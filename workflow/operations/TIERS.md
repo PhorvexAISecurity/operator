@@ -57,6 +57,10 @@ consolidation equivalence; never rewrite attestations to invented source pins.
 Keep issue-specific live acceptance even though publication uses one shared PR.
 See assessments/20260913-tier2/TIER-DELIVERY-POLICY.md for the recorded instruction.
 
+## Active continuation and publication override
+
+The owner's September16 instruction permits continued independent source work while deployment and closure-only L3 lag. September17 restores publication: one completed, reviewed and composition-tested PR per tier, always targeting main. Cumulative earlier unmerged-tier diffs are accepted. Follow `assessments/20260916-local-continuation/AUTHORIZATION.md`; preserve live-critical dependencies, live debt and production HOLD. Workers keep isolated issue branches; the lead publishes combined tiers. No merge or shared infrastructure authority is added. The older routine deployment barrier below is superseded for this run.
+
 ## Stop at the deployment barrier
 
 When every member is independently reviewed and its issue PR or shared tier PR

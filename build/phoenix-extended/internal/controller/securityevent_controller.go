@@ -64,6 +64,35 @@ func isControlledPhorvexQuarantine(event *amtdv1beta1.SecurityEvent) bool {
 	return event != nil && event.Spec.Rule.Type == PHORVEX_QUARANTINE_RULE_TYPE && event.Spec.Rule.Source == PHORVEX_CONTROLLED_RULE_SOURCE
 }
 
+func isControlledPhorvexRotate(event *amtdv1beta1.SecurityEvent) bool {
+	return event != nil && event.Spec.Rule.Type == PHORVEX_ROTATE_RULE_TYPE &&
+		event.Spec.Rule.ThreatLevel == PHORVEX_ROTATE_THREAT_LEVEL && event.Spec.Rule.Source == PHORVEX_CONTROLLED_RULE_SOURCE
+}
+
+// boundPhorvexRotateTarget prevents a delayed controlled event from rotating a
+// same-name replacement. Manual and external Phoenix events keep their existing
+// behavior because only Phorvex's private rule tuple enters this path.
+func (r *SecurityEventReconciler) boundPhorvexRotateTarget(ctx context.Context, event *amtdv1beta1.SecurityEvent, namespace, name string) (*corev1.Pod, error) {
+	if !isControlledPhorvexRotate(event) {
+		return nil, nil
+	}
+	if len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != namespace+"/"+name {
+		return nil, fmt.Errorf("controlled Phorvex rotate must bind exactly one target")
+	}
+	targetUID := strings.TrimSpace(event.Annotations[PHORVEX_ROTATE_TARGET_UID])
+	if targetUID == "" || len(targetUID) > 128 {
+		return nil, fmt.Errorf("controlled Phorvex rotate target identity envelope is incomplete")
+	}
+	pod := &corev1.Pod{}
+	if err := r.identityReader().Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
+		return nil, fmt.Errorf("validate controlled rotate target identity: %w", err)
+	}
+	if pod.UID == "" || string(pod.UID) != targetUID || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("controlled Phorvex rotate target UID/version changed or is terminating")
+	}
+	return pod, nil
+}
+
 func (r *SecurityEventReconciler) identityReader() client.Reader {
 	if r.APIReader != nil {
 		return r.APIReader
@@ -114,8 +143,8 @@ func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Contex
 		return nil, false, false, fmt.Errorf("SecurityEvent is required")
 	}
 	targets := event.Spec.Targets
-	if isControlledPhorvexQuarantine(event) && len(targets) != 1 {
-		return nil, false, false, fmt.Errorf("controlled Phorvex quarantine must bind exactly one target")
+	if (isControlledPhorvexQuarantine(event) || isControlledPhorvexRotate(event)) && len(targets) != 1 {
+		return nil, false, false, fmt.Errorf("controlled Phorvex event must bind exactly one target")
 	}
 	prepared := make([]preparedSecurityEventTarget, 0, len(targets))
 	var pendingAdoption, absentPod bool
@@ -128,7 +157,7 @@ func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Contex
 		pod := &corev1.Pod{}
 		key := types.NamespacedName{Namespace: parts[0], Name: parts[1]}
 		reader := client.Reader(r.Client)
-		if isControlledPhorvexQuarantine(event) {
+		if isControlledPhorvexQuarantine(event) || isControlledPhorvexRotate(event) {
 			reader = r.identityReader()
 		}
 		if err := reader.Get(ctx, key, pod); err != nil {
@@ -142,6 +171,12 @@ func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Contex
 		}
 		if isControlledPhorvexQuarantine(event) {
 			bound, bindErr := r.boundPhorvexQuarantineTarget(ctx, event, parts[0], parts[1])
+			if bindErr != nil {
+				return nil, false, false, bindErr
+			}
+			pod = bound
+		} else if isControlledPhorvexRotate(event) {
+			bound, bindErr := r.boundPhorvexRotateTarget(ctx, event, parts[0], parts[1])
 			if bindErr != nil {
 				return nil, false, false, bindErr
 			}
@@ -242,6 +277,11 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+		} else if isControlledPhorvexRotate(securityEvent) {
+			pod, err = r.boundPhorvexRotateTarget(ctx, securityEvent, prepared.pod.Namespace, prepared.pod.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 
 		// ---------------------------------------------------
@@ -292,6 +332,9 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		if isControlledPhorvexQuarantine(securityEvent) && action.Quarantine == nil {
 			return ctrl.Result{}, fmt.Errorf("controlled Phorvex quarantine event did not resolve to the quarantine action")
+		}
+		if isControlledPhorvexRotate(securityEvent) && action.Delete == nil {
+			return ctrl.Result{}, fmt.Errorf("controlled Phorvex rotate event did not resolve to the compatible delete action")
 		}
 
 		// ---------------------------------------------------
@@ -345,6 +388,11 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				if err != nil {
 					return ctrl.Result{}, err
 				}
+			} else if isControlledPhorvexRotate(securityEvent) {
+				pod, err = r.boundPhorvexRotateTarget(ctx, securityEvent, pod.Namespace, pod.Name)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 			if pod.Annotations == nil {
 				pod.Annotations = map[string]string{}
@@ -392,9 +440,30 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// TODO: replace with Action interface and function call
 		// ---------------------------------------------------
 		if action.Delete != nil {
-			podErr := r.Client.Delete(ctx, pod)
+			var podErr error
+			if isControlledPhorvexRotate(securityEvent) {
+				// The actual Phorvex producer has always mapped its private rotate rule
+				// to Phoenix's simple Delete action. Preserve that compatibility seam,
+				// but bind the accepted delete to the fresh target identity and RV.
+				pod, err = r.boundPhorvexRotateTarget(ctx, securityEvent, pod.Namespace, pod.Name)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				uid, rv := pod.UID, pod.ResourceVersion
+				podErr = r.Client.Delete(ctx, pod, &client.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}})
+			} else {
+				podErr = r.Client.Delete(ctx, pod)
+			}
 
-			if err != nil && !errors.IsNotFound(err) {
+			if isControlledPhorvexRotate(securityEvent) {
+				if podErr != nil {
+					log.Error(podErr, fmt.Sprintf(`Failed to delete controlled rotate target "%s"`, req.Name))
+					return ctrl.Result{}, podErr
+				}
+				r.recordControlledRotateReceipt(ctx, securityEvent, log)
+			} else if podErr != nil && !errors.IsNotFound(podErr) {
+				// Preserve the established manual/external event contract: a Delete
+				// failure is logged, while only the controlled receipt path is retried.
 				log.Error(podErr, fmt.Sprintf(`Failed to delete pod "%s"`, req.Name))
 			}
 			log.Info(fmt.Sprintf(`Pod: "%s" was sucessfully deleted with ACTION: delete`, pod.Name))
@@ -658,6 +727,29 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// recordControlledRotateReceipt records only acceptance of the exact
+// UID/resourceVersion-bound Delete used by Phorvex's compatibility strategy.
+// Replacement readiness and disruption remain separate runner observations.
+func (r *SecurityEventReconciler) recordControlledRotateReceipt(ctx context.Context, event *amtdv1beta1.SecurityEvent, logger logr.Logger) {
+	fresh := &amtdv1beta1.SecurityEvent{}
+	if err := r.identityReader().Get(ctx, namespacedNameOfEvent(event), fresh); err != nil {
+		logger.Error(err, "controlled rotate: failed to re-read SecurityEvent for receipt", "SecurityEvent", event.Name)
+		return
+	}
+	if event.UID == "" || fresh.UID != event.UID || !isControlledPhorvexRotate(fresh) ||
+		len(event.Spec.Targets) != 1 || len(fresh.Spec.Targets) != 1 || fresh.Spec.Targets[0] != event.Spec.Targets[0] ||
+		fresh.Annotations[PHORVEX_ROTATE_TARGET_UID] == "" ||
+		fresh.Annotations[PHORVEX_ROTATE_TARGET_UID] != event.Annotations[PHORVEX_ROTATE_TARGET_UID] {
+		logger.Info("controlled rotate: SecurityEvent identity or envelope changed before receipt write", "SecurityEvent", event.Name)
+		return
+	}
+	fresh.Status.AppliedAction = "rotate"
+	fresh.Status.ProcessedAt = metav1.Now()
+	if err := r.Client.Status().Update(ctx, fresh); err != nil {
+		logger.Error(err, "controlled rotate: failed to write execution receipt", "SecurityEvent", event.Name)
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

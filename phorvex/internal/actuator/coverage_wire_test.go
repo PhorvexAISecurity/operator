@@ -16,7 +16,7 @@ func TestM032RawCoverageWireAndExactMatcher(t *testing.T) {
 	for _, value := range []float64{0, 0.125, 1, 2.25, 9.87654321012345, math.NaN(), math.Inf(1), -1} {
 		t.Run(strconv.FormatFloat(value, 'g', -1, 64), func(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
-			_, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "ns", Pod: "pod", Action: model.ActionRotate, Score: 0.9, CoverageValue: &value})
+			_, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate, Score: 0.9, CoverageValue: &value})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -128,6 +128,26 @@ func TestM095AdapterObservationRejectsControlsAndConflict(t *testing.T) {
 	}
 }
 
+func TestM071AdapterObservationSelectsFreshestSameAdapterEvent(t *testing.T) {
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	creator := "system:serviceaccount:ns:detector"
+	old := model.SecurityEventInfo{Name: "a-old", UID: "old", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
+		TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", CreatedAt: now.Add(-2 * time.Minute), Age: 2 * time.Minute}
+	fresh := model.SecurityEventInfo{Name: "z-fresh", UID: "fresh", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
+		TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", CreatedAt: now.Add(-time.Minute), Age: time.Minute}
+	p := model.Pod{Namespace: "ns", Name: "serve", UID: "pod-1"}
+	bindAdapterObservation(&p, []model.SecurityEventInfo{old, fresh})
+	if p.AdapterObservation == nil || p.AdapterObservation.EventUID != fresh.UID {
+		t.Fatalf("fresh poison assertion was shadowed by an older lexical event: %+v", p.AdapterObservation)
+	}
+	conflict := fresh
+	conflict.UID, conflict.AdapterName, conflict.CreatedAt = "conflict", "b", now
+	bindAdapterObservation(&p, []model.SecurityEventInfo{old, fresh, conflict})
+	if p.AdapterObservation != nil {
+		t.Fatalf("freshest selection weakened conflicting-adapter refusal: %+v", p.AdapterObservation)
+	}
+}
+
 func TestM095ProductionSnapshotViewLifecycle(t *testing.T) {
 	trustEvents(t, "ns/detector")
 	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
@@ -152,18 +172,18 @@ func TestM095ProductionSnapshotViewLifecycle(t *testing.T) {
 		if !snap.EventInventoryComplete {
 			t.Fatal("event inventory unavailable")
 		}
-		productionEvents=append([]model.SecurityEventInfo(nil),snap.EventByPod["ns/serve"]...)
+		productionEvents = append([]model.SecurityEventInfo(nil), snap.EventByPod["ns/serve"]...)
 		return *snap.PodByKey["ns/serve"]
 	}
 	first := snapshot()
 	if first.SuspectAdapter != "actual" || first.AdapterObservation == nil || !hasAdapterFact(&model.WorkloadView{Pod: first}) {
 		t.Fatalf("trusted event absent from production snapshot: %+v", first)
 	}
-	view := &model.WorkloadView{Pod: first,Events:productionEvents, Phase: model.PhaseWarm, Physics: model.NeutralPhysics(), ExposureByVariable: map[string]time.Duration{model.VarAdapterEpoch: time.Hour}}
+	view := &model.WorkloadView{Pod: first, Events: productionEvents, Phase: model.PhaseWarm, Physics: model.NeutralPhysics(), ExposureByVariable: map[string]time.Duration{model.VarAdapterEpoch: time.Hour}}
 	pol := model.Policy{Tenant: "tenant", Namespace: "ns", DryRun: true, TraceEnabled: true, MaxMovesPerTick: 1,
 		NormSparsity: .4, FlowDisruption: .6, WeightSecrets: .8, Lambda: 0.1,
-		AssetWeightFromLabels:func(map[string]string)float64{return 1},
-		ProactiveFloor: time.Hour, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
+		AssetWeightFromLabels: func(map[string]string) float64 { return 1 },
+		ProactiveFloor:        time.Hour, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
 	engine := decision.NewCoverageEngine()
 	profile, ok := recon.Registry.Get("ucw-recon")
 	if !ok {
@@ -181,7 +201,7 @@ func TestM095ProductionSnapshotViewLifecycle(t *testing.T) {
 		}
 	}
 	if adapterTrace == nil || len(adapterTrace.Events) != 1 || adapterTrace.Events[0].EventUID != "event-1" || adapterTrace.Events[0].TargetPodUID != "pod-1" || adapterTrace.Events[0].AdapterName != "actual" {
-		t.Fatalf("serialized fact lost detector binding: %+v facts=%+v absent=%q phold=%v asset=%v view=%+v", adapterTrace, ds[0].Trace.Facts,ds[0].Trace.Inputs.FactsAbsentReason,ds[0].PHold,ds[0].AssetValue,view.Pod)
+		t.Fatalf("serialized fact lost detector binding: %+v facts=%+v absent=%q phold=%v asset=%v view=%+v", adapterTrace, ds[0].Trace.Facts, ds[0].Trace.Inputs.FactsAbsentReason, ds[0].PHold, ds[0].AssetValue, view.Pod)
 	}
 	encoded, err := json.Marshal(ds[0])
 	if err != nil {

@@ -30,6 +30,9 @@ type mockVLLM struct {
 	loaded                                           bool
 	drained                                          int
 	resetCalls, unloadCalls, loadCalls, drainCalls   int
+	adapterObserveCalls                              int
+	adapterStates                                    []bool
+	adapterObserveErr                                error
 	loadedAdapter, loadedSource                      string
 }
 
@@ -43,6 +46,21 @@ func (m *mockVLLM) ResetPrefixCache(_ context.Context, _ servingEndpoint) error 
 func (m *mockVLLM) UnloadAdapter(_ context.Context, _ servingEndpoint, _ string) error {
 	m.unloadCalls++
 	return m.unloadErr
+}
+func (m *mockVLLM) AdapterLoaded(_ context.Context, _ servingEndpoint, _ string) (bool, error) {
+	m.adapterObserveCalls++
+	if m.adapterObserveErr != nil {
+		return false, m.adapterObserveErr
+	}
+	if len(m.adapterStates) != 0 {
+		state := m.adapterStates[0]
+		m.adapterStates = m.adapterStates[1:]
+		return state, nil
+	}
+	if m.loadCalls > 0 && m.loadErr == nil {
+		return true, nil
+	}
+	return m.unloadCalls == 0, nil
 }
 func (m *mockVLLM) LoadAdapter(_ context.Context, _ servingEndpoint, adapter, source string) error {
 	m.loadCalls++
@@ -177,7 +195,7 @@ func fakeC(objs ...client.Object) client.Client {
 			}
 		}
 	}
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind), v1alpha1.ActionType(model.ActionRequestDrain)}}}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind), v1alpha1.ActionType(model.ActionRequestDrain), v1alpha1.ActionType(model.ActionAdapterRotate)}}}}
 	objs = append(objs, policy, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 		if obj.GetUID() == "" {
@@ -309,11 +327,11 @@ func TestKVResetReachableFailureFailsClosed(t *testing.T) {
 func TestEndpointRotateRestitchesRouteAndRollsBack(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelRouteKey: "ep-old"})
 	pod.Annotations[annoRouteService] = "infer-svc"
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "infer-svc"},
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "infer-svc", UID: types.UID("uid-infer-svc"), ResourceVersion: "9"},
 		Spec: corev1.ServiceSpec{Selector: map[string]string{labelRouteKey: "ep-old"}}}
 	c := fakeC(pod, svc)
-	ec := EnactCtx{Client: c}
-	hr, err := endpointRotateHandler{}.Enact(context.Background(), ec, Request{Namespace: "ns", Pod: "infer", Action: model.ActionEndpointRotate})
+	ec := EnactCtx{Client: c, Reader: c}
+	hr, err := endpointRotateHandler{}.Enact(context.Background(), ec, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionEndpointRotate})
 	if err != nil {
 		t.Fatalf("endpoint-rotate: %v", err)
 	}

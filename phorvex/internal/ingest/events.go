@@ -29,17 +29,36 @@ import (
 // nothing. Only an event whose ADMISSION-STAMPED creator identity is an allowlisted
 // detector becomes belief evidence (byPod); everything else is ingested and recorded
 // with its Trust verdict but carries no evidence. See eventtrust.go.
-func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model.SecurityEventInfo, map[string][]model.SecurityEventInfo, error) {
+func collectEvents(ctx context.Context, c client.Reader, now time.Time) ([]model.SecurityEventInfo, map[string][]model.SecurityEventInfo, error) {
+	all, byPod, _, err := collectEventsAndReceipts(ctx, c, now)
+	return all, byPod, err
+}
+
+func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Time) ([]model.SecurityEventInfo, map[string][]model.SecurityEventInfo, map[string]model.PhoenixExecutionReceipt, error) {
 	var seList amtdv1beta1.SecurityEventList
 	if err := c.List(ctx, &seList); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	all := make([]model.SecurityEventInfo, 0, len(seList.Items))
 	byPod := map[string][]model.SecurityEventInfo{}
+	receipts := map[string]model.PhoenixExecutionReceipt{}
 	for i := range seList.Items {
 		se := &seList.Items[i]
 		if se.Spec.Rule.Source == actuator.RuleSource {
 			metrics.RecordSecurityEvent(TrustSelf)
+			// A finalizer-retained deleting event is no longer durable execution
+			// evidence. Keep it outside belief, but do not project a receipt that could
+			// authorize learning or cost attribution after deletion began.
+			if se.Spec.Rule.Type == actuator.RuleTypeRotate && se.DeletionTimestamp == nil {
+				targets := append([]string(nil), se.Spec.Targets...)
+				receipts[se.Name] = model.PhoenixExecutionReceipt{
+					EventName: se.Name, EventUID: string(se.UID), RuleType: se.Spec.Rule.Type,
+					ThreatLevel: se.Spec.Rule.ThreatLevel, RuleSource: se.Spec.Rule.Source, Targets: targets,
+					TargetUID:     se.Annotations[actuator.PhoenixRotateTargetUIDAnnotation],
+					AppliedAction: se.Status.AppliedAction, CreatedAt: se.CreationTimestamp.Time,
+					ProcessedAt: se.Status.ProcessedAt.Time,
+				}
+			}
 			continue // skip Phorvex's own emitted events
 		}
 		identity := se.Annotations[CreatorIdentityAnnotation]
@@ -109,7 +128,7 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 			byPod[key] = append(byPod[key], ev)
 		}
 	}
-	return all, byPod, nil
+	return all, byPod, receipts, nil
 }
 
 // normalizeTarget canonicalizes a SecurityEvent target ("namespace/name") to a pod key.

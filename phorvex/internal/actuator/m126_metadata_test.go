@@ -115,7 +115,7 @@ func TestM126ActuatePreservesIdentityAndCoverageAnnotations(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(m126Scheme(t)).Build()
 	value := 0.75
 	tenant := strings.Repeat("t", 70)
-	res, err := NewPhoenixActuator(base).Actuate(context.Background(), Request{Namespace: "ns", Tenant: tenant, Pod: "pod", Action: model.ActionRotate, CoverageValue: &value})
+	res, err := NewPhoenixActuator(base).Actuate(context.Background(), Request{Namespace: "ns", Tenant: tenant, Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate, CoverageValue: &value})
 	if err != nil || !res.Emitted {
 		t.Fatalf("Actuate result=%+v err=%v", res, err)
 	}
@@ -190,7 +190,7 @@ func TestM126RejectsInvalidOrOversizedIdentityBeforeWrite(t *testing.T) {
 			if err := pa.EnsurePolicy(context.Background(), m126Target(tc.namespace, tc.tenant)); err == nil || base.creates != 0 || base.updates != 0 {
 				t.Fatalf("EnsurePolicy err=%v creates=%d updates=%d", err, base.creates, base.updates)
 			}
-			if _, err := pa.Actuate(context.Background(), Request{Namespace: tc.namespace, Tenant: tc.tenant, Pod: "pod", Action: model.ActionRotate}); err == nil || base.creates != 0 {
+			if _, err := pa.Actuate(context.Background(), Request{Namespace: tc.namespace, Tenant: tc.tenant, Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate}); err == nil || base.creates != 0 {
 				t.Fatalf("Actuate err=%v creates=%d", err, base.creates)
 			}
 		})
@@ -203,7 +203,7 @@ func TestM126ClientCreateErrorsRemainVisible(t *testing.T) {
 	if err := NewPhoenixActuator(base).EnsurePolicy(context.Background(), m126Target("ns", "tenant")); !errors.Is(err, want) {
 		t.Fatalf("EnsurePolicy error=%v, want wrapped create error", err)
 	}
-	if _, err := NewPhoenixActuator(base).Actuate(context.Background(), Request{Namespace: "ns", Tenant: "tenant", Pod: "pod", Action: model.ActionRotate}); !errors.Is(err, want) {
+	if _, err := NewPhoenixActuator(base).Actuate(context.Background(), Request{Namespace: "ns", Tenant: "tenant", Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate}); !errors.Is(err, want) {
 		t.Fatalf("Actuate error=%v, want wrapped create error", err)
 	}
 }

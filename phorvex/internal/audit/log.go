@@ -649,3 +649,52 @@ func (l *Logger) RotationObservationTerminated(tenant, owner, namespace, pod str
 		"tenant", tenant, "owner", owner, "namespace", namespace, "pod", pod,
 		"priorLedgerEntry", ledgerRecorded)
 }
+
+// RotationObservation appends asynchronous Phoenix execution/recovery evidence.
+// It never rewrites the dispatch decision: EventUID and TargetUID bind this row
+// to the exact submitted event and selected Pod, while the two booleans keep
+// accepted execution distinct from replacement readiness.
+func (l *Logger) RotationObservation(tenant, owner, decisionID, namespace, pod, targetUID, eventName, eventUID, outcome string, executionConfirmed, recoveryConfirmed bool, startedAt, observedAt time.Time) {
+	rec := struct {
+		SchemaVersion      string    `json:"schemaVersion"`
+		Kind               string    `json:"kind"`
+		Time               time.Time `json:"time"`
+		Tenant             string    `json:"tenant"`
+		Owner              string    `json:"owner"`
+		DecisionID         string    `json:"decisionID,omitempty"`
+		Namespace          string    `json:"namespace"`
+		Pod                string    `json:"pod"`
+		TargetUID          string    `json:"targetUID"`
+		Action             string    `json:"action"`
+		Backend            string    `json:"backend"`
+		EventName          string    `json:"eventName"`
+		EventUID           string    `json:"eventUID"`
+		Outcome            string    `json:"outcome"`
+		ExecutionConfirmed bool      `json:"executionConfirmed"`
+		RecoveryConfirmed  bool      `json:"recoveryConfirmed"`
+		StartedAt          time.Time `json:"startedAt"`
+		ObservedAt         time.Time `json:"observedAt"`
+	}{SchemaVersionCurrent, "phorvex.actuation-observation", observedAt.UTC(), tenant, owner, decisionID,
+		namespace, pod, targetUID, "rotate", "phoenix", eventName, eventUID, outcome,
+		executionConfirmed, recoveryConfirmed, startedAt.UTC(), observedAt.UTC()}
+	l.log.Info("actuation-observation", "tenant", tenant, "namespace", namespace, "pod", pod,
+		"targetUID", targetUID, "action", "rotate", "backend", "phoenix", "event", eventName,
+		"eventUID", eventUID, "outcome", outcome, "executionConfirmed", executionConfirmed,
+		"recoveryConfirmed", recoveryConfirmed)
+	b, err := json.Marshal(rec)
+	if err != nil {
+		l.log.Error(err, "actuation observation audit encoding failed")
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := l.jsonOut
+	if l.sinkFor != nil && tenant != "" {
+		out = l.sinkFor(tenant)
+	}
+	if out != nil {
+		if _, err := out.Write(append(b, '\n')); err != nil {
+			l.log.Error(err, "actuation observation audit persistence failed")
+		}
+	}
+}

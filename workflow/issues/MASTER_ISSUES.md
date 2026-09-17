@@ -489,7 +489,7 @@ Severity: unspecified · Tier: 1 · Fixes: none
 
 ### M-9 · `Emitted` is a request-ack, not an effect — the brain never learns what Phoenix did · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: MAJOR · Tier: 2 · Fixes: none
+Severity: MAJOR · Tier: 2 · Fixes: T9-M009
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · phoenix-execution-readback
@@ -517,6 +517,9 @@ Severity: MAJOR · Tier: 2 · Fixes: none
 **Live evidence (V10, 2026-08-21):** kv-reset on the vllm tenant was pointed at a dead endpoint (`phorvex.ai/kv-reset-path: http://127.0.0.1:1/dead`) and a probe event fired. The actuation **failed every ~10-20s** (`ERROR runner actuate failed … serving-stack flush failed: parse "http://172.27.12.214:8000http://127.0.0.1:1/dead"` — the M-92 raw-concatenation bug visible in the error text). Through the whole failure loop: **no SecurityEvent was emitted at all** (the handler dies pre-emit, so the system's outward actuation record simply doesn't exist), the decision log kept narrating `selected: true` with the success story (`"Phorvex used kv-reset instead — the workload keeps serving"`), and the tick summary counted the failures as `selected: 1`. The only failure trace anywhere is a transient ERROR log line, uncorrelated with the decision record.
 **Fix:** add `Note` to `Result`, an else-branch Warn log + `phorvex_actuations_not_emitted_total{tenant,action,reason}`, and a `NotEmittedWhy` audit field.
 *Sources: A-7, A-26, A-81, A-94, A-196, A-204; V10 live 2026-08-21.*
+
+
+**Current-source reconciliation (2026-09-16):** The historical missing Result.Note/dispatch-trace problem has been repaired. An independent actual-handler -> runner -> serialized-audit control now retains the exact refusal reason. Remaining source work concerns the structured decision log, definite-no-effect attempt Event classification and bounded retry behavior for repeated deterministic refusals. M12 owns missing outcome counters separately. See `workflow/assessments/20260916-local-continuation/reconciliation/M010.md`; L3 remains pending.
 
 ### M-64 · Epoch-write conflicts discard completed effects · **OPEN** · `ACTUATION->EFFECT`
 
@@ -1437,6 +1440,9 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 **What:** The promoted shadow is selected by labels only — its model ID is never compared to the leader's — and the replacement shadow is cloned from the old leader's spec, guaranteeing the same model. The modelFingerprint fact is booked as invalidated while the attacker's fingerprint is intact.
 **Fix:** compare model identity leader-vs-shadow and fail-closed when equal, or re-credit the action with what it does invalidate.
 *Sources: A-42.*
+
+
+**Current-source reconciliation (2026-09-16):** At35997baa/current local Tier9, ancestor8fe69bf8 already withholds modelFingerprint credit from every action; model-shard-replace remains coverless. Independent producer/actionset controls pass. No duplicate false-credit patch is needed. A genuine loaded-model-identity invalidator remains a separate capability gap; declared aliases/readiness do not prove it, and live acceptance is not claimed. See `workflow/assessments/20260916-local-continuation/reconciliation/M037.md`.
 
 ### M-39 · `kv-migrate-invalidate`: local flush, full session credit · **OPEN** · `KNOWLEDGE`
 
