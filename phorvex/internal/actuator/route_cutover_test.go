@@ -259,7 +259,8 @@ func TestRouteCutoverSharedEngineCompletesAndRollbackRestoresOwnedFields(t *test
 				t.Fatalf("final owned/unrelated state Pod=%v/%v Service=%v", gotPod.Labels, gotPod.Annotations, gotSvc.Spec.Selector)
 			}
 			repeated, err := f.native.Actuate(f.ctx, f.request)
-			if err != nil || repeated.Emitted || !strings.Contains(repeated.Note, "already applied") {
+			if err != nil || repeated.Emitted || repeated.NoEffect != NoEffectReconciled || repeated.MutationKind != "none" ||
+				repeated.RollbackRef != result.RollbackRef || len(repeated.ObjectsTouched) != 3 || !strings.Contains(repeated.Note, "already applied") {
 				t.Fatalf("same operation retried result=%+v err=%v", repeated, err)
 			}
 			if err := f.native.Rollback(f.ctx, f.request, result.RollbackRef); err != nil {

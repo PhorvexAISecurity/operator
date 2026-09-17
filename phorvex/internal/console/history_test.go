@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -67,6 +68,50 @@ func getHistoryAs(t *testing.T, s *Server, caller *Principal, q url.Values, want
 func eventPod(t *testing.T, item historyItem) string {
 	t.Helper()
 	return item.Event.(map[string]any)["pod"].(string)
+}
+
+func TestM010HistoryRetainsTopLevelDispatchWithoutTrace(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	older := historyRecord(1, false)
+	older.Selected = true
+	older.Action = string(model.ActionKVReset)
+	current := historyRecord(2, false)
+	current.Selected = true
+	current.Action = string(model.ActionKVReset)
+	current.DispatchOutcome = model.DispatchRefused
+	current.DispatchReason = "definite-no-effect-refusal"
+	current.DecisionTrace = &model.DecisionTraceV2{DispatchOutcome: model.DispatchRefused, DispatchReason: "definite-no-effect-refusal"}
+	writeHistory(t, path, older, current)
+	s := NewServer(Config{AuditPath: path})
+
+	operatorPage, body := getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"2"}}, http.StatusOK)
+	if len(operatorPage.Events) != 2 {
+		t.Fatalf("operator summary = %s", body)
+	}
+	newEvent := operatorPage.Events[0].Event.(map[string]any)
+	oldEvent := operatorPage.Events[1].Event.(map[string]any)
+	if _, ok := newEvent["decisionTrace"]; ok {
+		t.Fatalf("operator summary retained decision trace: %#v", newEvent)
+	}
+	if newEvent["dispatchOutcome"] != model.DispatchRefused || newEvent["dispatchReason"] != "definite-no-effect-refusal" {
+		t.Fatalf("top-level outcome lost after trace stripping: %#v", newEvent)
+	}
+	if _, ok := oldEvent["dispatchOutcome"]; ok {
+		t.Fatalf("older record gained an outcome: %#v", oldEvent)
+	}
+
+	ownerPage, ownerBody := getHistoryAs(t, s, testOwnerPrincipal("acme"), url.Values{"lens": {"owner"}, "tenant": {"acme"}, "limit": {"2"}}, http.StatusOK)
+	if len(ownerPage.Events) != 2 {
+		t.Fatalf("owner history = %s", ownerBody)
+	}
+	newOwner := ownerPage.Events[0].Event.(map[string]any)
+	oldOwner := ownerPage.Events[1].Event.(map[string]any)
+	if newOwner["dispatchOutcome"] != model.DispatchRefused || newOwner["outcomeEvidence"] != "not-emitted" {
+		t.Fatalf("owner outcome lost: %#v", newOwner)
+	}
+	if _, ok := oldOwner["dispatchOutcome"]; ok || oldOwner["outcomeEvidence"] != "selected" {
+		t.Fatalf("older owner history gained confirmation: %#v", oldOwner)
+	}
 }
 
 func TestHistoryRetainedActuationAfterLargeNoops(t *testing.T) {

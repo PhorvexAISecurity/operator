@@ -536,8 +536,8 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
               {num(e.cost) != null && <Metric label="cost" value={num(e.cost, 4)} />}
               {num(e.net) != null && <Metric label="net value" value={num(e.net)} />}
               {num(e.perDollar) != null && e.perDollar > 0 && <Metric label="per-$ modeled coverage" value={num(e.perDollar)} />}
-              {typeof e.coveredFacts === "number" && e.coveredFacts > 0 && <Metric label="covered facts" value={e.coveredFacts} />}
-              {num(e.coveredWeight) != null && e.coveredWeight > 0 && <Metric label="covered weight" value={num(e.coveredWeight)} />}
+              {typeof e.coveredFacts === "number" && e.coveredFacts > 0 && <Metric label="modeled covered facts" value={e.coveredFacts} />}
+              {num(e.coveredWeight) != null && e.coveredWeight > 0 && <Metric label="modeled selection weight" value={num(e.coveredWeight)} />}
               {num(e.belief) != null && <Metric label="belief" value={num(e.belief)} />}
               {num(e.assetValue) != null && <Metric label="asset value" value={num(e.assetValue)} />}
               {num(e.blastRadius) != null && <Metric label="blast radius" value={num(e.blastRadius)} />}

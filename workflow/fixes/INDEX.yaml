@@ -1006,7 +1006,7 @@ fixes:
     issues:
     - M-9
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t9-m009
@@ -1026,3 +1026,27 @@ fixes:
     stacked_on: []
     branch: fix/t11-route
     head_sha: 064d5d087ffc021c0abe4d69b290f37a867d8cc1
+  T10-M077:
+    directory: fixes/T10-M077
+    aliases: []
+    issues:
+    - M-77
+    - M-76
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t10-m077
+    head_sha: 018a5628e44a89eea2146526eadbf994f52fb124
+  T10-M010:
+    directory: fixes/T10-M010
+    aliases: []
+    issues:
+    - M-10
+    - M-15
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t10-m010
+    head_sha: 43ece5080ce999af86c6fb79138b963088ac38b5

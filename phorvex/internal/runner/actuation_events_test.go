@@ -24,8 +24,11 @@ func TestM013TruthfulNotifications(t *testing.T) {
 		reason string
 	}{
 		{name: "emitted", res: actuator.Result{Emitted: true, Note: secret}, reason: "PhorvexActuationEmitted"},
-		{name: "refused", res: actuator.Result{Actuator: "native", Note: "Rotation not performed: target-uid-mismatch"}, reason: "PhorvexActuationNotEmitted"},
+		{name: "refused", res: actuator.Result{Actuator: "native", NoEffect: actuator.NoEffectRefused, Note: secret}, reason: "PhorvexActuationNotEmitted"},
+		{name: "reconciled", res: actuator.Result{NoEffect: actuator.NoEffectReconciled, Note: secret}, reason: "PhorvexActuationReconciled"},
+		{name: "declared", res: actuator.Result{NoEffect: actuator.NoEffectDeclared, MutationKind: "declared", Note: secret}, reason: "PhorvexActuationDeclaredOnly"},
 		{name: "unknown", res: actuator.Result{Note: secret}, reason: "PhorvexActuationOutcomeUnknown"},
+		{name: "contradictory-refused-emitted", res: actuator.Result{Emitted: true, NoEffect: actuator.NoEffectRefused, Note: secret}, reason: "PhorvexActuationOutcomeUnknown"},
 		{name: "partial-error", res: actuator.Result{Emitted: true, ObjectsTouched: []string{secret}}, err: errors.New(secret), reason: "PhorvexActuationOutcomeUnknown"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

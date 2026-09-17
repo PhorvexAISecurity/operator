@@ -37,6 +37,8 @@ type OwnerEvent struct {
 	Pod             string              `json:"pod"`
 	Action          string              `json:"action"`
 	Actuated        bool                `json:"actuated"`
+	DispatchOutcome string              `json:"dispatchOutcome,omitempty"`
+	DispatchReason  string              `json:"dispatchReason,omitempty"`
 	DryRun          bool                `json:"dryRun"`
 	Handler         string              `json:"handler,omitempty"`
 	ObjectsTouched  []string            `json:"objectsTouched,omitempty"`
@@ -104,8 +106,8 @@ func blindOutcome(action string, actuated, workPreserved bool) string {
 // ownerOutcome interprets existing evidence only. No generic confirmation flag,
 // future field, or elapsed time can promote a record to confirmed effect.
 func ownerOutcome(rec audit.Record) string {
-	dispatch := ""
-	if rec.DecisionTrace != nil {
+	dispatch := rec.DispatchOutcome
+	if dispatch == "" && rec.DecisionTrace != nil {
 		dispatch = rec.DecisionTrace.DispatchOutcome
 	}
 	if rec.DryRun {
@@ -135,6 +137,26 @@ func ownerOutcome(rec audit.Record) string {
 			return "not-emitted"
 		}
 		return "unknown"
+	case model.DispatchRefused:
+		if rec.Actuated {
+			return "unknown"
+		}
+		return "not-emitted"
+	case model.DispatchSatisfied:
+		if rec.Actuated {
+			return "unknown"
+		}
+		return "already-satisfied"
+	case model.DispatchReconciled:
+		if rec.Actuated {
+			return "unknown"
+		}
+		return "reconciled"
+	case model.DispatchDeclared:
+		if rec.Actuated {
+			return "unknown"
+		}
+		return "declared-only"
 	case "":
 		if rec.Actuated {
 			return "emitted-unconfirmed"
@@ -164,6 +186,11 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 	if rec.Claim != nil {
 		claim = model.NewClaimScope(rec.Claim.DetectorSet, rec.Claim.DetectorSetKnown, rec.Claim.BrainImage, rec.Claim.GitSHA)
 	}
+	dispatchOutcome := model.SafeDispatchOutcome(rec.DispatchOutcome)
+	dispatchReason := ""
+	if dispatchOutcome != "" {
+		dispatchReason = model.SafeDispatchReason(rec.DispatchReason)
+	}
 	return OwnerEvent{
 		Representation:  ownerRepresentation(rec),
 		Claim:           claim,
@@ -174,6 +201,8 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 		Pod:             rec.Pod,
 		Action:          rec.Action,
 		Actuated:        rec.Actuated,
+		DispatchOutcome: dispatchOutcome,
+		DispatchReason:  dispatchReason,
 		DryRun:          rec.DryRun,
 		Handler:         rec.Handler,
 		ObjectsTouched:  rec.ObjectsTouched,
@@ -233,6 +262,9 @@ func containsStr(haystack, needle string) bool {
 
 // Only fixed, reviewed native refusal reasons may enter the owner-safe narrative.
 func ownerRefusal(rec audit.Record) string {
+	if rec.DispatchOutcome == model.DispatchRefused {
+		return "Action was definitely refused before effect. No mutation was credited."
+	}
 	if rec.Action == "rotate" && !rec.Actuated && rec.DecisionTrace != nil {
 		switch rec.DecisionTrace.DispatchReason {
 		case "Rotation not performed: ownerless", "Rotation not performed: owner-unresolved", "Rotation not performed: owner-uid-mismatch", "Rotation not performed: owner-terminating", "Rotation not performed: owner-kind-unsupported", "Rotation not performed: owner-state-ineligible":
@@ -252,6 +284,12 @@ func ownerRecordWhy(rec audit.Record, reversible, workPreserved, harm bool) stri
 		return ownerWhy(rec.Action, true, reversible, false, false)
 	case "not-emitted":
 		return ownerRefusal(rec)
+	case "already-satisfied":
+		return "No new mutation was needed; current evidence says the requested state was already satisfied."
+	case "reconciled":
+		return "No new mutation was submitted; a prior operation or observation was reconciled without confirming availability or security effect."
+	case "declared-only":
+		return "No mutation was submitted; this administrative action is declared without an implementation."
 	case "dry-run":
 		return "Dry-run: action recommended, execution disabled."
 	case "selected":

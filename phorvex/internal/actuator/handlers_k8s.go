@@ -59,7 +59,11 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 		return HandlerResult{}, errDryRunGuard
 	}
 	refuse := func(reason string) (HandlerResult, error) {
-		return HandlerResult{Note: "Rotation not performed: " + reason}, nil
+		disposition := NoEffectRefused
+		if reason == "target-already-gone" {
+			disposition = NoEffectSatisfied
+		}
+		return HandlerResult{NoEffect: disposition, Note: "Rotation not performed: " + reason}, nil
 	}
 	if ec.Reader == nil {
 		return refuse("authoritative-reader-unavailable")
@@ -205,7 +209,7 @@ func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, spec corev1.
 			if spec.Name == "phorvex-debugger" {
 				return debuggerObservedResult(pod, time.Now()), nil
 			}
-			return HandlerResult{Emitted: false, MutationKind: "irreversible", Note: "custom-inject spec already present; no new submission"}, nil
+			return HandlerResult{Emitted: false, NoEffect: NoEffectReconciled, Note: "custom-inject spec already present; no new submission"}, nil
 		}
 	}
 	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, spec)
@@ -249,21 +253,21 @@ func debuggerObservedResult(pod *corev1.Pod, now time.Time) HandlerResult {
 		case st.State.Running != nil:
 			started := st.State.Running.StartedAt.Time
 			if started.IsZero() || started.After(now) {
-				return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger running status has invalid or missing start time; availability unobservable"}
+				return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger running status has invalid or missing start time; availability unobservable"}
 			}
 			if !now.Before(started.Add(5 * time.Minute)) {
-				return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger running status is past five-minute expiry; status may lag, use a fresh Pod for another session"}
+				return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger running status is past five-minute expiry; status may lag, use a fresh Pod for another session"}
 			}
-			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger observed running within five-minute window; no new submission; inspect runtime/PID support before use"}
+			return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger observed running within five-minute window; no new submission; inspect runtime/PID support before use"}
 		case st.State.Waiting != nil:
-			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger observed waiting (" + st.State.Waiting.Reason + "); unavailable; no new submission"}
+			return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger observed waiting (" + st.State.Waiting.Reason + "); unavailable; no new submission"}
 		case st.State.Terminated != nil:
-			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger terminated; immutable session expired, use a fresh Pod for another session"}
+			return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger terminated; immutable session expired, use a fresh Pod for another session"}
 		default:
-			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger state unobservable; no new submission"}
+			return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger state unobservable; no new submission"}
 		}
 	}
-	return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger status missing; availability unobservable, no new submission"}
+	return HandlerResult{NoEffect: NoEffectReconciled, Note: "bounded debugger status missing; availability unobservable, no new submission"}
 }
 
 // --- 5. disable (= Phoenix DECLARATION) — declared-not-implemented ------------------------
@@ -277,7 +281,7 @@ type disableHandler struct{}
 func (disableHandler) Name() string { return string(model.ActionDisable) }
 
 func (disableHandler) Enact(_ context.Context, _ EnactCtx, _ Request) (HandlerResult, error) {
-	return HandlerResult{Emitted: false, MutationKind: "declared", Note: "disable is declared-not-implemented (matches Phoenix posture); no fabricated behaviour"}, nil
+	return HandlerResult{Emitted: false, NoEffect: NoEffectDeclared, MutationKind: "declared", Note: "disable is declared-not-implemented (matches Phoenix posture); no fabricated behaviour"}, nil
 }
 
 // --- 6. identity-rotate (declared-only; historical metadata rollback) ------------------

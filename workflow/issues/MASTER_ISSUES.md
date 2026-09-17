@@ -506,7 +506,7 @@ Severity: MAJOR · Tier: 2 · Fixes: T9-M009
 
 ### M-10 · Silent non-emit: the honest "I did nothing" leaves zero trace · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: MAJOR · Tier: 2 · Fixes: none
+Severity: MAJOR · Tier: 2 · Fixes: T10-M010
 
 > Anatomy join review: **complete**.
 > `V2` **ABSENCE** — no positive locus: no trace of an honest non-emit: no metric, no Event, no audit line
@@ -578,7 +578,7 @@ Severity: MINOR · Tier: 2 · Fixes: none
 
 ### M-15 · Coverage booked at decide-time, never retracted · **OPEN** · `EFFECT->BELIEF`
 
-Severity: ADVISORY · Tier: 2 · Fixes: none
+Severity: ADVISORY · Tier: 2 · Fixes: T10-M010
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · decision.coverage
@@ -819,7 +819,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-76 · `do()` maps EVERY transport error to "stack unreachable" · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T10-M077
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -834,7 +834,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-77 · `postJSON`: classifier asymmetry + single-read truncation · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T10-M077
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers

@@ -147,7 +147,7 @@ func TestM127SentinelFlipAfterRoutePreparationRefusesDispatch(t *testing.T) {
 	if !d.KillSwitch || d.KillSwitchCause != string(KillSwitchSentinelEngaged) ||
 		d.Trace.KillSwitchCause != string(KillSwitchSentinelEngaged) ||
 		d.Trace.DispatchOutcome != model.DispatchNotAttempted ||
-		d.Trace.DispatchReason != "kill-switch: "+string(KillSwitchSentinelEngaged) {
+		d.Trace.DispatchReason != "kill-switch" {
 		t.Fatalf("late refusal evidence = %+v trace=%+v", d, d.Trace)
 	}
 	if d.Actuated || d.Handler != "" || len(d.ObjectsTouched) != 0 || d.RollbackRef != "" || d.MutationKind != "" || d.Phoenix != nil {
@@ -230,8 +230,8 @@ func TestM127EngagementAfterCleanRefusalSuppressesLearningAndFallback(t *testing
 		t.Fatal("kill-switch path reserved the fallback slot despite refusing fallback")
 	}
 	if !decisions[0].KillSwitch || decisions[0].KillSwitchCause != string(KillSwitchSentinelEngaged) ||
-		decisions[0].Trace.DispatchOutcome != model.DispatchError ||
-		!strings.Contains(decisions[0].Trace.DispatchReason, "fallback-refused-kill-switch: "+string(KillSwitchSentinelEngaged)) {
+		decisions[0].Trace.DispatchOutcome != model.DispatchRefused ||
+		!strings.Contains(decisions[0].Trace.DispatchReason, "fallback-blocked-kill-switch") {
 		t.Fatalf("refused fallback evidence = %+v trace=%+v", decisions[0], decisions[0].Trace)
 	}
 }
@@ -263,7 +263,7 @@ func TestM127DeniedPostFailureReadSuppressesLearningAndFallback(t *testing.T) {
 		t.Fatal("denied read path reserved the fallback slot")
 	}
 	if decisions[0].KillSwitchCause != string(KillSwitchReadError) ||
-		!strings.Contains(decisions[0].Trace.DispatchReason, "fallback-refused-kill-switch: "+string(KillSwitchReadError)) {
+		!strings.Contains(decisions[0].Trace.DispatchReason, "fallback-blocked-kill-switch") {
 		t.Fatalf("denied-read refusal evidence = %+v trace=%+v", decisions[0], decisions[0].Trace)
 	}
 }

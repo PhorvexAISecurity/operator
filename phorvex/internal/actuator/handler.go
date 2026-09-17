@@ -67,11 +67,17 @@ type EnactCtx struct {
 type HandlerResult struct {
 	ObjectsTouched []string
 	RollbackRef    string
-	// MutationKind: "reversible" | "irreversible" | "forward-only" | "swap" | "declared".
+	// NoEffect is an explicit closed disposition for a reviewed non-emission.
+	// Reconciled results may carry prior-operation references. Empty means
+	// unknown and is never inferred from Note or MutationKind.
+	NoEffect NoEffectDisposition
+	// MutationKind: "reversible" | "irreversible" | "forward-only" | "swap" | "declared" | "partial".
+	// A partial kind with Emitted=false records an attempted external mutation whose
+	// effect is unknown; it is not a confirmed or credited emission.
 	MutationKind string
-	// Emitted is false for a refused/not-performed action (including an
-	// already-absent adapter goal); it is true for a confirmed mutation or
-	// partial mutation that must remain visible even alongside an error.
+	// Emitted is true only for a confirmed mutation or confirmed partial
+	// mutation. It stays false for refusal, definite no-effect, and an attempted
+	// external mutation whose result is unknown.
 	Emitted bool
 	Note    string
 }
@@ -103,6 +109,7 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	return Result{
 		Actuator:       "native",
 		Note:           hr.Note,
+		NoEffect:       hr.NoEffect,
 		Emitted:        hr.Emitted,
 		Handler:        string(req.Action),
 		ObjectsTouched: hr.ObjectsTouched,

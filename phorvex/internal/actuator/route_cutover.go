@@ -1215,7 +1215,13 @@ func resumeRouteReceipt(ctx context.Context, ec EnactCtx, req Request, cm, guard
 				return routeLocksOnlyResult(guard, cm, "terminal same-operation target guard cleanup unresolved"), cleanupErr
 			}
 		}
-		return HandlerResult{MutationKind: "reversible", RollbackRef: cm.Namespace + "/" + cm.Name + "@" + string(cm.UID) + "#" + r.ReceiptID, Note: "exact same route operation already applied; no new write or credit"}, nil
+		return HandlerResult{
+			NoEffect:       NoEffectReconciled,
+			MutationKind:   "none",
+			RollbackRef:    cm.Namespace + "/" + cm.Name + "@" + string(cm.UID) + "#" + r.ReceiptID,
+			ObjectsTouched: []string{objRef("Pod", r.PolicyNamespace, r.TargetName), objRef("Service", r.PolicyNamespace, r.ServiceName), objRef("ConfigMap", cm.Namespace, cm.Name)},
+			Note:           "exact same route operation already applied; protected receipt reconciled without a new write or credit",
+		}, nil
 	}
 	if guard == nil {
 		var err error

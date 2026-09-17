@@ -65,7 +65,7 @@ func triggerIdentityRefusal(req Request, observed *corev1.Pod) string {
 // refuseAI is the native-rotate refusal shape for the AI destructive handlers: nothing was
 // mutated, nothing is emitted, the reason is carried in the Note and no error is raised.
 func refuseAI(kind, reason string) (HandlerResult, error) {
-	return HandlerResult{Note: kind + " not performed: " + reason}, nil
+	return HandlerResult{NoEffect: NoEffectRefused, Note: kind + " not performed: " + reason}, nil
 }
 
 // deleteObservedPod deletes exactly the observed Pod object: the Delete carries the observed
