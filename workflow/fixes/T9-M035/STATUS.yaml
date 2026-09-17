@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 21
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -24,70 +24,47 @@ checks:
     source_sha: 3bb0bc14cd78457d8d85078ef717ef8912848adc
     at: '2026-09-16T23:02:05+00:00'
   preflight:
-    result: PASS
+    result: UNAVAILABLE
     by: sol-t9-m035
-    artifact: workflow/fixes/T9-M035/evidence/preflight/receipt.json
-    sha256: 7017ba4add9afbed8db08ec65d221476d1956c316374c181a4d48c788265c585
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:10:51+00:00'
+    artifact: evidence/superseded-source.md
+    sha256: a13621864f765292a64896578ae547d55a9d4fb7ca9148b3c610a0ea4aa964a9
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:14:15+00:00'
   implementation:
     result: PASS
     by: sol-t9-m035
     artifact: 04-diff.patch
-    sha256: d19f91659acb0a3c5e403adc8c697c51e925733f547b8290080d725f532dbc6a
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:10:51+00:00'
+    sha256: 16bc96513b4d0b6c698fbbc0225d256698a622106594c3a2e40870129b98c02c
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:12:32+00:00'
   l0:
-    result: PASS
+    result: UNAVAILABLE
     by: sol-t9-m035
-    artifact: evidence/worker/full-relevant.log
-    sha256: f51d97c72f1bbd1c1d134cd9e0c4fbd8b8480a2aca391a2a6c1fc25b401b01d2
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:10:51+00:00'
-    inputs:
-    - phorvex/internal/actuator
-    - phorvex/internal/decision
-    - phorvex/internal/recon
-    inputs_sha256: 6fb47aca483213dce51da54038fbe0c3f629a31696f87c64a3c62cbe3232a73a
+    artifact: evidence/superseded-source.md
+    sha256: a13621864f765292a64896578ae547d55a9d4fb7ca9148b3c610a0ea4aa964a9
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:14:15+00:00'
   l1:
-    result: PASS
+    result: UNAVAILABLE
     by: sol-t9-m035
-    artifact: evidence/worker/head-focused.log
-    sha256: 8c237b721e22bc932a9077839f9a54ec55810ecc7bd8014b71a24ee68ac30973
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:10:51+00:00'
-    inputs:
-    - phorvex/internal/actuator/endpoint_locator_test.go
-    - phorvex/internal/actuator/endpoint_rotate_safety_test.go
-    - phorvex/internal/actuator/handlers_ai.go
-    - phorvex/internal/actuator/handlers_ai_test.go
-    - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
-    inputs_sha256: d9aebfc2c14ecd2fd0635f38403a01607d9c896c18b54c3e3f7a292016255e92
+    artifact: evidence/superseded-source.md
+    sha256: a13621864f765292a64896578ae547d55a9d4fb7ca9148b3c610a0ea4aa964a9
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:14:15+00:00'
   l2:
-    result: PASS
+    result: UNAVAILABLE
     by: sol-t9-m035
-    artifact: evidence/worker/full-relevant.log
-    sha256: f51d97c72f1bbd1c1d134cd9e0c4fbd8b8480a2aca391a2a6c1fc25b401b01d2
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:10:51+00:00'
-    inputs:
-    - phorvex/internal/actuator
-    - phorvex/internal/decision
-    - phorvex/internal/recon
-    inputs_sha256: 6fb47aca483213dce51da54038fbe0c3f629a31696f87c64a3c62cbe3232a73a
+    artifact: evidence/superseded-source.md
+    sha256: a13621864f765292a64896578ae547d55a9d4fb7ca9148b3c610a0ea4aa964a9
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:14:15+00:00'
   positive_control:
-    result: PASS
+    result: UNAVAILABLE
     by: sol-t9-m035
-    artifact: evidence/worker/head-focused.log
-    sha256: 8c237b721e22bc932a9077839f9a54ec55810ecc7bd8014b71a24ee68ac30973
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:10:51+00:00'
-    inputs:
-    - phorvex/internal/actuator/endpoint_locator_test.go
-    - phorvex/internal/actuator/handlers_ai.go
-    - phorvex/internal/actuator/handlers_ai_test.go
-    - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
-    inputs_sha256: 3b518e1bf19ef8d97560b7d544361a288a3e1d8785fa3cf760e1cb94ff9c258e
+    artifact: evidence/superseded-source.md
+    sha256: a13621864f765292a64896578ae547d55a9d4fb7ca9148b3c610a0ea4aa964a9
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:14:16+00:00'
   p3:
     result: FAIL
     by: codex-lead
@@ -146,12 +123,12 @@ verification:
   live_required: true
   soak_required: false
   p3: FAIL
-  l0: PASS
-  l1: PASS
-  l2: PASS
+  l0: UNAVAILABLE
+  l1: UNAVAILABLE
+  l2: UNAVAILABLE
   l3: pending
   l4: pending
-  positive_control: PASS
+  positive_control: UNAVAILABLE
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -164,7 +141,7 @@ next_action:
   owner: implementer
   action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
     prior evidence.
-updated_at: '2026-09-17T00:08:02+00:00'
+updated_at: '2026-09-17T00:14:16+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:30+00:00'
   by: codex-lead
@@ -245,3 +222,126 @@ handoff:
   role: implementer
   kind: review
   revision: 8
+check_history:
+- check: implementation
+  result: PASS
+  by: sol-t9-m035
+  artifact: 04-diff.patch
+  sha256: d19f91659acb0a3c5e403adc8c697c51e925733f547b8290080d725f532dbc6a
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:10:51+00:00'
+- check: preflight
+  result: PASS
+  by: sol-t9-m035
+  artifact: workflow/fixes/T9-M035/evidence/preflight/receipt.json
+  sha256: 7017ba4add9afbed8db08ec65d221476d1956c316374c181a4d48c788265c585
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:10:51+00:00'
+- check: l0
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/worker/full-relevant.log
+  sha256: f51d97c72f1bbd1c1d134cd9e0c4fbd8b8480a2aca391a2a6c1fc25b401b01d2
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:10:51+00:00'
+  inputs:
+  - phorvex/internal/actuator
+  - phorvex/internal/decision
+  - phorvex/internal/recon
+  inputs_sha256: 6fb47aca483213dce51da54038fbe0c3f629a31696f87c64a3c62cbe3232a73a
+- check: l1
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/worker/head-focused.log
+  sha256: 8c237b721e22bc932a9077839f9a54ec55810ecc7bd8014b71a24ee68ac30973
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:10:51+00:00'
+  inputs:
+  - phorvex/internal/actuator/endpoint_locator_test.go
+  - phorvex/internal/actuator/endpoint_rotate_safety_test.go
+  - phorvex/internal/actuator/handlers_ai.go
+  - phorvex/internal/actuator/handlers_ai_test.go
+  - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
+  inputs_sha256: d9aebfc2c14ecd2fd0635f38403a01607d9c896c18b54c3e3f7a292016255e92
+- check: l2
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/worker/full-relevant.log
+  sha256: f51d97c72f1bbd1c1d134cd9e0c4fbd8b8480a2aca391a2a6c1fc25b401b01d2
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:10:51+00:00'
+  inputs:
+  - phorvex/internal/actuator
+  - phorvex/internal/decision
+  - phorvex/internal/recon
+  inputs_sha256: 6fb47aca483213dce51da54038fbe0c3f629a31696f87c64a3c62cbe3232a73a
+- check: positive_control
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/worker/head-focused.log
+  sha256: 8c237b721e22bc932a9077839f9a54ec55810ecc7bd8014b71a24ee68ac30973
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:10:51+00:00'
+  inputs:
+  - phorvex/internal/actuator/endpoint_locator_test.go
+  - phorvex/internal/actuator/handlers_ai.go
+  - phorvex/internal/actuator/handlers_ai_test.go
+  - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
+  inputs_sha256: 3b518e1bf19ef8d97560b7d544361a288a3e1d8785fa3cf760e1cb94ff9c258e
+- check: preflight
+  result: FAIL
+  by: sol-t9-m035
+  artifact: evidence/preflight/receipt.json
+  sha256: a47b0b35d9d3efc892fa051d10e5b2107cec5e63a5b841137b89b92a9f917abd
+  source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  at: '2026-09-17T00:12:32+00:00'
+- check: l0
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/preflight/run-1789603693335406983/go-phorvex.log
+  sha256: 48818651e0e8ebf2d88cf352a66efa2942513fe4b9a58b87a5514c26badf700e
+  source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  at: '2026-09-17T00:12:47+00:00'
+  inputs:
+  - phorvex/internal/actuator
+  - phorvex/internal/decision
+  - phorvex/internal/recon
+  inputs_sha256: e3c0c110f16d5fe435fdc5ed7cdf9d872ed92a724d35100c5a3b388d4d005d38
+- check: l1
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/preflight/run-1789603693335406983/go-phorvex.log
+  sha256: 48818651e0e8ebf2d88cf352a66efa2942513fe4b9a58b87a5514c26badf700e
+  source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  at: '2026-09-17T00:12:59+00:00'
+  inputs:
+  - phorvex/internal/actuator/endpoint_locator_test.go
+  - phorvex/internal/actuator/endpoint_rotate_safety_test.go
+  - phorvex/internal/actuator/handlers_ai.go
+  - phorvex/internal/actuator/handlers_ai_test.go
+  - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
+  inputs_sha256: ae75caf7f79381655dc4ac301dc4d6bc36f511986153f03be4f202d0deac2524
+- check: l2
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/preflight/run-1789603693335406983/go-phorvex.log
+  sha256: 48818651e0e8ebf2d88cf352a66efa2942513fe4b9a58b87a5514c26badf700e
+  source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  at: '2026-09-17T00:12:59+00:00'
+  inputs:
+  - phorvex/internal/actuator
+  - phorvex/internal/decision
+  - phorvex/internal/recon
+  inputs_sha256: e3c0c110f16d5fe435fdc5ed7cdf9d872ed92a724d35100c5a3b388d4d005d38
+- check: positive_control
+  result: PASS
+  by: sol-t9-m035
+  artifact: evidence/preflight/run-1789603693335406983/go-phorvex.log
+  sha256: 48818651e0e8ebf2d88cf352a66efa2942513fe4b9a58b87a5514c26badf700e
+  source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  at: '2026-09-17T00:12:59+00:00'
+  inputs:
+  - phorvex/internal/actuator/handlers_ai.go
+  - phorvex/internal/actuator/handlers_ai_test.go
+  - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
+  inputs_sha256: f61e707a409d1039067606810e4c05d6992a4ed05378cc3d7e4b9eb883cdca4a
