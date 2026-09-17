@@ -509,6 +509,97 @@ func TestRouteCutoverAcceptedFirstPatchLostPhaseThenUnreadyRestoresOwnedBridge(t
 	}
 }
 
+func TestRouteCutoverUnavailableTargetRetainsImpossibleMixedOwnedState(t *testing.T) {
+	for _, mutate := range []string{"Pod", "Service"} {
+		t.Run(mutate, func(t *testing.T) {
+			f := newRouteUnitFixture(t, model.ActionRouteRotate, 1)
+			result, err := f.native.Actuate(f.ctx, f.request)
+			if err != nil || !result.Emitted {
+				t.Fatalf("initial cutover result=%+v err=%v", result, err)
+			}
+			pod := &corev1.Pod{}
+			if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
+				t.Fatal(err)
+			}
+			for i := range pod.Status.Conditions {
+				if pod.Status.Conditions[i].Type == corev1.PodReady {
+					pod.Status.Conditions[i].Status = corev1.ConditionFalse
+				}
+			}
+			if err := f.client.Client.Status().Update(f.ctx, pod); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
+				t.Fatal(err)
+			}
+			var mixedPodLabels, mixedPodAnnotations map[string]string
+			var mixedServiceSelector map[string]string
+			switch mutate {
+			case "Pod":
+				pod.Annotations = copyLabels(pod.Annotations)
+				delete(pod.Annotations, routeEpochKey(model.ActionRouteRotate))
+				if err := f.client.Client.Update(f.ctx, pod); err != nil {
+					t.Fatal(err)
+				}
+				mixedPodLabels, mixedPodAnnotations = copyLabels(pod.Labels), copyLabels(pod.Annotations)
+			case "Service":
+				svc := &corev1.Service{}
+				if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.service), svc); err != nil {
+					t.Fatal(err)
+				}
+				var protected corev1.ConfigMapList
+				if err := f.client.List(f.ctx, &protected, client.InNamespace("route-operator")); err != nil {
+					t.Fatal(err)
+				}
+				foundReceipt := false
+				for i := range protected.Items {
+					if protected.Items[i].Labels[journalLabel] != "v1" {
+						continue
+					}
+					recorded, readErr := readRouteReceipt(&protected.Items[i])
+					if readErr != nil {
+						t.Fatal(readErr)
+					}
+					svc.Spec.Selector = copyLabels(svc.Spec.Selector)
+					svc.Spec.Selector[routeBridgeLabel] = recorded.BridgeValue
+					foundReceipt = true
+				}
+				if !foundReceipt {
+					t.Fatal("terminal route receipt missing")
+				}
+				if err := f.client.Client.Update(f.ctx, svc); err != nil {
+					t.Fatal(err)
+				}
+				mixedServiceSelector = copyLabels(svc.Spec.Selector)
+			}
+
+			events, recoverErr := f.native.RecoverOperations(f.ctx, false)
+			if recoverErr == nil || len(events) == 0 {
+				t.Fatalf("impossible mixed %s state was accepted: events=%+v err=%v", mutate, events, recoverErr)
+			}
+			if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
+				t.Fatal(err)
+			}
+			if mutate == "Pod" && (!reflect.DeepEqual(pod.Labels, mixedPodLabels) || !reflect.DeepEqual(pod.Annotations, mixedPodAnnotations)) {
+				t.Fatalf("mixed Pod owned fields were overwritten: labels=%v annotations=%v", pod.Labels, pod.Annotations)
+			}
+			if mutate == "Service" {
+				svc := &corev1.Service{}
+				if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.service), svc); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(svc.Spec.Selector, mixedServiceSelector) {
+					t.Fatalf("mixed Service owned fields were overwritten: %v", svc.Spec.Selector)
+				}
+			}
+			var retained corev1.ConfigMapList
+			if err := f.client.List(f.ctx, &retained, client.InNamespace("route-operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(retained.Items) != 1 {
+				t.Fatalf("unresolved receipt count=%d err=%v", len(retained.Items), err)
+			}
+		})
+	}
+}
+
 func TestRouteCutoverNewOperationSupersedesTerminalAndOldRollbackRefuses(t *testing.T) {
 	f := newRouteUnitFixture(t, model.ActionRouteRotate, 1)
 	first, err := f.native.Actuate(f.ctx, f.request)

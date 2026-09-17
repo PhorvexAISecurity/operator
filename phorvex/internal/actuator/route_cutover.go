@@ -973,27 +973,18 @@ func ensureRouteGuardForReceipt(ctx context.Context, ec EnactCtx, cm *corev1.Con
 }
 
 func routePodOwnedRecoverable(pod *corev1.Pod, r operationReceipt) bool {
-	if pod == nil || string(pod.UID) != r.TargetUID {
-		return false
-	}
-	route := ownedValue(pod.Labels, labelRouteKey)
-	epoch := ownedValue(pod.Annotations, r.RouteEpochKey)
-	bridge := ownedValue(pod.Labels, routeBridgeLabel)
-	validRoute := route == r.BeforePodRoute || route == routeAppliedValue(r.RouteValue)
-	validEpoch := epoch == r.BeforePodEpoch || epoch == routeAppliedValue(r.RouteValue)
-	validBridge := bridge == r.BeforePodBridge || bridge == routeAppliedValue(r.BridgeValue)
-	return validRoute && validEpoch && validBridge
+	appliedRoute := routeAppliedValue(r.RouteValue)
+	appliedBridge := routeAppliedValue(r.BridgeValue)
+	return routePodState(pod, r, r.BeforePodRoute, r.BeforePodEpoch, r.BeforePodBridge) ||
+		routePodState(pod, r, r.BeforePodRoute, r.BeforePodEpoch, appliedBridge) ||
+		routePodState(pod, r, appliedRoute, appliedRoute, appliedBridge) ||
+		routePodState(pod, r, appliedRoute, appliedRoute, r.BeforePodBridge)
 }
 
 func routeServiceOwnedRecoverable(svc *corev1.Service, r operationReceipt) bool {
-	if svc == nil || string(svc.UID) != r.ServiceUID || !routeUnrelatedSelectorExact(svc, r) {
-		return false
-	}
-	route := ownedValue(svc.Spec.Selector, labelRouteKey)
-	bridge := ownedValue(svc.Spec.Selector, routeBridgeLabel)
-	validRoute := route == r.BeforeServiceRoute || route == (routeOwnedValue{}) || route == routeAppliedValue(r.RouteValue)
-	validBridge := bridge == r.BeforeServiceBridge || bridge == routeAppliedValue(r.BridgeValue)
-	return validRoute && validBridge
+	return routeServiceState(svc, r, r.BeforeServiceRoute, r.BeforeServiceBridge) ||
+		routeServiceState(svc, r, routeOwnedValue{}, routeAppliedValue(r.BridgeValue)) ||
+		routeServiceState(svc, r, routeAppliedValue(r.RouteValue), r.BeforeServiceBridge)
 }
 
 func routeReadyOriginalSiblings(ctx context.Context, reader client.Reader, r operationReceipt) (int, error) {
