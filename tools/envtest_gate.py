@@ -64,6 +64,7 @@ REQUIRED = {
         'TestM040RequestDrainAPIServerLifecycleAndRecovery',
         'TestRouteCutoverActualAPIAndKCMEndpointSliceLifecycle',
         'TestM093RealAPISecretAuthorizationAndProtectedTLSRecovery',
+        'TestM064RealAPIAcknowledgementCASAndLifecycle',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',
@@ -74,6 +75,7 @@ REQUIRED = {
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
         'TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController',
         'TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController',
+        'TestM064RealAPIRunnerNativeAccounting',
     ),
     'github.com/phorvex/phorvex/internal/authz': (
         'TestClusterScopedReviewRejectsNamespacedOnlyGrant',

@@ -150,9 +150,9 @@ func TestM090TerminatingTargetStopsNativeAndAIHandlersBeforeEffect(t *testing.T)
 		active := pod.DeepCopy()
 		active.DeletionTimestamp = nil
 		active.Finalizers = nil
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(active).Build()
+		c := fakeC(active)
 		stack := &mockVLLM{}
-		result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: stack}, req)
+		result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: stack}, boundReq(active, model.ActionKVReset))
 		if err != nil || !result.Emitted || stack.resetCalls != 1 {
 			t.Fatalf("active AI control failed: result=%+v calls=%d err=%v", result, stack.resetCalls, err)
 		}

@@ -6,6 +6,7 @@ package actuator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -107,6 +108,9 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("native actuator: %s", model.IdentityRotateUnsupportedReason)
 	}
 	if err := prepareServingAttempt(ctx, &ec, req); err != nil {
+		if pending, lookupErr := pendingProtectedServingReceipt(ctx, ec, req); pending {
+			return Result{Actuator: "native", Handler: string(req.Action), MutationKind: "partial", Note: "protected serving operation remains pending; preparation failure cannot authorize fallback"}, errors.Join(err, lookupErr)
+		}
 		return Result{}, err
 	}
 	h, ok := HandlerRegistry.Get(string(req.Action))

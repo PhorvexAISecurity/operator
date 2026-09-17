@@ -29,6 +29,11 @@ import (
 	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
+func ownedMetadataValue(values map[string]string, key string) model.OwnedValue {
+	value, present := values[key]
+	return model.OwnedValue{Present: present, Value: value}
+}
+
 // Snapshot is one cluster-wide ingest pass shared by all tenants in a tick: the
 // projected pods, the built blast-radius graph, namespace labels, and the
 // SecurityEvent stream. Built once per tick (NFR1: <1s for <=1000 pods) so per-tenant
@@ -516,6 +521,9 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out.ModelID = serving.ModelID
 	// Session epoch: either flush bumps it, and either resets the session exposure clock (PHVX-67).
 	out.SessionEpoch = p.Annotations["phorvex.ai/kv-reset-epoch"] + "|" + p.Annotations["phorvex.ai/kv-migrate-epoch"]
+	out.KVResetEpoch = ownedMetadataValue(p.Annotations, "phorvex.ai/kv-reset-epoch")
+	out.KVMigrateEpoch = ownedMetadataValue(p.Annotations, "phorvex.ai/kv-migrate-epoch")
+	out.KVLocalEffectEpoch = ownedMetadataValue(p.Annotations, "phorvex.ai/kv-local-effect-epoch")
 	// M-23 per-action exposure epochs: the `phorvex.ai/*-epoch` labels the pod-alive rotation
 	// handlers stamp (= pod.ResourceVersion at actuation). "" when the marker is absent (never
 	// actuated, or stripped by a rollback) — ExposureFingerprints absent-skips those so the
@@ -527,6 +535,7 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out.AdapterEpoch = p.Labels["phorvex.ai/adapter-epoch"]
 	out.DrainEpoch = p.Labels["phorvex.ai/drain-epoch"]
 	out.GuardrailEpoch = p.Labels["phorvex.ai/guardrail-epoch"]
+	out.GuardrailEpochObservation = ownedMetadataValue(p.Labels, "phorvex.ai/guardrail-epoch")
 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
 	out.RouteService = p.Annotations["phorvex.ai/route-service"]
 	out.ParallelSize, _ = strconv.Atoi(p.Annotations["phorvex.ai/parallel-size"])

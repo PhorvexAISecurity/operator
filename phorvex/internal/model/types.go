@@ -306,6 +306,15 @@ type RotationOwnership struct {
 	OwnerResourceVersion string
 }
 
+// OwnedValue preserves the distinction between a missing Kubernetes metadata
+// key and a present key whose value is empty. Protected serving operations use
+// these observations for optimistic selection freshness; concatenated legacy
+// fingerprints are deliberately not parsed back into this form.
+type OwnedValue struct {
+	Present bool
+	Value   string
+}
+
 type Pod struct {
 	RotationOwnership RotationOwnership
 
@@ -338,19 +347,23 @@ type Pod struct {
 	// time an actuator flushes this pod's KV-cache or agent session, and is what clocks
 	// model.VarSession — WITHOUT it, a session-affecting action has no exposure clock of its own
 	// and falls through to podIdentity, which it never changes (PHVX-67).
-	SessionEpoch string
+	SessionEpoch       string
+	KVResetEpoch       OwnedValue
+	KVMigrateEpoch     OwnedValue
+	KVLocalEffectEpoch OwnedValue
 	// M-23 per-action exposure epochs — the `phorvex.ai/*-epoch` markers the pod-alive
 	// rotation handlers write (= pod.ResourceVersion at actuation). "" = never actuated /
 	// marker absent, in which case ExposureFingerprints skips it (the variable stays
 	// unclocked and the guard fail-OPENs the first actuation). Each clocks the matching
 	// model.Var* dimension.
-	QuarantineEpoch string // phorvex.ai/quarantine-epoch  -> VarNetworkIdentity (M-23 D2 stamp)
-	RouteKeyEpoch   string // phorvex.ai/route-key         -> VarRouteKey (endpoint- & route-rotate re-key)
-	IdentityEpoch   string // phorvex.ai/identity-epoch    -> VarIdentity
-	AdapterEpoch    string // phorvex.ai/adapter-epoch     -> VarAdapterEpoch
-	DrainEpoch      string // phorvex.ai/drain-epoch       -> VarDrainEpoch (M-23 A1 stamp)
-	GuardrailEpoch  string // phorvex.ai/guardrail-epoch   -> VarGuardrailEpoch
-	Stateful        bool   // owned by a StatefulSet or mounts a PVC / Job
+	QuarantineEpoch           string // phorvex.ai/quarantine-epoch  -> VarNetworkIdentity (M-23 D2 stamp)
+	RouteKeyEpoch             string // phorvex.ai/route-key         -> VarRouteKey (endpoint- & route-rotate re-key)
+	IdentityEpoch             string // phorvex.ai/identity-epoch    -> VarIdentity
+	AdapterEpoch              string // phorvex.ai/adapter-epoch     -> VarAdapterEpoch
+	DrainEpoch                string // phorvex.ai/drain-epoch       -> VarDrainEpoch (M-23 A1 stamp)
+	GuardrailEpoch            string // phorvex.ai/guardrail-epoch   -> VarGuardrailEpoch
+	GuardrailEpochObservation OwnedValue
+	Stateful                  bool // owned by a StatefulSet or mounts a PVC / Job
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---

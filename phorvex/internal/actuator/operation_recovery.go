@@ -53,6 +53,17 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 			events = append(events, ev)
 			continue
 		}
+		if r.Version == servingEffectReceiptVersion {
+			handled, effect, gcErr := gcCompletedServingReceipt(ctx, ec, &entry.CM, r)
+			if handled {
+				ev.Effect, ev.Err = effect, gcErr
+				if gcErr == nil {
+					ev.Outcome = "confirmed"
+				}
+				events = append(events, ev)
+				continue
+			}
+		}
 		entryEC := ec
 		entryEC.ServingRequest = Request{Namespace: r.PolicyNamespace, Pod: r.TargetName, TargetUID: r.TargetUID, PolicyName: r.PolicyName, PolicyUID: r.PolicyUID, Action: action}
 		if servingHTTPAction(action) {
@@ -87,6 +98,8 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 					ev.Effect, _, ev.Err = recoverRequestDrain(ctx, entryEC, &entry.CM, &r)
 				case "adapter-rotate":
 					ev.Effect, ev.Err = recoverAdapterRotate(ctx, entryEC, &entry.CM, &r)
+				case string(model.ActionKVReset), string(model.ActionKVMigrateInvalidate), string(model.ActionGuardrailRotate):
+					ev.Effect, ev.Err = recoverProtectedServingEffect(ctx, entryEC, &entry.CM, &r)
 				}
 			}
 		}
@@ -103,6 +116,31 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 		events = append(events, ev)
 	}
 	return events, nil
+}
+
+func gcCompletedServingReceipt(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r operationReceipt) (bool, string, error) {
+	if r.Version != servingEffectReceiptVersion || !terminalServingPhase(r.Phase) {
+		return false, "", nil
+	}
+	if ec.Reader == nil {
+		return true, "", fmt.Errorf("protected serving terminal target cannot be classified without an authoritative reader")
+	}
+	pod := &corev1.Pod{}
+	err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.TargetName}, pod)
+	switch {
+	case err == nil && string(pod.UID) == r.TargetUID:
+		return false, "", nil
+	case err == nil:
+		// A same-name successor is not the exact old target. The receipt remains
+		// bound to the absent UID and may be retired without touching the successor.
+	case apierrors.IsNotFound(err):
+	case err != nil:
+		return true, "", fmt.Errorf("protected serving terminal target absence is unconfirmed: %w", err)
+	}
+	if err := journalFinish(ctx, ec, cm); err != nil {
+		return true, "", fmt.Errorf("protected serving terminal receipt GC was not acknowledged: %w", err)
+	}
+	return true, fmt.Sprintf("terminal protected %s receipt garbage-collected after exact target UID absence", r.Kind), nil
 }
 
 func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (string, error) {

@@ -327,6 +327,9 @@ func (g httpGuardrail) ApplyVariant(ctx context.Context, ep servingEndpoint, var
 	if err != nil {
 		return err
 	}
+	if code == http.StatusAccepted {
+		return errServingQueued
+	}
 	if !okCode(code) {
 		return fmt.Errorf("guardrail reload: HTTP %d", code)
 	}
@@ -342,7 +345,33 @@ func (g httpGuardrail) ApplyVariant(ctx context.Context, ep servingEndpoint, var
 // enforce a separate operator-owned peer allowlist before dialing tenant-declared endpoints.
 type kvTransferController interface {
 	InvalidateLocal(ctx context.Context, ep servingEndpoint) error
-	MigrateRemote(ctx context.Context, ep servingEndpoint, peers []string) error
+	MigrateRemote(ctx context.Context, ep servingEndpoint, peers []string) ([]kvPeerOutcome, error)
+}
+
+type kvPeerDisposition string
+
+const (
+	kvPeerConfirmed            kvPeerDisposition = "confirmed"
+	kvPeerNotSentUnimplemented kvPeerDisposition = "not-sent-unimplemented"
+	kvPeerRefusedBeforeSend    kvPeerDisposition = "refused-before-send"
+	kvPeerUnknownAfterDispatch kvPeerDisposition = "unknown-after-dispatch"
+)
+
+type kvPeerOutcome struct {
+	Peer        string            `json:"peer"`
+	Disposition kvPeerDisposition `json:"disposition"`
+}
+
+func (o kvPeerOutcome) valid() bool {
+	if o.Peer == "" || len(o.Peer) > 300 {
+		return false
+	}
+	switch o.Disposition {
+	case kvPeerConfirmed, kvPeerNotSentUnimplemented, kvPeerRefusedBeforeSend, kvPeerUnknownAfterDispatch:
+		return true
+	default:
+		return false
+	}
 }
 
 type httpKVTransfer struct{ v *httpVLLM }
@@ -360,16 +389,23 @@ func (k httpKVTransfer) InvalidateLocal(ctx context.Context, ep servingEndpoint)
 	if err != nil {
 		return err
 	}
+	if code == http.StatusAccepted {
+		return errServingQueued
+	}
 	if !okCode(code) {
 		return fmt.Errorf("kv invalidate(local): HTTP %d", code)
 	}
 	return nil
 }
 
-func (k httpKVTransfer) MigrateRemote(_ context.Context, _ servingEndpoint, _ []string) error {
+func (k httpKVTransfer) MigrateRemote(_ context.Context, _ servingEndpoint, peers []string) ([]kvPeerOutcome, error) {
 	// DEFERRED by design — cross-worker KV migration/invalidation needs a live disaggregated P/D
 	// fabric (RDMA/NVLink connector). Honest fail-closed rather than fabricate a cross-worker effect.
-	return fmt.Errorf("kv MigrateRemote not built [PENDING-GPU-VALIDATION]: needs a disaggregated P/D deployment + connector")
+	outcomes := make([]kvPeerOutcome, 0, len(peers))
+	for _, peer := range peers {
+		outcomes = append(outcomes, kvPeerOutcome{Peer: peer, Disposition: kvPeerNotSentUnimplemented})
+	}
+	return outcomes, fmt.Errorf("kv MigrateRemote not built [PENDING-GPU-VALIDATION]: needs a disaggregated P/D deployment + connector")
 }
 
 // ---- REAL MIG node-exec transport (completes mig-rebind) ----

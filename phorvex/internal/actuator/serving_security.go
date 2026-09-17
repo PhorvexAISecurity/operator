@@ -273,6 +273,8 @@ func secureServingReceipt(r operationReceipt) bool {
 		return r.Version == requestDrainSecureReceiptVersion
 	case string(model.ActionAdapterRotate):
 		return r.Version == adapterRotateSecureReceiptVersion
+	case string(model.ActionKVReset), string(model.ActionKVMigrateInvalidate), string(model.ActionGuardrailRotate):
+		return r.Version == servingEffectReceiptVersion && !r.ServingLegacy
 	default:
 		return false
 	}

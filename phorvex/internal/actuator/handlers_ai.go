@@ -688,51 +688,7 @@ func declaredKVEndpoint(ctx context.Context, ec EnactCtx, req Request, pod *core
 func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
 	req.Action = model.ActionKVReset
 	ec.ServingRequest = req
-	pod, refusal, err := authoritativeRawKVPod(ctx, ec, req, "kv-reset")
-	if pod == nil {
-		return refusal, err
-	}
-	ep, reason := declaredKVEndpoint(ctx, ec, req, pod)
-	if reason != "" {
-		return refuseAI("kv-reset", reason)
-	}
-	// REAL in-process flush via the serving stack (vLLM); the pod is NOT killed (the defining property).
-	flushNote := ""
-	resetErr := ec.vllm().ResetPrefixCache(ctx, ep)
-	switch {
-	case resetErr == nil:
-		flushNote = "KV/prefix cache flushed via the serving stack (defeats wipe-surviving implant)"
-	case errors.Is(resetErr, errStackUnreachable):
-		// [FAIL-CLOSED FIX] No serving stack reachable (pod Pending / no IP / no vLLM). This branch
-		// used to fall through and return Emitted:true with a "flush NOT performed" note — so a move
-		// that flushed NOTHING was recorded as a real actuation, counted in phorvex_actuations_total,
-		// and narrated to the customer as "Cleared injected state on the inference workload". A KV
-		// flush that did not happen is not a defence: report it as NOT emitted and write no epoch
-		// (a "flush epoch" for a flush that never ran is a false forensic record).
-		return HandlerResult{
-			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
-			Note: "[PENDING-GPU-VALIDATION] kv-reset NOT performed: serving stack unreachable at " +
-				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — no cache was flushed",
-		}, nil
-	default:
-		// The request may have reached the stack. Keep that uncertainty in the
-		// result while refusing to credit success or write a false flush epoch.
-		return HandlerResult{
-			MutationKind: "partial",
-			Note:         fmt.Sprintf("kv-reset serving mutation outcome unknown at %s/%s; no success epoch was written", req.Namespace, req.Pod),
-		}, fmt.Errorf("kv-reset %s/%s: serving-stack flush outcome unknown: %w", req.Namespace, req.Pod, resetErr)
-	}
-	// record the flush epoch (forensic + idempotent); pod stays alive.
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[annoKVResetEpoch] = pod.ResourceVersion
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("kv-reset epoch %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "forward-only",
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "kv-reset: pod ALIVE; " + flushNote,
-	}, nil
+	return enactProtectedKVReset(ctx, ec, req)
 }
 
 // --- 11. endpoint-rotate — REAL route restitch (re-key + Service selector) + rollback -------
