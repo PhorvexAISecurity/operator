@@ -1412,7 +1412,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-36 · `guardrail-rotate` credits an unapplied variant · **MAIN_PENDING_DEPLOY** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T14-M036
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:351
