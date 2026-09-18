@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -23,6 +23,14 @@ checks:
     sha256: d3bc4bbfd2eff86310fb1d02670b881f7720795703e40a31d27b1e9abfa8064e
     source_sha: c9dc92b37920f5c8bcf7527148af292268e98051
     at: '2026-09-17T07:02:37+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: b83490ecf3e1662e935a0fad9a8d975e9d6c1d9bc0ed8c36a1bc4e8c75a2482c
+    source_sha: 91104af98b7dcd60c9f1cf3af5d91da718372f8f
+    at: '2026-09-18T22:35:04+00:00'
+    baseline_sha: c9dc92b37920f5c8bcf7527148af292268e98051
 fix_id: T14-M036
 issues:
 - M-36
@@ -92,7 +100,7 @@ next_action:
   owner: sol-t14-m036
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-17T20:27:24+00:00'
+updated_at: '2026-09-18T22:35:04+00:00'
 configuration_history:
 - at: '2026-09-17T07:02:07+00:00'
   by: codex-lead
