@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -91,12 +91,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/runner
     inputs_sha256: b94f4eceb53676a90622f081629ebde49c69e3e566f6979004c55b088b565442
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 86bf80f85577fc999568d72e0676dd0b86fd6d1ac905815574a3ff6d443fa42c
+    source_sha: ee7e57000dbaff856e664bd443056cc33554b99e
+    at: '2026-09-19T17:56:44+00:00'
+    baseline_sha: f319bee63ec7206be2ac69164cdc73671a6cb245
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 6f708b356063ab4ae94880c99b5be42296736caec9d1a01f7982ebf14415bbee
+    source_sha: ee7e57000dbaff856e664bd443056cc33554b99e
+    at: '2026-09-19T17:56:44+00:00'
+    incident_sha256: 86bf80f85577fc999568d72e0676dd0b86fd6d1ac905815574a3ff6d443fa42c
 fix_id: T22-M180
 issues:
 - M-180
 title: Require nonempty validated model inventory for serving readiness
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -141,7 +157,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -157,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T17:56:12+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T17:56:48+00:00'
 configuration_history:
 - at: '2026-09-19T16:29:38+00:00'
   by: codex-lead
@@ -223,6 +239,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T17:56:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T17:56:47+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -234,9 +266,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T22-M180:10:submit
-  from: sol-t22-m180
+  id: T22-M180:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11

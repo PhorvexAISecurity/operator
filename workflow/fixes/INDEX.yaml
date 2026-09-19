@@ -1257,7 +1257,7 @@ fixes:
     issues:
     - M-180
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t22-m180
