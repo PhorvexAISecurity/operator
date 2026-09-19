@@ -1095,7 +1095,24 @@ func (m *Manager) reconcileWedged(ctx context.Context, initial KillSwitchObserva
 }
 
 // tick builds one cluster snapshot and processes all due tenants.
-func (m *Manager) tick(ctx context.Context) tickResult {
+func (m *Manager) tick(ctx context.Context) (result tickResult) {
+	started := time.Now()
+	defer func() {
+		outcome := metrics.ManagerTickFinished
+		switch result {
+		case tickNoSnapshot:
+			outcome = metrics.ManagerTickNoSnapshot
+		case tickSnapshotFailed:
+			outcome = metrics.ManagerTickSnapshotFailed
+		case tickInterrupted:
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				outcome = metrics.ManagerTickDeadline
+			} else {
+				outcome = metrics.ManagerTickCanceled
+			}
+		}
+		metrics.RecordManagerTick(outcome, time.Since(started))
+	}()
 	if ctx.Err() != nil {
 		return tickInterrupted
 	}
@@ -1824,6 +1841,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	killState := &killSwitchTickState{observation: *killObservation}
 	killEngaged := killState.observation.Engaged
 	pol := buildPolicy(e)
+	admittedOwnerEpoch := m.capturedEpoch(pol.Owner())
 	if m.QuarantineCapacity != nil {
 		pol.QuarantineCapacityConfigured = true
 		pol.QuarantineCapacityLimit = m.QuarantineCapacity.Limit()
@@ -2011,10 +2029,24 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		return
 	}
 	if err != nil {
-		metrics.RecordActionSetRejection(pol.Tenant, "cross-block-collision")
+		reason, currentFailure := checkedSelectionRejectionReason(err)
+		if !currentFailure {
+			m.Log.Info("decision tick dropped after policy owner retirement", "tenant", pol.Tenant)
+			return
+		}
+		// A replacement can be admitted while this producer is running. Status has
+		// its own UID guard; keep metrics and audit on the same current-owner side
+		// of that boundary instead of attributing a stale rejection to the new UID.
+		if !m.ownerCurrent(pol.Owner(), admittedOwnerEpoch) {
+			return
+		}
+		dur := time.Since(start)
+		metrics.PublishRejectedTick(pol.Tenant, pol.PolicyName, len(views), dur.Seconds(), reason)
 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
-			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name())
-		rejected := decision.ExistentialRejectedDecisions(views, pol, err.Error(), snap.Now)
+			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name(), "reason", string(reason))
+		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
+			killState.observation.Engaged, string(killState.observation.Cause))
+		rejected := decision.ExistentialRejectedDecisions(views, pol, string(reason), snap.Now)
 		for _, d := range rejected {
 			m.Audit.Record(d)
 		}
@@ -2025,6 +2057,12 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		if len(rejected) > 0 || inventory != nil {
 			m.updateExistentialStatus(ctx, e, rejected, inventory)
 		}
+		namespaceObservation := snap.NamespaceDryRun[e.namespace]
+		if namespaceObservation.Cause == "" {
+			namespaceObservation = actuationbrake.Namespace(nil)
+		}
+		actionsSupport.namespaceDryRun = namespaceObservation
+		m.updateRejectedStatusObserved(ctx, e, len(views), killState.observation, time.Now(), reason, actionsSupport)
 		m.Clock.RetainOwner(pol.Owner(), keep)
 		m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
@@ -2157,7 +2195,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	dur := time.Since(start)
 	metrics.PublishTick(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, decisions, exposuresForMetrics,
 		selected, dur.Seconds(), pol.Mode, m.uniqueOwnerOf(pol.Tenant))
-	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode,
+	m.Audit.TickSummaryForPolicy(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(decisions), selected, infeasible, dur, pol.Mode,
 		finalKillObservation.Engaged, string(finalKillObservation.Cause))
 	m.Clock.RetainOwner(pol.Owner(), keep)
 	m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
@@ -2186,6 +2224,23 @@ func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) boo
 		}
 	}
 	return false
+}
+
+// checkedSelectionRejectionReason separates a stale lifecycle refusal from a
+// failure of the current policy and bounds every externally published reason.
+func checkedSelectionRejectionReason(err error) (metrics.TickRejectionReason, bool) {
+	if errors.Is(err, decision.ErrOwnerRetired) {
+		return "", false
+	}
+	var collision actionset.CrossBlockCollision
+	if errors.As(err, &collision) {
+		return metrics.RejectCrossBlockCollision, true
+	}
+	var collisionPointer *actionset.CrossBlockCollision
+	if errors.As(err, &collisionPointer) {
+		return metrics.RejectCrossBlockCollision, true
+	}
+	return metrics.RejectDecisionContractError, true
 }
 
 func decideTick(optimizer decision.Optimizer, views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {

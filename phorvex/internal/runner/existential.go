@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"reflect"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -30,10 +31,20 @@ func (m *Manager) updateExistentialStatus(ctx context.Context, e *policyEntry, d
 	}
 	var obj v1alpha1.PhorvexPolicy
 	emit := false
+	written := false
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		emit = false
+		written = false
 		if err := m.Client.Get(ctx, e.key, &obj); err != nil {
 			return err
 		}
+		// The policy name may have been deleted and recreated after this tick's
+		// outer owner check. Never attach predecessor existential evidence or an
+		// event to the replacement UID.
+		if string(obj.UID) != e.uid {
+			return nil
+		}
+		before := obj.Status.DeepCopy()
 		old := meta.FindStatusCondition(obj.Status.Conditions, condition.Type)
 		emit = condition.Status == metav1.ConditionTrue && (old == nil || old.Status != condition.Status || old.Message != condition.Message)
 		condition.ObservedGeneration = obj.Generation
@@ -45,13 +56,20 @@ func (m *Manager) updateExistentialStatus(ctx context.Context, e *policyEntry, d
 			inventoryCondition.Message = "PHORVEXSEC-208 interim: outcome inventory contains unresolved policy/workload scope; see policy inventory audit record"
 		}
 		meta.SetStatusCondition(&obj.Status.Conditions, inventoryCondition)
-		return m.Client.Status().Update(ctx, &obj)
+		if reflect.DeepEqual(*before, obj.Status) {
+			return nil
+		}
+		if err := m.Client.Status().Update(ctx, &obj); err != nil {
+			return err
+		}
+		written = true
+		return nil
 	})
 	if err != nil {
 		m.Log.Error(err, "existential status update failed")
 		return
 	}
-	if emit && m.Recorder != nil {
+	if written && emit && m.Recorder != nil {
 		m.Recorder.Event(&obj, corev1.EventTypeWarning, "ExistentialUncontainable", condition.Message)
 	}
 }

@@ -141,10 +141,14 @@ var (
 		Name: "phorvex_ticks_total",
 		Help: "Decision ticks executed, by tenant and policy. The policy label keeps two policies that share one tenant name from collapsing into a single series (M-145).",
 	}, []string{"tenant", "policy"})
+	tickOutcomes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_tick_outcomes_total",
+		Help: "Decision tick results by closed outcome: completed or selection-rejected.",
+	}, []string{"tenant", "policy", "outcome"})
 
 	actionSetRejections = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_action_set_rejections_total",
-		Help: "Decision ticks rejected before optimization because the generated action set violated a structural invariant.",
+		Help: "Decision ticks rejected by checked selection before a decision set was accepted, by bounded reason.",
 	}, []string{"tenant", "reason"})
 
 	scrapeFailuresTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -181,9 +185,14 @@ var (
 
 	tickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "phorvex_tick_duration_seconds",
-		Help:    "Wall-clock duration of a decision tick (NFR1: <1s for <=1000 pods).",
+		Help:    "Wall-clock duration of one admitted policy's decision, dispatch and decision-record portion; excludes shared manager ingest/graph and later tick summary, retained-state cleanup, status writes and cadence credit.",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
 	}, []string{"tenant"})
+	managerTickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "phorvex_manager_tick_duration_seconds",
+		Help:    "Wall-clock duration of the complete serialized manager tick, including shared ingest, graph construction, admitted policy work and status writes, by closed outcome.",
+		Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120},
+	}, []string{"outcome"})
 
 	// ---- RLS cost-calibrator observability (PHVX-10c / PHORVEXSEC-98) ----
 	//
@@ -225,8 +234,8 @@ func init() {
 		podPerDollar, podProactiveRate, tenantLambda, policyLambda, tenantCollisions,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
 		decisionsTotal, actuationsTotal, actuationAttempts, actuationFailures, actuationSuppressions,
-		actuationConfirmations, maintenanceAttempts, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
-		costNaNUnactionable, requestDrainAborted, tickDuration,
+		actuationConfirmations, maintenanceAttempts, ticksTotal, tickOutcomes, actionSetRejections, epssLookupTotal, eventsAgedOut,
+		costNaNUnactionable, requestDrainAborted, tickDuration, managerTickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
 		candidatesExcludedTotal, candidatesRBACUnknownTotal, actuationCircuitCollector{},
@@ -238,6 +247,25 @@ func init() {
 // confirmation remains in phorvex_actuation_confirmations_total.
 type ActuationAttemptOutcome string
 
+// TickOutcome is the closed result of one admitted decision tick. A rejected
+// selection is still a tick for denominator and latency accounting, but it did
+// not produce a decision set.
+type TickOutcome string
+
+const (
+	TickCompleted         TickOutcome = "completed"
+	TickSelectionRejected TickOutcome = "selection-rejected"
+)
+
+// TickRejectionReason is the bounded classification of a checked-selection
+// refusal. It is deliberately independent of the free-form optimizer error.
+type TickRejectionReason string
+
+const (
+	RejectCrossBlockCollision   TickRejectionReason = "cross-block-collision"
+	RejectDecisionContractError TickRejectionReason = "decision-contract-error"
+)
+
 const (
 	AttemptAccepted   ActuationAttemptOutcome = "accepted-emission"
 	AttemptError      ActuationAttemptOutcome = "dispatch-error"
@@ -248,6 +276,24 @@ const (
 	AttemptReconciled ActuationAttemptOutcome = "reconciled-prior-operation"
 	AttemptDeclared   ActuationAttemptOutcome = "declared-only"
 )
+
+// ManagerTickOutcome is the bounded completion class for one complete serialized
+// manager tick. It intentionally carries no tenant or object identity.
+type ManagerTickOutcome string
+
+const (
+	ManagerTickFinished       ManagerTickOutcome = "finished-full-snapshot"
+	ManagerTickNoSnapshot     ManagerTickOutcome = "no-snapshot"
+	ManagerTickSnapshotFailed ManagerTickOutcome = "snapshot-failed"
+	ManagerTickDeadline       ManagerTickOutcome = "deadline"
+	ManagerTickCanceled       ManagerTickOutcome = "canceled"
+)
+
+// RecordManagerTick observes the complete manager tick rather than the earlier
+// per-policy portion recorded by phorvex_tick_duration_seconds.
+func RecordManagerTick(outcome ManagerTickOutcome, duration time.Duration) {
+	managerTickDuration.WithLabelValues(string(outcome)).Observe(duration.Seconds())
+}
 
 // ActuationSuppressionReason is the closed vocabulary for selected actions stopped before
 // Actuate. It is deliberately separate from failure metrics.
@@ -473,13 +519,18 @@ func RestoreUniqueOwnerSample(tenant, namespace, policy, uid string) bool {
 	return true
 }
 
-// PublishTick records one tenant's tick: re-publishes per-pod gauges, the rollups,
-// and the counters.
-func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string, uniqueOwner bool) {
-	RefreshOwnerPodSeries(tenant, uid)
+func publishTickEnvelope(tenant, policy string, protected int, durSeconds float64, outcome TickOutcome) {
 	ticksTotal.WithLabelValues(tenant, policy).Inc()
 	tickDuration.WithLabelValues(tenant).Observe(durSeconds)
-	protectedPods.WithLabelValues(tenant).Set(float64(len(decisions)))
+	protectedPods.WithLabelValues(tenant).Set(float64(protected))
+	tickOutcomes.WithLabelValues(tenant, policy, string(outcome)).Inc()
+}
+
+// PublishTick records one completed tenant tick: re-publishes per-pod gauges,
+// the rollups, and the counters.
+func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string, uniqueOwner bool) {
+	RefreshOwnerPodSeries(tenant, uid)
+	publishTickEnvelope(tenant, policy, len(decisions), durSeconds, TickCompleted)
 	selectedPods.WithLabelValues(tenant).Set(float64(selected))
 
 	for _, d := range decisions {
@@ -506,6 +557,19 @@ func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decisi
 			podExposure.WithLabelValues(tenant, ns, pod, variable, uid).Set(secs)
 		}
 	}
+}
+
+// PublishRejectedTick records the envelope of a checked-selection refusal. It
+// intentionally does not touch decision rows, selected moves, exposure rows or
+// learned-price series: none of those results exists for a rejected action set.
+func PublishRejectedTick(tenant, policy string, protected int, durSeconds float64, reason TickRejectionReason) {
+	switch reason {
+	case RejectCrossBlockCollision, RejectDecisionContractError:
+	default:
+		reason = RejectDecisionContractError
+	}
+	publishTickEnvelope(tenant, policy, protected, durSeconds, TickSelectionRejected)
+	actionSetRejections.WithLabelValues(tenant, string(reason)).Inc()
 }
 
 // RecordEPSSLookup counts one exploitability-cache lookup by outcome (M-141).
@@ -564,11 +628,6 @@ func RecordActuationConfirmation(backend, outcome string) {
 
 func RecordMaintenanceAttempt(operation, outcome string) {
 	maintenanceAttempts.WithLabelValues(operation, outcome).Inc()
-}
-
-// RecordActionSetRejection counts a fail-closed tick before any decision or actuation.
-func RecordActionSetRejection(tenant, reason string) {
-	actionSetRejections.WithLabelValues(tenant, reason).Inc()
 }
 
 // RecordCostNaNUnactionable makes every fail-conservative NaN exclusion visible
