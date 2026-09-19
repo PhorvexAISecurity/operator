@@ -165,7 +165,13 @@ func TestM079RenderedMainStartupSelectsMIGAuthorization(t *testing.T) {
 	}
 	m079WaitMainExecReview(t, ctx, restricted, false)
 
-	defaultOutput := m079RunMainUntil(t, bin, kubeconfig, defaultArgs, "startup authorization preflight passed")
+	// Wait past the optional MIG wiring branch. Reaching only the startup
+	// authorization marker would not prove that the default stayed on the
+	// unwired transport path.
+	defaultOutput := m079RunMainUntil(t, bin, kubeconfig, defaultArgs, "decision brain")
+	if !strings.Contains(defaultOutput, "startup authorization preflight passed") {
+		t.Fatalf("default startup did not pass authorization before composition:\n%s", defaultOutput)
+	}
 	if strings.Contains(defaultOutput, "MIG agent execution") || strings.Contains(defaultOutput, "trusted MIG node-exec transport wired") {
 		t.Fatalf("default startup selected MIG authorization or transport:\n%s", defaultOutput)
 	}
