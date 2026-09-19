@@ -47,6 +47,55 @@ type m034RecordingActuator struct {
 	err    error
 }
 
+type m034BoundedLog struct {
+	mu   sync.Mutex
+	tail []byte
+}
+
+const m034KCMLogLimit = 64 * 1024
+
+func (l *m034BoundedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(p) >= m034KCMLogLimit {
+		l.tail = append(l.tail[:0], p[len(p)-m034KCMLogLimit:]...)
+		return len(p), nil
+	}
+	l.tail = append(l.tail, p...)
+	if len(l.tail) > m034KCMLogLimit {
+		l.tail = append([]byte(nil), l.tail[len(l.tail)-m034KCMLogLimit:]...)
+	}
+	return len(p), nil
+}
+
+func (l *m034BoundedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return string(append([]byte(nil), l.tail...))
+}
+
+func m034NonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range addresses {
+		var ip net.IP
+		switch parsed := address.(type) {
+		case *net.IPNet:
+			ip = parsed.IP
+		case *net.IPAddr:
+			ip = parsed.IP
+		}
+		if ip4 := ip.To4(); ip4 != nil && ip4.IsGlobalUnicast() && !ip4.IsLoopback() {
+			return ip4.String()
+		}
+	}
+	t.Fatal("isolated EndpointSlice fixture requires a non-loopback local IPv4 address")
+	return ""
+}
+
 func (r *m034RecordingActuator) Name() string { return r.inner.Name() }
 func (r *m034RecordingActuator) EnsurePolicy(ctx context.Context, target actuator.TenantTarget) error {
 	return r.inner.EnsurePolicy(ctx, target)
@@ -110,18 +159,53 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	}
 	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+kubeconfig, "--controllers=replicaset,endpointslice", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	var kcmLog m034BoundedLog
+	cmd.Stdout, cmd.Stderr = &kcmLog, &kcmLog
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cancel(); _ = cmd.Wait() })
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("bounded kube-controller-manager log:\n%s", kcmLog.String())
+		}
+		cancel()
+		_ = cmd.Wait()
+	})
 	c, err := client.NewWithWatch(cfg, client.Options{Scheme: m034Scheme(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		var failedPods corev1.PodList
+		var failedSlices discoveryv1.EndpointSliceList
+		_ = c.List(context.Background(), &failedPods)
+		_ = c.List(context.Background(), &failedSlices)
+		podState := make([]string, 0, len(failedPods.Items))
+		for i := range failedPods.Items {
+			pod := &failedPods.Items[i]
+			podState = append(podState, fmt.Sprintf("%s/%s uid=%s role=%s IPs=%v deleting=%t", pod.Namespace, pod.Name, pod.UID, pod.Labels["phorvex.ai/role"], pod.Status.PodIPs, pod.DeletionTimestamp != nil))
+		}
+		sliceState := make([]string, 0, len(failedSlices.Items))
+		for i := range failedSlices.Items {
+			slice := &failedSlices.Items[i]
+			for j := range slice.Endpoints {
+				endpoint := &slice.Endpoints[j]
+				target := ""
+				if endpoint.TargetRef != nil {
+					target = endpoint.TargetRef.Namespace + "/" + endpoint.TargetRef.Name + " uid=" + string(endpoint.TargetRef.UID)
+				}
+				sliceState = append(sliceState, fmt.Sprintf("%s/%s addresses=%v target=%s", slice.Namespace, slice.Name, endpoint.Addresses, target))
+			}
+		}
+		t.Logf("failure-state Pods=%v EndpointSlices=%v", podState, sliceState)
+	})
 
 	var servingMu sync.Mutex
 	servingCalls := make([]string, 0, 5)
-	stack := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	stack := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		servingMu.Lock()
 		servingCalls = append(servingCalls, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
 		servingMu.Unlock()
@@ -140,6 +224,15 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		}
 		_, _ = w.Write([]byte(`{}`))
 	}))
+	if err := stack.Listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp4", net.JoinHostPort(m034NonLoopbackIPv4(t), "0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack.Listener = listener
+	stack.StartTLS()
 	t.Cleanup(stack.Close)
 	stackURL, err := url.Parse(stack.URL)
 	if err != nil {
@@ -182,7 +275,8 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		t.Fatal(err)
 	}
 	replicas := int32(2)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText}}, Spec: corev1.PodSpec{NodeName: node.Name, ServiceAccountName: "model-sa", Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
+	zero := int64(0)
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText}}, Spec: corev1.PodSpec{NodeName: node.Name, ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
 	}
@@ -202,6 +296,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		}
 		p.Status.Phase = corev1.PodRunning
 		p.Status.PodIP = host
+		p.Status.PodIPs = []corev1.PodIP{{IP: host}}
 		p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 		if err := c.Status().Update(ctx, p); err != nil {
 			t.Fatal(err)
@@ -250,7 +345,8 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		ProfileID: "m078-model-admin", SecretName: secret.Name, BearerKey: "bearer", CAKey: "ca.crt", ServerName: serverName,
 	}))
 	recording := &m034RecordingActuator{inner: native}
-	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native)
+	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native).
+		WithPolicyIdentity(policy.Name, string(policy.UID))
 	engine := decision.NewCoverageEngine()
 	wireCapabilityGates(engine, wit, true, func(*model.WorkloadView) bool { return false })
 	pol := model.Policy{Tenant: "m034", Namespace: ns, Mode: "active", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1, ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second, MinAvailableReplicas: 1, PolicyName: policy.Name, PolicyUID: string(policy.UID), EnabledActions: map[model.Action]bool{model.ActionWarmSwap: true}}
@@ -281,6 +377,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 				}
 				q.Status.Phase = corev1.PodRunning
 				q.Status.PodIP = host
+				q.Status.PodIPs = []corev1.PodIP{{IP: host}}
 				q.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 				if e := c.Status().Update(ctx, q); e == nil {
 					readyDone <- nil
