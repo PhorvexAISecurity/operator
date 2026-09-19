@@ -1279,7 +1279,7 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t24-m137-audit
@@ -1290,7 +1290,7 @@ fixes:
     issues:
     - M-181
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t24-m181
