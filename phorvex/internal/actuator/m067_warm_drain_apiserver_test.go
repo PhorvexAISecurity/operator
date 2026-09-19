@@ -20,6 +20,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -97,6 +98,28 @@ func (b *m067Backend) counts() (int, []string) {
 	return b.posts, append([]string(nil), b.requests...)
 }
 
+func m067NonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range addresses {
+		var ip net.IP
+		switch parsed := address.(type) {
+		case *net.IPNet:
+			ip = parsed.IP
+		case *net.IPAddr:
+			ip = parsed.IP
+		}
+		if ip4 := ip.To4(); ip4 != nil && ip4.IsGlobalUnicast() && !ip4.IsLoopback() {
+			return ip4.String()
+		}
+	}
+	t.Fatal("isolated EndpointSlice fixture requires a non-loopback local IPv4 address")
+	return ""
+}
+
 type m067APIFixture struct {
 	client  client.WithWatch
 	native  *NativeActuator
@@ -117,7 +140,16 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 		}
 	}
 	backend := &m067Backend{mode: mode}
-	server := httptest.NewTLSServer(http.HandlerFunc(backend.handler))
+	server := httptest.NewUnstartedServer(http.HandlerFunc(backend.handler))
+	if err := server.Listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp4", net.JoinHostPort(m067NonLoopbackIPv4(t), "0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Listener = listener
+	server.StartTLS()
 	backend.server = server
 	t.Cleanup(server.Close)
 	serverURL, err := url.Parse(server.URL)
@@ -153,7 +185,8 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 		t.Fatal(err)
 	}
 	replicas := int32(2)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix, labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": suffix, labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false"}, Annotations: map[string]string{annoRouteService: service.Name, "phorvex.ai/model-id": "model", annoServingPort: portText}}, Spec: corev1.PodSpec{NodeName: "m067-node", ServiceAccountName: "model-sa", Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
+	zero := int64(0)
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix, labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": suffix, labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false"}, Annotations: map[string]string{annoRouteService: service.Name, "phorvex.ai/model-id": "model", annoServingPort: portText}}, Spec: corev1.PodSpec{NodeName: "m067-node", ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +211,11 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 		}
 		pod.Status.Phase = corev1.PodRunning
 		pod.Status.PodIP = host
+		pod.Status.PodIPs = []corev1.PodIP{{IP: host}}
 		pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+		// envtest has no kubelet. These explicitly seeded statuses let the real
+		// EndpointSlice controller exercise UID membership, but do not claim
+		// kubelet readiness or cluster Pod-network traffic.
 		if err := c.Status().Update(ctx, pod); err != nil {
 			t.Fatal(err)
 		}
@@ -248,11 +285,50 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cancel(); _ = cmd.Wait() })
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("bounded kube-controller-manager log:\n%s", kcmLog.String())
+		}
+		cancel()
+		_ = cmd.Wait()
+	})
 	c, err := client.NewWithWatch(cfg, client.Options{Scheme: p4bScheme()})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		var pods corev1.PodList
+		var slices discoveryv1.EndpointSliceList
+		_ = c.List(context.Background(), &pods)
+		_ = c.List(context.Background(), &slices)
+		podState := make([]string, 0, len(pods.Items))
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			if !strings.HasPrefix(pod.Namespace, "m067-") {
+				continue
+			}
+			podState = append(podState, fmt.Sprintf("%s/%s uid=%s role=%s IPs=%v deleting=%t", pod.Namespace, pod.Name, pod.UID, pod.Labels[labelRole], pod.Status.PodIPs, pod.DeletionTimestamp != nil))
+		}
+		sliceState := make([]string, 0, len(slices.Items))
+		for i := range slices.Items {
+			slice := &slices.Items[i]
+			if !strings.HasPrefix(slice.Namespace, "m067-") {
+				continue
+			}
+			for j := range slice.Endpoints {
+				endpoint := &slice.Endpoints[j]
+				target := ""
+				if endpoint.TargetRef != nil {
+					target = endpoint.TargetRef.Namespace + "/" + endpoint.TargetRef.Name + " uid=" + string(endpoint.TargetRef.UID)
+				}
+				sliceState = append(sliceState, fmt.Sprintf("%s/%s addresses=%v target=%s", slice.Namespace, slice.Name, endpoint.Addresses, target))
+			}
+		}
+		t.Logf("M067 failure-state Pods=%v EndpointSlices=%v", podState, sliceState)
+	})
 	if err := c.Create(ctx, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "m067-node"}}); err != nil {
 		t.Fatal(err)
 	}
