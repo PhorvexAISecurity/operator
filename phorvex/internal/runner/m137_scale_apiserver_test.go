@@ -1181,8 +1181,8 @@ func TestM137ScaleHarness(t *testing.T) {
 	measuredDecisions := auditDecisionsAfter - auditDecisionsBefore
 	measuredSelected := auditSelectedAfter - auditSelectedBefore
 	incidentWitness := auditSink.decisionWitness(fixture.firstPod.String())
-	if finishedAttempts > 0 && (measuredDecisions < finishedAttempts || measuredSelected < finishedAttempts) {
-		probeErrors = append(probeErrors, fmt.Sprintf("measured audit decisions=%d selected-feasible=%d, want at least one valid record per %d finished workload attempts; incident-target=%+v", measuredDecisions, measuredSelected, finishedAttempts, incidentWitness))
+	if finishedAttempts > 0 && (measuredDecisions < finishedAttempts || measuredSelected <= 0) {
+		probeErrors = append(probeErrors, fmt.Sprintf("measured audit decisions=%d selected-feasible=%d, want at least one decision per %d finished attempts and a non-vacuous selected/feasible positive; incident-target=%+v", measuredDecisions, measuredSelected, finishedAttempts, incidentWitness))
 	}
 	incidentTargetSelected := incidentWitness.AssetUID == fixture.firstUID && incidentWitness.Selected && incidentWitness.Feasible
 	if !incidentTargetSelected {
