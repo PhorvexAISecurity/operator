@@ -13,6 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type recoveryReader struct {
@@ -95,6 +98,13 @@ func recoveryScope(max int) RecoveryScope {
 	return RecoveryScope{OperatorNamespace: "operator", Namespace: "ns", PolicyName: "policy", MaxItems: max}
 }
 
+func activateM091OwnerTracking(t *testing.T, n *NativeActuator) {
+	t.Helper()
+	if err := n.EnsurePolicy(t.Context(), TenantTarget{Tenant: "other", Namespace: "other", PolicyName: "other", PolicyUID: "other-uid"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdministrativeRecoveryProducerInventoryPlanApply(t *testing.T) {
 	ctx := context.Background()
 	n, c := recoveryFixture(t, "b", "a")
@@ -143,6 +153,42 @@ func TestAdministrativeRecoveryProducerInventoryPlanApply(t *testing.T) {
 	}
 }
 
+func TestM091AdministrativeRecoveryKeepsProtectedAuthoritySeparateFromLiveOwnerBindings(t *testing.T) {
+	ctx := t.Context()
+	n, c := recoveryFixture(t, "victim")
+	plan, err := n.PlanRecovery(ctx, recoveryScope(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Activate sticky owner tracking with an unrelated live policy. The protected
+	// recovery policy intentionally has no local preparation on this Native instance.
+	activateM091OwnerTracking(t, n)
+	item := plan.Items[0]
+	publicReq := Request{Namespace: item.Pod.Namespace, Pod: item.Pod.Name, TargetUID: item.Pod.UID, Action: model.ActionQuarantine, PolicyName: item.Policy.Name, PolicyUID: item.Policy.UID}
+	if err := n.Rollback(ctx, publicReq, item.RollbackRef); err == nil || !strings.Contains(err.Error(), "DENIED (O7)") {
+		t.Fatalf("public rollback bypassed owner binding: %v", err)
+	}
+	stillQuarantined := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "victim"}, stillQuarantined); err != nil {
+		t.Fatal(err)
+	}
+	if stillQuarantined.Labels[quarantineLabel] == "" {
+		t.Fatal("refused public rollback changed quarantine state")
+	}
+
+	result, err := n.ApplyRecovery(ctx, plan)
+	if err != nil || !result.Complete || len(result.Items) != 1 || result.Items[0].Outcome != "restored" {
+		t.Fatalf("protected recovery was coupled to local owner binding: result=%+v err=%v", result, err)
+	}
+	restored := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "victim"}, restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Labels[quarantineLabel] != "" || restored.Annotations[quarantineSnapAnno] != "" {
+		t.Fatalf("protected recovery did not restore Pod: labels=%v annotations=%v", restored.Labels, restored.Annotations)
+	}
+}
+
 func TestM040LegacyQuarantinePlanCanonicalShapeStillValidates(t *testing.T) {
 	n, _ := recoveryFixture(t, "victim")
 	plan, err := n.PlanRecovery(context.Background(), recoveryScope(1))
@@ -182,6 +228,7 @@ func TestAdministrativeRecoveryHoldReadFailureIsNotEngaged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	activateM091OwnerTracking(t, n)
 	n.Reader = recoveryReader{Reader: c, failHold: true}
 	if result, err := n.ApplyRecovery(context.Background(), plan); err == nil || len(result.Items) != 0 {
 		t.Fatalf("hold read failure bypass: %+v %v", result, err)
@@ -197,6 +244,7 @@ func TestAdministrativeRecoveryDryRunAndIdentityControls(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			activateM091OwnerTracking(t, n)
 			switch mutate {
 			case "dry-run":
 				n.DryRun = true
@@ -286,6 +334,7 @@ func TestAdministrativeRecoveryHoldMustBeRealAndEngaged(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			activateM091OwnerTracking(t, n)
 			hold := &corev1.ConfigMap{}
 			_ = c.Get(context.Background(), client.ObjectKey{Namespace: "operator", Name: RecoveryHoldName}, hold)
 			if tc.remove {
@@ -313,6 +362,7 @@ func TestAdministrativeRecoveryRejectsTamperAndStaleBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	activateM091OwnerTracking(t, n)
 	tampered := plan
 	tampered.Operation = "forged"
 	if _, err = n.ApplyRecovery(ctx, tampered); err == nil || !strings.Contains(err.Error(), "tampered") {
@@ -333,6 +383,40 @@ func TestAdministrativeRecoveryRejectsTamperAndStaleBindings(t *testing.T) {
 	}
 	if result, err := n.ApplyRecovery(ctx, plan); err == nil || len(result.Items) != 1 || result.Items[0].Outcome != "refused" {
 		t.Fatalf("altered receipt accepted: %+v %v", result, err)
+	}
+}
+
+func TestM091AdministrativeRecoveryRejectsRecreatedPolicyWhileTracked(t *testing.T) {
+	n, c := recoveryFixture(t, "victim")
+	ctx := t.Context()
+	plan, err := n.PlanRecovery(ctx, recoveryScope(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	activateM091OwnerTracking(t, n)
+	policy := &v1alpha1.PhorvexPolicy{}
+	key := client.ObjectKey{Namespace: plan.Items[0].Policy.Namespace, Name: plan.Items[0].Policy.Name}
+	if err := c.Get(ctx, key, policy); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete(ctx, policy); err != nil {
+		t.Fatal(err)
+	}
+	replacement := policy.DeepCopy()
+	replacement.UID = "replacement-policy-uid"
+	replacement.ResourceVersion = ""
+	if err := c.Create(ctx, replacement); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := n.ApplyRecovery(ctx, plan); err == nil || len(result.Items) != 1 || result.Items[0].Outcome != "refused" {
+		t.Fatalf("recreated policy accepted: result=%+v err=%v", result, err)
+	}
+	pod := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "victim"}, pod); err != nil {
+		t.Fatal(err)
+	}
+	if pod.Labels[quarantineLabel] == "" {
+		t.Fatal("stale-policy refusal changed quarantine state")
 	}
 }
 

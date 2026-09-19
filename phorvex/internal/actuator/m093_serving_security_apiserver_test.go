@@ -211,7 +211,7 @@ func TestM093RealAPISecretAuthorizationAndProtectedTLSRecovery(t *testing.T) {
 	native.Reader, native.JournalNamespace = admin, "m093-operator"
 	native.SetAdapterSources(AdapterSources{adapterSourceKey(pod.Namespace, "actual-poison"): "/models/clean"})
 	native.SetServingSecurity(security)
-	if err := native.EnsurePolicy(ctx, TenantTarget{Tenant: req.Tenant, Namespace: req.Namespace}); err != nil {
+	if err := native.EnsurePolicy(ctx, TenantTarget{Tenant: req.Tenant, Namespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID}); err != nil {
 		t.Fatal(err)
 	}
 	result, err := native.Actuate(ctx, req)

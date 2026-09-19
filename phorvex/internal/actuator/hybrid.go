@@ -145,5 +145,14 @@ func (h *HybridActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	return h.native.Actuate(ctx, req)
 }
 
+// RetirePolicyBinding forwards owner retirement only to the native leg. Phoenix
+// has no corresponding in-memory authorization store.
+func (h *HybridActuator) RetirePolicyBinding(policyUID string) {
+	h.native.RetirePolicyBinding(policyUID)
+}
+
 // compile-time guard: the hybrid satisfies the Actuator contract.
-var _ Actuator = (*HybridActuator)(nil)
+var (
+	_ Actuator               = (*HybridActuator)(nil)
+	_ PolicyBindingLifecycle = (*HybridActuator)(nil)
+)
