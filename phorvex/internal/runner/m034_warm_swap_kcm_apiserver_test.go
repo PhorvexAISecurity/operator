@@ -122,16 +122,18 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 
 	var servingMu sync.Mutex
 	servingCalls := make([]string, 0, 5)
+	loadedInventoryEnabled := false
 	stack := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		servingMu.Lock()
 		servingCalls = append(servingCalls, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
+		loadedInventory := loadedInventoryEnabled
 		servingMu.Unlock()
 		if r.Header.Get("Authorization") != "Bearer m078-trusted-token" {
 			http.Error(w, "missing trusted credential", http.StatusUnauthorized)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet && r.URL.Path == "/models-empty" {
+		if r.Method == http.MethodGet && (r.URL.Path == "/models-empty" || !loadedInventory) {
 			_, _ = w.Write([]byte(`{"data":[]}`))
 			return
 		}
@@ -269,6 +271,39 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		Namespace: ns, PolicyName: policy.Name, PolicyUID: string(policy.UID), ServiceAccount: "model-sa",
 		ProfileID: "m078-model-admin", SecretName: secret.Name, BearerKey: "bearer", CAKey: "ca.crt", ServerName: serverName,
 	}))
+	emptyResult, emptyErr := native.Actuate(ctx, actuator.Request{
+		Tenant: "m034", Namespace: ns, Pod: old.Name, TargetUID: string(oldUID),
+		PolicyName: policy.Name, PolicyUID: string(policy.UID), Action: model.ActionWarmSwap,
+		TickID: "m180-all-empty", ServingObservation: &actuator.ServingSelectionObservation{},
+	})
+	if emptyErr == nil || !strings.Contains(emptyErr.Error(), "no Ready model-loaded shadow") || emptyResult.Emitted {
+		t.Fatalf("all-empty Native phase did not refuse without effect: result=%+v err=%v", emptyResult, emptyErr)
+	}
+	for _, expected := range []*corev1.Pod{old, emptyShadow, shadow} {
+		var current corev1.Pod
+		if err := c.Get(ctx, client.ObjectKeyFromObject(expected), &current); err != nil {
+			t.Fatalf("all-empty phase removed exact Pod %s/%s UID=%s: %v", expected.Namespace, expected.Name, expected.UID, err)
+		}
+		if current.UID != expected.UID || current.Labels["phorvex.ai/role"] != expected.Labels["phorvex.ai/role"] {
+			t.Fatalf("all-empty phase changed Pod identity/role: got=%s/%s UID=%s role=%q want UID=%s role=%q", current.Namespace, current.Name, current.UID, current.Labels["phorvex.ai/role"], expected.UID, expected.Labels["phorvex.ai/role"])
+		}
+	}
+	var emptyReceipts corev1.ConfigMapList
+	if err := c.List(ctx, &emptyReceipts, client.InNamespace("m034-operator")); err != nil || len(emptyReceipts.Items) != 0 {
+		t.Fatalf("all-empty phase persisted a protected receipt: count=%d err=%v", len(emptyReceipts.Items), err)
+	}
+	servingMu.Lock()
+	emptyCalls := append([]string(nil), servingCalls...)
+	servingCalls = servingCalls[:0]
+	loadedInventoryEnabled = true
+	servingMu.Unlock()
+	wantEmptyCalls := []string{
+		"GET /health-empty Bearer m078-trusted-token", "GET /models-empty Bearer m078-trusted-token",
+		"GET /health-loaded Bearer m078-trusted-token", "GET /models-loaded Bearer m078-trusted-token",
+	}
+	if strings.Join(emptyCalls, ",") != strings.Join(wantEmptyCalls, ",") {
+		t.Fatalf("all-empty phase requests=%v, want exact authenticated readiness pairs=%v", emptyCalls, wantEmptyCalls)
+	}
 	recording := &m034RecordingActuator{inner: native}
 	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native)
 	engine := decision.NewCoverageEngine()
