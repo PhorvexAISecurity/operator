@@ -151,6 +151,8 @@ func (e *migIntegrationExec) run(ctx context.Context, _, _, container string, ar
 func TestMIGHandlerUsesRealUnixPodResourcesHelperPath(t *testing.T) {
 	pod := migPod("ns", "infer")
 	pod.Spec.NodeName = "node-1"
+	pod.Annotations["phorvex.ai/model-id"] = "m070-real-unix"
+	pod.Annotations[annoServingPort] = "8000"
 	c := fakeC(pod)
 	targetAllocation := podresources.Allocation{
 		Namespace: pod.Namespace, Pod: pod.Name, Container: "model", Resource: "nvidia.com/mig-1g.10gb",
@@ -169,11 +171,11 @@ func TestMIGHandlerUsesRealUnixPodResourcesHelperPath(t *testing.T) {
 	exec := &migIntegrationExec{t: t, socket: socket, helperPath: policy.AllocationHelper}
 	runner := execNodeRunner{client: kubefake.NewSimpleClientset(ds, agent), exec: exec.run, policy: policy}
 
-	result, err := (migRebindHandler{}).Enact(t.Context(), EnactCtx{
+	result, err := dispatch(t.Context(), EnactCtx{
 		Client: c, Reader: c, JournalNamespace: "operator", MIG: &nvidiaSMIMIG{run: runner},
-		VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles(),
+		VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles(), ServingSecurity: legacyServingSecurityForTest(t),
 	}, boundReq(pod, model.ActionMIGRebind))
-	if err != nil || !result.Emitted || result.MutationKind != "swap" {
+	if err != nil || !result.Emitted || result.MutationKind != "swap" || result.Handler != string(model.ActionMIGRebind) {
 		t.Fatalf("real producer/helper/handler result=%+v err=%v", result, err)
 	}
 	if exec.helperCalls < 5 {
@@ -210,6 +212,8 @@ func TestMIGHandlerRealUnixPodResourcesNegativeControls(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pod := migPod("ns", "infer")
 			pod.Spec.NodeName = "node-1"
+			pod.Annotations["phorvex.ai/model-id"] = "m070-real-unix"
+			pod.Annotations[annoServingPort] = "8000"
 			if tc.annotation != "" {
 				pod.Annotations[annoGPUID] = tc.annotation
 			}
@@ -229,11 +233,11 @@ func TestMIGHandlerRealUnixPodResourcesNegativeControls(t *testing.T) {
 			policy.AllocationSocket = socket
 			exec := &migIntegrationExec{t: t, socket: socket, helperPath: policy.AllocationHelper}
 			runner := execNodeRunner{client: kubefake.NewSimpleClientset(ds, agent), exec: exec.run, policy: policy}
-			result, err := (migRebindHandler{}).Enact(t.Context(), EnactCtx{
+			result, err := dispatch(t.Context(), EnactCtx{
 				Client: c, Reader: c, JournalNamespace: "operator", MIG: &nvidiaSMIMIG{run: runner},
-				VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles(),
+				VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles(), ServingSecurity: legacyServingSecurityForTest(t),
 			}, boundReq(pod, model.ActionMIGRebind))
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
+			if err == nil || result.Handler != string(model.ActionMIGRebind) || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("negative control result=%+v err=%v", result, err)
 			}
 			if result.Emitted || len(exec.destructive) != 0 || exec.helperCalls == 0 {
