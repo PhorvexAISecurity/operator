@@ -82,9 +82,10 @@ type operationReceipt struct {
 	// Route-cutover v5 fields. The Service-UID-named receipt is the only
 	// authority for route/endpoint continuation or restoration. Tenant metadata
 	// is deliberately not an authority surface.
-	NamespaceUID            string            `json:"namespaceUID,omitempty"`
-	ReceiptID               string            `json:"receiptID,omitempty"`
-	TargetGuardUID          string            `json:"targetGuardUID,omitempty"`
+	NamespaceUID   string `json:"namespaceUID,omitempty"`
+	ReceiptID      string `json:"receiptID,omitempty"`
+	TargetGuardUID string `json:"targetGuardUID,omitempty"`
+	// AdmittedFloor is shared by protected route cutover and scalar warm receipts.
 	AdmittedFloor           int               `json:"admittedFloor,omitempty"`
 	RouteEpochKey           string            `json:"routeEpochKey,omitempty"`
 	RouteValue              string            `json:"routeValue,omitempty"`
@@ -299,7 +300,7 @@ func (r operationReceipt) valid() bool {
 			if r.Version != warmDrainReceiptVersion {
 				return true
 			}
-			if !boundedLabelMap(r.TargetLabels) || !validDigest(r.EndpointConfigSHA256) || r.DrainAttempts < 0 || r.DrainAttempts > warmDrainMaxAttempts || len(r.WarmSelectedUIDs) == 0 || len(r.WarmSelectedUIDs) > warmPoolMaxMembers || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0 {
+			if !boundedLabelMap(r.TargetLabels) || !validDigest(r.EndpointConfigSHA256) || r.DrainAttempts < 0 || r.DrainAttempts > warmDrainMaxAttempts || len(r.WarmSelectedUIDs) == 0 || len(r.WarmSelectedUIDs) > warmPoolMaxMembers || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(p.Desired) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0 {
 				return false
 			}
 			if r.ServingLegacy {

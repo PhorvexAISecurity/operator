@@ -263,7 +263,16 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
 		bindingDigest, servingLegacy = ec.ServingAttempt.digest, false
 	}
-	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: warmDrainEndpointConfigDigest(leader, servingLegacy), WarmSelectedUIDs: selectedUIDs}
+	authoritySeed := operationReceipt{Kind: kind, PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID}
+	admittedPolicy, err := receiptAuthority(ctx, ec.Reader, authoritySeed, req.Action)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: policy authority before availability admission: %w", kind, err)
+	}
+	admittedFloor := admittedPolicy.Spec.EffectiveMinAvailableReplicas()
+	if admittedFloor <= 0 || admittedFloor > int(pool.Desired) || admittedFloor > len(selectedUIDs) {
+		return HandlerResult{}, fmt.Errorf("%s: availability floor %d cannot be admitted by recorded serving set size %d", kind, admittedFloor, len(selectedUIDs))
+	}
+	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: warmDrainEndpointConfigDigest(leader, servingLegacy), WarmSelectedUIDs: selectedUIDs, AdmittedFloor: admittedFloor}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}
@@ -279,6 +288,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if !podReady(shadow) || shadow.UID == "" || leader.ResourceVersion == "" || shadow.ResourceVersion == "" {
 		return HandlerResult{}, fmt.Errorf("%s: observed pod identity/readiness unavailable", kind)
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet, warmProspectiveServingSet); err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: availability admission: %w", kind, err)
 	}
 	journal, err := journalWrite(ctx, ec, receipt)
 	if err != nil {
@@ -346,6 +358,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		flipErr = fmt.Errorf("recorded pair changed before old route removal")
 	}
 	if flipErr == nil {
+		flipErr = warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmProspectiveServingSet)
+	}
+	if flipErr == nil {
 		before := freshOld.DeepCopy()
 		freshOld.Labels[labelRole] = roleRetiring
 		flipErr = ec.Client.Patch(ctx, freshOld, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{}))
@@ -372,6 +387,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		if checkErr == nil && (oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) || rollback.Labels[labelRole] != roleLeader || !podReady(rollback)) {
 			checkErr = fmt.Errorf("exact old/new serving roles or readiness changed")
 		}
+		if checkErr == nil {
+			checkErr = warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet)
+		}
 		if checkErr != nil {
 			if oldAfter.UID == leader.UID && oldAfter.Labels[labelRole] == roleRetiring {
 				promotedPartial.ObjectsTouched = append(promotedPartial.ObjectsTouched, objRef("Pod", req.Namespace, leader.Name))
@@ -387,6 +405,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		oldAfter = &corev1.Pod{}
 		if checkErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, oldAfter); checkErr != nil || oldAfter.UID != leader.UID || oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) {
 			return promotedPartial, fmt.Errorf("%s rollback could not confirm old leader; receipt retained: %w", kind, errors.Join(flipErr, checkErr))
+		}
+		if availabilityErr := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet); availabilityErr != nil {
+			return promotedPartial, fmt.Errorf("%s rollback availability unconfirmed; receipt retained: %w", kind, errors.Join(flipErr, availabilityErr))
 		}
 		if finishErr := journalFinish(ctx, ec, journal); finishErr != nil {
 			promotedPartial.Note = "cutover role changes compensated; receipt cleanup unresolved"
@@ -437,6 +458,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.Labels[labelRole] != roleRetiring {
 		return partial, fmt.Errorf("%s: recorded pair not ready for retirement", kind)
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmProspectiveServingSet); err != nil {
+		return partial, fmt.Errorf("%s: availability changed before confirmed retirement: %w", kind, err)
 	}
 	leader = freshOld
 	// [M-69] The Delete is bound to the UID of the leader object observed above (API-enforced

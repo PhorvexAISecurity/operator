@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -125,6 +127,7 @@ type m067APIFixture struct {
 	native  *NativeActuator
 	old     *corev1.Pod
 	next    *corev1.Pod
+	third   *corev1.Pod
 	policy  *v1alpha1.PhorvexPolicy
 	service *corev1.Service
 	backend *m067Backend
@@ -132,6 +135,10 @@ type m067APIFixture struct {
 }
 
 func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, suffix, mode string) *m067APIFixture {
+	return m067NewAPIAvailabilityFixture(t, ctx, c, suffix, mode, 2, 1)
+}
+
+func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.WithWatch, suffix, mode string, replicas int32, floor int) *m067APIFixture {
 	t.Helper()
 	nsName, opns := "m067-"+suffix, "m067-op-"+suffix
 	for _, name := range []string{nsName, opns} {
@@ -176,7 +183,7 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 	if err := c.Create(ctx, service); err != nil {
 		t.Fatal(err)
 	}
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Tenant: suffix, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Second}, ProactiveFloor: metav1.Duration{Duration: time.Minute}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap)}}}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Tenant: suffix, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Second}, ProactiveFloor: metav1.Duration{Duration: time.Minute}}, SLO: v1alpha1.SLOSpec{MinAvailableReplicas: floor}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap)}}}}
 	if err := c.Create(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +191,6 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 	if err := c.Create(ctx, secret); err != nil {
 		t.Fatal(err)
 	}
-	replicas := int32(2)
 	zero := int64(0)
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix, labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": suffix, labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false"}, Annotations: map[string]string{annoRouteService: service.Name, "phorvex.ai/model-id": "model", annoServingPort: portText}}, Spec: corev1.PodSpec{NodeName: "m067-node", ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
@@ -199,13 +205,23 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 		if err := c.Get(ctx, client.ObjectKeyFromObject(rs), current); err != nil {
 			return false, err
 		}
-		return len(pods.Items) == 2 && current.Status.ObservedGeneration == current.Generation && current.Status.Replicas == replicas, nil
+		return len(pods.Items) == int(replicas) && current.Status.ObservedGeneration == current.Generation && current.Status.Replicas == replicas, nil
 	})
 	sort.Slice(pods.Items, func(i, j int) bool { return pods.Items[i].Name < pods.Items[j].Name })
 	old, next := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy()
 	old.Labels[labelRole] = roleLeader
 	next.Labels[labelModelLoaded] = "true"
-	for _, pod := range []*corev1.Pod{old, next} {
+	fixturePods := []*corev1.Pod{old, next}
+	var third *corev1.Pod
+	for i := 2; i < len(pods.Items); i++ {
+		member := pods.Items[i].DeepCopy()
+		member.Labels[labelRole] = roleLeader
+		fixturePods = append(fixturePods, member)
+		if third == nil {
+			third = member
+		}
+	}
+	for _, pod := range fixturePods {
 		if err := c.Update(ctx, pod); err != nil {
 			t.Fatal(err)
 		}
@@ -228,14 +244,25 @@ func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, su
 	}
 	m066Poll(t, 20*time.Second, func() (bool, error) {
 		members, err := routeEndpointMembers(ctx, c, service)
-		return err == nil && len(members) == 1 && members[0] == string(old.UID), nil
+		if err != nil || len(members) != len(fixturePods)-1 {
+			return false, nil
+		}
+		for _, pod := range fixturePods {
+			if pod.Name == next.Name {
+				continue
+			}
+			if !slices.Contains(members, string(pod.UID)) {
+				return false, nil
+			}
+		}
+		return true, nil
 	})
 	binding := ServingSecurityBinding{Namespace: nsName, PolicyName: policy.Name, PolicyUID: string(policy.UID), ServiceAccount: "model-sa", ProfileID: "m067", SecretName: secret.Name, BearerKey: "bearer", CAKey: "ca.crt", ServerName: serverName}
 	native := NewNativeActuator(c)
 	native.Reader, native.JournalNamespace = c, opns
 	native.RouteObservationTimeout, native.RouteObservationInterval = 20*time.Second, 100*time.Millisecond
 	native.SetServingSecurity(writeServingSecurityConfig(t, ServingSecuritySecureRequired, opns, []ServingSecurityBinding{binding}))
-	return &m067APIFixture{client: c, native: native, old: old, next: next, policy: policy, service: service, backend: backend, opns: opns}
+	return &m067APIFixture{client: c, native: native, old: old, next: next, third: third, policy: policy, service: service, backend: backend, opns: opns}
 }
 
 func (f *m067APIFixture) request() Request {
@@ -332,6 +359,57 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 	if err := c.Create(ctx, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "m067-node"}}); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("three-member-ready-floor-retains-then-recovers", func(t *testing.T) {
+		fixture := m067NewAPIAvailabilityFixture(t, ctx, c, "floor", "confirmed", 3, 2)
+		dropped := false
+		guard := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || dropped || !strings.Contains(cm.Data["receipt"], `"phase":"promoted"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			dropped = true
+			return m067SetPodReady(ctx, inner, fixture.third, false)
+		}})
+		fixture.native.Client, fixture.native.Reader = guard, guard
+		result, enactErr := fixture.native.Actuate(ctx, fixture.request())
+		if enactErr == nil || result.MutationKind != "swap" || !dropped {
+			t.Fatalf("actual API availability boundary not exercised: result=%+v err=%v dropped=%t", result, enactErr, dropped)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 0 {
+			t.Fatalf("actual API unavailable prospective set reached POST: posts=%d requests=%v", posts, requests)
+		}
+		_, receipt := fixture.receipt(t, ctx)
+		if receipt.Phase != "promoted" || receipt.AdmittedFloor != 2 {
+			t.Fatalf("actual API availability refusal lost admitted state: %+v", receipt)
+		}
+		oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), oldCurrent); err != nil || oldCurrent.UID != fixture.old.UID || oldCurrent.Labels[labelRole] != roleLeader {
+			t.Fatalf("actual API availability refusal changed old route: %v %+v", err, oldCurrent)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.next), nextCurrent); err != nil || nextCurrent.UID != fixture.next.UID || nextCurrent.Labels[labelRole] != roleLeader {
+			t.Fatalf("actual API availability refusal rolled back promoted capacity: %v %+v", err, nextCurrent)
+		}
+		if err := m067SetPodReady(ctx, c, fixture.third, true); err != nil {
+			t.Fatal(err)
+		}
+		consumer := NewNativeActuator(c)
+		consumer.Reader, consumer.JournalNamespace = c, fixture.opns
+		consumer.RouteObservationTimeout, consumer.RouteObservationInterval = 20*time.Second, 100*time.Millisecond
+		consumer.SetServingSecurity(fixture.native.servingSecurity)
+		events, recoverErr := consumer.RecoverOperations(ctx, false)
+		if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Effect, "old leader retired") {
+			t.Fatalf("actual API restored readiness did not resume through confirmed retirement: events=%+v err=%v", events, recoverErr)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 1 {
+			t.Fatalf("actual API availability recovery POSTs=%d requests=%v", posts, requests)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), &corev1.Pod{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("actual API availability recovery did not delete exact old UID: %v", err)
+		}
+	})
 	t.Run("authority-drift-after-acknowledged-dispatch-claim", func(t *testing.T) {
 		fixture := m067NewAPIFixture(t, ctx, c, "authority", "confirmed")
 		claimed := false

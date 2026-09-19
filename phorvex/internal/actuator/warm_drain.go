@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -86,10 +87,177 @@ func captureWarmSelectedUIDs(ctx context.Context, reader client.Reader, pool war
 	return members, nil
 }
 
+type warmServingSet string
+
+const (
+	warmOriginalServingSet    warmServingSet = "original"
+	warmProspectiveServingSet warmServingSet = "prospective"
+)
+
+func warmDrainRoleAllowed(r operationReceipt, uid, role string, selected map[string]bool) bool {
+	if uid == r.OldUID {
+		allowed := role == roleLeader
+		switch r.Phase {
+		case "retiring", "drain-dispatching", "drain-unsent", "drain-confirmed":
+			allowed = role == roleRetiring
+		case "prepared", "promoted", "restore-old-claimed":
+			allowed = role == roleLeader || role == roleRetiring
+		case "old-route-observed", "restore-shadow-claimed", "routing-restored":
+			allowed = role == roleLeader
+		}
+		return allowed
+	}
+	if uid == r.NewUID {
+		allowed := role == roleLeader
+		switch r.Phase {
+		case "prepared", "promoted":
+			allowed = role == roleLeader || role == roleShadow
+		case "restore-shadow-claimed":
+			allowed = role == roleLeader || role == roleShadow
+		case "routing-restored":
+			allowed = role == roleShadow
+		}
+		return allowed
+	}
+	want := roleShadow
+	if selected[uid] {
+		want = roleLeader
+	}
+	return role == want
+}
+
+// warmDrainPoolSnapshot returns one complete authoritative view of the exact
+// pool recorded by the receipt. Readiness checks consume this same view so a
+// Ready Pod outside the recorded serving set cannot satisfy its floor.
+func warmDrainPoolSnapshot(ctx context.Context, reader client.Reader, r operationReceipt) ([]corev1.Pod, error) {
+	if reader == nil || r.Pool == nil {
+		return nil, fmt.Errorf("warm availability inventory unavailable")
+	}
+	rs := &appsv1.ReplicaSet{}
+	if err := reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.Pool.RSName}, rs); err != nil {
+		return nil, err
+	}
+	if string(rs.UID) != r.Pool.RSUID || rs.DeletionTimestamp != nil || rs.Generation != r.Pool.RSGeneration || rs.Status.ObservedGeneration != rs.Generation || rs.Spec.Replicas == nil || *rs.Spec.Replicas != r.Pool.Desired || hashWarmObject(rs.Spec.Template) != r.Pool.RSTemplateHash || hashWarmObject(rs.Spec.Selector) != r.Pool.RSSelectorHash {
+		return nil, fmt.Errorf("warm availability ReplicaSet intent drift")
+	}
+	sel, err := warmPoolSelector(rs, r.GroupKey, r.GroupValue)
+	if err != nil {
+		return nil, err
+	}
+	pods, err := warmPoolListMembers(ctx, reader, r.PolicyNamespace, sel)
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) != len(r.Pool.Members) {
+		return nil, fmt.Errorf("warm availability pool membership count drift")
+	}
+	expected := make(map[string]bool, len(r.Pool.Members))
+	for _, uid := range r.Pool.Members {
+		if uid == "" || expected[uid] {
+			return nil, fmt.Errorf("warm availability receipt member set invalid")
+		}
+		expected[uid] = true
+	}
+	selected := make(map[string]bool, len(r.WarmSelectedUIDs))
+	for _, uid := range r.WarmSelectedUIDs {
+		selected[uid] = true
+	}
+	seen := make(map[string]bool, len(pods.Items))
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		uid := string(pod.UID)
+		owner, ownerErr := controllingRS(pod)
+		if pod.Namespace != r.PolicyNamespace || pod.Name == "" || uid == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil || !sel.Matches(labels.Set(pod.Labels)) || pod.Labels[r.GroupKey] != r.GroupValue || ownerErr != nil || string(owner.UID) != r.Pool.RSUID || owner.Name != r.Pool.RSName || !expected[uid] || seen[uid] {
+			return nil, fmt.Errorf("warm availability pool member identity drift")
+		}
+		seen[uid] = true
+		if !warmDrainRoleAllowed(r, uid, pod.Labels[labelRole], selected) {
+			return nil, fmt.Errorf("recorded warm member role changed")
+		}
+	}
+	if len(seen) != len(expected) {
+		return nil, fmt.Errorf("warm availability pool member set incomplete")
+	}
+	return pods.Items, nil
+}
+
 func warmDrainRolesCurrent(ctx context.Context, reader client.Reader, r operationReceipt) error {
+	_, err := warmDrainPoolSnapshot(ctx, reader, r)
+	return err
+}
+
+// warmDrainAvailabilityCurrent requires every named serving set to retain the
+// stricter of its admitted floor and the current policy floor. It deliberately
+// counts only recorded serving UIDs; unrelated Ready shadows receive no credit.
+func warmDrainAvailabilityCurrent(ctx context.Context, reader client.Reader, r operationReceipt, sets ...warmServingSet) error {
+	if r.Version != warmDrainReceiptVersion || r.Pool == nil || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(r.Pool.Desired) {
+		return fmt.Errorf("warm availability receipt floor invalid")
+	}
+	pol, err := receiptAuthority(ctx, reader, r, model.Action(r.Kind))
+	if err != nil {
+		return err
+	}
+	floor := r.AdmittedFloor
+	if current := pol.Spec.EffectiveMinAvailableReplicas(); current > floor {
+		floor = current
+	}
+	pods, err := warmDrainPoolSnapshot(ctx, reader, r)
+	if err != nil {
+		return err
+	}
+	byUID := make(map[string]*corev1.Pod, len(pods))
+	for i := range pods {
+		byUID[string(pods[i].UID)] = &pods[i]
+	}
+	for _, set := range sets {
+		members := make(map[string]bool, len(r.WarmSelectedUIDs)+1)
+		for _, uid := range r.WarmSelectedUIDs {
+			members[uid] = true
+		}
+		switch set {
+		case warmOriginalServingSet:
+		case warmProspectiveServingSet:
+			delete(members, r.OldUID)
+			members[r.NewUID] = true
+		default:
+			return fmt.Errorf("unknown warm serving set %q", set)
+		}
+		ready := 0
+		for uid := range members {
+			pod := byUID[uid]
+			if pod != nil && pod.DeletionTimestamp == nil && podReady(pod) {
+				ready++
+			}
+		}
+		if ready < floor {
+			return fmt.Errorf("%s Ready serving set %d below availability floor %d", set, ready, floor)
+		}
+	}
+	return nil
+}
+
+// warmDrainRetiredAvailabilityCurrent validates the controller-replenished
+// pool before a completed cutover receipt is removed. The replacement shadow
+// restores pool size, but only the recorded prospective serving UIDs count
+// toward availability.
+func warmDrainRetiredAvailabilityCurrent(ctx context.Context, reader client.Reader, r operationReceipt) error {
+	if r.Version != warmDrainReceiptVersion || r.Pool == nil || r.RewarmUID == "" || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) {
+		return fmt.Errorf("retired warm availability receipt invalid")
+	}
+	pol, err := receiptAuthority(ctx, reader, r, model.Action(r.Kind))
+	if err != nil {
+		return err
+	}
+	floor := r.AdmittedFloor
+	if current := pol.Spec.EffectiveMinAvailableReplicas(); current > floor {
+		floor = current
+	}
 	rs := &appsv1.ReplicaSet{}
 	if err := reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.Pool.RSName}, rs); err != nil {
 		return err
+	}
+	if string(rs.UID) != r.Pool.RSUID || rs.DeletionTimestamp != nil || rs.Generation != r.Pool.RSGeneration || rs.Status.ObservedGeneration != rs.Generation || rs.Spec.Replicas == nil || *rs.Spec.Replicas != r.Pool.Desired || hashWarmObject(rs.Spec.Template) != r.Pool.RSTemplateHash || hashWarmObject(rs.Spec.Selector) != r.Pool.RSSelectorHash {
+		return fmt.Errorf("retired warm availability ReplicaSet intent drift")
 	}
 	sel, err := warmPoolSelector(rs, r.GroupKey, r.GroupValue)
 	if err != nil {
@@ -99,50 +267,45 @@ func warmDrainRolesCurrent(ctx context.Context, reader client.Reader, r operatio
 	if err != nil {
 		return err
 	}
-	selected := make(map[string]bool, len(r.WarmSelectedUIDs))
-	for _, uid := range r.WarmSelectedUIDs {
-		selected[uid] = true
+	expected := make(map[string]bool, len(r.Pool.Members))
+	for _, uid := range r.Pool.Members {
+		if uid != r.OldUID {
+			expected[uid] = true
+		}
 	}
+	expected[r.RewarmUID] = true
+	if len(pods.Items) != len(expected) || len(expected) != int(r.Pool.Desired) {
+		return fmt.Errorf("retired warm availability pool membership count drift")
+	}
+	prospective := make(map[string]bool, len(r.WarmSelectedUIDs))
+	for _, uid := range r.WarmSelectedUIDs {
+		if uid != r.OldUID {
+			prospective[uid] = true
+		}
+	}
+	prospective[r.NewUID] = true
+	seen, ready := make(map[string]bool, len(pods.Items)), 0
 	for i := range pods.Items {
 		pod := &pods.Items[i]
-		uid, role := string(pod.UID), pod.Labels[labelRole]
-		if uid == r.OldUID {
-			allowed := role == roleLeader
-			switch r.Phase {
-			case "retiring", "drain-dispatching", "drain-unsent", "drain-confirmed":
-				allowed = role == roleRetiring
-			case "prepared", "promoted", "restore-old-claimed":
-				allowed = role == roleLeader || role == roleRetiring
-			case "old-route-observed", "restore-shadow-claimed", "routing-restored":
-				allowed = role == roleLeader
-			}
-			if !allowed {
-				return fmt.Errorf("recorded old warm role changed")
-			}
-			continue
+		uid := string(pod.UID)
+		owner, ownerErr := controllingRS(pod)
+		if pod.Namespace != r.PolicyNamespace || pod.Name == "" || uid == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil || !sel.Matches(labels.Set(pod.Labels)) || pod.Labels[r.GroupKey] != r.GroupValue || ownerErr != nil || string(owner.UID) != r.Pool.RSUID || owner.Name != r.Pool.RSName || !expected[uid] || seen[uid] {
+			return fmt.Errorf("retired warm availability pool member identity drift")
 		}
-		if uid == r.NewUID {
-			allowed := role == roleLeader
-			switch r.Phase {
-			case "prepared", "promoted":
-				allowed = role == roleLeader || role == roleShadow
-			case "restore-shadow-claimed":
-				allowed = role == roleLeader || role == roleShadow
-			case "routing-restored":
-				allowed = role == roleShadow
-			}
-			if !allowed {
-				return fmt.Errorf("recorded new warm role changed")
-			}
-			continue
+		seen[uid] = true
+		wantRole := roleShadow
+		if prospective[uid] {
+			wantRole = roleLeader
 		}
-		want := roleShadow
-		if selected[uid] {
-			want = roleLeader
+		if pod.Labels[labelRole] != wantRole {
+			return fmt.Errorf("retired warm availability role drift")
 		}
-		if role != want {
-			return fmt.Errorf("unrelated warm member role changed")
+		if prospective[uid] && podReady(pod) {
+			ready++
 		}
+	}
+	if len(seen) != len(expected) || ready < floor {
+		return fmt.Errorf("retired prospective Ready serving set %d below availability floor %d", ready, floor)
 	}
 	return nil
 }
@@ -207,6 +370,9 @@ func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	}
 	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
 		return warmDrainRetained, fmt.Errorf("recorded pair changed after warm drain dispatch claim")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
+		return warmDrainRetained, fmt.Errorf("warm availability changed after dispatch claim: %w", err)
 	}
 	ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
 	if err != nil {
@@ -338,6 +504,9 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 		if old.Labels[labelRole] != roleLeader || (next.Labels[labelRole] != roleLeader && next.Labels[labelRole] != roleShadow) {
 			return fmt.Errorf("recorded warm roles changed before shadow restoration")
 		}
+		if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmOriginalServingSet); err != nil {
+			return fmt.Errorf("original availability insufficient before shadow restoration: %w", err)
+		}
 		if next.Labels[labelRole] == roleLeader {
 			before := next.DeepCopy()
 			next.Labels[labelRole] = roleShadow
@@ -369,6 +538,9 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 	}
 	if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleShadow {
 		return fmt.Errorf("restored warm pair roles changed before receipt cleanup")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmOriginalServingSet); err != nil {
+		return fmt.Errorf("restored availability insufficient before receipt cleanup: %w", err)
 	}
 	if err := waitWarmRouteMembers(ctx, ec, *r, r.WarmSelectedUIDs); err != nil {
 		return err
@@ -409,6 +581,9 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		if err := warmDrainRolesCurrent(ctx, ec.Reader, *r); err != nil {
 			return "", err
 		}
+		if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmOriginalServingSet); err != nil {
+			return "", err
+		}
 		if err := journalFinish(ctx, ec, cm); err != nil {
 			return "", err
 		}
@@ -444,6 +619,9 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 			return "", fmt.Errorf("recorded promoted warm roles changed")
 		}
 		if old.Labels[labelRole] == roleLeader {
+			if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
+				return "", fmt.Errorf("availability changed before recovered old route removal: %w", err)
+			}
 			before := old.DeepCopy()
 			old.Labels[labelRole] = roleRetiring
 			if err := ec.Client.Patch(ctx, old, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
@@ -456,6 +634,9 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		}
 		if old.Labels[labelRole] != roleRetiring || newPod.Labels[labelRole] != roleLeader {
 			return "old leader route removal pending", fmt.Errorf("recorded warm roles changed after route removal")
+		}
+		if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
+			return "old leader route removal pending", fmt.Errorf("availability changed at recovered route removal: %w", err)
 		}
 		r.Phase = "retiring"
 		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
@@ -504,6 +685,9 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	}
 	if old.Labels[labelRole] != roleRetiring || newPod.Labels[labelRole] != roleLeader {
 		return "confirmed warm drain; retirement pending", fmt.Errorf("recorded pair changed before confirmed retirement")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
+		return "confirmed warm drain; retirement pending", fmt.Errorf("availability changed before confirmed retirement: %w", err)
 	}
 	if err := ec.Client.Delete(ctx, old, uidPrecondition(old)); err != nil && !apierrors.IsNotFound(err) {
 		return "confirmed warm drain; retirement pending", err
@@ -559,6 +743,9 @@ func recoverWarmControllerCompletion(ctx context.Context, ec EnactCtx, cm *corev
 	ready, fallback := shadowModelReady(ctx, ec, observed)
 	if !ready {
 		return effect + "; controller Pod observed; warm capacity pending", fmt.Errorf("controller Pod observed but warm capacity not ready")
+	}
+	if err := warmDrainRetiredAvailabilityCurrent(ctx, ec.Reader, *r); err != nil {
+		return effect + "; controller pool observed; serving availability pending", err
 	}
 	if r.Phase != "pool-warm-ready" {
 		r.Phase = "pool-warm-ready"
