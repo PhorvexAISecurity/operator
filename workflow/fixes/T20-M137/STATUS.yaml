@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 14
+revision: 16
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -97,12 +97,28 @@ checks:
     - phorvex/internal/runner
     - phorvex/internal/scaleprobe
     inputs_sha256: 280fc774edccd750ded54a301ab8888fe23ee7658b37fec187c35c45eab00a80
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: b47ec522602afcb4b5df92e80cde8ee71aa64ecf751ac6878fd516f9b246d8d6
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:06:41+00:00'
+    baseline_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 75d6807f0f1bf733e332fc9fa91e654eba6c25d1bc1443bce00c4cd267331dd4
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:06:41+00:00'
+    incident_sha256: b47ec522602afcb4b5df92e80cde8ee71aa64ecf751ac6878fd516f9b246d8d6
 fix_id: T20-M137
 issues:
 - M-137
 title: Measure complete manager ticks and avoid unchanged existential status writes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -147,7 +163,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -161,12 +177,24 @@ synchronization:
   permanent_tests: pending
 dependencies: []
 blockers: []
-residuals: []
+residuals:
+- 'OPEN SOURCE: full successful manager tick target under1s at1000Pods is unmet; synchronized
+  final warmup returned126.334s at30s deadline and produced zero steady samples. No1000Pod
+  percentile/capacity PASS.'
+- 'OPEN SOURCE: synchronous audit representation/redaction/serialization is the measured
+  post-graph CPU bottleneck; preserve schema, redaction, ownership and durability
+  in follow-up.'
+- 'OPEN SOURCE: cooperative cancellation permits126.334s return after30s context;
+  audit completeness versus bounded deadline requires explicit semantics, not silent
+  record loss.'
+- 'UNVERIFIED: eight-tenant scale case interrupted; overlapping case NOT_RUN; intended
+  hardware, live cadence/APIQPS, lifetime/peakmemory and maximumfleet remain LV25;
+  no live OOM cause established.'
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T17:01:05+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T17:06:45+00:00'
 configuration_history:
 - at: '2026-09-19T14:30:38+00:00'
   by: codex-lead
@@ -195,6 +223,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T17:06:39+00:00'
+  by: codex-lead
+  fields:
+  - residuals
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -224,6 +257,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-19T17:01:03+00:00'
   by: sol-t20-m137
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T17:06:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T17:06:43+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -273,9 +322,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T20-M137:14:submit
-  from: sol-t20-m137
+  id: T20-M137:16:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 14
+  role: coordinator
+  kind: review
+  revision: 16
