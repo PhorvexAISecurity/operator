@@ -1246,7 +1246,7 @@ fixes:
     issues:
     - M-78
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t22-m078
