@@ -1169,11 +1169,11 @@ fixes:
     issues:
     - M-65
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t17-m065
-    head_sha: null
+    head_sha: 0852aab4619079837b08aae00ad1e84e77b4ad1b
   T16-M091:
     directory: fixes/T16-M091
     aliases: []
