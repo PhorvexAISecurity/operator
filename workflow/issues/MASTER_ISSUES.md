@@ -2188,7 +2188,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-131 · DecideChecked rejection path skips status and metrics · **OPEN** · `CHOICE`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T19-M131
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · decision.coverage
