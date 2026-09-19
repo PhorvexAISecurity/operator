@@ -1152,6 +1152,28 @@ fixes:
     stacked_on: []
     branch: fix/t14-m178
     head_sha: d68cdb93f4867b9dfa0a6b8d8f5d329cd2415c42
+  T17-M109:
+    directory: fixes/T17-M109
+    aliases: []
+    issues:
+    - M-109
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t17-m109
+    head_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+  T17-M065:
+    directory: fixes/T17-M065
+    aliases: []
+    issues:
+    - M-65
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t17-m065
+    head_sha: 0852aab4619079837b08aae00ad1e84e77b4ad1b
   T16-M091:
     directory: fixes/T16-M091
     aliases: []
