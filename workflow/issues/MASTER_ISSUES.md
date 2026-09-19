@@ -2731,7 +2731,7 @@ Severity: MEDIUM · Tier: unassigned · Fixes: T14-M177
 
 ### M-178 · vLLM prefix-cache reset credits HTTP success without backend confirmation · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T14-M178
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `ACTUATION` — anatomy locus review required.
