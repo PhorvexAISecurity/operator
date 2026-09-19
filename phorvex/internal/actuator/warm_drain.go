@@ -201,6 +201,13 @@ func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	if err := journalAdvance(ctx, ec, cm, *r); err != nil {
 		return warmDrainRetained, fmt.Errorf("warm drain dispatch claim was not acknowledged: %w", err)
 	}
+	old, next, err = warmDrainCurrentPair(ctx, ec, *r)
+	if err != nil {
+		return warmDrainRetained, fmt.Errorf("warm drain authority changed after dispatch claim: %w", err)
+	}
+	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
+		return warmDrainRetained, fmt.Errorf("recorded pair changed after warm drain dispatch claim")
+	}
 	ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
 	if err != nil {
 		return warmDrainRetained, err

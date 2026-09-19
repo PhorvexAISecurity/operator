@@ -432,6 +432,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err := warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew); err != nil {
 		return partial, err
 	}
+	if err := warmDrainRolesCurrent(ctx, ec.Reader, receipt); err != nil {
+		return partial, err
+	}
 	if freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.Labels[labelRole] != roleRetiring {
 		return partial, fmt.Errorf("%s: recorded pair not ready for retirement", kind)
 	}

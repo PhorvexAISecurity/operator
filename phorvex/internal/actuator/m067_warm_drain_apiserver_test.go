@@ -256,6 +256,151 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 	if err := c.Create(ctx, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "m067-node"}}); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("authority-drift-after-acknowledged-dispatch-claim", func(t *testing.T) {
+		fixture := m067NewAPIFixture(t, ctx, c, "authority", "confirmed")
+		claimed := false
+		guard := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			claimed = true
+			policy := &v1alpha1.PhorvexPolicy{}
+			if err := inner.Get(ctx, client.ObjectKeyFromObject(fixture.policy), policy); err != nil {
+				return err
+			}
+			policy.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate)}
+			return inner.Update(ctx, policy)
+		}})
+		fixture.native.Client, fixture.native.Reader = guard, guard
+		result, enactErr := fixture.native.Actuate(ctx, fixture.request())
+		if enactErr == nil || result.MutationKind != "swap" || !claimed {
+			t.Fatalf("actual API post-claim authority seam not exercised: result=%+v err=%v claimed=%t", result, enactErr, claimed)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 0 {
+			t.Fatalf("authority drift after acknowledged claim reached POST: posts=%d requests=%v", posts, requests)
+		}
+		_, receipt := fixture.receipt(t, ctx)
+		if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+			t.Fatalf("authority drift did not retain dispatch claim: %+v", receipt)
+		}
+		oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), oldCurrent); err != nil || oldCurrent.Labels[labelRole] != roleRetiring {
+			t.Fatalf("authority drift deleted or compensated old UID: %v %+v", err, oldCurrent)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleLeader {
+			t.Fatalf("authority drift compensated promoted UID: %v %+v", err, nextCurrent)
+		}
+	})
+	t.Run("two-consumers-one-cas-winner-one-post", func(t *testing.T) {
+		fixture := m067NewAPIFixture(t, ctx, c, "cas", "confirmed")
+		retiringPersisted := false
+		prepare := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || retiringPersisted || !strings.Contains(cm.Data["receipt"], `"phase":"retiring"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			retiringPersisted = true
+			return fmt.Errorf("retiring acknowledgement intentionally lost")
+		}})
+		fixture.native.Client, fixture.native.Reader = prepare, prepare
+		if _, err := fixture.native.Actuate(ctx, fixture.request()); err == nil || !retiringPersisted {
+			t.Fatalf("durable retiring fixture not prepared: err=%v persisted=%t", err, retiringPersisted)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 0 {
+			t.Fatalf("pre-CAS fixture sent drain: posts=%d requests=%v", posts, requests)
+		}
+
+		runCtx, cancelRun := context.WithTimeout(ctx, 20*time.Second)
+		defer cancelRun()
+		var barrierMu sync.Mutex
+		arrivals, winners := 0, 0
+		bothArrived := make(chan struct{})
+		barrier := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			barrierMu.Lock()
+			arrivals++
+			if arrivals == 2 {
+				close(bothArrived)
+			}
+			barrierMu.Unlock()
+			select {
+			case <-bothArrived:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			err := inner.Update(ctx, obj, opts...)
+			if err == nil {
+				barrierMu.Lock()
+				winners++
+				barrierMu.Unlock()
+			}
+			return err
+		}})
+		makeConsumer := func() *NativeActuator {
+			n := NewNativeActuator(barrier)
+			n.Reader, n.JournalNamespace = barrier, fixture.opns
+			n.RouteObservationTimeout, n.RouteObservationInterval = 20*time.Second, 100*time.Millisecond
+			n.SetServingSecurity(fixture.native.servingSecurity)
+			return n
+		}
+		consumers := []*NativeActuator{makeConsumer(), makeConsumer()}
+		results := make([][]RecoveryEvent, len(consumers))
+		errs := make([]error, len(consumers))
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for i := range consumers {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				<-start
+				results[index], errs[index] = consumers[index].RecoverOperations(runCtx, false)
+			}(i)
+		}
+		close(start)
+		wg.Wait()
+		barrierMu.Lock()
+		gotArrivals, gotWinners := arrivals, winners
+		barrierMu.Unlock()
+		if gotArrivals != 2 || gotWinners != 1 {
+			t.Fatalf("actual API dispatch CAS arrivals=%d winners=%d results=%+v errs=%v", gotArrivals, gotWinners, results, errs)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 1 {
+			t.Fatalf("competing consumers emitted posts=%d requests=%v results=%+v errs=%v", posts, requests, results, errs)
+		}
+		for i := range results {
+			if errs[i] != nil || len(results[i]) != 1 {
+				t.Fatalf("consumer %d recovery events=%+v err=%v", i, results[i], errs[i])
+			}
+			if strings.Contains(results[i][0].Effect, "restored") {
+				t.Fatalf("CAS loser compensated routing: consumer=%d event=%+v", i, results[i][0])
+			}
+		}
+		next := &corev1.Pod{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.next), next); err != nil || next.Labels[labelRole] != roleLeader {
+			t.Fatalf("competing consumer changed promoted route: %v %+v", err, next)
+		}
+		old := &corev1.Pod{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), old); err == nil && old.Labels[labelRole] != roleRetiring {
+			t.Fatalf("CAS loser changed retained old route: %+v", old)
+		}
+		check := NewNativeActuator(c)
+		check.Reader, check.JournalNamespace = c, fixture.opns
+		check.SetServingSecurity(fixture.native.servingSecurity)
+		_, _ = check.RecoverOperations(ctx, false)
+		if posts, requests := fixture.backend.counts(); posts != 1 {
+			t.Fatalf("post-race recovery replayed drain: posts=%d requests=%v", posts, requests)
+		}
+	})
 	for i, mode := range []string{"202", "malformed-200", "empty-200", "404", "501", "accepted-lost-response"} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := m067NewAPIFixture(t, ctx, c, fmt.Sprintf("u%d", i), mode)
