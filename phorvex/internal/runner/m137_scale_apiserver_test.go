@@ -243,7 +243,7 @@ func m137ScaleConfigFromEnv(t *testing.T) m137ScaleConfig {
 	if cfg.name == "" {
 		cfg.name = fmt.Sprintf("pods-%d-policies-%d-%s", cfg.pods, cfg.policies, cfg.selector)
 	}
-	if cfg.samples < 20 || cfg.namespaces < 2 || cfg.policies < cfg.namespaces || cfg.policies%cfg.namespaces != 0 || cfg.pods < cfg.policies || cfg.pods%cfg.namespaces != 0 {
+	if cfg.samples < 20 || cfg.namespaces < 2 || cfg.policies < cfg.namespaces || cfg.policies%cfg.namespaces != 0 || cfg.pods < cfg.policies || cfg.pods%cfg.namespaces != 0 || cfg.pods/cfg.namespaces < 2 {
 		t.Fatalf("invalid predeclared case: %+v", cfg)
 	}
 	if cfg.selector == "partitioned" && cfg.pods%cfg.policies != 0 {
@@ -256,6 +256,8 @@ type m137Fixture struct {
 	policies                           []*v1alpha1.PhorvexPolicy
 	firstPod                           client.ObjectKey
 	firstUID                           string
+	receiptPod                         client.ObjectKey
+	receiptTargetUID                   string
 	eventName, receiptName, receiptUID string
 	ownerUIDByNamespace                map[string]string
 }
@@ -409,6 +411,10 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 				fixture.firstPod = client.ObjectKeyFromObject(pod)
 				fixture.firstUID = string(pod.UID)
 			}
+			if nsIndex == 0 && podIndex == 1 {
+				fixture.receiptPod = client.ObjectKeyFromObject(pod)
+				fixture.receiptTargetUID = string(pod.UID)
+			}
 		}
 	}
 	for i := 0; i < 2; i++ {
@@ -420,7 +426,7 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 	score := "0.95"
 	trusted := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: fixture.eventName, Annotations: map[string]string{ingest.CreatorIdentityAnnotation: "system:serviceaccount:m137-00:detector"}}, Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{fixture.firstPod.String()}, Rule: amtdv1beta1.Rule{Type: "Panic", ThreatLevel: "high", Source: "m137-source-shaped-detector"}, Description: "source-shaped synthetic scale fixture; no admission chain installed", AnomalyScore: &score}}
 	create(trusted)
-	receipt := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: fixture.receiptName, Annotations: map[string]string{actuator.PhoenixRotateTargetUIDAnnotation: fixture.firstUID}}, Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{fixture.firstPod.String()}, Rule: amtdv1beta1.Rule{Type: actuator.RuleTypeRotate, ThreatLevel: "high", Source: actuator.RuleSource}, Description: "real receipt structure scale fixture"}}
+	receipt := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: fixture.receiptName, Annotations: map[string]string{actuator.PhoenixRotateTargetUIDAnnotation: fixture.receiptTargetUID}}, Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{fixture.receiptPod.String()}, Rule: amtdv1beta1.Rule{Type: actuator.RuleTypeRotate, ThreatLevel: "high", Source: actuator.RuleSource}, Description: "real receipt structure scale fixture distinct from the trusted incident target"}}
 	create(receipt)
 	fixture.receiptUID = string(receipt.UID)
 	var currentReceipt amtdv1beta1.SecurityEvent
@@ -834,7 +840,7 @@ func TestM137ScaleHarness(t *testing.T) {
 	if receipt, ok := snap.PhoenixReceipts[fixture.receiptName]; ok {
 		receiptPresent = snap.PhoenixReceiptInventoryComplete && receipt.EventName == fixture.receiptName && receipt.EventUID == fixture.receiptUID &&
 			receipt.RuleType == actuator.RuleTypeRotate && receipt.ThreatLevel == "high" && receipt.RuleSource == actuator.RuleSource &&
-			reflect.DeepEqual(receipt.Targets, []string{fixture.firstPod.String()}) && receipt.TargetUID == fixture.firstUID &&
+			reflect.DeepEqual(receipt.Targets, []string{fixture.receiptPod.String()}) && receipt.TargetUID == fixture.receiptTargetUID &&
 			receipt.AppliedAction == string(model.ActionRotate) && !receipt.CreatedAt.IsZero() && !receipt.ProcessedAt.IsZero() && !receipt.ProcessedAt.Before(receipt.CreatedAt)
 	}
 	ownerEligible := len(snap.Pods) == cfg.pods
