@@ -94,3 +94,7 @@ Independent SSH reads confirm the same0.4.124 manager and console digests as06:0
 ## Runtime incident requiring checkpoint follow-up
 
 Recurring manager OOM termination is retained in [the source investigation](20260916-local-continuation/live/20260918/OOM-INVESTIGATION.md). M137 already tracks informer-cache scale; a separate calibration-memory cause is a hypothesis, not a new proved M-issue. Need time-correlated memory/heap/cardinality data and bounded reproduction to distinguish source retention from insufficient configured headroom. DevOps owns deployment resource changes. Do not label the runtime stable or approve production merely because the restarted Pod is Ready.
+
+## September19 independent checkpoint reads
+
+The10:56 UTC [read-only checkpoint report](20260916-local-continuation/live/20260919/REPORT.md) confirms Tier6–13 manager source at0.4.129, plus a fifth recorded restart whose latest termination is independently OOMKilled/137 at10:38:12Z. A separate03:36:38Z termination was also captured. The mounted guardrail ConfigMap remains byte-identical to pre-Tier8 code; manager rollout is not guardrail rollout. Actual vLLM backend0.7.3 OpenAPI documents unchecked cache reset completion, so terminal-full receipts cannot independently prove that effect. Two natural version9 receipts and current policy/readback/admission/network/hardware inventories are retained without upgrading them to behavioral PASS. Tier14 source delivery continues, then the owner-required live checkpoint before Tier15.
