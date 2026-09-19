@@ -111,6 +111,17 @@ type Warmup struct {
 	HTTP        map[string]int64 `json:"http"`
 }
 
+type AgePrerequisite struct {
+	Purpose         string  `json:"purpose"`
+	Pod             string  `json:"pod"`
+	UID             string  `json:"uid"`
+	StartTime       string  `json:"startTime"`
+	ClockBasis      string  `json:"clockBasis"`
+	RequiredSeconds float64 `json:"requiredSeconds"`
+	ObservedSeconds float64 `json:"observedSeconds"`
+	WaitSeconds     float64 `json:"waitSeconds"`
+}
+
 type Memory struct {
 	Scope             string  `json:"scope"`
 	HarnessBaseline   int64   `json:"harnessBaselineRSSBytes"`
@@ -165,6 +176,7 @@ type Report struct {
 	Fixture         Fixture               `json:"fixture"`
 	Samples         []Sample              `json:"samples"`
 	Warmups         []Warmup              `json:"warmups"`
+	AgePrerequisite AgePrerequisite       `json:"workloadAgePrerequisite"`
 	Controls        []Control             `json:"controls"`
 	StartupHTTP     map[string]int64      `json:"startupHTTP"`
 	SampleHTTP      map[string]int64      `json:"sampleHTTP"`
@@ -316,6 +328,10 @@ func (r Report) Validate() error {
 	}
 	if len(r.Warmups) != r.Fixture.WarmupTicks {
 		return fmt.Errorf("warmup attempts=%d, want %d", len(r.Warmups), r.Fixture.WarmupTicks)
+	}
+	age := r.AgePrerequisite
+	if age.Purpose != "incident-pod-authoritative-start-time" || age.Pod == "" || age.UID == "" || age.StartTime == "" || age.ClockBasis != "API Pod.status.startTime observed against local wall clock before warmups" || age.RequiredSeconds != 20 || age.ObservedSeconds < age.RequiredSeconds || age.WaitSeconds < 0 || age.WaitSeconds > 30 || math.IsNaN(age.ObservedSeconds) || math.IsInf(age.ObservedSeconds, 0) || math.IsNaN(age.WaitSeconds) || math.IsInf(age.WaitSeconds, 0) {
+		return errors.New("fixed incident workload-age prerequisite is missing or invalid")
 	}
 	for i, warmup := range r.Warmups {
 		if warmup.Index != i || warmup.Phase != "post-cache-sync" || warmup.Outcome != "finished-full-snapshot" || warmup.DurationSec <= 0 || math.IsNaN(warmup.DurationSec) || math.IsInf(warmup.DurationSec, 0) || warmup.Error != "" || warmup.HTTP == nil {

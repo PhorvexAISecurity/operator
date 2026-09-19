@@ -499,6 +499,69 @@ func m137ForceDue(m *Manager) {
 	}
 }
 
+func m137PodReady(pod *corev1.Pod) bool {
+	if pod == nil || pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func m137WaitIncidentAge(ctx context.Context, reader client.Reader, key client.ObjectKey, uid string) (scaleprobe.AgePrerequisite, error) {
+	const (
+		requiredAge = 20 * time.Second
+		maximumWait = 30 * time.Second
+	)
+	started := time.Now()
+	result := scaleprobe.AgePrerequisite{
+		Purpose:         "incident-pod-authoritative-start-time",
+		Pod:             key.String(),
+		UID:             uid,
+		ClockBasis:      "API Pod.status.startTime observed against local wall clock before warmups",
+		RequiredSeconds: requiredAge.Seconds(),
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, maximumWait)
+	defer cancel()
+	for {
+		pod := &corev1.Pod{}
+		if err := reader.Get(waitCtx, key, pod); err != nil {
+			result.WaitSeconds = time.Since(started).Seconds()
+			return result, fmt.Errorf("read incident Pod age prerequisite: %w", err)
+		}
+		if string(pod.UID) != uid || pod.DeletionTimestamp != nil || !m137PodReady(pod) || pod.Status.StartTime == nil || pod.Status.StartTime.IsZero() {
+			result.WaitSeconds = time.Since(started).Seconds()
+			return result, fmt.Errorf("incident Pod identity/readiness/startTime changed: key=%s uid=%s", key, pod.UID)
+		}
+		now := time.Now()
+		startTime := pod.Status.StartTime.Time
+		result.StartTime = startTime.UTC().Format(time.RFC3339Nano)
+		result.ObservedSeconds = now.Sub(startTime).Seconds()
+		result.WaitSeconds = now.Sub(started).Seconds()
+		if result.ObservedSeconds < 0 {
+			return result, fmt.Errorf("incident Pod startTime %s is in the future", result.StartTime)
+		}
+		if result.ObservedSeconds >= result.RequiredSeconds {
+			return result, nil
+		}
+		remaining := requiredAge - now.Sub(startTime)
+		if remaining > 250*time.Millisecond {
+			remaining = 250 * time.Millisecond
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-waitCtx.Done():
+			timer.Stop()
+			result.WaitSeconds = time.Since(started).Seconds()
+			return result, fmt.Errorf("incident Pod did not reach %s actual age within %s: %w", requiredAge, maximumWait, waitCtx.Err())
+		case <-timer.C:
+		}
+	}
+}
+
 func m137WaitPolicyCache(ctx context.Context, reader, authoritative client.Reader, policies []*v1alpha1.PhorvexPolicy) error {
 	type observation struct {
 		resourceVersion string
@@ -903,6 +966,16 @@ func TestM137ScaleHarness(t *testing.T) {
 		RESTConfigs:   map[string]scaleprobe.RESTConfig{"fixture": m137RESTBinding(fixtureREST), "cache": m137RESTBinding(cacheREST), "manager": m137RESTBinding(managerREST), "direct": m137RESTBinding(directREST), "convergence": m137RESTBinding(convergenceREST)},
 		ProbeErrors:   []string{fmt.Sprintf("harness incomplete before %d post-cache-sync warmups", cfg.warmup)},
 	}
+	agePrerequisite, ageErr := m137WaitIncidentAge(ctx, direct, fixture.firstPod, fixture.firstUID)
+	report.AgePrerequisite = agePrerequisite
+	m137MergeHTTP(report.StartupHTTP, counts.reset())
+	if ageErr != nil {
+		report.ProbeErrors = []string{"fixed workload-age prerequisite failed: " + ageErr.Error()}
+		if err := m137WriteReport(output, report); err != nil {
+			t.Fatal(err)
+		}
+		t.Fatal(ageErr)
+	}
 	if err := m137WriteReport(output, report); err != nil {
 		t.Fatal(err)
 	}
@@ -1199,7 +1272,7 @@ func TestM137ScaleHarness(t *testing.T) {
 	report = scaleprobe.Report{
 		SchemaVersion: scaleprobe.SchemaVersion,
 		Environment:   scaleprobe.Environment{GitSHA: m137GitSHA(t), Executable: executable, ExecutableSHA256: executableSHA, GoVersion: runtime.Version(), KubernetesAssets: os.Getenv("KUBEBUILDER_ASSETS"), CPUCount: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), MemoryTotalBytes: totalMemory, MemoryLimitBytes: limitMemory, HarnessPID: os.Getpid(), APIProcessPID: children["apiserver"], EtcdProcessPID: children["etcd"], APIProcessRSSBytes: m137RSS(children["apiserver"]), EtcdProcessRSSBytes: m137RSS(children["etcd"])},
-		Fixture:       fixtureReport, Samples: samples, Warmups: warmups, Controls: []scaleprobe.Control{deadlineControl}, StartupHTTP: startupHTTP, SampleHTTP: sampledHTTP, ConvergenceHTTP: convergenceHTTP, ControlHTTP: controlHTTP,
+		Fixture:       fixtureReport, Samples: samples, Warmups: warmups, AgePrerequisite: agePrerequisite, Controls: []scaleprobe.Control{deadlineControl}, StartupHTTP: startupHTTP, SampleHTTP: sampledHTTP, ConvergenceHTTP: convergenceHTTP, ControlHTTP: controlHTTP,
 		RESTConfigs: map[string]scaleprobe.RESTConfig{"fixture": m137RESTBinding(fixtureREST), "cache": m137RESTBinding(cacheREST), "manager": m137RESTBinding(managerREST), "direct": m137RESTBinding(directREST), "convergence": m137RESTBinding(convergenceREST)},
 		Memory:      scaleprobe.Memory{Scope: "sampled post-tick harness/cache/manager and separate envtest kube-apiserver/etcd snapshots; max and slope are not continuous within-tick peaks", HarnessBaseline: rssBefore, HarnessPeak: peakRSS, HarnessFinal: m137RSS(os.Getpid()), HarnessSlopeBytes: m137Slope(rssValues), HeapBaseline: memBefore.HeapAlloc, HeapPeak: peakHeap, HeapFinal: memAfter.HeapAlloc, HeapSlopeBytes: m137Slope(heapValues), GCCount: memAfter.NumGC - memBefore.NumGC, APIBaseline: apiRSSBefore, APIPeak: peakAPIRSS, APIFinal: m137RSS(children["apiserver"]), EtcdBaseline: etcdRSSBefore, EtcdPeak: peakEtcdRSS, EtcdFinal: m137RSS(children["etcd"])},
 		Correctness: scaleprobe.Correctness{CacheConverged: len(cachedPods.Items) == cfg.pods, ProtectedObjectCount: len(snap.Pods), GraphEdgesPresent: graphEdges, RBACPresent: rbacPresent, TrustedEventPresent: trustedPresent, ReceiptPresent: receiptPresent, DecisionRecords: measuredDecisions, SelectedFeasibleRecords: measuredSelected, IncidentTargetSelected: incidentTargetSelected, CurrentOwnerEligible: ownerEligible, ControllerStatusPreserved: controllerStatusPreserved, NoFalseCadence: noFalseCadence},

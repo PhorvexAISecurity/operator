@@ -488,15 +488,24 @@ var (
 )
 
 func redactTraceString(s string) string {
-	s = authorizationPattern.ReplaceAllString(s, "Authorization:[REDACTED]")
-	s = bearerPattern.ReplaceAllString(s, "Bearer [REDACTED]")
-	s = uriUserInfoPattern.ReplaceAllString(s, "://[REDACTED]@")
-	return secretKVPattern.ReplaceAllStringFunc(s, func(match string) string {
-		if i := strings.IndexAny(match, ":="); i >= 0 {
-			return strings.TrimSpace(match[:i]) + string(match[i]) + "[REDACTED]"
-		}
-		return "[REDACTED]"
-	})
+	if strings.ContainsAny(s, ":=") {
+		s = authorizationPattern.ReplaceAllString(s, "Authorization:[REDACTED]")
+	}
+	if strings.ContainsAny(s, " \t\n\f\r\v") {
+		s = bearerPattern.ReplaceAllString(s, "Bearer [REDACTED]")
+	}
+	if strings.Contains(s, "://") && strings.Contains(s, "@") {
+		s = uriUserInfoPattern.ReplaceAllString(s, "://[REDACTED]@")
+	}
+	if strings.ContainsAny(s, ":=") {
+		s = secretKVPattern.ReplaceAllStringFunc(s, func(match string) string {
+			if i := strings.IndexAny(match, ":="); i >= 0 {
+				return strings.TrimSpace(match[:i]) + string(match[i]) + "[REDACTED]"
+			}
+			return "[REDACTED]"
+		})
+	}
+	return s
 }
 
 func cleanOptional(v OptionalFloat) OptionalFloat {
