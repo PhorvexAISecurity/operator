@@ -12,9 +12,9 @@ import (
 )
 
 // conformal.go provides the DISTRIBUTIONALLY-ROBUST upper bound C_hi used by the HARD
-// feasibility/SLO gate (METHOD-DECISION cost graft, CDR-Cost). C_hi = E[C] +
-// conformal-residual-quantile + a hardware-calibrated GPU envelope. Feasibility uses
-// C_hi; the objective uses E[C].
+// feasibility/SLO gate (METHOD-DECISION cost graft, CDR-Cost). For GPU rotations,
+// C_hi = E[C] + max(generic conformal-residual quantile, explicitly configured GPU
+// envelope minimum). Feasibility uses C_hi; the objective uses E[C].
 
 const (
 	// DefaultGPUEnvelopeMax is the fail-safe used when a deployment has no hardware
