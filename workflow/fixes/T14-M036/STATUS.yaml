@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -89,12 +89,19 @@ checks:
     source_sha: 62ed95b872dc254e95604a4537c138226428eed2
     at: '2026-09-19T09:27:00+00:00'
     incident_sha256: ea737efae3b65bb2c39040185f21c1543bb4361264738353cbf08a6146f80488
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: e482ba670da91c8911ef0e7436c7dc53c78109a0ecded5b36626202fc2659323
+    source_sha: 62ed95b872dc254e95604a4537c138226428eed2
+    at: '2026-09-19T11:24:16+00:00'
 fix_id: T14-M036
 issues:
 - M-36
 title: Cycle every configured guardrail variant with fixed receipt intent
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -121,11 +128,11 @@ implementation:
   head_sha: 62ed95b872dc254e95604a4537c138226428eed2
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/232
+  reviewed_head: a8ef43cfba3be1e1bdbcffe7922d7396edb9dcd1
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -156,9 +163,10 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T09:27:03+00:00'
+  action: PR232 targets main; await DevOps merge/deployment and external billing resolution.
+    Own accumulated live checkpoint; do not start Tier15. Prepared CPU-only controls
+    may run on pinned deployed source after exact fixture handoff.
+updated_at: '2026-09-19T11:24:17+00:00'
 configuration_history:
 - at: '2026-09-17T07:02:07+00:00'
   by: codex-lead
@@ -181,6 +189,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T11:24:15+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -229,6 +243,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T11:24:17+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T14-M036:9:review

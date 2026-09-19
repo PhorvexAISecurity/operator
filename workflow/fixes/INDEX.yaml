@@ -1125,7 +1125,7 @@ fixes:
     issues:
     - M-36
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t14-m036
@@ -1136,7 +1136,7 @@ fixes:
     issues:
     - M-177
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t14-m177
@@ -1147,7 +1147,7 @@ fixes:
     issues:
     - M-178
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t14-m178
