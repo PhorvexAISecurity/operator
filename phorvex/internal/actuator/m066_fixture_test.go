@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"testing"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -15,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
-	"testing"
 )
 
 // m066FakePool configures a complete *synthetic* snapshot for authority and
@@ -322,6 +324,77 @@ func TestM066PostDeleteObservationRequiresExactReplacementShape(t *testing.T) {
 			}
 			if !tc.wantOK && err == nil {
 				t.Fatalf("ambiguous postdelete inventory accepted: %+v", candidate)
+			}
+		})
+	}
+}
+
+func TestM065PostDeleteObservationRequiresExpectedTemplateMetadataPresence(t *testing.T) {
+	const (
+		emptyLabel         = "m065.test/empty-label"
+		emptyAnnotation    = "m065.test/empty-annotation"
+		nonemptyLabel      = "m065.test/nonempty-label"
+		nonemptyAnnotation = "m065.test/nonempty-annotation"
+	)
+	for _, tc := range []struct {
+		name      string
+		mutate    func(*corev1.Pod)
+		wantOK    bool
+		wantError string
+	}{
+		{name: "present-empty-with-admission-extras", wantOK: true},
+		{name: "missing-empty-label", mutate: func(p *corev1.Pod) { delete(p.Labels, emptyLabel) }, wantError: "template label drift"},
+		{name: "missing-empty-annotation", mutate: func(p *corev1.Pod) { delete(p.Annotations, emptyAnnotation) }, wantError: "serving annotation drift"},
+		{name: "nonempty-label-mismatch", mutate: func(p *corev1.Pod) { p.Labels[nonemptyLabel] = "changed" }, wantError: "template label drift"},
+		{name: "nonempty-annotation-mismatch", mutate: func(p *corev1.Pod) { p.Annotations[nonemptyAnnotation] = "changed" }, wantError: "serving annotation drift"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+			objects := m066FakePool(old, next, labelSwapGroup)
+			rs := objects[0].(*appsv1.ReplicaSet)
+			rs.Spec.Template.Labels[emptyLabel] = ""
+			rs.Spec.Template.Labels[nonemptyLabel] = "expected"
+			rs.Spec.Template.Annotations[emptyAnnotation] = ""
+			rs.Spec.Template.Annotations[nonemptyAnnotation] = "expected"
+			pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "m066-pool"}}}}
+			captureObjects := append([]client.Object{old, next, pol}, objects...)
+			capture := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(captureObjects...).Build()
+			intent, err := warmPoolCapture(context.Background(), capture, old, next, labelSwapGroup, "g")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := m066ValidV2Receipt(old, next, intent)
+			r.Phase = "retired-awaiting-controller"
+
+			replacement := next.DeepCopy()
+			replacement.Name = "controller-new"
+			replacement.UID = "controller-new-uid"
+			replacement.ResourceVersion = "10"
+			replacement.Labels[labelModelLoaded] = "false"
+			replacement.Labels[emptyLabel] = ""
+			replacement.Labels[nonemptyLabel] = "expected"
+			replacement.Labels["admission.test/extra-label"] = "kept"
+			replacement.Annotations[emptyAnnotation] = ""
+			replacement.Annotations[nonemptyAnnotation] = "expected"
+			replacement.Annotations["admission.test/extra-annotation"] = "kept"
+			if tc.mutate != nil {
+				tc.mutate(replacement)
+			}
+			live := append([]client.Object{pol, next, replacement}, objects...)
+			c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(live...).Build()
+			candidate, err := warmPoolObserve(context.Background(), c, r)
+			if tc.wantOK {
+				if err != nil || candidate == nil || candidate.UID != replacement.UID {
+					t.Fatalf("valid expected metadata subset refused: candidate=%+v err=%v", candidate, err)
+				}
+				if candidate.Labels["admission.test/extra-label"] != "kept" || candidate.Annotations["admission.test/extra-annotation"] != "kept" {
+					t.Fatalf("admission-added metadata was not accepted: labels=%v annotations=%v", candidate.Labels, candidate.Annotations)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("metadata drift reached wrong outcome: candidate=%+v err=%v want=%q", candidate, err, tc.wantError)
 			}
 		})
 	}
