@@ -124,7 +124,7 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 		if p.Name == exclude {
 			continue
 		}
-		if p.Namespace != ns || p.Name == "" || p.UID == "" || p.ResourceVersion == "" {
+		if p.Namespace != ns || p.Name == "" || p.UID == "" || p.ResourceVersion == "" || p.CreationTimestamp.IsZero() {
 			return nil, false, fmt.Errorf("warm candidate inventory contains incomplete identity")
 		}
 		for key, value := range sel {
@@ -149,9 +149,6 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if attempts == warmCandidateAttemptLimit {
-			return nil, false, fmt.Errorf("%w after %d candidates; candidate set incomplete", errWarmCandidateAttemptBudget, attempts)
-		}
 		p := &candidates[i]
 		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, p)
 		if err != nil {
@@ -160,10 +157,13 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 			}
 			return nil, false, fmt.Errorf("warm candidate serving endpoint configuration: %w", err)
 		}
-		attempts++
 		if !podReady(p) || p.DeletionTimestamp != nil {
 			continue
 		}
+		if attempts == warmCandidateAttemptLimit {
+			return nil, false, fmt.Errorf("%w after %d candidates; candidate set incomplete", errWarmCandidateAttemptBudget, attempts)
+		}
+		attempts++
 		ready, pending, err := shadowModelReadyAtEndpoint(ctx, ec, p, ep)
 		if err != nil {
 			return nil, false, err
