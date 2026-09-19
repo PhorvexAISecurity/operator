@@ -92,6 +92,13 @@ func TestM079RenderedMainStartupSelectsMIGAuthorization(t *testing.T) {
 	if got := m079FindArg(enabledArgs, "--mig-profiles-file"); got != "/etc/phorvex-mig/profiles.json" || profile == "" {
 		t.Fatalf("enabled rendered profile path=%q contentBytes=%d", got, len(profile))
 	}
+	// The production Deployment obtains its leader-election namespace from its
+	// in-cluster service-account mount. This isolated process uses an envtest
+	// kubeconfig, so disable only leader election before exercising startup
+	// authorization and transport wiring. Leader-election behavior is covered by
+	// the manager election controls; the other rendered arguments remain intact.
+	defaultArgs = m079ReplaceArg(defaultArgs, "--leader-elect", "false")
+	enabledArgs = m079ReplaceArg(enabledArgs, "--leader-elect", "false")
 
 	localOnly := false
 	environment := &envtest.Environment{UseExistingCluster: &localOnly, CRDDirectoryPaths: []string{"../config/crd/bases"}}
@@ -206,9 +213,11 @@ func m079RenderMainChart(t *testing.T, values string) []byte {
 	}
 	chart := filepath.Join(filepath.Dir(source), "..", "charts", "phorvex")
 	cmd := exec.Command(helm, "template", "m079-main", chart, "--namespace", "control", "--values", valuesPath)
-	out, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("helm template: %v\n%s", err, out)
+		t.Fatalf("helm template: %v\n%s", err, stderr.Bytes())
 	}
 	return out
 }
