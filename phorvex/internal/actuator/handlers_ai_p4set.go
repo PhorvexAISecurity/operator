@@ -55,10 +55,10 @@ const (
 	annoParallelSize     = "phorvex.ai/parallel-size"  // number of ranks in the group
 )
 
-// groupCoherentCutover flips an ENTIRE tensor/pipeline-parallel group as a UNIT (model-shard-replace's
-// TP/PP completion). A parallel group is a consistency unit: a COMPLETE replacement shadow group (one
-// Ready shadow per rank) is flipped together, then the old group is drained + retired. FAIL-CLOSED on
-// an incomplete replacement group — never serve a mixed-rank (old+new) group.
+// groupCoherentCutover is retained only for historical lower-level UID and partial-
+// compensation regression tests. Production capability and modelShardReplaceHandler
+// refuse every grouped target because this helper has no trusted distributed-readiness
+// witness, atomic route activation, protected recovery, or controller replenishment.
 func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group string) (HandlerResult, error) {
 	req.Action = model.ActionModelShardReplace
 	ec.ServingRequest = req

@@ -180,6 +180,10 @@ const (
 	// ReasonTransportUnwired: the backend implements the action but a runtime transport
 	// prerequisite is absent (M-79 node-exec). Retained verbatim from the pre-M-21 code.
 	ReasonTransportUnwired = "transport-unwired"
+	// ReasonParallelGroupUnavailable is the stable capability and dispatch reason for
+	// grouped model-shard replacement until a trusted distributed-readiness witness,
+	// atomic activation, and controller-owned replenishment protocol exist.
+	ReasonParallelGroupUnavailable = "parallel-group-unavailable: distributed readiness, atomic activation and replenishment are unverified"
 
 	// detailSentinel: the value is a control sentinel, never an emitted move.
 	detailSentinel = "control sentinel, not an emitted move"
@@ -323,7 +327,12 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionMIGRebind {
 					e.Prerequisite = ReasonTransportUnwired + " is reported unless the node-exec transport is wired (M-79)"
 				}
-				e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
+				if a == model.ActionModelShardReplace {
+					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
+					e.UnverifiedEffect = "registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable"
+				} else {
+					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
+				}
 			} else {
 				e.Why = unsupportedWhy(BackendNative, a, detail)
 			}
