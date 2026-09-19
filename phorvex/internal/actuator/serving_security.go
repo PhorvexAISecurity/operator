@@ -268,7 +268,7 @@ func servingHTTPAction(action model.Action) bool {
 func secureServingReceipt(r operationReceipt) bool {
 	switch r.Kind {
 	case string(model.ActionWarmSwap), string(model.ActionModelShardReplace):
-		return r.Version == warmSecureReceiptVersion
+		return r.Version == warmSecureReceiptVersion || (r.Version == warmDrainReceiptVersion && !r.ServingLegacy)
 	case string(model.ActionRequestDrain):
 		return r.Version == requestDrainSecureReceiptVersion
 	case string(model.ActionAdapterRotate):

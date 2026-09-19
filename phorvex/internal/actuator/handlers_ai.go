@@ -253,11 +253,17 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: unsupported warm pool: %w", kind, err)
 	}
-	receiptVersion, bindingDigest, bindingServiceAccount := 2, "", ""
-	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
-		receiptVersion, bindingDigest, bindingServiceAccount = warmSecureReceiptVersion, ec.ServingAttempt.digest, normalizeServiceAccount(leader.Spec.ServiceAccountName)
+	selectedUIDs, err := captureWarmSelectedUIDs(ctx, ec.Reader, pool, leader, shadow, groupKey, group)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: pre-cutover route inventory: %w", kind, err)
 	}
-	receipt := operationReceipt{Version: receiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount}
+	bindingDigest := ""
+	bindingServiceAccount := normalizeServiceAccount(leader.Spec.ServiceAccountName)
+	servingLegacy := true
+	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
+		bindingDigest, servingLegacy = ec.ServingAttempt.digest, false
+	}
+	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: warmDrainEndpointConfigDigest(leader, servingLegacy), WarmSelectedUIDs: selectedUIDs}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}
@@ -395,14 +401,19 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		return promotedPartial, fmt.Errorf("%s: old leader retiring but journal phase update failed: %w", kind, err)
 	}
 	partial := HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + shadow.Name, ObjectsTouched: []string{objRef("Pod", req.Namespace, shadow.Name), objRef("Pod", req.Namespace, leader.Name)}, Note: "partial cutover: earlier Pod mutations accepted; completion unresolved"}
-	// (3) DRAIN then RETIRE the old leader. [P-ACTUATOR-SET-COMPLETE] The old leader is already
-	// relabeled `retiring` (admits routed away by step 2); now actually DRAIN its in-flight requests
-	// via the serving stack BEFORE deleting it, so in-flight requests are not dropped ungracefully
-	// (closes the prior ":141 recorded-not-slept" gap). Unreachable stack => the K8s route-drain still
-	// applies; the in-flight abort is [PENDING-GPU-VALIDATION] (recorded in the note).
-	_, drainPending, drainErr := drainInflight(ctx, ec, leader)
+	// (3) Claim one serving send before POST. Only a durable exact-200 result
+	// authorizes retirement. A typed definitely-unsent result may restore the
+	// recorded route in old-first order; every possible-send result is retained.
+	drainResult, drainErr := executeWarmDrainAttempt(ctx, ec, journal, &receipt)
 	if drainErr != nil {
 		return partial, fmt.Errorf("%s drain old leader %s/%s: %w", kind, req.Namespace, req.Pod, drainErr)
+	}
+	if drainResult == warmDrainRestored {
+		partial.Note = "drain was definitely unsent; exact old-first routing roles restored"
+		return partial, fmt.Errorf("%s drain old leader %s/%s definitely unsent; routing restored without retirement", kind, req.Namespace, req.Pod)
+	}
+	if drainResult != warmDrainConfirmed {
+		return partial, fmt.Errorf("%s drain old leader %s/%s retained without confirmed completion", kind, req.Namespace, req.Pod)
 	}
 	pol, err = receiptAuthority(ctx, ec.Reader, receipt, req.Action)
 	if err != nil {
@@ -449,10 +460,7 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		partial.Note = "partial cutover: old leader retired; journal phase unresolved"
 		return partial, fmt.Errorf("%s: old leader retired but journal phase update failed: %w", kind, err)
 	}
-	drainNote := "in-flight drained"
-	if drainPending {
-		drainNote = "in-flight abort [PENDING-GPU-VALIDATION] (stack unreachable; K8s route-drained)"
-	}
+	drainNote := fmt.Sprintf("in-flight drained (aborted=%d)", receipt.Aborted)
 	retireNote := "retired (uid " + string(leader.UID) + ")"
 	if alreadyGone {
 		retireNote = "already gone before retire (no pod of that name; uid " + string(leader.UID) + ")"

@@ -144,6 +144,9 @@ func gcCompletedServingReceipt(ctx context.Context, ec EnactCtx, cm *corev1.Conf
 }
 
 func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (string, error) {
+	if r.Version == warmDrainReceiptVersion {
+		return recoverWarmDrainCutover(ctx, ec, cm, r)
+	}
 	if r.Version == 1 {
 		return recoverLegacyScalarCutover(ctx, ec, cm, r)
 	}
@@ -182,80 +185,14 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 		return "", fmt.Errorf("recorded promoted leader missing, changed or unhealthy")
 	}
 	effect := ""
+	if err == nil {
+		// v2/v6 receipts predate the durable pre-POST claim. Once the new
+		// leader is selected they cannot prove that no drain was sent, so do
+		// not change either route, POST, delete or compensate from their bytes.
+		return effect, fmt.Errorf("legacy warm receipt has ambiguous drain history; external resolution required")
+	}
 	if apierrors.IsNotFound(err) {
 		effect = "old leader already absent; prior in-flight drain unverified"
-	}
-	if err == nil {
-		pol, e := receiptAuthority(ctx, ec.Reader, *r, model.Action(r.Kind))
-		if e != nil {
-			return effect, e
-		}
-		if e := warmCurrentScope(pol, *r, old, newPod); e != nil {
-			return effect, e
-		}
-		if e := warmPoolRecheck(ctx, ec.Reader, *r, old, newPod); e != nil {
-			return effect, e
-		}
-		if old.Labels[labelRole] == roleLeader {
-			before := old.DeepCopy()
-			old.Labels[labelRole] = roleRetiring
-			if e := ec.Client.Patch(ctx, old, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); e != nil {
-				return effect, e
-			}
-			effect = "old leader route removed"
-			fresh := &corev1.Pod{}
-			if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.OldName}, fresh); e != nil {
-				return effect, e
-			}
-			if fresh.UID != old.UID || fresh.Labels[labelRole] != roleRetiring {
-				return effect, fmt.Errorf("old leader changed after route removal")
-			}
-			old = fresh
-		} else if old.Labels[labelRole] != roleRetiring {
-			return effect, fmt.Errorf("old leader role ambiguous")
-		}
-		pol, e = receiptAuthority(ctx, ec.Reader, *r, model.Action(r.Kind))
-		if e != nil {
-			return effect, e
-		}
-		if e := warmCurrentScope(pol, *r, old, newPod); e != nil {
-			return effect, e
-		}
-		if e := warmPoolRecheck(ctx, ec.Reader, *r, old, newPod); e != nil {
-			return effect, e
-		}
-		_, drainPending, e := drainInflight(ctx, ec, old)
-		if e != nil {
-			return effect, e
-		}
-		pol, e = receiptAuthority(ctx, ec.Reader, *r, model.Action(r.Kind))
-		if e != nil {
-			return effect, e
-		}
-		freshOld, freshNew := &corev1.Pod{}, &corev1.Pod{}
-		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.OldName}, freshOld); e != nil {
-			return effect, e
-		}
-		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.NewName}, freshNew); e != nil {
-			return effect, e
-		}
-		if e := warmCurrentScope(pol, *r, freshOld, freshNew); e != nil {
-			return effect, e
-		}
-		if e := warmPoolRecheck(ctx, ec.Reader, *r, freshOld, freshNew); e != nil {
-			return effect, e
-		}
-		if freshOld.Labels[labelRole] != roleRetiring || freshOld.DeletionTimestamp != nil || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshNew.DeletionTimestamp != nil {
-			return effect, fmt.Errorf("recorded pair changed before retirement")
-		}
-		if e := ec.Client.Delete(ctx, freshOld, uidPrecondition(freshOld)); e != nil && !apierrors.IsNotFound(e) {
-			return effect, e
-		}
-		if drainPending {
-			effect = "old leader route removed and retired; in-flight abort unverified (serving stack unreachable)"
-		} else {
-			effect = "old leader in-flight drained and retired"
-		}
 	}
 	if r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" {
 		r.Phase = "retired-awaiting-controller"
