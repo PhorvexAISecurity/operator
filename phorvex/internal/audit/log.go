@@ -543,11 +543,39 @@ func (l *Logger) Record(d model.Decision) error {
 	return err
 }
 
-// TickSummary logs a per-tenant tick rollup.
+// TickSummary logs one completed per-tenant tick rollup. Outcome is explicit so
+// a healthy empty tick cannot be confused with a checked-selection refusal.
 func (l *Logger) TickSummary(tenant string, total, selected, infeasible int, dur time.Duration, mode string, killSwitch bool, killSwitchCause string) {
-	l.log.Info("tick",
-		"tenant", tenant, "pods", total, "selected", selected, "infeasible", infeasible,
-		"mode", mode, "killSwitch", killSwitch, "killSwitchCause", killSwitchCause, "durationMs", dur.Milliseconds())
+	l.tickSummary(tenant, "", "", "", total, selected, infeasible, dur, mode, "completed", "", killSwitch, killSwitchCause)
+}
+
+// TickSummaryForPolicy adds the exact M-140 owner identity to a completed
+// rollup. TickSummary remains available for callers that do not own that context.
+func (l *Logger) TickSummaryForPolicy(tenant, namespace, policy, uid string, total, selected, infeasible int, dur time.Duration, mode string, killSwitch bool, killSwitchCause string) {
+	l.tickSummary(tenant, namespace, policy, uid, total, selected, infeasible, dur, mode, "completed", "", killSwitch, killSwitchCause)
+}
+
+// RejectedTickSummary logs a checked-selection refusal without fabricating a
+// zero-decision result. reason must come from the runner's closed classifier.
+func (l *Logger) RejectedTickSummary(tenant, namespace, policy, uid string, protected int, dur time.Duration, mode, reason string, killSwitch bool, killSwitchCause string) {
+	l.tickSummary(tenant, namespace, policy, uid, protected, 0, 0, dur, mode, "selection-rejected", reason, killSwitch, killSwitchCause)
+}
+
+func (l *Logger) tickSummary(tenant, namespace, policy, uid string, total, selected, infeasible int, dur time.Duration, mode, outcome, reason string, killSwitch bool, killSwitchCause string) {
+	fields := []any{"tenant", tenant}
+	if namespace != "" || policy != "" || uid != "" {
+		fields = append(fields, "namespace", namespace, "policy", policy, "policyUID", uid)
+	}
+	fields = append(fields, "pods", total)
+	if outcome == "completed" {
+		fields = append(fields, "selected", selected, "infeasible", infeasible)
+	}
+	fields = append(fields, "mode", mode, "outcome", outcome)
+	if reason != "" {
+		fields = append(fields, "reason", reason)
+	}
+	fields = append(fields, "killSwitch", killSwitch, "killSwitchCause", killSwitchCause, "durationMs", dur.Milliseconds())
+	l.log.Info("tick", fields...)
 }
 
 func round4(x float64) float64 {

@@ -51,7 +51,7 @@ func (b *m067Backend) handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(r.URL.Path, "models") {
-			_, _ = w.Write([]byte(`{"data":[]}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"model"}]}`))
 			if b.mode == "definitely-unsent" {
 				_ = b.server.Listener.Close()
 			}
