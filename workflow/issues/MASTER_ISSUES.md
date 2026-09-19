@@ -2761,7 +2761,7 @@ Severity: MEDIUM · Tier: unassigned · Fixes: T20-M179
 
 ### M-180 · Empty model inventory is reported as serving model ready · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T22-M180
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `ACTUATION` — anatomy locus review required.

@@ -1240,3 +1240,14 @@ fixes:
     stacked_on: []
     branch: fix/t22-m078
     head_sha: null
+  T22-M180:
+    directory: fixes/T22-M180
+    aliases: []
+    issues:
+    - M-180
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t22-m180
+    head_sha: null
