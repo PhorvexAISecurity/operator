@@ -85,10 +85,15 @@ func TestM079RenderedDefaultAndOptInComposition(t *testing.T) {
 	}
 	for _, scenario := range []string{"default", "enabled"} {
 		t.Run(scenario, func(t *testing.T) {
-			cmd := exec.Command(os.Args[0], "-test.run=^TestM079CompositionWorker$", "-test.v")
+			ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestM079CompositionWorker$", "-test.v")
 			cmd.Env = append(os.Environ(), m079ScenarioEnv+"="+scenario)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					t.Fatalf("scenario %s exceeded 90s deadline:\n%s", scenario, out)
+				}
 				t.Fatalf("scenario %s: %v\n%s", scenario, err, out)
 			}
 			if !strings.Contains(string(out), "--- PASS: TestM079CompositionWorker") {
@@ -119,8 +124,6 @@ func m079DefaultComposition(t *testing.T) {
 			t.Fatalf("default chart rendered trusted-node argument %q", arg)
 		}
 	}
-	restore := actuator.M079SetNodeExecUnwiredForTest()
-	t.Cleanup(restore)
 	security, err := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	if err != nil {
 		t.Fatal(err)

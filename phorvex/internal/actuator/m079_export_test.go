@@ -13,14 +13,6 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-// M079SetNodeExecUnwiredForTest isolates the package transport in a fresh-process
-// composition control. It is test-only and is absent from production builds.
-func M079SetNodeExecUnwiredForTest() func() {
-	old := pkgNodeRunner
-	pkgNodeRunner = nil
-	return func() { pkgNodeRunner = old }
-}
-
 // M079WireRemoteNodeExecForTest reaches the production wiring function while
 // supplying its existing private remotecommand executor seam. No runtime hook is added.
 func M079WireRemoteNodeExecForTest(cfg RemoteExecConfig, factory func(*rest.Config, string, *url.URL) (remotecommand.Executor, error)) (func(), error) {
