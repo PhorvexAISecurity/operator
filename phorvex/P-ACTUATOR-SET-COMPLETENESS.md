@@ -5,7 +5,8 @@
 below are implemented + green in CI; the brain stays byte-identical (opt-in actions). This records the decision
 from the §9.18 audit
 (`P4-COMPLETENESS-AUDIT.md` holds the full reasoning, persona panel, premortem + steelman, and serving-stack
-citations). No handler code exists for anything below; this is the build contract to approve before coding.
+citations). This began as the build contract; the current source status and remaining live boundaries are
+recorded below.
 
 ---
 
@@ -24,7 +25,7 @@ citations). No handler code exists for anything below; this is the build contrac
    | kv-reset | **real-but-pending** | the vLLM reset route string is unconfirmed against a live version |
    | warm-swap | **real-but-pending + drain gap** | connection-drain unimplemented (`handlers_ai.go:141`) → in-flight requests dropped |
    | model-shard-replace | **partially-built** | single-pod flip only; **no TP/PP coordination** (a parallel group is a consistency unit) |
-   | mig-rebind | **partially-built — transport UNBUILT** | **no real `nodeRunner` exists** → always fail-closes in production; "drain" is route-relabel, not GPU-context eviction |
+   | mig-rebind | **source-built, explicit opt-in transport; hardware pending** | `cmd/main.go` wires the scoped remotecommand runner only from complete configuration; deployed SPDY, CUDA release and GPU effects remain LV01 |
 
 3. **The LoRA-adapter survival gap.** A poisoned LoRA/adapter survives **every** current actuator (warm-swap
    reloads the base and re-pulls the same poisoned adapter from the registry; kv-reset is cache; shard-replace
@@ -54,7 +55,7 @@ implemented **behind the mockable stack abstraction** (`gpu_stack.go` interfaces
 | Item | What to build | Closes |
 |---|---|---|
 | **warm-swap real drain** | implement the connection-drain phase (shared with `request-drain`): stop new admits, finish/abort in-flight with a bounded window, THEN retire | the in-flight-drop gap (`handlers_ai.go:141`) |
-| **mig-rebind real `nodeRunner`** | a production node-exec transport (privileged DaemonSet exec / GPU-Operator mig-manager) **and** true GPU-context eviction (evict the pod off the GPU so reconfig has zero CUDA contexts) | the UNBUILT transport + the insufficient route-only "drain" |
+| **mig-rebind real `nodeRunner`** | production source now wires a scoped privileged-DaemonSet remotecommand transport and kubelet PodResources helper; true GPU-context eviction and hardware readback still require LV01 | the former unwired source path; deployed transport and zero-CUDA-context evidence remain open |
 | **model-shard-replace TP/PP coordination** | coordinate the replace across a tensor/pipeline-parallel group (the framework's coordinated-restart / consistent-rank-swap path), not an independent pod flip | the single-pod-flip correctness gap |
 
 ---
@@ -69,4 +70,6 @@ implemented **behind the mockable stack abstraction** (`gpu_stack.go` interfaces
 - **Mechanism-coverage is a recurring human review** — re-run this audit (the template) on serving-stack shifts;
   the handler-coverage invariant alone cannot detect a newly-missing mechanism.
 
-**No handler code in this pass. Build begins only on approval of this set.**
+**Current boundary:** the handlers and opt-in transport are source-built and locally testable. A source-matched
+deployment, real remotecommand/SPDY, kubelet/device-plugin agreement, CUDA release and GI/CI effects remain LV01;
+this document does not claim hardware validation.

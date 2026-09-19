@@ -4,9 +4,10 @@
  * gpu_stack_p4set.go — the stack control-plane surface for the NEW actuators (adapter-rotate,
  * request-drain, guardrail-rotate, kv-migrate-invalidate) + the REAL MIG node-exec transport that
  * completes mig-rebind. Every call is REAL code behind a swappable interface (vLLM default; Triton
- * EXPLICIT / TGI / LoRAX swap by re-implementing), marked [PENDING-GPU-VALIDATION] — the serving
- * routes + the node-exec syscall are confirmed on real hardware, not here. Same honest tri-state:
- * success / errStackUnreachable -> [PENDING] / reachable-fails -> fail-closed.
+ * EXPLICIT / TGI / LoRAX swap by re-implementing), marked [PENDING-GPU-VALIDATION]. Source tests
+ * cover the serving routes and node-exec request boundary; deployed remotecommand and GPU effects
+ * remain pending under LV01. Same honest tri-state: success / errStackUnreachable -> [PENDING] /
+ * reachable-fails -> fail-closed.
  */
 
 package actuator
@@ -131,59 +132,77 @@ func (c *httpVLLM) AdapterLoaded(ctx context.Context, ep servingEndpoint, adapte
 	return loaded, nil
 }
 
+type servingModelInventory struct {
+	ids map[string]struct{}
+}
+
+func (i servingModelInventory) contains(id string) bool {
+	_, ok := i.ids[id]
+	return ok
+}
+
+func (i servingModelInventory) nonempty() bool { return len(i.ids) != 0 }
+
 // parseAdapterInventory accepts the OpenAI-compatible models envelope while allowing
 // documented extension fields. Absence is authoritative only when every entry has one
 // explicit, unique ID and the input is one complete bounded JSON value.
 func parseAdapterInventory(data []byte, adapter string) (bool, error) {
+	inventory, err := parseServingModelInventory(data)
+	if err != nil {
+		return false, err
+	}
+	return inventory.contains(adapter), nil
+}
+
+// parseServingModelInventory returns the strictly validated model identities in an
+// OpenAI-compatible models envelope. A valid empty inventory remains authoritative:
+// callers decide whether it means an adapter is absent or generic readiness is false.
+func parseServingModelInventory(data []byte) (servingModelInventory, error) {
 	if len(data) == 0 || len(data) > servingResponseMaxBytes {
-		return false, fmt.Errorf("response size must be 1..%d bytes", servingResponseMaxBytes)
+		return servingModelInventory{}, fmt.Errorf("response size must be 1..%d bytes", servingResponseMaxBytes)
 	}
 	if err := rejectDuplicateJSONFields(data); err != nil {
-		return false, err
+		return servingModelInventory{}, err
 	}
 	var envelope map[string]json.RawMessage
 	dec := json.NewDecoder(bytes.NewReader(data))
 	if err := dec.Decode(&envelope); err != nil {
-		return false, err
+		return servingModelInventory{}, err
 	}
 	for key := range envelope {
 		if strings.EqualFold(key, "data") && key != "data" {
-			return false, fmt.Errorf("inventory has an ambiguous data field alias")
+			return servingModelInventory{}, fmt.Errorf("inventory has an ambiguous data field alias")
 		}
 	}
 	rawData, present := envelope["data"]
 	if !present || bytes.Equal(bytes.TrimSpace(rawData), []byte("null")) {
-		return false, fmt.Errorf("missing data inventory")
+		return servingModelInventory{}, fmt.Errorf("missing data inventory")
 	}
 	var entries []map[string]json.RawMessage
 	if err := json.Unmarshal(rawData, &entries); err != nil {
-		return false, fmt.Errorf("data must be an array: %w", err)
+		return servingModelInventory{}, fmt.Errorf("data must be an array: %w", err)
 	}
-	seen := make(map[string]bool, len(entries))
-	loaded := false
+	ids := make(map[string]struct{}, len(entries))
 	for i, entry := range entries {
 		for key := range entry {
 			if strings.EqualFold(key, "id") && key != "id" {
-				return false, fmt.Errorf("data[%d] has an ambiguous id field alias", i)
+				return servingModelInventory{}, fmt.Errorf("data[%d] has an ambiguous id field alias", i)
 			}
 		}
 		rawID, present := entry["id"]
 		if !present || bytes.Equal(bytes.TrimSpace(rawID), []byte("null")) {
-			return false, fmt.Errorf("data[%d] has no explicit nonempty id", i)
+			return servingModelInventory{}, fmt.Errorf("data[%d] has no explicit nonempty id", i)
 		}
 		var id string
 		if err := json.Unmarshal(rawID, &id); err != nil || strings.TrimSpace(id) == "" {
-			return false, fmt.Errorf("data[%d] has no explicit nonempty string id", i)
+			return servingModelInventory{}, fmt.Errorf("data[%d] has no explicit nonempty string id", i)
 		}
-		if seen[id] {
-			return false, fmt.Errorf("duplicate model id")
+		if _, duplicate := ids[id]; duplicate {
+			return servingModelInventory{}, fmt.Errorf("duplicate model id")
 		}
-		seen[id] = true
-		if id == adapter {
-			loaded = true
-		}
+		ids[id] = struct{}{}
 	}
-	return loaded, nil
+	return servingModelInventory{ids: ids}, nil
 }
 
 func (c *httpVLLM) LoadAdapter(ctx context.Context, ep servingEndpoint, adapter, source string) error {
@@ -418,7 +437,7 @@ const migAgentLabelKey = "phorvex.ai/mig-agent"
 // fabricate a node exec.
 type execInPodFunc func(ctx context.Context, ns, pod, container string, argv []string) (string, error)
 
-var pkgNodeRunner *execNodeRunner // nil by default; no production caller wires it
+var pkgNodeRunner *execNodeRunner // nil by default; main wires it only from complete explicit configuration
 
 type unwiredNodeRunner struct{}
 

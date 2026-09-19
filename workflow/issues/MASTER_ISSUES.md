@@ -1954,7 +1954,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-78 · Unbounded sequential serving probes inside the tick budget · **OPEN** · `CONTROL`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T22-M078
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.vllm
@@ -2761,7 +2761,7 @@ Severity: MEDIUM · Tier: unassigned · Fixes: T20-M179
 
 ### M-180 · Empty model inventory is reported as serving model ready · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T22-M180
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `ACTUATION` — anatomy locus review required.

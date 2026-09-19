@@ -2,20 +2,25 @@ package runner
 
 import (
 	"context"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,6 +46,55 @@ type m034RecordingActuator struct {
 	inner  actuator.Actuator
 	result actuator.Result
 	err    error
+}
+
+type m034BoundedLog struct {
+	mu   sync.Mutex
+	tail []byte
+}
+
+const m034KCMLogLimit = 64 * 1024
+
+func (l *m034BoundedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(p) >= m034KCMLogLimit {
+		l.tail = append(l.tail[:0], p[len(p)-m034KCMLogLimit:]...)
+		return len(p), nil
+	}
+	l.tail = append(l.tail, p...)
+	if len(l.tail) > m034KCMLogLimit {
+		l.tail = append([]byte(nil), l.tail[len(l.tail)-m034KCMLogLimit:]...)
+	}
+	return len(p), nil
+}
+
+func (l *m034BoundedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return string(append([]byte(nil), l.tail...))
+}
+
+func m034NonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range addresses {
+		var ip net.IP
+		switch parsed := address.(type) {
+		case *net.IPNet:
+			ip = parsed.IP
+		case *net.IPAddr:
+			ip = parsed.IP
+		}
+		if ip4 := ip.To4(); ip4 != nil && ip4.IsGlobalUnicast() && !ip4.IsLoopback() {
+			return ip4.String()
+		}
+	}
+	t.Fatal("isolated EndpointSlice fixture requires a non-loopback local IPv4 address")
+	return ""
 }
 
 func (r *m034RecordingActuator) Name() string { return r.inner.Name() }
@@ -82,7 +136,7 @@ func m034Poll(t *testing.T, d time.Duration, f func() (bool, error)) {
 	t.Fatal("timed out waiting for isolated controller fixture")
 }
 
-func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) {
+func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" || os.Getenv("KUBE_CONTROLLER_MANAGER") == "" {
 		t.Skip("requires pinned envtest and kube-controller-manager")
 	}
@@ -104,21 +158,71 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	if err := clientcmd.WriteToFile(kcfg, kubeconfig); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+kubeconfig, "--controllers=replicaset", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
+	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+kubeconfig, "--controllers=replicaset,endpointslice", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	var kcmLog m034BoundedLog
+	cmd.Stdout, cmd.Stderr = &kcmLog, &kcmLog
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cancel(); _ = cmd.Wait() })
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("bounded kube-controller-manager log:\n%s", kcmLog.String())
+		}
+		cancel()
+		_ = cmd.Wait()
+	})
 	c, err := client.NewWithWatch(cfg, client.Options{Scheme: m034Scheme(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		var failedPods corev1.PodList
+		var failedSlices discoveryv1.EndpointSliceList
+		_ = c.List(context.Background(), &failedPods)
+		_ = c.List(context.Background(), &failedSlices)
+		podState := make([]string, 0, len(failedPods.Items))
+		for i := range failedPods.Items {
+			pod := &failedPods.Items[i]
+			podState = append(podState, fmt.Sprintf("%s/%s uid=%s role=%s IPs=%v deleting=%t", pod.Namespace, pod.Name, pod.UID, pod.Labels["phorvex.ai/role"], pod.Status.PodIPs, pod.DeletionTimestamp != nil))
+		}
+		sliceState := make([]string, 0, len(failedSlices.Items))
+		for i := range failedSlices.Items {
+			slice := &failedSlices.Items[i]
+			for j := range slice.Endpoints {
+				endpoint := &slice.Endpoints[j]
+				target := ""
+				if endpoint.TargetRef != nil {
+					target = endpoint.TargetRef.Namespace + "/" + endpoint.TargetRef.Name + " uid=" + string(endpoint.TargetRef.UID)
+				}
+				sliceState = append(sliceState, fmt.Sprintf("%s/%s addresses=%v target=%s", slice.Namespace, slice.Name, endpoint.Addresses, target))
+			}
+		}
+		t.Logf("failure-state Pods=%v EndpointSlices=%v", podState, sliceState)
+	})
 
-	stack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var servingMu sync.Mutex
+	servingCalls := make([]string, 0, 5)
+	loadedInventoryEnabled := false
+	stack := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		servingMu.Lock()
+		servingCalls = append(servingCalls, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
+		loadedInventory := loadedInventoryEnabled
+		servingMu.Unlock()
+		if r.Header.Get("Authorization") != "Bearer m078-trusted-token" {
+			http.Error(w, "missing trusted credential", http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "models") {
+		if r.Method == http.MethodGet && (r.URL.Path == "/models-empty" || !loadedInventory) {
 			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "models") {
+			_, _ = w.Write([]byte(`{"data":[{"id":"model"}]}`))
 			return
 		}
 		if r.Method == http.MethodPost {
@@ -127,12 +231,33 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		}
 		_, _ = w.Write([]byte(`{}`))
 	}))
+	if err := stack.Listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp4", net.JoinHostPort(m034NonLoopbackIPv4(t), "0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack.Listener = listener
+	stack.StartTLS()
 	t.Cleanup(stack.Close)
-	host, portText, err := net.SplitHostPort(strings.TrimPrefix(stack.URL, "http://"))
+	stackURL, err := url.Parse(stack.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, portText, err := net.SplitHostPort(stackURL.Host)
 	if err != nil {
 		t.Fatal(err)
 	}
 	port, _ := strconv.Atoi(portText)
+	cert := stack.Certificate()
+	serverName := host
+	if len(cert.DNSNames) > 0 {
+		serverName = cert.DNSNames[0]
+	} else if len(cert.IPAddresses) > 0 {
+		serverName = cert.IPAddresses[0].String()
+	}
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
 
 	for _, name := range []string{"m034-pool", "m034-operator"} {
 		if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
@@ -140,6 +265,10 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		}
 	}
 	ns := "m034-pool"
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "m034-node"}}
+	if err := c.Create(ctx, node); err != nil {
+		t.Fatal(err)
+	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "serving"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "leader"}, Ports: []corev1.ServicePort{{Port: int32(port)}}}}
 	if err := c.Create(ctx, svc); err != nil {
 		t.Fatal(err)
@@ -148,8 +277,13 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	if err := c.Create(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
-	replicas := int32(2)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "m034-operator", Name: "serving-admin"}, Data: map[string][]byte{"bearer": []byte("m078-trusted-token"), "ca.crt": ca}}
+	if err := c.Create(ctx, secret); err != nil {
+		t.Fatal(err)
+	}
+	replicas := int32(3)
+	zero := int64(0)
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText}}, Spec: corev1.PodSpec{NodeName: node.Name, ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
 	}
@@ -158,17 +292,33 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		if err := c.List(ctx, &pods, client.InNamespace(ns)); err != nil {
 			return false, err
 		}
-		return len(pods.Items) == 2, nil
+		return len(pods.Items) == 3, nil
 	})
-	old, shadow := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy()
+	sort.Slice(pods.Items, func(i, j int) bool {
+		a, b := &pods.Items[i], &pods.Items[j]
+		if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+			return a.CreationTimestamp.Before(&b.CreationTimestamp)
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return string(a.UID) < string(b.UID)
+	})
+	old, emptyShadow, shadow := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy(), pods.Items[2].DeepCopy()
 	old.Labels["phorvex.ai/role"] = "leader"
+	emptyShadow.Labels["phorvex.ai/model-loaded"] = "true"
+	emptyShadow.Annotations["phorvex.ai/health-path"] = "/health-empty"
+	emptyShadow.Annotations["phorvex.ai/models-path"] = "/models-empty"
 	shadow.Labels["phorvex.ai/model-loaded"] = "true"
-	for _, p := range []*corev1.Pod{old, shadow} {
+	shadow.Annotations["phorvex.ai/health-path"] = "/health-loaded"
+	shadow.Annotations["phorvex.ai/models-path"] = "/models-loaded"
+	for _, p := range []*corev1.Pod{old, emptyShadow, shadow} {
 		if err := c.Update(ctx, p); err != nil {
 			t.Fatal(err)
 		}
 		p.Status.Phase = corev1.PodRunning
 		p.Status.PodIP = host
+		p.Status.PodIPs = []corev1.PodIP{{IP: host}}
 		p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 		if err := c.Status().Update(ctx, p); err != nil {
 			t.Fatal(err)
@@ -178,6 +328,21 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		t.Fatal(err)
 	}
 	oldUID := old.UID
+	m034Poll(t, 20*time.Second, func() (bool, error) {
+		var slices discoveryv1.EndpointSliceList
+		if err := c.List(ctx, &slices, client.InNamespace(ns), client.MatchingLabels{discoveryv1.LabelServiceName: svc.Name}); err != nil {
+			return false, err
+		}
+		for i := range slices.Items {
+			for j := range slices.Items[i].Endpoints {
+				ref := slices.Items[i].Endpoints[j].TargetRef
+				if ref != nil && ref.UID == oldUID {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	})
 
 	var snap *ingest.Snapshot
 	var p *model.Pod
@@ -197,13 +362,46 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	native := actuator.NewNativeActuator(c)
 	native.Reader = c
 	native.JournalNamespace = "m034-operator"
-	legacySecurity, err := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "m034-operator")
-	if err != nil {
-		t.Fatal(err)
+	native.SetServingSecurity(m064RunnerSecurity(t, "m034-operator", actuator.ServingSecurityBinding{
+		Namespace: ns, PolicyName: policy.Name, PolicyUID: string(policy.UID), ServiceAccount: "model-sa",
+		ProfileID: "m078-model-admin", SecretName: secret.Name, BearerKey: "bearer", CAKey: "ca.crt", ServerName: serverName,
+	}))
+	emptyResult, emptyErr := native.Actuate(ctx, actuator.Request{
+		Tenant: "m034", Namespace: ns, Pod: old.Name, TargetUID: string(oldUID),
+		PolicyName: policy.Name, PolicyUID: string(policy.UID), Action: model.ActionWarmSwap,
+		TickID: "m180-all-empty", ServingObservation: &actuator.ServingSelectionObservation{},
+	})
+	if emptyErr == nil || !strings.Contains(emptyErr.Error(), "no Ready model-loaded shadow") || emptyResult.Emitted {
+		t.Fatalf("all-empty Native phase did not refuse without effect: result=%+v err=%v", emptyResult, emptyErr)
 	}
-	native.SetServingSecurity(legacySecurity)
+	for _, expected := range []*corev1.Pod{old, emptyShadow, shadow} {
+		var current corev1.Pod
+		if err := c.Get(ctx, client.ObjectKeyFromObject(expected), &current); err != nil {
+			t.Fatalf("all-empty phase removed exact Pod %s/%s UID=%s: %v", expected.Namespace, expected.Name, expected.UID, err)
+		}
+		if current.UID != expected.UID || current.Labels["phorvex.ai/role"] != expected.Labels["phorvex.ai/role"] {
+			t.Fatalf("all-empty phase changed Pod identity/role: got=%s/%s UID=%s role=%q want UID=%s role=%q", current.Namespace, current.Name, current.UID, current.Labels["phorvex.ai/role"], expected.UID, expected.Labels["phorvex.ai/role"])
+		}
+	}
+	var emptyReceipts corev1.ConfigMapList
+	if err := c.List(ctx, &emptyReceipts, client.InNamespace("m034-operator")); err != nil || len(emptyReceipts.Items) != 0 {
+		t.Fatalf("all-empty phase persisted a protected receipt: count=%d err=%v", len(emptyReceipts.Items), err)
+	}
+	servingMu.Lock()
+	emptyCalls := append([]string(nil), servingCalls...)
+	servingCalls = servingCalls[:0]
+	loadedInventoryEnabled = true
+	servingMu.Unlock()
+	wantEmptyCalls := []string{
+		"GET /health-empty Bearer m078-trusted-token", "GET /models-empty Bearer m078-trusted-token",
+		"GET /health-loaded Bearer m078-trusted-token", "GET /models-loaded Bearer m078-trusted-token",
+	}
+	if strings.Join(emptyCalls, ",") != strings.Join(wantEmptyCalls, ",") {
+		t.Fatalf("all-empty phase requests=%v, want exact authenticated readiness pairs=%v", emptyCalls, wantEmptyCalls)
+	}
 	recording := &m034RecordingActuator{inner: native}
-	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native)
+	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native).
+		WithPolicyIdentity(policy.Name, string(policy.UID))
 	engine := decision.NewCoverageEngine()
 	wireCapabilityGates(engine, wit, true, func(*model.WorkloadView) bool { return false })
 	pol := model.Policy{Tenant: "m034", Namespace: ns, Mode: "active", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1, ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second, MinAvailableReplicas: 1, PolicyName: policy.Name, PolicyUID: string(policy.UID), EnabledActions: map[model.Action]bool{model.ActionWarmSwap: true}}
@@ -225,7 +423,7 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 			}
 			for i := range current.Items {
 				q := current.Items[i].DeepCopy()
-				if q.UID == oldUID || q.UID == shadow.UID {
+				if q.UID == oldUID || q.UID == emptyShadow.UID || q.UID == shadow.UID {
 					continue
 				}
 				q.Labels["phorvex.ai/model-loaded"] = "true"
@@ -234,6 +432,7 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 				}
 				q.Status.Phase = corev1.PodRunning
 				q.Status.PodIP = host
+				q.Status.PodIPs = []corev1.PodIP{{IP: host}}
 				q.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 				if e := c.Status().Update(ctx, q); e == nil {
 					readyDone <- nil
@@ -265,7 +464,7 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		t.Fatal(err)
 	}
 	foundOld := false
-	var survivor, replacement *corev1.Pod
+	var retainedEmpty, survivor, replacement *corev1.Pod
 	for i := range after.Items {
 		if after.Items[i].UID == oldUID {
 			foundOld = true
@@ -273,7 +472,10 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		if after.Items[i].UID == shadow.UID {
 			survivor = after.Items[i].DeepCopy()
 		}
-		if after.Items[i].UID != oldUID && after.Items[i].UID != shadow.UID {
+		if after.Items[i].UID == emptyShadow.UID {
+			retainedEmpty = after.Items[i].DeepCopy()
+		}
+		if after.Items[i].UID != oldUID && after.Items[i].UID != emptyShadow.UID && after.Items[i].UID != shadow.UID {
 			replacement = after.Items[i].DeepCopy()
 		}
 	}
@@ -291,6 +493,12 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	if foundOld || survivor == nil || survivor.Labels["phorvex.ai/role"] != "leader" || !ready(survivor) {
 		t.Fatalf("exact old UID not retired or survivor not a Ready leader: old=%t survivor=%+v", foundOld, survivor)
 	}
+	if survivor.UID != shadow.UID {
+		t.Fatalf("Native selected a different warm candidate UID: got=%s want=%s", survivor.UID, shadow.UID)
+	}
+	if retainedEmpty == nil || retainedEmpty.Labels["phorvex.ai/role"] != "warm-shadow" || !ready(retainedEmpty) {
+		t.Fatalf("older empty-inventory candidate was mutated or removed: %+v", retainedEmpty)
+	}
 	if replacement == nil {
 		t.Fatalf("controller did not create an exact replacement: pods=%+v", after.Items)
 	}
@@ -302,5 +510,39 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	var journals corev1.ConfigMapList
 	if err := c.List(ctx, &journals, client.InNamespace("m034-operator")); err != nil || len(journals.Items) != 0 {
 		t.Fatalf("completed recovery retained operation journals: count=%d err=%v", len(journals.Items), err)
+	}
+	m034Poll(t, 20*time.Second, func() (bool, error) {
+		var slices discoveryv1.EndpointSliceList
+		if err := c.List(ctx, &slices, client.InNamespace(ns), client.MatchingLabels{discoveryv1.LabelServiceName: svc.Name}); err != nil {
+			return false, err
+		}
+		for i := range slices.Items {
+			for j := range slices.Items[i].Endpoints {
+				ref := slices.Items[i].Endpoints[j].TargetRef
+				if ref != nil && ref.UID == survivor.UID {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	})
+	servingMu.Lock()
+	defer servingMu.Unlock()
+	if len(servingCalls) == 0 {
+		t.Fatal("authenticated loopback serving backend was not reached")
+	}
+	for _, call := range servingCalls {
+		if !strings.HasSuffix(call, " Bearer m078-trusted-token") {
+			t.Fatalf("serving request escaped the trusted binding: %q", call)
+		}
+	}
+	wantLoadedCalls := []string{
+		"GET /health-empty Bearer m078-trusted-token", "GET /models-empty Bearer m078-trusted-token",
+		"GET /health-loaded Bearer m078-trusted-token", "GET /models-loaded Bearer m078-trusted-token",
+		"POST /v1/drain Bearer m078-trusted-token",
+		"GET /health Bearer m078-trusted-token", "GET /v1/models Bearer m078-trusted-token",
+	}
+	if strings.Join(servingCalls, ",") != strings.Join(wantLoadedCalls, ",") {
+		t.Fatalf("readiness/drain/recovery requests do not prove empty-oldest then loaded-younger selection: got=%v want=%v", servingCalls, wantLoadedCalls)
 	}
 }

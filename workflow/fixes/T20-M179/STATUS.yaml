@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 14
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -104,13 +104,20 @@ checks:
     source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
     at: '2026-09-19T16:00:15+00:00'
     incident_sha256: 918e061981b36d21a59b20d60db86a980b239cdc711ae325123fbefa4e682ffe
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: f57b1041602d82c6c1256b5f3f54ffa31bee7777ef242b1fc19b3c8fc8cb3983
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T17:16:44+00:00'
 fix_id: T20-M179
 issues:
 - M-179
 title: Release expired calibration backing-array references without changing valid
   history
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -137,11 +144,11 @@ implementation:
   head_sha: 60dfb761752b898eb96b8f847b69a2d244041830
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/237
+  reviewed_head: 44b23b8c3732cad77215d8f85448bffbc86f9327
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -172,9 +179,10 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T16:00:19+00:00'
+  action: PR237 open/non-draft/main; continue independent Tier22 source. LiveLV25/LV26
+    and earlier controls pending; M137capacity/audit/deadline remain OPEN SOURCE.
+    Hosted billing refusal retained.
+updated_at: '2026-09-19T17:16:45+00:00'
 configuration_history:
 - at: '2026-09-19T14:51:33+00:00'
   by: codex-lead
@@ -198,6 +206,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T17:16:43+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -246,6 +260,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T17:16:45+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
