@@ -217,6 +217,7 @@ func TestM069TriggerIdentityRefusedBeforeMutation(t *testing.T) {
 				c := m069Client(d, interceptor.Funcs{}, objs...)
 				ec, mm := m069Stack()
 				ec.Client = c
+				ec.Reader = c
 				hr, err := tc.handler.Enact(context.Background(), ec, req)
 				if err != nil {
 					t.Fatalf("refusal must not be an error (native rotate convention): %v", err)
@@ -250,7 +251,14 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 			ec, _ := m069Stack()
 			ec.Client = c
 			ec.Reader, ec.JournalNamespace = c, "operator"
-			hr, err := tc.handler.Enact(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), tc.action))
+			var hr HandlerResult
+			var err error
+			if tc.name == "model-shard-replace-group" {
+				// Historical lower-level UID-precondition control. Production dispatch refuses groups.
+				hr, err = groupCoherentCutover(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), tc.action), "g")
+			} else {
+				hr, err = tc.handler.Enact(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), tc.action))
+			}
 			scalarPending := tc.name == "warm-swap" || tc.name == "model-shard-replace"
 			if (!scalarPending && (err != nil || !hr.Emitted)) || (scalarPending && (err == nil || hr.MutationKind != "swap")) {
 				t.Fatalf("positive control: %+v %v", hr, err)
@@ -346,7 +354,8 @@ func TestM069GroupCutoverRejectedDeleteIsHonestNonSuccess(t *testing.T) {
 	c := m069Client(d, interceptor.Funcs{}, objs...)
 	ec, _ := m069Stack()
 	ec.Client = c
-	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace))
+	// Historical lower-level partial-effect control. Production dispatch refuses groups.
+	hr, err := groupCoherentCutover(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace), "g")
 	if err == nil || !errors.Is(err, errPodReplaced) || hr.Emitted {
 		t.Fatalf("group cutover with a rejected member delete must be a non-success: err=%v hr=%+v", err, hr)
 	}
@@ -401,7 +410,8 @@ func TestM069GroupCutoverTriggerReplacedBeforeRetireListIsNotDeleted(t *testing.
 	c := m069Client(d, fns, objs...)
 	ec, _ := m069Stack()
 	ec.Client = c
-	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace))
+	// Historical lower-level replacement-identity control. Production dispatch refuses groups.
+	hr, err := groupCoherentCutover(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace), "g")
 	if err == nil || !errors.Is(err, errPodReplaced) || hr.Emitted {
 		t.Fatalf("replaced trigger must be a non-success: err=%v hr=%+v", err, hr)
 	}
