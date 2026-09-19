@@ -94,6 +94,15 @@ func LoadMIGProfilesFile(path string) (*MIGProfiles, error) {
 	if err := rejectDuplicateJSONFields(b); err != nil {
 		return nil, fmt.Errorf("MIG profile configuration: %w", err)
 	}
+	if err := validateExactObjectArrayJSONKeys(
+		b,
+		"rules",
+		"MIG profile rule",
+		map[string]struct{}{"version": {}, "rules": {}},
+		map[string]struct{}{"namespace": {}, "resource": {}, "profile": {}},
+	); err != nil {
+		return nil, fmt.Errorf("MIG profile configuration: %w", err)
+	}
 	var p MIGProfiles
 	d := json.NewDecoder(strings.NewReader(string(b)))
 	d.DisallowUnknownFields()

@@ -29,11 +29,12 @@ import (
 )
 
 type m064HTTPReceiver struct {
-	calls  atomic.Int32
-	mu     sync.Mutex
-	status int
-	hook   func() error
-	token  string
+	calls    atomic.Int32
+	mu       sync.Mutex
+	status   int
+	hook     func() error
+	token    string
+	variants []string
 }
 
 func (r *m064HTTPReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -50,6 +51,17 @@ func (r *m064HTTPReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.calls.Add(1)
 	r.mu.Lock()
 	status, hook, token := r.status, r.hook, r.token
+	if req.URL.Path == defaultGuardPath {
+		var body struct {
+			Variant string `json:"variant"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Variant == "" {
+			r.mu.Unlock()
+			http.Error(w, "invalid guardrail payload", http.StatusBadRequest)
+			return
+		}
+		r.variants = append(r.variants, body.Variant)
+	}
 	r.hook = nil
 	r.mu.Unlock()
 	if token != "" && req.Header.Get("Authorization") != "Bearer "+token {
@@ -63,15 +75,28 @@ func (r *m064HTTPReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	if status == 0 {
-		status = http.StatusNoContent
+		if req.URL.Path == defaultResetPath {
+			status = http.StatusOK
+		} else {
+			status = http.StatusNoContent
+		}
 	}
 	w.WriteHeader(status)
+	if req.URL.Path == defaultResetPath && status == http.StatusOK {
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}
 }
 
 func (r *m064HTTPReceiver) configure(status int, token string, hook func() error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.status, r.token, r.hook = status, token, hook
+}
+
+func (r *m064HTTPReceiver) observedVariants() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.variants...)
 }
 
 type m064APIFaultClient struct {
@@ -429,7 +454,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 		if err == nil || result.MutationKind != "partial" || result.NoEffect != "" || receiver.calls.Load() != before+1 {
 			t.Fatalf("shared-domain contender escaped: result=%+v calls=%d err=%v", result, receiver.calls.Load(), err)
 		}
-		receiver.configure(http.StatusNoContent, "", nil)
+		receiver.configure(http.StatusOK, "", nil)
 	})
 
 	t.Run("effect-confirmed-acknowledgement-loss", func(t *testing.T) {
@@ -520,7 +545,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 	t.Run("confirmed-http-policy-revocation-retains-effect", func(t *testing.T) {
 		f := newM064APIFixture(t, ctx, apiClient, "revoke-after", server.URL, model.ActionKVReset)
 		before := receiver.calls.Load()
-		receiver.configure(http.StatusNoContent, "", func() error {
+		receiver.configure(http.StatusOK, "", func() error {
 			policy := &v1alpha1.PhorvexPolicy{}
 			if err := apiClient.Get(ctx, client.ObjectKeyFromObject(f.policy), policy); err != nil {
 				return err
@@ -536,13 +561,13 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 		if getErr != nil || receipt.Phase != "effect-confirmed" {
 			t.Fatalf("confirmed phase not retained: receipt=%+v err=%v", receipt, getErr)
 		}
-		receiver.configure(http.StatusNoContent, "", nil)
+		receiver.configure(http.StatusOK, "", nil)
 	})
 
 	t.Run("confirmed-http-owned-metadata-change-is-not-overwritten", func(t *testing.T) {
 		f := newM064APIFixture(t, ctx, apiClient, "owned-change", server.URL, model.ActionKVReset)
 		before := receiver.calls.Load()
-		receiver.configure(http.StatusNoContent, "", func() error {
+		receiver.configure(http.StatusOK, "", func() error {
 			pod := &corev1.Pod{}
 			if err := apiClient.Get(ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
 				return err
@@ -565,7 +590,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 		if err := apiClient.Update(ctx, pod); err != nil {
 			t.Fatal(err)
 		}
-		receiver.configure(http.StatusNoContent, "", nil)
+		receiver.configure(http.StatusOK, "", nil)
 		if events, err := f.recover(t); err != nil || len(events) != 1 || events[0].Outcome != "confirmed" || receiver.calls.Load() != before+1 {
 			t.Fatalf("restored selected state did not converge metadata-only: events=%+v calls=%d err=%v", events, receiver.calls.Load(), err)
 		}
@@ -698,6 +723,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 
 	t.Run("terminal-gc-exact-uid-and-unknown-retention", func(t *testing.T) {
 		f := newM064APIFixture(t, ctx, apiClient, "terminal-gc", server.URL, model.ActionKVReset)
+		receiver.configure(http.StatusOK, "", nil)
 		before := receiver.calls.Load()
 		result, err := f.enactReset(apiClient, f.req)
 		if err != nil || !result.Emitted || receiver.calls.Load() != before+1 {
@@ -737,7 +763,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 		if _, _, err := servingReceiptGet(ctx, EnactCtx{Reader: apiClient, JournalNamespace: pending.opns}, pending.req.TargetUID, pending.req.Action); err != nil {
 			t.Fatalf("unknown receipt was garbage-collected: %v", err)
 		}
-		receiver.configure(http.StatusNoContent, "", nil)
+		receiver.configure(http.StatusOK, "", nil)
 	})
 
 	t.Run("terminal-gc-read-and-cas-failures-retain-receipt", func(t *testing.T) {
@@ -786,7 +812,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 	t.Run("secure-tls-v9-positive", func(t *testing.T) {
 		tlsReceiver := &m064HTTPReceiver{}
 		const token = "m064-synthetic-token"
-		tlsReceiver.configure(http.StatusNoContent, token, nil)
+		tlsReceiver.configure(http.StatusOK, token, nil)
 		tlsServer := httptest.NewTLSServer(tlsReceiver)
 		defer tlsServer.Close()
 		f := newM064APIFixture(t, ctx, apiClient, "secure-tls", tlsServer.URL, model.ActionKVReset)
@@ -840,7 +866,7 @@ func TestM064RealAPIAcknowledgementCASAndLifecycle(t *testing.T) {
 		if err := apiClient.Update(ctx, rotateSecret); err != nil {
 			t.Fatal(err)
 		}
-		tlsReceiver.configure(http.StatusNoContent, "token-two", nil)
+		tlsReceiver.configure(http.StatusOK, "token-two", nil)
 		before := tlsReceiver.calls.Load()
 		restarted := NewNativeActuator(apiClient)
 		restarted.Reader, restarted.JournalNamespace = apiClient, rotate.opns

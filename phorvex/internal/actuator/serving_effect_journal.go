@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
 const (
@@ -133,8 +134,33 @@ func servingMetadataPreconditionMatches(pod *corev1.Pod, r operationReceipt) boo
 			podOwned(pod.Annotations, annoGuardrailSnap) == (routeOwnedValue{Present: true, Value: r.PriorVariant}) &&
 			podOwned(pod.Labels, "phorvex.ai/guardrail-epoch") == (routeOwnedValue{Present: true, Value: epochToken(r.OperationID, "apply")})
 	}
-	return guardrailObservationMatches(pod, r) && pod.Annotations[annoGuardrailVariant] == r.PriorVariant &&
+	return guardrailObservationMatches(pod, r) && strings.TrimSpace(pod.Annotations[annoGuardrailVariant]) == r.PriorVariant &&
 		podOwned(pod.Annotations, annoGuardrailSnap) == r.PriorSnapshot
+}
+
+func guardrailRosterForPod(pod *corev1.Pod) (servingcontext.GuardrailRoster, error) {
+	if pod == nil {
+		return servingcontext.GuardrailRoster{}, fmt.Errorf("guardrail target is unavailable")
+	}
+	return servingcontext.ParseGuardrailRoster(
+		pod.Annotations[annoGuardrailVariant],
+		pod.Annotations[annoGuardrailAlts],
+	)
+}
+
+func guardrailRosterMatchesReceipt(pod *corev1.Pod, r operationReceipt, rollback bool) error {
+	roster, err := guardrailRosterForPod(pod)
+	if err != nil {
+		return err
+	}
+	wantCurrent := r.PriorVariant
+	if rollback {
+		wantCurrent = r.NextVariant
+	}
+	if roster.Current != wantCurrent || !roster.Contains(r.PriorVariant) || !roster.Contains(r.NextVariant) {
+		return fmt.Errorf("guardrail roster no longer contains the fixed prior/next operation intent")
+	}
+	return nil
 }
 
 func protectedEndpointConfigDigest(pod *corev1.Pod) string {
@@ -457,11 +483,11 @@ func revalidateServingDispatch(ctx context.Context, ec EnactCtx, req Request, r 
 	if model.Action(r.Kind) == model.ActionGuardrailRotate {
 		switch r.Phase {
 		case "dispatching":
-			if pod.Annotations[annoGuardrailVariant] != r.PriorVariant || podOwned(pod.Annotations, annoGuardrailSnap) != r.PriorSnapshot {
+			if guardrailRosterMatchesReceipt(pod, r, false) != nil || podOwned(pod.Annotations, annoGuardrailSnap) != r.PriorSnapshot {
 				return freshEC, servingEndpoint{}, fmt.Errorf("post-claim guardrail prior variant or snapshot changed")
 			}
 		case "rollback-dispatching":
-			if !servingExpectedMatches(pod, r) || podOwned(pod.Annotations, annoGuardrailSnap) != (routeOwnedValue{Present: true, Value: r.PriorVariant}) {
+			if guardrailRosterMatchesReceipt(pod, r, true) != nil || !servingExpectedMatches(pod, r) || podOwned(pod.Annotations, annoGuardrailSnap) != (routeOwnedValue{Present: true, Value: r.PriorVariant}) {
 				return freshEC, servingEndpoint{}, fmt.Errorf("post-claim guardrail applied state changed before rollback")
 			}
 		}
@@ -651,19 +677,24 @@ func enactProtectedGuardrail(ctx context.Context, ec EnactCtx, req Request) (Han
 	if err != nil || !ok {
 		return protectedServingRefusal(ctx, ec, req, HandlerResult{}, orGone(err, ok, "guardrail-rotate", req))
 	}
-	if string(pod.UID) != req.TargetUID || pod.DeletionTimestamp != nil || pod.Labels[labelGuardrailTier] != "true" || pod.Annotations[annoGuardrailAlts] == "" {
+	if string(pod.UID) != req.TargetUID || pod.DeletionTimestamp != nil || pod.Labels[labelGuardrailTier] != "true" {
 		return protectedServingRefusal(ctx, ec, req, HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate target identity or declaration unavailable")))
 	}
-	cur, next := pod.Annotations[annoGuardrailVariant], ""
-	for _, candidate := range strings.Split(pod.Annotations[annoGuardrailAlts], ",") {
-		if candidate = strings.TrimSpace(candidate); candidate != "" && candidate != cur {
-			next = candidate
-			break
+	if existingCM, existing, getErr := servingReceiptGet(ctx, ec, req.TargetUID, model.ActionGuardrailRotate); getErr == nil {
+		opID, opErr := servingOperationID(req)
+		if !terminalServingPhase(existing.Phase) || (opErr == nil && existing.OperationID == opID) {
+			cm, r, fresh, ready, prepareErr := prepareServingReceipt(ctx, ec, req, pod, nil, existing.PriorVariant, existing.NextVariant)
+			if result, resultErr, done := preparedServingResult(cm, r, fresh, ready, prepareErr); done {
+				return result, resultErr
+			}
+			return servingPartial(existingCM, existing, false, fmt.Errorf("protected guardrail receipt could not be classified before roster validation"))
 		}
 	}
-	if next == "" {
-		return protectedServingRefusal(ctx, ec, req, HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate has no distinct alternate variant")))
+	roster, rosterErr := guardrailRosterForPod(pod)
+	if rosterErr != nil {
+		return protectedServingRefusal(ctx, ec, req, HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate ordered roster: %w", rosterErr)))
 	}
+	cur, next := roster.Current, roster.Next()
 	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return protectedServingRefusal(ctx, ec, req, HandlerResult{}, RefusedWithoutEffect(endpointErr))
@@ -791,6 +822,9 @@ func rollbackProtectedGuardrail(ctx context.Context, ec EnactCtx, req Request, r
 	if !servingExpectedMatches(pod, r) || !servingReceiptSecurityMatches(ec, pod, r) {
 		return fmt.Errorf("guardrail rollback current binding, endpoint, or terminal metadata changed")
 	}
+	if err := guardrailRosterMatchesReceipt(pod, r, true); err != nil {
+		return fmt.Errorf("guardrail rollback ordered roster changed: %w", err)
+	}
 	ep, err := servingEndpointForPod(ctx, ec, req, pod)
 	if err != nil {
 		return err
@@ -879,6 +913,11 @@ func recoverProtectedServingEffect(ctx context.Context, ec EnactCtx, cm *corev1.
 	pod, err := currentServingPod(ctx, ec, *r)
 	if err != nil || !servingObservationMatches(pod, *r) {
 		return "", errors.Join(err, fmt.Errorf("protected serving selected observation changed before recovery dispatch"))
+	}
+	if r.Kind == string(model.ActionGuardrailRotate) {
+		if err := guardrailRosterMatchesReceipt(pod, *r, false); err != nil {
+			return "", fmt.Errorf("protected guardrail recovery ordered roster changed: %w", err)
+		}
 	}
 	req := ec.ServingRequest
 	ep, err := servingEndpointForPod(ctx, ec, req, pod)

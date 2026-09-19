@@ -134,6 +134,8 @@ func TestM092ValidDefaultAndOverrideRoutesReachOnlySelectedPod(t *testing.T) {
 			_, _ = w.Write([]byte(`{"aborted":1}`))
 		case strings.HasSuffix(r.URL.Path, "/health"):
 			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == defaultResetPath || strings.HasSuffix(r.URL.Path, "/reset"):
+			_, _ = w.Write([]byte(`{"success":true}`))
 		default:
 			w.WriteHeader(http.StatusNoContent)
 		}
@@ -302,7 +304,7 @@ func TestM092ProxyAndRedirectCannotReceiveServingBearer(t *testing.T) {
 }
 
 func TestM092ExtendedHandlerRejectsMalformedUnusedRouteBeforeEffects(t *testing.T) {
-	pod := guardrailPod("ns", "guard", "v1", "v2")
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	pod.Status.PodIP = "127.0.0.1"
 	pod.Annotations[annoKVInvalidate] = "//alternate.invalid/unused"
 	kube := fakeC(pod)

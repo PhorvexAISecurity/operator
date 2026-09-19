@@ -310,7 +310,7 @@ func TestM077OtherReceiptlessServingMutationsRetainUnknownOutcome(t *testing.T) 
 	ep := m077Endpoint(t, server.URL)
 	hc := &http.Client{Timeout: 10 * time.Millisecond}
 
-	guardPod := guardrailPod("ns", "guard", "v1", "v2")
+	guardPod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	guardPod.Status.PodIP = ep.podIP
 	guardPod.Annotations[annoServingPort] = strconv.Itoa(ep.port)
 	guardPod.Annotations[annoGuardrailPath] = "/"

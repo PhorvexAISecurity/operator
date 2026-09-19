@@ -25,6 +25,7 @@ package actuator
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -250,6 +251,7 @@ type vLLMClient interface {
 	// stack, so callers may use the documented non-GPU compatibility fallback.
 	ModelReady(ctx context.Context, ep servingEndpoint) (bool, error)
 	// ResetPrefixCache flushes the prefix/KV cache in-process WITHOUT restarting (kv-reset).
+	// Nil requires one bounded synchronous backend acknowledgement with exact success:true.
 	ResetPrefixCache(ctx context.Context, ep servingEndpoint) error
 	// UnloadAdapter unloads a named LoRA/adapter (vLLM /v1/unload_lora_adapter; adapter-rotate).
 	UnloadAdapter(ctx context.Context, ep servingEndpoint, adapter string) error
@@ -430,15 +432,52 @@ func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) err
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, _, err := c.doEndpoint(ctx, ep, http.MethodPost, ep.resetPath)
+	code, body, err := c.doEndpoint(ctx, ep, http.MethodPost, ep.resetPath)
 	if err != nil {
 		return err
 	}
-	if code == http.StatusAccepted {
-		return errServingQueued
+	if code != http.StatusOK {
+		return fmt.Errorf("%w: vLLM reset_prefix_cache acknowledgement unavailable after HTTP %d", errServingOutcomeUnknown, code)
 	}
-	if code != http.StatusOK && code != http.StatusNoContent {
-		return fmt.Errorf("vLLM reset_prefix_cache: HTTP %d", code)
+	if err := parseResetPrefixCacheAcknowledgement(body); err != nil {
+		return fmt.Errorf("%w: vLLM reset_prefix_cache acknowledgement is invalid", errServingOutcomeUnknown)
+	}
+	return nil
+}
+
+// parseResetPrefixCacheAcknowledgement accepts only one complete bounded JSON object
+// with the exact lowercase boolean field `success:true`. The vLLM request may have
+// changed cache state before any nonconfirming response, so callers treat every parse
+// failure as an unknown post-send outcome rather than a clean refusal. Extension fields
+// are allowed, but case aliases and duplicate keys cannot override the required field.
+func parseResetPrefixCacheAcknowledgement(body string) error {
+	data := []byte(body)
+	if len(data) == 0 || len(data) > servingResponseMaxBytes {
+		return fmt.Errorf("response size must be 1..%d bytes", servingResponseMaxBytes)
+	}
+	if err := rejectDuplicateJSONFields(data); err != nil {
+		return err
+	}
+	var envelope map[string]json.RawMessage
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&envelope); err != nil || envelope == nil {
+		return fmt.Errorf("expected one JSON object")
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("trailing reset acknowledgement data")
+	}
+	for key := range envelope {
+		if strings.EqualFold(key, "success") && key != "success" {
+			return fmt.Errorf("ambiguous success field alias")
+		}
+	}
+	raw, present := envelope["success"]
+	if !present || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return fmt.Errorf("success:true is required")
+	}
+	var success bool
+	if err := json.Unmarshal(raw, &success); err != nil || !success {
+		return fmt.Errorf("success must be boolean true")
 	}
 	return nil
 }

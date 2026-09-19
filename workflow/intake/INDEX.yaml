@@ -132,3 +132,10 @@ intakes:
     state: FILED
     issue_id: M-176
     aliases: []
+  RPT-20260918-223752-recurring-manager-oom-termination-under-deployed:
+    directory: intake/RPT-20260918-223752-recurring-manager-oom-termination-under-deployed
+    kind: INCIDENT
+    title: Recurring manager OOM termination under deployed memory limit
+    state: REPORTED
+    issue_id: null
+    aliases: []
