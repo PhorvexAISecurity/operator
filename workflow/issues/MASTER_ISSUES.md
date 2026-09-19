@@ -1926,7 +1926,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-137 · No scale envelope: per-tick cost is writes + an O(cluster) in-memory cache, zero measurements · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: T20-M137
+Severity: HIGH · Tier: parallel · Fixes: T20-M137, T24-M137-AUDIT
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
