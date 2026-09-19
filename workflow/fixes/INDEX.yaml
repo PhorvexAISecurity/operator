@@ -1202,11 +1202,11 @@ fixes:
     issues:
     - M-68
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t18-m068
-    head_sha: null
+    head_sha: df2f36c1a7c920df3665cfcbdcd431f19fbb5206
   T19-M131:
     directory: fixes/T19-M131
     aliases: []

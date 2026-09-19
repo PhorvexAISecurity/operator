@@ -478,9 +478,7 @@ func (w Witness) shardPoolWhy(pod *model.Pod) string {
 		return "pod declares no model-shard"
 	}
 	if parallel := pod.Labels[labelParallelGroup]; parallel != "" {
-		if pod.ParallelSize <= 0 || w.idx.parallelRanks[poolKey(pod.Namespace, shard, parallel)] < pod.ParallelSize {
-			return "no complete parallel shadow group (one Ready rank per member)"
-		}
+		return actuator.ReasonParallelGroupUnavailable
 	} else if !w.idx.shardShadow[poolKey(pod.Namespace, shard)] {
 		return "no Ready warm shadow exists for a matching model-shard pool"
 	}

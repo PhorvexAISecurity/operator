@@ -557,7 +557,7 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 func TestModelShardReplaceFailClosedNoShard(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelRole: roleLeader}) // no model-shard label
 	c := fakeC(pod)
-	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c}, boundReq(pod, model.ActionModelShardReplace))
+	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c}, boundReq(pod, model.ActionModelShardReplace))
 	if err == nil {
 		t.Fatal("model-shard-replace must FAIL-CLOSED without a declared shard")
 	}

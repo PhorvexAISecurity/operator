@@ -100,7 +100,11 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind string) (HandlerResult, error) {
 	req.Action = model.Action(kind)
 	ec.ServingRequest = req
-	leader, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
+	leaderReader := client.Reader(ec.Client)
+	if req.Action == model.ActionModelShardReplace {
+		leaderReader = ec.Reader
+	}
+	leader, ok, err := getPod(ctx, leaderReader, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, kind, req)
 	}
@@ -109,6 +113,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	// same-name replacement is refused here, untouched (native rotate's refusal convention).
 	if reason := triggerIdentityRefusal(req, leader); reason != "" {
 		return refuseAI(kind, reason)
+	}
+	if req.Action == model.ActionModelShardReplace && leader.Labels[labelParallelGroup] != "" {
+		return refuseAI(kind, ReasonParallelGroupUnavailable)
 	}
 	if _, err := servingEndpointForPod(ctx, ec, req, leader); err != nil {
 		return refuseAI(kind, err.Error())
@@ -137,6 +144,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if currentOld.UID != leader.UID || currentNew.UID != shadow.UID {
 		return HandlerResult{}, fmt.Errorf("%s: warm pair UID changed before intent", kind)
+	}
+	if req.Action == model.ActionModelShardReplace && (currentOld.Labels[labelParallelGroup] != "" || currentNew.Labels[labelParallelGroup] != "") {
+		return refuseAI(kind, ReasonParallelGroupUnavailable)
 	}
 	leader, shadow = currentOld, currentNew
 	if _, err := servingEndpointForPod(ctx, ec, req, leader); err != nil {
@@ -704,26 +714,27 @@ func (endpointRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Requ
 	return rollbackRouteCutover(ctx, ec, req, ref)
 }
 
-// --- 12. model-shard-replace — REAL warm-provision/flip/retire for a sharded model ----------
+// --- 12. model-shard-replace — controller-owned scalar replacement --------------------------
 type modelShardReplaceHandler struct{}
 
 func (modelShardReplaceHandler) Name() string { return string(model.ActionModelShardReplace) }
 func (modelShardReplaceHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
+	if ec.Reader == nil || ec.Client == nil {
+		return refuseAI("model-shard-replace", "authoritative reader or writer unavailable")
+	}
+	pod, ok, err := getPod(ctx, ec.Reader, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "model-shard-replace", req)
+	}
+	if reason := triggerIdentityRefusal(req, pod); reason != "" {
+		return refuseAI("model-shard-replace", reason)
 	}
 	// FAIL-CLOSED: no declared shard => no model server => never fabricate a shard replace.
 	if pod.Labels[labelModelShard] == "" {
 		return HandlerResult{}, fmt.Errorf("model-shard-replace ShardUnavailable: pod %s/%s declares no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelModelShard)
 	}
-	// [P-ACTUATOR-SET-COMPLETE] TP/PP COORDINATION. A tensor/pipeline-parallel group is a CONSISTENCY
-	// UNIT — flipping one rank independently yields mixed-rank garbage/crash. If the pod is in a
-	// parallel group, do a GROUP-COHERENT cutover (a COMPLETE replacement group, all ranks Ready, flipped
-	// together); fail-closed on an incomplete group. An independent shard (no parallel-group) keeps the
-	// single-pod warm-cutover.
 	if pod.Labels[labelParallelGroup] != "" {
-		return groupCoherentCutover(ctx, ec, req, pod.Labels[labelParallelGroup])
+		return refuseAI("model-shard-replace", ReasonParallelGroupUnavailable)
 	}
 	return warmCutover(ctx, ec, req, labelModelShard, "model-shard-replace")
 }
