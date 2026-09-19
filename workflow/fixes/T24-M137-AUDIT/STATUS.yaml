@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -33,12 +33,77 @@ checks:
     source_sha: 3b5519c2ccd7aa3e8d2dfedd9657985445d8273c
     at: '2026-09-19T18:42:28+00:00'
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t24-m137-audit
+    artifact: evidence/preflight/receipt.json
+    sha256: f2ec3007673ff8315d612c549dc6bfa75ce560fbf1d5ce607897aa23f8e12c67
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:12:53+00:00'
+  implementation:
+    result: PASS
+    by: sol-t24-m137-audit
+    artifact: 04-diff.patch
+    sha256: f3ae3493f2128098d4392c64013a9144f83da5e8164ee113a11d6a46c259a95e
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:12:53+00:00'
+  l0:
+    result: PASS
+    by: sol-t24-m137-audit
+    artifact: evidence/preflight/receipt.json
+    sha256: f2ec3007673ff8315d612c549dc6bfa75ce560fbf1d5ce607897aa23f8e12c67
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:12:53+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: fc38daefafa946aa61196242aecdd9e0a9c847ce3155cdc02320b57f057aed59
+  l1:
+    result: PASS
+    by: sol-t24-m137-audit
+    artifact: evidence/worker/head/offline-3cc4932c.log
+    sha256: f3bd4b97c83e00f5c04f1699c0ad1f082f315c2e9e2fffd9f3ea47df55e3351f
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:12:53+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/model
+    - phorvex/internal/representation
+    - workflow/fixes/T24-M137-AUDIT/verify.sh
+    inputs_sha256: 606628380b6821fc61b183b48b9947083a619504b793a3492e1958cf7696fd25
+  l2:
+    result: PASS
+    by: sol-t24-m137-audit
+    artifact: evidence/preflight/run-1789844895289786658/go-phorvex.log
+    sha256: d7d0ce8bfc1ca7e05404735dbd4d9aec1939ab557336a4699f67b533d05f9079
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:12:53+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: b364e9d2a62c48d2ba5341bc37ebffb6854cef1cac44b7d0df9ac5faba0bc00d
+  positive_control:
+    result: PASS
+    by: sol-t24-m137-audit
+    artifact: evidence/worker/final-summary.md
+    sha256: 39cf908cd73216ab9c910eeefcc40db0de923bcd96f13ce4c062b2305e49589e
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:12:53+00:00'
+    inputs:
+    - phorvex/cmd/m137-scale-report
+    - phorvex/internal/audit
+    - phorvex/internal/model
+    - phorvex/internal/runner
+    - phorvex/internal/scaleprobe
+    - workflow/fixes/T24-M137-AUDIT/verify.sh
+    inputs_sha256: e09b2dd8bb71dccc376d1d725620d34b01c53df689da93b29de4d713628d4829
 fix_id: T24-M137-AUDIT
 issues:
 - M-137
 title: Avoid impossible audit redaction regex scans without changing evidence
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -62,7 +127,7 @@ blind_derivation:
 implementation:
   branch: fix/t24-m137-audit
   base_sha: 3b5519c2ccd7aa3e8d2dfedd9657985445d8273c
-  head_sha: null
+  head_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
   stacked_on: []
 pull_request:
   url: null
@@ -84,12 +149,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -99,10 +164,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t24-m137-audit
-  action: Verify bounded canonical guard equivalence, original/new benchmark,32positive
-    and one exact1000profile then exactpreflight; preserve capacity/source/live residuals
-updated_at: '2026-09-19T18:50:14+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-19T19:12:57+00:00'
 follow_up_to: T20-M137
 configuration_history:
 - at: '2026-09-19T17:09:36+00:00'
@@ -123,6 +188,11 @@ configuration_history:
   - implementation
   - next_action
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T19:12:53+00:00'
+  by: sol-t24-m137-audit
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -138,6 +208,22 @@ transitions:
   by: codex-lead
   artifact: 03-decision.md
   note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T19:12:53+00:00'
+  by: sol-t24-m137-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T19:12:55+00:00'
+  by: sol-t24-m137-audit
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -159,3 +245,10 @@ check_history:
   at: '2026-09-19T18:42:27+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
+handoff:
+  id: T24-M137-AUDIT:10:submit
+  from: sol-t24-m137-audit
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 10
