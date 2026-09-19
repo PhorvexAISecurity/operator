@@ -1,0 +1,117 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 9005a32b280255596b0cd4a8fff95c2455b8a4704698bdf9857d0a2aac03f9f3
+    source_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
+    at: '2026-09-19T12:37:34+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+fix_id: T17-M065
+issues:
+- M-65
+title: M65 require expected warm replacement metadata keys
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t17-m065
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier17
+  code_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t17-m065
+  base_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: sol-t17-m065
+  action: Implement signed plan; heavy slot held by M91 until lead grants it; integrate
+    accepted Tier16 before final tests
+updated_at: '2026-09-19T12:37:34+00:00'
+configuration_history:
+- at: '2026-09-19T12:37:32+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-19T12:37:33+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-19T12:37:34+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false

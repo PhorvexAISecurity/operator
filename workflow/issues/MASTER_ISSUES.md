@@ -593,7 +593,7 @@ Severity: ADVISORY · Tier: 2 · Fixes: T10-M010
 
 ### M-109 · I-1 — the GPU warm-load SLO envelope is disarmed by the first NON-GPU rotation · **OPEN** · `ECONOMICS`
 
-Severity: MAJOR · Tier: 3 · Fixes: none
+Severity: MAJOR · Tier: 3 · Fixes: T17-M109
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.feedback
@@ -789,7 +789,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T11-ROUTE
 
 ### M-65 · `rewarmShadow` drops ALL annotations · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T17-M065
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
