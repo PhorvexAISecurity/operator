@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -88,13 +88,29 @@ checks:
     inputs:
     - phorvex/internal/calib
     inputs_sha256: 343b960c896fb4af22a5fa855d37d4758665c18b2d053a2b1e9b480840b2166e
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 918e061981b36d21a59b20d60db86a980b239cdc711ae325123fbefa4e682ffe
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T16:00:15+00:00'
+    baseline_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: bb8dab619ddf79c90980f6f78d72bc319c44f1ac603587c5c7821ee3fa7447bb
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T16:00:15+00:00'
+    incident_sha256: 918e061981b36d21a59b20d60db86a980b239cdc711ae325123fbefa4e682ffe
 fix_id: T20-M179
 issues:
 - M-179
 title: Release expired calibration backing-array references without changing valid
   history
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -139,7 +155,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -155,10 +171,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T15:57:50+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T16:00:19+00:00'
 configuration_history:
 - at: '2026-09-19T14:51:33+00:00'
   by: codex-lead
@@ -215,6 +231,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T16:00:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T16:00:18+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -233,9 +265,9 @@ check_history:
   source_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
   at: '2026-09-19T14:51:38+00:00'
 handoff:
-  id: T20-M179:10:submit
-  from: sol-t20-m179
+  id: T20-M179:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
