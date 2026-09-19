@@ -1954,7 +1954,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-78 · Unbounded sequential serving probes inside the tick budget · **OPEN** · `CONTROL`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T22-M078
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.vllm
