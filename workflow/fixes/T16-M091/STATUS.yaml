@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -23,12 +23,73 @@ checks:
     sha256: f3e44a592919ea6fec08922addf590db80d84f25ca8788be1bd5cce5ac8b636d
     source_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
     at: '2026-09-19T12:22:30+00:00'
+  preflight:
+    result: PASS
+    by: sol-t16-m091
+    artifact: workflow/fixes/T16-M091/evidence/preflight/receipt.json
+    sha256: 64a69583925aa9135957a3526154221f5b8f16d1a7db31145dbaf6120535129e
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+  implementation:
+    result: PASS
+    by: sol-t16-m091
+    artifact: 04-diff.patch
+    sha256: 2d90183efa78756938915e5a6174e18ee76f92eef4d24856803b6194ee829104
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+  l0:
+    result: PASS
+    by: sol-t16-m091
+    artifact: workflow/fixes/T16-M091/evidence/preflight/receipt.json
+    sha256: 64a69583925aa9135957a3526154221f5b8f16d1a7db31145dbaf6120535129e
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 0af4c2583aa4ff0835bdcf2f09e0b9ecbf420b1dd2515098df1a7a7591ca5ab3
+  l1:
+    result: PASS
+    by: sol-t16-m091
+    artifact: evidence/worker/focused-final.md
+    sha256: abef245765cbce13ab337d2a90aea44b1c54b73cc60739fddd7db0790600380b
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - phorvex/docs/recon-cover-map.generated.md
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    - workflow/fixes/T16-M091/verify.sh
+    inputs_sha256: 3c5cf9332d62e3bae14fcbd4da5cc2227551a13352748a10fa7bede859c8c62a
+  l2:
+    result: PASS
+    by: sol-t16-m091
+    artifact: workflow/fixes/T16-M091/evidence/preflight/run-1789822123216329343/go-phorvex.log
+    sha256: 978b83a8b685224fb3e23d4a978397684dc8b912beb316fe40ed1fcc9358b326
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: a4227b0588afa85cfd09bc3ddd6794dff31d62bec67feb7ddf2dfc0b69da5764
+  positive_control:
+    result: PASS
+    by: sol-t16-m091
+    artifact: evidence/worker/focused-final.md
+    sha256: abef245765cbce13ab337d2a90aea44b1c54b73cc60739fddd7db0790600380b
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: 7f4d41b7417391e107410318918a4d54f18066970de10acaa89edbf6435eb759
 fix_id: T16-M091
 issues:
 - M-91
 title: M91 retire native policy bindings by exact owner identity
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -52,7 +113,7 @@ blind_derivation:
 implementation:
   branch: fix/t16-m091
   base_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
-  head_sha: null
+  head_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
   stacked_on: []
 pull_request:
   url: null
@@ -74,12 +135,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -89,10 +150,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t16-m091
-  action: Implement signed plan; one heavy slot; submit-review --no-notify; local
-    only
-updated_at: '2026-09-19T12:22:30+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-19T13:00:16+00:00'
 configuration_history:
 - at: '2026-09-19T12:19:54+00:00'
   by: codex-lead
@@ -105,6 +166,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T12:48:26+00:00'
+  by: sol-t16-m091
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-19T13:00:12+00:00'
+  by: sol-t16-m091
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -122,3 +193,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T13:00:13+00:00'
+  by: sol-t16-m091
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T13:00:14+00:00'
+  by: sol-t16-m091
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T16-M091:7:submit
+  from: sol-t16-m091
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 7

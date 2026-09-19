@@ -1158,8 +1158,8 @@ fixes:
     issues:
     - M-91
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t16-m091
-    head_sha: null
+    head_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
