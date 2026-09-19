@@ -1158,7 +1158,7 @@ fixes:
     issues:
     - M-109
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t17-m109
@@ -1169,7 +1169,7 @@ fixes:
     issues:
     - M-65
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t17-m065
