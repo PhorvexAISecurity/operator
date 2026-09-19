@@ -1,0 +1,39 @@
+schema_version: 1
+intake_id: RPT-20260918-223752-recurring-manager-oom-termination-under-deployed
+kind: INCIDENT
+title: Recurring manager OOM termination under deployed memory limit
+state: REPORTED
+reporter: codex-lead
+approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+created_at: '2026-09-18T22:37:52+00:00'
+updated_at: '2026-09-18T22:37:52+00:00'
+pins:
+  source_main_sha: 4c31ae289797f1c5e71bb957d5fbaf6a965ba787
+  source_release: 0.4.129
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.129
+  deployed_digest: sha256:8825048bbd824d6579a951f6170f690791d1e5a3d3203a0a8d7406f4d073b7ba
+  deployed_git_sha: 54b7c3ae676ae132e928da738bc14c3e82712a34
+  environment: dev
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: investigator
+  action: Triage the report and pin its environment.
+transitions: []
