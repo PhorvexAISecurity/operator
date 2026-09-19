@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -130,8 +131,12 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "models") {
+		if r.Method == http.MethodGet && r.URL.Path == "/models-empty" {
 			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "models") {
+			_, _ = w.Write([]byte(`{"data":[{"id":"model"}]}`))
 			return
 		}
 		if r.Method == http.MethodPost {
@@ -181,7 +186,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	if err := c.Create(ctx, secret); err != nil {
 		t.Fatal(err)
 	}
-	replicas := int32(2)
+	replicas := int32(3)
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText}}, Spec: corev1.PodSpec{NodeName: node.Name, ServiceAccountName: "model-sa", Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
@@ -191,12 +196,27 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		if err := c.List(ctx, &pods, client.InNamespace(ns)); err != nil {
 			return false, err
 		}
-		return len(pods.Items) == 2, nil
+		return len(pods.Items) == 3, nil
 	})
-	old, shadow := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy()
+	sort.Slice(pods.Items, func(i, j int) bool {
+		a, b := &pods.Items[i], &pods.Items[j]
+		if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+			return a.CreationTimestamp.Before(&b.CreationTimestamp)
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return string(a.UID) < string(b.UID)
+	})
+	old, emptyShadow, shadow := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy(), pods.Items[2].DeepCopy()
 	old.Labels["phorvex.ai/role"] = "leader"
+	emptyShadow.Labels["phorvex.ai/model-loaded"] = "true"
+	emptyShadow.Annotations["phorvex.ai/health-path"] = "/health-empty"
+	emptyShadow.Annotations["phorvex.ai/models-path"] = "/models-empty"
 	shadow.Labels["phorvex.ai/model-loaded"] = "true"
-	for _, p := range []*corev1.Pod{old, shadow} {
+	shadow.Annotations["phorvex.ai/health-path"] = "/health-loaded"
+	shadow.Annotations["phorvex.ai/models-path"] = "/models-loaded"
+	for _, p := range []*corev1.Pod{old, emptyShadow, shadow} {
 		if err := c.Update(ctx, p); err != nil {
 			t.Fatal(err)
 		}
@@ -272,7 +292,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 			}
 			for i := range current.Items {
 				q := current.Items[i].DeepCopy()
-				if q.UID == oldUID || q.UID == shadow.UID {
+				if q.UID == oldUID || q.UID == emptyShadow.UID || q.UID == shadow.UID {
 					continue
 				}
 				q.Labels["phorvex.ai/model-loaded"] = "true"
@@ -312,7 +332,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		t.Fatal(err)
 	}
 	foundOld := false
-	var survivor, replacement *corev1.Pod
+	var retainedEmpty, survivor, replacement *corev1.Pod
 	for i := range after.Items {
 		if after.Items[i].UID == oldUID {
 			foundOld = true
@@ -320,7 +340,10 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		if after.Items[i].UID == shadow.UID {
 			survivor = after.Items[i].DeepCopy()
 		}
-		if after.Items[i].UID != oldUID && after.Items[i].UID != shadow.UID {
+		if after.Items[i].UID == emptyShadow.UID {
+			retainedEmpty = after.Items[i].DeepCopy()
+		}
+		if after.Items[i].UID != oldUID && after.Items[i].UID != emptyShadow.UID && after.Items[i].UID != shadow.UID {
 			replacement = after.Items[i].DeepCopy()
 		}
 	}
@@ -340,6 +363,9 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	}
 	if survivor.UID != shadow.UID {
 		t.Fatalf("Native selected a different warm candidate UID: got=%s want=%s", survivor.UID, shadow.UID)
+	}
+	if retainedEmpty == nil || retainedEmpty.Labels["phorvex.ai/role"] != "warm-shadow" || !ready(retainedEmpty) {
+		t.Fatalf("older empty-inventory candidate was mutated or removed: %+v", retainedEmpty)
 	}
 	if replacement == nil {
 		t.Fatalf("controller did not create an exact replacement: pods=%+v", after.Items)
@@ -377,5 +403,21 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		if !strings.HasSuffix(call, " Bearer m078-trusted-token") {
 			t.Fatalf("serving request escaped the trusted binding: %q", call)
 		}
+	}
+	modelGets := make([]string, 0, 2)
+	gets, posts := 0, 0
+	for _, call := range servingCalls {
+		if strings.HasPrefix(call, "GET ") {
+			gets++
+		}
+		if strings.HasPrefix(call, "GET /models-") {
+			modelGets = append(modelGets, strings.Fields(call)[1])
+		}
+		if strings.HasPrefix(call, "POST ") {
+			posts++
+		}
+	}
+	if strings.Join(modelGets, ",") != "/models-empty,/models-loaded" || gets != 4 || posts != 1 {
+		t.Fatalf("readiness/drain requests do not prove empty-oldest then loaded-younger selection: calls=%v modelGETs=%v GETs=%d POSTs=%d", servingCalls, modelGets, gets, posts)
 	}
 }
