@@ -1218,3 +1218,14 @@ fixes:
     stacked_on: []
     branch: fix/t19-m131
     head_sha: null
+  T22-M078:
+    directory: fixes/T22-M078
+    aliases: []
+    issues:
+    - M-78
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t22-m078
+    head_sha: null
