@@ -274,7 +274,7 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 	apiNative := actuator.NewNativeActuator(apiClient)
 	apiNative.SetBoundaryReader(apiClient)
 	apiManager := &Manager{Actuator: apiNative, Intents: exposure.NewIntents(), Log: logr.Discard()}
-	apiPolicy := model.Policy{Tenant: "m012-api-forbidden", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	apiPolicy := model.Policy{Tenant: "m012-api-forbidden", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	apiView := m010KVView(string(apiPod.UID))
 	apiView.Pod.Name = apiPod.Name
 	apiDecision := []model.Decision{{Namespace: "ns", Pod: apiPod.Name, Action: model.ActionRotate, Selected: true, Feasible: true}}
@@ -305,7 +305,7 @@ func TestM012ActualNativeStaleUIDRefusalHasNoAcceptedCredit(t *testing.T) {
 	native.SetBoundaryReader(c)
 	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	tenant := "m012-native-stale"
-	pol := model.Policy{Tenant: tenant, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	pol := model.Policy{Tenant: tenant, PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	view := m010KVView("stale-uid")
 	decisions := []model.Decision{{Namespace: "ns", Pod: "p1", Action: model.ActionRotate, Selected: true, Feasible: true}}
 	attemptLabels := map[string]string{"tenant": tenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptRefused)}

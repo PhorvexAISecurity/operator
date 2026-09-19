@@ -139,3 +139,10 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20260919-122509-calibration-expired-comparison-references:
+    directory: intake/RPT-20260919-122509-calibration-expired-comparison-references
+    kind: BUG
+    title: Calibration sample compaction retains expired comparison references
+    state: REPORTED
+    issue_id: null
+    aliases: []

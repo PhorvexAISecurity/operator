@@ -1,0 +1,17 @@
+File: calib.test
+Build ID: 99cfe2695ba026f42921d94166630e174b05ac92
+Type: inuse_space
+Time: 2026-09-19 12:04:18 UTC
+Showing nodes accounting for 51.29MB, 100% of 51.29MB total
+      flat  flat%   sum%        cum   cum%
+   36.53MB 71.23% 71.23%    50.78MB 99.02%  github.com/phorvex/phorvex/internal/calib.TestCheckpointCalibrationRetentionExperiment.func1
+       7MB 13.65% 84.88%        7MB 13.65%  fmt.Sprintf
+    6.25MB 12.19% 97.07%     7.25MB 14.14%  github.com/phorvex/phorvex/internal/calib.(*Runtime).ObserveSnapshot
+       1MB  1.96% 99.02%        1MB  1.96%  github.com/phorvex/phorvex/internal/calib.AssetsFromSnapshot
+    0.50MB  0.98%   100%     0.50MB  0.98%  runtime.mallocgc
+         0     0%   100%     0.50MB  0.98%  runtime.malg
+         0     0%   100%     0.50MB  0.98%  runtime.newobject
+         0     0%   100%     0.50MB  0.98%  runtime.newproc.func1
+         0     0%   100%     0.50MB  0.98%  runtime.newproc1
+         0     0%   100%     0.50MB  0.98%  runtime.systemstack
+         0     0%   100%    50.78MB 99.02%  testing.tRunner
