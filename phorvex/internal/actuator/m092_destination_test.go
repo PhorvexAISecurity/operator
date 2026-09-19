@@ -302,7 +302,7 @@ func TestM092ProxyAndRedirectCannotReceiveServingBearer(t *testing.T) {
 }
 
 func TestM092ExtendedHandlerRejectsMalformedUnusedRouteBeforeEffects(t *testing.T) {
-	pod := guardrailPod("ns", "guard", "v1", "v2")
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	pod.Status.PodIP = "127.0.0.1"
 	pod.Annotations[annoKVInvalidate] = "//alternate.invalid/unused"
 	kube := fakeC(pod)

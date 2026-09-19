@@ -31,6 +31,24 @@ func TestProjectPodCapabilityWitnesses(t *testing.T) {
 	}
 }
 
+func TestM036GuardrailCapabilityRequiresValidCompleteRoster(t *testing.T) {
+	for _, tc := range []struct {
+		name, current, roster string
+		want                  int
+	}{
+		{name: "ordered-deduplicated", current: "v2", roster: " v1, v2, v2, v3 ", want: 3},
+		{name: "missing-current", current: "v3", roster: "v1,v2"},
+		{name: "empty-member", current: "v1", roster: "v1,,v2"},
+		{name: "singleton", current: "v1", roster: "v1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := distinctGuardrailVariants(tc.current, tc.roster); got != tc.want {
+				t.Fatalf("projected variants=%d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestServingEndpointReadyProducerMatrix(t *testing.T) {
 	for _, tc := range []struct {
 		name                                                 string

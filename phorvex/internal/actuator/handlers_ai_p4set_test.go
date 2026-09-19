@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -309,12 +310,100 @@ func TestGuardrailRotatePicksDistinctVariant(t *testing.T) {
 	}
 }
 
+func TestM036GuardrailRotateCyclesCompleteOrderedRoster(t *testing.T) {
+	for _, tc := range []struct {
+		name, roster string
+		want         []string
+	}{
+		{name: "three-member-wrap", roster: " v1, v2, v2, v3 ", want: []string{"v2", "v3", "v1"}},
+		{name: "two-member-alternation", roster: "v1,v2", want: []string{"v2", "v1", "v2"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := guardrailPod("ns", "guard", " v1 ", tc.roster)
+			c := fakeC(pod)
+			controller := &recordingGuardrail{}
+			var receiptUID string
+			var priorOperation string
+			for i, want := range tc.want {
+				current := &corev1.Pod{}
+				if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {
+					t.Fatal(err)
+				}
+				prior := strings.TrimSpace(current.Annotations[annoGuardrailVariant])
+				req := boundReq(current, model.ActionGuardrailRotate)
+				req.TickID = "m036-cycle-" + strconv.Itoa(i)
+				result, err := (guardrailRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: controller}, req)
+				if err != nil || !result.Emitted || result.MutationKind != "reversible" {
+					t.Fatalf("cycle %d result=%+v err=%v", i, result, err)
+				}
+				if got := controller.variants[len(controller.variants)-1]; got != want {
+					t.Fatalf("cycle %d applied=%q, want %q; all=%v", i, got, want, controller.variants)
+				}
+				if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {
+					t.Fatal(err)
+				}
+				if current.Annotations[annoGuardrailVariant] != want || current.Annotations[annoGuardrailSnap] != prior {
+					t.Fatalf("cycle %d metadata current=%q snapshot=%q, want current=%q snapshot=%q", i, current.Annotations[annoGuardrailVariant], current.Annotations[annoGuardrailSnap], want, prior)
+				}
+				cm, receipt, err := servingReceiptGet(context.Background(), EnactCtx{Reader: c, JournalNamespace: "operator"}, string(pod.UID), model.ActionGuardrailRotate)
+				if err != nil || receipt.Phase != "terminal-full" || receipt.Generation != uint64(i+1) || receipt.PriorVariant != prior || receipt.NextVariant != want {
+					t.Fatalf("cycle %d receipt=%+v err=%v", i, receipt, err)
+				}
+				if i == 0 {
+					receiptUID = string(cm.UID)
+				} else if string(cm.UID) != receiptUID || receipt.OperationID == priorOperation {
+					t.Fatalf("cycle %d slot/op identity uid=%q/%q operation=%q prior=%q", i, cm.UID, receiptUID, receipt.OperationID, priorOperation)
+				}
+				priorOperation = receipt.OperationID
+
+				before := len(controller.variants)
+				reconciled, err := (guardrailRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: controller}, req)
+				if err != nil || reconciled.Emitted || reconciled.NoEffect != NoEffectReconciled || len(controller.variants) != before {
+					t.Fatalf("cycle %d same-operation retry result=%+v calls=%v err=%v", i, reconciled, controller.variants, err)
+				}
+			}
+		})
+	}
+}
+
 func TestGuardrailRotateFailClosedNoDistinctVariant(t *testing.T) {
 	pod := guardrailPod("ns", "guard", "v1", "v1")
 	c := fakeC(pod) // only the current variant declared
 	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil {
 		t.Fatal("guardrail-rotate must FAIL-CLOSED when no DISTINCT variant exists (same blind spot = no MTD)")
+	}
+}
+
+func TestM036GuardrailRotateRefusesMalformedRosterBeforeReceiptOrEffect(t *testing.T) {
+	for _, tc := range []struct {
+		name, current, roster string
+	}{
+		{name: "missing-current", roster: "v1,v2"},
+		{name: "current-outside", current: "v3", roster: "v1,v2"},
+		{name: "empty-member", current: "v1", roster: "v1,,v2"},
+		{name: "singleton", current: "v1", roster: "v1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := guardrailPod("ns", "guard", tc.current, tc.roster)
+			c := fakeC(pod)
+			controller := &recordingGuardrail{}
+			result, err := (guardrailRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: controller}, boundReq(pod, model.ActionGuardrailRotate))
+			if err == nil || !IsNoEffectRefusal(err) || result.Emitted || len(controller.variants) != 0 {
+				t.Fatalf("malformed roster reached effect: result=%+v variants=%v err=%v", result, controller.variants, err)
+			}
+			var receipts corev1.ConfigMapList
+			if err := c.List(context.Background(), &receipts, client.InNamespace("operator")); err != nil || len(receipts.Items) != 0 {
+				t.Fatalf("malformed roster created receipt: count=%d err=%v", len(receipts.Items), err)
+			}
+			current := &corev1.Pod{}
+			if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {
+				t.Fatal(err)
+			}
+			if current.Annotations[annoGuardrailVariant] != tc.current || current.Annotations[annoGuardrailAlts] != tc.roster || current.Annotations[annoGuardrailSnap] != "" || current.Labels["phorvex.ai/guardrail-epoch"] != "" {
+				t.Fatalf("malformed roster changed target: labels=%v annotations=%v", current.Labels, current.Annotations)
+			}
+		})
 	}
 }
 
@@ -328,7 +417,7 @@ func TestGuardrailRotateFailClosedNotTier(t *testing.T) {
 }
 
 func TestGuardrailRotateUnreachableIsNotCreditedOrRecorded(t *testing.T) {
-	pod := guardrailPod("ns", "guard", "v1", "v2")
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	c := fakeC(pod)
 	hr, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{applyErr: errStackUnreachable}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err != nil {
@@ -356,7 +445,7 @@ func TestGuardrailRotateUnreachableIsNotCreditedOrRecorded(t *testing.T) {
 }
 
 func TestGuardrailRotateReachableFailureDoesNotRecordTransition(t *testing.T) {
-	pod := guardrailPod("ns", "guard", "v1", "v2")
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	c := fakeC(pod)
 	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{applyErr: errors.New("HTTP 500")}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil {
@@ -375,7 +464,7 @@ func TestGuardrailRotateReachableFailureDoesNotRecordTransition(t *testing.T) {
 }
 
 func TestGuardrailRotateRetainsConfirmedVariantWhenRecordFails(t *testing.T) {
-	pod := guardrailPod("ns", "guard", "v1", "v2")
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	base := fakeC(pod)
 	c := updateFailClient{Client: base, err: errors.New("Kubernetes write failed")}
 	g := &recordingGuardrail{}
