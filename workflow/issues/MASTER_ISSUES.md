@@ -1998,7 +1998,7 @@ Fix `T7-M127` at `f2d56318701b532f0a6c4e1b1363a7e58e5120d6` passed independent o
 
 ### M-128 · Tenant processing order is nondeterministic under a hard tick deadline · **OPEN** · `CONTROL`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T18-M128
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
