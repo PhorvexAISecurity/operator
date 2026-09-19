@@ -1318,7 +1318,7 @@ func TestM067ConfirmedDrainRechecksUnrelatedRecordedRolesBeforeDelete(t *testing
 		}
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
-			base, old, _, third := m067ThreeMemberPool(t)
+			base, old, next, third := m067ThreeMemberPool(t)
 			vllm := &changingDrainVLLM{mockVLLM: mockVLLM{loaded: true, drained: 2}}
 			if drift {
 				vllm.change = func() {
