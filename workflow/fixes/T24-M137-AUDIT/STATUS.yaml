@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -98,12 +98,28 @@ checks:
     - phorvex/internal/scaleprobe
     - workflow/fixes/T24-M137-AUDIT/verify.sh
     inputs_sha256: e09b2dd8bb71dccc376d1d725620d34b01c53df689da93b29de4d713628d4829
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 8c48cf7f865cfae5798d4929508ea23ed86eacf59cf5177f0625298476b734bd
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:14:14+00:00'
+    baseline_sha: 3b5519c2ccd7aa3e8d2dfedd9657985445d8273c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 6ef109f184bec4cc2675c5db95c09064761d98cc675095786c8252781448c124
+    source_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
+    at: '2026-09-19T19:14:14+00:00'
+    incident_sha256: 8c48cf7f865cfae5798d4929508ea23ed86eacf59cf5177f0625298476b734bd
 fix_id: T24-M137-AUDIT
 issues:
 - M-137
 title: Avoid impossible audit redaction regex scans without changing evidence
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -148,7 +164,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -164,10 +180,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T19:12:57+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T19:14:18+00:00'
 follow_up_to: T20-M137
 configuration_history:
 - at: '2026-09-19T17:09:36+00:00'
@@ -226,6 +242,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T19:14:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T19:14:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -246,9 +278,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T24-M137-AUDIT:10:submit
-  from: sol-t24-m137-audit
+  id: T24-M137-AUDIT:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
