@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -12,17 +12,25 @@ checks:
     by: codex-lead
     artifact: 03-decision.md
     sha256: 27a9c7cb449ccd31f3656f2b75e3ee6719a4fd1fa3c30d08b7d65b7bcee3545b
-    source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
-    at: '2026-09-19T13:55:13+00:00'
+    source_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
+    at: '2026-09-19T14:47:56+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   red:
     result: PASS
     by: codex-lead
-    artifact: evidence/lead/baseline.log
-    sha256: 295df724ec89976818d08bf01d59526031c93c188c7717b50e623194a1c67315
-    source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
-    at: '2026-09-19T13:55:15+00:00'
+    artifact: evidence/lead/baseline-current.log
+    sha256: 916a9a3d51235e62dadfad8caaeb360daa00a8c6d29f8ea3ce0db2baa1703404
+    source_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
+    at: '2026-09-19T14:47:57+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 93f3a2f23579f833c9a16b058ac1cedf59468204b9de66ae7fc4958eb5aaf715
+    source_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
+    at: '2026-09-19T14:47:57+00:00'
+    baseline_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
 fix_id: T19-M131
 issues:
 - M-131
@@ -41,8 +49,8 @@ capabilities_required:
   cluster_access: false
   deployment_authority: false
 baseline:
-  code_branch: tier16
-  code_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+  code_branch: tier18
+  code_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
   deployed_image: null
   deployed_git_sha: null
 blind_derivation:
@@ -51,7 +59,7 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: fix/t19-m131
-  base_sha: 4c0e38091fad519fec5f81408bea23ce42dee9ea
+  base_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
   head_sha: null
   stacked_on: []
 pull_request:
@@ -92,7 +100,7 @@ next_action:
   owner: implementer
   action: Implement signed plan; complete Tier18 required before final verification;
     no heavy work until slot
-updated_at: '2026-09-19T13:55:15+00:00'
+updated_at: '2026-09-19T14:47:57+00:00'
 configuration_history:
 - at: '2026-09-19T13:55:10+00:00'
   by: codex-lead
@@ -104,6 +112,12 @@ configuration_history:
   - next_action
   - roles
   - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T14:47:55+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - implementation
   approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
@@ -122,3 +136,20 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 27a9c7cb449ccd31f3656f2b75e3ee6719a4fd1fa3c30d08b7d65b7bcee3545b
+  source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+  at: '2026-09-19T13:55:13+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/lead/baseline.log
+  sha256: 295df724ec89976818d08bf01d59526031c93c188c7717b50e623194a1c67315
+  source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+  at: '2026-09-19T13:55:15+00:00'
