@@ -311,7 +311,7 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 			}
 			policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("policy-%02d", localPolicy)}, Spec: v1alpha1.PhorvexPolicySpec{Tenant: fmt.Sprintf("tenant-%02d-%02d", nsIndex, localPolicy), Selector: metav1.LabelSelector{MatchLabels: selector}, Mode: v1alpha1.ModeDryRun, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Hour}, ProactiveFloor: metav1.Duration{Duration: 10 * time.Minute}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}}}}
 			create(policy)
-			policy.Status.Conditions = []metav1.Condition{{Type: "ValidationError", Status: metav1.ConditionFalse, Reason: "M137Preserve", Message: "scale fixture controller-owned preservation marker", ObservedGeneration: policy.Generation}}
+			policy.Status.Conditions = []metav1.Condition{{Type: "ValidationError", Status: metav1.ConditionFalse, Reason: "M137Preserve", Message: "scale fixture controller-owned preservation marker", ObservedGeneration: policy.Generation, LastTransitionTime: metav1.Now()}}
 			if err := c.Status().Update(ctx, policy); err != nil {
 				t.Fatal(err)
 			}
