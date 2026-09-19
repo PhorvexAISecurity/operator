@@ -1191,11 +1191,11 @@ fixes:
     issues:
     - M-128
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t18-m128
-    head_sha: null
+    head_sha: 46a77f9bc63dd812b745a789916feed6d8903599
   T18-M068:
     directory: fixes/T18-M068
     aliases: []
