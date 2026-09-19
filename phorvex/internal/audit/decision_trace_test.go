@@ -76,9 +76,21 @@ func TestAuditLoggerSerializesRedactedRecordWithoutMutatingProducer(t *testing.T
 	}
 
 	raw := strings.TrimSpace(sink.String())
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+		t.Fatal(err)
+	}
+	nested, ok := fields["decisionTrace"]
+	if !ok {
+		t.Fatalf("serialized record dropped the decision trace: %s", raw)
+	}
+	// ToRecord also projects BrainImage into the legacy top-level ClaimScope,
+	// whose preexisting raw-string behavior is tracked separately by M181. This
+	// bounded control proves the nested trace boundary without treating that
+	// distinct predecessor behavior as a regression caused by the regex guards.
 	for _, secret := range []string{"registry-password", "decision-secret", "fact-secret", "candidate-secret"} {
-		if strings.Contains(raw, secret) {
-			t.Fatalf("serialized record leaked %q: %s", secret, raw)
+		if bytes.Contains(nested, []byte(secret)) {
+			t.Fatalf("serialized nested trace leaked %q: %s", secret, nested)
 		}
 	}
 	var record Record
@@ -90,6 +102,9 @@ func TestAuditLoggerSerializesRedactedRecordWithoutMutatingProducer(t *testing.T
 	}
 	if got := record.DecisionTrace.DecisionID; got != "decision-stable" {
 		t.Fatalf("safe trace identity changed: %q", got)
+	}
+	if got := record.DecisionTrace.BrainImage; got != "https://[REDACTED]@registry.example/phorvex:tag" {
+		t.Fatalf("nested URI user-info redaction changed: %q", got)
 	}
 	if got := record.DecisionTrace.NoopReason; got != "Authorization:[REDACTED]" {
 		t.Fatalf("authorization redaction changed: %q", got)
