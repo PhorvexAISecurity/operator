@@ -42,46 +42,48 @@ type RESTConfig struct {
 }
 
 type Fixture struct {
-	Case              string `json:"case"`
-	Backend           string `json:"backend"`
-	CacheReader       string `json:"cacheReader"`
-	ReceiptReader     string `json:"receiptReader"`
-	OwnerReader       string `json:"ownerReader"`
-	TransportCoverage string `json:"transportCoverage"`
-	Optimizer         string `json:"optimizer"`
-	TelemetrySource   string `json:"telemetrySource"`
-	Calibration       string `json:"calibration"`
-	Readiness         string `json:"readiness"`
-	SelectorMode      string `json:"selectorMode"`
-	Deployments       int    `json:"deployments"`
-	ReplicaSets       int    `json:"replicaSets"`
-	Pods              int    `json:"pods"`
-	Namespaces        int    `json:"namespaces"`
-	ServiceAccounts   int    `json:"serviceAccounts"`
-	Policies          int    `json:"policies"`
-	PoliciesPerNS     int    `json:"policiesPerNamespace"`
-	PodsPerPolicy     int    `json:"podsPerPolicy"`
-	Nodes             int    `json:"nodes"`
-	Services          int    `json:"services"`
-	PDBs              int    `json:"pdbs"`
-	NetworkPolicies   int    `json:"networkPolicies"`
-	Roles             int    `json:"roles"`
-	RoleBindings      int    `json:"roleBindings"`
-	ClusterRoles      int    `json:"clusterRoles"`
-	ClusterBindings   int    `json:"clusterRoleBindings"`
-	SecurityEvents    int    `json:"securityEvents"`
-	Receipts          int    `json:"receipts"`
-	BrakeConfigMaps   int    `json:"brakeConfigMaps"`
-	WarmupTicks       int    `json:"warmupTicks"`
-	RequestedAttempts int    `json:"requestedAttempts"`
-	TickTimeoutMS     int64  `json:"tickTimeoutMs"`
-	TickIntervalMS    int64  `json:"tickIntervalMs"`
-	SampleCadence     string `json:"sampleCadence"`
-	AuditByteLimit    int    `json:"auditByteLimit"`
-	AuditRetained     int    `json:"auditRetainedBytes"`
-	AuditDropped      int    `json:"auditDroppedBytes"`
-	MetricsSink       string `json:"metricsSink"`
-	TrustFixture      string `json:"trustFixture"`
+	Case               string `json:"case"`
+	Backend            string `json:"backend"`
+	CacheReader        string `json:"cacheReader"`
+	ReceiptReader      string `json:"receiptReader"`
+	OwnerReader        string `json:"ownerReader"`
+	TransportCoverage  string `json:"transportCoverage"`
+	Optimizer          string `json:"optimizer"`
+	TelemetrySource    string `json:"telemetrySource"`
+	Calibration        string `json:"calibration"`
+	Readiness          string `json:"readiness"`
+	SelectorMode       string `json:"selectorMode"`
+	Deployments        int    `json:"deployments"`
+	ReplicaSets        int    `json:"replicaSets"`
+	Pods               int    `json:"pods"`
+	Namespaces         int    `json:"namespaces"`
+	ServiceAccounts    int    `json:"serviceAccounts"`
+	Policies           int    `json:"policies"`
+	PoliciesPerNS      int    `json:"policiesPerNamespace"`
+	PodsPerPolicy      int    `json:"podsPerPolicy"`
+	Nodes              int    `json:"nodes"`
+	Services           int    `json:"services"`
+	PDBs               int    `json:"pdbs"`
+	NetworkPolicies    int    `json:"networkPolicies"`
+	Roles              int    `json:"roles"`
+	RoleBindings       int    `json:"roleBindings"`
+	ClusterRoles       int    `json:"clusterRoles"`
+	ClusterBindings    int    `json:"clusterRoleBindings"`
+	SecurityEvents     int    `json:"securityEvents"`
+	Receipts           int    `json:"receipts"`
+	BrakeConfigMaps    int    `json:"brakeConfigMaps"`
+	WarmupTicks        int    `json:"warmupTicks"`
+	RequestedAttempts  int    `json:"requestedAttempts"`
+	TickTimeoutMS      int64  `json:"tickTimeoutMs"`
+	TickIntervalMS     int64  `json:"tickIntervalMs"`
+	AntiOverRotationMS int64  `json:"antiOverRotationWindowMs"`
+	ProactiveFloorMS   int64  `json:"proactiveFloorMs"`
+	SampleCadence      string `json:"sampleCadence"`
+	AuditByteLimit     int    `json:"auditByteLimit"`
+	AuditRetained      int    `json:"auditRetainedBytes"`
+	AuditDropped       int    `json:"auditDroppedBytes"`
+	MetricsSink        string `json:"metricsSink"`
+	TrustFixture       string `json:"trustFixture"`
 }
 
 type Sample struct {
@@ -98,6 +100,15 @@ type Sample struct {
 type Control struct {
 	Purpose string `json:"purpose"`
 	Sample  Sample `json:"sample"`
+}
+
+type Warmup struct {
+	Index       int              `json:"index"`
+	Phase       string           `json:"phase"`
+	Outcome     string           `json:"outcome"`
+	DurationSec float64          `json:"durationSeconds"`
+	Error       string           `json:"error,omitempty"`
+	HTTP        map[string]int64 `json:"http"`
 }
 
 type Memory struct {
@@ -128,6 +139,7 @@ type Correctness struct {
 	ReceiptPresent            bool `json:"receiptPresent"`
 	DecisionRecords           int  `json:"decisionRecords"`
 	SelectedFeasibleRecords   int  `json:"selectedFeasibleRecords"`
+	IncidentTargetSelected    bool `json:"incidentTargetSelected"`
 	CurrentOwnerEligible      bool `json:"currentOwnerEligible"`
 	ControllerStatusPreserved bool `json:"controllerStatusPreserved"`
 	NoFalseCadence            bool `json:"noFalseCadenceOnDeadline"`
@@ -152,6 +164,7 @@ type Report struct {
 	Environment     Environment           `json:"environment"`
 	Fixture         Fixture               `json:"fixture"`
 	Samples         []Sample              `json:"samples"`
+	Warmups         []Warmup              `json:"warmups"`
 	Controls        []Control             `json:"controls"`
 	StartupHTTP     map[string]int64      `json:"startupHTTP"`
 	SampleHTTP      map[string]int64      `json:"sampleHTTP"`
@@ -274,7 +287,7 @@ func (r Report) Validate() error {
 	if r.Fixture.Case == "" || r.Fixture.Backend == "" || r.Fixture.CacheReader == "" || r.Fixture.ReceiptReader == "" || r.Fixture.OwnerReader == "" || r.Fixture.TransportCoverage == "" || r.Fixture.Optimizer == "" || r.Fixture.TelemetrySource == "" || r.Fixture.Calibration == "" || r.Fixture.Readiness == "" {
 		return errors.New("case and reader/backend configuration are required")
 	}
-	if r.Fixture.Deployments <= 0 || r.Fixture.ReplicaSets <= 0 || r.Fixture.Pods <= 0 || r.Fixture.Namespaces <= 0 || r.Fixture.Policies <= 0 || r.Fixture.PoliciesPerNS <= 0 || r.Fixture.PodsPerPolicy <= 0 || r.Fixture.RequestedAttempts < 20 || r.Fixture.WarmupTicks <= 0 || r.Fixture.TickTimeoutMS <= 0 || r.Fixture.TickIntervalMS <= 0 || r.Fixture.SampleCadence == "" {
+	if r.Fixture.Deployments <= 0 || r.Fixture.ReplicaSets <= 0 || r.Fixture.Pods <= 0 || r.Fixture.Namespaces <= 0 || r.Fixture.Policies <= 0 || r.Fixture.PoliciesPerNS <= 0 || r.Fixture.PodsPerPolicy <= 0 || r.Fixture.RequestedAttempts < 20 || r.Fixture.WarmupTicks <= 0 || r.Fixture.TickTimeoutMS <= 0 || r.Fixture.TickIntervalMS <= 0 || r.Fixture.AntiOverRotationMS <= 0 || r.Fixture.ProactiveFloorMS <= 0 || r.Fixture.SampleCadence == "" {
 		return errors.New("object counts, warmup and at least 20 requested samples are required")
 	}
 	if r.Fixture.Deployments != r.Fixture.Namespaces || r.Fixture.ReplicaSets != r.Fixture.Namespaces || r.Fixture.ServiceAccounts != r.Fixture.Namespaces || r.Fixture.Services != r.Fixture.Namespaces || r.Fixture.PDBs != r.Fixture.Namespaces || r.Fixture.NetworkPolicies != r.Fixture.Namespaces || r.Fixture.Roles != r.Fixture.Namespaces || r.Fixture.RoleBindings != r.Fixture.Namespaces || r.Fixture.BrakeConfigMaps != r.Fixture.Namespaces || r.Fixture.Policies%r.Fixture.Namespaces != 0 || r.Fixture.PoliciesPerNS != r.Fixture.Policies/r.Fixture.Namespaces {
@@ -300,6 +313,19 @@ func (r Report) Validate() error {
 	}
 	if len(r.Samples) != r.Fixture.RequestedAttempts {
 		return fmt.Errorf("workload attempts=%d, want fixed predeclared budget %d", len(r.Samples), r.Fixture.RequestedAttempts)
+	}
+	if len(r.Warmups) != r.Fixture.WarmupTicks {
+		return fmt.Errorf("warmup attempts=%d, want %d", len(r.Warmups), r.Fixture.WarmupTicks)
+	}
+	for i, warmup := range r.Warmups {
+		if warmup.Index != i || warmup.Phase != "post-cache-sync" || warmup.Outcome != "finished-full-snapshot" || warmup.DurationSec <= 0 || math.IsNaN(warmup.DurationSec) || math.IsInf(warmup.DurationSec, 0) || warmup.Error != "" || warmup.HTTP == nil {
+			return fmt.Errorf("warmup %d lacks a successful post-cache-sync result", i)
+		}
+		for key, value := range warmup.HTTP {
+			if key == "" || value < 0 {
+				return fmt.Errorf("warmup %d HTTP count %q=%d is invalid", i, key, value)
+			}
+		}
 	}
 	finished := 0
 	statusWrites := int64(0)
@@ -433,7 +459,7 @@ func (r Report) Validate() error {
 		return errors.New("sampled harness and heap memory slopes must be finite")
 	}
 	c := r.Correctness
-	if !c.CacheConverged || c.ProtectedObjectCount != r.Fixture.Pods || !c.GraphEdgesPresent || !c.RBACPresent || !c.TrustedEventPresent || !c.ReceiptPresent || c.DecisionRecords <= 0 || c.SelectedFeasibleRecords <= 0 || !c.CurrentOwnerEligible || !c.ControllerStatusPreserved || !c.NoFalseCadence {
+	if !c.CacheConverged || c.ProtectedObjectCount != r.Fixture.Pods || !c.GraphEdgesPresent || !c.RBACPresent || !c.TrustedEventPresent || !c.ReceiptPresent || c.DecisionRecords <= 0 || c.SelectedFeasibleRecords <= 0 || !c.IncidentTargetSelected || !c.CurrentOwnerEligible || !c.ControllerStatusPreserved || !c.NoFalseCadence {
 		return errors.New("correctness controls did not all pass")
 	}
 	return nil

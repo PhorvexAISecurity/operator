@@ -25,9 +25,10 @@ func validReport() Report {
 			Case: "valid", Backend: "native", CacheReader: "controller-runtime-cache", ReceiptReader: "direct-api",
 			OwnerReader: "direct-api", TransportCoverage: "all harness clients counted; control-plane internals excluded", Optimizer: "production p1", TelemetrySource: "honest absent", Calibration: "production enabled", Readiness: "manually seeded consistently", SelectorMode: "partitioned", Deployments: 4, ReplicaSets: 4, Pods: 1000, Namespaces: 4, Policies: 8, PoliciesPerNS: 2, PodsPerPolicy: 125,
 			Nodes: 2, ServiceAccounts: 4, Services: 4, PDBs: 4, NetworkPolicies: 4, Roles: 4, RoleBindings: 4, ClusterRoles: 1, ClusterBindings: 1, SecurityEvents: 2, Receipts: 1, BrakeConfigMaps: 4,
-			RequestedAttempts: 20, WarmupTicks: 2, TickTimeoutMS: 30000, TickIntervalMS: 20000, SampleCadence: "forced-due-back-to-back", AuditByteLimit: 2 << 20, AuditRetained: 1, MetricsSink: "bounded labels", TrustFixture: "synthetic",
+			RequestedAttempts: 20, WarmupTicks: 2, TickTimeoutMS: 30000, TickIntervalMS: 20000, AntiOverRotationMS: 1, ProactiveFloorMS: 600000, SampleCadence: "forced-due-back-to-back", AuditByteLimit: 2 << 20, AuditRetained: 1, MetricsSink: "bounded labels", TrustFixture: "synthetic",
 		},
 		Samples: samples,
+		Warmups: []Warmup{{Index: 0, Phase: "post-cache-sync", Outcome: "finished-full-snapshot", DurationSec: 0.1, HTTP: map[string]int64{}}, {Index: 1, Phase: "post-cache-sync", Outcome: "finished-full-snapshot", DurationSec: 0.1, HTTP: map[string]int64{}}},
 		Controls: []Control{{Purpose: "deadline-exclusion-and-no-cadence-after-producer-entry", Sample: Sample{
 			Index: 20, Outcome: "deadline", DurationSec: 0.01, PolicySeconds: map[string]float64{}, RSSBytes: 1, Error: "deadline exceeded",
 		}}},
@@ -37,7 +38,7 @@ func validReport() Report {
 		ControlHTTP:     map[string]int64{"direct|LIST|securityevents|-": 1},
 		RESTConfigs:     map[string]RESTConfig{"fixture": {Server: "https://127.0.0.1", QPS: 5, Burst: 10, Timeout: "0s", RateLimiter: "client-go-token-bucket-effective-qps-burst", UserAgent: "test"}, "cache": {Server: "https://127.0.0.1", QPS: 5, Burst: 10, Timeout: "0s", RateLimiter: "client-go-token-bucket-effective-qps-burst", UserAgent: "test"}, "manager": {Server: "https://127.0.0.1", QPS: 5, Burst: 10, Timeout: "0s", RateLimiter: "client-go-token-bucket-effective-qps-burst", UserAgent: "test"}, "direct": {Server: "https://127.0.0.1", QPS: 5, Burst: 10, Timeout: "0s", RateLimiter: "client-go-token-bucket-effective-qps-burst", UserAgent: "test"}, "convergence": {Server: "https://127.0.0.1", QPS: 5, Burst: 10, Timeout: "0s", RateLimiter: "client-go-token-bucket-effective-qps-burst", UserAgent: "test"}},
 		Memory:          Memory{Scope: "sampled post-tick harness-process", HarnessBaseline: 1, HarnessPeak: 2, HarnessFinal: 2, HarnessSlopeBytes: 1, HeapBaseline: 1, HeapPeak: 2, HeapFinal: 2, HeapSlopeBytes: 1, APIBaseline: 1, APIPeak: 1, APIFinal: 1, EtcdBaseline: 1, EtcdPeak: 1, EtcdFinal: 1},
-		Correctness:     Correctness{CacheConverged: true, ProtectedObjectCount: 1000, GraphEdgesPresent: true, RBACPresent: true, TrustedEventPresent: true, ReceiptPresent: true, DecisionRecords: 1, SelectedFeasibleRecords: 1, CurrentOwnerEligible: true, ControllerStatusPreserved: true, NoFalseCadence: true},
+		Correctness:     Correctness{CacheConverged: true, ProtectedObjectCount: 1000, GraphEdgesPresent: true, RBACPresent: true, TrustedEventPresent: true, ReceiptPresent: true, DecisionRecords: 1, SelectedFeasibleRecords: 1, IncidentTargetSelected: true, CurrentOwnerEligible: true, ControllerStatusPreserved: true, NoFalseCadence: true},
 		NFRVerdict:      "PASS", NFRDetail: "all successful full ticks below the predeclared one-second target",
 		Limitations: []string{"isolated local source-shaped fixture, not live behavior", "intended hardware, cadence, lifetime and maximum fleet remain unverified"},
 	}
@@ -101,6 +102,7 @@ func TestM137ScaleReportValidation(t *testing.T) {
 		{name: "missing-harness-final", mutate: func(r *Report) { r.Memory.HarnessFinal = 0 }},
 		{name: "missing-heap-baseline", mutate: func(r *Report) { r.Memory.HeapBaseline = 0 }},
 		{name: "too-few-samples", mutate: func(r *Report) { r.Samples = r.Samples[:19]; r.Summary = Summarize(r.Samples, 1) }},
+		{name: "missing-warmup", mutate: func(r *Report) { r.Warmups = r.Warmups[:1] }},
 		{name: "incomplete-unclassified", mutate: func(r *Report) { r.Samples[0].Outcome = "deadline"; r.Summary = Summarize(r.Samples, 1) }},
 		{name: "incorrect-summary", mutate: func(r *Report) { r.Summary.P95Seconds = 9 }},
 		{name: "missing-correctness", mutate: func(r *Report) { r.Correctness.ReceiptPresent = false }},

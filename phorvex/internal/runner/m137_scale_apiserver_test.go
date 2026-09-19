@@ -173,6 +173,16 @@ type m137BoundedAudit struct {
 	decisions        int
 	selectedFeasible int
 	dropped          int
+	lastByAsset      map[string]m137DecisionWitness
+}
+
+type m137DecisionWitness struct {
+	AssetUID      string
+	Selected      bool
+	Feasible      bool
+	Action        string
+	Reason        string
+	InfeasibleWhy string
 }
 
 func (w *m137BoundedAudit) Write(p []byte) (int, error) {
@@ -182,6 +192,24 @@ func (w *m137BoundedAudit) Write(p []byte) (int, error) {
 		w.decisions++
 		if bytes.Contains(p, []byte(`"selected":true`)) && bytes.Contains(p, []byte(`"feasible":true`)) {
 			w.selectedFeasible++
+		}
+		var record struct {
+			Namespace     string `json:"namespace"`
+			Pod           string `json:"pod"`
+			Action        string `json:"action"`
+			Selected      bool   `json:"selected"`
+			Feasible      bool   `json:"feasible"`
+			Reason        string `json:"reason"`
+			InfeasibleWhy string `json:"infeasibleWhy"`
+			DecisionTrace struct {
+				AssetUID string `json:"assetUID"`
+			} `json:"decisionTrace"`
+		}
+		if json.Unmarshal(p, &record) == nil && record.Namespace != "" && record.Pod != "" {
+			if w.lastByAsset == nil {
+				w.lastByAsset = map[string]m137DecisionWitness{}
+			}
+			w.lastByAsset[record.Namespace+"/"+record.Pod] = m137DecisionWitness{AssetUID: record.DecisionTrace.AssetUID, Selected: record.Selected, Feasible: record.Feasible, Action: record.Action, Reason: record.Reason, InfeasibleWhy: record.InfeasibleWhy}
 		}
 	}
 	remaining := w.maxBytes - w.retained.Len()
@@ -195,6 +223,12 @@ func (w *m137BoundedAudit) Write(p []byte) (int, error) {
 		w.dropped += len(p) - remaining
 	}
 	return len(p), nil
+}
+
+func (w *m137BoundedAudit) decisionWitness(key string) m137DecisionWitness {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lastByAsset[key]
 }
 
 func (w *m137BoundedAudit) decisionStats() (decisions, selectedFeasible int) {
@@ -213,6 +247,16 @@ type m137ScaleConfig struct {
 	name, selector                              string
 	pods, namespaces, policies, samples, warmup int
 	timeout                                     time.Duration
+}
+
+func m137FixtureReport(cfg m137ScaleConfig, auditLimit int) scaleprobe.Fixture {
+	report := scaleprobe.Fixture{Case: cfg.name, Backend: "native-dry-run", CacheReader: "controller-runtime-cache", ReceiptReader: "direct-api-reader", OwnerReader: "snapshot-local deduplicated direct-api-reader", TransportCoverage: "fixture/cache/manager/direct/convergence REST transports counted; convergence traffic reported separately; envtest control-plane internals and metric gathers uncounted", Optimizer: "production decision.CoverageEngine", TelemetrySource: "honest-absent local source; no external Prometheus transport", Calibration: "production calibration runtime enabled; warm-up establishes current schedule", Readiness: "Deployment, ReplicaSet and Pod readiness/status manually seeded consistently; no kube-controller-manager or scheduler", SelectorMode: cfg.selector, Deployments: cfg.namespaces, ReplicaSets: cfg.namespaces, Pods: cfg.pods, Namespaces: cfg.namespaces, Policies: cfg.policies, PoliciesPerNS: cfg.policies / cfg.namespaces, Nodes: 2, ServiceAccounts: cfg.namespaces, Services: cfg.namespaces, PDBs: cfg.namespaces, NetworkPolicies: cfg.namespaces, Roles: cfg.namespaces, RoleBindings: cfg.namespaces, ClusterRoles: 1, ClusterBindings: 1, SecurityEvents: 2, Receipts: 1, BrakeConfigMaps: cfg.namespaces, WarmupTicks: cfg.warmup, RequestedAttempts: cfg.samples, TickTimeoutMS: cfg.timeout.Milliseconds(), TickIntervalMS: 20000, AntiOverRotationMS: 1, ProactiveFloorMS: (10 * time.Minute).Milliseconds(), SampleCadence: "fixed attempt budget, forced due after cached policy resourceVersion/status exactly match authoritative post-tick reads; no retry-to-success and convergence waits/GETs excluded from measured manager duration and sampled producer traffic", AuditByteLimit: auditLimit, MetricsSink: "controller-runtime process registry with a bounded instrumented audit sink; fixed outcome and declared tenant labels", TrustFixture: "source-shaped synthetic creator annotation; admission stamp/policy not installed"}
+	if cfg.selector == "partitioned" {
+		report.PodsPerPolicy = cfg.pods / cfg.policies
+	} else {
+		report.PodsPerPolicy = cfg.pods / cfg.namespaces
+	}
+	return report
 }
 
 func m137ScaleConfigFromEnv(t *testing.T) m137ScaleConfig {
@@ -382,7 +426,7 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 			if cfg.selector == "partitioned" {
 				selector["m137-policy"] = strconv.Itoa(localPolicy)
 			}
-			policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("policy-%02d", localPolicy)}, Spec: v1alpha1.PhorvexPolicySpec{Tenant: fmt.Sprintf("tenant-%02d-%02d", nsIndex, localPolicy), Selector: metav1.LabelSelector{MatchLabels: selector}, Mode: v1alpha1.ModeDryRun, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Hour}, ProactiveFloor: metav1.Duration{Duration: 10 * time.Minute}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}}}}
+			policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("policy-%02d", localPolicy)}, Spec: v1alpha1.PhorvexPolicySpec{Tenant: fmt.Sprintf("tenant-%02d-%02d", nsIndex, localPolicy), Selector: metav1.LabelSelector{MatchLabels: selector}, Mode: v1alpha1.ModeDryRun, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Millisecond}, ProactiveFloor: metav1.Duration{Duration: 10 * time.Minute}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}}}}
 			create(policy)
 			policy.Status.Conditions = []metav1.Condition{{Type: "ValidationError", Status: metav1.ConditionFalse, Reason: "M137Preserve", Message: "scale fixture controller-owned preservation marker", ObservedGeneration: policy.Generation, LastTransitionTime: metav1.Now()}}
 			if err := c.Status().Update(ctx, policy); err != nil {
@@ -491,6 +535,21 @@ func m137WaitPolicyCache(ctx context.Context, reader, authoritative client.Reade
 		case <-ticker.C:
 		}
 	}
+}
+
+func m137PrimeCache(ctx context.Context, c client.Client) error {
+	lists := []client.ObjectList{
+		&corev1.PodList{}, &corev1.NamespaceList{}, &corev1.NodeList{}, &corev1.ServiceList{}, &corev1.ConfigMapList{},
+		&networkingv1.NetworkPolicyList{}, &policyv1.PodDisruptionBudgetList{},
+		&rbacv1.RoleList{}, &rbacv1.RoleBindingList{}, &rbacv1.ClusterRoleList{}, &rbacv1.ClusterRoleBindingList{},
+		&v1alpha1.PhorvexPolicyList{},
+	}
+	for _, list := range lists {
+		if err := c.List(ctx, list); err != nil {
+			return fmt.Errorf("prime cache for %T: %w", list, err)
+		}
+	}
+	return nil
 }
 
 func m137RSS(pid int) int64 {
@@ -809,21 +868,65 @@ func TestM137ScaleHarness(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	for i := 0; i < cfg.warmup; i++ {
-		m137ForceDue(m)
-		tickCtx, tickCancel := context.WithTimeout(ctx, cfg.timeout)
-		result := m.tick(tickCtx)
-		tickCancel()
-		if result != tickSnapshotSucceeded {
-			t.Fatalf("warmup %d result=%v", i, result)
-		}
-	}
-	if err := m137WaitPolicyCache(ctx, managerClient, convergence, fixture.policies); err != nil {
+	if err := m137PrimeCache(ctx, managerClient); err != nil {
 		t.Fatal(err)
 	}
 	if !informerCache.WaitForCacheSync(ctx) {
-		t.Fatal("cache did not synchronize")
+		t.Fatal("cache did not synchronize before warmup")
+	}
+	children := m137ChildProcesses()
+	if children["apiserver"] == 0 || children["etcd"] == 0 {
+		t.Fatalf("could not identify separate envtest API server and etcd processes: %v", children)
+	}
+	totalMemory, limitMemory := m137SystemMemory()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executableSHA, err := m137ExecutableSHA256(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureReport := m137FixtureReport(cfg, auditSink.maxBytes)
+	startupHTTP := counts.reset()
+	report = scaleprobe.Report{
+		SchemaVersion: scaleprobe.SchemaVersion,
+		Environment:   scaleprobe.Environment{GitSHA: m137GitSHA(t), Executable: executable, ExecutableSHA256: executableSHA, GoVersion: runtime.Version(), KubernetesAssets: os.Getenv("KUBEBUILDER_ASSETS"), CPUCount: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), MemoryTotalBytes: totalMemory, MemoryLimitBytes: limitMemory, HarnessPID: os.Getpid(), APIProcessPID: children["apiserver"], EtcdProcessPID: children["etcd"], APIProcessRSSBytes: m137RSS(children["apiserver"]), EtcdProcessRSSBytes: m137RSS(children["etcd"])},
+		Fixture:       fixtureReport,
+		StartupHTTP:   startupHTTP,
+		RESTConfigs:   map[string]scaleprobe.RESTConfig{"fixture": m137RESTBinding(fixtureREST), "cache": m137RESTBinding(cacheREST), "manager": m137RESTBinding(managerREST), "direct": m137RESTBinding(directREST), "convergence": m137RESTBinding(convergenceREST)},
+		ProbeErrors:   []string{fmt.Sprintf("harness incomplete before %d post-cache-sync warmups", cfg.warmup)},
+	}
+	if err := m137WriteReport(output, report); err != nil {
+		t.Fatal(err)
+	}
+	warmups := make([]scaleprobe.Warmup, 0, cfg.warmup)
+	for i := 0; i < cfg.warmup; i++ {
+		m137ForceDue(m)
+		started := time.Now()
+		tickCtx, tickCancel := context.WithTimeout(ctx, cfg.timeout)
+		result := m.tick(tickCtx)
+		ctxErr := tickCtx.Err()
+		tickCancel()
+		outcome := m137Outcome(result, ctxErr)
+		warmupError := ""
+		if result != tickSnapshotSucceeded {
+			warmupError = fmt.Sprintf("result=%v context=%v", result, ctxErr)
+		} else if err := m137WaitPolicyCache(ctx, managerClient, convergence, fixture.policies); err != nil {
+			warmupError = "cache convergence: " + err.Error()
+		}
+		warmups = append(warmups, scaleprobe.Warmup{Index: i, Phase: "post-cache-sync", Outcome: outcome, DurationSec: time.Since(started).Seconds(), Error: warmupError, HTTP: counts.reset()})
+		report.Warmups = append([]scaleprobe.Warmup(nil), warmups...)
+		report.ProbeErrors = []string{fmt.Sprintf("harness incomplete after %d/%d post-cache-sync warmups", len(warmups), cfg.warmup)}
+		if err := m137WriteReport(output, report); err != nil {
+			t.Fatal(err)
+		}
+		if result != tickSnapshotSucceeded {
+			t.Fatalf("post-cache-sync warmup %d %s", i, warmupError)
+		}
+		if warmupError != "" {
+			t.Fatalf("post-cache-sync warmup %d %s", i, warmupError)
+		}
 	}
 	var cachedPods corev1.PodList
 	if err := managerClient.List(ctx, &cachedPods); err != nil || len(cachedPods.Items) != cfg.pods {
@@ -873,12 +976,8 @@ func TestM137ScaleHarness(t *testing.T) {
 	expectedCrossNamespaceNeighbor := "m137-01/pod-0000"
 	graphEdges := snap.Graph != nil && m137ContainsNeighbor(snap.Graph.Neighbors(fixture.firstPod.Namespace, fixture.firstPod.Name), expectedCrossNamespaceNeighbor)
 	rbacPresent := m137ExactRBAC(cfg, cachedRoles.Items, cachedBindings.Items, cachedClusterRoles.Items, cachedClusterBindings.Items)
-	startupHTTP := counts.reset()
+	m137MergeHTTP(startupHTTP, counts.reset())
 	auditDecisionsBefore, auditSelectedBefore := auditSink.decisionStats()
-	children := m137ChildProcesses()
-	if children["apiserver"] == 0 || children["etcd"] == 0 {
-		t.Fatalf("could not identify separate envtest API server and etcd processes: %v", children)
-	}
 	apiRSSBefore := m137RSS(children["apiserver"])
 	etcdRSSBefore := m137RSS(children["etcd"])
 
@@ -1059,17 +1158,6 @@ func TestM137ScaleHarness(t *testing.T) {
 
 	var memAfter kruntimeMemStats
 	readM137MemStats(&memAfter)
-	totalMemory, limitMemory := m137SystemMemory()
-	executable, err := os.Executable()
-	if err != nil {
-		probeErrors = append(probeErrors, "resolve harness executable: "+err.Error())
-		executable = "unavailable"
-	}
-	executableSHA, err := m137ExecutableSHA256(executable)
-	if err != nil {
-		probeErrors = append(probeErrors, "hash harness executable: "+err.Error())
-		executableSHA = "unavailable"
-	}
 	peakRSS := rssBefore
 	peakHeap := memBefore.HeapAlloc
 	peakAPIRSS := apiRSSBefore
@@ -1092,22 +1180,22 @@ func TestM137ScaleHarness(t *testing.T) {
 	auditDecisionsAfter, auditSelectedAfter := auditSink.decisionStats()
 	measuredDecisions := auditDecisionsAfter - auditDecisionsBefore
 	measuredSelected := auditSelectedAfter - auditSelectedBefore
+	incidentWitness := auditSink.decisionWitness(fixture.firstPod.String())
 	if finishedAttempts > 0 && (measuredDecisions < finishedAttempts || measuredSelected < finishedAttempts) {
-		probeErrors = append(probeErrors, fmt.Sprintf("measured audit decisions=%d selected-feasible=%d, want at least one valid record per %d finished workload attempts", measuredDecisions, measuredSelected, finishedAttempts))
+		probeErrors = append(probeErrors, fmt.Sprintf("measured audit decisions=%d selected-feasible=%d, want at least one valid record per %d finished workload attempts; incident-target=%+v", measuredDecisions, measuredSelected, finishedAttempts, incidentWitness))
 	}
-	fixtureReport := scaleprobe.Fixture{Case: cfg.name, Backend: "native-dry-run", CacheReader: "controller-runtime-cache", ReceiptReader: "direct-api-reader", OwnerReader: "snapshot-local deduplicated direct-api-reader", TransportCoverage: "fixture/cache/manager/direct/convergence REST transports counted; convergence traffic reported separately; envtest control-plane internals and metric gathers uncounted", Optimizer: "production decision.CoverageEngine", TelemetrySource: "honest-absent local source; no external Prometheus transport", Calibration: "production calibration runtime enabled; warm-up establishes current schedule", Readiness: "Deployment, ReplicaSet and Pod readiness/status manually seeded consistently; no kube-controller-manager or scheduler", SelectorMode: cfg.selector, Deployments: cfg.namespaces, ReplicaSets: cfg.namespaces, Pods: cfg.pods, Namespaces: cfg.namespaces, Policies: cfg.policies, PoliciesPerNS: cfg.policies / cfg.namespaces, Nodes: 2, ServiceAccounts: cfg.namespaces, Services: cfg.namespaces, PDBs: cfg.namespaces, NetworkPolicies: cfg.namespaces, Roles: cfg.namespaces, RoleBindings: cfg.namespaces, ClusterRoles: 1, ClusterBindings: 1, SecurityEvents: 2, Receipts: 1, BrakeConfigMaps: cfg.namespaces, WarmupTicks: cfg.warmup, RequestedAttempts: cfg.samples, TickTimeoutMS: cfg.timeout.Milliseconds(), TickIntervalMS: 20000, SampleCadence: "fixed attempt budget, forced due after cached policy resourceVersion/status exactly match authoritative post-tick reads; no retry-to-success and convergence waits/GETs excluded from measured manager duration and sampled producer traffic", AuditByteLimit: auditSink.maxBytes, AuditRetained: auditRetained, AuditDropped: auditDropped, MetricsSink: "controller-runtime process registry with a bounded instrumented audit sink; fixed outcome and declared tenant labels", TrustFixture: "source-shaped synthetic creator annotation; admission stamp/policy not installed"}
-	if cfg.selector == "partitioned" {
-		fixtureReport.PodsPerPolicy = cfg.pods / cfg.policies
-	} else {
-		fixtureReport.PodsPerPolicy = cfg.pods / cfg.namespaces
+	incidentTargetSelected := incidentWitness.AssetUID == fixture.firstUID && incidentWitness.Selected && incidentWitness.Feasible
+	if !incidentTargetSelected {
+		probeErrors = append(probeErrors, fmt.Sprintf("incident target %s@%s lacks an exact selected/feasible audit decision: %+v", fixture.firstPod.String(), fixture.firstUID, incidentWitness))
 	}
+	fixtureReport.AuditRetained, fixtureReport.AuditDropped = auditRetained, auditDropped
 	report = scaleprobe.Report{
 		SchemaVersion: scaleprobe.SchemaVersion,
 		Environment:   scaleprobe.Environment{GitSHA: m137GitSHA(t), Executable: executable, ExecutableSHA256: executableSHA, GoVersion: runtime.Version(), KubernetesAssets: os.Getenv("KUBEBUILDER_ASSETS"), CPUCount: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), MemoryTotalBytes: totalMemory, MemoryLimitBytes: limitMemory, HarnessPID: os.Getpid(), APIProcessPID: children["apiserver"], EtcdProcessPID: children["etcd"], APIProcessRSSBytes: m137RSS(children["apiserver"]), EtcdProcessRSSBytes: m137RSS(children["etcd"])},
-		Fixture:       fixtureReport, Samples: samples, Controls: []scaleprobe.Control{deadlineControl}, StartupHTTP: startupHTTP, SampleHTTP: sampledHTTP, ConvergenceHTTP: convergenceHTTP, ControlHTTP: controlHTTP,
+		Fixture:       fixtureReport, Samples: samples, Warmups: warmups, Controls: []scaleprobe.Control{deadlineControl}, StartupHTTP: startupHTTP, SampleHTTP: sampledHTTP, ConvergenceHTTP: convergenceHTTP, ControlHTTP: controlHTTP,
 		RESTConfigs: map[string]scaleprobe.RESTConfig{"fixture": m137RESTBinding(fixtureREST), "cache": m137RESTBinding(cacheREST), "manager": m137RESTBinding(managerREST), "direct": m137RESTBinding(directREST), "convergence": m137RESTBinding(convergenceREST)},
 		Memory:      scaleprobe.Memory{Scope: "sampled post-tick harness/cache/manager and separate envtest kube-apiserver/etcd snapshots; max and slope are not continuous within-tick peaks", HarnessBaseline: rssBefore, HarnessPeak: peakRSS, HarnessFinal: m137RSS(os.Getpid()), HarnessSlopeBytes: m137Slope(rssValues), HeapBaseline: memBefore.HeapAlloc, HeapPeak: peakHeap, HeapFinal: memAfter.HeapAlloc, HeapSlopeBytes: m137Slope(heapValues), GCCount: memAfter.NumGC - memBefore.NumGC, APIBaseline: apiRSSBefore, APIPeak: peakAPIRSS, APIFinal: m137RSS(children["apiserver"]), EtcdBaseline: etcdRSSBefore, EtcdPeak: peakEtcdRSS, EtcdFinal: m137RSS(children["etcd"])},
-		Correctness: scaleprobe.Correctness{CacheConverged: len(cachedPods.Items) == cfg.pods, ProtectedObjectCount: len(snap.Pods), GraphEdgesPresent: graphEdges, RBACPresent: rbacPresent, TrustedEventPresent: trustedPresent, ReceiptPresent: receiptPresent, DecisionRecords: measuredDecisions, SelectedFeasibleRecords: measuredSelected, CurrentOwnerEligible: ownerEligible, ControllerStatusPreserved: controllerStatusPreserved, NoFalseCadence: noFalseCadence},
+		Correctness: scaleprobe.Correctness{CacheConverged: len(cachedPods.Items) == cfg.pods, ProtectedObjectCount: len(snap.Pods), GraphEdgesPresent: graphEdges, RBACPresent: rbacPresent, TrustedEventPresent: trustedPresent, ReceiptPresent: receiptPresent, DecisionRecords: measuredDecisions, SelectedFeasibleRecords: measuredSelected, IncidentTargetSelected: incidentTargetSelected, CurrentOwnerEligible: ownerEligible, ControllerStatusPreserved: controllerStatusPreserved, NoFalseCadence: noFalseCadence},
 		ProbeErrors: probeErrors,
 	}
 	report.Summary = scaleprobe.Summarize(report.Samples, 1)
@@ -1182,6 +1270,12 @@ func m137PartitionHTTP(counts map[string]int64, origin string) (map[string]int64
 		remaining[key] = value
 	}
 	return remaining, selected
+}
+
+func m137MergeHTTP(into, from map[string]int64) {
+	for key, value := range from {
+		into[key] += value
+	}
 }
 
 func m137LargestHTTPProducer(counts map[string]int64) string {
