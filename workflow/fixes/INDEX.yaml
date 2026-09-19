@@ -1279,8 +1279,8 @@ fixes:
     issues:
     - M-181
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t24-m181
-    head_sha: null
+    head_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e

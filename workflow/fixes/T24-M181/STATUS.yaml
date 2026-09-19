@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -33,12 +33,78 @@ checks:
     source_sha: 94c62bffa8b6e623e69fbe289e8bf3dd621ac2a7
     at: '2026-09-19T19:15:42+00:00'
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t24-m181
+    artifact: evidence/preflight/receipt.json
+    sha256: f0ad5e80ef52a46a6c9705a5cd3b3b4829fd012412d0e553b4718427b9474bb3
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:02+00:00'
+  implementation:
+    result: PASS
+    by: sol-t24-m181
+    artifact: 04-diff.patch
+    sha256: 66577a57481feb3ce3cc62e1927b97729862344e40c8a2743ccbaa078d713fd3
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:02+00:00'
+  l0:
+    result: PASS
+    by: sol-t24-m181
+    artifact: evidence/preflight/receipt.json
+    sha256: f0ad5e80ef52a46a6c9705a5cd3b3b4829fd012412d0e553b4718427b9474bb3
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:02+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: fb93eed1c073fa2f4776349bc4cd401d3007e9db288dacd1db5386d06fd9b317
+  l1:
+    result: PASS
+    by: sol-t24-m181
+    artifact: evidence/worker/focused/m181-verify.log
+    sha256: 4f0902ced61d7e1369ba93603013030cf81358138de82aa28d09781d99d17b94
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:02+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/console
+    - phorvex/internal/model
+    - workflow/fixes/T24-M181/verify.sh
+    inputs_sha256: 0565824059b4885177ed8c62f467fba23a52fa684344309d51feccaaad130bef
+  l2:
+    result: PASS
+    by: sol-t24-m181
+    artifact: evidence/worker/focused/m181-verify.log
+    sha256: 4f0902ced61d7e1369ba93603013030cf81358138de82aa28d09781d99d17b94
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:02+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/console
+    - phorvex/internal/model
+    - workflow/fixes/T24-M181/verify.sh
+    inputs_sha256: 0565824059b4885177ed8c62f467fba23a52fa684344309d51feccaaad130bef
+  positive_control:
+    result: PASS
+    by: sol-t24-m181
+    artifact: evidence/worker/focused/m181-verify.log
+    sha256: 4f0902ced61d7e1369ba93603013030cf81358138de82aa28d09781d99d17b94
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:02+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/console
+    - phorvex/internal/model
+    - workflow/fixes/T24-M181/verify.sh
+    inputs_sha256: 0565824059b4885177ed8c62f467fba23a52fa684344309d51feccaaad130bef
 fix_id: T24-M181
 issues:
 - M-181
 title: Redact claim build metadata consistently across reporting
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -62,7 +128,7 @@ blind_derivation:
 implementation:
   branch: fix/t24-m181
   base_sha: 94c62bffa8b6e623e69fbe289e8bf3dd621ac2a7
-  head_sha: null
+  head_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
   stacked_on: []
 pull_request:
   url: null
@@ -84,12 +150,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -99,10 +165,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t24-m181
-  action: Validate canonical focused/race/exactpreflight after lead heavy-slot grant;
-    submit no-notify
-updated_at: '2026-09-19T19:15:42+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-19T19:25:06+00:00'
 configuration_history:
 - at: '2026-09-19T18:46:17+00:00'
   by: codex-lead
@@ -122,6 +188,16 @@ configuration_history:
   - implementation
   - next_action
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T19:17:52+00:00'
+  by: sol-t24-m181
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T19:25:02+00:00'
+  by: sol-t24-m181
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -139,6 +215,22 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T19:25:02+00:00'
+  by: sol-t24-m181
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T19:25:04+00:00'
+  by: sol-t24-m181
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -149,3 +241,10 @@ check_history:
   at: '2026-09-19T18:46:20+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
+handoff:
+  id: T24-M181:10:submit
+  from: sol-t24-m181
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 10
