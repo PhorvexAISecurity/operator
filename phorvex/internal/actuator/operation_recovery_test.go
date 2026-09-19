@@ -1572,6 +1572,12 @@ func TestM067DefinitelyUnsentRestoresOldBeforeAvailabilityCanBlockNewDemotion(t 
 			return m067SyncFakeRoute(ctx, inner, old)
 		},
 		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if pod, ok := obj.(*corev1.Pod); ok {
+				if err := inner.Update(ctx, pod, opts...); err != nil {
+					return err
+				}
+				return m067SyncFakeRoute(ctx, inner, old)
+			}
 			cm, ok := obj.(*corev1.ConfigMap)
 			if !ok || readinessDropped || !strings.Contains(cm.Data["receipt"], `"phase":"old-route-observed"`) {
 				return inner.Update(ctx, obj, opts...)
