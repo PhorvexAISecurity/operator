@@ -4,9 +4,9 @@
  * DaemonSet pod resolved on the target node, so the nvidia-smi MIG sequence actually runs instead of the
  * default fail-closed path. Wire it once at startup with the cluster REST config + clientset.
  *
- * [PENDING-GPU-VALIDATION] — real transport code; the exec syscall + the nvidia-smi MIG result are
- * validated against a real GPU node + a deployed node-agent DaemonSet by the dev team. CI mocks the exec
- * (asserts the command sequence/ordering + the fail-closed-without-agent path).
+ * [PENDING-GPU-VALIDATION] — real transport code. Local tests cover request construction, trusted
+ * agent identity, production PodResources decoding and command ordering through the private executor
+ * seam. Deployed remotecommand/SPDY and nvidia-smi effects on real hardware remain pending under LV01.
  *
  * PREMORTEM (persona panel: GPU-expert / Physics-informed-AI / distributed-systems / Cloud-engineer):
  *   - agent unreachable / not scheduled on the node  → Prepare() fail-closes BEFORE any eviction;

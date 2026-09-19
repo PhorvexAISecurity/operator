@@ -556,7 +556,7 @@ func TestOperationJournalWarmDrainAndCollisionOutcomes(t *testing.T) {
 		if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: newPod.Name}, promoted); err != nil {
 			t.Fatal(err)
 		}
-		name := truncName(promoted.Name + "-rw-" + promoted.ResourceVersion)
+		name := "legacy-rewarm-name-collision"
 		foreign := aiPod("ns", name, map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false"})
 		foreign.UID = "foreign-uid"
 		foreign.ResourceVersion = ""
