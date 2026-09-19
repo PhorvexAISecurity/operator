@@ -146,14 +146,33 @@ func TestM078WarmCandidateBudgetRefusesBeforeFifthAndMutatesNothing(t *testing.T
 }
 
 func TestM078FourCompletedNotReadyCandidatesRemainNoReady(t *testing.T) {
-	items := make([]corev1.Pod, warmCandidateAttemptLimit)
-	for i := range items {
+	items := make([]corev1.Pod, warmCandidateAttemptLimit+2)
+	for i := 0; i < warmCandidateAttemptLimit; i++ {
 		items[i] = m078Candidate(fmt.Sprintf("shadow-%d", i), fmt.Sprintf("uid-%d", i), fmt.Sprintf("10.0.0.%d", i+10), int64(100+i))
 	}
+	items[warmCandidateAttemptLimit] = m078Candidate("shadow-pending", "uid-pending", "10.0.0.20", 200)
+	items[warmCandidateAttemptLimit].Status.Conditions[0].Status = corev1.ConditionFalse
+	items[warmCandidateAttemptLimit+1] = m078Candidate("shadow-deleting", "uid-deleting", "10.0.0.21", 201)
+	deletedAt := metav1.NewTime(time.Unix(300, 0))
+	items[warmCandidateAttemptLimit+1].DeletionTimestamp = &deletedAt
 	stack := &m078Readiness{}
 	picked, pending, err := m078Pick(t.Context(), &m078InventoryReader{items: items}, stack)
 	if err != nil || picked != nil || pending || len(stack.calls) != warmCandidateAttemptLimit {
 		t.Fatalf("completed no-ready traversal: picked=%v pending=%t calls=%d err=%v", picked, pending, len(stack.calls), err)
+	}
+}
+
+func TestM078IneligibleRowsDoNotSpendReadinessAttemptBudget(t *testing.T) {
+	items := make([]corev1.Pod, warmCandidateAttemptLimit+2)
+	for i := 0; i < warmCandidateAttemptLimit+1; i++ {
+		items[i] = m078Candidate(fmt.Sprintf("pending-%d", i), fmt.Sprintf("uid-pending-%d", i), fmt.Sprintf("10.0.1.%d", i+10), int64(100+i))
+		items[i].Status.Conditions[0].Status = corev1.ConditionFalse
+	}
+	items[len(items)-1] = m078Candidate("ready-target", "uid-ready", "10.0.1.30", 300)
+	stack := &m078Readiness{readyAt: 1}
+	picked, pending, err := m078Pick(t.Context(), &m078InventoryReader{items: items}, stack)
+	if err != nil || pending || picked == nil || picked.UID != "uid-ready" || len(stack.calls) != 1 {
+		t.Fatalf("ineligible rows spent readiness attempts: picked=%v pending=%t calls=%d err=%v", picked, pending, len(stack.calls), err)
 	}
 }
 
@@ -172,6 +191,11 @@ func TestM078IncompleteInventoryRefusesBeforeServingProbe(t *testing.T) {
 			return items
 		}()}},
 		{name: "identity", reader: &m078InventoryReader{items: []corev1.Pod{func() corev1.Pod { p := valid.DeepCopy(); p.UID = ""; return *p }()}}},
+		{name: "timestamp", reader: &m078InventoryReader{items: []corev1.Pod{func() corev1.Pod {
+			p := valid.DeepCopy()
+			p.CreationTimestamp = metav1.Time{}
+			return *p
+		}()}}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
