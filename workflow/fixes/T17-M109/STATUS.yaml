@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -89,12 +89,28 @@ checks:
     - phorvex/internal/cost
     - phorvex/internal/decision
     inputs_sha256: f1861971bc3bbc0d1479c47d6a8c933bbad31df6a0d4dba6cf0f1c9f68acc4fc
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 332b0ad8c364cd6ddd3332ad1d110380dcdc2c2285dd079061bb53b918cff394
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:50:32+00:00'
+    baseline_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 031ed7b2537afca164e5edac3fc2f65bc9d08315703e106206b70d5a7e8ee5b7
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:50:32+00:00'
+    incident_sha256: 332b0ad8c364cd6ddd3332ad1d110380dcdc2c2285dd079061bb53b918cff394
 fix_id: T17-M109
 issues:
 - M-109
 title: M109 retain configured GPU rotation uncertainty floor
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -139,7 +155,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -155,10 +171,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T13:49:01+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T13:50:36+00:00'
 configuration_history:
 - at: '2026-09-19T12:37:27+00:00'
   by: codex-lead
@@ -219,6 +235,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T13:50:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T13:50:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -230,9 +262,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T17-M109:10:submit
-  from: sol-t17-m109
+  id: T17-M109:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
