@@ -1,6 +1,8 @@
 package scaleprobe
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -26,7 +28,7 @@ func validReport() Report {
 			RequestedAttempts: 20, WarmupTicks: 2, TickTimeoutMS: 30000, TickIntervalMS: 20000, SampleCadence: "forced-due-back-to-back", AuditByteLimit: 2 << 20, AuditRetained: 1, MetricsSink: "bounded labels", TrustFixture: "synthetic",
 		},
 		Samples: samples,
-		Controls: []Control{{Purpose: "deadline-exclusion-and-no-cadence", Sample: Sample{
+		Controls: []Control{{Purpose: "deadline-exclusion-and-no-cadence-after-producer-entry", Sample: Sample{
 			Index: 20, Outcome: "deadline", DurationSec: 0.01, PolicySeconds: map[string]float64{}, RSSBytes: 1, Error: "deadline exceeded",
 		}}},
 		StartupHTTP:     map[string]int64{"cache|WATCH|pods|-": 1},
@@ -98,8 +100,6 @@ func TestM137ScaleReportValidation(t *testing.T) {
 		{name: "missing-api-memory", mutate: func(r *Report) { r.Environment.APIProcessRSSBytes = 0 }},
 		{name: "missing-harness-final", mutate: func(r *Report) { r.Memory.HarnessFinal = 0 }},
 		{name: "missing-heap-baseline", mutate: func(r *Report) { r.Memory.HeapBaseline = 0 }},
-		{name: "missing-harness-slope", mutate: func(r *Report) { r.Memory.HarnessSlopeBytes = 0 }},
-		{name: "missing-heap-slope", mutate: func(r *Report) { r.Memory.HeapSlopeBytes = 0 }},
 		{name: "too-few-samples", mutate: func(r *Report) { r.Samples = r.Samples[:19]; r.Summary = Summarize(r.Samples, 1) }},
 		{name: "incomplete-unclassified", mutate: func(r *Report) { r.Samples[0].Outcome = "deadline"; r.Summary = Summarize(r.Samples, 1) }},
 		{name: "incorrect-summary", mutate: func(r *Report) { r.Summary.P95Seconds = 9 }},
@@ -133,6 +133,31 @@ func TestM137ScaleReportValidation(t *testing.T) {
 func TestM137ScaleReportDecodeRejectsUnknownFields(t *testing.T) {
 	if _, err := Decode(strings.NewReader(`{"schemaVersion":"phorvex.m137.scale.v1","unknown":true}`)); err == nil {
 		t.Fatal("unknown field accepted")
+	}
+}
+
+func TestM137ScaleReportDecodeDistinguishesZeroFromMissingSlope(t *testing.T) {
+	report := validReport()
+	report.Memory.HarnessSlopeBytes = 0
+	report.Memory.HeapSlopeBytes = 0
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Decode(bytes.NewReader(data)); err != nil {
+		t.Fatalf("present zero slopes rejected: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	delete(raw["memory"].(map[string]any), "heapSlopeBytesPerTick")
+	data, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Decode(bytes.NewReader(data)); err == nil {
+		t.Fatal("missing heap slope field accepted")
 	}
 }
 

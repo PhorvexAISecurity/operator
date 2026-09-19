@@ -1,6 +1,7 @@
 package scaleprobe
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -222,14 +223,34 @@ func percentile(sorted []float64, fraction float64) float64 {
 }
 
 func Decode(r io.Reader) (Report, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return Report{}, err
+	}
 	var report Report
-	decoder := json.NewDecoder(r)
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&report); err != nil {
 		return Report{}, err
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return Report{}, errors.New("report must contain exactly one JSON value")
+	}
+	var required struct {
+		Memory *struct {
+			HarnessFinal      *int64   `json:"harnessFinalRSSBytes"`
+			HarnessSlopeBytes *float64 `json:"harnessRSSSlopeBytesPerTick"`
+			HeapBaseline      *uint64  `json:"heapBaselineBytes"`
+			HeapPeak          *uint64  `json:"heapPeakBytes"`
+			HeapFinal         *uint64  `json:"heapFinalBytes"`
+			HeapSlopeBytes    *float64 `json:"heapSlopeBytesPerTick"`
+		} `json:"memory"`
+	}
+	if err := json.Unmarshal(data, &required); err != nil {
+		return Report{}, err
+	}
+	if required.Memory == nil || required.Memory.HarnessFinal == nil || required.Memory.HarnessSlopeBytes == nil || required.Memory.HeapBaseline == nil || required.Memory.HeapPeak == nil || required.Memory.HeapFinal == nil || required.Memory.HeapSlopeBytes == nil {
+		return Report{}, errors.New("required sampled memory fields are missing")
 	}
 	if err := report.Validate(); err != nil {
 		return Report{}, err
@@ -342,7 +363,7 @@ func (r Report) Validate() error {
 	}
 	deadlineControl := false
 	for _, control := range r.Controls {
-		if control.Purpose == "deadline-exclusion-and-no-cadence" && control.Sample.Index == r.Fixture.RequestedAttempts && control.Sample.Outcome == "deadline" && control.Sample.Error != "" && control.Sample.DurationSec >= 0 && !math.IsNaN(control.Sample.DurationSec) && !math.IsInf(control.Sample.DurationSec, 0) && len(control.Sample.PolicySeconds) == 0 && control.Sample.StatusWrites == 0 {
+		if control.Purpose == "deadline-exclusion-and-no-cadence-after-producer-entry" && control.Sample.Index == r.Fixture.RequestedAttempts && control.Sample.Outcome == "deadline" && control.Sample.Error != "" && control.Sample.DurationSec >= 0 && !math.IsNaN(control.Sample.DurationSec) && !math.IsInf(control.Sample.DurationSec, 0) && len(control.Sample.PolicySeconds) == 0 && control.Sample.StatusWrites == 0 {
 			deadlineControl = true
 		}
 	}
@@ -408,8 +429,8 @@ func (r Report) Validate() error {
 	if r.Memory.Scope == "" || r.Memory.HarnessBaseline <= 0 || r.Memory.HarnessPeak <= 0 || r.Memory.HarnessFinal <= 0 || r.Memory.HeapBaseline == 0 || r.Memory.HeapPeak == 0 || r.Memory.HeapFinal == 0 || r.Memory.APIBaseline <= 0 || r.Memory.APIPeak <= 0 || r.Memory.APIFinal <= 0 || r.Memory.EtcdBaseline <= 0 || r.Memory.EtcdPeak <= 0 || r.Memory.EtcdFinal <= 0 {
 		return errors.New("process-scoped memory evidence is required")
 	}
-	if r.Memory.HarnessSlopeBytes == 0 || math.IsNaN(r.Memory.HarnessSlopeBytes) || math.IsInf(r.Memory.HarnessSlopeBytes, 0) || r.Memory.HeapSlopeBytes == 0 || math.IsNaN(r.Memory.HeapSlopeBytes) || math.IsInf(r.Memory.HeapSlopeBytes, 0) {
-		return errors.New("sampled harness and heap memory slopes are required and must be finite")
+	if math.IsNaN(r.Memory.HarnessSlopeBytes) || math.IsInf(r.Memory.HarnessSlopeBytes, 0) || math.IsNaN(r.Memory.HeapSlopeBytes) || math.IsInf(r.Memory.HeapSlopeBytes, 0) {
+		return errors.New("sampled harness and heap memory slopes must be finite")
 	}
 	c := r.Correctness
 	if !c.CacheConverged || c.ProtectedObjectCount != r.Fixture.Pods || !c.GraphEdgesPresent || !c.RBACPresent || !c.TrustedEventPresent || !c.ReceiptPresent || c.DecisionRecords <= 0 || c.SelectedFeasibleRecords <= 0 || !c.CurrentOwnerEligible || !c.ControllerStatusPreserved || !c.NoFalseCadence {

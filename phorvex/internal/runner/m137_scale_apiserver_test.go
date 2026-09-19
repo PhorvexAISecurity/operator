@@ -1048,7 +1048,7 @@ func TestM137ScaleHarness(t *testing.T) {
 	if deadlineErr != nil {
 		deadlineError = deadlineErr.Error()
 	}
-	deadlineControl := scaleprobe.Control{Purpose: "deadline-exclusion-and-no-cadence", Sample: scaleprobe.Sample{Index: cfg.samples, Outcome: deadlineOutcome, DurationSec: deadlineSumAfter - deadlineSumBefore, PolicySeconds: map[string]float64{}, RSSBytes: m137RSS(os.Getpid()), Error: deadlineError}}
+	deadlineControl := scaleprobe.Control{Purpose: "deadline-exclusion-and-no-cadence-after-producer-entry", Sample: scaleprobe.Sample{Index: cfg.samples, Outcome: deadlineOutcome, DurationSec: deadlineSumAfter - deadlineSumBefore, PolicySeconds: map[string]float64{}, RSSBytes: m137RSS(os.Getpid()), Error: deadlineError}}
 	controlHTTP := counts.snapshot()
 
 	var memAfter kruntimeMemStats
