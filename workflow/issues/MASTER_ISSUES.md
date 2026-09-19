@@ -2746,7 +2746,7 @@ Severity: HIGH · Tier: unassigned · Fixes: T14-M178
 
 ### M-179 · Calibration sample compaction retains expired comparison references · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: none
+Severity: MEDIUM · Tier: unassigned · Fixes: T20-M179
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONTROL` — anatomy locus review required.
