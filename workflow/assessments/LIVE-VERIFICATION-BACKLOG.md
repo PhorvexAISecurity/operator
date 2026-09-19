@@ -121,3 +121,7 @@ The10:56 UTC [read-only checkpoint report](20260916-local-continuation/live/2026
 ## September19 continuation update
 
 Tier14 PR232 is merged and manager source inclusion is now independently observed on0.4.130. The owner explicitly permits later source tiers after available live checks, with unresolved behavior and DevOps changes retained. Historical statements above requiring a blanket Tier15 stop are superseded for scheduling only. Tier15 M62 and Tier16 M63 were already source-delivered in Tier11; LV-14 still owns their unavailable real traffic/recovery controls.
+
+## Tier20 source review
+
+M137 timer/status/graph fixes and M179 expired-reference release are accepted locally; [Tier20 report](20260916-local-continuation/tier20/REPORT.md) retains exact scope and all failed scale evidence. LV25/LV26 remain pending. The1000Pod full-tick criterion, synchronous audit CPU and delayed cancellation remain OPEN SOURCE; no deployment/health observation closes them. All prior source and live residuals remain.

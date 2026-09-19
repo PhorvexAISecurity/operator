@@ -1224,22 +1224,33 @@ fixes:
     issues:
     - M-179
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t20-m179
     head_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+  T20-M137:
+    directory: fixes/T20-M137
+    aliases: []
+    issues:
+    - M-137
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t20-m137
+    head_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
   T22-M078:
     directory: fixes/T22-M078
     aliases: []
     issues:
     - M-78
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t22-m078
-    head_sha: null
+    head_sha: 24f967dbb57709821fc74279c66add087c13f725
   T22-M180:
     directory: fixes/T22-M180
     aliases: []

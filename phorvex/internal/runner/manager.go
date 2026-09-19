@@ -1095,7 +1095,24 @@ func (m *Manager) reconcileWedged(ctx context.Context, initial KillSwitchObserva
 }
 
 // tick builds one cluster snapshot and processes all due tenants.
-func (m *Manager) tick(ctx context.Context) tickResult {
+func (m *Manager) tick(ctx context.Context) (result tickResult) {
+	started := time.Now()
+	defer func() {
+		outcome := metrics.ManagerTickFinished
+		switch result {
+		case tickNoSnapshot:
+			outcome = metrics.ManagerTickNoSnapshot
+		case tickSnapshotFailed:
+			outcome = metrics.ManagerTickSnapshotFailed
+		case tickInterrupted:
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				outcome = metrics.ManagerTickDeadline
+			} else {
+				outcome = metrics.ManagerTickCanceled
+			}
+		}
+		metrics.RecordManagerTick(outcome, time.Since(started))
+	}()
 	if ctx.Err() != nil {
 		return tickInterrupted
 	}

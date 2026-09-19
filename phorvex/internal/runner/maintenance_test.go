@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,7 +31,7 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 		}
 	}
 	ready := []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
-	old := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "old", UID: "old-uid", ResourceVersion: "7", Labels: map[string]string{"phorvex.ai/swap-group": "g", "phorvex.ai/role": "leader"}}, Status: corev1.PodStatus{Conditions: ready}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "serve", Image: "fixture"}}}}
+	old := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "old", UID: "old-uid", ResourceVersion: "7", CreationTimestamp: metav1.NewTime(time.Unix(1, 0)), Labels: map[string]string{"phorvex.ai/swap-group": "g", "phorvex.ai/role": "leader"}}, Status: corev1.PodStatus{Conditions: ready}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "serve", Image: "fixture"}}}}
 	shadow := old.DeepCopy()
 	shadow.Name, shadow.UID, shadow.Labels["phorvex.ai/role"], shadow.Labels["phorvex.ai/model-loaded"] = "new", "new-uid", "warm-shadow", "true"
 	for _, p := range []*corev1.Pod{old, shadow} {
