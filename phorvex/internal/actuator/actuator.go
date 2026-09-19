@@ -186,6 +186,13 @@ type Actuator interface {
 	SupportsAction(ctx context.Context, a model.Action, t Target) (ok bool, why string)
 }
 
+// PolicyBindingLifecycle is the optional owner-lifecycle seam for actuators that
+// retain local policy authorization. Manager invokes it only when an exact policy
+// UID has reached the serialized lifecycle-drain boundary.
+type PolicyBindingLifecycle interface {
+	RetirePolicyBinding(policyUID string)
+}
+
 // RuleTypeFor maps a Phorvex action to its controlled SecurityEvent rule type.
 func RuleTypeFor(a model.Action) string {
 	switch a {

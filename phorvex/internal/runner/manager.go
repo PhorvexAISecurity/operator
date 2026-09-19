@@ -825,6 +825,10 @@ func (m *Manager) DrainLifecycle() {
 			continue
 		}
 		stores := 0
+		if lifecycle, ok := m.Actuator.(actuator.PolicyBindingLifecycle); ok && ev.uid != "" {
+			lifecycle.RetirePolicyBinding(ev.uid)
+			stores++
+		}
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 			ce.ForgetOwner(ev.owner) // cost bucket + belief prior + stage clock + alias retirement
 			stores += 3
