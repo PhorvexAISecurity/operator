@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -31,13 +31,70 @@ checks:
     source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
     at: '2026-09-19T15:46:13+00:00'
     baseline_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  preflight:
+    result: PASS
+    by: sol-t20-m179
+    artifact: evidence/preflight/receipt.json
+    sha256: 41e37be9eb67a84bf7d17c8c0c431c37ec29db963a30e0cfd52209ade9ddda27
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T15:57:46+00:00'
+  implementation:
+    result: PASS
+    by: sol-t20-m179
+    artifact: 04-diff.patch
+    sha256: 268093e3f57fb88aaf41a5ae18e0e36f7b910580e8fcb13e733a1766e6a26fad
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T15:57:46+00:00'
+  l0:
+    result: PASS
+    by: sol-t20-m179
+    artifact: evidence/preflight/receipt.json
+    sha256: 41e37be9eb67a84bf7d17c8c0c431c37ec29db963a30e0cfd52209ade9ddda27
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T15:57:46+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: b5dc1b150426af94600931a1090bf7d2a476a2beffe10d81517e089321f22c86
+  l1:
+    result: PASS
+    by: sol-t20-m179
+    artifact: evidence/worker/verify-final.log
+    sha256: 1efbac6a9bb976e19b03f5c492aff1970b4ca8e97477f5d1f794cbc78e3639ef
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T15:57:46+00:00'
+    inputs:
+    - phorvex/internal/calib
+    inputs_sha256: 343b960c896fb4af22a5fa855d37d4758665c18b2d053a2b1e9b480840b2166e
+  l2:
+    result: PASS
+    by: sol-t20-m179
+    artifact: evidence/preflight/run-1789832980621216331/go-phorvex.log
+    sha256: e9d9c66e5c162f4393406807117ee69ff490218eca62872afaca745ec6727978
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T15:57:46+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: f56a8a1a12a21fb837662d6342e73150de3988d0dc0d26eee865c463a44c372e
+  positive_control:
+    result: PASS
+    by: sol-t20-m179
+    artifact: evidence/worker/verify-final.log
+    sha256: 1efbac6a9bb976e19b03f5c492aff1970b4ca8e97477f5d1f794cbc78e3639ef
+    source_sha: 60dfb761752b898eb96b8f847b69a2d244041830
+    at: '2026-09-19T15:57:46+00:00'
+    inputs:
+    - phorvex/internal/calib
+    inputs_sha256: 343b960c896fb4af22a5fa855d37d4758665c18b2d053a2b1e9b480840b2166e
 fix_id: T20-M179
 issues:
 - M-179
 title: Release expired calibration backing-array references without changing valid
   history
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -61,7 +118,7 @@ blind_derivation:
 implementation:
   branch: fix/t20-m179
   base_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
-  head_sha: null
+  head_sha: 60dfb761752b898eb96b8f847b69a2d244041830
   stacked_on: []
 pull_request:
   url: null
@@ -83,12 +140,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -98,9 +155,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t20-m179
-  action: Implement signed plan; full accepted Tier19 before final verification
-updated_at: '2026-09-19T15:46:13+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-19T15:57:50+00:00'
 configuration_history:
 - at: '2026-09-19T14:51:33+00:00'
   by: codex-lead
@@ -119,6 +177,11 @@ configuration_history:
   - baseline
   - implementation
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T15:57:46+00:00'
+  by: sol-t20-m179
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -134,6 +197,22 @@ transitions:
   by: codex-lead
   artifact: 03-decision.md
   note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T15:57:46+00:00'
+  by: sol-t20-m179
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T15:57:48+00:00'
+  by: sol-t20-m179
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -153,3 +232,10 @@ check_history:
   sha256: 916a9a3d51235e62dadfad8caaeb360daa00a8c6d29f8ea3ce0db2baa1703404
   source_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
   at: '2026-09-19T14:51:38+00:00'
+handoff:
+  id: T20-M179:10:submit
+  from: sol-t20-m179
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 10
