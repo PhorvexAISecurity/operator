@@ -56,6 +56,15 @@ func LoadAdapterSourcesFile(path string) (AdapterSources, error) {
 	if err := adapterRejectDuplicateJSONFields(limited.Bytes()); err != nil {
 		return nil, fmt.Errorf("adapter clean sources: %w", err)
 	}
+	if err := validateExactObjectArrayJSONKeys(
+		limited.Bytes(),
+		"sources",
+		"adapter source",
+		map[string]struct{}{"version": {}, "sources": {}},
+		map[string]struct{}{"namespace": {}, "adapter": {}, "source": {}},
+	); err != nil {
+		return nil, fmt.Errorf("adapter clean sources: %w", err)
+	}
 	dec := json.NewDecoder(bytes.NewReader(limited.Bytes()))
 	dec.DisallowUnknownFields()
 	var doc adapterSourcesDocument
