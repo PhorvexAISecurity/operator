@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -104,12 +104,19 @@ checks:
     source_sha: 46a77f9bc63dd812b745a789916feed6d8903599
     at: '2026-09-19T14:24:36+00:00'
     incident_sha256: 848203d3d91f1e037cdbdd240a07ce94c651d38dd3c8deede77ad290334a19a3
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 020defef8122ee756a88a9dfbeb9f7f77bd4da0a87703af22801b2bbfdde2eea
+    source_sha: 46a77f9bc63dd812b745a789916feed6d8903599
+    at: '2026-09-19T14:52:44+00:00'
 fix_id: T18-M128
 issues:
 - M-128
 title: Deterministic due-policy order and truthful interrupted-tick cadence
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,11 +143,11 @@ implementation:
   head_sha: 46a77f9bc63dd812b745a789916feed6d8903599
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/235
+  reviewed_head: 0e7766e7a9dcca6ba5f8557f44b61fe54797158a
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -171,9 +178,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T14:24:40+00:00'
+  action: PR235 open, non-draft, main target. Continue Tier19 source; DevOps deployment/behavior
+    pending, M68 full functionality open, hosted billing refusal retained.
+updated_at: '2026-09-19T14:52:44+00:00'
 configuration_history:
 - at: '2026-09-19T13:13:19+00:00'
   by: codex-lead
@@ -196,6 +203,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T14:52:42+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -244,6 +257,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T14:52:44+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T18-M128:9:review
