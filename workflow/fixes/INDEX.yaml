@@ -1213,7 +1213,7 @@ fixes:
     issues:
     - M-131
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t19-m131

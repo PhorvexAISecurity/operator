@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -101,12 +101,28 @@ checks:
     - phorvex/internal/model
     - phorvex/internal/runner
     inputs_sha256: a58ed9f9a5d3bf01292e47ed8de1250ab226d9a44ab9090db5b0c694bc1517ac
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a1486cc1c6ebc701d99600a66b75efc24980c1ffe979a558a1c728a842ce42fb
+    source_sha: 78f5c81193c969ae6b877ecd144de5abca1a1f23
+    at: '2026-09-19T15:17:07+00:00'
+    baseline_sha: 1439bac857af3739991cdfc894f72e5cdb0a1ba3
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 42e58fe9ec21b06aec260a33c203a3ca500bae19a8ba111cb2427b6ccd8007c6
+    source_sha: 78f5c81193c969ae6b877ecd144de5abca1a1f23
+    at: '2026-09-19T15:17:07+00:00'
+    incident_sha256: a1486cc1c6ebc701d99600a66b75efc24980c1ffe979a558a1c728a842ce42fb
 fix_id: T19-M131
 issues:
 - M-131
 title: Publish rejected decision ticks through truthful metrics audit and status
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -151,7 +167,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -167,10 +183,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T15:12:26+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T15:17:11+00:00'
 configuration_history:
 - at: '2026-09-19T13:55:10+00:00'
   by: codex-lead
@@ -227,6 +243,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T15:17:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T15:17:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -245,9 +277,9 @@ check_history:
   source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
   at: '2026-09-19T13:55:15+00:00'
 handoff:
-  id: T19-M131:10:submit
-  from: sol-t19-m131
+  id: T19-M131:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
