@@ -1,0 +1,6 @@
+=== RUN   TestCheckpointExpiredCalibrationReferencesAreReleased
+    checkpoint_retention_probe_test.go:99: expired comparison references remain reachable in Runtime.samples backing array: got 100 want 0
+--- FAIL: TestCheckpointExpiredCalibrationReferencesAreReleased (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/calib	0.022s
+FAIL
