@@ -645,6 +645,47 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			t.Fatalf("completed definitely-unsent restoration retained receipt: count=%d err=%v", len(journals.Items), err)
 		}
 	})
+	t.Run("promoted-not-ready-restores-old-through-controller", func(t *testing.T) {
+		fixture := m067NewAPIAvailabilityFixture(t, ctx, c, "next-not-ready", "definitely-unsent", 3, 2)
+		dropped := false
+		guard := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || dropped || !strings.Contains(cm.Data["receipt"], `"phase":"drain-unsent"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, cm, opts...); err != nil {
+				return err
+			}
+			dropped = true
+			return m067SetPodReady(ctx, inner, fixture.next, false)
+		}})
+		fixture.native.Client, fixture.native.Reader = guard, guard
+		result, enactErr := fixture.native.Actuate(ctx, fixture.request())
+		if enactErr == nil || result.Emitted || !dropped || !strings.Contains(enactErr.Error(), "routing restored") {
+			t.Fatalf("actual API next-readiness compensation not completed: result=%+v err=%v dropped=%t", result, enactErr, dropped)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 0 {
+			t.Fatalf("definitely-unsent actual transport reached backend POST: posts=%d requests=%v", posts, requests)
+		}
+		oldCurrent, nextCurrent, thirdCurrent := &corev1.Pod{}, &corev1.Pod{}, &corev1.Pod{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), oldCurrent); err != nil || oldCurrent.UID != fixture.old.UID || oldCurrent.Labels[labelRole] != roleLeader || !podReady(oldCurrent) {
+			t.Fatalf("actual controller path did not restore healthy old UID: %v %+v", err, oldCurrent)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.next), nextCurrent); err != nil || nextCurrent.UID != fixture.next.UID || nextCurrent.Labels[labelRole] != roleShadow || podReady(nextCurrent) {
+			t.Fatalf("actual controller path did not retain inactive exact shadow: %v %+v", err, nextCurrent)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.third), thirdCurrent); err != nil || thirdCurrent.UID != fixture.third.UID || thirdCurrent.Labels[labelRole] != roleLeader || !podReady(thirdCurrent) {
+			t.Fatalf("actual controller path changed third serving member: %v %+v", err, thirdCurrent)
+		}
+		members, err := routeEndpointMembers(ctx, c, fixture.service)
+		if err != nil || len(members) != 2 || !slices.Contains(members, string(fixture.old.UID)) || !slices.Contains(members, string(fixture.third.UID)) || slices.Contains(members, string(fixture.next.UID)) {
+			t.Fatalf("actual EndpointSlice active membership did not match exact Ready leaders: members=%v err=%v", members, err)
+		}
+		var journals corev1.ConfigMapList
+		if err := c.List(ctx, &journals, client.InNamespace(fixture.opns), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(journals.Items) != 0 {
+			t.Fatalf("completed actual API next-readiness compensation retained receipt: count=%d err=%v", len(journals.Items), err)
+		}
+	})
 	t.Run("secure-profile-drift-retains-compensation", func(t *testing.T) {
 		fixture := m067NewAPIFixture(t, ctx, c, "profile", "definitely-unsent")
 		lost := false

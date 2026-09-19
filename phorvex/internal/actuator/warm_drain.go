@@ -310,7 +310,9 @@ func warmDrainRetiredAvailabilityCurrent(ctx context.Context, reader client.Read
 	return nil
 }
 
-func warmDrainCurrentPair(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, *corev1.Pod, error) {
+// warmDrainBoundPair revalidates the complete recorded pair authority without
+// assigning one readiness policy to both forward and compensation paths.
+func warmDrainBoundPair(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, *corev1.Pod, error) {
 	pol, err := receiptAuthority(ctx, ec.Reader, r, model.Action(r.Kind))
 	if err != nil {
 		return nil, nil, err
@@ -331,8 +333,8 @@ func warmDrainCurrentPair(ctx context.Context, ec EnactCtx, r operationReceipt) 
 	if err := warmDrainRolesCurrent(ctx, ec.Reader, r); err != nil {
 		return nil, nil, err
 	}
-	if !podReady(old) || !podReady(next) || old.ResourceVersion == "" || next.ResourceVersion == "" {
-		return nil, nil, fmt.Errorf("recorded warm pair identity/readiness changed")
+	if old.ResourceVersion == "" || next.ResourceVersion == "" {
+		return nil, nil, fmt.Errorf("recorded warm pair identity changed")
 	}
 	if normalizeServiceAccount(old.Spec.ServiceAccountName) != r.ServingServiceAccount || normalizeServiceAccount(next.Spec.ServiceAccountName) != r.ServingServiceAccount {
 		return nil, nil, fmt.Errorf("recorded warm pair ServiceAccount changed")
@@ -342,6 +344,32 @@ func warmDrainCurrentPair(ctx context.Context, ec EnactCtx, r operationReceipt) 
 	}
 	if warmDrainEndpointConfigDigest(old, r.ServingLegacy) != r.EndpointConfigSHA256 {
 		return nil, nil, fmt.Errorf("recorded old serving endpoint binding changed")
+	}
+	return old, next, nil
+}
+
+// warmDrainCurrentPair retains the strict forward readiness contract used to
+// claim/send a drain and to retire the old UID after confirmation.
+func warmDrainCurrentPair(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, *corev1.Pod, error) {
+	old, next, err := warmDrainBoundPair(ctx, ec, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !podReady(old) || !podReady(next) {
+		return nil, nil, fmt.Errorf("recorded warm pair readiness changed")
+	}
+	return old, next, nil
+}
+
+// warmDrainRestorationPair permits an inactive exact promoted Pod while
+// requiring the old Pod whose route is being restored to remain healthy.
+func warmDrainRestorationPair(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, *corev1.Pod, error) {
+	old, next, err := warmDrainBoundPair(ctx, ec, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !podReady(old) {
+		return nil, nil, fmt.Errorf("recorded old warm Pod is not Ready for route restoration")
 	}
 	return old, next, nil
 }
@@ -406,13 +434,6 @@ func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	return warmDrainRestored, nil
 }
 
-func warmExpectedBridge(r operationReceipt) []string {
-	out := append([]string(nil), r.WarmSelectedUIDs...)
-	out = append(out, r.NewUID)
-	sort.Strings(out)
-	return out
-}
-
 func waitWarmRouteMembers(ctx context.Context, ec EnactCtx, r operationReceipt, expected []string) error {
 	timeout, interval := routeTiming(ec)
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -453,6 +474,60 @@ func waitWarmRouteMembers(ctx context.Context, ec EnactCtx, r operationReceipt, 
 	}
 }
 
+// warmCompensationActiveMembers derives the exact active route membership from
+// the authoritative recorded pool. Only Ready leaders in the admitted original
+// set plus the exact promoted UID are eligible; unrelated Ready shadows cannot
+// satisfy route convergence.
+func warmCompensationActiveMembers(ctx context.Context, reader client.Reader, r operationReceipt) ([]string, error) {
+	if _, err := receiptAuthority(ctx, reader, r, model.Action(r.Kind)); err != nil {
+		return nil, err
+	}
+	pods, err := warmDrainPoolSnapshot(ctx, reader, r)
+	if err != nil {
+		return nil, err
+	}
+	eligible := make(map[string]bool, len(r.WarmSelectedUIDs)+1)
+	for _, uid := range r.WarmSelectedUIDs {
+		eligible[uid] = true
+	}
+	eligible[r.NewUID] = true
+	members := make([]string, 0, len(eligible))
+	for i := range pods {
+		pod := &pods[i]
+		uid := string(pod.UID)
+		if eligible[uid] && pod.Labels[labelRole] == roleLeader && podReady(pod) {
+			members = append(members, uid)
+		}
+	}
+	sort.Strings(members)
+	return members, nil
+}
+
+// observeWarmCompensationRoute binds EndpointSlice convergence to readiness
+// sampled from the exact recorded pool on both sides of the observation. These
+// separate Kubernetes reads are deliberately not claimed as an atomic traffic
+// snapshot.
+func observeWarmCompensationRoute(ctx context.Context, ec EnactCtx, r operationReceipt) error {
+	expected, err := warmCompensationActiveMembers(ctx, ec.Reader, r)
+	if err != nil {
+		return err
+	}
+	if !containsUID(expected, r.OldUID) {
+		return fmt.Errorf("restored old UID is not an active recorded route member")
+	}
+	if err := waitWarmRouteMembers(ctx, ec, r, expected); err != nil {
+		return err
+	}
+	current, err := warmCompensationActiveMembers(ctx, ec.Reader, r)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(current, expected) {
+		return fmt.Errorf("warm route readiness changed around observation: before=%v after=%v", expected, current)
+	}
+	return nil
+}
+
 func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) error {
 	if r.Version != warmDrainReceiptVersion || r.DrainAttempts <= 0 || r.DrainAttempts > warmDrainMaxAttempts {
 		return fmt.Errorf("warm routing restoration lacks definite-unsent provenance")
@@ -464,7 +539,7 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 		}
 	}
 	if r.Phase == "restore-old-claimed" {
-		old, next, err := warmDrainCurrentPair(ctx, ec, *r)
+		old, next, err := warmDrainRestorationPair(ctx, ec, *r)
 		if err != nil {
 			return err
 		}
@@ -478,10 +553,17 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 				return fmt.Errorf("restore exact old leader route: %w", err)
 			}
 		}
-		if err := waitWarmRouteMembers(ctx, ec, *r, warmExpectedBridge(*r)); err != nil {
+		old, next, err = warmDrainRestorationPair(ctx, ec, *r)
+		if err != nil {
+			return fmt.Errorf("warm pair authority changed after old-route write: %w", err)
+		}
+		if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleLeader {
+			return fmt.Errorf("warm pair roles changed after old-route write")
+		}
+		if err := observeWarmCompensationRoute(ctx, ec, *r); err != nil {
 			return err
 		}
-		old, next, err = warmDrainCurrentPair(ctx, ec, *r)
+		old, next, err = warmDrainRestorationPair(ctx, ec, *r)
 		if err != nil {
 			return fmt.Errorf("warm pair authority changed after old-route observation: %w", err)
 		}
@@ -500,7 +582,7 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 		}
 	}
 	if r.Phase == "restore-shadow-claimed" {
-		old, next, err := warmDrainCurrentPair(ctx, ec, *r)
+		old, next, err := warmDrainBoundPair(ctx, ec, *r)
 		if err != nil {
 			return err
 		}
@@ -517,10 +599,10 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 				return fmt.Errorf("restore exact shadow route: %w", err)
 			}
 		}
-		if err := waitWarmRouteMembers(ctx, ec, *r, r.WarmSelectedUIDs); err != nil {
+		if err := observeWarmCompensationRoute(ctx, ec, *r); err != nil {
 			return err
 		}
-		old, next, err = warmDrainCurrentPair(ctx, ec, *r)
+		old, next, err = warmDrainBoundPair(ctx, ec, *r)
 		if err != nil {
 			return fmt.Errorf("warm pair authority changed after shadow-route observation: %w", err)
 		}
@@ -535,7 +617,7 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 	if r.Phase != "routing-restored" {
 		return fmt.Errorf("warm routing restoration phase %q is retained", r.Phase)
 	}
-	old, next, err := warmDrainCurrentPair(ctx, ec, *r)
+	old, next, err := warmDrainBoundPair(ctx, ec, *r)
 	if err != nil {
 		return fmt.Errorf("restored warm pair authority changed before receipt cleanup: %w", err)
 	}
@@ -545,7 +627,7 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmOriginalServingSet); err != nil {
 		return fmt.Errorf("restored availability insufficient before receipt cleanup: %w", err)
 	}
-	if err := waitWarmRouteMembers(ctx, ec, *r, r.WarmSelectedUIDs); err != nil {
+	if err := observeWarmCompensationRoute(ctx, ec, *r); err != nil {
 		return err
 	}
 	if err := journalFinish(ctx, ec, cm); err != nil {

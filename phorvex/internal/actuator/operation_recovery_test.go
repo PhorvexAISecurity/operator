@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -976,6 +978,73 @@ func m067SyncFakeRoute(ctx context.Context, c client.Client, old *corev1.Pod) er
 	return c.Update(ctx, slice)
 }
 
+func m067CompensationBoundaryClient(base client.Client, old, next, third *corev1.Pod, mutate func(context.Context, client.WithWatch) error) (client.Client, *bool) {
+	mutated := false
+	return interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if pod, ok := obj.(*corev1.Pod); ok {
+				if err := inner.Update(ctx, pod, opts...); err != nil {
+					return err
+				}
+				if pod.UID == old.UID || pod.UID == next.UID || (third != nil && pod.UID == third.UID) {
+					return m067SyncFakeRoute(ctx, inner, old)
+				}
+				return nil
+			}
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || mutate == nil || mutated || !strings.Contains(cm.Data["receipt"], `"phase":"drain-unsent"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, cm, opts...); err != nil {
+				return err
+			}
+			if err := mutate(ctx, inner); err != nil {
+				return err
+			}
+			mutated = true
+			return m067SyncFakeRoute(ctx, inner, old)
+		},
+		Patch: func(ctx context.Context, inner client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if err := inner.Patch(ctx, obj, patch, opts...); err != nil {
+				return err
+			}
+			pod, ok := obj.(*corev1.Pod)
+			if !ok || (pod.UID != old.UID && pod.UID != next.UID && (third == nil || pod.UID != third.UID)) {
+				return nil
+			}
+			return m067SyncFakeRoute(ctx, inner, old)
+		},
+	}), &mutated
+}
+
+func m067AssertFakeRouteUIDs(t *testing.T, ctx context.Context, c client.Client, old *corev1.Pod, want ...*corev1.Pod) {
+	t.Helper()
+	service := &corev1.Service{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: old.Namespace, Name: old.Annotations[annoRouteService]}, service); err != nil {
+		t.Fatal(err)
+	}
+	members, err := routeEndpointMembers(ctx, c, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantUIDs := make([]string, 0, len(want))
+	for _, pod := range want {
+		wantUIDs = append(wantUIDs, string(pod.UID))
+	}
+	sort.Strings(wantUIDs)
+	if !reflect.DeepEqual(members, wantUIDs) {
+		t.Fatalf("active route members=%v want exact recorded Ready leaders=%v", members, wantUIDs)
+	}
+}
+
+func m067AssertNoFakeReceipt(t *testing.T, ctx context.Context, c client.Client) {
+	t.Helper()
+	var receipts corev1.ConfigMapList
+	if err := c.List(ctx, &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(receipts.Items) != 0 {
+		t.Fatalf("completed compensation retained receipt: count=%d err=%v", len(receipts.Items), err)
+	}
+}
+
 func TestM067AvailabilityAdmissionUsesOnlyProspectiveServingUIDs(t *testing.T) {
 	t.Run("equal-floor-two", func(t *testing.T) {
 		ctx := context.Background()
@@ -1307,6 +1376,164 @@ func TestM067DefinitelyUnsentRestoresOldBeforeAvailabilityCanBlockNewDemotion(t 
 	var receipts corev1.ConfigMapList
 	if err := base.List(ctx, &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(receipts.Items) != 0 {
 		t.Fatalf("completed availability recovery retained receipt: count=%d err=%v", len(receipts.Items), err)
+	}
+}
+
+func TestM067DefinitelyUnsentCompensationTreatsPromotedReadinessDirectionally(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		dropNext, dropThird bool
+		wantFinished        bool
+	}{
+		{name: "unchanged-ready-positive", wantFinished: true},
+		{name: "promoted-not-ready-original-floor-met", dropNext: true, wantFinished: true},
+		{name: "promoted-and-third-not-ready-retained", dropNext: true, dropThird: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			base, old, next, third := m067ThreeMemberPool(t)
+			if err := m067SetPolicyFloor(ctx, base, 2); err != nil {
+				t.Fatal(err)
+			}
+			var mutate func(context.Context, client.WithWatch) error
+			if tc.dropNext || tc.dropThird {
+				mutate = func(ctx context.Context, inner client.WithWatch) error {
+					if tc.dropNext {
+						if err := m067SetPodReady(ctx, inner, next, false); err != nil {
+							return err
+						}
+					}
+					if tc.dropThird {
+						return m067SetPodReady(ctx, inner, third, false)
+					}
+					return nil
+				}
+			}
+			guard, changed := m067CompensationBoundaryClient(base, old, next, third, mutate)
+			vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+			ec := EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}
+			result, enactErr := (warmSwapHandler{}).Enact(ctx, ec, boundReq(old, model.ActionWarmSwap))
+			if enactErr == nil || result.MutationKind != "swap" || vllm.drainCalls != 1 || *changed != (tc.dropNext || tc.dropThird) {
+				t.Fatalf("directional compensation producer not exercised: result=%+v err=%v calls=%d changed=%t", result, enactErr, vllm.drainCalls, *changed)
+			}
+			oldCurrent, nextCurrent, thirdCurrent := &corev1.Pod{}, &corev1.Pod{}, &corev1.Pod{}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); err != nil || oldCurrent.UID != old.UID || oldCurrent.Labels[labelRole] != roleLeader || !podReady(oldCurrent) {
+				t.Fatalf("healthy old capacity was not restored first: %v %+v", err, oldCurrent)
+			}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(third), thirdCurrent); err != nil || thirdCurrent.UID != third.UID || thirdCurrent.Labels[labelRole] != roleLeader || podReady(thirdCurrent) == tc.dropThird {
+				t.Fatalf("third recorded member changed unexpectedly: %v %+v", err, thirdCurrent)
+			}
+			if tc.wantFinished {
+				if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.UID != next.UID || nextCurrent.Labels[labelRole] != roleShadow || podReady(nextCurrent) == tc.dropNext {
+					t.Fatalf("promoted member did not return to exact shadow state: %v %+v", err, nextCurrent)
+				}
+				m067AssertFakeRouteUIDs(t, ctx, base, old, old, third)
+				m067AssertNoFakeReceipt(t, ctx, base)
+				return
+			}
+
+			if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.UID != next.UID || nextCurrent.Labels[labelRole] != roleLeader || podReady(nextCurrent) {
+				t.Fatalf("below-floor compensation reduced the promoted member: %v %+v", err, nextCurrent)
+			}
+			m067AssertFakeRouteUIDs(t, ctx, base, old, old)
+			receipt := m067ReadReceipt(t, ctx, base, old)
+			if receipt.Phase != "restore-shadow-claimed" || receipt.DrainAttempts != 1 {
+				t.Fatalf("below-floor compensation did not retain the exact obligation: %+v", receipt)
+			}
+			if err := m067SetPodReady(ctx, base, third, true); err != nil {
+				t.Fatal(err)
+			}
+			if err := m067SyncFakeRoute(ctx, base, old); err != nil {
+				t.Fatal(err)
+			}
+			native := NewNativeActuator(guard)
+			native.Reader, native.JournalNamespace, native.RecoveryVLLM = guard, "operator", vllm
+			native.RouteObservationTimeout, native.RouteObservationInterval = 50*time.Millisecond, time.Millisecond
+			events, recoverErr := native.RecoverOperations(ctx, false)
+			if recoverErr != nil || len(events) != 1 || events[0].Err != nil || !strings.Contains(events[0].Effect, "routing roles restored") {
+				t.Fatalf("restored original floor did not finish compensation: events=%+v err=%v", events, recoverErr)
+			}
+			if vllm.drainCalls != 1 {
+				t.Fatalf("retained compensation replayed the definitely-unsent drain: calls=%d", vllm.drainCalls)
+			}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleShadow || podReady(nextCurrent) {
+				t.Fatalf("recovered compensation did not demote exact inactive promoted UID: %v %+v", err, nextCurrent)
+			}
+			m067AssertFakeRouteUIDs(t, ctx, base, old, old, third)
+			m067AssertNoFakeReceipt(t, ctx, base)
+		})
+	}
+}
+
+func TestM067CompensationReadinessExceptionPreservesHealthAndAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(context.Context, client.WithWatch, *corev1.Pod, *corev1.Pod) error
+	}{
+		{name: "old-not-ready", mutate: func(ctx context.Context, c client.WithWatch, old, _ *corev1.Pod) error {
+			return m067SetPodReady(ctx, c, old, false)
+		}},
+		{name: "next-uid", mutate: func(ctx context.Context, c client.WithWatch, _, next *corev1.Pod) error {
+			if err := m067SetPodReady(ctx, c, next, false); err != nil {
+				return err
+			}
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+				return err
+			}
+			if err := c.Delete(ctx, current); err != nil {
+				return err
+			}
+			replacement := current.DeepCopy()
+			replacement.UID, replacement.ResourceVersion = "foreign-next-uid", ""
+			return c.Create(ctx, replacement)
+		}},
+		{name: "next-role", mutate: func(ctx context.Context, c client.WithWatch, _, next *corev1.Pod) error {
+			if err := m067SetPodReady(ctx, c, next, false); err != nil {
+				return err
+			}
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+				return err
+			}
+			current.Labels[labelRole] = roleShadow
+			return c.Update(ctx, current)
+		}},
+		{name: "next-profile", mutate: func(ctx context.Context, c client.WithWatch, _, next *corev1.Pod) error {
+			if err := m067SetPodReady(ctx, c, next, false); err != nil {
+				return err
+			}
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+				return err
+			}
+			current.Spec.ServiceAccountName = "foreign-profile"
+			return c.Update(ctx, current)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			base, old, next, third := m067ThreeMemberPool(t)
+			if err := m067SetPolicyFloor(ctx, base, 2); err != nil {
+				t.Fatal(err)
+			}
+			guard, changed := m067CompensationBoundaryClient(base, old, next, third, func(ctx context.Context, c client.WithWatch) error {
+				return tc.mutate(ctx, c, old, next)
+			})
+			vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+			result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+			if enactErr == nil || result.MutationKind != "swap" || !*changed || vllm.drainCalls != 1 {
+				t.Fatalf("compensation authority boundary not exercised: result=%+v err=%v changed=%t calls=%d", result, enactErr, *changed, vllm.drainCalls)
+			}
+			oldCurrent := &corev1.Pod{}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); err != nil || oldCurrent.UID != old.UID || oldCurrent.Labels[labelRole] != roleRetiring {
+				t.Fatalf("invalid compensation authority restored old route: %v %+v", err, oldCurrent)
+			}
+			receipt := m067ReadReceipt(t, ctx, base, old)
+			if receipt.Phase != "restore-old-claimed" || receipt.DrainAttempts != 1 {
+				t.Fatalf("invalid compensation authority changed retained claim: %+v", receipt)
+			}
+		})
 	}
 }
 
