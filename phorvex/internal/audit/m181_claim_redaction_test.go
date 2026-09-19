@@ -100,9 +100,9 @@ func TestM181LoggerRedactsClaimBuildMetadataAtBothProducerShapes(t *testing.T) {
 			t.Run(tc.name+"/"+shape, func(t *testing.T) {
 				trace := &model.DecisionTraceV2{
 					SchemaVersion: model.DecisionTraceSchemaV2,
-					DecisionID: "decision-ordinary",
-					BrainImage: tc.image,
-					GitSHA: tc.sha,
+					DecisionID:    "decision-ordinary",
+					BrainImage:    tc.image,
+					GitSHA:        tc.sha,
 				}
 				decision := model.Decision{
 					Tenant: "tenant-fixture", Namespace: "namespace-fixture", Pod: "pod-fixture",

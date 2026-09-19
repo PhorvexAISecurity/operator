@@ -37,7 +37,7 @@ func TestM181OwnerReconstructionRedactsLegacyRawClaim(t *testing.T) {
 			}},
 		},
 	} {
-			t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			beforeClaim := tc.rec.Claim
 			var beforeIDs []string
 			if beforeClaim != nil {
