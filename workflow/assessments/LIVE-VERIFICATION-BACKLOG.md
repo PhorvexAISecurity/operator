@@ -133,3 +133,5 @@ M137 timer/status/graph fixes and M179 expired-reference release are accepted lo
 ## Current debt mapping correction — Tier24 preparation
 
 M79 local manager/API/Unix composition proof in Tier23 does not close LV-01. Its historical T1-M079 record remains unchanged; the current behavior inventory must explicitly preserve trusted SPDY, GPU/kubelet/device-plugin agreement, maintenance, geometry/retirement/recovery, CUDA and real traffic controls as PENDING. LV-01 now also names M8 and M70; LV-02 explicitly names M34, and LV-11 names M124, which were already required by prior narrative handoffs. No historical pending/approval-required evidence is upgraded.
+
+September19 LV20 evidence update: [96-sample manager lifetime timeline](20260916-local-continuation/live/post14-20260919/tier25-memory-timeline/FINDINGS.md) retains the7h01m42s process lifetime ending in OOM, without an observed killing peak or established cause. Container working set, process RSS and Go heap remain distinct. Source investigation and representative repaired-source lifetime verification remain required.
