@@ -179,7 +179,7 @@ func aiPod(ns, name string, labels map[string]string) *corev1.Pod {
 	return &corev1.Pod{
 		// [M-69] every fixture Pod carries a distinct nonempty UID: the destructive AI handlers
 		// bind their trigger check and their Delete to it, exactly as the runner's snapshot does.
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, UID: types.UID("uid-" + name), ResourceVersion: "7", Labels: labels, Annotations: map[string]string{}},
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, UID: types.UID("uid-" + name), ResourceVersion: "7", CreationTimestamp: metav1.NewTime(time.Unix(1, 0)), Labels: labels, Annotations: map[string]string{}},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning, PodIP: "10.0.0.9",
 			Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
 		Spec: corev1.PodSpec{NodeName: "node-a", Containers: []corev1.Container{{Name: "vllm", Image: "vllm:latest"}}},
