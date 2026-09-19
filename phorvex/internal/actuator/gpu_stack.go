@@ -408,7 +408,8 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	// health 200 => live; the models route lists the loaded model => model-loaded.
+	// Health establishes liveness only. Generic model readiness additionally requires
+	// at least one strictly validated loaded-model identity from the bounded inventory.
 	mcode, body, err := c.doEndpoint(ctx, ep, http.MethodGet, ep.modelsPath)
 	if err != nil {
 		if errors.Is(err, errStackUnreachable) {
@@ -423,10 +424,11 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 	if mcode != http.StatusOK {
 		return false, nil
 	}
-	if _, err := parseAdapterInventory([]byte(body), "\x00"); err != nil {
+	inventory, err := parseServingModelInventory([]byte(body))
+	if err != nil {
 		return false, fmt.Errorf("serving model inventory: invalid bounded response")
 	}
-	return true, nil
+	return inventory.nonempty(), nil
 }
 
 func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) error {

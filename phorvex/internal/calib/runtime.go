@@ -206,6 +206,21 @@ func recordTime(record RotationRecord) time.Time {
 	return record.StartedAt
 }
 
+// retainAndRelease performs a stable in-place compaction and then releases every
+// discarded struct reference before shortening the slice. It deliberately clears
+// slots, not nested referents: retained entries and results returned by earlier
+// refreshes may share their immutable nested evidence slices.
+func retainAndRelease[T any](values []T, keep func(T) bool) []T {
+	retained := values[:0]
+	for _, value := range values {
+		if keep(value) {
+			retained = append(retained, value)
+		}
+	}
+	clear(retained[len(retained):len(values)])
+	return retained
+}
+
 // ObserveSnapshot samples history and, when due, performs a 30-minute shadow refresh.
 func (r *Runtime) ObserveSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsWitness) (RefreshResult, bool, error) {
 	if r == nil || snap == nil {
@@ -225,19 +240,17 @@ func (r *Runtime) ObserveSnapshot(snap *ingest.Snapshot, witness map[string]mode
 		return latest, false, nil
 	}
 	cutoff := now.Add(-r.config.Lookback)
-	keptRotations := r.rotations[:0]
 	var newRotations []RotationRecord
-	for _, record := range r.rotations {
+	r.rotations = retainAndRelease(r.rotations, func(record RotationRecord) bool {
 		at := recordTime(record)
 		if at.Before(cutoff) {
-			continue
+			return false
 		}
-		keptRotations = append(keptRotations, record)
 		if r.lastSample.IsZero() || at.After(r.lastSample) {
 			newRotations = append(newRotations, record)
 		}
-	}
-	r.rotations = keptRotations
+		return true
+	})
 	r.samples = append(r.samples, CadenceSample{
 		At: now, Nodes: nodes, Assets: assets, ReadyDelay: newRotations,
 		OptimizerComparisons:   append([]SelectionComparison(nil), r.pending...),
@@ -245,13 +258,9 @@ func (r *Runtime) ObserveSnapshot(snap *ingest.Snapshot, witness map[string]mode
 	})
 	r.pending = nil
 	r.pendingAvailability, r.pendingSLO = 0, 0
-	keptSamples := r.samples[:0]
-	for _, sample := range r.samples {
-		if !sample.At.Before(cutoff) {
-			keptSamples = append(keptSamples, sample)
-		}
-	}
-	r.samples = keptSamples
+	r.samples = retainAndRelease(r.samples, func(sample CadenceSample) bool {
+		return !sample.At.Before(cutoff)
+	})
 	r.lastSample = now
 	if !r.lastRefresh.IsZero() && now.Before(r.lastRefresh.Add(r.config.RefreshInterval)) {
 		latest := r.latest

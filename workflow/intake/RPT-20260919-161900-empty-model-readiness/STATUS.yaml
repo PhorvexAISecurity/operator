@@ -1,0 +1,227 @@
+schema_version: 1
+intake_id: RPT-20260919-161900-empty-model-readiness
+kind: BUG
+title: Empty model inventory is reported as serving model ready
+state: FILED
+reporter: codex-lead
+approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+created_at: '2026-09-19T16:22:27+00:00'
+updated_at: '2026-09-19T16:22:30+00:00'
+pins:
+  source_main_sha: 8d783a5ba4c8c61a0a650ce36f33182af06595bb
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: isolated local real HTTP producer; baseline ce0b697b2176c3a1921a598e1096a275d58ab51e
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-142
+    score: 15
+    overlap:
+    - any
+    - claim
+    - evidence
+    - first
+    - here
+    - loaded
+    - not
+    - observed
+    - ready
+    - record
+    - 'true'
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-146
+    score: 15
+    overlap:
+    - after
+    - any
+    - but
+    - claim
+    - empty
+    - evidence
+    - here
+    - inputs
+    - not
+    - raw
+    - record
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-140
+    score: 14
+    overlap:
+    - after
+    - any
+    - behavior
+    - but
+    - evidence
+    - first
+    - model
+    - not
+    - observation
+    - raw
+    - result
+    - whether
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-144
+    score: 14
+    overlap:
+    - after
+    - any
+    - but
+    - claim
+    - evidence
+    - first
+    - loaded
+    - not
+    - observation
+    - observed
+    - retained
+    - separate
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-158
+    score: 14
+    overlap:
+    - after
+    - but
+    - contract
+    - empty
+    - first
+    - model
+    - not
+    - scope
+    title: 'T1-E follow-up: boot DISCOVERY of the deployed CRD action enum into `model.NotInstallable`
+      is unwired — the not-installable gate is live but its set is populated empty'
+  - issue_id: M-2
+    score: 10
+    overlap:
+    - any
+    - but
+    - contract
+    - empty
+    - evidence
+    - first
+    - invariant
+    - model
+    - not
+    - observed
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-21
+    score: 10
+    overlap:
+    - any
+    - behavior
+    - but
+    - contract
+    - reporting
+    - 'true'
+    title: 'The default actuator rejects every AI-native move while reporting `ActionsSupported:
+      True`'
+  - issue_id: M-26
+    score: 10
+    overlap:
+    - actual
+    - any
+    - but
+    - contract
+    - direct
+    - models
+    - not
+    - observation
+    - scope
+    - 'true'
+    title: The anti-decoy gate (`HasEvidence`) is tautologically open on multi-namespace
+      GPU nodes
+  - issue_id: M-157
+    score: 10
+    overlap:
+    - any
+    - but
+    - evidence
+    - model
+    - not
+    - reproduction
+    - scope
+    - 'true'
+    title: '`recon/nonfinite_guard_test.go` does not compile on main — the M-104 EPSS
+      field rename left the NaN-guard test referencing a deleted field, darkening
+      the whole recon test package'
+  - issue_id: M-167
+    score: 10
+    overlap:
+    - actual
+    - artifacts
+    - claim
+    - evidence
+    - mutation
+    - not
+    - required
+    - separate
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-180
+  fix_id: null
+  approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-180.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-19T16:22:27+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-19T16:22:28+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-19T16:22:28+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-19T16:22:28+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-19T16:22:30+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-180.md
+  approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

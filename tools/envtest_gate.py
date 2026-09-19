@@ -76,7 +76,7 @@ REQUIRED = {
         'TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch',
         'TestM012RealAPIAuthorizationDenialCountsOneAttempt',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
-        'TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController',
+        'TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers',
         'TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController',
         'TestM064RealAPIRunnerNativeAccounting',
         'TestM178RealAPINativeReceiptAndIngest',
