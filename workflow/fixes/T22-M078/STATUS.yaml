@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 14
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -91,12 +91,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/runner
     inputs_sha256: 5ff08655c992e69304e554f3600116a7fe52be8113bec37835f7a64b39bde520
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1b68ceedd3bf1441f910b3d9601477bf173d1ff4a658f4e3b2fb773a1f11f8d9
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:43:23+00:00'
+    baseline_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: dbfe6bc1bc7e199edc0fec459922f9b996f137836c955ec081c32708e635ab38
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:43:23+00:00'
+    incident_sha256: 1b68ceedd3bf1441f910b3d9601477bf173d1ff4a658f4e3b2fb773a1f11f8d9
 fix_id: T22-M078
 issues:
 - M-78
 title: Bound and order authoritative warm candidate probes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -141,7 +157,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -157,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T17:42:50+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T17:43:27+00:00'
 configuration_history:
 - at: '2026-09-19T15:15:33+00:00'
   by: codex-lead
@@ -237,6 +253,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T17:43:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T17:43:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -248,9 +280,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T22-M078:13:submit
-  from: sol-t22-m078
+  id: T22-M078:14:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 13
+  role: coordinator
+  kind: review
+  revision: 14
