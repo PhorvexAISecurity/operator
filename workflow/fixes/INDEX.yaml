@@ -1202,7 +1202,7 @@ fixes:
     issues:
     - M-68
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t18-m068

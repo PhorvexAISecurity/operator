@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -90,12 +90,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/capability
     inputs_sha256: 0b2f7f1b336629ec9296547a0b8f32768582f403c67763867e6d5c3ce5309605
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4ca010fac34e4d658aa7ba6c3aa890b0a07336bd561a79bd274c56e0186cd95e
+    source_sha: df2f36c1a7c920df3665cfcbdcd431f19fbb5206
+    at: '2026-09-19T14:38:43+00:00'
+    baseline_sha: 4c0e38091fad519fec5f81408bea23ce42dee9ea
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: bc885a6b5e61eb6e8a1ab80fd86a6c989bdcf6da1c8315b6147bf3ad5baa1145
+    source_sha: df2f36c1a7c920df3665cfcbdcd431f19fbb5206
+    at: '2026-09-19T14:38:43+00:00'
+    incident_sha256: 4ca010fac34e4d658aa7ba6c3aa890b0a07336bd561a79bd274c56e0186cd95e
 fix_id: T18-M068
 issues:
 - M-68
 title: Contain unverified parallel group cutover; full TP/PP support remains open
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -140,7 +156,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -160,10 +176,10 @@ residuals:
   protocol/design and multi-rank fixture. This repair supplies only unsupported-capability
   containment.'
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T14:37:46+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T14:38:47+00:00'
 configuration_history:
 - at: '2026-09-19T13:21:08+00:00'
   by: codex-lead
@@ -221,6 +237,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T14:38:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T14:38:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -241,9 +273,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T18-M068:9:submit
-  from: sol-t18-m068
+  id: T18-M068:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 10
