@@ -1,0 +1,10 @@
+=== RUN   TestLeadM180EmptyInventoryIsNotLoaded
+=== RUN   TestLeadM180EmptyInventoryIsNotLoaded/empty
+    zz_m180_lead_test.go:11: actual health200 plus empty inventory ModelReady=true want false
+=== RUN   TestLeadM180EmptyInventoryIsNotLoaded/loaded-positive
+--- FAIL: TestLeadM180EmptyInventoryIsNotLoaded (0.00s)
+    --- FAIL: TestLeadM180EmptyInventoryIsNotLoaded/empty (0.00s)
+    --- PASS: TestLeadM180EmptyInventoryIsNotLoaded/loaded-positive (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/actuator	0.020s
+FAIL
