@@ -31,6 +31,8 @@ func NewClaimScope(ids []string, known bool, image, sha string) ClaimScope {
 	if sha == "" {
 		sha = "unavailable"
 	}
+	image = redactTraceString(image)
+	sha = redactTraceString(sha)
 	cap := "unknown"
 	note := "Modeled coverage of the detector-visible, reversible projection; not confirmation of security effect. Trusted detector configuration unavailable; recall unknown."
 	if known {
