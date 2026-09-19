@@ -1257,11 +1257,11 @@ fixes:
     issues:
     - M-67
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t25-m067
-    head_sha: null
+    head_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
   T20-M137:
     directory: fixes/T20-M137
     aliases: []

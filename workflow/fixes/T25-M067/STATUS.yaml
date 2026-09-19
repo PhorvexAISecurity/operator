@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 16
+revision: 17
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -33,12 +33,71 @@ checks:
     source_sha: 2f22f93dc41f7126c1e67739304d104cdfaae320
     at: '2026-09-19T19:50:04+00:00'
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t25-m067-boundary
+    artifact: evidence/preflight/receipt.json
+    sha256: 9aa9aac585e628bb76f5b66dd2290d605e33a9c1f0ee0a4b85683922bc398999
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:38:20+00:00'
+  implementation:
+    result: PASS
+    by: sol-t25-m067-boundary
+    artifact: 04-diff.patch
+    sha256: 88c8c0842dd6cd8376da346637fd3c0e07e5715d3184ee7af47529ced2e2675a
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:38:20+00:00'
+  l0:
+    result: PASS
+    by: sol-t25-m067-boundary
+    artifact: evidence/preflight/receipt.json
+    sha256: 9aa9aac585e628bb76f5b66dd2290d605e33a9c1f0ee0a4b85683922bc398999
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:38:20+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 9ebe29b1d4fea8c0ce1a3306344c8f50f74fd4947ad6986ca6bb4a43669ed339
+  l1:
+    result: PASS
+    by: sol-t25-m067-boundary
+    artifact: evidence/worker/focused-final.md
+    sha256: 38e1c932eb45bbcaa0e3e673ad51eabbd1f310166daec98f28c79e83ce345e50
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:38:20+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: dbd8416d002c9cce3fda178f3145638a7d7096151be048e971e2f768a0503c2e
+  l2:
+    result: PASS
+    by: sol-t25-m067-boundary
+    artifact: evidence/preflight/run-1789849792707811752/go-phorvex.log
+    sha256: 78365dbdd4b1a0cd14c975a61416709c901eb55bf41e1137be1853c576e38409
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:38:20+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 680cec8cd84c76c4bd8dbb947a7ab1b2a1ae7b3556bd3b6313d2660e418f9a96
+  positive_control:
+    result: PASS
+    by: sol-t25-m067-boundary
+    artifact: evidence/worker/focused-final.md
+    sha256: 38e1c932eb45bbcaa0e3e673ad51eabbd1f310166daec98f28c79e83ce345e50
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:38:20+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: dbd8416d002c9cce3fda178f3145638a7d7096151be048e971e2f768a0503c2e
 fix_id: T25-M067
 issues:
 - M-67
 title: Protect scalar drain claims and restore definitely-unsent routing
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -62,7 +121,7 @@ blind_derivation:
 implementation:
   branch: fix/t25-m067
   base_sha: 2f22f93dc41f7126c1e67739304d104cdfaae320
-  head_sha: null
+  head_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
   stacked_on: []
 pull_request:
   url: null
@@ -84,12 +143,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -99,10 +158,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t25-m067-boundary
-  action: Validate canonical focused/API/race/exactpreflight after lead heavy-slot
-    grant; submit no-notify
-updated_at: '2026-09-19T20:04:44+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-19T20:38:24+00:00'
 configuration_history:
 - at: '2026-09-19T15:28:44+00:00'
   by: codex-lead
@@ -127,6 +186,11 @@ configuration_history:
   - implementation
   - next_action
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T20:38:20+00:00'
+  by: sol-t25-m067-boundary
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -142,6 +206,22 @@ transitions:
   by: codex-lead
   artifact: 03-decision.md
   note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T20:38:20+00:00'
+  by: sol-t25-m067-boundary
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T20:38:22+00:00'
+  by: sol-t25-m067-boundary
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -217,3 +297,10 @@ check_history:
   at: '2026-09-19T19:50:04+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
+handoff:
+  id: T25-M067:17:submit
+  from: sol-t25-m067-boundary
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 17
