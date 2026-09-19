@@ -359,6 +359,9 @@ func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
 		return warmDrainRetained, fmt.Errorf("recorded pair is not in the drain routing state")
 	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
+		return warmDrainRetained, fmt.Errorf("warm availability insufficient before dispatch claim: %w", err)
+	}
 	r.DrainAttempts++
 	r.Phase = "drain-dispatching"
 	if err := journalAdvance(ctx, ec, cm, *r); err != nil {

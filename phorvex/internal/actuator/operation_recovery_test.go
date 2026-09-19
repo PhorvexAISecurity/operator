@@ -1122,6 +1122,64 @@ func TestM067AvailabilityDriftAtReducingBoundariesRetainsExactState(t *testing.T
 	}
 }
 
+func TestM067AvailabilityFailureBeforeDispatchClaimPreservesRetryableReceipt(t *testing.T) {
+	ctx := context.Background()
+	base, old, next, third := m067ThreeMemberPool(t)
+	if err := m067SetPolicyFloor(ctx, base, 2); err != nil {
+		t.Fatal(err)
+	}
+	readinessDropped := false
+	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || readinessDropped || !strings.Contains(cm.Data["receipt"], `"phase":"retiring"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			readinessDropped = true
+			return m067SetPodReady(ctx, inner, third, false)
+		},
+	})
+	vllm := &mockVLLM{loaded: true, drained: 2}
+	result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+	if err == nil || result.MutationKind != "swap" || !readinessDropped || vllm.drainCalls != 0 {
+		t.Fatalf("preclaim availability drift crossed send boundary: result=%+v err=%v dropped=%t calls=%d", result, err, readinessDropped, vllm.drainCalls)
+	}
+	receipt := m067ReadReceipt(t, ctx, base, old)
+	if receipt.Phase != "retiring" || receipt.DrainAttempts != 0 || receipt.AdmittedFloor != 2 {
+		t.Fatalf("preclaim availability drift changed retryable receipt: %+v", receipt)
+	}
+	oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+	if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); getErr != nil || oldCurrent.UID != old.UID || oldCurrent.Labels[labelRole] != roleRetiring {
+		t.Fatalf("preclaim availability drift changed old route identity: %v %+v", getErr, oldCurrent)
+	}
+	if getErr := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); getErr != nil || nextCurrent.UID != next.UID || nextCurrent.Labels[labelRole] != roleLeader {
+		t.Fatalf("preclaim availability drift changed promoted route identity: %v %+v", getErr, nextCurrent)
+	}
+
+	if err := m067SetPodReady(ctx, base, third, true); err != nil {
+		t.Fatal(err)
+	}
+	n := NewNativeActuator(guard)
+	n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+	events, recoverErr := n.RecoverOperations(ctx, false)
+	if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Effect, "old leader retired") {
+		t.Fatalf("restored availability did not resume confirmed drain: events=%+v err=%v", events, recoverErr)
+	}
+	if vllm.drainCalls != 1 {
+		t.Fatalf("restored availability drain calls=%d want=1", vllm.drainCalls)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("restored availability did not retire exact old UID: %v", err)
+	}
+	receipt = m067ReadReceipt(t, ctx, base, old)
+	if receipt.Phase != "retired-awaiting-controller" || receipt.DrainAttempts != 1 {
+		t.Fatalf("restored availability recovery receipt=%+v", receipt)
+	}
+}
+
 func TestM067AvailabilityInventoryDriftAndFailedFlipPreservePromotedMember(t *testing.T) {
 	for _, drift := range []string{"member-deleted", "member-replaced", "failed-old-flip-low-original-capacity"} {
 		t.Run(drift, func(t *testing.T) {
