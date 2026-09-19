@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -103,12 +103,19 @@ checks:
     source_sha: 0852aab4619079837b08aae00ad1e84e77b4ad1b
     at: '2026-09-19T13:36:38+00:00'
     incident_sha256: cb58f358ab5e2a4fddb0ca4b748a3f313a0d83f0ebb88a33e92a44d2fcec950e
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 3959cff29a5fa80a105c1be74d21b331688aeb0d52fd544a925c861ff2b7df5e
+    source_sha: 0852aab4619079837b08aae00ad1e84e77b4ad1b
+    at: '2026-09-19T14:00:42+00:00'
 fix_id: T17-M065
 issues:
 - M-65
 title: M65 require expected warm replacement metadata keys
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -135,11 +142,11 @@ implementation:
   head_sha: 0852aab4619079837b08aae00ad1e84e77b4ad1b
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/234
+  reviewed_head: ef29e85846c42f64ae95c24009776c3324733657
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -170,9 +177,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T13:36:42+00:00'
+  action: PR234 open, non-draft, main target. Continue Tier18 source work; DevOps
+    deployment and issue-specific live controls pending. Hosted billing refusal retained.
+updated_at: '2026-09-19T14:00:42+00:00'
 configuration_history:
 - at: '2026-09-19T12:37:32+00:00'
   by: codex-lead
@@ -200,6 +207,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T14:00:41+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -248,6 +261,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T14:00:42+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T17-M065:9:review
