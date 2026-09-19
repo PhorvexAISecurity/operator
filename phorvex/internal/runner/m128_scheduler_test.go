@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -484,12 +486,12 @@ func (o *m128SelectedOptimizer) Decide(views []*model.WorkloadView, pol model.Po
 	o.decisions = []model.Decision{
 		{
 			Tenant: pol.Tenant, Namespace: views[0].Pod.Namespace, Pod: views[0].Pod.Name,
-			Action: model.ActionRotate, Selected: true, Feasible: true,
+			Action: model.ActionKVReset, Selected: true, Feasible: true,
 			Existential: &model.ExistentialDecision{Present: true, EffectStatus: "not-attempted"},
 		},
 		{
 			Tenant: pol.Tenant, Namespace: views[0].Pod.Namespace, Pod: views[0].Pod.Name,
-			Action: model.ActionRotate, Selected: true, Feasible: true,
+			Action: model.ActionKVReset, Selected: true, Feasible: true,
 			Existential: &model.ExistentialDecision{Present: true, EffectStatus: "not-attempted"},
 		},
 	}
@@ -517,9 +519,30 @@ func (a *m128AttemptingActuator) Actuate(ctx context.Context, _ actuator.Request
 func TestM128CancellationAfterDispatchPreservesAttemptAuditWithoutCadence(t *testing.T) {
 	policy := m128Policy("ns", "policy", "owner-attempt")
 	policy.Spec.Mode = v1alpha1.ModeActive
-	policy.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate)}
+	policy.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionKVReset)}
 	source := &m128RecordingSource{}
 	m := m128Manager(t, source, policy)
+	var pod corev1.Pod
+	if err := m.Client.Get(context.Background(), typesName("ns", "crown"), &pod); err != nil {
+		t.Fatal(err)
+	}
+	pod.Annotations = map[string]string{
+		"phorvex.ai/serving-port":   "8000",
+		"phorvex.ai/kv-reset-epoch": "old",
+	}
+	if err := m.Client.Update(context.Background(), &pod); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Client.Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}); err != nil {
+		t.Fatal(err)
+	}
+	m.KillSwitch = &KillSwitch{}
+	m.BoundaryReader = m.Client
+	m.Clock.Observe(exposure.Observation{
+		Owner: m.policies["ns/policy"].ownerKey(), Namespace: "ns", Pod: "crown",
+		StartedAt:    time.Now().Add(-24 * time.Hour),
+		Fingerprints: map[string]string{model.VarPodIdentity: "u-crown", model.VarSession: "old|"},
+	}, time.Now().Add(-24*time.Hour))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	hands := &m128AttemptingActuator{cancel: cancel}
@@ -529,7 +552,7 @@ func TestM128CancellationAfterDispatchPreservesAttemptAuditWithoutCadence(t *tes
 	m.Actuator = hands
 	m.Audit = audit.New(logr.Discard(), &records)
 	if result := m.tick(ctx); result != tickInterrupted {
-		t.Fatalf("tick result=%v", result)
+		t.Fatalf("tick result=%v actuator calls=%d decisions=%+v audit=%s", result, hands.calls, optimizer.decisions, records.String())
 	}
 	if hands.calls != 1 {
 		t.Fatalf("actuator calls=%d", hands.calls)
