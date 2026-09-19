@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: f1cb7ddf3372c59b6fb5e41e4c01a6db411f10a81d3e3c9dd2408852d04ac38f
+    sha256: 3a58b8b00488be48afe8799e88b8769b77981d49502477f78672d53752b79dba
     source_sha: 3b194eee2cde60506302217c246d015913424a99
-    at: '2026-09-19T17:39:27+00:00'
+    at: '2026-09-19T17:55:19+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
 fix_id: T25-M067
@@ -85,7 +85,7 @@ next_action:
   owner: sol-t25-m067
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-19T17:39:27+00:00'
+updated_at: '2026-09-19T17:55:19+00:00'
 configuration_history:
 - at: '2026-09-19T15:28:44+00:00'
   by: codex-lead
@@ -146,5 +146,14 @@ check_history:
   sha256: 27d145c8f2a586eda012ed183a8e65212666efcb982f789355e181545b2d4897
   source_sha: 3b194eee2cde60506302217c246d015913424a99
   at: '2026-09-19T17:21:25+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: f1cb7ddf3372c59b6fb5e41e4c01a6db411f10a81d3e3c9dd2408852d04ac38f
+  source_sha: 3b194eee2cde60506302217c246d015913424a99
+  at: '2026-09-19T17:39:27+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
