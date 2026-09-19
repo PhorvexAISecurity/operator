@@ -1,0 +1,236 @@
+schema_version: 1
+intake_id: RPT-20260919-185000-claim-build-redaction
+kind: BUG
+title: Claim build metadata bypasses existing credential-pattern redaction
+state: FILED
+reporter: codex-lead
+approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+created_at: '2026-09-19T18:45:58+00:00'
+updated_at: '2026-09-19T18:46:00+00:00'
+pins:
+  source_main_sha: 8d783a5ba4c8c61a0a650ce36f33182af06595bb
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Isolated actual Logger/ToRecord producers on accepted Tier23 3b5519c2;
+    no live credential observation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-146
+    score: 20
+    overlap:
+    - any
+    - audit
+    - but
+    - claim
+    - evidence
+    - here
+    - inputs
+    - nested
+    - not
+    - raw
+    - record
+    - records
+    - top-level
+    - trace
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-154
+    score: 16
+    overlap:
+    - any
+    - audit
+    - claim
+    - evidence
+    - not
+    - observed
+    - record
+    - records
+    - retained
+    - same
+    title: Audit retention is size-capped, not time-capped — decision-trace.v3's larger
+      records halved the observable history depth, and the pre-v3 corpus rotated out
+      unremarked
+  - issue_id: M-167
+    score: 14
+    overlap:
+    - actual
+    - artifacts
+    - audit
+    - claim
+    - evidence
+    - mutation
+    - not
+    - records
+    - required
+    - separate
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+  - issue_id: M-144
+    score: 13
+    overlap:
+    - any
+    - audit
+    - but
+    - claim
+    - evidence
+    - first
+    - not
+    - observation
+    - observed
+    - records
+    - retained
+    - same
+    - separate
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-2
+    score: 12
+    overlap:
+    - any
+    - audit
+    - but
+    - contract
+    - evidence
+    - existing
+    - first
+    - invariant
+    - metadata
+    - not
+    - observed
+    - same
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-142
+    score: 12
+    overlap:
+    - any
+    - audit
+    - claim
+    - evidence
+    - first
+    - here
+    - not
+    - observed
+    - record
+    - trace
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-25
+    score: 11
+    overlap:
+    - behavior
+    - but
+    - evidence
+    - existing
+    - not
+    - raw
+    - records
+    - same
+    - separate
+    title: The AI stage classifier overrides — and can downgrade — real detector evidence
+  - issue_id: M-143
+    score: 11
+    overlap:
+    - any
+    - audit
+    - but
+    - evidence
+    - not
+    - records
+    - reproduction
+    - same
+    - scope
+    title: pHold is algebraically pinned to 1 by pod age — the Bayesian belief layer
+      is annihilated, not outweighed
+  - issue_id: M-136
+    score: 10
+    overlap:
+    - any
+    - audit
+    - but
+    - evidence
+    - logs
+    - mutation
+    - not
+    - same
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-140
+    score: 10
+    overlap:
+    - any
+    - behavior
+    - but
+    - evidence
+    - first
+    - not
+    - observation
+    - raw
+    - same
+    - whether
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-181
+  fix_id: null
+  approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-181.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-19T18:45:58+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-19T18:45:58+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-19T18:45:59+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-19T18:45:59+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-19T18:46:00+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-181.md
+  approval_ref: workflow/assessments/20260916-local-continuation/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4
