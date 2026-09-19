@@ -1180,7 +1180,7 @@ fixes:
     issues:
     - M-91
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t16-m091
