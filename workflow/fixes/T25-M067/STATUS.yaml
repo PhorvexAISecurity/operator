@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 17
+revision: 18
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -92,12 +92,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/runner
     inputs_sha256: dbd8416d002c9cce3fda178f3145638a7d7096151be048e971e2f768a0503c2e
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 3ec4ef6979f13ece17a39cb3cea1b799c9214a9d1bdb2a459454bcf546e2b585
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:39:13+00:00'
+    baseline_sha: 2f22f93dc41f7126c1e67739304d104cdfaae320
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 188ebf0ea0208bacece8b18ba83c3ff2c88c19ca2a9d4e444b9153edeb7af489
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T20:39:13+00:00'
+    incident_sha256: 3ec4ef6979f13ece17a39cb3cea1b799c9214a9d1bdb2a459454bcf546e2b585
 fix_id: T25-M067
 issues:
 - M-67
 title: Protect scalar drain claims and restore definitely-unsent routing
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -142,7 +158,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -158,10 +174,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T20:38:24+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T20:39:17+00:00'
 configuration_history:
 - at: '2026-09-19T15:28:44+00:00'
   by: codex-lead
@@ -220,6 +236,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-19T20:38:22+00:00'
   by: sol-t25-m067-boundary
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T20:39:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T20:39:16+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -298,9 +330,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T25-M067:17:submit
-  from: sol-t25-m067-boundary
+  id: T25-M067:18:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 17
+  role: coordinator
+  kind: review
+  revision: 18
