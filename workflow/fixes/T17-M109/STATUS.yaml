@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -12,16 +12,89 @@ checks:
     by: codex-lead
     artifact: 03-decision.md
     sha256: 9bde0dee631cbc90951339f6423a281bc84cb4763a47b819f01bbea6cb70444e
-    source_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
-    at: '2026-09-19T12:37:29+00:00'
+    source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+    at: '2026-09-19T13:48:31+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
-    approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: b69c197918305d8a0b70808cd5a85f904c3165e9051600d82f7a11c47cff2cc3
+    source_sha: 89f611e445ac6906517df78a155286e96b902845
+    at: '2026-09-19T13:48:32+00:00'
+    baseline_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+  red:
+    result: PASS
+    by: sol-t17-m109
+    artifact: evidence/worker/baseline-zero-residual.log
+    sha256: f049e1cd5c96c0b43223e4345afcff8c7bf46f943d52041f03cb1affd282bdf3
+    source_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+    at: '2026-09-19T13:48:52+00:00'
+  preflight:
+    result: PASS
+    by: sol-t17-m109
+    artifact: workflow/fixes/T17-M109/evidence/preflight/receipt.json
+    sha256: 97c54b996e55e78ad473153811de5f4b18e8a50d24888355be233625b267146e
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:48:58+00:00'
+  implementation:
+    result: PASS
+    by: sol-t17-m109
+    artifact: 04-diff.patch
+    sha256: 1e3044ff5e8e2dd9aff9ffce4d8828b0fb6236bddfe8dfdb62c2c9e585074255
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:48:58+00:00'
+  l0:
+    result: PASS
+    by: sol-t17-m109
+    artifact: workflow/fixes/T17-M109/evidence/preflight/receipt.json
+    sha256: 97c54b996e55e78ad473153811de5f4b18e8a50d24888355be233625b267146e
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:48:58+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 1427d990a629c391f30a5c7280e3ee219d8821c53f92a6701749fad1532c710c
+  l1:
+    result: PASS
+    by: sol-t17-m109
+    artifact: evidence/worker/focused-final.md
+    sha256: 07f47006859529020c09d112cad3dd96435f2a70aaa8d3951e2333b38e4330d2
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:48:58+00:00'
+    inputs:
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    inputs_sha256: f1861971bc3bbc0d1479c47d6a8c933bbad31df6a0d4dba6cf0f1c9f68acc4fc
+  l2:
+    result: PASS
+    by: sol-t17-m109
+    artifact: workflow/fixes/T17-M109/evidence/preflight/run-1789825046084550692/go-phorvex.log
+    sha256: b1de45eeb54bc0cd1cc06455bb0296dac2f90b915452dff959037c24f64ef155
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:48:58+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 66618a81b05d6884436ad838583751e96e344caa6ea6d8b5ed6fb78faa80ee19
+  positive_control:
+    result: PASS
+    by: sol-t17-m109
+    artifact: evidence/worker/focused-final.md
+    sha256: 07f47006859529020c09d112cad3dd96435f2a70aaa8d3951e2333b38e4330d2
+    source_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
+    at: '2026-09-19T13:48:58+00:00'
+    inputs:
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    inputs_sha256: f1861971bc3bbc0d1479c47d6a8c933bbad31df6a0d4dba6cf0f1c9f68acc4fc
 fix_id: T17-M109
 issues:
 - M-109
 title: M109 retain configured GPU rotation uncertainty floor
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -34,8 +107,8 @@ capabilities_required:
   cluster_access: false
   deployment_authority: false
 baseline:
-  code_branch: tier17
-  code_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
+  code_branch: tier16
+  code_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
   deployed_image: null
   deployed_git_sha: null
 blind_derivation:
@@ -44,8 +117,8 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: fix/t17-m109
-  base_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
-  head_sha: null
+  base_sha: 89f611e445ac6906517df78a155286e96b902845
+  head_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +140,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +155,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t17-m109
-  action: Implement signed plan; heavy slot held by M91 until lead grants it; integrate
-    accepted Tier16 before final tests
-updated_at: '2026-09-19T12:37:29+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-19T13:49:01+00:00'
 configuration_history:
 - at: '2026-09-19T12:37:27+00:00'
   by: codex-lead
@@ -98,6 +171,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T13:37:11+00:00'
+  by: sol-t17-m109
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-19T13:48:30+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  approval_ref: null
+- at: '2026-09-19T13:48:58+00:00'
+  by: sol-t17-m109
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +203,36 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T13:48:58+00:00'
+  by: sol-t17-m109
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T13:49:00+00:00'
+  by: sol-t17-m109
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 9bde0dee631cbc90951339f6423a281bc84cb4763a47b819f01bbea6cb70444e
+  source_sha: 41031674242f199c1e6a1c8731d906a8267f2e30
+  at: '2026-09-19T12:37:29+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+handoff:
+  id: T17-M109:10:submit
+  from: sol-t17-m109
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 10
