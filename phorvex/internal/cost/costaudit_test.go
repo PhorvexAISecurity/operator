@@ -303,7 +303,7 @@ func TestPart3_CostCeilingValue(t *testing.T) {
 	if ceiling != DefaultCostCeiling {
 		t.Errorf("cost ceiling = %v, want imported default %v", ceiling, DefaultCostCeiling)
 	}
-	// A GPU pod with an unprimed RLS gets the worst-case envelope: assert it is the case that
+	// A GPU rotate gets the configured worst-case envelope: assert it is the case that
 	// actually approaches/【exceeds】the ceiling, which is what the SLO gate is there to catch.
 	c := NewP1Cost()
 	v := bareView()

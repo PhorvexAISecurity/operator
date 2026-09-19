@@ -404,12 +404,14 @@ func warmPoolObserve(ctx context.Context, reader client.Reader, r operationRecei
 		if k == labelRole || k == labelModelLoaded {
 			continue
 		}
-		if candidate.Labels[k] != v {
+		actual, present := candidate.Labels[k]
+		if !present || actual != v {
 			return nil, fmt.Errorf("warm pool new member template label drift")
 		}
 	}
 	for k, v := range rs.Spec.Template.Annotations {
-		if candidate.Annotations[k] != v {
+		actual, present := candidate.Annotations[k]
+		if !present || actual != v {
 			return nil, fmt.Errorf("warm pool new member serving annotation drift")
 		}
 	}

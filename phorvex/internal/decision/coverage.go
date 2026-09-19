@@ -1314,7 +1314,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		key := traceCandidateKey(assetKey, candidate.Action)
 		marginal, wasEvaluated := evaluatedMarginal[key]
 		provenance := prov(assetKey)
-		components := tcost.Components(v, model.Move{Action: candidate.Action}, pol)
+		evaluation := tcost.Evaluation(v, model.Move{Action: candidate.Action}, pol)
 		lambdaContribution := lambda * candidate.ECost
 		netGain := legacyMixedGain(marginal, provenance, lambda, candidate.ECost)
 		candidateSelected := selected && candidate.Action == selectedAction
@@ -1326,7 +1326,6 @@ func (e *CoverageEngine) buildDecisionTrace(
 		// live; without these four fields CHi is unreconstructable there.
 		conformalQuantile, quantileOK := tcost.ConformalQuantile()
 		conformalCalibrated, calibratedOK := tcost.ConformalCalibrated()
-		envelopeApplied := candidate.Action == model.ActionRotate && v.Pod.HasGPU && !primed
 		selectionReason := "not_selected_by_current_greedy_ranking"
 		switch {
 		case candidateSelected:
@@ -1354,8 +1353,8 @@ func (e *CoverageEngine) buildDecisionTrace(
 			GrossFullValue:              traceOptional(true, grossFull),
 			MarginalCoverage:            traceOptional(wasEvaluated, marginal),
 			Provenance:                  traceOptional(true, provenance),
-			CNorm:                       traceOptional(true, components.Norm),
-			CFlow:                       traceOptional(true, components.Flow),
+			CNorm:                       traceOptional(true, evaluation.Norm),
+			CFlow:                       traceOptional(true, evaluation.Flow),
 			ExpectedCost:                traceOptional(true, candidate.ECost),
 			CostHigh:                    traceOptional(true, candidate.CHi),
 			LambdaContribution:          traceOptional(true, lambdaContribution),
@@ -1366,12 +1365,12 @@ func (e *CoverageEngine) buildDecisionTrace(
 			NotClassifiedByCurrentModel: true,
 			// Generated ⇒ passed the conformal SLO gate (generator step 4).
 			SLOGateResult:      model.OptionalBool{Present: true, Value: true},
-			GPUEnvelopeApplied: model.OptionalBool{Present: true, Value: envelopeApplied},
+			GPUEnvelopeApplied: model.OptionalBool{Present: true, Value: evaluation.GPUEnvelopeApplied},
 		}
 		if candidate.Action == model.ActionRotate {
 			row.ConformalQuantile = traceOptional(quantileOK, conformalQuantile)
 			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated}
-			row.GPUEnvelopeSlack = traceOptional(envelopeApplied, pol.FlowDisruption*cost.GPUEnvelopeMax())
+			row.GPUEnvelopeSlack = traceOptional(evaluation.GPUEnvelopeApplied, evaluation.GPUEnvelopeSlack)
 		}
 		if candidateSelected {
 			row.SelectionRound = model.OptionalInt{Present: true, Value: selectionRound}
@@ -1412,14 +1411,13 @@ func (e *CoverageEngine) buildDecisionTrace(
 			// (the only costed exclusion path) — the gate result is false, and
 			// rotate rows carry the same CHi reconstruction terms as candidates.
 			candidate.SLOGateResult = model.OptionalBool{Present: true, Value: false}
-			exclEnvelopeApplied := exclusion.Action == model.ActionRotate && v.Pod.HasGPU && !primed
-			candidate.GPUEnvelopeApplied = model.OptionalBool{Present: true, Value: exclEnvelopeApplied}
+			candidate.GPUEnvelopeApplied = model.OptionalBool{Present: true, Value: evaluation.GPUEnvelopeApplied}
 			if exclusion.Action == model.ActionRotate {
 				q, qOK := tcost.ConformalQuantile()
 				cal, calOK := tcost.ConformalCalibrated()
 				candidate.ConformalQuantile = traceOptional(qOK, q)
 				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal}
-				candidate.GPUEnvelopeSlack = traceOptional(exclEnvelopeApplied, pol.FlowDisruption*cost.GPUEnvelopeMax())
+				candidate.GPUEnvelopeSlack = traceOptional(evaluation.GPUEnvelopeApplied, evaluation.GPUEnvelopeSlack)
 			}
 		}
 		trace.Candidates = append(trace.Candidates, candidate)

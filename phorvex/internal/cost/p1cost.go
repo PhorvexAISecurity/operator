@@ -65,11 +65,15 @@ type P1Components struct {
 }
 
 // P1Evaluation carries the point and robust costs plus the fail-conservative
-// category needed by candidate generation and audit. NaNFeature is the precise
-// input that made the action unactionable.
+// category needed by candidate generation and audit. GPUEnvelopeApplied means the
+// configured term participated in the robust maximum; it does not imply that the
+// term dominated or that GPU behavior is empirically calibrated. NaNFeature is the
+// precise input that made the action unactionable.
 type P1Evaluation struct {
 	P1Components
 	CHi                  float64 `json:"chi"`
+	GPUEnvelopeApplied   bool    `json:"gpu_envelope_applied"`
+	GPUEnvelopeSlack     float64 `json:"gpu_envelope_slack"`
 	UnactionableCategory string  `json:"unactionable_category,omitempty"`
 	NaNFeature           string  `json:"nan_feature,omitempty"`
 }
@@ -174,13 +178,17 @@ func (c *P1Cost) Evaluation(view *model.WorkloadView, move model.Move, pol model
 	}
 	components := c.components(view, move, pol)
 	chi := components.Total
+	envelopeApplied := false
+	envelopeSlack := 0.0
 	if move.Action == model.ActionRotate {
 		slack := c.Conformal.Quantile()
 		if slack < 0 {
 			slack = 0
 		}
-		if view != nil && view.Pod.HasGPU && !c.RLS.Primed() {
-			slack = maxf(slack, pol.FlowDisruption*GPUEnvelopeMax())
+		if view != nil && view.Pod.HasGPU {
+			envelopeApplied = true
+			envelopeSlack = pol.FlowDisruption * GPUEnvelopeMax()
+			slack = maxf(slack, envelopeSlack)
 		}
 		chi += slack
 	}
@@ -193,7 +201,12 @@ func (c *P1Cost) Evaluation(view *model.WorkloadView, move model.Move, pol model
 			NaNFeature:           "derived-cost",
 		}
 	}
-	return P1Evaluation{P1Components: components, CHi: chi}
+	return P1Evaluation{
+		P1Components:       components,
+		CHi:                chi,
+		GPUEnvelopeApplied: envelopeApplied,
+		GPUEnvelopeSlack:   envelopeSlack,
+	}
 }
 
 // Components returns the exact current-model terms and weighted total for a move.
@@ -237,9 +250,11 @@ func (c *P1Cost) ConformalCalibrated() (calibrated, ok bool) {
 }
 
 // CHi is the conformal robust UPPER bound used by the hard SLO/feasibility gate. For a
-// rotate it adds the conformal slack on top of E[C]; for an unprimed GPU pod the
-// configured hardware-measured reload/warm-up envelope dominates. Deployments without
-// a calibration retain the conservative default rather than fabricating a measurement.
+// rotate it adds generic conformal slack on top of E[C]. For GPU rotates, the larger
+// of that slack and the configured GPU envelope minimum applies; CPU rotates use only
+// the generic slack. Generic RLS or conformal observations do not establish GPU-specific
+// support and cannot withdraw the configured minimum. Deployments without an explicit
+// value retain the conservative default rather than fabricating a measurement.
 func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy) float64 {
 	return c.Evaluation(view, move, pol).CHi
 }

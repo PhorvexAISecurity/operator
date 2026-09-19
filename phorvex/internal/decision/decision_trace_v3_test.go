@@ -146,7 +146,7 @@ func TestDecisionTraceV3CoveredRoundSemantics(t *testing.T) {
 	// over not-covered-before keys. Reaching here means it held on all three records.
 }
 
-// B.7.3: GPU-unprimed rotate carries the full CHi reconstruction quad (B.1) and the
+// B.7.3: a cold-start GPU rotate carries the full CHi reconstruction quad (B.1) and the
 // pinned law reconstructs CostHigh from the recorded terms.
 func TestDecisionTraceV3GPUUnprimedRotateCarriesEnvelopeTerms(t *testing.T) {
 	view := covView("v3-gpu", true, 2*time.Hour, false)
@@ -176,7 +176,7 @@ func TestDecisionTraceV3GPUUnprimedRotateCarriesEnvelopeTerms(t *testing.T) {
 		t.Fatalf("cold-start bound must record calibrated=false: %+v", rotate.ConformalCalibrated)
 	}
 	if !rotate.GPUEnvelopeApplied.Present || !rotate.GPUEnvelopeApplied.Value {
-		t.Fatalf("unprimed GPU rotate must record the envelope branch: %+v", rotate.GPUEnvelopeApplied)
+		t.Fatalf("GPU rotate must record the configured envelope branch: %+v", rotate.GPUEnvelopeApplied)
 	}
 	wantSlack := pol.FlowDisruption * cost.GPUEnvelopeMax()
 	if !rotate.GPUEnvelopeSlack.Present || rotate.GPUEnvelopeSlack.Value != wantSlack {
