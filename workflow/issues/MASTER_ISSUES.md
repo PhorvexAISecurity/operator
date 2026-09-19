@@ -1017,7 +1017,7 @@ Severity: HIGH · Tier: parallel · Fixes: T4-M066
 
 ### M-68 · TP/PP group cutover never rewarms · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T18-M068
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
