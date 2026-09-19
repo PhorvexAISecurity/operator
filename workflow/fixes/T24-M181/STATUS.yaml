@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -99,12 +99,28 @@ checks:
     - phorvex/internal/model
     - workflow/fixes/T24-M181/verify.sh
     inputs_sha256: 0565824059b4885177ed8c62f467fba23a52fa684344309d51feccaaad130bef
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1d68d00d00491e2de82b6db9b1a6af90fadc14a5dad498d8d76b2ee9f16d93be
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:57+00:00'
+    baseline_sha: 94c62bffa8b6e623e69fbe289e8bf3dd621ac2a7
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 1fcaea6694bc3751a2967c0e463dda71df1bc8fc1d4058bfac99f548b43e5e9a
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:25:57+00:00'
+    incident_sha256: 1d68d00d00491e2de82b6db9b1a6af90fadc14a5dad498d8d76b2ee9f16d93be
 fix_id: T24-M181
 issues:
 - M-181
 title: Redact claim build metadata consistently across reporting
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -149,7 +165,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -165,10 +181,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T19:25:06+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T19:26:01+00:00'
 configuration_history:
 - at: '2026-09-19T18:46:17+00:00'
   by: codex-lead
@@ -231,6 +247,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T19:25:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T19:26:00+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -242,9 +274,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T24-M181:10:submit
-  from: sol-t24-m181
+  id: T24-M181:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
