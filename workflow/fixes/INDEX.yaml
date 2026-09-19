@@ -1224,7 +1224,7 @@ fixes:
     issues:
     - M-179
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t20-m179
@@ -1235,7 +1235,7 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t20-m137

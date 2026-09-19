@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 16
+revision: 19
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -113,12 +113,19 @@ checks:
     source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
     at: '2026-09-19T17:06:41+00:00'
     incident_sha256: b47ec522602afcb4b5df92e80cde8ee71aa64ecf751ac6878fd516f9b246d8d6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 2a929e0646295b416e0db64fb715362079c964bd5515123c7e155092ce99a62c
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:16:41+00:00'
 fix_id: T20-M137
 issues:
 - M-137
 title: Measure complete manager ticks and avoid unchanged existential status writes
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -145,11 +152,11 @@ implementation:
   head_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/237
+  reviewed_head: 44b23b8c3732cad77215d8f85448bffbc86f9327
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -192,9 +199,10 @@ residuals:
   no live OOM cause established.'
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T17:06:45+00:00'
+  action: PR237 open/non-draft/main; continue independent Tier22 source. LiveLV25/LV26
+    and earlier controls pending; M137capacity/audit/deadline remain OPEN SOURCE.
+    Hosted billing refusal retained.
+updated_at: '2026-09-19T17:16:41+00:00'
 configuration_history:
 - at: '2026-09-19T14:30:38+00:00'
   by: codex-lead
@@ -227,6 +235,12 @@ configuration_history:
   by: codex-lead
   fields:
   - residuals
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:16:39+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
@@ -276,6 +290,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T17:16:41+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
