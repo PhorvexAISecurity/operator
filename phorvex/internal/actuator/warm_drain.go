@@ -266,6 +266,9 @@ func waitWarmRouteMembers(ctx context.Context, ec EnactCtx, r operationReceipt, 
 				}
 			}
 		}
+		if last != nil {
+			confirmed = false
+		}
 		select {
 		case <-waitCtx.Done():
 			return fmt.Errorf("warm route EndpointSlice convergence timed out: %w", errors.Join(last, waitCtx.Err()))

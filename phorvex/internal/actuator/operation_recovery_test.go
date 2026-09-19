@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -767,6 +768,325 @@ func TestM067LostDispatchClaimAcknowledgementSendsNothing(t *testing.T) {
 	}
 	if vllm.drainCalls != 0 {
 		t.Fatalf("recovery replayed an unacknowledged dispatch claim: calls=%d", vllm.drainCalls)
+	}
+}
+
+func TestM067WarmRouteObservationRequiresConsecutiveReads(t *testing.T) {
+	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "serving", UID: "service-uid", ResourceVersion: "3"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "model", labelRole: roleLeader}}}
+	ready := true
+	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Namespace: service.Namespace, Name: "serving-a", UID: "slice-uid", ResourceVersion: "4", Labels: map[string]string{discoveryv1.LabelServiceName: service.Name}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "Service", Name: service.Name, UID: service.UID}}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"10.0.0.9"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: service.Namespace, Name: "old", UID: "old-uid"}}}}
+	receipt := operationReceipt{PolicyNamespace: service.Namespace, Pool: &warmPoolIntent{ServiceName: service.Name, ServiceUID: string(service.UID), ServiceSelectorHash: hashWarmObject(service.Spec.Selector)}}
+	for _, source := range []string{"service-get", "endpoint-list"} {
+		for _, tc := range []struct {
+			name      string
+			afterGap  bool
+			wantError bool
+		}{
+			{name: "error-breaks-sequence", afterGap: false, wantError: true},
+			{name: "two-successes-after-error", afterGap: true},
+		} {
+			t.Run(source+"/"+tc.name, func(t *testing.T) {
+				base := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(service.DeepCopy(), slice.DeepCopy()).Build()
+				calls := 0
+				failRead := func() error {
+					calls++
+					if calls == 2 || (!tc.afterGap && calls > 3) {
+						return errors.New("transient " + source + " failure")
+					}
+					return nil
+				}
+				reader := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+					Get: func(ctx context.Context, inner client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if source == "service-get" && key.Namespace == service.Namespace && key.Name == service.Name {
+							if err := failRead(); err != nil {
+								return err
+							}
+						}
+						return inner.Get(ctx, key, obj, opts...)
+					},
+					List: func(ctx context.Context, inner client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						if source == "endpoint-list" {
+							if _, ok := list.(*discoveryv1.EndpointSliceList); ok {
+								if err := failRead(); err != nil {
+									return err
+								}
+							}
+						}
+						return inner.List(ctx, list, opts...)
+					},
+				})
+				err := waitWarmRouteMembers(context.Background(), EnactCtx{Reader: reader, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}, receipt, []string{"old-uid"})
+				if tc.wantError && err == nil {
+					t.Fatalf("separated successes were treated as consecutive after %d reads", calls)
+				}
+				if !tc.wantError && (err != nil || calls < 4) {
+					t.Fatalf("two post-error successes did not converge: calls=%d err=%v", calls, err)
+				}
+			})
+		}
+	}
+}
+
+func m067PhaseLossClient(base client.Client, old, next *corev1.Pod, lostPhase string) (client.Client, *bool) {
+	lost := false
+	return interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+		Patch: func(ctx context.Context, inner client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if err := inner.Patch(ctx, obj, patch, opts...); err != nil {
+				return err
+			}
+			pod, ok := obj.(*corev1.Pod)
+			if !ok || (pod.Name != old.Name && pod.Name != next.Name) {
+				return nil
+			}
+			oldNow, nextNow := &corev1.Pod{}, &corev1.Pod{}
+			if err := inner.Get(ctx, client.ObjectKeyFromObject(old), oldNow); err != nil {
+				return err
+			}
+			if err := inner.Get(ctx, client.ObjectKeyFromObject(next), nextNow); err != nil {
+				return err
+			}
+			slice := &discoveryv1.EndpointSlice{}
+			if err := inner.Get(ctx, client.ObjectKey{Namespace: old.Namespace, Name: "m066-serving-1"}, slice); err != nil {
+				return err
+			}
+			ready := true
+			slice.Endpoints = nil
+			for _, current := range []*corev1.Pod{oldNow, nextNow} {
+				if current.Labels[labelRole] == roleLeader {
+					slice.Endpoints = append(slice.Endpoints, discoveryv1.Endpoint{Addresses: []string{current.Status.PodIP}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: current.Namespace, Name: current.Name, UID: current.UID}})
+				}
+			}
+			return inner.Update(ctx, slice)
+		},
+		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || lost || !strings.Contains(cm.Data["receipt"], `"phase":"`+lostPhase+`"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			lost = true
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			return errors.New("persisted phase acknowledgement lost")
+		},
+	}), &lost
+}
+
+func TestM067CompensationPhaseAcknowledgementLossRecoversWithoutExtraSend(t *testing.T) {
+	for _, phase := range []string{"drain-unsent", "restore-old-claimed", "old-route-observed", "restore-shadow-claimed", "routing-restored"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx := context.Background()
+			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+			base := fakeC(old, next)
+			guard, lost := m067PhaseLossClient(base, old, next, phase)
+			vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+			result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+			if enactErr == nil || result.MutationKind != "swap" || !*lost {
+				t.Fatalf("phase acknowledgement loss not exercised: result=%+v err=%v lost=%t", result, enactErr, *lost)
+			}
+			cm := &corev1.ConfigMap{}
+			key := client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}
+			if err := base.Get(ctx, key, cm); err != nil || !strings.Contains(cm.Data["receipt"], `"phase":"`+phase+`"`) {
+				t.Fatalf("lost acknowledgement did not persist %s: err=%v receipt=%s", phase, err, cm.Data["receipt"])
+			}
+			n := NewNativeActuator(guard)
+			n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+			n.RouteObservationTimeout, n.RouteObservationInterval = 50*time.Millisecond, time.Millisecond
+			events, recoverErr := n.RecoverOperations(ctx, false)
+			if recoverErr != nil || len(events) != 1 || events[0].Err != nil || !strings.Contains(events[0].Effect, "routing roles restored") {
+				t.Fatalf("phase %s did not resume compensation: events=%+v err=%v", phase, events, recoverErr)
+			}
+			wantCalls := 1
+			if phase == "drain-unsent" {
+				wantCalls = warmDrainMaxAttempts
+			}
+			if vllm.drainCalls != wantCalls {
+				t.Fatalf("phase %s drain calls=%d want=%d", phase, vllm.drainCalls, wantCalls)
+			}
+			oldAfter, nextAfter := &corev1.Pod{}, &corev1.Pod{}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldAfter); err != nil || oldAfter.Labels[labelRole] != roleLeader {
+				t.Fatalf("phase %s old route not restored: %v %+v", phase, err, oldAfter)
+			}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextAfter); err != nil || nextAfter.Labels[labelRole] != roleShadow {
+				t.Fatalf("phase %s new shadow not restored: %v %+v", phase, err, nextAfter)
+			}
+			if err := base.Get(ctx, key, &corev1.ConfigMap{}); !apierrors.IsNotFound(err) {
+				t.Fatalf("phase %s completed receipt retained: %v", phase, err)
+			}
+		})
+	}
+}
+
+func TestM067ConfirmedPhaseAcknowledgementLossRecoversWithoutReplay(t *testing.T) {
+	ctx := context.Background()
+	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	base := fakeC(old, next)
+	guard, lost := m067PhaseLossClient(base, old, next, "drain-confirmed")
+	vllm := &mockVLLM{loaded: true, drained: 4}
+	result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+	if enactErr == nil || result.MutationKind != "swap" || !*lost || vllm.drainCalls != 1 {
+		t.Fatalf("confirmed acknowledgement loss not exercised: result=%+v err=%v lost=%t calls=%d", result, enactErr, *lost, vllm.drainCalls)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); err != nil {
+		t.Fatalf("process-local 200 deleted old before durable confirmation acknowledgement: %v", err)
+	}
+	n := NewNativeActuator(guard)
+	n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+	events, recoverErr := n.RecoverOperations(ctx, false)
+	if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Effect, "old leader retired") {
+		t.Fatalf("durable confirmed phase did not retire without replay: events=%+v err=%v", events, recoverErr)
+	}
+	if vllm.drainCalls != 1 {
+		t.Fatalf("confirmed recovery replayed drain: calls=%d", vllm.drainCalls)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("durably confirmed old UID not retired: %v", err)
+	}
+}
+
+func TestM067PromotionAndRetiringAcknowledgementLossRecoverOnce(t *testing.T) {
+	for _, phase := range []string{"promoted", "retiring"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx := context.Background()
+			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+			base := fakeC(old, next)
+			guard, lost := m067PhaseLossClient(base, old, next, phase)
+			vllm := &mockVLLM{loaded: true, drained: 1}
+			result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+			if enactErr == nil || result.MutationKind != "swap" || !*lost || vllm.drainCalls != 0 {
+				t.Fatalf("phase %s acknowledgement loss crossed send boundary: result=%+v err=%v lost=%t calls=%d", phase, result, enactErr, *lost, vllm.drainCalls)
+			}
+			n := NewNativeActuator(guard)
+			n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+			events, recoverErr := n.RecoverOperations(ctx, false)
+			if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Effect, "old leader retired") {
+				t.Fatalf("phase %s did not continue its one confirmed send: events=%+v err=%v", phase, events, recoverErr)
+			}
+			if vllm.drainCalls != 1 {
+				t.Fatalf("phase %s recovery drain calls=%d want=1", phase, vllm.drainCalls)
+			}
+			if err := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); !apierrors.IsNotFound(err) {
+				t.Fatalf("phase %s confirmed old UID not retired: %v", phase, err)
+			}
+		})
+	}
+}
+
+func TestM067PersistedCreateAcknowledgementLossMutatesNothing(t *testing.T) {
+	ctx := context.Background()
+	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	base := fakeC(old, next)
+	lost := false
+	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Create: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+		if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Labels[journalLabel] == "v1" && !lost {
+			lost = true
+			if err := inner.Create(ctx, obj, opts...); err != nil {
+				return err
+			}
+			return errors.New("journal create acknowledgement lost")
+		}
+		return inner.Create(ctx, obj, opts...)
+	}})
+	vllm := &mockVLLM{loaded: true, drained: 1}
+	result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+	if enactErr == nil || result.Emitted || !lost || vllm.drainCalls != 0 {
+		t.Fatalf("lost receipt create acknowledgement crossed mutation boundary: result=%+v err=%v lost=%t calls=%d", result, enactErr, lost, vllm.drainCalls)
+	}
+	oldAfter, nextAfter := &corev1.Pod{}, &corev1.Pod{}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldAfter); err != nil || oldAfter.Labels[labelRole] != roleLeader {
+		t.Fatalf("old changed after unacknowledged receipt create: %v %+v", err, oldAfter)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextAfter); err != nil || nextAfter.Labels[labelRole] != roleShadow {
+		t.Fatalf("shadow changed after unacknowledged receipt create: %v %+v", err, nextAfter)
+	}
+	n := NewNativeActuator(base)
+	n.Reader, n.JournalNamespace, n.RecoveryVLLM = base, "operator", vllm
+	events, recoverErr := n.RecoverOperations(ctx, false)
+	if recoverErr != nil || len(events) != 1 || events[0].Err != nil || !strings.Contains(events[0].Effect, "unpromoted") {
+		t.Fatalf("persisted prepared receipt did not cleanly recover: events=%+v err=%v", events, recoverErr)
+	}
+	if vllm.drainCalls != 0 {
+		t.Fatalf("prepared receipt recovery sent drain: calls=%d", vllm.drainCalls)
+	}
+}
+
+func TestM067CompensationAuthorityDriftRetainsWithoutPost(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(context.Context, client.Client, *corev1.Pod, *corev1.Pod) error
+	}{
+		{name: "old-uid", mutate: func(ctx context.Context, c client.Client, old, _ *corev1.Pod) error {
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(old), current); err != nil {
+				return err
+			}
+			if err := c.Delete(ctx, current, uidPrecondition(current)); err != nil {
+				return err
+			}
+			replacement := current.DeepCopy()
+			replacement.UID, replacement.ResourceVersion = "foreign-old-uid", ""
+			return c.Create(ctx, replacement)
+		}},
+		{name: "new-role", mutate: func(ctx context.Context, c client.Client, _, next *corev1.Pod) error {
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+				return err
+			}
+			current.Labels[labelRole] = roleShadow
+			return c.Update(ctx, current)
+		}},
+		{name: "service-uid", mutate: func(ctx context.Context, c client.Client, old, _ *corev1.Pod) error {
+			service := &corev1.Service{}
+			key := client.ObjectKey{Namespace: old.Namespace, Name: "m066-serving"}
+			if err := c.Get(ctx, key, service); err != nil {
+				return err
+			}
+			if err := c.Delete(ctx, service); err != nil {
+				return err
+			}
+			service.UID, service.ResourceVersion = "foreign-service-uid", ""
+			return c.Create(ctx, service)
+		}},
+		{name: "service-account-profile", mutate: func(ctx context.Context, c client.Client, old, _ *corev1.Pod) error {
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(old), current); err != nil {
+				return err
+			}
+			current.Spec.ServiceAccountName = "foreign-profile"
+			return c.Update(ctx, current)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+			base := fakeC(old, next)
+			guard, lost := m067PhaseLossClient(base, old, next, "restore-old-claimed")
+			vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+			if _, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap)); err == nil || !*lost {
+				t.Fatalf("restoration claim fixture failed: err=%v lost=%t", err, *lost)
+			}
+			if err := tc.mutate(ctx, base, old, next); err != nil {
+				t.Fatal(err)
+			}
+			n := NewNativeActuator(guard)
+			n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+			events, recoverErr := n.RecoverOperations(ctx, false)
+			if recoverErr != nil || len(events) != 1 || events[0].Err == nil {
+				t.Fatalf("authority drift was not retained: events=%+v err=%v", events, recoverErr)
+			}
+			if vllm.drainCalls != 1 {
+				t.Fatalf("authority drift triggered another POST: calls=%d", vllm.drainCalls)
+			}
+			var receipts corev1.ConfigMapList
+			if err := base.List(ctx, &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(receipts.Items) != 1 {
+				t.Fatalf("authority drift lost retained obligation: count=%d err=%v", len(receipts.Items), err)
+			}
+		})
 	}
 }
 
