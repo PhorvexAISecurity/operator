@@ -231,6 +231,12 @@ func (w *m137BoundedAudit) decisionWitness(key string) m137DecisionWitness {
 	return w.lastByAsset[key]
 }
 
+func (w *m137BoundedAudit) resetDecisionWitnesses() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastByAsset = map[string]m137DecisionWitness{}
+}
+
 func (w *m137BoundedAudit) decisionStats() (decisions, selectedFeasible int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -978,6 +984,7 @@ func TestM137ScaleHarness(t *testing.T) {
 	rbacPresent := m137ExactRBAC(cfg, cachedRoles.Items, cachedBindings.Items, cachedClusterRoles.Items, cachedClusterBindings.Items)
 	m137MergeHTTP(startupHTTP, counts.reset())
 	auditDecisionsBefore, auditSelectedBefore := auditSink.decisionStats()
+	auditSink.resetDecisionWitnesses()
 	apiRSSBefore := m137RSS(children["apiserver"])
 	etcdRSSBefore := m137RSS(children["etcd"])
 
