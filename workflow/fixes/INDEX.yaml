@@ -1213,8 +1213,8 @@ fixes:
     issues:
     - M-131
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t19-m131
-    head_sha: null
+    head_sha: 78f5c81193c969ae6b877ecd144de5abca1a1f23
