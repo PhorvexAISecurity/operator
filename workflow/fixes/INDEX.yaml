@@ -1191,7 +1191,7 @@ fixes:
     issues:
     - M-128
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t18-m128
@@ -1202,7 +1202,7 @@ fixes:
     issues:
     - M-68
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t18-m068

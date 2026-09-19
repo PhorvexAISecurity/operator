@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 13
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -106,12 +106,19 @@ checks:
     source_sha: df2f36c1a7c920df3665cfcbdcd431f19fbb5206
     at: '2026-09-19T14:38:43+00:00'
     incident_sha256: 4ca010fac34e4d658aa7ba6c3aa890b0a07336bd561a79bd274c56e0186cd95e
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 55972f1b4d26df1ba73991780fabf42e99380ea8d2f773270b829e5d66c296d8
+    source_sha: df2f36c1a7c920df3665cfcbdcd431f19fbb5206
+    at: '2026-09-19T14:52:47+00:00'
 fix_id: T18-M068
 issues:
 - M-68
 title: Contain unverified parallel group cutover; full TP/PP support remains open
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,11 +145,11 @@ implementation:
   head_sha: df2f36c1a7c920df3665cfcbdcd431f19fbb5206
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/235
+  reviewed_head: 0e7766e7a9dcca6ba5f8557f44b61fe54797158a
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -177,9 +184,9 @@ residuals:
   containment.'
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T14:38:47+00:00'
+  action: PR235 open, non-draft, main target. Continue Tier19 source; DevOps deployment/behavior
+    pending, M68 full functionality open, hosted billing refusal retained.
+updated_at: '2026-09-19T14:52:48+00:00'
 configuration_history:
 - at: '2026-09-19T13:21:08+00:00'
   by: codex-lead
@@ -204,6 +211,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T14:52:46+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -252,6 +265,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T14:52:48+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
