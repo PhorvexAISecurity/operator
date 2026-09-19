@@ -1224,8 +1224,8 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t20-m137
-    head_sha: null
+    head_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
