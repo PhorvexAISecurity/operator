@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: dc53a239c978b587120295107ebbab1e82da0ecec439dfc88cc1feab13eb9c7e
+    sha256: 07e45ea7203b31fb098184258ecb6c03c28d113d5d3fdc231c28813fa4ebeee3
     source_sha: 3b5519c2ccd7aa3e8d2dfedd9657985445d8273c
-    at: '2026-09-19T18:42:27+00:00'
+    at: '2026-09-19T18:50:14+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   base_review:
@@ -102,7 +102,7 @@ next_action:
   owner: sol-t24-m137-audit
   action: Verify bounded canonical guard equivalence, original/new benchmark,32positive
     and one exact1000profile then exactpreflight; preserve capacity/source/live residuals
-updated_at: '2026-09-19T18:42:28+00:00'
+updated_at: '2026-09-19T18:50:14+00:00'
 follow_up_to: T20-M137
 configuration_history:
 - at: '2026-09-19T17:09:36+00:00'
@@ -148,5 +148,14 @@ check_history:
   sha256: a924fe947d17173191b605296840c4fb7171924c3d446bd8727965746de8508d
   source_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
   at: '2026-09-19T17:09:39+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: dc53a239c978b587120295107ebbab1e82da0ecec439dfc88cc1feab13eb9c7e
+  source_sha: 3b5519c2ccd7aa3e8d2dfedd9657985445d8273c
+  at: '2026-09-19T18:42:27+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
