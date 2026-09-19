@@ -512,6 +512,41 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			t.Fatalf("authority drift compensated promoted UID: %v %+v", err, nextCurrent)
 		}
 	})
+	t.Run("promoted-binding-drift-after-acknowledged-dispatch-claim", func(t *testing.T) {
+		fixture := m067NewAPIFixture(t, ctx, c, "binding", "confirmed")
+		claimed := false
+		guard := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+				return inner.Update(ctx, obj, opts...)
+			}
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			claimed = true
+			promoted := &corev1.Pod{}
+			if err := inner.Get(ctx, client.ObjectKeyFromObject(fixture.next), promoted); err != nil {
+				return err
+			}
+			promoted.Annotations[annoModelsPath] = "/changed-after-claim"
+			return inner.Update(ctx, promoted)
+		}})
+		fixture.native.Client, fixture.native.Reader = guard, guard
+		result, enactErr := fixture.native.Actuate(ctx, fixture.request())
+		if enactErr == nil || result.MutationKind != "swap" || !claimed {
+			t.Fatalf("actual API promoted-binding seam not exercised: result=%+v err=%v claimed=%t", result, enactErr, claimed)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 0 {
+			t.Fatalf("promoted binding drift after acknowledged claim reached POST: posts=%d requests=%v", posts, requests)
+		}
+		_, receipt := fixture.receipt(t, ctx)
+		if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+			t.Fatalf("promoted binding drift did not retain dispatch claim: %+v", receipt)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), &corev1.Pod{}); err != nil {
+			t.Fatalf("promoted binding drift deleted old UID: %v", err)
+		}
+	})
 	t.Run("stale-route-after-acknowledged-dispatch-claim", func(t *testing.T) {
 		fixture := m067NewAPIFixture(t, ctx, c, "route-claim", "confirmed")
 		claimed := false

@@ -544,7 +544,8 @@ func TestMIGRebindDefaultRunnerFailsClosed(t *testing.T) {
 func TestModelShardReplaceWarmCutover(t *testing.T) {
 	leader := aiPod("ns", "shard0", map[string]string{labelModelShard: "s", labelRole: roleLeader})
 	shadow := aiPod("ns", "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"})
-	c := fakeC(leader, shadow)
+	base := fakeC(leader, shadow)
+	c := m067ModeledRouteClient(base, leader)
 	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
 	if err == nil || hr.MutationKind != "swap" {
 		t.Fatalf("controller observation must remain pending in fake: result=%+v err=%v", hr, err)
@@ -552,7 +553,7 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 	var s corev1.Pod
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "shard0b"}, &s)
 	if leaderRole(&s) != roleLeader {
-		t.Errorf("replacement shard not promoted, role=%q", leaderRole(&s))
+		t.Errorf("replacement shard not promoted, role=%q result=%+v err=%v", leaderRole(&s), hr, err)
 	}
 }
 

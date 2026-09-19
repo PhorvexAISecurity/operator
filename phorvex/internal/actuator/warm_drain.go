@@ -2,6 +2,8 @@ package actuator
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
@@ -15,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
 const warmDrainMaxAttempts = 2
@@ -27,11 +30,51 @@ const (
 	warmDrainRestored
 )
 
-func warmDrainEndpointConfigDigest(pod *corev1.Pod, legacy bool) string {
+func warmDrainEndpointConfigDigest(pod *corev1.Pod, ep servingEndpoint, legacy bool) string {
+	declaration := servingcontext.FromAnnotations(pod.Annotations)
+	tokenDigest := ""
 	if legacy {
-		return drainEndpointConfigDigest(pod)
+		h := sha256.Sum256([]byte(ep.token))
+		tokenDigest = hex.EncodeToString(h[:])
 	}
-	return secureDrainEndpointConfigDigest(pod)
+	return digestJSON(struct {
+		ModelID, PodIP, HealthPath, ModelsPath, DrainPath, TokenSHA256 string
+		DeclaredPort, Port                                             int
+	}{
+		ModelID: declaration.ModelID, DeclaredPort: declaration.Port,
+		PodIP: ep.podIP, Port: ep.port, HealthPath: ep.healthPath,
+		ModelsPath: ep.modelsPath, DrainPath: ep.drainPath,
+		TokenSHA256: tokenDigest,
+	})
+}
+
+// warmDrainServingContractCurrent couples trusted-profile endpoint validation
+// with one stable authoritative object version. The second read prevents a
+// contract assembled from fields observed on different Pod revisions.
+func warmDrainServingContractCurrent(ctx context.Context, ec EnactCtx, pod *corev1.Pod, legacy bool) (*corev1.Pod, string, error) {
+	if pod == nil || pod.UID == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
+		return nil, "", fmt.Errorf("recorded warm serving participant identity changed")
+	}
+	authorized, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+	if err != nil {
+		return nil, "", err
+	}
+	fresh := &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKeyFromObject(pod), fresh); err != nil {
+		return nil, "", err
+	}
+	if fresh.UID != pod.UID || fresh.ResourceVersion != pod.ResourceVersion || fresh.DeletionTimestamp != nil {
+		return nil, "", fmt.Errorf("recorded warm serving participant changed during validation")
+	}
+	declared, err := validatedEndpointForPod(fresh)
+	if err != nil {
+		return nil, "", err
+	}
+	authorizedDigest := warmDrainEndpointConfigDigest(fresh, authorized, legacy)
+	if authorizedDigest != warmDrainEndpointConfigDigest(fresh, declared, legacy) {
+		return nil, "", fmt.Errorf("recorded warm serving endpoint changed during validation")
+	}
+	return fresh, authorizedDigest, nil
 }
 
 func captureWarmSelectedUIDs(ctx context.Context, reader client.Reader, pool warmPoolIntent, old, next *corev1.Pod, groupKey, groupValue string) ([]string, error) {
@@ -344,11 +387,19 @@ func warmDrainBoundPair(ctx context.Context, ec EnactCtx, r operationReceipt) (*
 	if normalizeServiceAccount(old.Spec.ServiceAccountName) != r.ServingServiceAccount || normalizeServiceAccount(next.Spec.ServiceAccountName) != r.ServingServiceAccount {
 		return nil, nil, fmt.Errorf("recorded warm pair ServiceAccount changed")
 	}
-	if _, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old); err != nil {
+	old, oldDigest, err := warmDrainServingContractCurrent(ctx, ec, old, r.ServingLegacy)
+	if err != nil {
 		return nil, nil, fmt.Errorf("recorded old serving endpoint changed: %w", err)
 	}
-	if warmDrainEndpointConfigDigest(old, r.ServingLegacy) != r.EndpointConfigSHA256 {
+	if oldDigest != r.EndpointConfigSHA256 {
 		return nil, nil, fmt.Errorf("recorded old serving endpoint binding changed")
+	}
+	next, nextDigest, err := warmDrainServingContractCurrent(ctx, ec, next, r.ServingLegacy)
+	if err != nil {
+		return nil, nil, fmt.Errorf("recorded promoted serving endpoint changed: %w", err)
+	}
+	if nextDigest != r.NewEndpointConfigSHA256 {
+		return nil, nil, fmt.Errorf("recorded promoted serving endpoint binding changed")
 	}
 	return old, next, nil
 }
@@ -762,6 +813,16 @@ func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMa
 	if err := observeWarmCompensationRoute(ctx, ec, *r); err != nil {
 		return err
 	}
+	old, next, err = warmDrainBoundPair(ctx, ec, *r)
+	if err != nil {
+		return fmt.Errorf("restored warm pair authority changed after final route observation: %w", err)
+	}
+	if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleShadow {
+		return fmt.Errorf("restored warm pair roles changed after final route observation")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmOriginalServingSet); err != nil {
+		return fmt.Errorf("restored availability changed after final route observation: %w", err)
+	}
 	if err := journalFinish(ctx, ec, cm); err != nil {
 		return fmt.Errorf("restored warm operation receipt cleanup failed: %w", err)
 	}
@@ -916,21 +977,8 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 }
 
 func recoverWarmControllerCompletion(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt, effect string) (string, error) {
-	pol, err := receiptAuthority(ctx, ec.Reader, *r, model.Action(r.Kind))
+	_, err := warmDrainSurvivorCurrent(ctx, ec, *r)
 	if err != nil {
-		return effect, err
-	}
-	survivor := &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.NewName}, survivor); err != nil {
-		return effect, err
-	}
-	if string(survivor.UID) != r.NewUID || survivor.Labels[labelRole] != roleLeader || !podReady(survivor) {
-		return effect, fmt.Errorf("recorded serving survivor changed")
-	}
-	if err := warmSurvivorScope(pol, *r, survivor); err != nil {
-		return effect, err
-	}
-	if err := warmPoolRecheck(ctx, ec.Reader, *r, nil, survivor); err != nil {
 		return effect, err
 	}
 	var recorded *corev1.Pod
@@ -960,6 +1008,11 @@ func recoverWarmControllerCompletion(ctx context.Context, ec EnactCtx, cm *corev
 	if !ready {
 		return effect + "; controller Pod observed; warm capacity pending", fmt.Errorf("controller Pod observed but warm capacity not ready")
 	}
+	// Model readiness can block on the serving backend. Reacquire the survivor's
+	// complete authority after that work and before any terminal phase/cleanup.
+	if _, err := warmDrainSurvivorCurrent(ctx, ec, *r); err != nil {
+		return effect + "; controller Pod observed; serving survivor revalidation pending", err
+	}
 	if err := warmDrainRetiredAvailabilityCurrent(ctx, ec.Reader, *r); err != nil {
 		return effect + "; controller pool observed; serving availability pending", err
 	}
@@ -977,4 +1030,35 @@ func recoverWarmControllerCompletion(ctx context.Context, ec EnactCtx, cm *corev
 		effect += " [PENDING-GPU-VALIDATION]: K8s/model-loaded fallback"
 	}
 	return effect, nil
+}
+
+func warmDrainSurvivorCurrent(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, error) {
+	pol, err := receiptAuthority(ctx, ec.Reader, r, model.Action(r.Kind))
+	if err != nil {
+		return nil, err
+	}
+	survivor := &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.NewName}, survivor); err != nil {
+		return nil, err
+	}
+	if string(survivor.UID) != r.NewUID || survivor.Labels[labelRole] != roleLeader || !podReady(survivor) {
+		return nil, fmt.Errorf("recorded serving survivor changed")
+	}
+	if normalizeServiceAccount(survivor.Spec.ServiceAccountName) != r.ServingServiceAccount {
+		return nil, fmt.Errorf("recorded serving survivor ServiceAccount changed")
+	}
+	survivor, survivorDigest, err := warmDrainServingContractCurrent(ctx, ec, survivor, r.ServingLegacy)
+	if err != nil {
+		return nil, fmt.Errorf("recorded serving survivor endpoint changed: %w", err)
+	}
+	if survivorDigest != r.NewEndpointConfigSHA256 {
+		return nil, fmt.Errorf("recorded serving survivor endpoint binding changed")
+	}
+	if err := warmSurvivorScope(pol, r, survivor); err != nil {
+		return nil, err
+	}
+	if err := warmPoolRecheck(ctx, ec.Reader, r, nil, survivor); err != nil {
+		return nil, err
+	}
+	return survivor, nil
 }

@@ -165,6 +165,13 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 	if err == nil && (string(old.UID) != r.OldUID || old.DeletionTimestamp != nil || old.Labels[r.GroupKey] != r.GroupValue) {
 		return "", fmt.Errorf("recorded old leader missing identity or scope")
 	}
+	if apierrors.IsNotFound(err) {
+		// v2/v6 receipts have no durable send claim or confirmation. Absence of
+		// the old UID therefore cannot prove a drain result or authorize receipt
+		// advancement/cleanup, even when the survivor and controller pool look
+		// healthy.
+		return "old leader absent; prior in-flight drain unverified", fmt.Errorf("legacy warm receipt has ambiguous drain history; external resolution required")
+	}
 	if err == nil && (r.Phase == "prepared" || r.Phase == "promoted") && old.Labels[labelRole] == roleLeader && podReady(old) && newPod.Labels[labelRole] == roleShadow {
 		pol, e := receiptAuthority(ctx, ec.Reader, *r, model.Action(r.Kind))
 		if e != nil {
@@ -190,9 +197,6 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 		// leader is selected they cannot prove that no drain was sent, so do
 		// not change either route, POST, delete or compensate from their bytes.
 		return effect, fmt.Errorf("legacy warm receipt has ambiguous drain history; external resolution required")
-	}
-	if apierrors.IsNotFound(err) {
-		effect = "old leader already absent; prior in-flight drain unverified"
 	}
 	if r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" {
 		r.Phase = "retired-awaiting-controller"

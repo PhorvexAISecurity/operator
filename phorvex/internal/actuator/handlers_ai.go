@@ -243,10 +243,16 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		return refuseAI(kind, ReasonParallelGroupUnavailable)
 	}
 	leader, shadow = currentOld, currentNew
-	if _, err := servingEndpointForPod(ctx, ec, req, leader); err != nil {
+	servingLegacy := true
+	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
+		servingLegacy = false
+	}
+	leader, oldEndpointDigest, err := warmDrainServingContractCurrent(ctx, ec, leader, servingLegacy)
+	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: current leader serving identity: %w", kind, err)
 	}
-	if _, err := servingEndpointForPod(ctx, ec, req, shadow); err != nil {
+	shadow, newEndpointDigest, err := warmDrainServingContractCurrent(ctx, ec, shadow, servingLegacy)
+	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: current shadow serving identity: %w", kind, err)
 	}
 	pool, err := warmPoolCapture(ctx, ec.Reader, leader, shadow, groupKey, group)
@@ -259,9 +265,11 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	bindingDigest := ""
 	bindingServiceAccount := normalizeServiceAccount(leader.Spec.ServiceAccountName)
-	servingLegacy := true
-	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
-		bindingDigest, servingLegacy = ec.ServingAttempt.digest, false
+	if normalizeServiceAccount(shadow.Spec.ServiceAccountName) != bindingServiceAccount {
+		return HandlerResult{}, fmt.Errorf("%s: warm pair ServiceAccount differs at admission", kind)
+	}
+	if !servingLegacy {
+		bindingDigest = ec.ServingAttempt.digest
 	}
 	authoritySeed := operationReceipt{Kind: kind, PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID}
 	admittedPolicy, err := receiptAuthority(ctx, ec.Reader, authoritySeed, req.Action)
@@ -272,7 +280,7 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if admittedFloor <= 0 || admittedFloor > int(pool.Desired) || admittedFloor > len(selectedUIDs) {
 		return HandlerResult{}, fmt.Errorf("%s: availability floor %d cannot be admitted by recorded serving set size %d", kind, admittedFloor, len(selectedUIDs))
 	}
-	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: warmDrainEndpointConfigDigest(leader, servingLegacy), WarmSelectedUIDs: selectedUIDs, AdmittedFloor: admittedFloor}
+	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: oldEndpointDigest, NewEndpointConfigSHA256: newEndpointDigest, WarmSelectedUIDs: selectedUIDs, AdmittedFloor: admittedFloor}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}

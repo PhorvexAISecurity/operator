@@ -248,6 +248,9 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 			}
 			d := &m069Delete{}
 			c := m069Client(d, interceptor.Funcs{}, objs...)
+			if tc.name == "warm-swap" || tc.name == "model-shard-replace" {
+				c = m067ModeledRouteClient(c, objs[0].(*corev1.Pod))
+			}
 			ec, _ := m069Stack()
 			ec.Client = c
 			ec.Reader, ec.JournalNamespace = c, "operator"
@@ -264,7 +267,7 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 				t.Fatalf("positive control: %+v %v", hr, err)
 			}
 			if len(d.opts) == 0 {
-				t.Fatal("positive control issued no Delete")
+				t.Fatalf("positive control issued no Delete: result=%+v err=%v", hr, err)
 			}
 			for name, calls := range d.opts {
 				for _, o := range calls {

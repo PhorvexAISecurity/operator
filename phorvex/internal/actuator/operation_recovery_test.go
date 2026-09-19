@@ -33,6 +33,19 @@ type changingDrainVLLM struct {
 	change func()
 }
 
+type changingReadyVLLM struct {
+	mockVLLM
+	change func()
+}
+
+func (m *changingReadyVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, error) {
+	if m.change != nil {
+		m.change()
+		m.change = nil
+	}
+	return m.mockVLLM.ModelReady(ctx, ep)
+}
+
 func (m *changingDrainVLLM) DrainRequests(ctx context.Context, ep servingEndpoint) (int, error) {
 	if m.change != nil {
 		m.change()
@@ -664,6 +677,70 @@ func TestM067DefinitelyUnsentRestoresOldFirstWithoutZeroRoute(t *testing.T) {
 	}
 }
 
+func TestM067CompensationRechecksScopeAfterFinalRouteWait(t *testing.T) {
+	ctx := context.Background()
+	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	base := fakeC(old, next)
+	modeled := m067ModeledRouteClient(base, old)
+	changed := false
+	guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{List: func(ctx context.Context, inner client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+		if _, ok := list.(*discoveryv1.EndpointSliceList); ok && !changed {
+			cm := &corev1.ConfigMap{}
+			key := client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}
+			if err := inner.Get(ctx, key, cm); err == nil && strings.Contains(cm.Data["receipt"], `"phase":"routing-restored"`) {
+				policy := &v1alpha1.PhorvexPolicy{}
+				if err := inner.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, policy); err != nil {
+					return err
+				}
+				policy.Spec.Selector.MatchLabels = map[string]string{"other": "scope"}
+				if err := inner.Update(ctx, policy); err != nil {
+					return err
+				}
+				changed = true
+			}
+		}
+		return inner.List(ctx, list, opts...)
+	}})
+	vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+	result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+	if err == nil || result.MutationKind != "swap" || !changed || !strings.Contains(err.Error(), "outside policy/group scope") {
+		t.Fatalf("post-wait selector drift was not retained: result=%+v err=%v changed=%t", result, err, changed)
+	}
+	if vllm.drainCalls != 1 {
+		t.Fatalf("post-wait selector drift replayed drain: calls=%d", vllm.drainCalls)
+	}
+	receipt := m067ReadReceipt(t, ctx, base, old)
+	if receipt.Phase != "routing-restored" {
+		t.Fatalf("post-wait selector drift changed retained phase: %+v", receipt)
+	}
+	oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); err != nil || oldCurrent.Labels[labelRole] != roleLeader {
+		t.Fatalf("post-wait selector drift lost restored old route: %v %+v", err, oldCurrent)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleShadow {
+		t.Fatalf("post-wait selector drift changed restored shadow: %v %+v", err, nextCurrent)
+	}
+	policy := &v1alpha1.PhorvexPolicy{}
+	if err := base.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, policy); err != nil {
+		t.Fatal(err)
+	}
+	policy.Spec.Selector.MatchLabels = map[string]string{labelSwapGroup: "g"}
+	if err := base.Update(ctx, policy); err != nil {
+		t.Fatal(err)
+	}
+	n := NewNativeActuator(guard)
+	n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+	n.RouteObservationTimeout, n.RouteObservationInterval = 50*time.Millisecond, time.Millisecond
+	events, recoverErr := n.RecoverOperations(ctx, false)
+	if recoverErr != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+		t.Fatalf("restored selector did not complete compensation: events=%+v err=%v", events, recoverErr)
+	}
+	if vllm.drainCalls != 1 {
+		t.Fatalf("selector recovery replayed drain: calls=%d", vllm.drainCalls)
+	}
+}
+
 func TestM067LegacyRetiringReceiptNeverPostsDeletesOrRestores(t *testing.T) {
 	ctx := context.Background()
 	c, n, old, newPod := interruptedWarmReceiptFixture(t)
@@ -714,6 +791,354 @@ func TestM067LegacyRetiringReceiptNeverPostsDeletesOrRestores(t *testing.T) {
 		if err := c.Get(ctx, client.ObjectKey{Namespace: old.Namespace, Name: expected.name}, pod); err != nil || pod.Labels[labelRole] != expected.role {
 			t.Fatalf("legacy receipt mutated %s: %v %+v", expected.name, err, pod)
 		}
+	}
+}
+
+func TestM067LegacyOldAbsentReceiptIsRetainedByteForByte(t *testing.T) {
+	for _, version := range []int{2, warmSecureReceiptVersion} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			ctx := context.Background()
+			c, n, old, _ := interruptedWarmReceiptFixture(t)
+			cm := &corev1.ConfigMap{}
+			key := client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}
+			if err := c.Get(ctx, key, cm); err != nil {
+				t.Fatal(err)
+			}
+			var receipt operationReceipt
+			if err := json.Unmarshal([]byte(cm.Data["receipt"]), &receipt); err != nil {
+				t.Fatal(err)
+			}
+			receipt.Version, receipt.Phase = version, "retiring"
+			receipt.DrainAttempts, receipt.Aborted, receipt.AdmittedFloor = 0, 0, 0
+			receipt.WarmSelectedUIDs = nil
+			receipt.EndpointConfigSHA256, receipt.NewEndpointConfigSHA256 = "", ""
+			receipt.ServingLegacy = false
+			receipt.ServingServiceAccount = ""
+			receipt.ServingBindingSHA256 = ""
+			var secureConfig *ServingSecurityConfig
+			if version == warmSecureReceiptVersion {
+				fixture := newM093Fixture(t, nil)
+				secret := &corev1.Secret{}
+				if err := fixture.client.Get(ctx, client.ObjectKey{Namespace: "operator", Name: fixture.binding.SecretName}, secret); err != nil {
+					t.Fatal(err)
+				}
+				binding := fixture.binding
+				binding.Namespace, binding.PolicyName, binding.PolicyUID, binding.ServiceAccount = "ns", "policy", "policy-uid", "default"
+				secureConfig = writeServingSecurityConfig(t, ServingSecuritySecureRequired, "operator", []ServingSecurityBinding{binding})
+				receipt.ServingBindingSHA256 = servingBindingDigest("operator", binding)
+				receipt.ServingServiceAccount = "default"
+				secret = secret.DeepCopy()
+				secret.ResourceVersion = ""
+				if err := c.Create(ctx, secret); err != nil {
+					t.Fatal(err)
+				}
+			}
+			encoded, err := json.Marshal(receipt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cm.Data["receipt"] = string(encoded)
+			if err := c.Update(ctx, cm); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Delete(ctx, old); err != nil {
+				t.Fatal(err)
+			}
+			n.SetServingSecurity(secureConfig)
+			vllm := &mockVLLM{loaded: true}
+			n.RecoveryVLLM = vllm
+			events, err := n.RecoverOperations(ctx, false)
+			if err != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Err.Error(), "ambiguous drain history") {
+				t.Fatalf("legacy old-absent recovery did not reach ambiguity rule: events=%+v err=%v", events, err)
+			}
+			if vllm.drainCalls != 0 {
+				t.Fatalf("legacy old-absent recovery sent %d drains", vllm.drainCalls)
+			}
+			after := &corev1.ConfigMap{}
+			if err := c.Get(ctx, key, after); err != nil || after.Data["receipt"] != string(encoded) {
+				t.Fatalf("legacy old-absent receipt changed: err=%v before=%q after=%q", err, encoded, after.Data["receipt"])
+			}
+		})
+	}
+}
+
+func TestM067WarmServingContractBindsBothParticipants(t *testing.T) {
+	ctx := context.Background()
+	mutations := []struct {
+		name   string
+		mutate func(*corev1.Pod)
+	}{
+		{"model", func(p *corev1.Pod) { p.Annotations["phorvex.ai/model-id"] = "changed-model" }},
+		{"valid-port", func(p *corev1.Pod) { p.Annotations[annoServingPort] = "9001" }},
+		{"invalid-port", func(p *corev1.Pod) { p.Annotations[annoServingPort] = "invalid" }},
+		{"health-path", func(p *corev1.Pod) { p.Annotations[annoHealthPath] = "/changed-health" }},
+		{"models-path", func(p *corev1.Pod) { p.Annotations[annoModelsPath] = "/changed-models" }},
+		{"drain-path", func(p *corev1.Pod) { p.Annotations[annoDrainPath] = "/changed-drain" }},
+		{"address", func(p *corev1.Pod) { p.Status.PodIP = "10.99.0.1" }},
+		{"service-account", func(p *corev1.Pod) { p.Spec.ServiceAccountName = "borrowed" }},
+	}
+	for _, participant := range []string{"old", "promoted"} {
+		for _, mutation := range mutations {
+			t.Run(participant+"-"+mutation.name, func(t *testing.T) {
+				c, _, old, next := interruptedWarmReceiptFixture(t)
+				receipt := m067ReadReceipt(t, ctx, c, old)
+				target := old
+				if participant == "promoted" {
+					target = next
+				}
+				current := &corev1.Pod{}
+				if err := c.Get(ctx, client.ObjectKeyFromObject(target), current); err != nil {
+					t.Fatal(err)
+				}
+				mutation.mutate(current)
+				var updateErr error
+				if mutation.name == "address" {
+					updateErr = c.Status().Update(ctx, current)
+				} else {
+					updateErr = c.Update(ctx, current)
+				}
+				if updateErr != nil {
+					t.Fatal(updateErr)
+				}
+				ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{}, ServingRequest: boundReq(old, model.ActionWarmSwap)}
+				if _, _, err := warmDrainBoundPair(ctx, ec, receipt); err == nil {
+					t.Fatal("changed serving contract retained authority")
+				}
+			})
+		}
+	}
+}
+
+func TestM067WarmServingContractDefaultsAndCredentialMode(t *testing.T) {
+	pod := aiPod("ns", "model", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	pod.Annotations["phorvex.ai/model-id"] = "model"
+	pod.Annotations[annoServingTok] = "first-token"
+	ep, err := validatedEndpointForPod(pod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := warmDrainEndpointConfigDigest(pod, ep, true)
+	secure := warmDrainEndpointConfigDigest(pod, ep, false)
+	pod.Annotations[annoServingTok] = "second-token"
+	ep, err = validatedEndpointForPod(pod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warmDrainEndpointConfigDigest(pod, ep, true) == legacy {
+		t.Fatal("legacy token change did not change serving contract")
+	}
+	if warmDrainEndpointConfigDigest(pod, ep, false) != secure {
+		t.Fatal("secure serving contract depended on ignored legacy token")
+	}
+	defaults := pod.DeepCopy()
+	explicit := pod.DeepCopy()
+	explicit.Annotations[annoHealthPath] = defaultHealthPath
+	explicit.Annotations[annoModelsPath] = defaultModelsPath
+	explicit.Annotations[annoDrainPath] = defaultDrainPath
+	defaultEP, err := validatedEndpointForPod(defaults)
+	if err != nil {
+		t.Fatal(err)
+	}
+	explicitEP, err := validatedEndpointForPod(explicit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warmDrainEndpointConfigDigest(defaults, defaultEP, false) != warmDrainEndpointConfigDigest(explicit, explicitEP, false) {
+		t.Fatal("explicit effective route defaults changed serving contract")
+	}
+}
+
+func TestM067WarmDrainReceiptRequiresBothServingContracts(t *testing.T) {
+	ctx := context.Background()
+	c, _, old, _ := interruptedWarmReceiptFixture(t)
+	receipt := m067ReadReceipt(t, ctx, c, old)
+	if !receipt.valid() {
+		t.Fatal("producer emitted invalid v10 receipt")
+	}
+	for _, mutate := range []func(*operationReceipt){
+		func(r *operationReceipt) { r.EndpointConfigSHA256 = "" },
+		func(r *operationReceipt) { r.NewEndpointConfigSHA256 = "" },
+		func(r *operationReceipt) { r.NewEndpointConfigSHA256 = strings.Repeat("z", 64) },
+	} {
+		invalid := receipt
+		mutate(&invalid)
+		if invalid.valid() {
+			t.Fatalf("invalid serving-contract receipt accepted: %+v", invalid)
+		}
+	}
+}
+
+func TestM067PromotedServingBindingBlocksPostClaimAndPostConfirmation(t *testing.T) {
+	for _, phase := range []string{"drain-dispatching", "drain-confirmed"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx := context.Background()
+			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+			base := fakeC(old, next)
+			modeled := m067ModeledRouteClient(base, old)
+			changed, deletes := false, 0
+			guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{
+				Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					if err := inner.Update(ctx, obj, opts...); err != nil {
+						return err
+					}
+					cm, ok := obj.(*corev1.ConfigMap)
+					if !ok || changed || !strings.Contains(cm.Data["receipt"], `"phase":"`+phase+`"`) {
+						return nil
+					}
+					changed = true
+					current := &corev1.Pod{}
+					if err := inner.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+						return err
+					}
+					current.Annotations["phorvex.ai/model-id"] = "changed-after-" + phase
+					return inner.Update(ctx, current)
+				},
+				Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					if pod, ok := obj.(*corev1.Pod); ok && pod.Name == old.Name {
+						deletes++
+					}
+					return inner.Delete(ctx, obj, opts...)
+				},
+			})
+			vllm := &mockVLLM{loaded: true, drained: 2}
+			result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+			if err == nil || result.MutationKind != "swap" || !changed {
+				t.Fatalf("promoted binding drift did not stop %s boundary: result=%+v err=%v", phase, result, err)
+			}
+			wantPosts := 0
+			if phase == "drain-confirmed" {
+				wantPosts = 1
+			}
+			if vllm.drainCalls != wantPosts || deletes != 0 {
+				t.Fatalf("%s binding drift effects: posts=%d want=%d deletes=%d", phase, vllm.drainCalls, wantPosts, deletes)
+			}
+			if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); getErr != nil {
+				t.Fatalf("%s binding drift removed old UID: %v", phase, getErr)
+			}
+		})
+	}
+}
+
+func TestM067ControllerCompletionRevalidatesSurvivorServingBinding(t *testing.T) {
+	ctx := context.Background()
+	c, n, old, next := interruptedWarmReceiptFixture(t)
+	changed := false
+	guard := interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+		if err := inner.Delete(ctx, obj, opts...); err != nil {
+			return err
+		}
+		pod, ok := obj.(*corev1.Pod)
+		if !ok || pod.Name != old.Name || changed {
+			return nil
+		}
+		changed = true
+		current := &corev1.Pod{}
+		if err := inner.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+			return err
+		}
+		current.Annotations[annoModelsPath] = "/changed-after-old-absence"
+		return inner.Update(ctx, current)
+	}})
+	n.Client, n.Reader = guard, guard
+	vllm := &mockVLLM{loaded: true, drained: 1}
+	n.RecoveryVLLM = vllm
+	events, err := n.RecoverOperations(ctx, false)
+	if err != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Err.Error(), "survivor endpoint binding changed") {
+		t.Fatalf("survivor drift did not retain controller completion: events=%+v err=%v", events, err)
+	}
+	if !changed || vllm.drainCalls != 1 {
+		t.Fatalf("survivor drift fixture not exercised: changed=%t posts=%d", changed, vllm.drainCalls)
+	}
+	var receipts corev1.ConfigMapList
+	if err := c.List(ctx, &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(receipts.Items) != 1 {
+		t.Fatalf("survivor drift did not retain exact receipt: count=%d err=%v", len(receipts.Items), err)
+	}
+	current := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+		t.Fatal(err)
+	}
+	delete(current.Annotations, annoModelsPath)
+	if err := c.Update(ctx, current); err != nil {
+		t.Fatal(err)
+	}
+	events, err = n.RecoverOperations(ctx, false)
+	if err != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+		t.Fatalf("stable survivor did not complete retained v10 receipt: events=%+v err=%v", events, err)
+	}
+}
+
+func TestM067ControllerCompletionRevalidatesSurvivorAfterReadiness(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		mutate     func(client.Client, *corev1.Pod) error
+		restore    func(client.Client, *corev1.Pod) error
+	}{
+		{name: "service-account", want: "survivor ServiceAccount changed", mutate: func(c client.Client, pod *corev1.Pod) error {
+			pod.Spec.ServiceAccountName = "changed-during-controller-readiness"
+			return c.Update(context.Background(), pod)
+		}, restore: func(c client.Client, pod *corev1.Pod) error {
+			pod.Spec.ServiceAccountName = "default"
+			return c.Update(context.Background(), pod)
+		}},
+		{name: "policy-selector", want: "outside current policy selector", mutate: func(c client.Client, _ *corev1.Pod) error {
+			policy := &v1alpha1.PhorvexPolicy{}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "policy"}, policy); err != nil {
+				return err
+			}
+			policy.Spec.Selector.MatchLabels = map[string]string{"other": "scope"}
+			return c.Update(context.Background(), policy)
+		}, restore: func(c client.Client, _ *corev1.Pod) error {
+			policy := &v1alpha1.PhorvexPolicy{}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "policy"}, policy); err != nil {
+				return err
+			}
+			policy.Spec.Selector.MatchLabels = map[string]string{labelSwapGroup: "g"}
+			return c.Update(context.Background(), policy)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			c, n, old, next := interruptedWarmReceiptFixture(t)
+			changed := false
+			vllm := &changingReadyVLLM{mockVLLM: mockVLLM{loaded: true, drained: 1}, change: func() {
+				current := &corev1.Pod{}
+				if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+					t.Fatal(err)
+				}
+				if err := tc.mutate(c, current); err != nil {
+					t.Fatal(err)
+				}
+				changed = true
+			}}
+			n.RecoveryVLLM = vllm
+			events, err := n.RecoverOperations(ctx, false)
+			if err != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Err.Error(), tc.want) {
+				t.Fatalf("post-readiness survivor drift did not retain completion: events=%+v err=%v", events, err)
+			}
+			if !changed || vllm.drainCalls != 1 {
+				t.Fatalf("post-readiness drift fixture not exercised: changed=%t posts=%d", changed, vllm.drainCalls)
+			}
+			if getErr := c.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); !apierrors.IsNotFound(getErr) {
+				t.Fatalf("confirmed old UID state changed unexpectedly: %v", getErr)
+			}
+			var receipts corev1.ConfigMapList
+			if err := c.List(ctx, &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(receipts.Items) != 1 {
+				t.Fatalf("post-readiness drift did not retain receipt: count=%d err=%v", len(receipts.Items), err)
+			}
+			current := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(next), current); err != nil {
+				t.Fatal(err)
+			}
+			if err := tc.restore(c, current); err != nil {
+				t.Fatal(err)
+			}
+			n.RecoveryVLLM = &mockVLLM{loaded: true}
+			events, err = n.RecoverOperations(ctx, false)
+			if err != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+				t.Fatalf("restored post-readiness survivor did not complete: events=%+v err=%v", events, err)
+			}
+		})
 	}
 }
 
@@ -978,8 +1403,12 @@ func m067ReadReceipt(t *testing.T, ctx context.Context, c client.Client, old *co
 }
 
 func m067SyncFakeRoute(ctx context.Context, c client.Client, old *corev1.Pod) error {
+	groupKey := labelSwapGroup
+	if old.Labels[groupKey] == "" {
+		groupKey = labelModelShard
+	}
 	var pods corev1.PodList
-	if err := c.List(ctx, &pods, client.InNamespace(old.Namespace), client.MatchingLabels{"app": "m066-pool", labelSwapGroup: "g"}); err != nil {
+	if err := c.List(ctx, &pods, client.InNamespace(old.Namespace), client.MatchingLabels{"app": "m066-pool", groupKey: old.Labels[groupKey]}); err != nil {
 		return err
 	}
 	slice := &discoveryv1.EndpointSlice{}

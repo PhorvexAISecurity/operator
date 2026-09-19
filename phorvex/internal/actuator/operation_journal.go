@@ -61,7 +61,11 @@ type operationReceipt struct {
 	PriorServingValue    string            `json:"priorServingValue,omitempty"`
 	EndpointAddresses    []string          `json:"endpointAddresses,omitempty"`
 	EndpointConfigSHA256 string            `json:"endpointConfigSHA256,omitempty"`
-	Aborted              int               `json:"aborted,omitempty"`
+	// NewEndpointConfigSHA256 binds the promoted warm participant's immutable
+	// serving declaration and effective endpoint. EndpointConfigSHA256 remains
+	// the corresponding old/drained participant binding.
+	NewEndpointConfigSHA256 string `json:"newEndpointConfigSHA256,omitempty"`
+	Aborted                 int    `json:"aborted,omitempty"`
 	// Scalar warm v10 fields protect each serving drain send and the exact
 	// pre-cutover routing set used by definitely-unsent compensation.
 	DrainAttempts    int      `json:"drainAttempts,omitempty"`
@@ -300,7 +304,7 @@ func (r operationReceipt) valid() bool {
 			if r.Version != warmDrainReceiptVersion {
 				return true
 			}
-			if !boundedLabelMap(r.TargetLabels) || !validDigest(r.EndpointConfigSHA256) || r.DrainAttempts < 0 || r.DrainAttempts > warmDrainMaxAttempts || len(r.WarmSelectedUIDs) == 0 || len(r.WarmSelectedUIDs) > warmPoolMaxMembers || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(p.Desired) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0 {
+			if !boundedLabelMap(r.TargetLabels) || !validDigest(r.EndpointConfigSHA256) || !validDigest(r.NewEndpointConfigSHA256) || r.DrainAttempts < 0 || r.DrainAttempts > warmDrainMaxAttempts || len(r.WarmSelectedUIDs) == 0 || len(r.WarmSelectedUIDs) > warmPoolMaxMembers || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(p.Desired) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0 {
 				return false
 			}
 			if r.ServingLegacy {
