@@ -1,0 +1,13 @@
+=== RUN   TestM137LeadClaimBuildIdentityRedactionGap
+=== RUN   TestM137LeadClaimBuildIdentityRedactionGap/trace-fallback
+    zz_m181_lead_test.go:60: top-level claim leaked build-identity credential pattern: "registry.example/team/credential:s3cr3t-token"
+=== RUN   TestM137LeadClaimBuildIdentityRedactionGap/runtime-explicit-claim
+    zz_m181_lead_test.go:60: top-level claim leaked build-identity credential pattern: "registry.example/team/credential:s3cr3t-token"
+--- FAIL: TestM137LeadClaimBuildIdentityRedactionGap (0.00s)
+    --- FAIL: TestM137LeadClaimBuildIdentityRedactionGap/trace-fallback (0.00s)
+    --- FAIL: TestM137LeadClaimBuildIdentityRedactionGap/runtime-explicit-claim (0.00s)
+=== RUN   TestLeadM181OrdinaryClaimIdentityUnchanged
+--- PASS: TestLeadM181OrdinaryClaimIdentityUnchanged (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/audit	0.016s
+FAIL
