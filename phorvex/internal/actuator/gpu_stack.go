@@ -387,6 +387,9 @@ func definitelyUnsentServingRequest(err error) bool {
 }
 
 func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	var err error
 	ep, err = ep.validated()
 	if err != nil {
@@ -401,6 +404,9 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 	}
 	if code != http.StatusOK {
 		return false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	// health 200 => live; the models route lists the loaded model => model-loaded.
 	mcode, body, err := c.doEndpoint(ctx, ep, http.MethodGet, ep.modelsPath)

@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -42,7 +43,11 @@ const (
 	roleLeader       = "leader"
 	roleShadow       = "warm-shadow"
 	roleRetiring     = "retiring"
+
+	warmCandidateAttemptLimit = 4
 )
+
+var errWarmCandidateAttemptBudget = errors.New("warm candidate readiness attempt budget exhausted")
 
 // ---- shared warm-pool primitives (used by warm-swap AND model-shard-replace) ----
 
@@ -62,36 +67,125 @@ func shadowModelReady(ctx context.Context, ec EnactCtx, pod *corev1.Pod) (ready,
 	if endpointErr != nil {
 		return false, false
 	}
+	loaded, pending, _ := shadowModelReadyAtEndpoint(ctx, ec, pod, ep)
+	return loaded, pending
+}
+
+// shadowModelReadyAtEndpoint preserves cancellation for bounded candidate traversal. Other
+// readiness failures retain the existing meaning: this candidate is not promotable, while only a
+// definitely unreachable stack may use the documented Kubernetes/model-loaded fallback.
+func shadowModelReadyAtEndpoint(ctx context.Context, ec EnactCtx, pod *corev1.Pod, ep servingEndpoint) (ready, pending bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return false, false, err
+	}
 	loaded, err := ec.vllm().ModelReady(ctx, ep)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return false, false, ctxErr
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false, false, err
+	}
 	if err == nil {
-		return loaded, false // real vLLM verdict
+		return loaded, false, nil // real vLLM verdict
 	}
 	if errors.Is(err, errStackUnreachable) {
-		return pod.Labels[labelModelLoaded] == "true", true // K8s-ready fallback, pending real validation
+		return pod.Labels[labelModelLoaded] == "true", true, nil // K8s-ready fallback, pending real validation
 	}
-	return false, false
+	return false, false, nil
 }
 
 // pickReadyShadow returns the oldest promotable shadow in the selector set (nil if none), plus whether
-// the readiness verdict fell back to the K8s gate (pending real vLLM validation).
+// the readiness verdict fell back to the K8s gate (pending real vLLM validation). Candidate inventory
+// is an authoritative, complete bounded snapshot. Traversal is deterministic and refuses an unfinished
+// candidate set rather than reporting that no Ready candidate exists.
 func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.MatchingLabels, exclude string) (*corev1.Pod, bool, error) {
-	var pods corev1.PodList
-	if err := ec.Client.List(ctx, &pods, client.InNamespace(ns), sel); err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
+	if ec.Reader == nil {
+		return nil, false, fmt.Errorf("warm candidate authoritative reader unavailable")
+	}
+	var pods corev1.PodList
+	if err := ec.Reader.List(ctx, &pods, client.InNamespace(ns), sel, client.Limit(warmPoolMaxMembers+1)); err != nil {
+		return nil, false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if pods.Continue != "" || len(pods.Items) > warmPoolMaxMembers {
+		return nil, false, fmt.Errorf("warm candidate inventory incomplete/overflow")
+	}
+
+	candidates := make([]corev1.Pod, 0, len(pods.Items))
+	seenKeys := make(map[string]struct{}, len(pods.Items))
+	seenUIDs := make(map[string]struct{}, len(pods.Items))
 	for i := range pods.Items {
 		p := &pods.Items[i]
 		if p.Name == exclude {
 			continue
 		}
-		if _, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, p); err != nil {
+		if p.Namespace != ns || p.Name == "" || p.UID == "" || p.ResourceVersion == "" {
+			return nil, false, fmt.Errorf("warm candidate inventory contains incomplete identity")
+		}
+		for key, value := range sel {
+			if p.Labels[key] != value {
+				return nil, false, fmt.Errorf("warm candidate inventory violates selector authority")
+			}
+		}
+		key, uid := p.Namespace+"/"+p.Name, string(p.UID)
+		if _, exists := seenKeys[key]; exists {
+			return nil, false, fmt.Errorf("warm candidate inventory contains duplicate identity")
+		}
+		if _, exists := seenUIDs[uid]; exists {
+			return nil, false, fmt.Errorf("warm candidate inventory contains duplicate UID")
+		}
+		seenKeys[key], seenUIDs[uid] = struct{}{}, struct{}{}
+		candidates = append(candidates, *p.DeepCopy())
+	}
+	sort.Slice(candidates, func(i, j int) bool { return warmCandidateLess(&candidates[i], &candidates[j]) })
+
+	attempts := 0
+	for i := range candidates {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
+		if attempts == warmCandidateAttemptLimit {
+			return nil, false, fmt.Errorf("%w after %d candidates; candidate set incomplete", errWarmCandidateAttemptBudget, attempts)
+		}
+		p := &candidates[i]
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, p)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, false, ctxErr
+			}
 			return nil, false, fmt.Errorf("warm candidate serving endpoint configuration: %w", err)
 		}
-		if ready, pending := shadowModelReady(ctx, ec, p); ready {
+		attempts++
+		if !podReady(p) || p.DeletionTimestamp != nil {
+			continue
+		}
+		ready, pending, err := shadowModelReadyAtEndpoint(ctx, ec, p, ep)
+		if err != nil {
+			return nil, false, err
+		}
+		if ready {
 			return p, pending, nil
 		}
 	}
 	return nil, false, nil
+}
+
+func warmCandidateLess(a, b *corev1.Pod) bool {
+	if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+		return a.CreationTimestamp.Before(&b.CreationTimestamp)
+	}
+	if a.Namespace != b.Namespace {
+		return a.Namespace < b.Namespace
+	}
+	if a.Name != b.Name {
+		return a.Name < b.Name
+	}
+	return string(a.UID) < string(b.UID)
 }
 
 // warmCutover is the shared provision-before-retire leadership flip: find a Ready shadow, flip it to
