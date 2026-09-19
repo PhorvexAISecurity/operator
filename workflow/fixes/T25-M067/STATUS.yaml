@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 15
+revision: 16
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 4c89b7f7eb22e5665a3738a4416b4d9fa74b2292c70214d87f061e0583ed8d71
+    sha256: aac0e97df47c09d75466831dd74008157336b778f36f88230c95fc11625c3f7b
     source_sha: 2f22f93dc41f7126c1e67739304d104cdfaae320
-    at: '2026-09-19T19:50:04+00:00'
+    at: '2026-09-19T20:04:44+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   base_review:
@@ -102,7 +102,7 @@ next_action:
   owner: sol-t25-m067-boundary
   action: Validate canonical focused/API/race/exactpreflight after lead heavy-slot
     grant; submit no-notify
-updated_at: '2026-09-19T19:50:04+00:00'
+updated_at: '2026-09-19T20:04:44+00:00'
 configuration_history:
 - at: '2026-09-19T15:28:44+00:00'
   by: codex-lead
@@ -206,5 +206,14 @@ check_history:
   sha256: 8535dfa0800e64ed47f6ad3eb12031e17b6cb63a2956a9b62f1a02db18313f55
   source_sha: 3b194eee2cde60506302217c246d015913424a99
   at: '2026-09-19T19:32:28+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 4c89b7f7eb22e5665a3738a4416b4d9fa74b2292c70214d87f061e0583ed8d71
+  source_sha: 2f22f93dc41f7126c1e67739304d104cdfaae320
+  at: '2026-09-19T19:50:04+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
