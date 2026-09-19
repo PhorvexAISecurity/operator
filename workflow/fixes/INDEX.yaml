@@ -1158,11 +1158,11 @@ fixes:
     issues:
     - M-109
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t17-m109
-    head_sha: null
+    head_sha: 25d3384a561d8a0cb3a0c0e48bcecb4a807b9576
   T17-M065:
     directory: fixes/T17-M065
     aliases: []
