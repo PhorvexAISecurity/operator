@@ -1,0 +1,330 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 16
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: b6040777b1dceb9a52ccd8c816bc9bba13615746a5457a3c2acf467834b468da
+    source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+    at: '2026-09-19T16:42:04+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/current-base.log
+    sha256: 8d8ef2f5bdd96f33f3fdeeeb0426bbb6179323807060df7f94aa0f2825fe18b2
+    source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+    at: '2026-09-19T15:59:04+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: e4a48dec59bde55158c249546e6932179a95fa691a1f2be32d1b3072180bd174
+    source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+    at: '2026-09-19T15:59:04+00:00'
+    baseline_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  preflight:
+    result: PASS
+    by: sol-t20-m137
+    artifact: evidence/preflight/receipt.json
+    sha256: ac1c5be1353af240f31d856c1ce38ea9facd21a59640578b77c3bdc68a2c2211
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:01:01+00:00'
+  implementation:
+    result: PASS
+    by: sol-t20-m137
+    artifact: 04-diff.patch
+    sha256: 941879dc0f239b50e7f3b5f69d0601ce8d386664349ce4ce1a2048101103ff17
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:01:01+00:00'
+  l0:
+    result: PASS
+    by: sol-t20-m137
+    artifact: evidence/preflight/receipt.json
+    sha256: ac1c5be1353af240f31d856c1ce38ea9facd21a59640578b77c3bdc68a2c2211
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:01:01+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: ad103aa228d15800a4b10a26adc45a195942d14a3f36ede4c2a82702e1a370af
+  l1:
+    result: PASS
+    by: sol-t20-m137
+    artifact: evidence/worker/head/offline-de5e4ad5.log
+    sha256: 21f16646d5f43ecf81e89fe445a4eed308ba889570e026d48cf71a2bb081709f
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:01:02+00:00'
+    inputs:
+    - phorvex/cmd/m137-scale-report
+    - phorvex/internal/graph
+    - phorvex/internal/runner
+    - phorvex/internal/scaleprobe
+    - workflow/fixes/T20-M137/verify.sh
+    inputs_sha256: 94315095532766563f550bf159718b7b958b4488c77309ea1733aab594272618
+  l2:
+    result: PASS
+    by: sol-t20-m137
+    artifact: 05-evidence.md
+    sha256: 5c26f633dbb511e89419fcccc4776d0fc401b1555f9429d55f8cf3ff965eb708
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:01:02+00:00'
+    inputs:
+    - phorvex/internal/graph
+    - phorvex/internal/ingest
+    - phorvex/internal/runner
+    - phorvex/internal/scaleprobe
+    inputs_sha256: e4e4ed8c1676b5d6ba576a8332f76fe7349df74fc570770b239d5450ddeee66e
+  positive_control:
+    result: PASS
+    by: sol-t20-m137
+    artifact: evidence/worker/scale/run-de5e4ad5/small-native-partitioned.json
+    sha256: 4d92d13da76e712f2595856b5bbcc86f07339d1b87960039321a01c84a4dcbb5
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:01:02+00:00'
+    inputs:
+    - phorvex/internal/graph
+    - phorvex/internal/runner
+    - phorvex/internal/scaleprobe
+    inputs_sha256: 280fc774edccd750ded54a301ab8888fe23ee7658b37fec187c35c45eab00a80
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: b47ec522602afcb4b5df92e80cde8ee71aa64ecf751ac6878fd516f9b246d8d6
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:06:41+00:00'
+    baseline_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 75d6807f0f1bf733e332fc9fa91e654eba6c25d1bc1443bce00c4cd267331dd4
+    source_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+    at: '2026-09-19T17:06:41+00:00'
+    incident_sha256: b47ec522602afcb4b5df92e80cde8ee71aa64ecf751ac6878fd516f9b246d8d6
+fix_id: T20-M137
+issues:
+- M-137
+title: Measure complete manager ticks and avoid unchanged existential status writes
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t20-m137
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier19
+  code_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t20-m137
+  base_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  head_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- 'OPEN SOURCE: full successful manager tick target under1s at1000Pods is unmet; synchronized
+  final warmup returned126.334s at30s deadline and produced zero steady samples. No1000Pod
+  percentile/capacity PASS.'
+- 'OPEN SOURCE: synchronous audit representation/redaction/serialization is the measured
+  post-graph CPU bottleneck; preserve schema, redaction, ownership and durability
+  in follow-up.'
+- 'OPEN SOURCE: cooperative cancellation permits126.334s return after30s context;
+  audit completeness versus bounded deadline requires explicit semantics, not silent
+  record loss.'
+- 'UNVERIFIED: eight-tenant scale case interrupted; overlapping case NOT_RUN; intended
+  hardware, live cadence/APIQPS, lifetime/peakmemory and maximumfleet remain LV25;
+  no live OOM cause established.'
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T17:06:45+00:00'
+configuration_history:
+- at: '2026-09-19T14:30:38+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T15:59:03+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T16:57:54+00:00'
+  by: sol-t20-m137
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-19T17:01:01+00:00'
+  by: sol-t20-m137
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-19T17:06:39+00:00'
+  by: codex-lead
+  fields:
+  - residuals
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-19T14:30:39+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-19T14:30:41+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T17:01:02+00:00'
+  by: sol-t20-m137
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T17:01:03+00:00'
+  by: sol-t20-m137
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T17:06:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T17:06:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: c890369fc3b33620631c2baf66a674acaf8ed78403457db32101f2e04aa26eec
+  source_sha: b188c6bcbcbffefda7b36019da384ac158e5a87d
+  at: '2026-09-19T14:30:41+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/lead/baseline.log
+  sha256: a947452b2efc9f0fbbb622b6c023c71f7a0ef140aae3468e46596f58e42640d7
+  source_sha: b188c6bcbcbffefda7b36019da384ac158e5a87d
+  at: '2026-09-19T14:30:43+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: c890369fc3b33620631c2baf66a674acaf8ed78403457db32101f2e04aa26eec
+  source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  at: '2026-09-19T15:59:04+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: afcd2b6d814d49780ef1ab47e8ea3de9ab10f2eb601b24892a126697fc5b00b7
+  source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  at: '2026-09-19T16:05:55+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 16d1d5b12975aa918aa0493a633488f2c9581be4fd3e40401d658de168a367c5
+  source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  at: '2026-09-19T16:35:36+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+handoff:
+  id: T20-M137:16:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 16
