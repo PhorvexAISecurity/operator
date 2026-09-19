@@ -394,7 +394,39 @@ const (
 	tickNoSnapshot tickResult = iota
 	tickSnapshotSucceeded
 	tickSnapshotFailed
+	tickInterrupted
 )
+
+// duePolicy freezes one policy's scheduling identity for the lifetime of a tick.
+// entry retains the admitted configuration even if Upsert replaces the live pointer;
+// cadence writes target the current same-UID entry.
+type duePolicy struct {
+	entry                *policyEntry
+	dueAt                time.Time
+	neverRun             bool
+	namespace, name, uid string
+	owner                string
+	epoch                uint64
+}
+
+func sortDuePolicies(due []duePolicy) {
+	sort.Slice(due, func(i, j int) bool {
+		left, right := due[i], due[j]
+		if left.neverRun != right.neverRun {
+			return left.neverRun
+		}
+		if !left.neverRun && !left.dueAt.Equal(right.dueAt) {
+			return left.dueAt.Before(right.dueAt)
+		}
+		if left.namespace != right.namespace {
+			return left.namespace < right.namespace
+		}
+		if left.name != right.name {
+			return left.name < right.name
+		}
+		return left.uid < right.uid
+	})
+}
 
 type managerTimer interface {
 	C() <-chan time.Time
@@ -946,7 +978,8 @@ func (m *Manager) Start(ctx context.Context) error {
 			// Work can cross the maintenance deadline selected before admission. Coalesce
 			// again so a failed snapshot always retries in the future, never at Reset(0).
 			baseDeadline = nextMaintenanceDeadline(baseDeadline, now, m.BaseInterval)
-			deadline := m.nextWakeDeadline(now, baseDeadline, result != tickSnapshotFailed)
+			includePolicyDeadlines := result != tickSnapshotFailed && result != tickInterrupted
+			deadline := m.nextWakeDeadline(now, baseDeadline, includePolicyDeadlines)
 			t.Reset(max(deadline.Sub(now), time.Duration(0)))
 		}
 	}
@@ -1063,9 +1096,15 @@ func (m *Manager) reconcileWedged(ctx context.Context, initial KillSwitchObserva
 
 // tick builds one cluster snapshot and processes all due tenants.
 func (m *Manager) tick(ctx context.Context) tickResult {
+	if ctx.Err() != nil {
+		return tickInterrupted
+	}
 	// One bounded CRD read at most per refresh period, before any tenant witness.
 	// The published observation remains fixed for this serialized tick.
 	m.refreshVocabulary(ctx, m.managerClock().Now())
+	if ctx.Err() != nil {
+		return tickInterrupted
+	}
 	// [M-140] Complete pending ownership transitions BEFORE any snapshot or decision work,
 	// on every tick including ones with no due policy, so a removal is never stranded behind
 	// an idle tenant and no decision is priced from a departed owner's state.
@@ -1076,18 +1115,27 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	// into `due` while the engine had not yet been told it was live — the decision would
 	// then be rejected as retired. They must describe the same instant.
 	m.mu.Lock()
-	due := make([]*policyEntry, 0, len(m.policies))
+	due := make([]duePolicy, 0, len(m.policies))
 	liveOwners := make([]string, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := m.managerClock().Now()
 	for _, e := range m.policies {
-		liveOwners = append(liveOwners, e.ownerKey())
-		if now.Sub(e.lastTick) >= e.spec.EffectiveTickInterval() {
-			due = append(due, e)
-			dueEpochs[e.ownerKey()] = m.epochs[e.ownerKey()]
+		owner := e.ownerKey()
+		liveOwners = append(liveOwners, owner)
+		row := duePolicy{
+			entry: e, namespace: e.namespace, name: e.key.Name, uid: e.uid,
+			owner: owner, epoch: m.epochs[owner], neverRun: e.lastTick.IsZero(),
+		}
+		if !row.neverRun {
+			row.dueAt = e.lastTick.Add(e.spec.EffectiveTickInterval())
+		}
+		if row.neverRun || !row.dueAt.After(now) {
+			due = append(due, row)
+			dueEpochs[owner] = row.epoch
 		}
 	}
 	m.mu.Unlock()
+	sortDuePolicies(due)
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		for _, owner := range liveOwners {
 			ce.SetOwnerLive(owner, true)
@@ -1125,6 +1173,9 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 		killObservation = m.reconcileWedged(ctx, killObservation)
 		metrics.SetKillSwitch(killObservation.Engaged)
 	}
+	if ctx.Err() != nil {
+		return tickInterrupted
+	}
 
 	calibrationDue := m.Calibration != nil && m.Calibration.Due(now)
 	if len(due) == 0 && !calibrationDue {
@@ -1136,7 +1187,8 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 		ownerReader = m.OwnershipReader
 	}
 	snap, err := ingest.CollectSnapshotForRotationTargetsWithReceiptReader(ctx, m.Client, now, genericAssetValue, ownerReader, m.BoundaryReader, func(p *corev1.Pod) bool {
-		for _, e := range due {
+		for _, row := range due {
+			e := row.entry
 			if p.Namespace == e.namespace && (e.selector == nil || e.selector.Matches(labels.Set(p.Labels))) {
 				return true
 			}
@@ -1145,7 +1197,13 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
+		if ctx.Err() != nil {
+			return tickInterrupted
+		}
 		return tickSnapshotFailed
+	}
+	if ctx.Err() != nil {
+		return tickInterrupted
 	}
 
 	m.observeEventTrust(snap.Events)
@@ -1170,10 +1228,22 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 			m.Log.Error(err, "shadow calibration export failed; metrics and in-memory result remain available")
 		}
 	}
+	if ctx.Err() != nil {
+		return tickInterrupted
+	}
 
-	for _, e := range due {
-		m.processTenantWithPhysicsObserved(ctx, snap, e, &killObservation, physicsByKey)
+	for _, row := range due {
+		if ctx.Err() != nil {
+			return tickInterrupted
+		}
+		if !m.ownerCurrent(row.owner, row.epoch) {
+			continue
+		}
+		m.processTenantWithPhysicsObserved(ctx, snap, row.entry, &killObservation, physicsByKey)
 		metrics.SetKillSwitch(killObservation.Engaged)
+		if ctx.Err() != nil {
+			return tickInterrupted
+		}
 	}
 	return tickSnapshotSucceeded
 }
@@ -1723,9 +1793,12 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 
 // creditCadence advances only the identity admitted in this tick. An in-flight
 // predecessor must never stamp its admission time onto a replacement UID.
-func (m *Manager) creditCadence(e *policyEntry, admittedAt time.Time) {
+func (m *Manager) creditCadence(ctx context.Context, e *policyEntry, admittedAt time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 	if cur := m.policies[e.key.String()]; cur != nil && cur.uid == e.uid {
 		cur.lastTick = admittedAt
 	}
@@ -1737,10 +1810,16 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 }
 
 func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killObservation *KillSwitchObservation, physicsByKey map[string]model.PhysicsWitness) {
+	if ctx.Err() != nil {
+		return
+	}
 	start := time.Now()
 	if killObservation == nil {
 		fallback := m.KillSwitch.Observe(ctx)
 		killObservation = &fallback
+		if ctx.Err() != nil {
+			return
+		}
 	}
 	killState := &killSwitchTickState{observation: *killObservation}
 	killEngaged := killState.observation.Engaged
@@ -1755,6 +1834,9 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		} else {
 			pol.QuarantineCapacityKnown = true
 			pol.QuarantineCapacityUsed = inventory.Used
+		}
+		if ctx.Err() != nil {
+			return
 		}
 	}
 	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
@@ -1794,6 +1876,9 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			tele = t
 		}
 		m.observeSourceHealth(e, err)
+		if ctx.Err() != nil {
+			return
+		}
 	}
 
 	pol.DecisionAssets = map[string]string{}
@@ -1810,6 +1895,9 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			}
 			break
 		}
+	}
+	if ctx.Err() != nil {
+		return
 	}
 	keep := make(map[string]struct{}, len(selPods))
 	failureKeep := make(map[string]struct{}, len(selPods))
@@ -1919,6 +2007,9 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	}
 
 	decisions, err := decideTick(m.Optimizer, views, pol)
+	if ctx.Err() != nil {
+		return
+	}
 	if err != nil {
 		metrics.RecordActionSetRejection(pol.Tenant, "cross-block-collision")
 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
@@ -1939,7 +2030,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 			ce.RetainStageClock(pol.Owner(), keep)
 		}
-		m.creditCadence(e, snap.Now)
+		m.creditCadence(ctx, e, snap.Now)
 		return
 	}
 	if shadowAvailable {
@@ -1986,6 +2077,9 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			stampKillSwitchRefusal(&decisions[i], killState.observation)
 		}
 	}
+	if ctx.Err() != nil {
+		return
+	}
 
 	// M100: freeze the reporting source BEFORE actuation; no later resnapshot or
 	// shared map/slice can rewrite the evidence used for this claim.
@@ -2009,7 +2103,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
 		}
-		_, currentPreparation = m.actuatePreparedWithKillSwitch(ctx, e, pol, decisions, viewByKey, killState, brakeState)
+		if ctx.Err() != nil {
+			return
+		}
+		var attempted bool
+		_, currentPreparation, attempted = m.actuatePreparedWithKillSwitchObserved(ctx, e, pol, decisions, viewByKey, killState, brakeState)
+		if ctx.Err() != nil && !attempted {
+			return
+		}
 	}
 	*killObservation = killState.observation
 	finalKillObservation := killState.observation
@@ -2072,7 +2173,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	actionsSupport.namespaceDryRun = finalNamespaceObservation
 	m.updateStatusObserved(ctx, e, len(views), selected, 0, finalKillObservation, time.Now(), actionsSupport)
 
-	m.creditCadence(e, snap.Now)
+	m.creditCadence(ctx, e, snap.Now)
 }
 
 func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) bool {
@@ -2354,6 +2455,11 @@ func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model
 }
 
 func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
+	count, preparation, _ := m.actuatePreparedWithKillSwitchObserved(ctx, e, pol, decisions, tickViewByKey, state, brakeState)
+	return count, preparation
+}
+
+func (m *Manager) actuatePreparedWithKillSwitchObserved(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
 	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState)
 }
 
@@ -2385,7 +2491,8 @@ func actuationAttemptOutcome(res actuator.Result, err error, disposition actuato
 	}
 }
 
-func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
+	attempted := false
 	// Clear prior result and boundary metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -2400,6 +2507,9 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		brakeState = &actuationBrakeTickState{namespace: actuationbrake.Namespace(nil)}
 	}
 	boundaryObservation := state.observe(ctx, m.KillSwitch)
+	if ctx.Err() != nil {
+		return 0, nil, attempted
+	}
 	if boundaryObservation.Engaged {
 		for i := range decisions {
 			if decisions[i].Selected {
@@ -2410,9 +2520,12 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		m.Log.Info("kill-switch refused route preparation",
 			"tenant", pol.Tenant, "namespace", e.namespace,
 			"killSwitchEngaged", true, "killSwitchCause", string(boundaryObservation.Cause))
-		return 0, nil
+		return 0, nil, attempted
 	}
 	namespaceObservation := brakeState.observeNamespace(ctx, m, e.namespace)
+	if ctx.Err() != nil {
+		return 0, nil, attempted
+	}
 	if namespaceObservation.Engaged {
 		for i := range decisions {
 			if decisions[i].Selected {
@@ -2423,7 +2536,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		m.Log.Info("namespace dry-run refused route preparation",
 			"tenant", pol.Tenant, "namespace", e.namespace,
 			"actuationBrakeCause", namespaceObservation.Cause)
-		return 0, nil
+		return 0, nil, attempted
 	}
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
@@ -2454,6 +2567,9 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			preparation.PhoenixErr = err
 		}
 	}
+	if ctx.Err() != nil {
+		return 0, &preparation, attempted
+	}
 	if err != nil {
 		m.Log.Error(err, "actuator EnsurePolicy failed; suppressing actuation this tick", "tenant", pol.Tenant)
 		// T0-C: a tick-level pre-dispatch guard — every selected move is refused here.
@@ -2463,7 +2579,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressEnsurePolicy)
 			}
 		}
-		return 0, &preparation
+		return 0, &preparation, attempted
 	}
 	actuated := 0
 	for i := range decisions {
@@ -2474,6 +2590,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		// the audit write, so a selected-but-refused move never reads as unselected.
 		stampDispatch := func(outcome, reason string) {
 			stampDispatchEvidence(&decisions[i], outcome, reason)
+		}
+		if ctx.Err() != nil {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
 		}
 		// Inviolability guard at the emit boundary (defense in depth): a selected move is
 		// ALWAYS feasible (the action-set generator excluded infeasible moves before
@@ -2530,7 +2651,13 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressCodeExecUnverified)
 				continue
 			}
-			if ok, why := m.CodeExec.FinalCheck(ctx, decisions[i].Namespace); !ok {
+			ok, why := m.CodeExec.FinalCheck(ctx, decisions[i].Namespace)
+			if ctx.Err() != nil {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+				return actuated, &preparation, attempted
+			}
+			if !ok {
 				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec admission not verified at pre-submit; refusing injection",
 					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", why)
 				stampDispatch(model.DispatchNotAttempted, "code-exec-unverified")
@@ -2552,6 +2679,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		// Capture immutable target identity before a handler can delete the Pod.
 		eventTarget := actuationEventTarget(v)
 		dispatchObservation := state.observe(ctx, m.KillSwitch)
+		if ctx.Err() != nil {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
+		}
 		if dispatchObservation.Engaged {
 			stampKillSwitchRefusal(&decisions[i], dispatchObservation)
 			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressKillSwitch)
@@ -2562,6 +2694,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			continue
 		}
 		namespaceObservation = brakeState.observeNamespace(ctx, m, decisions[i].Namespace)
+		if ctx.Err() != nil {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
+		}
 		if namespaceObservation.Engaged {
 			stampNamespaceDryRun(&decisions[i], namespaceObservation)
 			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressNamespaceDryRun)
@@ -2572,6 +2709,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			continue
 		}
 		podObservation := brakeState.observePod(ctx, m, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+		if ctx.Err() != nil {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
+		}
 		if podObservation.Engaged {
 			stampTargetBrake(&decisions[i], podObservation)
 			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressPodOptOut)
@@ -2580,6 +2722,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				"pod", decisions[i].Pod, "action", decisions[i].Action,
 				"actuationBrakeCause", podObservation.Cause)
 			continue
+		}
+		if ctx.Err() != nil {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
 		}
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
@@ -2609,14 +2756,26 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		var res actuator.Result
 		var err error
 		backendInvoked := true
+		if ctx.Err() != nil {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
+		}
 		if m.QuarantineCapacity != nil {
 			var provenance actuator.QuarantineCapacityProvenance
 			res, provenance, err = m.QuarantineCapacity.ActuateWithProvenance(ctx, m.Actuator, request)
 			backendInvoked = provenance.BackendInvoked
+			attempted = attempted || backendInvoked
 		} else {
+			attempted = true
 			res, err = m.Actuator.Actuate(ctx, request)
 		}
 		if !backendInvoked {
+			if ctx.Err() != nil {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+				return actuated, &preparation, attempted
+			}
 			stampDispatch(model.DispatchNotAttempted, "quarantine-capacity-refused")
 			recordExistentialEffect(&decisions[i], false)
 			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressQuarantineCapacity)
@@ -2741,7 +2900,8 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 						}
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
-						more, _ := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState)
+						more, _, fallbackAttempted := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState)
+						attempted = attempted || fallbackAttempted
 						actuated += more
 						// The recursive call modifies its local slice's owned trace;
 						// capture that actual attempt as a separate audit decision.
@@ -2816,7 +2976,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}
-	return actuated, &preparation
+	return actuated, &preparation, attempted
 }
 
 // phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision

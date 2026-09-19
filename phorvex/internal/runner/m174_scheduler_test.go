@@ -175,7 +175,7 @@ func TestM174CadenceIdentityUpdateReplacementAndRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := m.policies["ns/policy"]
-	m.creditCadence(e, now)
+	m.creditCadence(context.Background(), e, now)
 
 	updated := p.DeepCopy()
 	updated.Generation++
@@ -195,7 +195,7 @@ func TestM174CadenceIdentityUpdateReplacementAndRemoval(t *testing.T) {
 	if err := m.Upsert(replacement); err != nil {
 		t.Fatal(err)
 	}
-	m.creditCadence(e, now.Add(time.Second)) // stale predecessor completion
+	m.creditCadence(context.Background(), e, now.Add(time.Second)) // stale predecessor completion
 	if got := m.policies["ns/policy"].lastTick; !got.IsZero() {
 		t.Fatalf("predecessor credited replacement: %v", got)
 	}
