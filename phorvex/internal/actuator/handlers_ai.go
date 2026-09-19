@@ -584,13 +584,6 @@ func relabelRole(ctx context.Context, c client.Client, ns, name, role string) er
 	return c.Update(ctx, pod)
 }
 
-func truncName(s string) string {
-	if len(s) > 63 {
-		return s[:63]
-	}
-	return s
-}
-
 // --- 8. warm-swap — real warm-pool + REWARM-to-N (vLLM-gated readiness) --------------------
 type warmSwapHandler struct{}
 

@@ -106,7 +106,7 @@ jobs:
         run: go -C build/prometheus-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
-  # API, actuator, runner, authz, startupauthz and console packages (no -run filter)
+  # API, actuator, runner, authz, startupauthz, console and cmd packages (no -run filter)
   # with local kube-apiserver/etcd/controller-manager binaries, so every
   # envtest-backed test in those
   # packages executes whatever helper performs its setup, and requires at least
@@ -167,7 +167,7 @@ jobs:
       # go test -json is started directly by the gate (no shell pipe, exit
       # preserved); the verbatim stream is retained and the verdict is computed
       # from it. Skipped, missing, failed, malformed or empty output fails.
-      - name: Local API/controller test packages (six complete suites; required controls)
+      - name: Local API/controller test packages (seven complete suites; required controls)
         run: python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl --summary envtest-evidence/summary.json --timeout 10m
       - name: Retain raw envtest JSON evidence
         if: always()

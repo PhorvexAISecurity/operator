@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 17
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,17 +11,115 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: e5c31cc60594c172b28254256056ba9472ecc12d661c19364902cd6e75577b25
-    source_sha: 07163f3c8f73f97acc61541246c664f2f6054ad6
-    at: '2026-09-19T15:15:36+00:00'
+    sha256: 105aab60f3df11ccfce90d2409423c039efcf6cb1ee846ebb478c57691c03740
+    source_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+    at: '2026-09-19T17:11:54+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: aab33d8bb512a3a167e4598ca55894275b6f0a46ec7fee8aa6d5b4665887ce56
+    source_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+    at: '2026-09-19T17:15:09+00:00'
+    baseline_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/current-base.log
+    sha256: 5d071322c766ba8fd4f8c1b8ba56477e096e96c837d7a07102c96015a747e898
+    source_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+    at: '2026-09-19T17:15:09+00:00'
+  preflight:
+    result: PASS
+    by: sol-t22-m078
+    artifact: evidence/preflight/receipt.json
+    sha256: 6370714202ca0df058992a48d8bc255d602a81a4ad403da90300411612c4b9e1
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:42:46+00:00'
+  implementation:
+    result: PASS
+    by: sol-t22-m078
+    artifact: 04-diff.patch
+    sha256: af9ce892279ca60e84acfa1df45384b5d50119abd9b02d81b696d85425348be3
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:42:46+00:00'
+  l0:
+    result: PASS
+    by: sol-t22-m078
+    artifact: evidence/preflight/receipt.json
+    sha256: 6370714202ca0df058992a48d8bc255d602a81a4ad403da90300411612c4b9e1
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:42:46+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 5b9b06b3f5a91c6d8b0e68b96d25d554b05fe3378e9fa877598724c3bb38375e
+  l1:
+    result: PASS
+    by: sol-t22-m078
+    artifact: evidence/worker/head/verify-final-fixtures.log
+    sha256: c8931ac61592ce46e623a58f1c3f718edfc99994c99c6a5000e314cc7fb9770b
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:42:46+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    - tools/envtest_gate.py
+    inputs_sha256: 947ebd1954750ccff2e3b72b135594b0ddbc77742088b9fbb18e270ff55f9e56
+  l2:
+    result: PASS
+    by: sol-t22-m078
+    artifact: evidence/preflight/run-1789839464384136305/go-phorvex.log
+    sha256: 897584b48c7c0260433b83fa33a29c1fad2c840da9c6e5379cbd5a03f19a3e06
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:42:46+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: e5bd48d6e802dfc1a9d8f46ce502c83604c50cd8cfd374db626f2044c543225e
+  positive_control:
+    result: PASS
+    by: sol-t22-m078
+    artifact: evidence/worker/final-summary.md
+    sha256: 5a8753fe3a6ea5ecaee1738d4166c2ba307a0872ad3af067909ec8652ecddec9
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:42:46+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: 5ff08655c992e69304e554f3600116a7fe52be8113bec37835f7a64b39bde520
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1b68ceedd3bf1441f910b3d9601477bf173d1ff4a658f4e3b2fb773a1f11f8d9
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:43:23+00:00'
+    baseline_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: dbfe6bc1bc7e199edc0fec459922f9b996f137836c955ec081c32708e635ab38
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T17:43:23+00:00'
+    incident_sha256: 1b68ceedd3bf1441f910b3d9601477bf173d1ff4a658f4e3b2fb773a1f11f8d9
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 59d543daeeacd4f5e705f1cc9ec89184b2b23a2f5461c9cb326a605abe4c2a10
+    source_sha: 24f967dbb57709821fc74279c66add087c13f725
+    at: '2026-09-19T18:06:09+00:00'
 fix_id: T22-M078
 issues:
 - M-78
 title: Bound and order authoritative warm candidate probes
 profile: standard
-state: AGREED
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -34,8 +132,8 @@ capabilities_required:
   cluster_access: false
   deployment_authority: false
 baseline:
-  code_branch: tier19
-  code_sha: 07163f3c8f73f97acc61541246c664f2f6054ad6
+  code_branch: tier20
+  code_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
   deployed_image: null
   deployed_git_sha: null
 blind_derivation:
@@ -44,15 +142,15 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: fix/t22-m078
-  base_sha: 07163f3c8f73f97acc61541246c664f2f6054ad6
-  head_sha: null
+  base_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+  head_sha: 24f967dbb57709821fc74279c66add087c13f725
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/238
+  reviewed_head: 6e54a960c7459e2e0532d22a02400b4c4a2d7ead
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -66,13 +164,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +180,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t22-m078
-  action: Implement signed plan; one heavy slot; submit-review --no-notify; local
-    only
-updated_at: '2026-09-19T15:15:36+00:00'
+  owner: coordinator
+  action: PR238 open/non-draft/main; continue Tier23 independent source/proof. LV27/LV28
+    and all prior live/source residuals pending; hosted status retained separately.
+updated_at: '2026-09-19T18:06:09+00:00'
 configuration_history:
 - at: '2026-09-19T15:15:33+00:00'
   by: codex-lead
@@ -97,6 +195,43 @@ configuration_history:
   - next_action
   - roles
   - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:09:05+00:00'
+  by: sol-t22-m078
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:11:52+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:24:15+00:00'
+  by: sol-t22-m078
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:24:47+00:00'
+  by: sol-t22-m078
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:36:20+00:00'
+  by: sol-t22-m078
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:42:46+00:00'
+  by: sol-t22-m078
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-19T18:06:07+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
@@ -115,3 +250,60 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T17:42:46+00:00'
+  by: sol-t22-m078
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T17:42:48+00:00'
+  by: sol-t22-m078
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T17:43:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T17:43:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T18:06:09+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: e5c31cc60594c172b28254256056ba9472ecc12d661c19364902cd6e75577b25
+  source_sha: 07163f3c8f73f97acc61541246c664f2f6054ad6
+  at: '2026-09-19T15:15:36+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+handoff:
+  id: T22-M078:14:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 14
