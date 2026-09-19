@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 14
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -115,12 +115,19 @@ checks:
     source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
     at: '2026-09-19T19:25:57+00:00'
     incident_sha256: 1d68d00d00491e2de82b6db9b1a6af90fadc14a5dad498d8d76b2ee9f16d93be
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 4f1cd5a71b2cafb9a51e9dec3fa8079ab4c53d4ae8895eb59f63902358d3a970
+    source_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+    at: '2026-09-19T19:37:02+00:00'
 fix_id: T24-M181
 issues:
 - M-181
 title: Redact claim build metadata consistently across reporting
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -147,11 +154,11 @@ implementation:
   head_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/240
+  reviewed_head: 5c39dc282f667572682f0e56cf25f509fd8b7bf6
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -182,9 +189,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T19:26:01+00:00'
+  action: PR240 open/non-draft/main; continue Tier25 canonical verification. LV25/LV29
+    and all prior live/source residuals pending; hosted status retained separately.
+updated_at: '2026-09-19T19:37:03+00:00'
 configuration_history:
 - at: '2026-09-19T18:46:17+00:00'
   by: codex-lead
@@ -214,6 +221,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T19:37:01+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -262,6 +275,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T19:37:03+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
