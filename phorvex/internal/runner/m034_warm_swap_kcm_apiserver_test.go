@@ -536,20 +536,13 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 			t.Fatalf("serving request escaped the trusted binding: %q", call)
 		}
 	}
-	modelGets := make([]string, 0, 2)
-	gets, posts := 0, 0
-	for _, call := range servingCalls {
-		if strings.HasPrefix(call, "GET ") {
-			gets++
-		}
-		if strings.HasPrefix(call, "GET /models-") {
-			modelGets = append(modelGets, strings.Fields(call)[1])
-		}
-		if strings.HasPrefix(call, "POST ") {
-			posts++
-		}
+	wantLoadedCalls := []string{
+		"GET /health-empty Bearer m078-trusted-token", "GET /models-empty Bearer m078-trusted-token",
+		"GET /health-loaded Bearer m078-trusted-token", "GET /models-loaded Bearer m078-trusted-token",
+		"POST /v1/drain Bearer m078-trusted-token",
+		"GET /health Bearer m078-trusted-token", "GET /v1/models Bearer m078-trusted-token",
 	}
-	if strings.Join(modelGets, ",") != "/models-empty,/models-loaded" || gets != 4 || posts != 1 {
-		t.Fatalf("readiness/drain requests do not prove empty-oldest then loaded-younger selection: calls=%v modelGETs=%v GETs=%d POSTs=%d", servingCalls, modelGets, gets, posts)
+	if strings.Join(servingCalls, ",") != strings.Join(wantLoadedCalls, ",") {
+		t.Fatalf("readiness/drain/recovery requests do not prove empty-oldest then loaded-younger selection: got=%v want=%v", servingCalls, wantLoadedCalls)
 	}
 }
