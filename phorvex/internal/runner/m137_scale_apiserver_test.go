@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -242,7 +243,7 @@ func m137ScaleConfigFromEnv(t *testing.T) m137ScaleConfig {
 	if cfg.name == "" {
 		cfg.name = fmt.Sprintf("pods-%d-policies-%d-%s", cfg.pods, cfg.policies, cfg.selector)
 	}
-	if cfg.samples < 20 || cfg.policies < cfg.namespaces || cfg.policies%cfg.namespaces != 0 || cfg.pods < cfg.policies || cfg.pods%cfg.namespaces != 0 {
+	if cfg.samples < 20 || cfg.namespaces < 2 || cfg.policies < cfg.namespaces || cfg.policies%cfg.namespaces != 0 || cfg.pods < cfg.policies || cfg.pods%cfg.namespaces != 0 {
 		t.Fatalf("invalid predeclared case: %+v", cfg)
 	}
 	if cfg.selector == "partitioned" && cfg.pods%cfg.policies != 0 {
@@ -256,6 +257,75 @@ type m137Fixture struct {
 	firstPod                           client.ObjectKey
 	firstUID                           string
 	eventName, receiptName, receiptUID string
+	ownerUIDByNamespace                map[string]string
+}
+
+func m137ExactRBAC(cfg m137ScaleConfig, roles []rbacv1.Role, bindings []rbacv1.RoleBinding, clusterRoles []rbacv1.ClusterRole, clusterBindings []rbacv1.ClusterRoleBinding) bool {
+	rules := []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"pods", "secrets"}, Verbs: []string{"get", "list"}}}
+	for nsIndex := 0; nsIndex < cfg.namespaces; nsIndex++ {
+		ns := fmt.Sprintf("m137-%02d", nsIndex)
+		roleOK, bindingOK := false, false
+		for i := range roles {
+			roleOK = roleOK || roles[i].Namespace == ns && roles[i].Name == "scale" && reflect.DeepEqual(roles[i].Rules, rules)
+		}
+		expectedRef := rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "scale"}
+		expectedSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: ns, Name: "scale"}}
+		for i := range bindings {
+			bindingOK = bindingOK || bindings[i].Namespace == ns && bindings[i].Name == "scale" && bindings[i].RoleRef == expectedRef && reflect.DeepEqual(bindings[i].Subjects, expectedSubjects)
+		}
+		if !roleOK || !bindingOK {
+			return false
+		}
+	}
+	expectedClusterRef := rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "m137-scale"}
+	expectedClusterSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "m137-00", Name: "scale"}}
+	clusterRoleOK, clusterBindingOK := false, false
+	for i := range clusterRoles {
+		clusterRoleOK = clusterRoleOK || clusterRoles[i].Name == "m137-scale" && reflect.DeepEqual(clusterRoles[i].Rules, rules)
+	}
+	for i := range clusterBindings {
+		clusterBindingOK = clusterBindingOK || clusterBindings[i].Name == "m137-scale" && clusterBindings[i].RoleRef == expectedClusterRef && reflect.DeepEqual(clusterBindings[i].Subjects, expectedClusterSubjects)
+	}
+	return clusterRoleOK && clusterBindingOK
+}
+
+func m137ContainsNeighbor(neighbors []string, expected string) bool {
+	for _, neighbor := range neighbors {
+		if neighbor == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func TestM137CorrectnessWitnessRejectsCounterexamples(t *testing.T) {
+	cfg := m137ScaleConfig{namespaces: 2}
+	rules := []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"pods", "secrets"}, Verbs: []string{"get", "list"}}}
+	roles := []rbacv1.Role{
+		{ObjectMeta: metav1.ObjectMeta{Namespace: "m137-00", Name: "scale"}, Rules: rules},
+		{ObjectMeta: metav1.ObjectMeta{Namespace: "m137-01", Name: "scale"}, Rules: rules},
+	}
+	bindings := []rbacv1.RoleBinding{
+		{ObjectMeta: metav1.ObjectMeta{Namespace: "m137-00", Name: "scale"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "scale"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "m137-00", Name: "scale"}}},
+		{ObjectMeta: metav1.ObjectMeta{Namespace: "m137-01", Name: "scale"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "scale"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "m137-01", Name: "scale"}}},
+	}
+	clusterRoles := []rbacv1.ClusterRole{{ObjectMeta: metav1.ObjectMeta{Name: "m137-scale"}, Rules: rules}}
+	clusterBindings := []rbacv1.ClusterRoleBinding{{ObjectMeta: metav1.ObjectMeta{Name: "m137-scale"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "m137-scale"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "m137-00", Name: "scale"}}}}
+	if !m137ExactRBAC(cfg, roles, bindings, clusterRoles, clusterBindings) {
+		t.Fatal("exact RBAC witness rejected")
+	}
+	bindings[1].Subjects[0].Name = "unrelated"
+	if m137ExactRBAC(cfg, roles, bindings, clusterRoles, clusterBindings) {
+		t.Fatal("unrelated RoleBinding subject accepted")
+	}
+	bindings[1].Subjects[0].Name = "scale"
+	bindings[1].RoleRef.Name = "unrelated"
+	if m137ExactRBAC(cfg, roles, bindings, clusterRoles, clusterBindings) {
+		t.Fatal("unrelated RoleBinding roleRef accepted")
+	}
+	if m137ContainsNeighbor([]string{"m137-00/pod-0001"}, "m137-01/pod-0000") {
+		t.Fatal("same-namespace edge satisfied cross-namespace witness")
+	}
 }
 
 func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m137ScaleConfig) m137Fixture {
@@ -266,7 +336,7 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 			t.Fatalf("create %T %s: %v", obj, obj.GetName(), err)
 		}
 	}
-	fixture := m137Fixture{eventName: "m137-trusted-event", receiptName: "m137-receipt"}
+	fixture := m137Fixture{eventName: "m137-trusted-event", receiptName: "m137-receipt", ownerUIDByNamespace: map[string]string{}}
 	policiesPerNS := cfg.policies / cfg.namespaces
 	podsPerNS := cfg.pods / cfg.namespaces
 	for nsIndex := 0; nsIndex < cfg.namespaces; nsIndex++ {
@@ -288,6 +358,7 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 		controller := true
 		rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "scale", OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "Deployment", Name: deployment.Name, UID: deployment.UID, Controller: &controller}}}, Spec: appsv1.ReplicaSetSpec{Replicas: &desiredReplicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m137"}}, Template: deployment.Spec.Template}}
 		create(rs)
+		fixture.ownerUIDByNamespace[ns] = string(rs.UID)
 		var currentRS appsv1.ReplicaSet
 		if err := c.Get(ctx, client.ObjectKeyFromObject(rs), &currentRS); err != nil {
 			t.Fatal(err)
@@ -372,7 +443,20 @@ func m137ForceDue(m *Manager) {
 	}
 }
 
-func m137WaitPolicyCache(ctx context.Context, reader client.Reader, policies []*v1alpha1.PhorvexPolicy, after time.Time) error {
+func m137WaitPolicyCache(ctx context.Context, reader, authoritative client.Reader, policies []*v1alpha1.PhorvexPolicy) error {
+	type observation struct {
+		resourceVersion string
+		status          v1alpha1.PhorvexPolicyStatus
+	}
+	wanted := make(map[client.ObjectKey]observation, len(policies))
+	for _, policy := range policies {
+		key := client.ObjectKeyFromObject(policy)
+		var current v1alpha1.PhorvexPolicy
+		if err := authoritative.Get(ctx, key, &current); err != nil {
+			return fmt.Errorf("read authoritative policy %s: %w", key, err)
+		}
+		wanted[key] = observation{resourceVersion: current.ResourceVersion, status: *current.Status.DeepCopy()}
+	}
 	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	ticker := time.NewTicker(5 * time.Millisecond)
@@ -380,12 +464,14 @@ func m137WaitPolicyCache(ctx context.Context, reader client.Reader, policies []*
 	for {
 		converged := true
 		for _, policy := range policies {
+			key := client.ObjectKeyFromObject(policy)
 			var current v1alpha1.PhorvexPolicy
-			if err := reader.Get(waitCtx, client.ObjectKeyFromObject(policy), &current); err != nil {
+			if err := reader.Get(waitCtx, key, &current); err != nil {
 				converged = false
 				break
 			}
-			if current.Status.LastTickTime.Time.Before(after) || meta.FindStatusCondition(current.Status.Conditions, "ExistentialUncontainable") == nil || meta.FindStatusCondition(current.Status.Conditions, "ExistentialScopeComplete") == nil {
+			expected := wanted[key]
+			if current.ResourceVersion != expected.resourceVersion || !reflect.DeepEqual(current.Status, expected.status) {
 				converged = false
 				break
 			}
@@ -395,7 +481,7 @@ func m137WaitPolicyCache(ctx context.Context, reader client.Reader, policies []*
 		}
 		select {
 		case <-waitCtx.Done():
-			return fmt.Errorf("policy status watch did not converge after %s: %w", after.UTC().Format(time.RFC3339Nano), waitCtx.Err())
+			return fmt.Errorf("policy cache did not converge to authoritative resourceVersion/status: %w", waitCtx.Err())
 		case <-ticker.C:
 		}
 	}
@@ -494,21 +580,31 @@ func m137GitSHA(t *testing.T) string {
 }
 
 func m137WriteReport(path string, report scaleprobe.Report) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	file, err := os.Create(path)
+	file, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
 	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
 	encodeErr := encoder.Encode(report)
+	syncErr := file.Sync()
 	closeErr := file.Close()
 	if encodeErr != nil {
 		return encodeErr
 	}
-	return closeErr
+	if syncErr != nil {
+		return syncErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(temporary, path)
 }
 
 func m137ExecutableSHA256(path string) (string, error) {
@@ -542,12 +638,43 @@ func m137Slope(values []int64) float64 {
 	return (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX)
 }
 
-type m137DeadlineSource struct{}
+type m137DeadlineSource struct {
+	once    sync.Once
+	entered chan struct{}
+}
 
-func (m137DeadlineSource) Name() string { return "m137-deadline" }
-func (m137DeadlineSource) PodMetrics(ctx context.Context, _ string, _ []string) (map[string]model.Telemetry, error) {
+func (*m137DeadlineSource) Name() string { return "m137-deadline" }
+func (s *m137DeadlineSource) PodMetrics(ctx context.Context, _ string, _ []string) (map[string]model.Telemetry, error) {
+	s.once.Do(func() { close(s.entered) })
 	<-ctx.Done()
 	return nil, ctx.Err()
+}
+
+type m137ControlledDeadline struct {
+	context.Context
+	done chan struct{}
+	once sync.Once
+	mu   sync.Mutex
+	err  error
+}
+
+func newM137ControlledDeadline(parent context.Context) *m137ControlledDeadline {
+	return &m137ControlledDeadline{Context: parent, done: make(chan struct{})}
+}
+
+func (c *m137ControlledDeadline) Done() <-chan struct{} { return c.done }
+func (c *m137ControlledDeadline) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.err
+}
+func (c *m137ControlledDeadline) trigger(err error) {
+	c.once.Do(func() {
+		c.mu.Lock()
+		c.err = err
+		c.mu.Unlock()
+		close(c.done)
+	})
 }
 
 func m137Outcome(result tickResult, ctxErr error) string {
@@ -651,6 +778,11 @@ func TestM137ScaleHarness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	convergenceREST := m137CountedConfig(base, "convergence", counts)
+	convergence, err := client.New(convergenceREST, client.Options{Scheme: scheme})
+	if err != nil {
+		t.Fatal(err)
+	}
 	m, err := NewManagerWithBackend(managerClient, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendNative, Source: actuator.SourceExplicit, Raw: "native", Present: true})
 	if err != nil {
 		t.Fatal(err)
@@ -672,8 +804,6 @@ func TestM137ScaleHarness(t *testing.T) {
 		}
 	}
 
-	auditDecisionsBefore, auditSelectedBefore := auditSink.decisionStats()
-	warmupStarted := time.Now()
 	for i := 0; i < cfg.warmup; i++ {
 		m137ForceDue(m)
 		tickCtx, tickCancel := context.WithTimeout(ctx, cfg.timeout)
@@ -683,7 +813,7 @@ func TestM137ScaleHarness(t *testing.T) {
 			t.Fatalf("warmup %d result=%v", i, result)
 		}
 	}
-	if err := m137WaitPolicyCache(ctx, managerClient, fixture.policies, warmupStarted); err != nil {
+	if err := m137WaitPolicyCache(ctx, managerClient, convergence, fixture.policies); err != nil {
 		t.Fatal(err)
 	}
 	if !informerCache.WaitForCacheSync(ctx) {
@@ -697,30 +827,48 @@ func TestM137ScaleHarness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trustedPresent, receiptPresent, ownerEligible := false, false, false
+	trustedPresent, receiptPresent := false, false
 	for _, event := range snap.Events {
 		trustedPresent = trustedPresent || event.Name == fixture.eventName && event.Trust == ingest.TrustTrusted
 	}
 	if receipt, ok := snap.PhoenixReceipts[fixture.receiptName]; ok {
-		receiptPresent = receipt.EventUID == fixture.receiptUID && receipt.TargetUID == fixture.firstUID && receipt.AppliedAction == string(model.ActionRotate)
+		receiptPresent = snap.PhoenixReceiptInventoryComplete && receipt.EventName == fixture.receiptName && receipt.EventUID == fixture.receiptUID &&
+			receipt.RuleType == actuator.RuleTypeRotate && receipt.ThreatLevel == "high" && receipt.RuleSource == actuator.RuleSource &&
+			reflect.DeepEqual(receipt.Targets, []string{fixture.firstPod.String()}) && receipt.TargetUID == fixture.firstUID &&
+			receipt.AppliedAction == string(model.ActionRotate) && !receipt.CreatedAt.IsZero() && !receipt.ProcessedAt.IsZero() && !receipt.ProcessedAt.Before(receipt.CreatedAt)
 	}
+	ownerEligible := len(snap.Pods) == cfg.pods
+	observedOwnerUIDs := map[string]struct{}{}
 	for i := range snap.Pods {
-		if snap.Pods[i].Namespace == fixture.firstPod.Namespace && snap.Pods[i].Name == fixture.firstPod.Name {
-			ownerEligible = snap.Pods[i].RotationOwnership.Eligible
-			break
+		ownership := snap.Pods[i].RotationOwnership
+		expectedUID := fixture.ownerUIDByNamespace[snap.Pods[i].Namespace]
+		if !ownership.Eligible || expectedUID == "" || ownership.OwnerUID != expectedUID || ownership.OwnerResourceVersion == "" {
+			ownerEligible = false
 		}
+		observedOwnerUIDs[ownership.OwnerUID] = struct{}{}
 	}
+	ownerEligible = ownerEligible && len(observedOwnerUIDs) == cfg.namespaces
 	var cachedRoles rbacv1.RoleList
 	var cachedBindings rbacv1.RoleBindingList
+	var cachedClusterRoles rbacv1.ClusterRoleList
+	var cachedClusterBindings rbacv1.ClusterRoleBindingList
 	if err := managerClient.List(ctx, &cachedRoles); err != nil {
 		t.Fatal(err)
 	}
 	if err := managerClient.List(ctx, &cachedBindings); err != nil {
 		t.Fatal(err)
 	}
-	graphEdges := snap.Graph != nil && snap.Graph.NeighborCount(fixture.firstPod.Namespace, fixture.firstPod.Name) > 0
-	rbacPresent := len(cachedRoles.Items) >= cfg.namespaces && len(cachedBindings.Items) >= cfg.namespaces
+	if err := managerClient.List(ctx, &cachedClusterRoles); err != nil {
+		t.Fatal(err)
+	}
+	if err := managerClient.List(ctx, &cachedClusterBindings); err != nil {
+		t.Fatal(err)
+	}
+	expectedCrossNamespaceNeighbor := "m137-01/pod-0000"
+	graphEdges := snap.Graph != nil && m137ContainsNeighbor(snap.Graph.Neighbors(fixture.firstPod.Namespace, fixture.firstPod.Name), expectedCrossNamespaceNeighbor)
+	rbacPresent := m137ExactRBAC(cfg, cachedRoles.Items, cachedBindings.Items, cachedClusterRoles.Items, cachedClusterBindings.Items)
 	startupHTTP := counts.reset()
+	auditDecisionsBefore, auditSelectedBefore := auditSink.decisionStats()
 	children := m137ChildProcesses()
 	if children["apiserver"] == 0 || children["etcd"] == 0 {
 		t.Fatalf("could not identify separate envtest API server and etcd processes: %v", children)
@@ -797,15 +945,25 @@ func TestM137ScaleHarness(t *testing.T) {
 			sampleError = fmt.Sprintf("workload attempt did not finish: result=%v context=%v", result, ctxErr)
 		}
 		samples = append(samples, scaleprobe.Sample{Index: i, Outcome: outcome, DurationSec: metricDuration, PolicySeconds: policySeconds, HeapBytes: memory.HeapAlloc, RSSBytes: rss, StatusWrites: m137PolicyStatusWrites(counts.snapshot()) - statusBefore, Error: sampleError})
+		// Persist every completed measured attempt before any post-sample
+		// convergence work so process interruption cannot erase slow outcomes.
+		report.Samples = append([]scaleprobe.Sample(nil), samples...)
+		report.ProbeErrors = append(append([]string(nil), probeErrors...), fmt.Sprintf("harness incomplete after %d/%d captured attempts", len(samples), cfg.samples))
+		if err := m137WriteReport(output, report); err != nil {
+			t.Fatal(err)
+		}
 		if outcome == "finished-full-snapshot" {
-			if err := m137WaitPolicyCache(ctx, managerClient, fixture.policies, started); err != nil {
+			beforeConvergenceErrors := len(probeErrors)
+			if err := m137WaitPolicyCache(ctx, managerClient, convergence, fixture.policies); err != nil {
 				probeErrors = append(probeErrors, fmt.Sprintf("sample %d cache convergence: %v", i, err))
 			}
+			if len(probeErrors) != beforeConvergenceErrors {
+				report.ProbeErrors = append(append([]string(nil), probeErrors...), fmt.Sprintf("harness incomplete after %d/%d captured attempts", len(samples), cfg.samples))
+				if err := m137WriteReport(output, report); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
-		// Keep every completed attempt in the deferred raw artifact even if a
-		// later probe assertion or report-finalization step fails.
-		report.Samples = append([]scaleprobe.Sample(nil), samples...)
-		report.ProbeErrors = append(append([]string(nil), probeErrors...), "harness exited before final report")
 	}
 	controllerStatusPreserved := true
 	for _, policy := range fixture.policies {
@@ -820,7 +978,7 @@ func TestM137ScaleHarness(t *testing.T) {
 			controllerStatusPreserved = false
 		}
 	}
-	sampledHTTP := counts.reset()
+	sampledHTTP, convergenceHTTP := m137PartitionHTTP(counts.reset(), "convergence")
 	wantStatusWrites := int64(0)
 	finishedAttempts := 0
 	for _, sample := range samples {
@@ -845,15 +1003,33 @@ func TestM137ScaleHarness(t *testing.T) {
 	}
 
 	m137ForceDue(m)
-	m.MetricsSource = m137DeadlineSource{}
+	deadlineSource := &m137DeadlineSource{entered: make(chan struct{})}
+	m.MetricsSource = deadlineSource
 	deadlineCountBefore, deadlineSumBefore, err := m137HistogramValue("phorvex_manager_tick_duration_seconds", map[string]string{"outcome": "deadline"})
 	if err != nil {
 		probeErrors = append(probeErrors, "deadline metric baseline: "+err.Error())
 	}
-	deadlineCtx, deadlineCancel := context.WithTimeout(ctx, time.Millisecond)
-	deadlineResult := m.tick(deadlineCtx)
+	deadlineOuter, deadlineOuterCancel := context.WithTimeout(ctx, 30*time.Second)
+	deadlineCtx := newM137ControlledDeadline(deadlineOuter)
+	deadlineResultCh := make(chan tickResult, 1)
+	go func() { deadlineResultCh <- m.tick(deadlineCtx) }()
+	select {
+	case <-deadlineSource.entered:
+		deadlineCtx.trigger(context.DeadlineExceeded)
+	case <-deadlineOuter.Done():
+		deadlineCtx.trigger(deadlineOuter.Err())
+		probeErrors = append(probeErrors, "deadline control did not enter the blocking metrics producer")
+	}
+	var deadlineResult tickResult
+	select {
+	case deadlineResult = <-deadlineResultCh:
+	case <-deadlineOuter.Done():
+		deadlineCtx.trigger(deadlineOuter.Err())
+		deadlineResult = tickInterrupted
+		probeErrors = append(probeErrors, "deadline control did not return within its outer timeout")
+	}
 	deadlineErr := deadlineCtx.Err()
-	deadlineCancel()
+	deadlineOuterCancel()
 	deadlineCountAfter, deadlineSumAfter, err := m137HistogramValue("phorvex_manager_tick_duration_seconds", map[string]string{"outcome": "deadline"})
 	if err != nil {
 		probeErrors = append(probeErrors, "deadline metric result: "+err.Error())
@@ -908,7 +1084,12 @@ func TestM137ScaleHarness(t *testing.T) {
 	}
 	auditRetained, auditDropped := auditSink.storage()
 	auditDecisionsAfter, auditSelectedAfter := auditSink.decisionStats()
-	fixtureReport := scaleprobe.Fixture{Case: cfg.name, Backend: "native-dry-run", CacheReader: "controller-runtime-cache", ReceiptReader: "direct-api-reader", OwnerReader: "direct-api-reader", TransportCoverage: "fixture/cache/manager/direct REST transports counted; envtest control-plane internals and metric gathers uncounted", Optimizer: "production decision.CoverageEngine", TelemetrySource: "honest-absent local source; no external Prometheus transport", Calibration: "production calibration runtime enabled; warm-up establishes current schedule", Readiness: "Deployment, ReplicaSet and Pod readiness/status manually seeded consistently; no kube-controller-manager or scheduler", SelectorMode: cfg.selector, Deployments: cfg.namespaces, ReplicaSets: cfg.namespaces, Pods: cfg.pods, Namespaces: cfg.namespaces, Policies: cfg.policies, PoliciesPerNS: cfg.policies / cfg.namespaces, Nodes: 2, ServiceAccounts: cfg.namespaces, Services: cfg.namespaces, PDBs: cfg.namespaces, NetworkPolicies: cfg.namespaces, Roles: cfg.namespaces, RoleBindings: cfg.namespaces, ClusterRoles: 1, ClusterBindings: 1, SecurityEvents: 2, Receipts: 1, BrakeConfigMaps: cfg.namespaces, WarmupTicks: cfg.warmup, RequestedAttempts: cfg.samples, TickTimeoutMS: cfg.timeout.Milliseconds(), TickIntervalMS: 20000, SampleCadence: "fixed attempt budget, forced due after cache-observed policy status convergence; no retry-to-success and convergence waits excluded from measured manager duration", AuditByteLimit: auditSink.maxBytes, AuditRetained: auditRetained, AuditDropped: auditDropped, MetricsSink: "controller-runtime process registry with a bounded instrumented audit sink; fixed outcome and declared tenant labels", TrustFixture: "source-shaped synthetic creator annotation; admission stamp/policy not installed"}
+	measuredDecisions := auditDecisionsAfter - auditDecisionsBefore
+	measuredSelected := auditSelectedAfter - auditSelectedBefore
+	if finishedAttempts > 0 && (measuredDecisions < finishedAttempts || measuredSelected < finishedAttempts) {
+		probeErrors = append(probeErrors, fmt.Sprintf("measured audit decisions=%d selected-feasible=%d, want at least one valid record per %d finished workload attempts", measuredDecisions, measuredSelected, finishedAttempts))
+	}
+	fixtureReport := scaleprobe.Fixture{Case: cfg.name, Backend: "native-dry-run", CacheReader: "controller-runtime-cache", ReceiptReader: "direct-api-reader", OwnerReader: "snapshot-local deduplicated direct-api-reader", TransportCoverage: "fixture/cache/manager/direct/convergence REST transports counted; convergence traffic reported separately; envtest control-plane internals and metric gathers uncounted", Optimizer: "production decision.CoverageEngine", TelemetrySource: "honest-absent local source; no external Prometheus transport", Calibration: "production calibration runtime enabled; warm-up establishes current schedule", Readiness: "Deployment, ReplicaSet and Pod readiness/status manually seeded consistently; no kube-controller-manager or scheduler", SelectorMode: cfg.selector, Deployments: cfg.namespaces, ReplicaSets: cfg.namespaces, Pods: cfg.pods, Namespaces: cfg.namespaces, Policies: cfg.policies, PoliciesPerNS: cfg.policies / cfg.namespaces, Nodes: 2, ServiceAccounts: cfg.namespaces, Services: cfg.namespaces, PDBs: cfg.namespaces, NetworkPolicies: cfg.namespaces, Roles: cfg.namespaces, RoleBindings: cfg.namespaces, ClusterRoles: 1, ClusterBindings: 1, SecurityEvents: 2, Receipts: 1, BrakeConfigMaps: cfg.namespaces, WarmupTicks: cfg.warmup, RequestedAttempts: cfg.samples, TickTimeoutMS: cfg.timeout.Milliseconds(), TickIntervalMS: 20000, SampleCadence: "fixed attempt budget, forced due after cached policy resourceVersion/status exactly match authoritative post-tick reads; no retry-to-success and convergence waits/GETs excluded from measured manager duration and sampled producer traffic", AuditByteLimit: auditSink.maxBytes, AuditRetained: auditRetained, AuditDropped: auditDropped, MetricsSink: "controller-runtime process registry with a bounded instrumented audit sink; fixed outcome and declared tenant labels", TrustFixture: "source-shaped synthetic creator annotation; admission stamp/policy not installed"}
 	if cfg.selector == "partitioned" {
 		fixtureReport.PodsPerPolicy = cfg.pods / cfg.policies
 	} else {
@@ -917,10 +1098,10 @@ func TestM137ScaleHarness(t *testing.T) {
 	report = scaleprobe.Report{
 		SchemaVersion: scaleprobe.SchemaVersion,
 		Environment:   scaleprobe.Environment{GitSHA: m137GitSHA(t), Executable: executable, ExecutableSHA256: executableSHA, GoVersion: runtime.Version(), KubernetesAssets: os.Getenv("KUBEBUILDER_ASSETS"), CPUCount: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), MemoryTotalBytes: totalMemory, MemoryLimitBytes: limitMemory, HarnessPID: os.Getpid(), APIProcessPID: children["apiserver"], EtcdProcessPID: children["etcd"], APIProcessRSSBytes: m137RSS(children["apiserver"]), EtcdProcessRSSBytes: m137RSS(children["etcd"])},
-		Fixture:       fixtureReport, Samples: samples, Controls: []scaleprobe.Control{deadlineControl}, StartupHTTP: startupHTTP, SampleHTTP: sampledHTTP, ControlHTTP: controlHTTP,
-		RESTConfigs: map[string]scaleprobe.RESTConfig{"fixture": m137RESTBinding(fixtureREST), "cache": m137RESTBinding(cacheREST), "manager": m137RESTBinding(managerREST), "direct": m137RESTBinding(directREST)},
-		Memory:      scaleprobe.Memory{Scope: "harness/cache/manager process measured separately from envtest kube-apiserver and etcd", HarnessBaseline: rssBefore, HarnessPeak: peakRSS, HarnessFinal: m137RSS(os.Getpid()), HarnessSlopeBytes: m137Slope(rssValues), HeapBaseline: memBefore.HeapAlloc, HeapPeak: peakHeap, HeapFinal: memAfter.HeapAlloc, HeapSlopeBytes: m137Slope(heapValues), GCCount: memAfter.NumGC - memBefore.NumGC, APIBaseline: apiRSSBefore, APIPeak: peakAPIRSS, APIFinal: m137RSS(children["apiserver"]), EtcdBaseline: etcdRSSBefore, EtcdPeak: peakEtcdRSS, EtcdFinal: m137RSS(children["etcd"])},
-		Correctness: scaleprobe.Correctness{CacheConverged: len(cachedPods.Items) == cfg.pods, ProtectedObjectCount: len(snap.Pods), GraphEdgesPresent: graphEdges, RBACPresent: rbacPresent, TrustedEventPresent: trustedPresent, ReceiptPresent: receiptPresent, DecisionRecords: auditDecisionsAfter - auditDecisionsBefore, SelectedFeasibleRecords: auditSelectedAfter - auditSelectedBefore, CurrentOwnerEligible: ownerEligible, ControllerStatusPreserved: controllerStatusPreserved, NoFalseCadence: noFalseCadence},
+		Fixture:       fixtureReport, Samples: samples, Controls: []scaleprobe.Control{deadlineControl}, StartupHTTP: startupHTTP, SampleHTTP: sampledHTTP, ConvergenceHTTP: convergenceHTTP, ControlHTTP: controlHTTP,
+		RESTConfigs: map[string]scaleprobe.RESTConfig{"fixture": m137RESTBinding(fixtureREST), "cache": m137RESTBinding(cacheREST), "manager": m137RESTBinding(managerREST), "direct": m137RESTBinding(directREST), "convergence": m137RESTBinding(convergenceREST)},
+		Memory:      scaleprobe.Memory{Scope: "sampled post-tick harness/cache/manager and separate envtest kube-apiserver/etcd snapshots; max and slope are not continuous within-tick peaks", HarnessBaseline: rssBefore, HarnessPeak: peakRSS, HarnessFinal: m137RSS(os.Getpid()), HarnessSlopeBytes: m137Slope(rssValues), HeapBaseline: memBefore.HeapAlloc, HeapPeak: peakHeap, HeapFinal: memAfter.HeapAlloc, HeapSlopeBytes: m137Slope(heapValues), GCCount: memAfter.NumGC - memBefore.NumGC, APIBaseline: apiRSSBefore, APIPeak: peakAPIRSS, APIFinal: m137RSS(children["apiserver"]), EtcdBaseline: etcdRSSBefore, EtcdPeak: peakEtcdRSS, EtcdFinal: m137RSS(children["etcd"])},
+		Correctness: scaleprobe.Correctness{CacheConverged: len(cachedPods.Items) == cfg.pods, ProtectedObjectCount: len(snap.Pods), GraphEdgesPresent: graphEdges, RBACPresent: rbacPresent, TrustedEventPresent: trustedPresent, ReceiptPresent: receiptPresent, DecisionRecords: measuredDecisions, SelectedFeasibleRecords: measuredSelected, CurrentOwnerEligible: ownerEligible, ControllerStatusPreserved: controllerStatusPreserved, NoFalseCadence: noFalseCadence},
 		ProbeErrors: probeErrors,
 	}
 	report.Summary = scaleprobe.Summarize(report.Samples, 1)
@@ -935,6 +1116,7 @@ func TestM137ScaleHarness(t *testing.T) {
 		"the per-origin REST QPS, burst, timeout and rate limiter are bound in this report and may differ from deployed controller client settings",
 		"intended deployment hardware, workload mix, scheduler cadence, API QPS/latency, process lifetime, memory retention and claimed maximum fleet remain LV25 debt",
 		"manager residual is computed by subtraction and combines shared ingest/graph with later audit summary, retained-state cleanup, status writes and cadence credit; it is not a causal stage profile",
+		"memory maxima and slopes use baseline/post-tick samples; transient within-tick spikes and OOM headroom are not established",
 	}
 	if cfg.pods == 1000 {
 		report.NFRVerdict = "PASS"
@@ -980,6 +1162,20 @@ func m137HTTPResourceCount(counts map[string]int64, origin, verb, resource strin
 		}
 	}
 	return total
+}
+
+func m137PartitionHTTP(counts map[string]int64, origin string) (map[string]int64, map[string]int64) {
+	remaining := make(map[string]int64, len(counts))
+	selected := map[string]int64{}
+	prefix := origin + "|"
+	for key, value := range counts {
+		if strings.HasPrefix(key, prefix) {
+			selected[key] = value
+			continue
+		}
+		remaining[key] = value
+	}
+	return remaining, selected
 }
 
 func m137LargestHTTPProducer(counts map[string]int64) string {

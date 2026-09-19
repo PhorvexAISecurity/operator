@@ -147,22 +147,23 @@ type Summary struct {
 }
 
 type Report struct {
-	SchemaVersion string                `json:"schemaVersion"`
-	Environment   Environment           `json:"environment"`
-	Fixture       Fixture               `json:"fixture"`
-	Samples       []Sample              `json:"samples"`
-	Controls      []Control             `json:"controls"`
-	StartupHTTP   map[string]int64      `json:"startupHTTP"`
-	SampleHTTP    map[string]int64      `json:"sampleHTTP"`
-	ControlHTTP   map[string]int64      `json:"controlHTTP"`
-	RESTConfigs   map[string]RESTConfig `json:"restConfigs"`
-	Memory        Memory                `json:"memory"`
-	Correctness   Correctness           `json:"correctness"`
-	Summary       Summary               `json:"summary"`
-	NFRVerdict    string                `json:"nfrVerdict"`
-	NFRDetail     string                `json:"nfrDetail"`
-	Limitations   []string              `json:"limitations"`
-	ProbeErrors   []string              `json:"probeErrors,omitempty"`
+	SchemaVersion   string                `json:"schemaVersion"`
+	Environment     Environment           `json:"environment"`
+	Fixture         Fixture               `json:"fixture"`
+	Samples         []Sample              `json:"samples"`
+	Controls        []Control             `json:"controls"`
+	StartupHTTP     map[string]int64      `json:"startupHTTP"`
+	SampleHTTP      map[string]int64      `json:"sampleHTTP"`
+	ConvergenceHTTP map[string]int64      `json:"sampleConvergenceHTTP"`
+	ControlHTTP     map[string]int64      `json:"controlHTTP"`
+	RESTConfigs     map[string]RESTConfig `json:"restConfigs"`
+	Memory          Memory                `json:"memory"`
+	Correctness     Correctness           `json:"correctness"`
+	Summary         Summary               `json:"summary"`
+	NFRVerdict      string                `json:"nfrVerdict"`
+	NFRDetail       string                `json:"nfrDetail"`
+	Limitations     []string              `json:"limitations"`
+	ProbeErrors     []string              `json:"probeErrors,omitempty"`
 }
 
 func Summarize(samples []Sample, targetSeconds float64) Summary {
@@ -348,17 +349,17 @@ func (r Report) Validate() error {
 	if !deadlineControl {
 		return errors.New("separate deliberate deadline exclusion/no-cadence control is required")
 	}
-	if len(r.StartupHTTP) == 0 || r.SampleHTTP == nil || r.ControlHTTP == nil {
-		return errors.New("startup, sampled and control HTTP counters are required")
+	if len(r.StartupHTTP) == 0 || r.SampleHTTP == nil || r.ConvergenceHTTP == nil || r.ControlHTTP == nil {
+		return errors.New("startup, sampled, convergence and control HTTP counters are required")
 	}
-	for scope, counts := range map[string]map[string]int64{"startup": r.StartupHTTP, "sample": r.SampleHTTP, "control": r.ControlHTTP} {
+	for scope, counts := range map[string]map[string]int64{"startup": r.StartupHTTP, "sample": r.SampleHTTP, "convergence": r.ConvergenceHTTP, "control": r.ControlHTTP} {
 		for key, value := range counts {
 			if key == "" || value < 0 {
 				return fmt.Errorf("%s HTTP count %q=%d is invalid", scope, key, value)
 			}
 		}
 	}
-	for _, origin := range []string{"fixture", "cache", "manager", "direct"} {
+	for _, origin := range []string{"fixture", "cache", "manager", "direct", "convergence"} {
 		config, ok := r.RESTConfigs[origin]
 		if !ok || config.Server == "" || config.Timeout == "" || config.RateLimiter == "" || config.UserAgent == "" || config.QPS <= 0 || config.Burst <= 0 {
 			return fmt.Errorf("counted REST origin %q lacks complete QPS/burst/timeout/rate-limiter binding", origin)
@@ -368,9 +369,20 @@ func (r Report) Validate() error {
 		return errors.New("startup cache watch traffic is missing")
 	}
 	for key, value := range r.SampleHTTP {
+		if strings.HasPrefix(key, "convergence|") {
+			return fmt.Errorf("sampled manager traffic includes convergence transport: %s=%d", key, value)
+		}
 		if strings.HasPrefix(key, "cache|LIST|") && value != 0 {
 			return fmt.Errorf("sampled cache inventory LIST recurred: %s=%d", key, value)
 		}
+	}
+	for key := range r.ConvergenceHTTP {
+		if !strings.HasPrefix(key, "convergence|") {
+			return fmt.Errorf("convergence traffic includes non-convergence origin: %s", key)
+		}
+	}
+	if httpCount(r.ConvergenceHTTP, "convergence|GET|phorvexpolicies|") != int64(finished*r.Fixture.Policies) {
+		return errors.New("authoritative convergence policy GET count does not match finished attempts")
 	}
 	if httpCount(r.SampleHTTP, "direct|LIST|securityevents|") < int64(finished) {
 		return errors.New("sampled direct SecurityEvent authority reads are missing")
@@ -393,8 +405,11 @@ func (r Report) Validate() error {
 	if len(r.ProbeErrors) > 0 {
 		return fmt.Errorf("probe correctness errors were retained: %v", r.ProbeErrors)
 	}
-	if r.Memory.Scope == "" || r.Memory.HarnessBaseline <= 0 || r.Memory.HarnessPeak <= 0 || r.Memory.APIBaseline <= 0 || r.Memory.APIPeak <= 0 || r.Memory.APIFinal <= 0 || r.Memory.EtcdBaseline <= 0 || r.Memory.EtcdPeak <= 0 || r.Memory.EtcdFinal <= 0 {
+	if r.Memory.Scope == "" || r.Memory.HarnessBaseline <= 0 || r.Memory.HarnessPeak <= 0 || r.Memory.HarnessFinal <= 0 || r.Memory.HeapBaseline == 0 || r.Memory.HeapPeak == 0 || r.Memory.HeapFinal == 0 || r.Memory.APIBaseline <= 0 || r.Memory.APIPeak <= 0 || r.Memory.APIFinal <= 0 || r.Memory.EtcdBaseline <= 0 || r.Memory.EtcdPeak <= 0 || r.Memory.EtcdFinal <= 0 {
 		return errors.New("process-scoped memory evidence is required")
+	}
+	if r.Memory.HarnessSlopeBytes == 0 || math.IsNaN(r.Memory.HarnessSlopeBytes) || math.IsInf(r.Memory.HarnessSlopeBytes, 0) || r.Memory.HeapSlopeBytes == 0 || math.IsNaN(r.Memory.HeapSlopeBytes) || math.IsInf(r.Memory.HeapSlopeBytes, 0) {
+		return errors.New("sampled harness and heap memory slopes are required and must be finite")
 	}
 	c := r.Correctness
 	if !c.CacheConverged || c.ProtectedObjectCount != r.Fixture.Pods || !c.GraphEdgesPresent || !c.RBACPresent || !c.TrustedEventPresent || !c.ReceiptPresent || c.DecisionRecords <= 0 || c.SelectedFeasibleRecords <= 0 || !c.CurrentOwnerEligible || !c.ControllerStatusPreserved || !c.NoFalseCadence {
