@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,6 +16,21 @@ checks:
     at: '2026-09-19T17:11:54+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: aab33d8bb512a3a167e4598ca55894275b6f0a46ec7fee8aa6d5b4665887ce56
+    source_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+    at: '2026-09-19T17:15:09+00:00'
+    baseline_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/current-base.log
+    sha256: 5d071322c766ba8fd4f8c1b8ba56477e096e96c837d7a07102c96015a747e898
+    source_sha: 44484557cd341d9552e767d20a8617b329d3e9d8
+    at: '2026-09-19T17:15:09+00:00'
 fix_id: T22-M078
 issues:
 - M-78
@@ -85,7 +100,7 @@ next_action:
   owner: sol-t22-m078
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-19T17:11:54+00:00'
+updated_at: '2026-09-19T17:15:09+00:00'
 configuration_history:
 - at: '2026-09-19T15:15:33+00:00'
   by: codex-lead
