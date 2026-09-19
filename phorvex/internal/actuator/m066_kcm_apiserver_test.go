@@ -91,6 +91,43 @@ func m066Poll(t *testing.T, within time.Duration, check func() (bool, error)) {
 	t.Fatal("timed out waiting for isolated ReplicaSet controller")
 }
 
+func m066WaitExactRoute(t *testing.T, ctx context.Context, c client.Reader, service *corev1.Service, pods ...*corev1.Pod) {
+	t.Helper()
+	want := make(map[string]bool, len(pods))
+	for _, pod := range pods {
+		want[string(pod.UID)] = true
+	}
+	m066Poll(t, 20*time.Second, func() (bool, error) {
+		members, err := routeEndpointMembers(ctx, c, service)
+		if err != nil || len(members) != len(want) {
+			return false, nil
+		}
+		for _, uid := range members {
+			if !want[uid] {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+}
+
+func m066SetPodNetworkReady(t *testing.T, ctx context.Context, c client.Client, pod *corev1.Pod, ip string) {
+	t.Helper()
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.PodIP = ip
+	pod.Status.PodIPs = []corev1.PodIP{{IP: ip}}
+	pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	// envtest has no kubelet. The explicitly seeded status lets the real
+	// EndpointSlice controller publish this exact Pod UID; it does not claim
+	// kubelet readiness or cluster Pod-network traffic.
+	if err := c.Status().Update(ctx, pod); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(pod), pod); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.T) {
 	const (
 		emptyLabel      = "m065.test/empty-label"
@@ -124,7 +161,7 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	privateKubeconfig := m066Kubeconfig(t, cfg)
-	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+privateKubeconfig, "--controllers=replicaset", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
+	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+privateKubeconfig, "--controllers=replicaset,endpointslice", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
 	cmd.Env = []string{"KUBECONFIG=" + privateKubeconfig}
 	for _, entry := range os.Environ() {
 		if !strings.HasPrefix(entry, "KUBECONFIG=") {
@@ -149,6 +186,9 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "m066-operator"}}); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.Create(ctx, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "m066-node"}}); err != nil {
+		t.Fatal(err)
+	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "serving"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "m066", labelSwapGroup: "g", labelRole: roleLeader}, Ports: []corev1.ServicePort{{Port: 8000}}}}
 	if err := c.Create(ctx, svc); err != nil {
 		t.Fatal(err)
@@ -158,7 +198,8 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 		t.Fatal(err)
 	}
 	count := int32(2)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &count, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m066", labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m066", labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false", emptyLabel: "", "m065.test/nonempty-label": "expected"}, Annotations: map[string]string{annoRouteService: svc.Name, annoServingPort: "8123", annoResetPath: "/custom_reset", "phorvex.ai/model-id": "declared-model", emptyAnnotation: "", "m065.test/nonempty-annotation": "expected"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
+	zero := int64(0)
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &count, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m066", labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m066", labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false", emptyLabel: "", "m065.test/nonempty-label": "expected"}, Annotations: map[string]string{annoRouteService: svc.Name, annoServingPort: "8123", annoResetPath: "/custom_reset", "phorvex.ai/model-id": "declared-model", emptyAnnotation: "", "m065.test/nonempty-annotation": "expected"}}, Spec: corev1.PodSpec{NodeName: "m066-node", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
 	}
@@ -182,16 +223,12 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 	if err := c.Update(ctx, next); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []*corev1.Pod{old, next} {
-		p.Status.Phase = corev1.PodRunning
-		p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
-		if err := c.Status().Update(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := c.Get(ctx, client.ObjectKey{Namespace: ns.Name, Name: old.Name}, old); err != nil {
+	m066SetPodNetworkReady(t, ctx, c, old, "10.66.0.10")
+	m066SetPodNetworkReady(t, ctx, c, next, "10.66.0.11")
+	if err := c.Get(ctx, client.ObjectKeyFromObject(svc), svc); err != nil {
 		t.Fatal(err)
 	}
+	m066WaitExactRoute(t, ctx, c, svc, old)
 	old.Spec.EphemeralContainers = []corev1.EphemeralContainer{{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debug", Image: "registry.k8s.io/pause:3.10"}}}
 	if err := c.SubResource("ephemeralcontainers").Update(ctx, old); err != nil {
 		t.Fatalf("inject exact incident trigger: %v", err)
@@ -265,11 +302,7 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 	if err := c.Update(ctx, replacement); err != nil {
 		t.Fatal(err)
 	}
-	replacement.Status.Phase = corev1.PodRunning
-	replacement.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
-	if err := c.Status().Update(ctx, replacement); err != nil {
-		t.Fatal(err)
-	}
+	m066SetPodNetworkReady(t, ctx, c, replacement, "10.66.0.12")
 	native := NewNativeActuator(guard)
 	native.Reader = c
 	native.JournalNamespace = "m066-operator"
@@ -338,7 +371,7 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 			t.Fatal("ReplicaSet has policy ownership")
 		}
 	}
-	t.Log("policy owner graph absent from pool; local KCM ran ReplicaSet only, so garbage collection itself was not exercised")
+	t.Log("policy owner graph absent from pool; local KCM ran ReplicaSet and EndpointSlice controllers only, so garbage collection itself was not exercised")
 	if strings.Contains(fmt.Sprint(events), "PENDING-GPU-VALIDATION") {
 		t.Log("explicit local status/model-ready fixture validates controller flow only; GPU timing remains unverified")
 	}

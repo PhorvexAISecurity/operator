@@ -54,7 +54,7 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	privateKubeconfig := m066Kubeconfig(t, cfg)
-	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+privateKubeconfig, "--controllers=replicaset", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
+	cmd := exec.CommandContext(ctx, kcm, "--kubeconfig="+privateKubeconfig, "--controllers=replicaset,endpointslice", "--leader-elect=false", "--use-service-account-credentials=false", "--bind-address=127.0.0.1", "--secure-port=0")
 	cmd.Env = []string{"KUBECONFIG=" + privateKubeconfig}
 	for _, entry := range os.Environ() {
 		if !strings.HasPrefix(entry, "KUBECONFIG=") {
@@ -71,10 +71,13 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := c.Create(ctx, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "m068-node"}}); err != nil {
+		t.Fatal(err)
+	}
 	m068AssertRealAPIParallelGroupRefusal(t, ctx, c)
 
 	var scalarHTTPCalls atomic.Int32
-	scalarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	scalarServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scalarHTTPCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -86,6 +89,15 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 			_, _ = w.Write([]byte(`{"success":true}`))
 		}
 	}))
+	if err := scalarServer.Listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	scalarListener, err := net.Listen("tcp4", net.JoinHostPort(m067NonLoopbackIPv4(t), "0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scalarServer.Listener = scalarListener
+	scalarServer.Start()
 	t.Cleanup(scalarServer.Close)
 	scalarHost, scalarPortText, err := net.SplitHostPort(strings.TrimPrefix(scalarServer.URL, "http://"))
 	if err != nil {
@@ -121,13 +133,14 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 		t.Fatal(err)
 	}
 	count := int32(2)
+	zero := int64(0)
 	replicaSet := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: tenantNS, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{
 		Replicas: &count,
 		Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m068", labelModelShard: shard}},
 		Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{
 			Labels:      map[string]string{"app": "m068", labelModelShard: shard, labelRole: roleShadow, labelModelLoaded: "false"},
 			Annotations: map[string]string{annoRouteService: service.Name, annoServingPort: scalarPortText, "phorvex.ai/model-id": "declared-model"},
-		}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}},
+		}, Spec: corev1.PodSpec{NodeName: "m068-node", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}},
 	}}
 	if err := c.Create(ctx, replicaSet); err != nil {
 		t.Fatal(err)
@@ -152,17 +165,12 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	if err := c.Update(ctx, shadow); err != nil {
 		t.Fatal(err)
 	}
-	for _, pod := range []*corev1.Pod{leader, shadow} {
-		pod.Status.Phase = corev1.PodRunning
-		pod.Status.PodIP = scalarHost
-		pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
-		if err := c.Status().Update(ctx, pod); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := c.Get(ctx, client.ObjectKeyFromObject(leader), leader); err != nil {
+	m066SetPodNetworkReady(t, ctx, c, leader, scalarHost)
+	m066SetPodNetworkReady(t, ctx, c, shadow, scalarHost)
+	if err := c.Get(ctx, client.ObjectKeyFromObject(service), service); err != nil {
 		t.Fatal(err)
 	}
+	m066WaitExactRoute(t, ctx, c, service, leader)
 	if _, registered := HandlerRegistry.Get(string(model.ActionModelShardReplace)); !registered {
 		t.Fatal("model-shard-replace handler is not registered")
 	}
@@ -227,12 +235,7 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	if err := c.Update(ctx, replacement); err != nil {
 		t.Fatal(err)
 	}
-	replacement.Status.Phase = corev1.PodRunning
-	replacement.Status.PodIP = scalarHost
-	replacement.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
-	if err := c.Status().Update(ctx, replacement); err != nil {
-		t.Fatal(err)
-	}
+	m066SetPodNetworkReady(t, ctx, c, replacement, scalarHost)
 	native.RecoveryVLLM = &mockVLLM{loaded: true}
 	var events []RecoveryEvent
 	m066Poll(t, 10*time.Second, func() (bool, error) {
