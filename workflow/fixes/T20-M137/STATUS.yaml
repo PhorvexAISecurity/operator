@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 16d1d5b12975aa918aa0493a633488f2c9581be4fd3e40401d658de168a367c5
+    sha256: b6040777b1dceb9a52ccd8c816bc9bba13615746a5457a3c2acf467834b468da
     source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
-    at: '2026-09-19T16:35:36+00:00'
+    at: '2026-09-19T16:42:04+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   red:
@@ -100,7 +100,7 @@ next_action:
   owner: sol-t20-m137
   action: Implement signed measured-envelope plan; full accepted Tier19 before final
     verification
-updated_at: '2026-09-19T16:35:36+00:00'
+updated_at: '2026-09-19T16:42:04+00:00'
 configuration_history:
 - at: '2026-09-19T14:30:38+00:00'
   by: codex-lead
@@ -169,5 +169,14 @@ check_history:
   sha256: afcd2b6d814d49780ef1ab47e8ea3de9ab10f2eb601b24892a126697fc5b00b7
   source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
   at: '2026-09-19T16:05:55+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 16d1d5b12975aa918aa0493a633488f2c9581be4fd3e40401d658de168a367c5
+  source_sha: f58a7ea335cdd53071f63af5cc5740ff00d9d785
+  at: '2026-09-19T16:35:36+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
