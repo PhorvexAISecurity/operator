@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: bcc574c94440dfb9553699d6cc89f9db5c1d50435505feab948492f1bf068525
+    sha256: 27d145c8f2a586eda012ed183a8e65212666efcb982f789355e181545b2d4897
     source_sha: 3b194eee2cde60506302217c246d015913424a99
-    at: '2026-09-19T17:20:46+00:00'
+    at: '2026-09-19T17:21:25+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
 fix_id: T25-M067
@@ -25,7 +25,7 @@ state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
-  implementer: sol-t25-m067
+  implementer: sol-t25-m067-boundary
   skeptic: codex-lead
   live_verifier: codex-lead
   coordinator: codex-lead
@@ -85,7 +85,7 @@ next_action:
   owner: sol-t25-m067
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-19T17:20:46+00:00'
+updated_at: '2026-09-19T17:21:25+00:00'
 configuration_history:
 - at: '2026-09-19T15:28:44+00:00'
   by: codex-lead
@@ -97,6 +97,11 @@ configuration_history:
   - next_action
   - roles
   - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T17:21:24+00:00'
+  by: codex-lead
+  fields:
+  - roles
   approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
@@ -123,5 +128,14 @@ check_history:
   sha256: 9d5aa7f59a7e6b2b0e5cfe891724d2ad912dff772405eddfbcc2fd8a28a9283b
   source_sha: 3b194eee2cde60506302217c246d015913424a99
   at: '2026-09-19T15:28:47+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: bcc574c94440dfb9553699d6cc89f9db5c1d50435505feab948492f1bf068525
+  source_sha: 3b194eee2cde60506302217c246d015913424a99
+  at: '2026-09-19T17:20:46+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
