@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -88,12 +88,28 @@ checks:
     inputs:
     - phorvex/internal/runner
     inputs_sha256: 5e624ec6439c419b9606b244aec752a5d29a0a35e3d1d131edbfe82b9faa92a8
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 848203d3d91f1e037cdbdd240a07ce94c651d38dd3c8deede77ad290334a19a3
+    source_sha: 46a77f9bc63dd812b745a789916feed6d8903599
+    at: '2026-09-19T14:24:36+00:00'
+    baseline_sha: 07cbdd9ac80a8d44cdacfb1b505260f0b537cc9c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b965f841a9b7df47f8dd361f601960965d1b0e62e6457c9e598bd8611410e470
+    source_sha: 46a77f9bc63dd812b745a789916feed6d8903599
+    at: '2026-09-19T14:24:36+00:00'
+    incident_sha256: 848203d3d91f1e037cdbdd240a07ce94c651d38dd3c8deede77ad290334a19a3
 fix_id: T18-M128
 issues:
 - M-128
 title: Deterministic due-policy order and truthful interrupted-tick cadence
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,7 +154,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -154,10 +170,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-19T14:22:12+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T14:24:40+00:00'
 configuration_history:
 - at: '2026-09-19T13:13:19+00:00'
   by: codex-lead
@@ -213,10 +229,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T14:24:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T14:24:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T18-M128:8:submit
-  from: sol-t18-m128
+  id: T18-M128:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9
