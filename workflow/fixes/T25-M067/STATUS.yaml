@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 18
+revision: 21
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -108,12 +108,19 @@ checks:
     source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
     at: '2026-09-19T20:39:13+00:00'
     incident_sha256: 3ec4ef6979f13ece17a39cb3cea1b799c9214a9d1bdb2a459454bcf546e2b585
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 729131be4798353e50cf8767c6ed4c52f66fda40e649d631a3552b0a74a27c24
+    source_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
+    at: '2026-09-19T21:03:12+00:00'
 fix_id: T25-M067
 issues:
 - M-67
 title: Protect scalar drain claims and restore definitely-unsent routing
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -140,11 +147,11 @@ implementation:
   head_sha: 094a8e517e5ba319bb214fc4f7b58013cbdcf3b2
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/241
+  reviewed_head: a44777f16a3a2a21378ba1effd28a127d965a729
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -175,9 +182,10 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-19T20:39:17+00:00'
+  action: PR241 open/non-draft/main. All planned source tiers reconciled; LV02/LV16
+    and prior live/source residuals remain pending. Await scoped DevOps/owner readiness;
+    production HOLD.
+updated_at: '2026-09-19T21:03:13+00:00'
 configuration_history:
 - at: '2026-09-19T15:28:44+00:00'
   by: codex-lead
@@ -207,6 +215,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-19T21:03:11+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -255,6 +269,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-19T21:03:13+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision

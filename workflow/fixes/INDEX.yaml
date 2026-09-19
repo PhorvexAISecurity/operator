@@ -1257,7 +1257,7 @@ fixes:
     issues:
     - M-67
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t25-m067
