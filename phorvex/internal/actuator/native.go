@@ -74,6 +74,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if ok, detail := nativeAccepts(a); !ok {
 		return false, unsupportedWhy(BackendNative, a, detail)
 	}
+	if a == model.ActionModelShardReplace && t.Labels[labelParallelGroup] != "" {
+		return false, ReasonParallelGroupUnavailable
+	}
 	if ok, why := n.servingSecurity.supports(a, t); !ok {
 		return false, why
 	}

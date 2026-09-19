@@ -143,6 +143,6 @@ intakes:
     directory: intake/RPT-20260919-122509-calibration-expired-comparison-references
     kind: BUG
     title: Calibration sample compaction retains expired comparison references
-    state: REPORTED
-    issue_id: null
+    state: FILED
+    issue_id: M-179
     aliases: []

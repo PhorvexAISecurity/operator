@@ -1,8 +1,9 @@
 /*
  * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (P4 — AI/GPU actuator)
  *
- * [M-69] Identity-bound AI Pod retirement. warm-swap, model-shard-replace (single and TP/PP
- * group) and mig-rebind retire Pods by DELETING them. A Pod name is not an identity: the
+ * [M-69] Identity-bound AI Pod retirement. warm-swap, scalar model-shard-replace, and
+ * mig-rebind retire Pods by DELETING them. Historical TP/PP helper tests retain these
+ * guards, while production dispatch refuses grouped replacement. A Pod name is not an identity: the
  * owner respawns a replacement under the SAME namespace/name, so a delayed retry of the same
  * decision — or a Delete issued after the observed object was already replaced — would kill
  * the respawned Pod that nothing ever selected. Native rotate already binds its Delete to the

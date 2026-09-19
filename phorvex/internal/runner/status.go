@@ -55,6 +55,21 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 }
 
 func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, protected, moves, actuated int, killObservation KillSwitchObservation, now time.Time, actionStatuses ...actionsSupportStatus) {
+	m.updateTickStatusObserved(ctx, e, protected, moves, actuated, killObservation, now, nil, actionStatuses...)
+}
+
+type rejectedTickStatus struct {
+	reason metrics.TickRejectionReason
+}
+
+// updateRejectedStatusObserved publishes a current checked-selection refusal
+// through the same operational status boundary as a completed tick. It passes
+// zero new decisions and emissions, preserving their retained totals/history.
+func (m *Manager) updateRejectedStatusObserved(ctx context.Context, e *policyEntry, protected int, killObservation KillSwitchObservation, now time.Time, reason metrics.TickRejectionReason, actionStatuses ...actionsSupportStatus) {
+	m.updateTickStatusObserved(ctx, e, protected, 0, 0, killObservation, now, &rejectedTickStatus{reason: reason}, actionStatuses...)
+}
+
+func (m *Manager) updateTickStatusObserved(ctx context.Context, e *policyEntry, protected, moves, actuated int, killObservation KillSwitchObservation, now time.Time, rejected *rejectedTickStatus, actionStatuses ...actionsSupportStatus) {
 	killEngaged := killObservation.Engaged
 	actions := actionsSupportStatus{
 		status:  metav1.ConditionTrue,
@@ -67,9 +82,13 @@ func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, prot
 	enactedInWindow, historyComplete := m.emissionWindow(e, actuated, now)
 	var updated v1alpha1.PhorvexPolicy
 	emitUnsupportedEvent := false
+	ownerMatched := false
 	lastOperation := "read"
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var p v1alpha1.PhorvexPolicy
+		updated = v1alpha1.PhorvexPolicy{}
+		emitUnsupportedEvent = false
+		ownerMatched = false
 		lastOperation = "read"
 		if err := m.Client.Get(ctx, e.key, &p); err != nil {
 			return err
@@ -78,6 +97,7 @@ func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, prot
 		if string(p.UID) != e.uid {
 			return nil
 		}
+		ownerMatched = true
 		before := p.Status.DeepCopy()
 		// Publish the disagreement before attempting the transition. A successful write clears it;
 		// any exhausted read/update failure below asserts it so the alert survives the failure.
@@ -100,11 +120,14 @@ func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, prot
 		emitUnsupportedEvent = actions.status == metav1.ConditionFalse &&
 			(previous == nil || previous.Status != actions.status || previous.Message != actions.message)
 
+		readyStatus, readyReason := metav1.ConditionTrue, "Ticking"
+		readyMessage := "phorvex is ingesting, scoring and logging decisions"
+		if rejected != nil {
+			readyStatus, readyReason = metav1.ConditionFalse, "ActionSetRejected"
+			readyMessage = "decision action set rejected before selection (" + string(rejected.reason) + ")"
+		}
 		meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionTrue,
-			Reason:             "Ticking",
-			Message:            "phorvex is ingesting, scoring and logging decisions",
+			Type: "Ready", Status: readyStatus, Reason: readyReason, Message: readyMessage,
 			ObservedGeneration: p.Generation,
 		})
 		dryReason, dryMsg := "Active", "actuation enabled"
@@ -129,29 +152,31 @@ func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, prot
 			ObservedGeneration: p.Generation,
 		})
 		prepStatus, prepReason, prepMessage := metav1.ConditionUnknown, "NotAttempted", "actuator preparation was not attempted this tick"
-		if actions.preparation != nil && e.generation != p.Generation {
-			prepReason, prepMessage = "StalePreparation", fmt.Sprintf("preparation was for generation %d; current policy generation is %d", e.generation, p.Generation)
-		} else if actions.preparation != nil && m.Actuator != nil {
-			prepStatus, prepReason, prepMessage = metav1.ConditionTrue, "Prepared", "selected actuator route prepared this tick"
-			prep := actions.preparation
-			switch m.Actuator.Name() {
-			case "hybrid":
-				if prep.PhoenixSkipped && prep.NativeSkipped {
-					prepStatus, prepReason, prepMessage = metav1.ConditionUnknown, "NoEnabledRoutes", "no enabled action route required preparation this tick"
-				} else if prep.PhoenixSkipped || prep.NativeSkipped {
-					prepMessage = fmt.Sprintf("Phoenix route: %s; native route: %s", preparationRouteDetail(prep.PhoenixErr, prep.PhoenixSkipped), preparationRouteDetail(prep.NativeErr, prep.NativeSkipped))
-				}
-				if prep.PhoenixErr != nil || prep.NativeErr != nil {
-					prepStatus, prepReason = metav1.ConditionFalse, "RoutePreparationRefused"
-					prepMessage = fmt.Sprintf("Phoenix route: %s; native route: %s. Existing AMTD objects, if any, are retained; refused routes emit no new event", preparationRouteDetail(prep.PhoenixErr, prep.PhoenixSkipped), preparationRouteDetail(prep.NativeErr, prep.NativeSkipped))
-				}
-			case "native":
-				if prep.NativeErr != nil {
-					prepStatus, prepReason, prepMessage = metav1.ConditionFalse, "NativePreparationRefused", prep.NativeErr.Error()
-				}
-			default:
-				if prep.PhoenixErr != nil {
-					prepStatus, prepReason, prepMessage = metav1.ConditionFalse, "PhoenixPreparationRefused", prep.PhoenixErr.Error()+"; existing AMTD objects, if any, are retained"
+		if rejected == nil {
+			if actions.preparation != nil && e.generation != p.Generation {
+				prepReason, prepMessage = "StalePreparation", fmt.Sprintf("preparation was for generation %d; current policy generation is %d", e.generation, p.Generation)
+			} else if actions.preparation != nil && m.Actuator != nil {
+				prepStatus, prepReason, prepMessage = metav1.ConditionTrue, "Prepared", "selected actuator route prepared this tick"
+				prep := actions.preparation
+				switch m.Actuator.Name() {
+				case "hybrid":
+					if prep.PhoenixSkipped && prep.NativeSkipped {
+						prepStatus, prepReason, prepMessage = metav1.ConditionUnknown, "NoEnabledRoutes", "no enabled action route required preparation this tick"
+					} else if prep.PhoenixSkipped || prep.NativeSkipped {
+						prepMessage = fmt.Sprintf("Phoenix route: %s; native route: %s", preparationRouteDetail(prep.PhoenixErr, prep.PhoenixSkipped), preparationRouteDetail(prep.NativeErr, prep.NativeSkipped))
+					}
+					if prep.PhoenixErr != nil || prep.NativeErr != nil {
+						prepStatus, prepReason = metav1.ConditionFalse, "RoutePreparationRefused"
+						prepMessage = fmt.Sprintf("Phoenix route: %s; native route: %s. Existing AMTD objects, if any, are retained; refused routes emit no new event", preparationRouteDetail(prep.PhoenixErr, prep.PhoenixSkipped), preparationRouteDetail(prep.NativeErr, prep.NativeSkipped))
+					}
+				case "native":
+					if prep.NativeErr != nil {
+						prepStatus, prepReason, prepMessage = metav1.ConditionFalse, "NativePreparationRefused", prep.NativeErr.Error()
+					}
+				default:
+					if prep.PhoenixErr != nil {
+						prepStatus, prepReason, prepMessage = metav1.ConditionFalse, "PhoenixPreparationRefused", prep.PhoenixErr.Error()+"; existing AMTD objects, if any, are retained"
+					}
 				}
 			}
 		}
@@ -217,6 +242,9 @@ func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, prot
 				"decision state", "tenant", e.spec.Tenant, "policy", e.key.String(),
 				"killSwitchEngaged", killEngaged, "killSwitchCause", string(killObservation.Cause))
 		}
+		return
+	}
+	if !ownerMatched {
 		return
 	}
 	metrics.SetKillSwitchStatusDisagreement(updated.Namespace, updated.Name, false)

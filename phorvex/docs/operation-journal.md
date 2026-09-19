@@ -11,9 +11,10 @@ these recoverable native operations.
 Receipts bind the selecting PhorvexPolicy UID, target Pod UID, operation kind and
 acknowledged phase. Warm cutovers also bind the exact old/new Pod pair; quarantine
 binds the canonical NetworkPolicy UID only after an acknowledged policy write.
-The model-shard tensor/pipeline-parallel group cutover has no scalar receipt and is
-excluded from this recovery path; its ranks are never retired by a generic
-double-leader cleanup.
+Tensor/pipeline-parallel model-shard replacement is unavailable and is refused before
+group mutation. It has no trusted distributed-readiness witness, atomic activation,
+protected group receipt, or controller-owned replenishment protocol. Its ranks are
+never retired by production dispatch or by generic double-leader cleanup.
 Missing or invalid receipts prevent automatic retirement or garbage collection.
 Uncertain operations remain in the journal for later review or safe retry. The
 journal stores only identities and selected labels, never credentials or Pod specs.

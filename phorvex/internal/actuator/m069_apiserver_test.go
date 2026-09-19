@@ -280,7 +280,8 @@ func TestM069APIServerNameReuse(t *testing.T) {
 			m069Create(t, c, tpPod(ns, s, "g", s[1:], roleShadow, true, 2))
 		}
 		wc, r := m069Wrap(t, c, "l1") // a non-trigger member is respawned under its name
-		hr, err := modelShardReplaceHandler{}.Enact(ctx, EnactCtx{Client: wc, VLLM: &mockVLLM{loaded: true}}, boundReq(l0, model.ActionModelShardReplace))
+		// Historical lower-level identity control: production dispatch refuses grouped targets.
+		hr, err := groupCoherentCutover(ctx, EnactCtx{Client: wc, VLLM: &mockVLLM{loaded: true}}, boundReq(l0, model.ActionModelShardReplace), "g")
 		m069Rejected(t, hr, err)
 		m069Survived(t, c, r)
 		if !strings.Contains(err.Error(), "retired [l0]") || !strings.Contains(err.Error(), "NOT retired [l1]") {
@@ -304,7 +305,8 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		for _, s := range []string{"s0", "s1"} {
 			m069Create(t, c, tpPod(ns, s, "g", s[1:], roleShadow, true, 2))
 		}
-		hr, err := modelShardReplaceHandler{}.Enact(ctx, EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, boundReq(l0, model.ActionModelShardReplace))
+		// Historical lower-level identity control: production dispatch refuses grouped targets.
+		hr, err := groupCoherentCutover(ctx, EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, boundReq(l0, model.ActionModelShardReplace), "g")
 		if err != nil || !hr.Emitted || !strings.Contains(hr.Note, "(2 old leaders)") {
 			t.Fatalf("unchanged group identities must retire coherently: %+v %v", hr, err)
 		}
