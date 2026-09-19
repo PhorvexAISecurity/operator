@@ -1,7 +1,8 @@
 package calib
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"reflect"
 	"sync"
@@ -42,13 +43,17 @@ func m179Rotation(at time.Time, tag string) RotationRecord {
 	}
 }
 
-func m179JSON(t *testing.T, value any) []byte {
+func m179Clone[T any](t *testing.T, value T) T {
 	t.Helper()
-	b, err := json.Marshal(value)
-	if err != nil {
+	var encoded bytes.Buffer
+	if err := gob.NewEncoder(&encoded).Encode(value); err != nil {
 		t.Fatal(err)
 	}
-	return b
+	var clone T
+	if err := gob.NewDecoder(&encoded).Decode(&clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
 }
 
 func m179Observe(t *testing.T, runtime *Runtime, at time.Time, tag string) RefreshResult {
@@ -95,29 +100,29 @@ func TestM179RuntimeReleasesExpiredSlotsWithoutChangingRetainedEvidence(t *testi
 	m179Observe(t, runtime, base.Add(10*time.Minute), "exact")
 	runtime.ObserveRotation(m179Rotation(base.Add(15*time.Minute), "retained"))
 	returnedBeforeExpiry := m179Observe(t, runtime, base.Add(15*time.Minute), "retained")
-	returnedBeforeExpiryBytes := m179JSON(t, returnedBeforeExpiry)
+	returnedBeforeExpiryCopy := m179Clone(t, returnedBeforeExpiry)
 
 	runtime.mu.Lock()
-	var exactSampleBefore, retainedSampleBefore []byte
+	var exactSampleBefore, retainedSampleBefore CadenceSample
 	for _, sample := range runtime.samples {
 		switch sample.At {
 		case base.Add(10 * time.Minute):
-			exactSampleBefore = m179JSON(t, sample)
+			exactSampleBefore = m179Clone(t, sample)
 		case base.Add(15 * time.Minute):
-			retainedSampleBefore = m179JSON(t, sample)
+			retainedSampleBefore = m179Clone(t, sample)
 		}
 	}
-	var exactRotationBefore, retainedRotationBefore []byte
+	var exactRotationBefore, retainedRotationBefore RotationRecord
 	for _, rotation := range runtime.rotations {
 		switch rotation.ID {
 		case "rotation-exact":
-			exactRotationBefore = m179JSON(t, rotation)
+			exactRotationBefore = m179Clone(t, rotation)
 		case "rotation-retained":
-			retainedRotationBefore = m179JSON(t, rotation)
+			retainedRotationBefore = m179Clone(t, rotation)
 		}
 	}
 	runtime.mu.Unlock()
-	if len(exactSampleBefore) == 0 || len(retainedSampleBefore) == 0 || len(exactRotationBefore) == 0 || len(retainedRotationBefore) == 0 {
+	if exactSampleBefore.At.IsZero() || retainedSampleBefore.At.IsZero() || exactRotationBefore.ID == "" || retainedRotationBefore.ID == "" {
 		t.Fatal("fixture did not capture exact-cutoff and retained evidence before expiry")
 	}
 
@@ -134,7 +139,7 @@ func TestM179RuntimeReleasesExpiredSlotsWithoutChangingRetainedEvidence(t *testi
 	if len(result.Nodes) != 1 || result.Nodes[0].Name != "node-current" || len(result.Assets) != 1 || result.Assets[0].Key != "tenant-current/pod-current" {
 		t.Fatalf("current public snapshot nodes=%+v assets=%+v", result.Nodes, result.Assets)
 	}
-	if !reflect.DeepEqual(m179JSON(t, returnedBeforeExpiry), returnedBeforeExpiryBytes) {
+	if !reflect.DeepEqual(returnedBeforeExpiry, returnedBeforeExpiryCopy) {
 		t.Fatal("expiry corrupted a previously returned refresh result")
 	}
 
@@ -145,20 +150,20 @@ func TestM179RuntimeReleasesExpiredSlotsWithoutChangingRetainedEvidence(t *testi
 	if len(samples) != 3 || len(rotations) != 2 {
 		t.Fatalf("compacted lengths samples=%d rotations=%d", len(samples), len(rotations))
 	}
-	if !reflect.DeepEqual(m179JSON(t, samples[0]), exactSampleBefore) || !reflect.DeepEqual(m179JSON(t, samples[1]), retainedSampleBefore) {
+	if !reflect.DeepEqual(samples[0], exactSampleBefore) || !reflect.DeepEqual(samples[1], retainedSampleBefore) {
 		t.Fatal("retained sample bytes or stable order changed")
 	}
-	if !reflect.DeepEqual(m179JSON(t, rotations[0]), exactRotationBefore) || !reflect.DeepEqual(m179JSON(t, rotations[1]), retainedRotationBefore) {
+	if !reflect.DeepEqual(rotations[0], exactRotationBefore) || !reflect.DeepEqual(rotations[1], retainedRotationBefore) {
 		t.Fatal("retained rotation bytes or stable order changed")
 	}
 	m179TailIsClear(t, runtime)
 
 	// A no-sample call returns the existing evidence unchanged. The next real sample
 	// advances the cutoff, safely prunes again, and admits ordinary new evidence.
-	beforeNoop := m179JSON(t, result)
+	beforeNoop := m179Clone(t, result)
 	noDueSnapshot, noDueWitnesses := m179Snapshot(base.Add(20*time.Minute+time.Second), "ignored")
 	noDue, refreshed, err := runtime.ObserveSnapshot(noDueSnapshot, noDueWitnesses)
-	if err != nil || refreshed || !reflect.DeepEqual(m179JSON(t, noDue), beforeNoop) {
+	if err != nil || refreshed || !reflect.DeepEqual(noDue, beforeNoop) {
 		t.Fatalf("no-expiry call changed result: refreshed=%v err=%v", refreshed, err)
 	}
 	runtime.ObserveRotation(m179Rotation(base.Add(25*time.Minute), "subsequent"))
@@ -169,7 +174,7 @@ func TestM179RuntimeReleasesExpiredSlotsWithoutChangingRetainedEvidence(t *testi
 	if len(subsequent.Rotations) != 2 || subsequent.Rotations[0].ID != "rotation-retained" || subsequent.Rotations[1].ID != "rotation-subsequent" {
 		t.Fatalf("subsequent rotations=%+v", subsequent.Rotations)
 	}
-	if !reflect.DeepEqual(m179JSON(t, returnedBeforeExpiry), returnedBeforeExpiryBytes) || !reflect.DeepEqual(m179JSON(t, result), beforeNoop) {
+	if !reflect.DeepEqual(returnedBeforeExpiry, returnedBeforeExpiryCopy) || !reflect.DeepEqual(result, beforeNoop) {
 		t.Fatal("repeated pruning corrupted an earlier returned result")
 	}
 	m179TailIsClear(t, runtime)
