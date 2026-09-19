@@ -90,7 +90,7 @@ func newM093Fixture(t *testing.T, handler http.Handler) *m093Fixture {
 				_, _ = w.Write([]byte(`{"aborted":1}`))
 				return
 			}
-			if r.URL.Path == "/reset" {
+			if r.URL.Path == defaultResetPath || r.URL.Path == "/reset" {
 				_, _ = w.Write([]byte(`{"success":true}`))
 				return
 			}
