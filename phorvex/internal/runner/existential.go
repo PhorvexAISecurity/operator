@@ -31,8 +31,15 @@ func (m *Manager) updateExistentialStatus(ctx context.Context, e *policyEntry, d
 	var obj v1alpha1.PhorvexPolicy
 	emit := false
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		emit = false
 		if err := m.Client.Get(ctx, e.key, &obj); err != nil {
 			return err
+		}
+		// The policy name may have been deleted and recreated after this tick's
+		// outer owner check. Never attach predecessor existential evidence or an
+		// event to the replacement UID.
+		if string(obj.UID) != e.uid {
+			return nil
 		}
 		old := meta.FindStatusCondition(obj.Status.Conditions, condition.Type)
 		emit = condition.Status == metav1.ConditionTrue && (old == nil || old.Status != condition.Status || old.Message != condition.Message)
