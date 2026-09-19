@@ -152,7 +152,7 @@ func (f *m093Fixture) native(t *testing.T) *NativeActuator {
 	n.Reader = f.client
 	n.JournalNamespace = "operator"
 	n.SetServingSecurity(f.config)
-	if err := n.EnsurePolicy(t.Context(), TenantTarget{Tenant: "tenant", Namespace: "tenant"}); err != nil {
+	if err := n.EnsurePolicy(t.Context(), TenantTarget{Tenant: "tenant", Namespace: "tenant", PolicyName: f.policy.Name, PolicyUID: string(f.policy.UID)}); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -274,7 +274,7 @@ func TestM093SecurePreparationRefusesScopeAndCredentialDriftBeforeHTTP(t *testin
 			candidate := NewNativeActuator(c)
 			candidate.Reader = c
 			candidate.SetServingSecurity(cfg)
-			_ = candidate.EnsurePolicy(t.Context(), TenantTarget{Tenant: "tenant", Namespace: "tenant"})
+			_ = candidate.EnsurePolicy(t.Context(), TenantTarget{Tenant: "tenant", Namespace: "tenant", PolicyName: pol.Name, PolicyUID: string(pol.UID)})
 			result, err := candidate.Actuate(t.Context(), f.request(model.ActionKVReset))
 			if err == nil || result.Emitted {
 				t.Fatalf("drift accepted: result=%+v err=%v", result, err)
@@ -619,7 +619,7 @@ func TestM093NativeSecureAdapterMultiStepPersistsBoundReceipt(t *testing.T) {
 	native := NewNativeActuator(c)
 	native.Reader, native.JournalNamespace = c, "operator"
 	native.SetServingSecurity(f.config)
-	if err := native.EnsurePolicy(t.Context(), TenantTarget{Tenant: "tenant", Namespace: "tenant"}); err != nil {
+	if err := native.EnsurePolicy(t.Context(), TenantTarget{Tenant: "tenant", Namespace: "tenant", PolicyName: f.policy.Name, PolicyUID: string(f.policy.UID)}); err != nil {
 		t.Fatal(err)
 	}
 	req := f.request(model.ActionAdapterRotate)

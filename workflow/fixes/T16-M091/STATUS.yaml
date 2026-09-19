@@ -1,0 +1,250 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 8
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 2f5e00b61f718e67f39c6662e23bc3f87927665b47dea5db6ce5904dbff33ca3
+    source_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
+    at: '2026-09-19T12:19:57+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline.log
+    sha256: f3e44a592919ea6fec08922addf590db80d84f25ca8788be1bd5cce5ac8b636d
+    source_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
+    at: '2026-09-19T12:22:30+00:00'
+  preflight:
+    result: PASS
+    by: sol-t16-m091
+    artifact: workflow/fixes/T16-M091/evidence/preflight/receipt.json
+    sha256: 64a69583925aa9135957a3526154221f5b8f16d1a7db31145dbaf6120535129e
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+  implementation:
+    result: PASS
+    by: sol-t16-m091
+    artifact: 04-diff.patch
+    sha256: 2d90183efa78756938915e5a6174e18ee76f92eef4d24856803b6194ee829104
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+  l0:
+    result: PASS
+    by: sol-t16-m091
+    artifact: workflow/fixes/T16-M091/evidence/preflight/receipt.json
+    sha256: 64a69583925aa9135957a3526154221f5b8f16d1a7db31145dbaf6120535129e
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 0af4c2583aa4ff0835bdcf2f09e0b9ecbf420b1dd2515098df1a7a7591ca5ab3
+  l1:
+    result: PASS
+    by: sol-t16-m091
+    artifact: evidence/worker/focused-final.md
+    sha256: abef245765cbce13ab337d2a90aea44b1c54b73cc60739fddd7db0790600380b
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - phorvex/docs/recon-cover-map.generated.md
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    - workflow/fixes/T16-M091/verify.sh
+    inputs_sha256: 3c5cf9332d62e3bae14fcbd4da5cc2227551a13352748a10fa7bede859c8c62a
+  l2:
+    result: PASS
+    by: sol-t16-m091
+    artifact: workflow/fixes/T16-M091/evidence/preflight/run-1789822123216329343/go-phorvex.log
+    sha256: 978b83a8b685224fb3e23d4a978397684dc8b912beb316fe40ed1fcc9358b326
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: a4227b0588afa85cfd09bc3ddd6794dff31d62bec67feb7ddf2dfc0b69da5764
+  positive_control:
+    result: PASS
+    by: sol-t16-m091
+    artifact: evidence/worker/focused-final.md
+    sha256: abef245765cbce13ab337d2a90aea44b1c54b73cc60739fddd7db0790600380b
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:00:13+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: 7f4d41b7417391e107410318918a4d54f18066970de10acaa89edbf6435eb759
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 704055e7bcb1edb361af29aaafbe32f4d97691d8aa79db5f679ad942ad3da9d5
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:01:53+00:00'
+    baseline_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 5e09d410751bfd670d3fa0fb6736bcd4d853a7af69172fecad052c648324c430
+    source_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+    at: '2026-09-19T13:01:53+00:00'
+    incident_sha256: 704055e7bcb1edb361af29aaafbe32f4d97691d8aa79db5f679ad942ad3da9d5
+fix_id: T16-M091
+issues:
+- M-91
+title: M91 retire native policy bindings by exact owner identity
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t16-m091
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier16
+  code_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t16-m091
+  base_sha: 5463460affe695a9ee7d41e9d23737e17e137c2b
+  head_sha: 985e4e6347f0d80b923d34a25bcf3b900a5124fd
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-19T13:01:56+00:00'
+configuration_history:
+- at: '2026-09-19T12:19:54+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-19T12:48:26+00:00'
+  by: sol-t16-m091
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-19T13:00:12+00:00'
+  by: sol-t16-m091
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-19T12:19:55+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-19T12:19:57+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-19T13:00:13+00:00'
+  by: sol-t16-m091
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-19T13:00:14+00:00'
+  by: sol-t16-m091
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-19T13:01:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-19T13:01:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T16-M091:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
