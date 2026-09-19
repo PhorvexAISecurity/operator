@@ -20,6 +20,7 @@ func main() {
 		Fixture         scaleprobe.Fixture               `json:"fixture"`
 		Summary         scaleprobe.Summary               `json:"summary"`
 		Warmups         []scaleprobe.Warmup              `json:"warmups"`
+		AgePrerequisite scaleprobe.AgePrerequisite       `json:"workloadAgePrerequisite"`
 		Memory          scaleprobe.Memory                `json:"memory"`
 		StartupHTTP     map[string]int64                 `json:"startupHTTP"`
 		SampleHTTP      map[string]int64                 `json:"sampleHTTP"`
@@ -44,7 +45,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", path, decodeErr)
 			os.Exit(1)
 		}
-		rows = append(rows, row{Path: path, Case: report.Fixture.Case, Environment: report.Environment, Fixture: report.Fixture, Summary: report.Summary, Warmups: report.Warmups, Memory: report.Memory, StartupHTTP: report.StartupHTTP, SampleHTTP: report.SampleHTTP, ConvergenceHTTP: report.ConvergenceHTTP, ControlHTTP: report.ControlHTTP, REST: report.RESTConfigs, Checks: report.Correctness, Verdict: report.NFRVerdict, Detail: report.NFRDetail, Limits: report.Limitations})
+		rows = append(rows, row{Path: path, Case: report.Fixture.Case, Environment: report.Environment, Fixture: report.Fixture, Summary: report.Summary, Warmups: report.Warmups, AgePrerequisite: report.AgePrerequisite, Memory: report.Memory, StartupHTTP: report.StartupHTTP, SampleHTTP: report.SampleHTTP, ConvergenceHTTP: report.ConvergenceHTTP, ControlHTTP: report.ControlHTTP, REST: report.RESTConfigs, Checks: report.Correctness, Verdict: report.NFRVerdict, Detail: report.NFRDetail, Limits: report.Limitations})
 	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
