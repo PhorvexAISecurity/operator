@@ -33,18 +33,32 @@ import (
 )
 
 type m067Backend struct {
-	mu       sync.Mutex
-	posts    int
-	requests []string
-	mode     string
-	server   *httptest.Server
+	mu            sync.Mutex
+	posts         int
+	requests      []string
+	routesAtPOST  [][]string
+	routeErrors   []string
+	routeSnapshot func() ([]string, error)
+	mode          string
+	server        *httptest.Server
 }
 
 func (b *m067Backend) handler(w http.ResponseWriter, r *http.Request) {
+	var route []string
+	var routeErr error
+	if r.Method == http.MethodPost && b.routeSnapshot != nil {
+		route, routeErr = b.routeSnapshot()
+	}
 	b.mu.Lock()
 	b.requests = append(b.requests, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
 	if r.Method == http.MethodPost {
 		b.posts++
+		b.routesAtPOST = append(b.routesAtPOST, append([]string(nil), route...))
+		if routeErr != nil {
+			b.routeErrors = append(b.routeErrors, routeErr.Error())
+		} else {
+			b.routeErrors = append(b.routeErrors, "")
+		}
 	}
 	b.mu.Unlock()
 	if r.Header.Get("Authorization") != "Bearer m067-token" {
@@ -98,6 +112,16 @@ func (b *m067Backend) counts() (int, []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.posts, append([]string(nil), b.requests...)
+}
+
+func (b *m067Backend) routeObservations() ([][]string, []string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	routes := make([][]string, len(b.routesAtPOST))
+	for i := range b.routesAtPOST {
+		routes[i] = append([]string(nil), b.routesAtPOST[i]...)
+	}
+	return routes, append([]string(nil), b.routeErrors...)
 }
 
 func m067NonLoopbackIPv4(t *testing.T) string {
@@ -207,6 +231,9 @@ func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.W
 		}
 		return len(pods.Items) == int(replicas) && current.Status.ObservedGeneration == current.Generation && current.Status.Replicas == replicas, nil
 	})
+	backend.routeSnapshot = func() ([]string, error) {
+		return routeEndpointMembers(context.Background(), c, service)
+	}
 	sort.Slice(pods.Items, func(i, j int) bool { return pods.Items[i].Name < pods.Items[j].Name })
 	old, next := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy()
 	old.Labels[labelRole] = roleLeader
@@ -263,6 +290,41 @@ func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.W
 	native.RouteObservationTimeout, native.RouteObservationInterval = 20*time.Second, 100*time.Millisecond
 	native.SetServingSecurity(writeServingSecurityConfig(t, ServingSecuritySecureRequired, opns, []ServingSecurityBinding{binding}))
 	return &m067APIFixture{client: c, native: native, old: old, next: next, third: third, policy: policy, service: service, backend: backend, opns: opns}
+}
+
+func (f *m067APIFixture) assertPOSTRoute(t *testing.T) {
+	t.Helper()
+	routes, routeErrors := f.backend.routeObservations()
+	if len(routes) != 1 || len(routeErrors) != 1 || routeErrors[0] != "" {
+		t.Fatalf("backend route-at-POST observations routes=%v errors=%v", routes, routeErrors)
+	}
+	members := routes[0]
+	currentPolicy := &v1alpha1.PhorvexPolicy{}
+	if err := f.client.Get(context.Background(), client.ObjectKeyFromObject(f.policy), currentPolicy); err != nil {
+		t.Fatal(err)
+	}
+	eligible := []*corev1.Pod{f.next}
+	if f.third != nil {
+		eligible = append(eligible, f.third)
+	}
+	expected := make([]string, 0, len(eligible))
+	for _, declared := range eligible {
+		current := &corev1.Pod{}
+		if err := f.client.Get(context.Background(), client.ObjectKeyFromObject(declared), current); err != nil || current.UID != declared.UID {
+			t.Fatalf("backend POST eligible Pod identity changed: want=%s err=%v pod=%+v", declared.UID, err, current)
+		}
+		if current.Labels[labelRole] == roleLeader && podReady(current) && current.DeletionTimestamp == nil {
+			expected = append(expected, string(current.UID))
+		}
+	}
+	sort.Strings(expected)
+	if !slices.Equal(members, expected) {
+		t.Fatalf("backend POST route=%v want exact current Ready prospective members=%v", members, expected)
+	}
+	floor := currentPolicy.Spec.EffectiveMinAvailableReplicas()
+	if slices.Contains(members, string(f.old.UID)) || !slices.Contains(members, string(f.next.UID)) || len(members) < floor {
+		t.Fatalf("backend POST observed stale/insufficient route: members=%v old=%s new=%s floor=%d", members, f.old.UID, f.next.UID, floor)
+	}
 }
 
 func (f *m067APIFixture) request() Request {
@@ -406,6 +468,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		if posts, requests := fixture.backend.counts(); posts != 1 {
 			t.Fatalf("actual API availability recovery POSTs=%d requests=%v", posts, requests)
 		}
+		fixture.assertPOSTRoute(t)
 		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), &corev1.Pod{}); !apierrors.IsNotFound(err) {
 			t.Fatalf("actual API availability recovery did not delete exact old UID: %v", err)
 		}
@@ -447,6 +510,48 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleLeader {
 			t.Fatalf("authority drift compensated promoted UID: %v %+v", err, nextCurrent)
+		}
+	})
+	t.Run("stale-route-after-acknowledged-dispatch-claim", func(t *testing.T) {
+		fixture := m067NewAPIFixture(t, ctx, c, "route-claim", "confirmed")
+		claimed := false
+		guard := interceptor.NewClient(c, interceptor.Funcs{
+			Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if err := inner.Update(ctx, obj, opts...); err != nil {
+					return err
+				}
+				if cm, ok := obj.(*corev1.ConfigMap); ok && strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+					claimed = true
+				}
+				return nil
+			},
+			List: func(ctx context.Context, inner client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if err := inner.List(ctx, list, opts...); err != nil || !claimed {
+					return err
+				}
+				slicesList, ok := list.(*discoveryv1.EndpointSliceList)
+				if !ok || len(slicesList.Items) == 0 {
+					return nil
+				}
+				ready := true
+				slicesList.Items[0].Endpoints = append(slicesList.Items[0].Endpoints, discoveryv1.Endpoint{Addresses: []string{fixture.old.Status.PodIP}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: fixture.old.Namespace, Name: fixture.old.Name, UID: fixture.old.UID}})
+				return nil
+			},
+		})
+		fixture.native.Client, fixture.native.Reader = guard, guard
+		result, enactErr := fixture.native.Actuate(ctx, fixture.request())
+		if enactErr == nil || result.MutationKind != "swap" || !claimed {
+			t.Fatalf("actual API stale postclaim route not exercised: result=%+v err=%v claimed=%t", result, enactErr, claimed)
+		}
+		if posts, requests := fixture.backend.counts(); posts != 0 {
+			t.Fatalf("actual API stale postclaim route reached backend: posts=%d requests=%v", posts, requests)
+		}
+		_, receipt := fixture.receipt(t, ctx)
+		if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+			t.Fatalf("actual API stale route did not retain dispatch claim: %+v", receipt)
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), &corev1.Pod{}); err != nil {
+			t.Fatalf("actual API stale postclaim route deleted old UID: %v", err)
 		}
 	})
 	t.Run("two-consumers-one-cas-winner-one-post", func(t *testing.T) {
@@ -531,6 +636,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		if posts, requests := fixture.backend.counts(); posts != 1 {
 			t.Fatalf("competing consumers emitted posts=%d requests=%v results=%+v errs=%v", posts, requests, results, errs)
 		}
+		fixture.assertPOSTRoute(t)
 		for i := range results {
 			if errs[i] != nil || len(results[i]) != 1 {
 				t.Fatalf("consumer %d recovery events=%+v err=%v", i, results[i], errs[i])
@@ -566,6 +672,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			if posts != 1 {
 				t.Fatalf("drain POST count=%d requests=%v", posts, requests)
 			}
+			fixture.assertPOSTRoute(t)
 			_, receipt := fixture.receipt(t, ctx)
 			if receipt.Version != warmDrainReceiptVersion || receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
 				t.Fatalf("possibly-sent receipt lost exact state: %+v", receipt)

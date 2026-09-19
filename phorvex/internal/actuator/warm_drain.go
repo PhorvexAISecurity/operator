@@ -89,9 +89,14 @@ func captureWarmSelectedUIDs(ctx context.Context, reader client.Reader, pool war
 
 type warmServingSet string
 
+type warmRouteSet string
+
 const (
 	warmOriginalServingSet    warmServingSet = "original"
 	warmProspectiveServingSet warmServingSet = "prospective"
+	warmPromotionBridgeRoute  warmRouteSet   = "promotion-bridge"
+	warmProspectiveRoute      warmRouteSet   = "prospective"
+	warmOriginalRoute         warmRouteSet   = "original"
 )
 
 func warmDrainRoleAllowed(r operationReceipt, uid, role string, selected map[string]bool) bool {
@@ -380,30 +385,18 @@ func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	if r.Version != warmDrainReceiptVersion || (r.Phase != "retiring" && r.Phase != "drain-unsent") || r.DrainAttempts >= warmDrainMaxAttempts {
 		return warmDrainRetained, fmt.Errorf("warm drain send is not claimable")
 	}
-	old, next, err := warmDrainCurrentPair(ctx, ec, *r)
+	old, _, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
 	if err != nil {
-		return warmDrainRetained, err
-	}
-	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
-		return warmDrainRetained, fmt.Errorf("recorded pair is not in the drain routing state")
-	}
-	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
-		return warmDrainRetained, fmt.Errorf("warm availability insufficient before dispatch claim: %w", err)
+		return warmDrainRetained, fmt.Errorf("warm route/authority insufficient before dispatch claim: %w", err)
 	}
 	r.DrainAttempts++
 	r.Phase = "drain-dispatching"
 	if err := journalAdvance(ctx, ec, cm, *r); err != nil {
 		return warmDrainRetained, fmt.Errorf("warm drain dispatch claim was not acknowledged: %w", err)
 	}
-	old, next, err = warmDrainCurrentPair(ctx, ec, *r)
+	old, _, err = warmDrainProspectiveRouteCurrent(ctx, ec, *r)
 	if err != nil {
-		return warmDrainRetained, fmt.Errorf("warm drain authority changed after dispatch claim: %w", err)
-	}
-	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
-		return warmDrainRetained, fmt.Errorf("recorded pair changed after warm drain dispatch claim")
-	}
-	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
-		return warmDrainRetained, fmt.Errorf("warm availability changed after dispatch claim: %w", err)
+		return warmDrainRetained, fmt.Errorf("warm route/authority changed after dispatch claim: %w", err)
 	}
 	ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
 	if err != nil {
@@ -474,11 +467,10 @@ func waitWarmRouteMembers(ctx context.Context, ec EnactCtx, r operationReceipt, 
 	}
 }
 
-// warmCompensationActiveMembers derives the exact active route membership from
-// the authoritative recorded pool. Only Ready leaders in the admitted original
-// set plus the exact promoted UID are eligible; unrelated Ready shadows cannot
-// satisfy route convergence.
-func warmCompensationActiveMembers(ctx context.Context, reader client.Reader, r operationReceipt) ([]string, error) {
+// warmRecordedActiveMembers derives the exact route membership that the
+// current recorded pool is eligible to expose. Only Ready leaders from the
+// admitted original set plus the exact promoted UID are eligible.
+func warmRecordedActiveMembers(ctx context.Context, reader client.Reader, r operationReceipt) ([]string, error) {
 	if _, err := receiptAuthority(ctx, reader, r, model.Action(r.Kind)); err != nil {
 		return nil, err
 	}
@@ -501,6 +493,146 @@ func warmCompensationActiveMembers(ctx context.Context, reader client.Reader, r 
 	}
 	sort.Strings(members)
 	return members, nil
+}
+
+func validateWarmRouteSet(r operationReceipt, set warmRouteSet, members []string) error {
+	switch set {
+	case warmPromotionBridgeRoute:
+		if !containsUID(members, r.OldUID) || !containsUID(members, r.NewUID) {
+			return fmt.Errorf("warm promotion bridge lacks exact old/new active UIDs")
+		}
+	case warmProspectiveRoute:
+		if containsUID(members, r.OldUID) || !containsUID(members, r.NewUID) {
+			return fmt.Errorf("warm prospective route has old UID or lacks promoted UID")
+		}
+	case warmOriginalRoute:
+		expected := append([]string(nil), r.WarmSelectedUIDs...)
+		sort.Strings(expected)
+		if !reflect.DeepEqual(members, expected) {
+			return fmt.Errorf("warm original route members %v do not match %v", members, expected)
+		}
+	default:
+		return fmt.Errorf("unknown warm route set %q", set)
+	}
+	return nil
+}
+
+// observeWarmRecordedRoute requires two exact EndpointSlice observations and
+// re-derives the readiness/role based expectation afterward. These sampled
+// cross-object reads do not claim an atomic traffic snapshot.
+func observeWarmRecordedRoute(ctx context.Context, ec EnactCtx, r operationReceipt, set warmRouteSet) error {
+	expected, err := warmRecordedActiveMembers(ctx, ec.Reader, r)
+	if err != nil {
+		return err
+	}
+	if err := validateWarmRouteSet(r, set, expected); err != nil {
+		return err
+	}
+	if err := waitWarmRouteMembers(ctx, ec, r, expected); err != nil {
+		return err
+	}
+	current, err := warmRecordedActiveMembers(ctx, ec.Reader, r)
+	if err != nil {
+		return err
+	}
+	if err := validateWarmRouteSet(r, set, current); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(current, expected) {
+		return fmt.Errorf("warm route readiness changed around observation: before=%v after=%v", expected, current)
+	}
+	return nil
+}
+
+// warmDrainPromotionRouteCurrent protects the capacity-reducing old-role
+// write. Full pair authority and availability are re-read after the bounded
+// promotion bridge observation so the wait cannot grant stale authority.
+func warmDrainPromotionRouteCurrent(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, *corev1.Pod, error) {
+	old, next, err := warmDrainCurrentPair(ctx, ec, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleLeader {
+		return nil, nil, fmt.Errorf("recorded pair is not in the promoted bridge state")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, r, warmProspectiveServingSet); err != nil {
+		return nil, nil, err
+	}
+	if err := observeWarmRecordedRoute(ctx, ec, r, warmPromotionBridgeRoute); err != nil {
+		return nil, nil, err
+	}
+	old, next, err = warmDrainCurrentPair(ctx, ec, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleLeader {
+		return nil, nil, fmt.Errorf("recorded pair changed around promotion bridge observation")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, r, warmProspectiveServingSet); err != nil {
+		return nil, nil, err
+	}
+	return old, next, nil
+}
+
+// warmDrainProspectiveRouteCurrent protects a dispatch claim, POST or confirmed
+// deletion. Full authority and availability are re-read after route observation.
+func warmDrainProspectiveRouteCurrent(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.Pod, *corev1.Pod, error) {
+	old, next, err := warmDrainCurrentPair(ctx, ec, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
+		return nil, nil, fmt.Errorf("recorded pair is not in the drain routing state")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, r, warmProspectiveServingSet); err != nil {
+		return nil, nil, err
+	}
+	if err := observeWarmRecordedRoute(ctx, ec, r, warmProspectiveRoute); err != nil {
+		return nil, nil, err
+	}
+	old, next, err = warmDrainCurrentPair(ctx, ec, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if old.Labels[labelRole] != roleRetiring || next.Labels[labelRole] != roleLeader {
+		return nil, nil, fmt.Errorf("recorded pair changed around prospective route observation")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, r, warmProspectiveServingSet); err != nil {
+		return nil, nil, err
+	}
+	return old, next, nil
+}
+
+func warmDrainOriginalRouteCurrent(ctx context.Context, ec EnactCtx, r operationReceipt) error {
+	old, next, err := warmDrainBoundPair(ctx, ec, r)
+	if err != nil {
+		return err
+	}
+	if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleShadow || !podReady(old) {
+		return fmt.Errorf("recorded pair is not in the original routing state")
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, r, warmOriginalServingSet); err != nil {
+		return err
+	}
+	if err := observeWarmRecordedRoute(ctx, ec, r, warmOriginalRoute); err != nil {
+		return err
+	}
+	old, next, err = warmDrainBoundPair(ctx, ec, r)
+	if err != nil {
+		return err
+	}
+	if old.Labels[labelRole] != roleLeader || next.Labels[labelRole] != roleShadow || !podReady(old) {
+		return fmt.Errorf("recorded pair changed around original route observation")
+	}
+	return warmDrainAvailabilityCurrent(ctx, ec.Reader, r, warmOriginalServingSet)
+}
+
+// warmCompensationActiveMembers derives the exact active route membership from
+// the authoritative recorded pool. Only Ready leaders in the admitted original
+// set plus the exact promoted UID are eligible; unrelated Ready shadows cannot
+// satisfy route convergence.
+func warmCompensationActiveMembers(ctx context.Context, reader client.Reader, r operationReceipt) ([]string, error) {
+	return warmRecordedActiveMembers(ctx, reader, r)
 }
 
 // observeWarmCompensationRoute binds EndpointSlice convergence to readiness
@@ -669,6 +801,9 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmOriginalServingSet); err != nil {
 			return "", err
 		}
+		if err := warmDrainOriginalRouteCurrent(ctx, ec, *r); err != nil {
+			return "", fmt.Errorf("original warm route observation pending: %w", err)
+		}
 		if err := journalFinish(ctx, ec, cm); err != nil {
 			return "", err
 		}
@@ -704,8 +839,10 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 			return "", fmt.Errorf("recorded promoted warm roles changed")
 		}
 		if old.Labels[labelRole] == roleLeader {
-			if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
-				return "", fmt.Errorf("availability changed before recovered old route removal: %w", err)
+			var err error
+			old, newPod, err = warmDrainPromotionRouteCurrent(ctx, ec, *r)
+			if err != nil {
+				return "", fmt.Errorf("promotion route/authority changed before recovered old route removal: %w", err)
 			}
 			before := old.DeepCopy()
 			old.Labels[labelRole] = roleRetiring
@@ -764,15 +901,9 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	if r.Phase != "drain-confirmed" {
 		return "old leader route removed", fmt.Errorf("warm drain completion is not durably confirmed")
 	}
-	old, newPod, err := warmDrainCurrentPair(ctx, ec, *r)
+	old, newPod, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
 	if err != nil {
-		return "confirmed warm drain; retirement pending", err
-	}
-	if old.Labels[labelRole] != roleRetiring || newPod.Labels[labelRole] != roleLeader {
-		return "confirmed warm drain; retirement pending", fmt.Errorf("recorded pair changed before confirmed retirement")
-	}
-	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, *r, warmProspectiveServingSet); err != nil {
-		return "confirmed warm drain; retirement pending", fmt.Errorf("availability changed before confirmed retirement: %w", err)
+		return "confirmed warm drain; retirement pending", fmt.Errorf("route/authority changed before confirmed retirement: %w", err)
 	}
 	if err := ec.Client.Delete(ctx, old, uidPrecondition(old)); err != nil && !apierrors.IsNotFound(err) {
 		return "confirmed warm drain; retirement pending", err

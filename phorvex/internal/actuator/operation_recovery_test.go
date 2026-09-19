@@ -64,7 +64,22 @@ func interruptedWarmReceiptFixture(t *testing.T) (client.Client, *NativeActuator
 				phaseError = false
 				return errors.New("injected post-promotion journal outage")
 			}
-			return c.Update(ctx, obj, opts...)
+			if err := c.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			if _, ok := obj.(*corev1.Pod); ok {
+				return m067SyncFakeRoute(ctx, c, old)
+			}
+			return nil
+		},
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if err := c.Patch(ctx, obj, patch, opts...); err != nil {
+				return err
+			}
+			if _, ok := obj.(*corev1.Pod); ok {
+				return m067SyncFakeRoute(ctx, c, old)
+			}
+			return nil
 		},
 		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
 			if err := c.Delete(ctx, obj, opts...); err != nil {
@@ -201,8 +216,9 @@ func TestOperationJournalProducerRetiringPatchAppliedButErrorRetainsLeader(t *te
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	newPod := aiPod("ns", "new", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	base := fakeC(old, newPod)
+	modeled := m067ModeledRouteClient(base, old)
 	applied := false
-	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Patch: func(ctx context.Context, inner client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{Patch: func(ctx context.Context, inner client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 		if pod, ok := obj.(*corev1.Pod); ok && pod.Name == old.Name && pod.Labels[labelRole] == roleRetiring && !applied {
 			applied = true
 			if err := inner.Patch(ctx, obj, patch, opts...); err != nil {
@@ -233,7 +249,8 @@ func TestOperationJournalProducerDrainFailureReportsPartialObjects(t *testing.T)
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	newPod := aiPod("ns", "new", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(old, newPod)
-	res, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true, drainErr: errors.New("drain failed")}}, boundReq(old, model.ActionWarmSwap))
+	modeled := m067ModeledRouteClient(c, old)
+	res, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: modeled, Reader: modeled, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true, drainErr: errors.New("drain failed")}}, boundReq(old, model.ActionWarmSwap))
 	if err == nil || res.Emitted || res.MutationKind != "swap" || len(res.ObjectsTouched) != 2 || !strings.Contains(res.Note, "partial") {
 		t.Fatalf("acknowledged partial cutover not reported: %+v %v", res, err)
 	}
@@ -705,8 +722,9 @@ func TestM067ConfirmedReceiptPrecedesExactOldDelete(t *testing.T) {
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	base := fakeC(old, next)
+	modeled := m067ModeledRouteClient(base, old)
 	deletes := 0
-	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+	guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
 		pod, ok := obj.(*corev1.Pod)
 		if !ok || pod.Name != old.Name {
 			return inner.Delete(ctx, obj, opts...)
@@ -744,8 +762,9 @@ func TestM067LostDispatchClaimAcknowledgementSendsNothing(t *testing.T) {
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	base := fakeC(old, next)
+	modeled := m067ModeledRouteClient(base, old)
 	lost := false
-	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+	guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 		cm, ok := obj.(*corev1.ConfigMap)
 		if ok && !lost && strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
 			lost = true
@@ -826,8 +845,9 @@ func TestM067PostDispatchClaimAuthorityDriftRetainsWithoutEffects(t *testing.T) 
 			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 			base := fakeC(old, next)
+			modeled := m067ModeledRouteClient(base, old)
 			claimed, deletes := false, 0
-			guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+			guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{
 				Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 					cm, ok := obj.(*corev1.ConfigMap)
 					if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
@@ -978,6 +998,225 @@ func m067SyncFakeRoute(ctx context.Context, c client.Client, old *corev1.Pod) er
 	return c.Update(ctx, slice)
 }
 
+// m067ModeledRouteClient is an explicit per-fixture EndpointSlice controller.
+// It is intentionally not part of fakeC: tests that need delayed or stale
+// convergence must continue to model those states themselves.
+func m067ModeledRouteClient(base client.Client, old *corev1.Pod) client.Client {
+	return interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if err := inner.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			if _, ok := obj.(*corev1.Pod); ok {
+				return m067SyncFakeRoute(ctx, inner, old)
+			}
+			return nil
+		},
+		Patch: func(ctx context.Context, inner client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if err := inner.Patch(ctx, obj, patch, opts...); err != nil {
+				return err
+			}
+			if _, ok := obj.(*corev1.Pod); ok {
+				return m067SyncFakeRoute(ctx, inner, old)
+			}
+			return nil
+		},
+	})
+}
+
+func m067WriteFakeRoute(ctx context.Context, c client.Client, old *corev1.Pod, members ...*corev1.Pod) error {
+	slice := &discoveryv1.EndpointSlice{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: old.Namespace, Name: "m066-serving-1"}, slice); err != nil {
+		return err
+	}
+	ready := true
+	slice.Endpoints = nil
+	for _, pod := range members {
+		slice.Endpoints = append(slice.Endpoints, discoveryv1.Endpoint{Addresses: []string{pod.Status.PodIP}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name, UID: pod.UID}})
+	}
+	return c.Update(ctx, slice)
+}
+
+func TestM067ForwardRouteBarriersProtectDrainAndDeletion(t *testing.T) {
+	ctx := context.Background()
+	t.Run("stale-original-after-promotion", func(t *testing.T) {
+		base, old, next, _ := m067ThreeMemberPool(t)
+		vllm := &mockVLLM{loaded: true, drained: 2}
+		result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: base, Reader: base, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+		if err == nil || result.MutationKind == "swap" || vllm.drainCalls != 0 {
+			t.Fatalf("stale promotion route crossed old removal: result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
+		}
+		oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+		if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); getErr != nil || oldCurrent.Labels[labelRole] != roleLeader {
+			t.Fatalf("stale promotion route changed old leader: %v %+v", getErr, oldCurrent)
+		}
+		if getErr := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); getErr != nil || nextCurrent.Labels[labelRole] != roleShadow {
+			t.Fatalf("stale promotion route did not preserve/restore shadow: %v %+v", getErr, nextCurrent)
+		}
+	})
+
+	t.Run("old-remains-selected-after-retirement", func(t *testing.T) {
+		base, old, _, _ := m067ThreeMemberPool(t)
+		guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+			Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if err := inner.Update(ctx, obj, opts...); err != nil {
+					return err
+				}
+				if _, ok := obj.(*corev1.Pod); ok {
+					return m067SyncFakeRoute(ctx, inner, old)
+				}
+				return nil
+			},
+		})
+		vllm := &mockVLLM{loaded: true, drained: 2}
+		result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+		if err == nil || result.MutationKind != "swap" || vllm.drainCalls != 0 {
+			t.Fatalf("stale retired route crossed dispatch claim: result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
+		}
+		receipt := m067ReadReceipt(t, ctx, base, old)
+		if receipt.Phase != "retiring" || receipt.DrainAttempts != 0 {
+			t.Fatalf("stale preclaim route changed send ownership: %+v", receipt)
+		}
+	})
+
+	for _, routeDrift := range []string{"stale-old", "foreign", "duplicate"} {
+		t.Run("after-dispatch-claim-"+routeDrift, func(t *testing.T) {
+			base, old, next, third := m067ThreeMemberPool(t)
+			mutated := false
+			guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+				Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					if err := inner.Update(ctx, obj, opts...); err != nil {
+						return err
+					}
+					if _, ok := obj.(*corev1.Pod); ok {
+						return m067SyncFakeRoute(ctx, inner, old)
+					}
+					cm, ok := obj.(*corev1.ConfigMap)
+					if !ok || mutated || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+						return nil
+					}
+					mutated = true
+					switch routeDrift {
+					case "stale-old":
+						return m067WriteFakeRoute(ctx, inner, old, old, next, third)
+					case "foreign":
+						foreign := next.DeepCopy()
+						foreign.Name, foreign.UID = "foreign", "foreign-uid"
+						return m067WriteFakeRoute(ctx, inner, old, foreign, third)
+					default:
+						return m067WriteFakeRoute(ctx, inner, old, next, next, third)
+					}
+				},
+				Patch: func(ctx context.Context, inner client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					if err := inner.Patch(ctx, obj, patch, opts...); err != nil {
+						return err
+					}
+					if _, ok := obj.(*corev1.Pod); ok {
+						return m067SyncFakeRoute(ctx, inner, old)
+					}
+					return nil
+				},
+			})
+			vllm := &mockVLLM{loaded: true, drained: 2}
+			result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+			if err == nil || result.MutationKind != "swap" || !mutated || vllm.drainCalls != 0 {
+				t.Fatalf("postclaim route drift crossed POST: drift=%s result=%+v err=%v mutated=%t calls=%d", routeDrift, result, err, mutated, vllm.drainCalls)
+			}
+			receipt := m067ReadReceipt(t, ctx, base, old)
+			if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+				t.Fatalf("postclaim route drift lost conservative claim: %+v", receipt)
+			}
+			if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); getErr != nil {
+				t.Fatalf("postclaim route drift deleted old UID: %v", getErr)
+			}
+		})
+	}
+
+	t.Run("route-regression-after-confirmation", func(t *testing.T) {
+		base, old, next, third := m067ThreeMemberPool(t)
+		guard := m067ModeledRouteClient(base, old)
+		vllm := &changingDrainVLLM{mockVLLM: mockVLLM{loaded: true, drained: 2}, change: func() {
+			if err := m067WriteFakeRoute(ctx, base, old, old, next, third); err != nil {
+				t.Errorf("regress route after POST: %v", err)
+			}
+		}}
+		result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+		if err == nil || result.MutationKind != "swap" || vllm.drainCalls != 1 {
+			t.Fatalf("confirmed route regression fixture: result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
+		}
+		receipt := m067ReadReceipt(t, ctx, base, old)
+		if receipt.Phase != "drain-confirmed" || receipt.DrainAttempts != 1 {
+			t.Fatalf("confirmed route regression lost durable result: %+v", receipt)
+		}
+		if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); getErr != nil {
+			t.Fatalf("confirmed route regression deleted old UID: %v", getErr)
+		}
+		events, recoverErr := (&NativeActuator{Client: guard, Reader: guard, JournalNamespace: "operator", RecoveryVLLM: vllm, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}).RecoverOperations(ctx, false)
+		if recoverErr != nil || len(events) != 1 || events[0].Err == nil || vllm.drainCalls != 1 {
+			t.Fatalf("confirmed route regression replayed or vanished: events=%+v err=%v calls=%d", events, recoverErr, vllm.drainCalls)
+		}
+		if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); getErr != nil {
+			t.Fatalf("confirmed route regression recovery deleted old UID: %v", getErr)
+		}
+	})
+
+	t.Run("converged", func(t *testing.T) {
+		base, old, _, _ := m067ThreeMemberPool(t)
+		guard := m067ModeledRouteClient(base, old)
+		vllm := &mockVLLM{loaded: true, drained: 2}
+		result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm, RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}, boundReq(old, model.ActionWarmSwap))
+		if err == nil || result.MutationKind != "swap" || vllm.drainCalls != 1 {
+			t.Fatalf("converged route did not reach confirmed retirement: result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
+		}
+		if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); !apierrors.IsNotFound(getErr) {
+			t.Fatalf("converged route did not delete exact old UID: %v", getErr)
+		}
+	})
+}
+
+func TestM067ForwardRouteObservationRechecksAuthorityAndReadiness(t *testing.T) {
+	for _, drift := range []string{"promoted-readiness", "service-authority"} {
+		t.Run(drift, func(t *testing.T) {
+			ctx := context.Background()
+			base, old, next, _ := m067ThreeMemberPool(t)
+			producer, lost := m067PhaseLossClient(base, old, next, "retiring")
+			vllm := &mockVLLM{loaded: true, drained: 2}
+			if _, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: producer, Reader: producer, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap)); err == nil || !*lost || vllm.drainCalls != 0 {
+				t.Fatalf("retiring producer fixture failed: err=%v lost=%t calls=%d", err, *lost, vllm.drainCalls)
+			}
+			receipt := m067ReadReceipt(t, ctx, base, old)
+			mutated := false
+			reader := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+				List: func(ctx context.Context, inner client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+					if err := inner.List(ctx, list, opts...); err != nil {
+						return err
+					}
+					if mutated {
+						return nil
+					}
+					if _, ok := list.(*discoveryv1.EndpointSliceList); !ok {
+						return nil
+					}
+					mutated = true
+					if drift == "promoted-readiness" {
+						return m067SetPodReady(ctx, inner, next, false)
+					}
+					service := &corev1.Service{}
+					if err := inner.Get(ctx, client.ObjectKey{Namespace: old.Namespace, Name: old.Annotations[annoRouteService]}, service); err != nil {
+						return err
+					}
+					service.Spec.Selector["observed-authority-drift"] = "true"
+					return inner.Update(ctx, service)
+				},
+			})
+			err := observeWarmRecordedRoute(ctx, EnactCtx{Reader: reader, RouteObservationTimeout: 15 * time.Millisecond, RouteObservationInterval: time.Millisecond}, receipt, warmProspectiveRoute)
+			if err == nil || !mutated {
+				t.Fatalf("route observation accepted %s drift: mutated=%t err=%v", drift, mutated, err)
+			}
+		})
+	}
+}
+
 func m067CompensationBoundaryClient(base client.Client, old, next, third *corev1.Pod, mutate func(context.Context, client.WithWatch) error) (client.Client, *bool) {
 	mutated := false
 	return interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
@@ -1052,8 +1291,9 @@ func TestM067AvailabilityAdmissionUsesOnlyProspectiveServingUIDs(t *testing.T) {
 		if err := m067SetPolicyFloor(ctx, base, 2); err != nil {
 			t.Fatal(err)
 		}
+		modeled := m067ModeledRouteClient(base, old)
 		vllm := &mockVLLM{loaded: true, drained: 2}
-		result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: base, Reader: base, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+		result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: modeled, Reader: modeled, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
 		if err == nil || result.MutationKind != "swap" || vllm.drainCalls != 1 {
 			t.Fatalf("equal floor two did not reach the fake-controller terminal boundary: result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
 		}
@@ -1141,7 +1381,8 @@ func TestM067AvailabilityDriftAtReducingBoundariesRetainsExactState(t *testing.T
 					}
 					return m067SetPolicyFloor(ctx, c, 3)
 				}
-				var enactClient client.Client = base
+				modeled := m067ModeledRouteClient(base, old)
+				var enactClient client.Client = modeled
 				vllm := &changingDrainVLLM{mockVLLM: mockVLLM{loaded: true, drained: 2}}
 				if boundary == "drain-confirmed" {
 					vllm.change = func() {
@@ -1150,7 +1391,7 @@ func TestM067AvailabilityDriftAtReducingBoundariesRetainsExactState(t *testing.T
 						}
 					}
 				} else {
-					enactClient = interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					enactClient = interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 						cm, ok := obj.(*corev1.ConfigMap)
 						if !ok || mutated || !strings.Contains(cm.Data["receipt"], `"phase":"`+boundary+`"`) {
 							return inner.Update(ctx, obj, opts...)
@@ -1197,8 +1438,9 @@ func TestM067AvailabilityFailureBeforeDispatchClaimPreservesRetryableReceipt(t *
 	if err := m067SetPolicyFloor(ctx, base, 2); err != nil {
 		t.Fatal(err)
 	}
+	modeled := m067ModeledRouteClient(base, old)
 	readinessDropped := false
-	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+	guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{
 		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 			cm, ok := obj.(*corev1.ConfigMap)
 			if !ok || readinessDropped || !strings.Contains(cm.Data["receipt"], `"phase":"retiring"`) {
@@ -1257,8 +1499,9 @@ func TestM067AvailabilityInventoryDriftAndFailedFlipPreservePromotedMember(t *te
 			if err := m067SetPolicyFloor(ctx, base, 2); err != nil {
 				t.Fatal(err)
 			}
+			modeled := m067ModeledRouteClient(base, old)
 			mutated := false
-			guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
+			guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{
 				Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 					cm, ok := obj.(*corev1.ConfigMap)
 					if !ok || mutated || drift == "failed-old-flip-low-original-capacity" || !strings.Contains(cm.Data["receipt"], `"phase":"promoted"`) {
@@ -1546,6 +1789,7 @@ func TestM067ConfirmedDrainRechecksUnrelatedRecordedRolesBeforeDelete(t *testing
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			base, old, next, third := m067ThreeMemberPool(t)
+			modeled := m067ModeledRouteClient(base, old)
 			vllm := &changingDrainVLLM{mockVLLM: mockVLLM{loaded: true, drained: 2}}
 			if drift {
 				vllm.change = func() {
@@ -1560,7 +1804,7 @@ func TestM067ConfirmedDrainRechecksUnrelatedRecordedRolesBeforeDelete(t *testing
 					}
 				}
 			}
-			result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: base, Reader: base, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
+			result, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: modeled, Reader: modeled, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
 			if err == nil || result.MutationKind != "swap" || vllm.drainCalls != 1 {
 				t.Fatalf("confirmed drain fixture result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
 			}
@@ -1591,8 +1835,8 @@ func TestM067ConfirmedDrainRechecksUnrelatedRecordedRolesBeforeDelete(t *testing
 				if err := base.Get(ctx, key, cm); err != nil || !strings.Contains(cm.Data["receipt"], `"phase":"drain-confirmed"`) {
 					t.Fatalf("third-member drift did not retain durable confirmation: err=%v receipt=%s", err, cm.Data["receipt"])
 				}
-				n := NewNativeActuator(base)
-				n.Reader, n.JournalNamespace, n.RecoveryVLLM = base, "operator", vllm
+				n := NewNativeActuator(modeled)
+				n.Reader, n.JournalNamespace, n.RecoveryVLLM = modeled, "operator", vllm
 				_, _ = n.RecoverOperations(ctx, false)
 				if vllm.drainCalls != 1 {
 					t.Fatalf("retained confirmation replayed drain: calls=%d", vllm.drainCalls)
@@ -1772,6 +2016,12 @@ func m067PhaseLossClient(base client.Client, old, next *corev1.Pod, lostPhase st
 			return inner.Update(ctx, slice)
 		},
 		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if pod, ok := obj.(*corev1.Pod); ok {
+				if err := inner.Update(ctx, pod, opts...); err != nil {
+					return err
+				}
+				return m067SyncFakeRoute(ctx, inner, old)
+			}
 			cm, ok := obj.(*corev1.ConfigMap)
 			if !ok || lost || !strings.Contains(cm.Data["receipt"], `"phase":"`+lostPhase+`"`) {
 				return inner.Update(ctx, obj, opts...)

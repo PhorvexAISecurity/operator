@@ -342,24 +342,10 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err := warmPoolRecheck(ctx, ec.Reader, receipt, leader, shadow); err != nil {
 		return promotedPartial, err
 	}
-	// (2) FLIP down: old leader -> retiring. On failure, ROLL BACK (re-flip shadow; old leader serves).
-	freshOld, freshNew := &corev1.Pod{}, &corev1.Pod{}
-	flipErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld)
-	if flipErr == nil {
-		flipErr = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, freshNew)
-	}
-	if flipErr == nil {
-		flipErr = warmCurrentScope(pol, receipt, freshOld, freshNew)
-	}
-	if flipErr == nil {
-		flipErr = warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew)
-	}
-	if flipErr == nil && (freshOld.Labels[labelRole] != roleLeader || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.DeletionTimestamp != nil || freshNew.DeletionTimestamp != nil) {
-		flipErr = fmt.Errorf("recorded pair changed before old route removal")
-	}
-	if flipErr == nil {
-		flipErr = warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmProspectiveServingSet)
-	}
+	// (2) FLIP down: old leader -> retiring. The exact promoted bridge must be
+	// visible through the recorded Service before old route removal. On failure,
+	// ROLL BACK (re-flip shadow; old leader serves).
+	freshOld, _, flipErr := warmDrainPromotionRouteCurrent(ctx, ec, receipt)
 	if flipErr == nil {
 		before := freshOld.DeepCopy()
 		freshOld.Labels[labelRole] = roleRetiring
@@ -409,6 +395,10 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		if availabilityErr := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet); availabilityErr != nil {
 			return promotedPartial, fmt.Errorf("%s rollback availability unconfirmed; receipt retained: %w", kind, errors.Join(flipErr, availabilityErr))
 		}
+		if routeErr := warmDrainOriginalRouteCurrent(ctx, ec, receipt); routeErr != nil {
+			promotedPartial.Note = "cutover role changes compensated; original route observation unresolved"
+			return promotedPartial, fmt.Errorf("%s rollback route unconfirmed; receipt retained: %w", kind, errors.Join(flipErr, routeErr))
+		}
 		if finishErr := journalFinish(ctx, ec, journal); finishErr != nil {
 			promotedPartial.Note = "cutover role changes compensated; receipt cleanup unresolved"
 			return promotedPartial, fmt.Errorf("%s flip-down %s/%s rolled back but receipt cleanup failed: %w", kind, req.Namespace, req.Pod, errors.Join(flipErr, finishErr))
@@ -436,31 +426,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if drainResult != warmDrainConfirmed {
 		return partial, fmt.Errorf("%s drain old leader %s/%s retained without confirmed completion", kind, req.Namespace, req.Pod)
 	}
-	pol, err = receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+	freshOld, _, err = warmDrainProspectiveRouteCurrent(ctx, ec, receipt)
 	if err != nil {
-		return partial, fmt.Errorf("%s: authority changed before retirement: %w", kind, err)
-	}
-	freshOld, freshNew = &corev1.Pod{}, &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld); err != nil {
-		return partial, err
-	}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, freshNew); err != nil {
-		return partial, err
-	}
-	if err := warmCurrentScope(pol, receipt, freshOld, freshNew); err != nil {
-		return partial, err
-	}
-	if err := warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew); err != nil {
-		return partial, err
-	}
-	if err := warmDrainRolesCurrent(ctx, ec.Reader, receipt); err != nil {
-		return partial, err
-	}
-	if freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.Labels[labelRole] != roleRetiring {
-		return partial, fmt.Errorf("%s: recorded pair not ready for retirement", kind)
-	}
-	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmProspectiveServingSet); err != nil {
-		return partial, fmt.Errorf("%s: availability changed before confirmed retirement: %w", kind, err)
+		return partial, fmt.Errorf("%s: route/authority changed before confirmed retirement: %w", kind, err)
 	}
 	leader = freshOld
 	// [M-69] The Delete is bound to the UID of the leader object observed above (API-enforced

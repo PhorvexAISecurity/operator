@@ -287,7 +287,8 @@ func TestM069WarmCutoverRejectedDeleteIsHonestNonSuccess(t *testing.T) {
 	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	d := &m069Delete{conflictOn: map[string]bool{"leader": true}}
-	c := m069Client(d, interceptor.Funcs{}, leader, shadow)
+	base := m069Client(d, interceptor.Funcs{}, leader, shadow)
+	c := m067ModeledRouteClient(base, leader)
 	ec, _ := m069Stack()
 	ec.Client = c
 	ec.Reader, ec.JournalNamespace = c, "operator"

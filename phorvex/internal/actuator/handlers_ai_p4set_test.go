@@ -545,7 +545,8 @@ func TestKVMigrateLocalUnreachablePending(t *testing.T) {
 func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
 	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
-	c := fakeC(leader, shadow)
+	base := fakeC(leader, shadow)
+	c := m067ModeledRouteClient(base, leader)
 	mv := &mockVLLM{loaded: true, drained: 2}
 	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err == nil || hr.MutationKind != "swap" {
