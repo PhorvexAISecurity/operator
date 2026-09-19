@@ -261,7 +261,7 @@ type vLLMClient interface {
 	// LoadAdapter loads a named LoRA/adapter from a (trusted, pinned) source path/uri.
 	LoadAdapter(ctx context.Context, ep servingEndpoint, adapter, source string) error
 	// DrainRequests stops admitting + aborts/finishes in-flight requests, returning the count
-	// aborted (request-drain; also warm-swap's drain). Best-effort; pair with the K8s readiness flip.
+	// aborted. Callers define their durable send and acknowledgement contract around it.
 	DrainRequests(ctx context.Context, ep servingEndpoint) (aborted int, err error)
 }
 

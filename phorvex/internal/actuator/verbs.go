@@ -17,8 +17,9 @@ import (
 // Broad scanner reads (get/list pods, owner-object gets) are intentionally excluded: they are broadly
 // granted, and the gate's question is "may I ACTUATE?" — gating on the mutation both
 // matches the semantics and BOUNDS SSAR amplification (P-BOUNDED-AUTHZ: fewer distinct
-// verbs ⇒ fewer cache keys ⇒ fewer apiserver calls). Request-drain's Service and EndpointSlice
-// reads are included because they are action-specific confirmation authority, not scanner context.
+// verbs ⇒ fewer cache keys ⇒ fewer apiserver calls). Request-drain and scalar warm Service/
+// EndpointSlice reads are included because they are action-specific confirmation authority,
+// not scanner context.
 // An empty entry is allowed for a
 // generatable action that performs no cluster mutation (none today); disable/noop are
 // declared-only, never generated, so they are deliberately absent.
@@ -33,11 +34,11 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionCustomInject:        {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
 	model.ActionIdentityRotate:      {{Resource: "pods", Verb: "update"}},
 	model.ActionRouteRotate:         {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Resource: "services", Verb: "update"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
-	model.ActionWarmSwap:            {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}},
+	model.ActionWarmSwap:            {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Resource: "services", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionMIGRebind:           {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "delete"}},
 	model.ActionKVReset:             {{Resource: "pods", Verb: "update"}},
 	model.ActionEndpointRotate:      {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Resource: "services", Verb: "update"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
-	model.ActionModelShardReplace:   {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}},
+	model.ActionModelShardReplace:   {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Resource: "services", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionAdapterRotate:       {{Resource: "pods", Verb: "patch"}},
 	model.ActionRequestDrain:        {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionGuardrailRotate:     {{Resource: "pods", Verb: "update"}},

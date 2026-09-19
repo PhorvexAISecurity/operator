@@ -531,10 +531,17 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	if len(servingCalls) == 0 {
 		t.Fatal("authenticated loopback serving backend was not reached")
 	}
+	posts := 0
 	for _, call := range servingCalls {
 		if !strings.HasSuffix(call, " Bearer m078-trusted-token") {
 			t.Fatalf("serving request escaped the trusted binding: %q", call)
 		}
+		if strings.HasPrefix(call, http.MethodPost+" ") {
+			posts++
+		}
+	}
+	if posts != 1 {
+		t.Fatalf("confirmed warm retirement must send exactly one drain POST, got %d calls=%v", posts, servingCalls)
 	}
 	wantLoadedCalls := []string{
 		"GET /health-empty Bearer m078-trusted-token", "GET /models-empty Bearer m078-trusted-token",

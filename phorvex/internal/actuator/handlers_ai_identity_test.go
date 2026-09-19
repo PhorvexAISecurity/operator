@@ -248,6 +248,9 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 			}
 			d := &m069Delete{}
 			c := m069Client(d, interceptor.Funcs{}, objs...)
+			if tc.name == "warm-swap" || tc.name == "model-shard-replace" {
+				c = m067ModeledRouteClient(c, objs[0].(*corev1.Pod))
+			}
 			ec, _ := m069Stack()
 			ec.Client = c
 			ec.Reader, ec.JournalNamespace = c, "operator"
@@ -264,7 +267,7 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 				t.Fatalf("positive control: %+v %v", hr, err)
 			}
 			if len(d.opts) == 0 {
-				t.Fatal("positive control issued no Delete")
+				t.Fatalf("positive control issued no Delete: result=%+v err=%v", hr, err)
 			}
 			for name, calls := range d.opts {
 				for _, o := range calls {
@@ -287,7 +290,8 @@ func TestM069WarmCutoverRejectedDeleteIsHonestNonSuccess(t *testing.T) {
 	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	d := &m069Delete{conflictOn: map[string]bool{"leader": true}}
-	c := m069Client(d, interceptor.Funcs{}, leader, shadow)
+	base := m069Client(d, interceptor.Funcs{}, leader, shadow)
+	c := m067ModeledRouteClient(base, leader)
 	ec, _ := m069Stack()
 	ec.Client = c
 	ec.Reader, ec.JournalNamespace = c, "operator"

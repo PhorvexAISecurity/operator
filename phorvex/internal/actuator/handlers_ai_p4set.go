@@ -323,9 +323,9 @@ func pendingErrors(names []string) []error {
 	return errs
 }
 
-// drainInflight performs the stack-side in-flight drain/abort with the honest tri-state. Shared by
-// request-drain AND warm-swap's retire. Returns (abortedCount, pending, err): pending=true means the
-// serving stack was unreachable (the abort is [PENDING-GPU-VALIDATION], the K8s drain still applies).
+// drainInflight performs the older stack-side in-flight drain/abort tri-state used by request-drain
+// and parallel replacement. Scalar warm retirement has a separate receipt-protected send contract.
+// Returns (abortedCount, pending, err): pending=true means the serving stack was unreachable.
 func drainInflight(ctx context.Context, ec EnactCtx, pod *corev1.Pod) (int, bool, error) {
 	req := ec.ServingRequest
 	if req.Action == "" {
