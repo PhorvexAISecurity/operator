@@ -559,7 +559,7 @@ func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
 	}
 }
 
-// ===== build-completion: model-shard-replace TP/PP coherence =====
+// ===== historical lower-level model-shard TP/PP helper regressions =====
 func tpPod(ns, name, group, rank, role string, loaded bool, size int) *corev1.Pod {
 	p := aiPod(ns, name, map[string]string{
 		labelParallelGroup: group, labelRank: rank, labelRole: role,
@@ -569,7 +569,7 @@ func tpPod(ns, name, group, rank, role string, loaded bool, size int) *corev1.Po
 	return p
 }
 
-func TestShardReplaceTPGroupFlipsCoherently(t *testing.T) {
+func TestHistoricalShardReplaceTPGroupHelperFlipsCoherently(t *testing.T) {
 	// a 2-rank TP group: 2 leaders + a COMPLETE replacement shadow group (both ranks ready).
 	objs := []client.Object{
 		tpPod("ns", "l0", "g", "0", roleLeader, true, 2),
@@ -579,7 +579,7 @@ func TestShardReplaceTPGroupFlipsCoherently(t *testing.T) {
 	}
 	c := fakeC(objs...)
 	// readyErr=unreachable => shadowModelReady falls back to the labelModelLoaded gate (true here).
-	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace))
+	hr, err := groupCoherentCutover(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace), "g")
 	if err != nil {
 		t.Fatalf("shard-replace TP/PP: %v", err)
 	}
@@ -602,7 +602,7 @@ func TestShardReplaceTPGroupFlipsCoherently(t *testing.T) {
 	}
 }
 
-func TestShardReplaceTPFailClosedIncompleteGroup(t *testing.T) {
+func TestHistoricalShardReplaceTPHelperFailsClosedOnIncompleteGroup(t *testing.T) {
 	// size 2 but only ONE ready shadow rank => must NEVER flip a partial parallel group.
 	objs := []client.Object{
 		tpPod("ns", "l0", "g", "0", roleLeader, true, 2),
@@ -611,7 +611,7 @@ func TestShardReplaceTPFailClosedIncompleteGroup(t *testing.T) {
 		tpPod("ns", "s1", "g", "1", roleShadow, false, 2), // rank 1 NOT ready
 	}
 	c := fakeC(objs...)
-	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace))
+	_, err := groupCoherentCutover(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace), "g")
 	if err == nil {
 		t.Fatal("shard-replace TP/PP must FAIL-CLOSED on an incomplete replacement group")
 	}

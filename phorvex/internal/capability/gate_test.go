@@ -422,46 +422,62 @@ func TestCapable_ScalarWarmPoolRequiresVerifiedSameController(t *testing.T) {
 	}
 }
 
-// TestCapable_ParallelShardGroup: a tensor/pipeline-parallel target needs a valid parallel
-// size AND one distinct Ready shadow rank per member; otherwise uncapable.
+// TestCapable_ParallelShardGroup: label/count/Ready observations cannot establish
+// distributed group readiness, atomic activation, or replenishment. Every grouped
+// declaration is therefore refused consistently by candidate and status paths.
 func TestCapable_ParallelShardGroup(t *testing.T) {
 	base, _ := capFleet()
-	mkLeader := func(size int) model.Pod {
+	mkLeader := func(size int, group string) model.Pod {
 		l := base[0].Pod
 		l.Labels = cloneMap(l.Labels)
-		l.Labels[labelParallelGroup] = "par-a"
+		l.Labels[labelParallelGroup] = group
 		l.ParallelSize = size
 		return l
 	}
-	mkRank := func(name, rank string) model.Pod {
+	mkRank := func(name, group, rank string) model.Pod {
 		return model.Pod{Namespace: "ns", Name: name, HasGPU: true, ModelID: "model", Ready: true,
 			Labels: map[string]string{labelWarmRole: warmShadowRole, labelModelLoaded: "true",
-				labelModelShard: "shard-a", labelParallelGroup: "par-a", labelRank: rank}}
+				labelModelShard: "shard-a", labelParallelGroup: group, labelRank: rank}}
+	}
+	for _, tc := range []struct {
+		name  string
+		size  int
+		ranks []model.Pod
+	}{
+		{name: "invalid-size", ranks: []model.Pod{mkRank("r0", "par-a", "0")}},
+		{name: "incomplete", size: 2, ranks: []model.Pod{mkRank("r0", "par-a", "0")}},
+		{name: "duplicate", size: 2, ranks: []model.Pod{mkRank("r0", "par-a", "0"), mkRank("r0dup", "par-a", "0")}},
+		{name: "complete", size: 2, ranks: []model.Pod{mkRank("r0", "par-a", "0"), mkRank("r1", "par-a", "1")}},
+		{name: "extra", size: 2, ranks: []model.Pod{mkRank("r0", "par-a", "0"), mkRank("r1", "par-a", "1"), mkRank("r2", "par-a", "2")}},
+		{name: "foreign-group", size: 2, ranks: []model.Pod{mkRank("r0", "par-b", "0"), mkRank("r1", "par-b", "1")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			leader := mkLeader(tc.size, "par-a")
+			fleet := append([]model.Pod{leader}, tc.ranks...)
+			witness := witOver(fleet, twoGPUNodes(), nil)
+			view := &model.WorkloadView{Pod: leader}
+			if ok, why := witness.Capable(view, model.ActionModelShardReplace); ok || why != actuator.ReasonParallelGroupUnavailable {
+				t.Fatalf("grouped capability = (%v, %q), want stable unsupported reason", ok, why)
+			}
+			if ok, why := witness.CapableAndAuthorized(view, model.ActionModelShardReplace); ok || why != actuator.ReasonParallelGroupUnavailable {
+				t.Fatalf("grouped status capability = (%v, %q), want stable unsupported reason", ok, why)
+			}
+			reason := witness.Eligible(view, model.ActionModelShardReplace, []string{"model-fingerprint"})
+			if reason == nil || !reason.Excluded || reason.Kind != ReasonCapability || reason.Detail != actuator.ReasonParallelGroupUnavailable {
+				t.Fatalf("grouped candidate reason = %+v", reason)
+			}
+		})
 	}
 
-	// no valid parallel-size ⇒ uncapable.
-	{
-		l := mkLeader(0)
-		wit := witOver([]model.Pod{l, mkRank("r0", "0")}, twoGPUNodes(), nil)
-		if ok, _ := wit.Capable(&model.WorkloadView{Pod: l}, model.ActionModelShardReplace); ok {
-			t.Fatal("parallel group without a valid parallel-size must be uncapable")
-		}
+	leader := base[0].Pod
+	fleet := []model.Pod{leader, base[1].Pod, base[2].Pod}
+	witness := witOver(fleet, twoGPUNodes(), nil)
+	view := &model.WorkloadView{Pod: leader}
+	if ok, why := witness.Capable(view, model.ActionModelShardReplace); !ok || why != "" {
+		t.Fatalf("scalar model-shard capability = (%v, %q)", ok, why)
 	}
-	// incomplete ranks (size 2, one rank) ⇒ uncapable; duplicate rank doesn't complete it.
-	{
-		l := mkLeader(2)
-		wit := witOver([]model.Pod{l, mkRank("r0", "0"), mkRank("r0dup", "0")}, twoGPUNodes(), nil)
-		if ok, _ := wit.Capable(&model.WorkloadView{Pod: l}, model.ActionModelShardReplace); ok {
-			t.Fatal("incomplete parallel rank set (duplicate rank) must be uncapable")
-		}
-	}
-	// complete distinct ranks (size 2, ranks 0 and 1) ⇒ capable.
-	{
-		l := mkLeader(2)
-		wit := witOver([]model.Pod{l, mkRank("r0", "0"), mkRank("r1", "1")}, twoGPUNodes(), nil)
-		if ok, why := wit.Capable(&model.WorkloadView{Pod: l}, model.ActionModelShardReplace); !ok {
-			t.Fatalf("complete parallel shadow group must be capable: %s", why)
-		}
+	if reason := witness.Eligible(view, model.ActionModelShardReplace, []string{"model-fingerprint"}); reason != nil {
+		t.Fatalf("scalar model-shard candidate excluded: %+v", reason)
 	}
 }
 
