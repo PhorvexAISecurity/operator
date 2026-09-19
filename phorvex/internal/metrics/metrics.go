@@ -185,9 +185,14 @@ var (
 
 	tickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "phorvex_tick_duration_seconds",
-		Help:    "Wall-clock duration of a decision tick (NFR1: <1s for <=1000 pods).",
+		Help:    "Wall-clock duration of one admitted policy's decision, dispatch and decision-record portion; excludes shared manager ingest/graph and later tick summary, retained-state cleanup, status writes and cadence credit.",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
 	}, []string{"tenant"})
+	managerTickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "phorvex_manager_tick_duration_seconds",
+		Help:    "Wall-clock duration of the complete serialized manager tick, including shared ingest, graph construction, admitted policy work and status writes, by closed outcome.",
+		Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120},
+	}, []string{"outcome"})
 
 	// ---- RLS cost-calibrator observability (PHVX-10c / PHORVEXSEC-98) ----
 	//
@@ -230,7 +235,7 @@ func init() {
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
 		decisionsTotal, actuationsTotal, actuationAttempts, actuationFailures, actuationSuppressions,
 		actuationConfirmations, maintenanceAttempts, ticksTotal, tickOutcomes, actionSetRejections, epssLookupTotal, eventsAgedOut,
-		costNaNUnactionable, requestDrainAborted, tickDuration,
+		costNaNUnactionable, requestDrainAborted, tickDuration, managerTickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
 		candidatesExcludedTotal, candidatesRBACUnknownTotal, actuationCircuitCollector{},
@@ -271,6 +276,24 @@ const (
 	AttemptReconciled ActuationAttemptOutcome = "reconciled-prior-operation"
 	AttemptDeclared   ActuationAttemptOutcome = "declared-only"
 )
+
+// ManagerTickOutcome is the bounded completion class for one complete serialized
+// manager tick. It intentionally carries no tenant or object identity.
+type ManagerTickOutcome string
+
+const (
+	ManagerTickFinished       ManagerTickOutcome = "finished-full-snapshot"
+	ManagerTickNoSnapshot     ManagerTickOutcome = "no-snapshot"
+	ManagerTickSnapshotFailed ManagerTickOutcome = "snapshot-failed"
+	ManagerTickDeadline       ManagerTickOutcome = "deadline"
+	ManagerTickCanceled       ManagerTickOutcome = "canceled"
+)
+
+// RecordManagerTick observes the complete manager tick rather than the earlier
+// per-policy portion recorded by phorvex_tick_duration_seconds.
+func RecordManagerTick(outcome ManagerTickOutcome, duration time.Duration) {
+	managerTickDuration.WithLabelValues(string(outcome)).Observe(duration.Seconds())
+}
 
 // ActuationSuppressionReason is the closed vocabulary for selected actions stopped before
 // Actuate. It is deliberately separate from failure metrics.
