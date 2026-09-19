@@ -126,7 +126,8 @@ func TestM131ActualCollisionPublishesRejectedTickAndRecovers(t *testing.T) {
 	p := m140Policy("policy", tenant, "m131-owner")
 	p.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate)}
 	p.Spec.Mode = "active"
-	oldTick := time.Unix(1_700_000_000, 0).UTC()
+	now := time.Now().UTC().Truncate(time.Second)
+	oldTick := now.Add(-2 * time.Hour)
 	lastDecision := metav1.NewTime(oldTick.Add(-time.Hour))
 	p.Status = v1alpha1.PhorvexPolicyStatus{
 		SelectedPods: 99, LastTickTime: metav1.NewTime(oldTick), LastDecisionTime: lastDecision,
@@ -150,7 +151,6 @@ func TestM131ActualCollisionPublishesRejectedTickAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry := m.policies[client.ObjectKeyFromObject(p).String()]
-	now := oldTick.Add(2 * time.Hour)
 	m.emissionWindow(entry, 2, now.Add(-time.Minute))
 	snap := m131Snapshot(now)
 
@@ -212,15 +212,15 @@ func TestM131ActualCollisionPublishesRejectedTickAndRecovers(t *testing.T) {
 	for _, conditionType := range []string{"DryRun", ConditionActionsSupported, ConditionTelemetryDegraded, "KillSwitch", "EmissionHistory"} {
 		m131Condition(t, &rejectedStatus, conditionType)
 	}
-	if rejectedStatus.Tenant != tenant || rejectedStatus.ObservedGeneration != p.Generation || rejectedStatus.KillSwitchEngaged {
+	if rejectedStatus.Status.Tenant != tenant || rejectedStatus.Status.ObservedGeneration != p.Generation || rejectedStatus.Status.KillSwitchEngaged {
 		t.Fatalf("policy identity/generation/kill observation not preserved: %+v", rejectedStatus.Status)
 	}
-	if rejectedStatus.SelectedPods != 2 || !rejectedStatus.LastTickTime.Time.After(oldTick) ||
-		rejectedStatus.DecisionsTotal != 7 || !rejectedStatus.LastDecisionTime.Equal(&lastDecision) {
+	if rejectedStatus.Status.SelectedPods != 2 || !rejectedStatus.Status.LastTickTime.Time.After(oldTick) ||
+		rejectedStatus.Status.DecisionsTotal != 7 || !rejectedStatus.Status.LastDecisionTime.Equal(&lastDecision) {
 		t.Fatalf("rejected status lost current inputs or prior decision history: %+v", rejectedStatus.Status)
 	}
-	if rejectedStatus.MovesThisWindow != 2 || !rejectedStatus.Actuated {
-		t.Fatalf("rolling emission history was erased: moves=%d actuated=%v", rejectedStatus.MovesThisWindow, rejectedStatus.Actuated)
+	if rejectedStatus.Status.MovesThisWindow != 2 || !rejectedStatus.Status.Actuated {
+		t.Fatalf("rolling emission history was erased: moves=%d actuated=%v", rejectedStatus.Status.MovesThisWindow, rejectedStatus.Status.Actuated)
 	}
 	joinedAudit := strings.Join(auditLines, "\n")
 	if !strings.Contains(joinedAudit, "outcome") || !strings.Contains(joinedAudit, "selection-rejected") ||

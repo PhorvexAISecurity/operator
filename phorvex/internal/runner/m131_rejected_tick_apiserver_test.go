@@ -107,8 +107,8 @@ func TestM131RealAPIRejectedTickAndReplacementUIDBoundary(t *testing.T) {
 	p.Status = v1alpha1.PhorvexPolicyStatus{
 		SelectedPods: 31, LastTickTime: oldTick, LastDecisionTime: lastDecision, DecisionsTotal: 11,
 		Conditions: []metav1.Condition{
-			{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Ticking"},
-			{Type: "ValidationError", Status: metav1.ConditionTrue, Reason: "ControllerOwned", Message: "real API sentinel"},
+			{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Ticking", LastTransitionTime: oldTick},
+			{Type: "ValidationError", Status: metav1.ConditionTrue, Reason: "ControllerOwned", Message: "real API sentinel", LastTransitionTime: oldTick},
 		},
 	}
 	if err := apiClient.Status().Update(ctx, p); err != nil {
@@ -137,7 +137,7 @@ func TestM131RealAPIRejectedTickAndReplacementUIDBoundary(t *testing.T) {
 	if ready.Status != metav1.ConditionFalse || ready.Reason != "ActionSetRejected" {
 		t.Fatalf("real API rejected Ready condition = %+v", ready)
 	}
-	if rejected.SelectedPods != 2 || rejected.DecisionsTotal != 11 || !rejected.LastDecisionTime.Equal(&lastDecision) {
+	if rejected.Status.SelectedPods != 2 || rejected.Status.DecisionsTotal != 11 || !rejected.Status.LastDecisionTime.Equal(&lastDecision) {
 		t.Fatalf("real API rejection status = %+v", rejected.Status)
 	}
 	if validation := m131Condition(t, &rejected, "ValidationError"); validation.Message != "real API sentinel" {
