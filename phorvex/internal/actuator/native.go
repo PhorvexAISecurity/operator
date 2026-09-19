@@ -7,6 +7,7 @@ package actuator
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -43,13 +44,21 @@ type NativeActuator struct {
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
 
-	// [P-VCLUSTER O7] tenantNS records each tenant's declared namespaces (via EnsurePolicy). Actuate
-	// fail-fast REJECTS a Request whose Namespace is not bound to its Tenant — an explicit Phorvex-layer
-	// cross-tenant-actuation control (defense-in-depth above the per-namespace K8s RBAC backstop).
-	tenantNS map[string]map[string]bool
+	// [P-VCLUSTER O7] Policy bindings authorize an exact policy owner to one immutable
+	// tenant/namespace tuple. The legacy tenant map remains available only until owner
+	// tracking first activates; all binding state shares one lock.
+	bindingMu       sync.RWMutex
+	tenantNS        map[string]map[string]bool
+	bindingsByUID   map[string]tenantNamespaceBinding
+	bindingsTracked bool
 	// StrictTenantNamespace fail-CLOSES on a Request whose Tenant has NO binding at all (production
 	// posture once every tenant is bound). Default false preserves the legacy single-tenant path.
 	StrictTenantNamespace bool
+}
+
+type tenantNamespaceBinding struct {
+	tenant    string
+	namespace string
 }
 
 // NewNativeActuator constructs the native actuator over a controller-runtime client.
@@ -123,6 +132,26 @@ func (n *NativeActuator) EnsurePolicy(_ context.Context, target TenantTarget) er
 			return fmt.Errorf("native actuator: tenant %q invalid selector: %w", target.Tenant, err)
 		}
 	}
+	if target.PolicyUID != "" {
+		if target.Tenant == "" || target.Namespace == "" {
+			return fmt.Errorf("native actuator: policy UID %q requires a nonempty tenant and namespace", target.PolicyUID)
+		}
+		n.bindingMu.Lock()
+		defer n.bindingMu.Unlock()
+		if n.bindingsByUID == nil {
+			n.bindingsByUID = map[string]tenantNamespaceBinding{}
+		}
+		n.bindingsTracked = true
+		n.tenantNS = nil
+		n.bindingsByUID[target.PolicyUID] = tenantNamespaceBinding{tenant: target.Tenant, namespace: target.Namespace}
+		return nil
+	}
+
+	n.bindingMu.Lock()
+	defer n.bindingMu.Unlock()
+	if n.bindingsTracked {
+		return fmt.Errorf("native actuator: policy UID is required after owner tracking activates")
+	}
 	if target.Tenant == "" || target.Namespace == "" {
 		return nil
 	}
@@ -138,6 +167,18 @@ func (n *NativeActuator) EnsurePolicy(_ context.Context, target TenantTarget) er
 
 // assertTenantNamespace is the O7 fail-fast: a Request may only act in a namespace bound to its tenant.
 func (n *NativeActuator) assertTenantNamespace(req Request) error {
+	n.bindingMu.RLock()
+	defer n.bindingMu.RUnlock()
+	if n.bindingsTracked {
+		binding, bound := n.bindingsByUID[req.PolicyUID]
+		if req.PolicyUID == "" || !bound {
+			return fmt.Errorf("native actuate DENIED (O7): policy owner %q has no active tenant/namespace binding for %s/%s", req.PolicyUID, req.Namespace, req.Pod)
+		}
+		if binding.tenant != req.Tenant || binding.namespace != req.Namespace {
+			return fmt.Errorf("native actuate DENIED (O7): policy owner %q is not bound to tenant %q namespace %q", req.PolicyUID, req.Tenant, req.Namespace)
+		}
+		return nil
+	}
 	allowed, bound := n.tenantNS[req.Tenant]
 	if !bound {
 		if n.StrictTenantNamespace {
@@ -149,6 +190,19 @@ func (n *NativeActuator) assertTenantNamespace(req Request) error {
 		return fmt.Errorf("native actuate DENIED (O7): tenant %q is not bound to namespace %q — cross-tenant actuation refused (%s/%s)", req.Tenant, req.Namespace, req.Namespace, req.Pod)
 	}
 	return nil
+}
+
+// RetirePolicyBinding removes exactly one policy owner's local authorization at
+// lifecycle completion. Tracking remains sticky after the final owner is removed.
+func (n *NativeActuator) RetirePolicyBinding(policyUID string) {
+	if policyUID == "" {
+		return
+	}
+	n.bindingMu.Lock()
+	defer n.bindingMu.Unlock()
+	n.bindingsTracked = true
+	n.tenantNS = nil
+	delete(n.bindingsByUID, policyUID)
 }
 
 // Actuate dispatches the move to its native handler. Implements Actuator.
@@ -171,6 +225,13 @@ func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) 
 	if err := n.assertTenantNamespace(req); err != nil {
 		return err
 	}
+	return n.rollbackPrepared(ctx, req, ref)
+}
+
+// rollbackPrepared performs a rollback after its caller has established the
+// applicable authority. Public Rollback performs the live owner check; protected
+// administrative recovery supplies its stronger plan/receipt/hold authority.
+func (n *NativeActuator) rollbackPrepared(ctx context.Context, req Request, ref string) error {
 	if n.DryRun {
 		return errDryRunGuard
 	}
@@ -191,8 +252,9 @@ func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) 
 // Compile-time assertions that ALL THREE actuators satisfy the interface (the seam is
 // real and Phase-2 cannot drift the contract).
 var (
-	_ Actuator = (*PhoenixActuator)(nil)
-	_ Actuator = (*NativeActuator)(nil)
+	_ Actuator               = (*PhoenixActuator)(nil)
+	_ Actuator               = (*NativeActuator)(nil)
+	_ PolicyBindingLifecycle = (*NativeActuator)(nil)
 )
 
 func (n *NativeActuator) SetBoundaryReader(r client.Reader) { n.Reader = r }

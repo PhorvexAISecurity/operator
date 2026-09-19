@@ -618,7 +618,7 @@ func (n *NativeActuator) ApplyRecoveryWithRecorder(ctx context.Context, plan Rec
 				err = rollbackRequestDrain(ctx, ec, req, item.RollbackRef)
 			}
 		} else {
-			err = n.Rollback(ctx, req, item.RollbackRef)
+			err = n.rollbackPrepared(ctx, req, item.RollbackRef)
 		}
 		if err != nil {
 			out.Outcome, out.Reason = "partial-or-unknown", err.Error()

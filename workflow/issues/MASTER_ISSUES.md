@@ -1966,7 +1966,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-91 · `tenantNS` map: unsynchronized and never pruned · **OPEN** · `CONTROL`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T16-M091
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
