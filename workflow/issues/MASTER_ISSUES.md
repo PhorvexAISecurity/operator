@@ -2776,7 +2776,7 @@ Severity: HIGH · Tier: unassigned · Fixes: T22-M180
 
 ### M-181 · Claim build metadata bypasses existing credential-pattern redaction · **OPEN** · `OBSERVABILITY`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: none
+Severity: MEDIUM · Tier: unassigned · Fixes: T24-M181
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `OBSERVABILITY` — anatomy locus review required.
