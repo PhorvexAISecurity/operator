@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 11
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -105,13 +105,20 @@ checks:
     source_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
     at: '2026-09-20T23:40:40+00:00'
     incident_sha256: 4f478fea87e975b5f2f4dd402ad3c407b4a706e90d61fbfd315e8b1dd5c82279
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/patch-equivalence.json
+    sha256: 304ba91b65eb2b925026e529eeda2494eadc6cfaff3aac4dbac2f18887b500c5
+    source_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+    at: '2026-09-20T23:47:28+00:00'
 fix_id: POST25-ECONOMICS
 issues:
 - M-144
 - M-98
 title: Separate persistent disruption preference from legacy count-driven lambda
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,8 +145,8 @@ implementation:
   head_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/249
+  reviewed_head: b24282ae785a802a4262a654091a219d8aae8176
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -172,10 +179,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-20T23:40:43+00:00'
+  owner: mehrdad
+  action: Review and merge PR 249, deploy through DevOps, then lead verifies fixed-preference
+    and lambda behavior live.
+updated_at: '2026-09-20T23:47:28+00:00'
 configuration_history:
 - at: '2026-09-20T22:33:37+00:00'
   by: codex-lead
@@ -197,6 +204,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-20T23:46:15+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -245,6 +257,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-20T23:47:28+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: POST25-ECONOMICS:8:review
