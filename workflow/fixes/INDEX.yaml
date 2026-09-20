@@ -1332,3 +1332,14 @@ fixes:
     - POST25-M137
     branch: post25-catalogue
     head_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+  POST25-CALIB-EXPORT:
+    directory: fixes/POST25-CALIB-EXPORT
+    aliases: []
+    issues:
+    - M-182
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-calibration-export
+    head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
