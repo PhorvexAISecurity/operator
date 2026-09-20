@@ -1365,4 +1365,4 @@ fixes:
     stacked_on:
     - POST25-CHECKPOINT-LOCAL-FIXTURE
     branch: post25-session-observation
-    head_sha: null
+    head_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
