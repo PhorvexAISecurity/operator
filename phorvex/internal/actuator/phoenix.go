@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -90,69 +91,152 @@ func amtdName(namespace, tenant string) string {
 	return boundedAMTDName(namespace, tenant)
 }
 
-// EnsurePolicy idempotently maintains the tenant's AMTD strategy. Implements Actuator.
-func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget) error {
+type phoenixPolicyDesired struct {
+	name       string
+	tenant     string
+	selector   map[string]string
+	strategies []amtdv1beta1.ResponseStrategy
+	identity   map[string]string
+}
+
+func desiredPhoenixPolicy(target TenantTarget) (phoenixPolicyDesired, error) {
+	if target.PolicyOwnerCount > 1 {
+		return phoenixPolicyDesired{}, fmt.Errorf("phoenix actuator: namespace %q tenant %q has %d current policy owners; refusing shared strategy", target.Namespace, target.Tenant, target.PolicyOwnerCount)
+	}
 	selector, err := phoenixEqualities(targetSelector(target))
 	if err != nil {
-		return fmt.Errorf("phoenix actuator: tenant %q selector preparation refused: %w", target.Tenant, err)
+		return phoenixPolicyDesired{}, fmt.Errorf("phoenix actuator: tenant %q selector preparation refused: %w", target.Tenant, err)
 	}
 	name := amtdName(target.Namespace, target.Tenant)
-	identity := identityAnnotations(target.Namespace, target.Tenant)
+	identity := mergeAnnotations(identityAnnotations(target.Namespace, target.Tenant), policyIdentityAnnotations(target))
 	if err := validateIdentityMetadata(target.Namespace, identity); err != nil {
-		return fmt.Errorf("phoenix actuator: %w", err)
+		return phoenixPolicyDesired{}, fmt.Errorf("phoenix actuator: %w", err)
 	}
-	desired := buildStrategies(target.EnabledActions)
+	return phoenixPolicyDesired{name: name, tenant: tenantLabel(target.Tenant), selector: selector, strategies: buildStrategies(target.EnabledActions), identity: identity}, nil
+}
+
+func phoenixPolicyInSync(amtd *amtdv1beta1.AdaptiveMovingTargetDefense, desired phoenixPolicyDesired) bool {
+	if !reflect.DeepEqual(amtd.Spec.PodSelector, desired.selector) ||
+		!reflect.DeepEqual(amtd.Spec.Strategy, desired.strategies) ||
+		amtd.Spec.MatcherMode != amtdv1beta1.MatcherModeExact ||
+		amtd.Labels["app.kubernetes.io/managed-by"] != "phorvex" ||
+		amtd.Labels["phorvex.ai/tenant"] != desired.tenant {
+		return false
+	}
+	for key, value := range desired.identity {
+		if amtd.Annotations[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func phoenixMaintenanceResult(state PolicyMaintenanceState, detail string, err error) PolicyMaintenanceResult {
+	result := PolicyMaintenanceResult{
+		Preparation: RoutePreparation{PhoenixErr: err, NativeSkipped: true},
+		Phoenix:     PolicyRouteMaintenance{State: state, Detail: detail},
+		Native:      PolicyRouteMaintenance{State: PolicyMaintenanceNotRequired, Detail: "native route not required"},
+	}
+	return result
+}
+
+func (p *PhoenixActuator) observeStandingPolicy(ctx context.Context, target TenantTarget) (PolicyMaintenanceState, string, error) {
+	desired, err := desiredPhoenixPolicy(target)
+	if err != nil {
+		return PolicyMaintenanceOwnershipRefused, err.Error(), err
+	}
+	var amtd amtdv1beta1.AdaptiveMovingTargetDefense
+	if err := p.Client.Get(ctx, client.ObjectKey{Namespace: target.Namespace, Name: desired.name}, &amtd); err != nil {
+		if apiNotFound(err) {
+			return PolicyMaintenanceMissing, "managed Phoenix strategy is absent", nil
+		}
+		return PolicyMaintenanceUnknown, err.Error(), fmt.Errorf("get AMTD %s/%s: %w", target.Namespace, desired.name, err)
+	}
+	if err := validateAMTDOwnership(&amtd, target, desired.name); err != nil {
+		return PolicyMaintenanceOwnershipRefused, err.Error(), fmt.Errorf("refuse AMTD update %s/%s: %w", target.Namespace, desired.name, err)
+	}
+	if phoenixPolicyInSync(&amtd, desired) {
+		return PolicyMaintenanceInSync, "managed Phoenix strategy matches owned desired fields", nil
+	}
+	return PolicyMaintenanceDrifted, "managed Phoenix strategy differs in owned desired fields", nil
+}
+
+// ObserveStandingPolicy performs a genuinely read-only drift check.
+func (p *PhoenixActuator) ObserveStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult {
+	state, detail, err := p.observeStandingPolicy(ctx, target)
+	return phoenixMaintenanceResult(state, detail, err)
+}
+
+// ReconcileStandingPolicy maintains the AMTD without emitting a SecurityEvent.
+// A matching object is a zero-write success.
+func (p *PhoenixActuator) ReconcileStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult {
+	desired, err := desiredPhoenixPolicy(target)
+	if err != nil {
+		return phoenixMaintenanceResult(PolicyMaintenanceOwnershipRefused, err.Error(), err)
+	}
 
 	var amtd amtdv1beta1.AdaptiveMovingTargetDefense
-	err = p.Client.Get(ctx, client.ObjectKey{Namespace: target.Namespace, Name: name}, &amtd)
+	err = p.Client.Get(ctx, client.ObjectKey{Namespace: target.Namespace, Name: desired.name}, &amtd)
 	if err != nil {
 		if !apiNotFound(err) {
-			return fmt.Errorf("get AMTD %s/%s: %w", target.Namespace, name, err)
+			err = fmt.Errorf("get AMTD %s/%s: %w", target.Namespace, desired.name, err)
+			return phoenixMaintenanceResult(PolicyMaintenanceUnknown, err.Error(), err)
 		}
 		amtd = amtdv1beta1.AdaptiveMovingTargetDefense{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
+				Name:        desired.name,
 				Namespace:   target.Namespace,
 				Labels:      map[string]string{"app.kubernetes.io/managed-by": "phorvex", "phorvex.ai/tenant": tenantLabel(target.Tenant)},
-				Annotations: identity,
+				Annotations: desired.identity,
 			},
 			Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
-				PodSelector: selector,
-				Strategy:    desired,
+				PodSelector: desired.selector,
+				Strategy:    desired.strategies,
 				MatcherMode: amtdv1beta1.MatcherModeExact,
 			},
 		}
 		if verr := validateObjectMetadata(&amtd.ObjectMeta); verr != nil {
-			return fmt.Errorf("create AMTD %s/%s metadata: %w", target.Namespace, name, verr)
+			err = fmt.Errorf("create AMTD %s/%s metadata: %w", target.Namespace, desired.name, verr)
+			return phoenixMaintenanceResult(PolicyMaintenanceUnknown, err.Error(), err)
 		}
 		if cerr := p.Client.Create(ctx, &amtd); cerr != nil {
-			return fmt.Errorf("create AMTD %s/%s: %w", target.Namespace, name, cerr)
+			err = fmt.Errorf("create AMTD %s/%s: %w", target.Namespace, desired.name, cerr)
+			return phoenixMaintenanceResult(PolicyMaintenanceUnknown, err.Error(), err)
 		}
-		return nil
+		return phoenixMaintenanceResult(PolicyMaintenanceRepaired, "created missing managed Phoenix strategy", nil)
 	}
 
-	if oerr := validateAMTDOwnership(&amtd, target, name); oerr != nil {
-		return fmt.Errorf("refuse AMTD update %s/%s: %w", target.Namespace, name, oerr)
+	if oerr := validateAMTDOwnership(&amtd, target, desired.name); oerr != nil {
+		err = fmt.Errorf("refuse AMTD update %s/%s: %w", target.Namespace, desired.name, oerr)
+		return phoenixMaintenanceResult(PolicyMaintenanceOwnershipRefused, err.Error(), err)
 	}
-	amtd.Annotations = mergeAnnotations(amtd.Annotations, identity)
+	if phoenixPolicyInSync(&amtd, desired) {
+		return phoenixMaintenanceResult(PolicyMaintenanceInSync, "managed Phoenix strategy matches owned desired fields", nil)
+	}
+	amtd.Annotations = mergeAnnotations(amtd.Annotations, desired.identity)
 	if amtd.Labels == nil {
 		amtd.Labels = map[string]string{}
 	}
 	amtd.Labels["app.kubernetes.io/managed-by"] = "phorvex"
 	amtd.Labels["phorvex.ai/tenant"] = tenantLabel(target.Tenant)
-	// Update in place if the selector or strategy drifted.
-	amtd.Spec.PodSelector = selector
-	amtd.Spec.Strategy = desired
-	if amtd.Spec.MatcherMode == "" {
-		amtd.Spec.MatcherMode = amtdv1beta1.MatcherModeExact
-	}
+	amtd.Spec.PodSelector = desired.selector
+	amtd.Spec.Strategy = desired.strategies
+	amtd.Spec.MatcherMode = amtdv1beta1.MatcherModeExact
 	if verr := validateObjectMetadata(&amtd.ObjectMeta); verr != nil {
-		return fmt.Errorf("update AMTD %s/%s metadata: %w", target.Namespace, name, verr)
+		err = fmt.Errorf("update AMTD %s/%s metadata: %w", target.Namespace, desired.name, verr)
+		return phoenixMaintenanceResult(PolicyMaintenanceUnknown, err.Error(), err)
 	}
 	if uerr := p.Client.Update(ctx, &amtd); uerr != nil {
-		return fmt.Errorf("update AMTD %s/%s: %w", target.Namespace, name, uerr)
+		err = fmt.Errorf("update AMTD %s/%s: %w", target.Namespace, desired.name, uerr)
+		return phoenixMaintenanceResult(PolicyMaintenanceUnknown, err.Error(), err)
 	}
-	return nil
+	return phoenixMaintenanceResult(PolicyMaintenanceRepaired, "repaired drifted managed Phoenix strategy", nil)
+}
+
+// EnsurePolicy preserves the Actuator interface while delegating to the typed
+// standing-policy result used by the runner.
+func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget) error {
+	return p.ReconcileStandingPolicy(ctx, target).Preparation.PhoenixErr
 }
 
 func validateAMTDOwnership(amtd *amtdv1beta1.AdaptiveMovingTargetDefense, target TenantTarget, expectedName string) error {
@@ -173,6 +257,22 @@ func validateAMTDOwnership(amtd *amtdv1beta1.AdaptiveMovingTargetDefense, target
 		if rawNamespace != target.Namespace || rawTenant != target.Tenant {
 			return fmt.Errorf("identity annotations belong to namespace %q tenant %q", rawNamespace, rawTenant)
 		}
+		policyName, hasPolicyName := annotations[policyNameAnnotation]
+		policyUID, hasPolicyUID := annotations[policyUIDAnnotation]
+		policyGeneration, hasPolicyGeneration := annotations[policyGenerationAnnotation]
+		if hasPolicyName || hasPolicyUID || hasPolicyGeneration {
+			if !hasPolicyName || !hasPolicyUID || !hasPolicyGeneration {
+				return fmt.Errorf("policy owner annotations are incomplete")
+			}
+			if target.PolicyUID == "" || policyName != target.PolicyName || policyUID != target.PolicyUID {
+				return fmt.Errorf("policy owner annotations belong to name %q uid %q generation %q", policyName, policyUID, policyGeneration)
+			}
+			if _, err := strconv.ParseInt(policyGeneration, 10, 64); err != nil {
+				return fmt.Errorf("policy owner generation %q is malformed", policyGeneration)
+			}
+		} else if target.PolicyUID != "" {
+			return fmt.Errorf("legacy AMTD has no exact policy owner identity; explicit migration is required")
+		}
 		return nil
 	}
 	legacyName := "phorvex-" + sanitize(target.Namespace) + "-" + sanitize(target.Tenant)
@@ -184,6 +284,8 @@ func validateAMTDOwnership(amtd *amtdv1beta1.AdaptiveMovingTargetDefense, target
 	}
 	return nil
 }
+
+var _ StandingPolicyMaintainer = (*PhoenixActuator)(nil)
 
 // Actuate emits the controlled SecurityEvent for one move. Implements Actuator.
 func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, error) {

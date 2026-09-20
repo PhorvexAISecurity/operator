@@ -1909,7 +1909,7 @@ Severity: HIGH · Tier: parallel · Fixes: T8-M124
 
 ### M-135 · `EnsurePolicy` only runs on the actuation path — no self-heal while a tenant is idle or braked · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M135
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.router

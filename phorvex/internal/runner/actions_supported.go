@@ -53,6 +53,7 @@ type actionsSupportStatus struct {
 	reason          string
 	message         string
 	preparation     *actuator.RoutePreparation
+	standingPolicy  *standingPolicyTickStatus
 	namespaceDryRun model.ActuationBrakeObservation
 }
 

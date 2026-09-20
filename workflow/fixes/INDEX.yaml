@@ -1366,3 +1366,14 @@ fixes:
     - POST25-CHECKPOINT-LOCAL-FIXTURE
     branch: post25-session-observation
     head_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
+  POST25-M135:
+    directory: fixes/POST25-M135
+    aliases: []
+    issues:
+    - M-135
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-m135-idle-maintenance
+    head_sha: null

@@ -151,12 +151,21 @@ func (m *Manager) updateTickStatusObserved(ctx context.Context, e *policyEntry, 
 			Message:            actions.message,
 			ObservedGeneration: p.Generation,
 		})
+		standingCondition := standingPolicyCondition(actions.standingPolicy, p.Generation)
+		if actions.standingPolicy != nil && e.generation != p.Generation {
+			standingCondition = metav1.Condition{
+				Type: ConditionStandingPolicy, Status: metav1.ConditionUnknown, Reason: "StaleObservation",
+				Message:            fmt.Sprintf("standing policy observation was for generation %d; current policy generation is %d", e.generation, p.Generation),
+				ObservedGeneration: p.Generation,
+			}
+		}
+		meta.SetStatusCondition(&p.Status.Conditions, standingCondition)
 		prepStatus, prepReason, prepMessage := metav1.ConditionUnknown, "NotAttempted", "actuator preparation was not attempted this tick"
 		if rejected == nil {
 			if actions.preparation != nil && e.generation != p.Generation {
 				prepReason, prepMessage = "StalePreparation", fmt.Sprintf("preparation was for generation %d; current policy generation is %d", e.generation, p.Generation)
 			} else if actions.preparation != nil && m.Actuator != nil {
-				prepStatus, prepReason, prepMessage = metav1.ConditionTrue, "Prepared", "selected actuator route prepared this tick"
+				prepStatus, prepReason, prepMessage = metav1.ConditionTrue, "Prepared", "standing actuator route prepared or observed this tick"
 				prep := actions.preparation
 				switch m.Actuator.Name() {
 				case "hybrid":
