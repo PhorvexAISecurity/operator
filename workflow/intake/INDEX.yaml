@@ -174,3 +174,11 @@ intakes:
     state: VERIFYING
     issue_id: null
     aliases: []
+  RPT-20260920-172300-gpu-fixture-evidence:
+    directory: intake/RPT-20260920-172300-gpu-fixture-evidence
+    kind: BUG
+    title: GPU live fixture loses first startup failure diagnostics across container
+      restart
+    state: VERIFYING
+    issue_id: null
+    aliases: []
