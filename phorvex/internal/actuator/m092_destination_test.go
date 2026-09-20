@@ -136,6 +136,8 @@ func TestM092ValidDefaultAndOverrideRoutesReachOnlySelectedPod(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		case r.URL.Path == defaultResetPath || strings.HasSuffix(r.URL.Path, "/reset"):
 			_, _ = w.Write([]byte(`{"success":true}`))
+		case r.URL.Path == defaultKVInvPath || strings.HasSuffix(r.URL.Path, "/kv"):
+			_, _ = w.Write([]byte(`{"success":true}`))
 		default:
 			w.WriteHeader(http.StatusNoContent)
 		}
@@ -448,7 +450,7 @@ func TestM075RawKVHandlerPreservesDeclaredCPUAndPortServingTargets(t *testing.T)
 		if r.URL.Path != defaultKVInvPath {
 			t.Errorf("path=%q", r.URL.Path)
 		}
-		w.WriteHeader(http.StatusNoContent)
+		_, _ = w.Write([]byte(`{"success":true}`))
 	}))
 	defer receiver.Close()
 	for _, declaration := range []string{"model", "port"} {

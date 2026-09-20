@@ -194,7 +194,7 @@ func TestM074HTTPKVTransferLocalProducer(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !body["local"] {
 			t.Errorf("unexpected local invalidation body %v, %v", body, err)
 		}
-		w.WriteHeader(http.StatusNoContent)
+		_, _ = w.Write([]byte(`{"success":true}`))
 	}))
 	defer srv.Close()
 	u, err := url.Parse(srv.URL)

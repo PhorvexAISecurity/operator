@@ -94,6 +94,10 @@ func newM093Fixture(t *testing.T, handler http.Handler) *m093Fixture {
 				_, _ = w.Write([]byte(`{"success":true}`))
 				return
 			}
+			if r.URL.Path == defaultKVInvPath || r.URL.Path == "/kv" {
+				_, _ = w.Write([]byte(`{"success":true}`))
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 		})
 	}
