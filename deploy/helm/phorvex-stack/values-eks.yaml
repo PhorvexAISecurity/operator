@@ -38,7 +38,7 @@ phorvex:
       # The phorvex subchart has no global-registry helper (unlike the dashboard), so the
       # registry has to be spelled out in the repository here.
       repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
-      tag: "0.4.137"    # ci:phorvex-tag
+      tag: "0.4.138"    # ci:phorvex-tag
       pullPolicy: IfNotPresent
     baseInterval: 10s
     leaderElect: true
@@ -102,7 +102,7 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.137" # ci:console-tag
+        tag: "0.4.138" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
       # ── console identity and authorization (M-136) ────────────────────────
