@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -77,12 +77,28 @@ checks:
     inputs:
     - build/test-harness
     inputs_sha256: d9ed032e33032cc842ba0598af243a93c145019b05b62eac63941628cc68f55c
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 3e338e3ddda21264e2bcf5b7f19ef2cf55d8a0fae9683b0f81f567f4c464162f
+    source_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad
+    at: '2026-09-20T19:53:06+00:00'
+    baseline_sha: b38e92f5ce4925be034286859b723d14b69136e8
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 3606bc822a92632bbb66ad635b41d66c6673bd8243b70aa89577be36f713124f
+    source_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad
+    at: '2026-09-20T19:53:06+00:00'
+    incident_sha256: 3e338e3ddda21264e2bcf5b7f19ef2cf55d8a0fae9683b0f81f567f4c464162f
 fix_id: POST25-CATALOGUE-CLAIMS
 issues:
 - M-170
 title: Require assessed mechanisms for catalogue security claims
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -126,7 +142,7 @@ verification:
   - L2
   live_required: false
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -149,10 +165,10 @@ residuals:
   verify that source is included before merging/verification. PR243 has no separate
   POST25-CATALOGUE-STATEFUL fix record.
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-20T19:51:44+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T19:53:09+00:00'
 follow_up_to: T5-M170
 configuration_history:
 - at: '2026-09-20T18:42:51+00:00'
@@ -220,6 +236,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T19:53:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T19:53:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -230,9 +262,9 @@ check_history:
   at: '2026-09-20T18:43:13+00:00'
   contract_sha256: 4bc178a5e90287ce559e2c5e7b39fc7b5016f72ce1e6543505b29e662af1af75
 handoff:
-  id: POST25-CATALOGUE-CLAIMS:10:submit
-  from: post25-catalogue
+  id: POST25-CATALOGUE-CLAIMS:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
