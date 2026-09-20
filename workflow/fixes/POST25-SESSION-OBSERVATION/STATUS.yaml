@@ -2,42 +2,51 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 0
-change_class: null
+revision: 4
+change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: ae1190dc3169aef0d09c3d2ac8c8124e54de62b8b776cc522b4f4d301494dcac
+    source_sha: 16111c40b3501cccc988eedadb06382596addcd8
+    at: '2026-09-20T21:00:43+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
 fix_id: POST25-SESSION-OBSERVATION
 issues:
 - M-170
 title: Measure real HTTP session behavior across bounded rotations
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
-  human_owner: unassigned
-  proposer: unassigned
-  implementer: unassigned
-  skeptic: unassigned
-  live_verifier: unassigned
-  coordinator: unassigned
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
 capabilities_required:
   go_toolchain: true
   cluster_access: false
   deployment_authority: false
 baseline:
-  code_branch: main
-  code_sha: null
-  deployed_image: null
-  deployed_git_sha: null
+  code_branch: post25-checkpoint-live-prep
+  code_sha: 16111c40b3501cccc988eedadb06382596addcd8
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.139
+  deployed_git_sha: 92f961bd43fa0ba0b34c21095c4a24f446675a26
 blind_derivation:
   status: pending
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
+  branch: post25-session-observation
+  base_sha: 16111c40b3501cccc988eedadb06382596addcd8
   head_sha: null
-  stacked_on: []
+  stacked_on:
+  - POST25-CHECKPOINT-LOCAL-FIXTURE
 pull_request:
   url: null
   reviewed_head: null
@@ -54,8 +63,9 @@ verification:
   - L0
   - L1
   - L2
-  live_required: null
-  soak_required: null
+  - L3
+  live_required: true
+  soak_required: false
   p3: pending
   l0: pending
   l1: pending
@@ -70,10 +80,42 @@ synchronization:
   permanent_tests: pending
 dependencies: []
 blockers: []
-residuals: []
+residuals:
+- Original session attempt4 remains incomplete; observation delay/outages must be
+  reported independently.
+- Benign process-local state only, zero security/economic/MIG/continuous-availability
+  credit.
 next_action:
-  owner: coordinator
-  action: Assign participants and pins; deliver independently reviewed PR under standing
-    scope.
-updated_at: '2026-09-20T20:59:12+00:00'
+  owner: post25-catalogue
+  action: Implement signed bounded real HTTP batch and identity/deadline controls
+updated_at: '2026-09-20T21:00:44+00:00'
 follow_up_to: POST25-CHECKPOINT-LOCAL-FIXTURE
+configuration_history:
+- at: '2026-09-20T21:00:40+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T21:00:42+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T21:00:44+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false

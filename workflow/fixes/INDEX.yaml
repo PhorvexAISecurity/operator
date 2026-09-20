@@ -1360,8 +1360,9 @@ fixes:
     issues:
     - M-170
     related_issues: []
-    state: TRIAGED
+    state: AGREED
     dependencies: []
-    stacked_on: []
-    branch: null
+    stacked_on:
+    - POST25-CHECKPOINT-LOCAL-FIXTURE
+    branch: post25-session-observation
     head_sha: null
