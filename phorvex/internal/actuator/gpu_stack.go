@@ -77,7 +77,8 @@ func (e servingEndpoint) routeURL(route string) string {
 	if scheme == "" {
 		scheme = "http"
 	}
-	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: route}).String()
+	path, query, _ := strings.Cut(route, "?")
+	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: path, RawQuery: query}).String()
 }
 
 const (

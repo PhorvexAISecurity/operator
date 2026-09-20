@@ -76,6 +76,15 @@ func preparedDrainV11Fixture() *drainV11Receipt {
 	}
 }
 
+func TestDrainV11StatusRoutePreservesObservationQuery(t *testing.T) {
+	got := (servingEndpoint{podIP: "127.0.0.1", port: 8000}).routeURL(
+		"/v1/drain/operations/7/00112233445566778899aabbccddeeff?observation_nonce=ffeeddccbbaa99887766554433221100")
+	want := "http://127.0.0.1:8000/v1/drain/operations/7/00112233445566778899aabbccddeeff?observation_nonce=ffeeddccbbaa99887766554433221100"
+	if got != want {
+		t.Fatalf("status query was not preserved as a query: got %q want %q", got, want)
+	}
+}
+
 func TestOperationReceiptVersionsPartitionDrainV11FieldsAndPhases(t *testing.T) {
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow})

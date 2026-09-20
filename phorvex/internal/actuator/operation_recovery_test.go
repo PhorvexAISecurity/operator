@@ -770,6 +770,7 @@ func TestM067LegacyRetiringReceiptNeverPostsDeletesOrRestores(t *testing.T) {
 		t.Fatal(err)
 	}
 	receipt.Version, receipt.Phase = 2, "retiring"
+	receipt.DrainV11 = nil
 	receipt.DrainAttempts, receipt.Aborted = 0, 0
 	receipt.AdmittedFloor = 0
 	receipt.WarmSelectedUIDs, receipt.EndpointConfigSHA256 = nil, ""
@@ -817,6 +818,7 @@ func TestM067LegacyOldAbsentReceiptIsRetainedByteForByte(t *testing.T) {
 				t.Fatal(err)
 			}
 			receipt.Version, receipt.Phase = version, "retiring"
+			receipt.DrainV11 = nil
 			receipt.DrainAttempts, receipt.Aborted, receipt.AdmittedFloor = 0, 0, 0
 			receipt.WarmSelectedUIDs = nil
 			receipt.EndpointConfigSHA256, receipt.NewEndpointConfigSHA256 = "", ""
