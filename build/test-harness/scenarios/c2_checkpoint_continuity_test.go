@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -129,6 +130,7 @@ func TestCheckpointLocalMarkerInitStrictlyBindsOpenedRegularFile(t *testing.T) {
 		{name: "bool-slot", raw: bytes.Replace(valid, []byte(`"slot":0`), []byte(`"slot":false`), 1)},
 		{name: "oversized", raw: bytes.Repeat([]byte("x"), 1025)},
 		{name: "directory", prepare: func(dir string) error { return os.Mkdir(filepath.Join(dir, checkpointLocalMarker), 0700) }},
+		{name: "fifo", prepare: func(dir string) error { return syscall.Mkfifo(filepath.Join(dir, checkpointLocalMarker), 0600) }},
 		{name: "symlink", prepare: func(dir string) error {
 			target := filepath.Join(dir, "target")
 			if err := os.WriteFile(target, valid, 0600); err != nil {
@@ -149,9 +151,14 @@ func TestCheckpointLocalMarkerInitStrictlyBindsOpenedRegularFile(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			cmd := exec.Command("python3", "-B", "-c", checkpointMarkerInitSource)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "python3", "-B", "-c", checkpointMarkerInitSource)
 			cmd.Env = append(os.Environ(), "STATE_DIR="+dir, "EXPECTED_HOLDER_UID="+holderUID, "EXPECTED_NODE_NAME="+nodeName, "EXPECTED_NONCE="+nonce, "EXPECTED_SLOT=0")
 			out, err := cmd.CombinedOutput()
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Fatalf("marker verifier exceeded bounded timeout: %s", out)
+			}
 			if (err == nil) != tc.ok {
 				t.Fatalf("marker result err=%v output=%s", err, out)
 			}

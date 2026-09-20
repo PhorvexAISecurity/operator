@@ -136,7 +136,7 @@ def strict_object(pairs):
   if key in out: raise ValueError("duplicate marker field")
   out[key]=value
  return out
-fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
 try:
  info=os.fstat(fd)
  if not stat.S_ISREG(info.st_mode) or info.st_size<=0 or info.st_size>maximum: raise ValueError("marker is not a bounded regular file")
