@@ -14,7 +14,7 @@ func TestRunnerCopiesRealismDescriptorToMetric(t *testing.T) {
 	// validity suite's real scenario and defender lifecycle implementations.
 	wrapped := realismScenario{vScenario: s}
 	trial := r.newTrialRun(trialSpec{scenario: wrapped, defender: &vDefender{name: "d"}, trial: 1})
-	if trial.m.ScenarioRealism != RealismMarkerSimulation || trial.m.ScenarioMechanism != "marker" || trial.m.ScenarioClaimLimits != "fixture only" {
+	if trial.m.ScenarioRealism != RealismMarkerSimulation || !trial.m.ScenarioBenignControl || trial.m.ScenarioMechanism != "marker" || trial.m.ScenarioClaimLimits != "fixture only" {
 		t.Fatalf("descriptor not propagated: %+v", trial.m)
 	}
 	if len(trial.m.DeclaredTechniqueIDs) != 1 || len(trial.m.ExercisedTechniqueIDs) != 0 {
@@ -27,6 +27,7 @@ type realismScenario struct{ *vScenario }
 func (s realismScenario) Metadata() ScenarioMeta {
 	m := s.vScenario.Metadata()
 	m.Realism, m.Mechanism, m.ClaimLimits = RealismMarkerSimulation, "marker", "fixture only"
+	m.BenignControl = true
 	m.AttackTechniqueIDs = []string{"T1610"}
 	return m
 }

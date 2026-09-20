@@ -476,10 +476,10 @@ func firstContainerName(podName string, env *core.Env) string {
 	return p.Spec.Containers[0].Name
 }
 
-// plantBackdoor writes a persistence backdoor inside the target pod: a marker
-// file plus a long-lived sleeper "process" recorded by writing its marker. It
-// FAITHFULLY models a runc-overwrite file-clobber persistence (T1543.005) within
-// the sandbox container. Returns the commands issued.
+// plantBackdoor writes a bounded marker file and sleeper process inside the
+// target pod. This fixture measures only ephemeral in-container state; it does
+// not execute or model a container escape, runc overwrite, or other exploit.
+// Returns the commands issued.
 func plantBackdoor(ctx context.Context, env *core.Env, pod, container string) []string {
 	cmds, _ := plantBackdoorObserved(ctx, env, pod, container)
 	return cmds

@@ -56,8 +56,14 @@ var mitreNames = map[string]string{
 func RenderMitreMatrix(scenarios []core.Scenario) string {
 	declared := map[string][]string{}
 	exercised := map[string][]string{}
+	attackScenarios, benignControls := 0, 0
 	for _, s := range scenarios {
 		m := s.Metadata()
+		if m.BenignControl {
+			benignControls++
+			continue
+		}
+		attackScenarios++
 		for _, id := range m.AttackTechniqueIDs {
 			declared[id] = append(declared[id], m.Name)
 		}
@@ -71,7 +77,7 @@ func RenderMitreMatrix(scenarios []core.Scenario) string {
 	var b strings.Builder
 	b.WriteString("# MITRE ATT&CK for Containers — Coverage Matrix\n\n")
 	b.WriteString("Declared mappings are narrative context. Exercised mappings require an explicitly executable mechanism. Neither table proves a successful live defense.\n\n")
-	b.WriteString(fmt.Sprintf("%d declared technique mappings and %d executable-mechanism technique mappings across %d scenarios.\n\n", len(declared), len(exercised), len(scenarios)))
+	b.WriteString(fmt.Sprintf("%d declared technique mappings and %d executable-mechanism technique mappings across %d attack scenarios. %d benign functional-effect control(s) are excluded from these coverage counts.\n\n", len(declared), len(exercised), attackScenarios, benignControls))
 	b.WriteString("## Declared narrative mappings\n\n")
 	renderTechniqueTable(&b, declared)
 	b.WriteString("\n## Executed mechanism inventory\n\n")
@@ -103,11 +109,15 @@ func RenderScenarioInventory(scenarios []core.Scenario) string {
 	sort.Slice(scenarios, func(i, j int) bool { return scenarios[i].Metadata().Name < scenarios[j].Metadata().Name })
 	var b strings.Builder
 	b.WriteString("# Scenario mechanism inventory\n\n")
-	b.WriteString("`marker-simulation` rows measure only their stated marker oracle. `unassessed` is the legacy default and makes no executable-coverage claim. Declared technique mappings are context until a concrete mechanism supports them.\n\n")
+	b.WriteString("`marker-simulation` rows measure only their stated marker oracle. Benign controls are executable functional-effect checks with no ATT&CK mapping and are excluded from attack-coverage aggregates. `unassessed` is the legacy default and makes no executable-coverage claim. Declared technique mappings are context until a concrete mechanism supports them.\n\n")
 	b.WriteString("| Stable ID | Status | Actual mechanism | Actual capabilities | Oracle | Cleanup | Claim limits |\n|---|---|---|---|---|---|---|\n")
 	for _, s := range scenarios {
 		m := s.Metadata()
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n", m.Name, m.EffectiveRealism(), inventoryCell(m.Mechanism), inventoryCell(fmt.Sprint(m.CapabilityRequirements)), inventoryCell(m.OracleDescription), inventoryCell(m.CleanupDescription), inventoryCell(m.ClaimLimits)))
+		status := string(m.EffectiveRealism())
+		if m.BenignControl {
+			status += " (benign control)"
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n", m.Name, status, inventoryCell(m.Mechanism), inventoryCell(fmt.Sprint(m.CapabilityRequirements)), inventoryCell(m.OracleDescription), inventoryCell(m.CleanupDescription), inventoryCell(m.ClaimLimits)))
 	}
 	return b.String()
 }

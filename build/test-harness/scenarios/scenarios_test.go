@@ -57,6 +57,7 @@ func TestCategory1And2Registered(t *testing.T) {
 		{"c1-stealth-dweller", core.CategoryClassicChain},
 		// CATEGORY 2 — R6-claimed.
 		{"c2-dwell-rotation", core.CategoryR6Claimed},
+		{"c2-ephemeral-session-rotation", core.CategoryR6Claimed},
 		{"c2-persistence-evict", core.CategoryR6Claimed},
 		{"c2-recon-window", core.CategoryR6Claimed},
 		{"c2-lateral-disrupt", core.CategoryR6Claimed},
@@ -100,8 +101,15 @@ func TestScenarioMetadataComplete(t *testing.T) {
 			if strings.TrimSpace(md.Source) == "" {
 				t.Errorf("Source must not be empty (provenance: task/paper/page)")
 			}
-			if len(md.AttackTechniqueIDs) == 0 {
-				t.Errorf("AttackTechniqueIDs must not be empty")
+			if md.BenignControl {
+				if md.EffectiveRealism() != core.RealismExecutable {
+					t.Errorf("benign control realism=%q, want executable mechanism", md.EffectiveRealism())
+				}
+				if len(md.AttackTechniqueIDs) != 0 || len(md.ExercisedTechniqueIDs) != 0 {
+					t.Errorf("benign control must not claim declared/exercised techniques: declared=%v exercised=%v", md.AttackTechniqueIDs, md.ExercisedTechniqueIDs)
+				}
+			} else if len(md.AttackTechniqueIDs) == 0 {
+				t.Errorf("AttackTechniqueIDs must not be empty unless the executable scenario is an explicit benign control")
 			}
 			for _, id := range md.AttackTechniqueIDs {
 				if !attackIDRe.MatchString(id) {
@@ -136,12 +144,13 @@ func TestR6TagsMatchLockedPlan(t *testing.T) {
 		"c1-c2-exfil":        core.R6Partial,
 		"c1-stealth-dweller": core.R6Partial,
 		// CATEGORY 2 — note: two product-claimed-COVERS resolve to PARTIAL honestly.
-		"c2-dwell-rotation":       core.R6Covers,
-		"c2-persistence-evict":    core.R6Covers,
-		"c2-recon-window":         core.R6Partial,
-		"c2-lateral-disrupt":      core.R6Partial,
-		"c2-c2-disrupt":           core.R6Partial,
-		"c2-supplychain-foothold": core.R6Partial,
+		"c2-dwell-rotation":             core.R6Covers,
+		"c2-ephemeral-session-rotation": core.R6Partial,
+		"c2-persistence-evict":          core.R6Covers,
+		"c2-recon-window":               core.R6Partial,
+		"c2-lateral-disrupt":            core.R6Partial,
+		"c2-c2-disrupt":                 core.R6Partial,
+		"c2-supplychain-foothold":       core.R6Partial,
 	}
 	reg := allScenarios()
 	for name, tag := range want {
@@ -163,7 +172,7 @@ func TestR6TagsMatchLockedPlan(t *testing.T) {
 func TestCat1And2NeedNoSpecialCapabilities(t *testing.T) {
 	names := []string{
 		"c1-escape-persist", "c1-lateral", "c1-credtheft-rbac", "c1-c2-exfil", "c1-stealth-dweller",
-		"c2-dwell-rotation", "c2-persistence-evict", "c2-recon-window",
+		"c2-dwell-rotation", "c2-ephemeral-session-rotation", "c2-persistence-evict", "c2-recon-window",
 		"c2-lateral-disrupt", "c2-c2-disrupt", "c2-supplychain-foothold",
 	}
 	reg := allScenarios()
