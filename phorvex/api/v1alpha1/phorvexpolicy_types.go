@@ -190,7 +190,8 @@ type SojournScaleSpec struct {
 	PromptInjectPersist int64 `json:"promptInjectPersist,omitempty"`
 }
 
-// ObjectiveSpec is the cost-weighted objective (PRD objective{lambda,costWeights}).
+// ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
+// runtime lambda; an explicit disruptionAversion opts into a fixed coefficient.
 type ObjectiveSpec struct {
 	// Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,
 	// which multiplies the dimensionless ECost score. Runtime state then adapts from
@@ -201,6 +202,16 @@ type ObjectiveSpec struct {
 	// +kubebuilder:validation:Pattern=`^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$`
 	// +kubebuilder:validation:XValidation:rule="self == '' || double(self) <= 10.0",message="lambda must be between 0 and 10"
 	Lambda string `json:"lambda,omitempty"`
+
+	// DisruptionAversion is an optional fixed preference beta in utility per
+	// normalized ECost unit. When present it replaces runtime lambda only in the
+	// scoring objective; the legacy count-pressure controller continues to learn
+	// independently. Explicit "0" is configured. Remove the field to restore
+	// legacy scoring. Empty is equivalent to absence. Decimal string in [0,10].
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$`
+	// +kubebuilder:validation:XValidation:rule="self == '' || double(self) <= 10.0",message="disruptionAversion must be between 0 and 10"
+	DisruptionAversion string `json:"disruptionAversion,omitempty"`
 
 	// CostWeights splits the switching cost K = normSparsity*C_norm +
 	// flowDisruption*C_flow (PRD §5.1B). Decimal strings; empty defaults to

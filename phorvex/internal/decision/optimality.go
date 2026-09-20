@@ -314,24 +314,27 @@ type OptimalityOut struct {
 // exact over the same substrate + the FROZEN λ (d.Lambda) + the re-created prov. No Decide change.
 func (e *CoverageEngine) computeOptimality(decs []model.Decision, set actionset.ActionSet, ctxByKey map[string]assetCtx, pol model.Policy) OptimalityOut {
 	out := OptimalityOut{}
-	lambda := 0.0
-	for _, d := range decs { // every decision carries the frozen pre-Step λ; take the first
-		lambda = d.Lambda
+	costCoefficient := 0.0
+	for _, d := range decs { // every decision carries the frozen descriptor; take the first
+		costCoefficient = d.Lambda
+		if d.Economics != nil {
+			costCoefficient = d.Economics.EffectiveCostCoefficient
+		}
 		break
 	}
 	prov := provFn(ctxByKey, pol.ProactiveFloor.Seconds())
-	// greedy objective = Σ over the REAL selected decisions of (marginal·prov − λ·cost).
+	// greedy objective uses the same frozen coefficient as the real selection.
 	gObj := 0.0
 	for _, d := range decs {
 		if d.Selected {
-			gObj += d.CoveredWeight*prov(d.Namespace+"/"+d.Pod) - lambda*d.Cost
+			gObj += d.CoveredWeight*prov(d.Namespace+"/"+d.Pod) - costCoefficient*d.Cost
 		}
 	}
 	out.GreedyObjective = gObj
 	out.CoversDisjoint, out.SharedKeyNote = coversDisjoint(set)
 	// greedy-then-swaps over the same substrate + frozen λ + re-created prov (>= greedy always).
-	out.SwapObjective = setObjective(greedyThenSwaps(set, pol.MaxMovesPerTick, prov, lambda), set.FactWeights, prov, lambda)
-	exObj, skipped := exactObjective(set, pol.MaxMovesPerTick, prov, lambda)
+	out.SwapObjective = setObjective(greedyThenSwaps(set, pol.MaxMovesPerTick, prov, costCoefficient), set.FactWeights, prov, costCoefficient)
+	exObj, skipped := exactObjective(set, pol.MaxMovesPerTick, prov, costCoefficient)
 	out.ExactObjective, out.ExactSkipped = exObj, skipped
 	if skipped {
 		return out // OptimalityRatio/SwapRatio left 0 (not brute-forced)

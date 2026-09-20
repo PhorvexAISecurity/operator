@@ -47,7 +47,7 @@ Severity: MAJOR · Tier: 0 · Fixes: none
 
 ### M-144 · λ decays to its floor and is structurally trapped there — after a brief seed-decay, the cost stack becomes inert · **OPEN** · `ECONOMICS`
 
-Severity: MAJOR · Tier: 0 · Fixes: none
+Severity: MAJOR · Tier: 0 · Fixes: POST25-ECONOMICS
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -607,7 +607,7 @@ Severity: MAJOR · Tier: 3 · Fixes: T17-M109
 
 ### M-98 · C1 — the mathematical spine: value and cost are incommensurable, and λ can't fix it · **OPEN** · `ECONOMICS`
 
-Severity: HIGH · Tier: 3 · Fixes: none
+Severity: HIGH · Tier: 3 · Fixes: POST25-ECONOMICS
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1

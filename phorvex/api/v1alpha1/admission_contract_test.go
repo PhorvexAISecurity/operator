@@ -30,6 +30,11 @@ func TestPolicyCRDAdmissionBounds(t *testing.T) {
 		t.Fatalf("lambda pattern = %q", lambda.Pattern)
 	}
 	assertValidationRule(t, lambda, `self == '' || double(self) <= 10.0`, "lambda must be between 0 and 10")
+	disruptionAversion := property(t, objective, "disruptionAversion")
+	if disruptionAversion.Pattern != `^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$` {
+		t.Fatalf("disruptionAversion pattern = %q", disruptionAversion.Pattern)
+	}
+	assertValidationRule(t, disruptionAversion, `self == '' || double(self) <= 10.0`, "disruptionAversion must be between 0 and 10")
 
 	// PHORVEXSEC-189 / M-143 test (f): the exposure-pressure cap is a decimal strictly inside (0,1).
 	belief := property(t, spec, "belief")

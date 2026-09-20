@@ -676,6 +676,8 @@ type Policy struct {
 	Mode                         string
 	DryRun                       bool
 	Lambda                       float64
+	DisruptionAversion           float64
+	DisruptionAversionConfigured bool
 	NormSparsity                 float64
 	FlowDisruption               float64
 	CostCeiling                  float64
@@ -733,7 +735,7 @@ type Decision struct {
 	// It is zero under P1 and is serialized separately so one field never has two meanings.
 	ThreatRisk    float64
 	Cost          float64
-	Net           float64 // engine-specific value - Lambda*Cost
+	Net           float64 // engine-specific value - frozen effective cost coefficient*Cost
 	AssetValue    float64
 	Residual      float64 // observational under the default P1 coverage engine
 	ThreatPosture float64 // observational under the default P1 coverage engine
@@ -790,16 +792,17 @@ type Decision struct {
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
-	Engine        string            // "p0-greedy" | "p1-coverage"
-	CoveredWeight float64           // modeled recon-fact selection opportunity; not measured mitigation
-	CoveredFacts  int               // count of modeled recon facts associated with the selected action
-	PerDollar     float64           // legacy full-value / ECost reporting ratio; not the selector
-	Stage         string            // most-likely kill-chain stage (semi-Markov)
-	StageHazard   float64           // stage-exit hazard h_s(t) (predictive horizon signal)
-	NextStage     string            // forward-projected next stage
-	Lambda        float64           // legacy mixed runtime lambda frozen for this decision
-	ProactiveRate float64           // legacy reporting score derived from PerDollar; not the selector
-	Attribution   []AttributionTerm // SHAP-style decomposition of the move's value
+	Engine        string             // "p0-greedy" | "p1-coverage"
+	CoveredWeight float64            // modeled recon-fact selection opportunity; not measured mitigation
+	CoveredFacts  int                // count of modeled recon facts associated with the selected action
+	PerDollar     float64            // legacy full-value / ECost reporting ratio; not the selector
+	Stage         string             // most-likely kill-chain stage (semi-Markov)
+	StageHazard   float64            // stage-exit hazard h_s(t) (predictive horizon signal)
+	NextStage     string             // forward-projected next stage
+	Lambda        float64            // legacy mixed runtime lambda frozen for this decision
+	Economics     *EconomicsMetadata // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
+	ProactiveRate float64            // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
+	Attribution   []AttributionTerm  // SHAP-style decomposition of the move's value
 
 	// --- P-CONTEXT predictive horizon (additive, audit-visible). ---
 	PreemptMargin         float64 // P(stage not yet transitioned by move-landing) [0,1]

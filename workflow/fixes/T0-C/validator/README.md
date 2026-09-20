@@ -1,7 +1,8 @@
 # Phorvex audit decision-record validator
 
 Independent, read-only, stdlib-only Python 3.10+ checker for `phorvex.audit.v2`
-records carrying a `decisionTrace` (`phorvex.decision-trace.v2`; v3 hooks reserved).
+records carrying a `decisionTrace` (`phorvex.decision-trace.v2`, v3, or
+economics-aware v4).
 It re-derives the decision from the record and refuses to treat an absent
 `{present:false}` optional as zero.
 
@@ -18,7 +19,8 @@ python3 audit_trace_validator.py <record.json|records.jsonl>... \
 * Exit `0` iff every record is PASS (no check FAIL and no check UNDECIDABLE);
   `1` otherwise. UNDECIDABLE is a finding, not a crash: it means the record does
   not carry enough scored fields to replay the selection.
-* `--strict-v3`: a v2 record FAILS check 12 instead of SKIPPED.
+* `--strict-v3`: a v2 record FAILS check 12 instead of SKIPPED; v3 and v4 run
+  the complete action-status checks.
 
 Record status: FAIL if any check FAILs; else UNDECIDABLE if any check is
 UNDECIDABLE; else PASS. SKIPPED checks (law not applicable / terms absent) never
@@ -50,18 +52,19 @@ null as an empty list.
 
 | # | name | asserts |
 |---|---|---|
-| 1 | schema | envelope `schemaVersion == phorvex.audit.v2`; `decisionTrace.schemaVersion` in {v2, v3}; records which |
+| 1 | schema | envelope `schemaVersion == phorvex.audit.v2`; `decisionTrace.schemaVersion` in {v2, v3, v4}; records which |
 | 2 | identity | brainImage, gitSHA, decisionID, tickID, policyUID, assetUID non-empty strings |
 | 3 | presence-flags | every `{present,value}` object has boolean `present`; present numeric values finite; top-level lambda/weights finite; builds the presence census (`inputs.*`, `facts[].*`, `candidates[].*`, `selectionRound`) |
 | 4 | selection-reference | noop => no `selected:true`, no `selectedCandidateKey`, non-empty `noopReason`; else exactly one selected candidate whose key/action equal `selectedCandidateKey`/`selectedAction` with reason `selected_strict_positive_gain`; envelope `action`/`selected` agree with the trace |
 | 5 | ecost-law | per candidate with cNorm, cFlow, expectedCost present: `expectedCost ~= normWeight*cNorm + flowWeight*cFlow` (abs or rel 1e-9); SKIPPED per candidate with the absent terms named |
-| 6 | netgain-law | `netGain ~= marginalCoverage*provenance - lambdaContribution` and `lambdaContribution ~= lambdaRuntime*expectedCost` where the terms are present; absences named |
+| 6 | netgain-law | reconstructs `netGain` and its cost contribution from runtime lambda for v2/v3 and legacy v4, or from the fixed objective coefficient for fixed v4; absences named |
 | 7 | selection-reconstruction (P-C1) | replays the greedy: (a) any generated candidate with `reactive_only_no_direct_foothold` => all must be, none scored, record noop with `reactive-only` reason; (b) nothing generated => noop, `no candidate generated` iff candidates empty; (c) scored candidates: argmax netGain, ties to lower tieBreakRank; expected = that candidate iff `netGain > 0 and budget > 0 and movesSpent < budget` (with `movesSpent == budget` the slot may be this asset's own move or another asset's -> noop must read `budget-exhausted`); noop with all netGain <= 0 must read `priced-out...` and losers `strict_gain_not_positive`; a selected trace needs `selectionRound` in 1..budget and other scored candidates `partition_other_action_selected`; generated but unscored candidates with budget > 0 => UNDECIDABLE naming the absent `netGain` paths |
 | 8 | ordering (P-C7) | facts ascending by factKey (unique, non-empty); candidates by asset key, then `MUTATING_ACTIONS` rank, then candidateKey (unique, action known); each `coverKeys` sorted; `candidateKey == assetNamespace/assetName\|action` |
 | 9 | cover-keys-resolve | every candidate coverKey is a `facts[].factKey` |
 | 10 | dual-update | when `costRepresentationVersion` non-empty: representation/unit/selector constants, lambda aliases, `dualUpdate.{demand,spent,budget,lambdaBefore}` equal `candidateDemand,movesSpent,budget,lambdaRuntimeLegacy`, `rawExcess == candidateDemand - budget`, `updateReason` non-empty; SKIPPED (pre-T0-B record) when empty |
 | 11 | redaction | every string in the WHOLE record (envelope + trace, keys included) against `(?i)bearer\s+\S+`, `(?i)authorization\s*[:=]`, `://[^/@\s]+:[^/@\s]+@`, `(?i)(api[_-]?key\|password\|token\|credential)\s*[:=]\s*\S+`, plus the Go `secretKVPattern`; any hit FAILs naming the path |
-| 12 | v3-hooks | only for `phorvex.decision-trace.v3` (else SKIPPED, or FAIL under `--strict-v3`): (a) `actionStatus` = 15 unique rows in canonical order, `status`/`exclusionKind` vocabularies, `status==selected <=> exclusionKind==none`, `cost-nan => infeasible`; (b) `costHigh ~= expectedCost + (rotate ? max(conformalQuantile, gpuEnvelopeApplied ? gpuEnvelopeSlack : 0) : 0)` skipping cost-nan rows; (c) `coveredBeforeDecision == (coveredRound.present and coveredRound.value < evaluationRound)` and `marginalCoverage ~= sum finalWeight of coverKeys whose fact is not covered-before`; (d) `dispatchOutcome` in {not-attempted, emitted, emitted-false, dispatch-error}. Field names are the exact camelCase names above; the laws come from the T0-C spec, not yet from Go |
+| 12 | v3-hooks | for v3/v4: (a) `actionStatus` = 15 unique rows in canonical order, `status`/`exclusionKind` vocabularies, `status==selected <=> exclusionKind==none`, `cost-nan => infeasible`; (b) `costHigh ~= expectedCost + (rotate ? max(conformalQuantile, gpuEnvelopeApplied ? gpuEnvelopeSlack : 0) : 0)` skipping cost-nan rows; (c) `coveredBeforeDecision == (coveredRound.present and coveredRound.value < evaluationRound)` and `marginalCoverage ~= sum finalWeight of coverKeys whose fact is not covered-before`; (d) `dispatchOutcome` in {not-attempted, emitted, emitted-false, dispatch-error}. |
+| 13 | economics-v4 | requires exact versioned economics fields, bounded runtime lambda/effective coefficient, distinct fixed-beta versus legacy contribution presence and reconstruction, split demand aliases, and an exact trace-off audit descriptor matching the trace. V2/v3 are SKIPPED for wire compatibility. |
 
 ## Report layout
 

@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -570,6 +571,9 @@ func buildActuator(c client.Client, log logr.Logger, res actuator.BackendResolut
 
 // Upsert adds or updates a tenant policy in the registry.
 func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
+	if _, _, err := p.Spec.EffectiveDisruptionAversion(); err != nil {
+		return fmt.Errorf("policy %s/%s: %w", p.Namespace, p.Name, err)
+	}
 	sel, err := metav1LabelSelector(p)
 	if err != nil {
 		return err
@@ -2392,6 +2396,10 @@ func cloneExistential(in *model.ExistentialDecision) *model.ExistentialDecision 
 
 func fallbackDecision(original model.Decision, a decision.Alternative) model.Decision {
 	d := original
+	if original.Economics != nil {
+		economics := *original.Economics
+		d.Economics = &economics
+	}
 	if original.Measurements != nil {
 		measurements := *original.Measurements
 		d.Measurements = &measurements
@@ -2412,7 +2420,11 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		}
 	}
 	d.Action, d.CoverageValue, d.CoveredWeight, d.Cost = a.Action, a.Coverage, a.Marginal, a.Cost
-	d.Net = a.Coverage - original.Lambda*a.Cost
+	costCoefficient := original.Lambda
+	if original.Economics != nil {
+		costCoefficient = original.Economics.EffectiveCostCoefficient
+	}
+	d.Net = a.Coverage - costCoefficient*a.Cost
 	d.Attribution = append([]model.AttributionTerm(nil), a.Attribution...)
 	if a.CounterfactualNote != "" {
 		d.CounterfactualNote = a.CounterfactualNote
@@ -2422,8 +2434,8 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		d.PerDollar = a.Coverage / a.Cost
 	}
 	d.ProactiveRate = 0
-	if d.PerDollar > d.Lambda {
-		d.ProactiveRate = d.PerDollar - d.Lambda
+	if d.PerDollar > costCoefficient {
+		d.ProactiveRate = d.PerDollar - costCoefficient
 	}
 	d.CoveredFacts = len(a.CoverKeys)
 	if d.Measurements != nil {
@@ -3066,6 +3078,11 @@ func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForen
 
 func buildPolicy(e *policyEntry) model.Policy {
 	s := &e.spec
+	disruptionAversion, disruptionAversionConfigured, disruptionAversionErr := s.EffectiveDisruptionAversion()
+	if disruptionAversionErr != nil {
+		disruptionAversion = math.NaN()
+		disruptionAversionConfigured = true
+	}
 	enabled := map[model.Action]bool{}
 	for _, a := range s.Actions.Enabled {
 		enabled[model.Action(a)] = true
@@ -3082,6 +3099,8 @@ func buildPolicy(e *policyEntry) model.Policy {
 		Mode:                         s.EffectiveMode(),
 		DryRun:                       s.IsDryRun(),
 		Lambda:                       s.EffectiveLambda(),
+		DisruptionAversion:           disruptionAversion,
+		DisruptionAversionConfigured: disruptionAversionConfigured,
 		NormSparsity:                 s.EffectiveNormSparsity(),
 		FlowDisruption:               s.EffectiveFlowDisruption(),
 		CostCeiling:                  s.EffectiveCostCeiling(),

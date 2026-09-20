@@ -21,6 +21,9 @@ const (
 	// status array, CHi reconstruction terms, round semantics, and the dispatch
 	// outcome. V2 records remain readable: Validate branches on the version.
 	DecisionTraceSchemaV3 = "phorvex.decision-trace.v3"
+	// DecisionTraceSchemaV4 makes the scoring coefficient independent of the
+	// separately learned legacy runtime lambda and records both demand views.
+	DecisionTraceSchemaV4 = "phorvex.decision-trace.v4"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -344,9 +347,12 @@ type DecisionCandidateV2 struct {
 	ExpectedCost       OptionalFloat `json:"expectedCost"`
 	CostHigh           OptionalFloat `json:"costHigh"`
 	LambdaContribution OptionalFloat `json:"lambdaContribution"`
-	NetGain            OptionalFloat `json:"netGain"`
-	Feasible           OptionalBool  `json:"feasible"`
-	Selected           bool          `json:"selected"`
+	// ObjectiveCostContribution is authoritative in fixed-beta mode. The legacy
+	// lambda contribution remains absent there so readers cannot relabel beta as lambda.
+	ObjectiveCostContribution *OptionalFloat `json:"objectiveCostContribution,omitempty"`
+	NetGain                   OptionalFloat  `json:"netGain"`
+	Feasible                  OptionalBool   `json:"feasible"`
+	Selected                  bool           `json:"selected"`
 
 	// T0-C CHi reconstruction terms (B.1). Present exactly where the cost path
 	// computed them: rotate rows carry ConformalQuantile (the post-clamp slack
@@ -412,16 +418,21 @@ type DecisionTraceV2 struct {
 	AssetName       string `json:"assetName"`
 	AssetUID        string `json:"assetUID"`
 
-	Budget               int     `json:"budget"`
-	CandidateDemand      int     `json:"candidateDemand"`
-	MovesSpent           int     `json:"movesSpent"`
-	DryRun               bool    `json:"dryRun"`
-	DryRunCause          string  `json:"dryRunCause,omitempty"`
-	ActuationBrakeCause  string  `json:"actuationBrakeCause,omitempty"`
-	KillSwitchEngaged    bool    `json:"killSwitchEngaged"`
-	KillSwitchCause      string  `json:"killSwitchCause,omitempty"`
-	LambdaConfiguredSeed float64 `json:"lambdaConfiguredSeed"`
-	LambdaRuntime        float64 `json:"lambdaRuntime"`
+	Budget          int `json:"budget"`
+	CandidateDemand int `json:"candidateDemand"`
+	// CandidateDemand is retained as the compatibility alias for LambdaDemand.
+	// ObjectiveCandidateDemand records positive demand under the coefficient that
+	// actually ranked candidates.
+	LambdaDemand             int     `json:"lambdaDemand,omitempty"`
+	ObjectiveCandidateDemand int     `json:"objectiveCandidateDemand,omitempty"`
+	MovesSpent               int     `json:"movesSpent"`
+	DryRun                   bool    `json:"dryRun"`
+	DryRunCause              string  `json:"dryRunCause,omitempty"`
+	ActuationBrakeCause      string  `json:"actuationBrakeCause,omitempty"`
+	KillSwitchEngaged        bool    `json:"killSwitchEngaged"`
+	KillSwitchCause          string  `json:"killSwitchCause,omitempty"`
+	LambdaConfiguredSeed     float64 `json:"lambdaConfiguredSeed"`
+	LambdaRuntime            float64 `json:"lambdaRuntime"`
 	// The two fields above remain as wire-compatible aliases for existing readers.
 	// [M-140] Ownership metadata, captured when the economic unit was CREATED and stable
 	// for its life. LambdaConfiguredSeed above re-reads the current policy spec every tick,
@@ -435,6 +446,10 @@ type DecisionTraceV2 struct {
 	BucketCreationEvent       uint64               `json:"bucketCreationEvent"`
 	LambdaConfiguredPolicy    float64              `json:"lambdaConfiguredPolicy"`
 	LambdaRuntimeLegacy       float64              `json:"lambdaRuntimeLegacy"`
+	EconomicsVersion          string               `json:"economicsVersion,omitempty"`
+	DisruptionAversion        *OptionalFloat       `json:"disruptionAversion,omitempty"`
+	EffectiveCostCoefficient  float64              `json:"effectiveCostCoefficient,omitempty"`
+	CostCoefficientSource     string               `json:"costCoefficientSource,omitempty"`
 	SelectorComparator        string               `json:"selectorComparator"`
 	NormWeight                float64              `json:"normWeight"`
 	FlowWeight                float64              `json:"flowWeight"`
@@ -523,6 +538,10 @@ func cleanOptional(v OptionalFloat) OptionalFloat {
 // records that lack the v3 arrays.)
 func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out := t
+	if t.DisruptionAversion != nil {
+		cleaned := cleanOptional(*t.DisruptionAversion)
+		out.DisruptionAversion = &cleaned
+	}
 	out.DecisionID = redactTraceString(out.DecisionID)
 	out.TickID = redactTraceString(out.TickID)
 	out.Timestamp = redactTraceString(out.Timestamp)
@@ -643,6 +662,10 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.ExpectedCost = cleanOptional(c.ExpectedCost)
 		c.CostHigh = cleanOptional(c.CostHigh)
 		c.LambdaContribution = cleanOptional(c.LambdaContribution)
+		if c.ObjectiveCostContribution != nil {
+			cleaned := cleanOptional(*c.ObjectiveCostContribution)
+			c.ObjectiveCostContribution = &cleaned
+		}
 		c.NetGain = cleanOptional(c.NetGain)
 		c.ConformalQuantile = cleanOptional(c.ConformalQuantile)
 		c.GPUEnvelopeSlack = cleanOptional(c.GPUEnvelopeSlack)
@@ -696,7 +719,25 @@ func canonicalActionRank(action string) int {
 func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 	type alias DecisionTraceV2
 	canonical := t.Canonical()
-	return json.Marshal(alias(canonical))
+	raw, err := json.Marshal(alias(canonical))
+	if err != nil || canonical.SchemaVersion != DecisionTraceSchemaV4 {
+		return raw, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	for name, value := range map[string]any{
+		"lambdaDemand": canonical.LambdaDemand, "objectiveCandidateDemand": canonical.ObjectiveCandidateDemand,
+		"effectiveCostCoefficient": canonical.EffectiveCostCoefficient,
+	} {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		object[name] = encoded
+	}
+	return json.Marshal(object)
 }
 
 // Validate checks the version/build identity and selection-reference invariants.
@@ -705,10 +746,11 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 // non-test caller — it is a test-time contract, not a runtime guard; the
 // production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
 	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
+	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
 	finite := func(values ...float64) bool {
 		for _, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -719,13 +761,30 @@ func (t DecisionTraceV2) Validate() error {
 	}
 	if !finite(t.LambdaConfiguredSeed, t.LambdaRuntime, t.LambdaConfiguredPolicy,
 		t.LambdaRuntimeLegacy, t.NormWeight, t.FlowWeight,
-		t.DualUpdate.LambdaBefore, t.DualUpdate.LambdaAfter) {
+		t.DualUpdate.LambdaBefore, t.DualUpdate.LambdaAfter) ||
+		(isV4 && !finite(t.EffectiveCostCoefficient)) ||
+		(t.DisruptionAversion != nil && t.DisruptionAversion.Present && !finite(t.DisruptionAversion.Value)) {
 		return errors.New("trace contains non-finite controller or cost values")
+	}
+	for name, value := range map[string]float64{
+		"lambdaConfiguredSeed":    t.LambdaConfiguredSeed,
+		"lambdaRuntime":           t.LambdaRuntime,
+		"lambdaConfiguredPolicy":  t.LambdaConfiguredPolicy,
+		"lambdaRuntimeLegacy":     t.LambdaRuntimeLegacy,
+		"dualUpdate.lambdaBefore": t.DualUpdate.LambdaBefore,
+		"dualUpdate.lambdaAfter":  t.DualUpdate.LambdaAfter,
+	} {
+		if !finiteBoundedCoefficient(value) {
+			return fmt.Errorf("trace %s must be between 0 and 10", name)
+		}
 	}
 	for _, candidate := range t.Candidates {
 		values := []OptionalFloat{candidate.GrossFullValue, candidate.MarginalCoverage,
 			candidate.Provenance, candidate.CNorm, candidate.CFlow, candidate.ExpectedCost,
 			candidate.CostHigh, candidate.LambdaContribution, candidate.NetGain}
+		if candidate.ObjectiveCostContribution != nil {
+			values = append(values, *candidate.ObjectiveCostContribution)
+		}
 		for _, value := range values {
 			if value.Present && !finite(value.Value) {
 				return fmt.Errorf("candidate %q contains a non-finite value", candidate.CandidateKey)
@@ -772,9 +831,16 @@ func (t DecisionTraceV2) Validate() error {
 			selected++
 			selectedKey = c.CandidateKey
 		}
-		if c.NetGain.Present && c.MarginalCoverage.Present && c.Provenance.Present &&
-			c.LambdaContribution.Present {
-			want := c.MarginalCoverage.Value*c.Provenance.Value - c.LambdaContribution.Value
+		contribution := c.LambdaContribution
+		if isV4 && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
+			if c.ObjectiveCostContribution != nil {
+				contribution = *c.ObjectiveCostContribution
+			} else {
+				contribution = OptionalFloat{}
+			}
+		}
+		if c.NetGain.Present && c.MarginalCoverage.Present && c.Provenance.Present && contribution.Present {
+			want := c.MarginalCoverage.Value*c.Provenance.Value - contribution.Value
 			if math.Abs(want-c.NetGain.Value) > 1e-9 {
 				return fmt.Errorf("candidate %q net gain is not reconstructable", c.CandidateKey)
 			}
@@ -802,10 +868,15 @@ func (t DecisionTraceV2) Validate() error {
 			t.DualUpdate.LambdaBefore != t.LambdaRuntimeLegacy || t.DualUpdate.UpdateReason == "" {
 			return errors.New("dual update is not reconstructable from trace inputs")
 		}
-	} else if isV3 {
-		return errors.New("v3 trace must carry the cost representation semantics")
+	} else if isV3 || isV4 {
+		return errors.New("v3/v4 trace must carry the cost representation semantics")
 	}
-	if isV3 {
+	if isV4 {
+		if err := t.validateV4(); err != nil {
+			return err
+		}
+	}
+	if isV3 || isV4 {
 		if err := t.validateV3(); err != nil {
 			return err
 		}
@@ -818,6 +889,45 @@ func (t DecisionTraceV2) Validate() error {
 	}
 	if selected != 1 || t.SelectedCandidateKey == "" || selectedKey != t.SelectedCandidateKey {
 		return errors.New("selected trace must reference exactly one recorded candidate")
+	}
+	return nil
+}
+
+func (t DecisionTraceV2) validateV4() error {
+	if t.LambdaDemand != t.CandidateDemand || t.ObjectiveCandidateDemand < 0 || t.LambdaDemand < 0 {
+		return errors.New("v4 demand fields are contradictory")
+	}
+	if !finiteBoundedCoefficient(t.EffectiveCostCoefficient) {
+		return errors.New("v4 effective cost coefficient must be between 0 and 10")
+	}
+	switch t.EconomicsVersion {
+	case EconomicsLegacyRuntimeLambdaV1:
+		if t.DisruptionAversion != nil || t.CostCoefficientSource != CostCoefficientSourceLambda ||
+			t.EffectiveCostCoefficient != t.LambdaRuntimeLegacy {
+			return errors.New("v4 legacy economics metadata is contradictory")
+		}
+	case EconomicsFixedDisruptionAversionV1:
+		if t.DisruptionAversion == nil || !t.DisruptionAversion.Present || !finiteBoundedCoefficient(t.DisruptionAversion.Value) ||
+			t.CostCoefficientSource != CostCoefficientSourceBeta ||
+			t.EffectiveCostCoefficient != t.DisruptionAversion.Value {
+			return errors.New("v4 fixed economics metadata is contradictory")
+		}
+	default:
+		return fmt.Errorf("v4 economicsVersion %q", t.EconomicsVersion)
+	}
+	for _, candidate := range t.Candidates {
+		if !candidate.ExpectedCost.Present {
+			continue
+		}
+		if t.EconomicsVersion == EconomicsLegacyRuntimeLambdaV1 {
+			if !candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution != nil ||
+				math.Abs(candidate.LambdaContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
+				return fmt.Errorf("candidate %q has contradictory legacy cost contribution", candidate.CandidateKey)
+			}
+		} else if candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution == nil || !candidate.ObjectiveCostContribution.Present ||
+			math.Abs(candidate.ObjectiveCostContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
+			return fmt.Errorf("candidate %q has contradictory fixed cost contribution", candidate.CandidateKey)
+		}
 	}
 	return nil
 }

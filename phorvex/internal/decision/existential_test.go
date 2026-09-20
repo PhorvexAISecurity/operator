@@ -323,7 +323,7 @@ func TestM99TraceAndRepresentativeRecords(t *testing.T) {
 				p.GitSHA = "synthetic-test"
 			}
 			p.EnabledActions = map[model.Action]bool{model.ActionRotate: true}
-			p.Lambda = 100
+			p.Lambda = model.MaxDisruptionAversion
 			switch state {
 			case "uncontainable":
 				v.OutcomeEvents[0].Outcomes[0].RequiredKeys = []string{"audit-only-unrepresented"}

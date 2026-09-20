@@ -304,8 +304,8 @@ spec:
                 type: string
               objective:
                 description: |-
-                  Objective is the cost-weighted optimization objective: maximize
-                  E[security] - lambda * E[switching-cost]. (PRD: objective{lambda,costWeights}.)
+                  ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
+                  runtime lambda; an explicit disruptionAversion opts into a fixed coefficient.
                 properties:
                   costWeights:
                     description: |-
@@ -325,6 +325,18 @@ spec:
                           possible). Decimal string; empty defaults to "0.4".
                         type: string
                     type: object
+                  disruptionAversion:
+                    description: |-
+                      DisruptionAversion is an optional fixed preference beta in utility per
+                      normalized ECost unit. When present it replaces runtime lambda only in the
+                      scoring objective; the legacy count-pressure controller continues to learn
+                      independently. Explicit "0" is configured. Remove the field to restore
+                      legacy scoring. Empty is equivalent to absence. Decimal string in [0,10].
+                    pattern: ^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$
+                    type: string
+                    x-kubernetes-validations:
+                    - message: disruptionAversion must be between 0 and 10
+                      rule: self == '' || double(self) <= 10.0
                   lambda:
                     description: |-
                       Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,

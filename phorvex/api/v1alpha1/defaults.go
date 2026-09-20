@@ -5,7 +5,9 @@
 package v1alpha1
 
 import (
+	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -18,6 +20,8 @@ var defaultSojournScaleSeconds = map[string]float64{
 	"recon": 1800, "exploit": 600, "persist": 3600, "lateral": 1200, "impact": 600,
 	"gpu-side-channel": 300, "model-theft": 180, "llm-jacking": 900, "prompt-inject-persist": 3600,
 }
+
+var nonnegativeDecimal = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 
 // Code defaults for the decimal-string / Duration knobs. These are FLAGGED design
 // proposals that trace the PRD PART 7 example values; they are NEVER inherited from
@@ -61,6 +65,24 @@ func (p *PhorvexPolicy) EffectiveTenant() string {
 // runtime lambda controller (default 0.6).
 func (s *PhorvexPolicySpec) EffectiveLambda() float64 {
 	return ParseDecimal(s.Objective.Lambda, defaultLambda)
+}
+
+// EffectiveDisruptionAversion resolves the optional fixed objective
+// coefficient. Presence is returned separately so an explicit zero cannot be
+// confused with legacy absence. Invalid values never fall back silently.
+func (s *PhorvexPolicySpec) EffectiveDisruptionAversion() (value float64, configured bool, err error) {
+	raw := s.Objective.DisruptionAversion
+	if raw == "" {
+		return 0, false, nil
+	}
+	if !nonnegativeDecimal.MatchString(raw) {
+		return 0, true, fmt.Errorf("disruptionAversion %q must be a decimal between 0 and 10", raw)
+	}
+	value, parseErr := strconv.ParseFloat(raw, 64)
+	if parseErr != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > model.MaxDisruptionAversion {
+		return 0, true, fmt.Errorf("disruptionAversion %q must be a finite decimal between 0 and 10", raw)
+	}
+	return value, true, nil
 }
 
 // EffectiveNormSparsity is the C_norm weight (default 0.4).
