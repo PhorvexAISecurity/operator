@@ -1301,7 +1301,7 @@ fixes:
     issues:
     - M-178
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: post25-backend

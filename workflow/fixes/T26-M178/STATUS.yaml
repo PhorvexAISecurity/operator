@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 14
+revision: 15
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -88,24 +88,24 @@ checks:
     result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 1a09bc873f2aa2c30c2646b6abeeb98ea9b8cbe0677e310ab3a61d27f07450e5
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:13:06+00:00'
-    incident_sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
+    sha256: 7bf480c04a3b57c45e217d85177376f6e87406407b0c9438f770b89deb755e13
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:52:31+00:00'
+    incident_sha256: 84c5468e626f16b93c97a42be11b1787ca2e2e925d452663ea4a72da8cc92bbb
   incident:
     result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:13:05+00:00'
+    sha256: 84c5468e626f16b93c97a42be11b1787ca2e2e925d452663ea4a72da8cc92bbb
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:52:31+00:00'
     baseline_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
 fix_id: T26-M178
 issues:
 - M-178
 title: Carry authentic vLLM reset acknowledgement end to end
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -166,10 +166,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-20T15:48:15+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T15:52:35+00:00'
 follow_up_to: T14-M178
 configuration_history:
 - at: '2026-09-20T13:29:15+00:00'
@@ -296,13 +296,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T15:52:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T15:52:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T26-M178:14:submit
-  from: post25-catalogue
+  id: T26-M178:15:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 14
+  role: coordinator
+  kind: review
+  revision: 15
 check_history:
 - check: preflight
   result: PASS
@@ -443,3 +459,19 @@ check_history:
   - phorvex/internal/actuator
   - workflow/fixes/T26-M178/verify.sh
   inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:13:05+00:00'
+  baseline_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 1a09bc873f2aa2c30c2646b6abeeb98ea9b8cbe0677e310ab3a61d27f07450e5
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:13:06+00:00'
+  incident_sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
