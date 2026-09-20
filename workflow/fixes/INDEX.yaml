@@ -1338,7 +1338,7 @@ fixes:
     issues:
     - M-170
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: post25-catalogue-claims
