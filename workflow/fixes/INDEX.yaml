@@ -1295,3 +1295,14 @@ fixes:
     stacked_on: []
     branch: fix/t24-m181
     head_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e
+  T26-M178:
+    directory: fixes/T26-M178
+    aliases: []
+    issues:
+    - M-178
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: post25-backend
+    head_sha: null

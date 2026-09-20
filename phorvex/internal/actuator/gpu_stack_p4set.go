@@ -404,15 +404,18 @@ func (k httpKVTransfer) InvalidateLocal(ctx context.Context, ep servingEndpoint)
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, _, err := k.v.postJSONEndpoint(ctx, ep, ep.kvInvPath, map[string]bool{"local": true})
+	code, body, err := k.v.postJSONEndpoint(ctx, ep, ep.kvInvPath, map[string]bool{"local": true})
 	if err != nil {
 		return err
 	}
 	if code == http.StatusAccepted {
 		return errServingQueued
 	}
-	if !okCode(code) {
-		return fmt.Errorf("kv invalidate(local): HTTP %d", code)
+	if code != http.StatusOK {
+		return fmt.Errorf("%w: kv invalidate(local) acknowledgement unavailable after HTTP %d", errServingOutcomeUnknown, code)
+	}
+	if err := parseResetPrefixCacheAcknowledgement(body); err != nil {
+		return fmt.Errorf("%w: kv invalidate(local) acknowledgement is invalid", errServingOutcomeUnknown)
 	}
 	return nil
 }

@@ -1,0 +1,4 @@
+BASELINE
+{"allocator_result": false, "body": null, "http_status": 200, "status_only_would_claim_success": true, "strict_success_confirmed": false}
+PATCHED
+{"allocator_result": false, "body": {"success": false}, "http_status": 200, "status_only_would_claim_success": true, "strict_success_confirmed": false}

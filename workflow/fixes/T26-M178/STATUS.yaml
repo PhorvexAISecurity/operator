@@ -1,0 +1,105 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 3
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks: {}
+fix_id: T26-M178
+issues:
+- M-178
+title: Carry authentic vLLM reset acknowledgement end to end
+profile: standard
+state: DESIGNING
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-backend
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  deployed_image: vllm/vllm-openai:v0.7.3@sha256:4f4039589120397ce64231883a1b8a78e7bc83b2a8999c5951af0bd72f6eea79
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-backend
+  base_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Complete independent critique and seal decision after R1/R2 corrections.
+updated_at: '2026-09-20T13:40:26+00:00'
+follow_up_to: T14-M178
+configuration_history:
+- at: '2026-09-20T13:29:15+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+- at: '2026-09-20T13:36:06+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T13:40:26+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+  forced: false

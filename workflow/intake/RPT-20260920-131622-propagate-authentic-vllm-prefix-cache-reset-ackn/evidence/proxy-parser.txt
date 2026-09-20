@@ -1,0 +1,7 @@
+test_preserves_true_and_false (build.test-harness.guardrail.test_reset_ack.ResetAcknowledgementParserTest.test_preserves_true_and_false) ... ok
+test_rejects_ambiguous_or_nonconfirming_responses (build.test-harness.guardrail.test_reset_ack.ResetAcknowledgementParserTest.test_rejects_ambiguous_or_nonconfirming_responses) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+OK

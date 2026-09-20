@@ -42,6 +42,9 @@ class CountingUpstream(BaseHTTPRequestHandler):
     lock = threading.Lock()
     stream_started = threading.Event()
     stream_release = threading.Event()
+    reset_status = 200
+    reset_body = b'{"success":true}'
+    reset_authorization = None
 
     def do_POST(self):
         size = int(self.headers.get("Content-Length", "0"))
@@ -49,6 +52,15 @@ class CountingUpstream(BaseHTTPRequestHandler):
         with self.lock:
             self.calls.append((self.path, body))
             call_number = len(self.calls)
+        if self.path == "/reset_prefix_cache":
+            type(self).reset_authorization = self.headers.get("Authorization")
+            response = type(self).reset_body
+            self.send_response(type(self).reset_status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
         if self.path == "/v1/completions" and b"stream benign" in body:
             self.send_response(202)
             self.send_header("Content-Type", "text/plain")
@@ -95,12 +107,15 @@ def serve_app(app):
         thread.join(timeout=5)
 
 
-def request_json(base_url, path, body=None):
+def request_json(base_url, path, body=None, headers=None):
     data = None if body is None else json.dumps(body).encode()
+    request_headers = dict(headers or {})
+    if data is not None:
+        request_headers["Content-Type"] = "application/json"
     request = urllib.request.Request(
         base_url + path,
         data=data,
-        headers={"Content-Type": "application/json"} if data is not None else {},
+        headers=request_headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
@@ -129,6 +144,9 @@ class GuardrailHTTPTest(unittest.TestCase):
             CountingUpstream.calls.clear()
         CountingUpstream.stream_started.clear()
         CountingUpstream.stream_release.clear()
+        CountingUpstream.reset_status = 200
+        CountingUpstream.reset_body = b'{"success":true}'
+        CountingUpstream.reset_authorization = None
 
     def runtime(self, mode="enforce", threshold_pgv1=0.5, threshold_pgv2=0.5, scores=None):
         config = guardrail.GuardrailConfig(
@@ -295,6 +313,77 @@ class GuardrailHTTPTest(unittest.TestCase):
             self.assertEqual((status, body["upstream"]), (201, True))
         self.assertEqual(self.call_count(), 2)
 
+    def test_kv_invalidate_propagates_authenticated_true_and_false(self):
+        runtime = self.runtime()
+        app = guardrail.create_app(
+            runtime=runtime,
+            upstream=self.upstream_url,
+            load_models=False,
+            upstream_api_key="reset-secret",
+        )
+        with serve_app(app) as base_url:
+            headers = {"Authorization": "Bearer reset-secret"}
+            status, body = request_json(base_url, "/v1/kv/invalidate", {"local": True}, headers)
+            self.assertEqual((status, body), (200, {"success": True, "scope": "local-prefix-cache"}))
+            self.assertEqual(CountingUpstream.reset_authorization, "Bearer reset-secret")
+
+            CountingUpstream.reset_body = b'{"success":false}'
+            status, body = request_json(base_url, "/v1/kv/invalidate", {"local": True}, headers)
+            self.assertEqual((status, body), (200, {"success": False, "scope": "local-prefix-cache"}))
+
+    def test_kv_invalidate_rejects_unconfirmed_upstream_responses(self):
+        runtime = self.runtime()
+        app = guardrail.create_app(
+            runtime=runtime,
+            upstream=self.upstream_url,
+            load_models=False,
+            upstream_api_key="reset-secret",
+        )
+        cases = (
+            (200, b""),
+            (204, b""),
+            (200, b'{"success":true,"success":false}'),
+            (200, b'{"success":true} trailing'),
+            (200, b"x" * (guardrail.RESET_RESPONSE_MAX_BYTES + 1)),
+        )
+        with serve_app(app) as base_url:
+            headers = {"Authorization": "Bearer reset-secret"}
+            for upstream_status, upstream_body in cases:
+                with self.subTest(status=upstream_status, body_len=len(upstream_body)):
+                    CountingUpstream.reset_status = upstream_status
+                    CountingUpstream.reset_body = upstream_body
+                    status, body = request_json(base_url, "/v1/kv/invalidate", {"local": True}, headers)
+                    self.assertEqual(status, 502)
+                    self.assertFalse(body["success"])
+
+    def test_kv_invalidate_requires_scope_and_upstream_credential(self):
+        runtime = self.runtime()
+        app = guardrail.create_app(runtime=runtime, upstream=self.upstream_url,
+                                   load_models=False, upstream_api_key="")
+        with serve_app(app) as base_url:
+            status, _ = request_json(base_url, "/v1/kv/invalidate", {"local": True})
+            self.assertEqual(status, 503)
+
+        app = guardrail.create_app(runtime=runtime, upstream=self.upstream_url,
+                                   load_models=False, upstream_api_key="reset-secret")
+        with serve_app(app) as base_url:
+            status, _ = request_json(base_url, "/v1/kv/invalidate", {"local": True})
+            self.assertEqual(status, 401)
+            status, _ = request_json(
+                base_url, "/v1/kv/invalidate", {"local": False},
+                {"Authorization": "Bearer reset-secret"})
+            self.assertEqual(status, 400)
+        self.assertEqual(self.call_count(), 0)
+
+        app = guardrail.create_app(runtime=runtime, upstream=f"http://127.0.0.1:{_free_port()}",
+                                   load_models=False, upstream_api_key="reset-secret")
+        with serve_app(app) as base_url:
+            status, body = request_json(
+                base_url, "/v1/kv/invalidate", {"local": True},
+                {"Authorization": "Bearer reset-secret"})
+            self.assertEqual(status, 502)
+            self.assertFalse(body["success"])
+
     def test_reload_changes_only_variant_and_preserves_effective_config(self):
         runtime = self.runtime(mode="observe", threshold_pgv1=0.8, threshold_pgv2=0.6)
         with serve_app(self.app(runtime)) as base_url:
@@ -370,17 +459,22 @@ class TransformTest(unittest.TestCase):
             dst = Path(tmp) / "out.json"
             src.write_text(json.dumps(self.deployment()))
             env = dict(os.environ, GUARDRAIL_INITIAL_VARIANT="pgv1", GUARDRAIL_MODE="observe",
-                       GUARDRAIL_THRESHOLD_PGV1="0.81", GUARDRAIL_THRESHOLD_PGV2="0.62")
+                       GUARDRAIL_THRESHOLD_PGV1="0.81", GUARDRAIL_THRESHOLD_PGV2="0.62",
+                       VLLM_API_KEY_SECRET_NAME="vllm-reset-api", VLLM_API_KEY_SECRET_KEY="token")
             subprocess.run([os.environ.get("PYTHON", "python3"), str(HERE / "transform.py"), str(src), str(dst)],
                            env=env, check=True, capture_output=True, text=True)
             rendered = json.loads(dst.read_text())
         template = rendered["spec"]["template"]
         self.assertEqual(template["metadata"]["annotations"]["phorvex.ai/guardrail-variant"], "pgv1")
         sidecar = next(container for container in template["spec"]["containers"] if container["name"] == "guardrail")
-        values = {item["name"]: item["value"] for item in sidecar["env"]}
+        values = {item["name"]: item["value"] for item in sidecar["env"] if "value" in item}
         self.assertEqual(values["GUARDRAIL_MODE"], "observe")
         self.assertEqual(values["GUARDRAIL_THRESHOLD_PGV1"], "0.81")
         self.assertEqual(values["GUARDRAIL_THRESHOLD_PGV2"], "0.62")
+        credential = next(item for item in sidecar["env"] if item["name"] == "VLLM_API_KEY")
+        self.assertEqual(credential["valueFrom"]["secretKeyRef"], {"name": "vllm-reset-api", "key": "token"})
+        vllm = next(container for container in template["spec"]["containers"] if container["name"] == "vllm")
+        self.assertEqual(next(item for item in vllm["env"] if item["name"] == "VLLM_API_KEY"), credential)
 
     def test_transform_rejects_invalid_mode_and_threshold(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -394,6 +488,21 @@ class TransformTest(unittest.TestCase):
                         env=dict(os.environ, **setting), capture_output=True, text=True,
                     )
                     self.assertNotEqual(result.returncode, 0)
+
+    def test_transform_requires_secret_backed_reset_credential(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "in.json"
+            dst = Path(tmp) / "out.json"
+            src.write_text(json.dumps(self.deployment()))
+            env = dict(os.environ)
+            env.pop("VLLM_API_KEY_SECRET_NAME", None)
+            env.pop("VLLM_API_KEY_SECRET_KEY", None)
+            result = subprocess.run(
+                [os.environ.get("PYTHON", "python3"), str(HERE / "transform.py"), str(src), str(dst)],
+                env=env, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(dst.exists())
 
     def test_deploy_rejects_invalid_config_before_mutation_or_stale_output(self):
         with tempfile.TemporaryDirectory() as tmp:
