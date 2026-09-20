@@ -1338,8 +1338,8 @@ fixes:
     issues:
     - M-170
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: post25-catalogue-claims
-    head_sha: 8d52179859aa03a0aa61ce75d5c639101b80249d
+    head_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad
