@@ -4,9 +4,10 @@
  * gpu_stack_p4set.go — the stack control-plane surface for the NEW actuators (adapter-rotate,
  * request-drain, guardrail-rotate, kv-migrate-invalidate) + the REAL MIG node-exec transport that
  * completes mig-rebind. Every call is REAL code behind a swappable interface (vLLM default; Triton
- * EXPLICIT / TGI / LoRAX swap by re-implementing), marked [PENDING-GPU-VALIDATION] — the serving
- * routes + the node-exec syscall are confirmed on real hardware, not here. Same honest tri-state:
- * success / errStackUnreachable -> [PENDING] / reachable-fails -> fail-closed.
+ * EXPLICIT / TGI / LoRAX swap by re-implementing), marked [PENDING-GPU-VALIDATION]. Source tests
+ * cover the serving routes and node-exec request boundary; deployed remotecommand and GPU effects
+ * remain pending under LV01. Same honest tri-state: success / errStackUnreachable -> [PENDING] /
+ * reachable-fails -> fail-closed.
  */
 
 package actuator
@@ -436,7 +437,7 @@ const migAgentLabelKey = "phorvex.ai/mig-agent"
 // fabricate a node exec.
 type execInPodFunc func(ctx context.Context, ns, pod, container string, argv []string) (string, error)
 
-var pkgNodeRunner *execNodeRunner // nil by default; no production caller wires it
+var pkgNodeRunner *execNodeRunner // nil by default; main wires it only from complete explicit configuration
 
 type unwiredNodeRunner struct{}
 
