@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/go-logr/logr"
 	"github.com/phorvex/phorvex/internal/audit"
@@ -14,6 +15,44 @@ import (
 	"testing"
 	"time"
 )
+
+type post25CountingContext struct {
+	checks      int
+	cancelAfter int
+}
+
+func (c *post25CountingContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *post25CountingContext) Done() <-chan struct{}       { return nil }
+func (c *post25CountingContext) Value(any) any               { return nil }
+func (c *post25CountingContext) Err() error {
+	c.checks++
+	if c.checks > c.cancelAfter {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestPost25M137RepresentationPreparationHonorsPreEffectCancellation(t *testing.T) {
+	p := model.Policy{Tenant: "tenant", TickID: "tick"}
+	c := model.NewClaimScope(nil, true, "image", "sha")
+	decisions := []model.Decision{{Namespace: "ns", Pod: "one"}, {Namespace: "ns", Pod: "two"}, {Namespace: "ns", Pod: "three"}}
+	versions := map[string]string{"ns/one": "uid-1", "ns/two": "uid-2", "ns/three": "uid-3"}
+	ctx := &post25CountingContext{cancelAfter: 1}
+	got, complete := representationSnapshotsBeforeEffect(ctx, decisions, p, versions, c, nil)
+	if complete || got != nil || ctx.checks != 2 {
+		t.Fatalf("canceled preparation returned complete=%v snapshots=%d checks=%d", complete, len(got), ctx.checks)
+	}
+
+	got, complete = representationSnapshotsBeforeEffect(context.Background(), decisions, p, versions, c, nil)
+	if !complete || len(got) != len(decisions) {
+		t.Fatalf("healthy preparation returned complete=%v snapshots=%d", complete, len(got))
+	}
+	for i, snapshot := range got {
+		if snapshot.Scope.Version != versions[decisions[i].Namespace+"/"+decisions[i].Pod] {
+			t.Fatalf("snapshot %d lost authoritative workload version", i)
+		}
+	}
+}
 
 func TestM100SourceAdapterFrozenUnboundOutcomesAndDispatch(t *testing.T) {
 	c := model.NewClaimScope([]string{"old-detector"}, true, "build", "sha")

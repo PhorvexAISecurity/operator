@@ -160,3 +160,17 @@ intakes:
     state: FILED
     issue_id: M-181
     aliases: []
+  RPT-20260920-131622-propagate-authentic-vllm-prefix-cache-reset-ackn:
+    directory: intake/RPT-20260920-131622-propagate-authentic-vllm-prefix-cache-reset-ackn
+    kind: BUG
+    title: Propagate authentic vLLM prefix-cache reset acknowledgement
+    state: DUPLICATE
+    issue_id: null
+    aliases: []
+  RPT-20260920-154700-node-ipam-allocation:
+    directory: intake/RPT-20260920-154700-node-ipam-allocation
+    kind: INCIDENT
+    title: Fresh Pods cannot obtain an IP on existing development node
+    state: VERIFYING
+    issue_id: null
+    aliases: []

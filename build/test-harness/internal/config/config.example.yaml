@@ -41,3 +41,9 @@ outDir: "out"
 # Optional subset filters (empty => run every registered plugin).
 defenderFilter: []
 scenarioFilter: []
+
+# Optional placement for the benign c2-ephemeral-session-rotation control only.
+# The target Deployment Pod template and HTTP producer receive independent
+# copies of the same validated selector. Omit this map for default scheduling.
+# benignSessionNodeSelector:
+#   kubernetes.io/hostname: "ip-172-27-12-233.us-east-2.compute.internal"

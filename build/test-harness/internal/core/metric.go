@@ -102,6 +102,7 @@ type Metric struct {
 	// Category mirrors the scenario category (carried for reporting).
 	Category              Category        `json:"category"`
 	ScenarioRealism       ScenarioRealism `json:"scenarioRealism"`
+	ScenarioBenignControl bool            `json:"scenarioBenignControl,omitempty"`
 	ScenarioMechanism     string          `json:"scenarioMechanism,omitempty"`
 	ScenarioClaimLimits   string          `json:"scenarioClaimLimits,omitempty"`
 	DeclaredTechniqueIDs  []string        `json:"declaredTechniqueIds,omitempty"`

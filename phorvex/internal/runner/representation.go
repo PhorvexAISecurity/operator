@@ -1,6 +1,8 @@
 package runner
 
 import (
+	"context"
+
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/representation"
 )
@@ -40,6 +42,17 @@ func representationSnapshotV1(d model.Decision, p model.Policy, version string, 
 		}
 	}
 	return representation.Freeze(s)
+}
+
+func representationSnapshotsBeforeEffect(ctx context.Context, decisions []model.Decision, p model.Policy, versions map[string]string, claim model.ClaimScope, inventory *model.ExistentialInventory) ([]model.RepresentationSnapshot, bool) {
+	out := make([]model.RepresentationSnapshot, len(decisions))
+	for i, d := range decisions {
+		if ctx.Err() != nil {
+			return nil, false
+		}
+		out[i] = representationSnapshotV1(d, p, versions[d.Namespace+"/"+d.Pod], claim, inventory)
+	}
+	return out, true
 }
 
 func appendRepresentation(d *model.Decision, frozen model.RepresentationSnapshot) {

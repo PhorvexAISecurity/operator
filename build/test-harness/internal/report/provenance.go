@@ -24,6 +24,7 @@ type ProvenanceEntry struct {
 	Disruption      float64  `json:"disruptionVsOracle"`
 	ObservedState   string   `json:"observedState"`
 	NegativeControl bool     `json:"negativeControl"`
+	BenignControl   bool     `json:"benignControl,omitempty"`
 
 	// TrialKind / Status / Scored describe HOW MUCH of this row is a measurement.
 	// Disruption is only a measurement when Scored is true.
@@ -104,6 +105,7 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 			Disruption:        m.DisruptionVsOracle,
 			ObservedState:     m.ObservedState,
 			NegativeControl:   m.NegativeControl,
+			BenignControl:     m.ScenarioBenignControl,
 			TrialKind:         m.Kind(),
 			Status:            val.Status(),
 			Scored:            val.Scorable,

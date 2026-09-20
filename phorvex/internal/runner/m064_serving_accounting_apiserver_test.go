@@ -97,7 +97,9 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
 	}))
 	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)

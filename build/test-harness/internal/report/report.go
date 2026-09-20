@@ -23,9 +23,10 @@ import (
 // ArmKey identifies one aggregated arm: (scenario, defender). The negative
 // control and adaptive trials are aggregated separately by trial kind.
 type ArmKey struct {
-	Scenario string
-	Defender string
-	Realism  core.ScenarioRealism
+	Scenario      string
+	Defender      string
+	Realism       core.ScenarioRealism
+	BenignControl bool
 }
 
 // Negative-control states. Only "observed" — EVERY negative-control row of the
@@ -57,10 +58,13 @@ type ArmValidity struct {
 	// without a usable control, cleanup or oracle). They are counted here so they
 	// stay visible instead of disappearing from every bucket.
 	Unverified int
-	// RealismExcluded counts otherwise valid rows withheld from real-attack
-	// reporting because their mechanism is explicitly a simulation.
+	// RealismExcluded counts otherwise valid marker-simulation rows withheld from
+	// real-attack reporting.
 	RealismExcluded int
-	Reasons         []string
+	// BenignControlExcluded counts otherwise valid executable benign-control rows
+	// withheld from attack coverage and economics denominators.
+	BenignControlExcluded int
+	Reasons               []string
 }
 
 // addReason appends each distinct, non-empty reason, skipping duplicates. Every
@@ -96,6 +100,9 @@ type ArmSummary struct {
 	Category core.Category
 	R6Tag    core.R6Tag
 	Realism  core.ScenarioRealism
+	// BenignControl keeps executable functional-effect controls in a distinct
+	// report group and out of attack-mitigation aggregates.
+	BenignControl bool
 	// Kind is the trial kind this summary aggregates (ordinary or adaptive).
 	Kind core.TrialKind
 	// Trials is the number of SCORED trials behind the statistics below.
@@ -158,6 +165,7 @@ type armAcc struct {
 	category                         core.Category
 	r6                               core.R6Tag
 	realism                          core.ScenarioRealism
+	benignControl                    bool
 	negTotal, negUsable, negUnusable int
 	negFalseMax                      int
 	control                          string
@@ -185,12 +193,12 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 	byArm := map[ArmKey]*armAcc{}
 	order := []ArmKey{}
 	touch := func(m core.Metric) *armAcc {
-		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender, Realism: effectiveMetricRealism(m)}
+		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender, Realism: effectiveMetricRealism(m), BenignControl: m.ScenarioBenignControl}
 		a, ok := byArm[k]
 		if !ok {
 			// negFalseMax starts at -1 (UNOBSERVED) so an arm that never observed a
 			// negative control can never present a zero.
-			a = &armAcc{category: m.Category, r6: m.R6Tag, realism: k.Realism, negFalseMax: -1}
+			a = &armAcc{category: m.Category, r6: m.R6Tag, realism: k.Realism, benignControl: k.BenignControl, negFalseMax: -1}
 			byArm[k] = a
 			order = append(order, k)
 		}
@@ -328,6 +336,7 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 			Category:             a.category,
 			R6Tag:                a.r6,
 			Realism:              a.realism,
+			BenignControl:        a.benignControl,
 			Kind:                 kind,
 			Trials:               a.validity.Scored,
 			Skipped:              a.validity.Scored == 0,
@@ -367,7 +376,10 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		if out[i].Defender != out[j].Defender {
 			return out[i].Defender < out[j].Defender
 		}
-		return out[i].Realism < out[j].Realism
+		if out[i].Realism != out[j].Realism {
+			return out[i].Realism < out[j].Realism
+		}
+		return !out[i].BenignControl && out[j].BenignControl
 	})
 	return out
 }
@@ -387,8 +399,8 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	summaries := Aggregate(metrics, ciLevel)
 	adaptive := AggregateAdaptive(metrics, ciLevel)
 	anchors := AggregateAnchorControls(metrics, ciLevel)
-	realAdaptive, markerAdaptive := splitMarkerSummaries(adaptive)
-	realAnchors, markerAnchors := splitMarkerSummaries(anchors)
+	realAdaptive, markerAdaptive, benignAdaptive := splitControlSummaries(adaptive)
+	realAnchors, markerAnchors, benignAnchors := splitControlSummaries(anchors)
 
 	b.WriteString("# Phoenix / Phorvex Attack-Harness Report\n\n")
 	b.WriteString(fmt.Sprintf("Confidence level: %.0f%%. Disruption is measured STRICTLY against each scenario's concrete observable oracle, anchored to the undefended positive control OBSERVED AT THE SAME TRIAL INDEX AND KIND.\n\n", ciLevel*100))
@@ -408,11 +420,21 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString("\n")
 	}
 
-	realSummaries, markerSummaries := splitMarkerSummaries(summaries)
+	realSummaries, markerSummaries, benignSummaries := splitControlSummaries(summaries)
 	b.WriteString("## Per-arm results — executable/unassessed scenarios\n\n")
 	b.WriteString("Trials counts SCORED trials only; see Measurement validity for what the arm emitted.\n\n")
 	b.WriteString("Legacy `unassessed` rows remain visible but do not establish technique-level realism.\n\n")
 	b.WriteString(renderArmTable(realSummaries))
+	if len(benignSummaries) > 0 {
+		b.WriteString("## Benign functional-effect controls (excluded from attack-mitigation and security-coverage percentages)\n\n")
+		b.WriteString("These executable controls measure only their stated functional side effect. They carry no ATT&CK technique mapping and do not enter attack-coverage or economics denominators.\n\n")
+		b.WriteString(renderArmTable(benignSummaries))
+		b.WriteString("### Benign functional-effect grounding\n\n")
+		for _, line := range functionalGrounding(metrics) {
+			b.WriteString(line)
+		}
+		b.WriteString("\n")
+	}
 	if len(markerSummaries) > 0 {
 		b.WriteString("## Marker-simulation results (excluded from real attack-defense percentages)\n\n")
 		b.WriteString("These percentages measure disruption of the stated marker fixture only. They do not measure the declared operation, ATT&CK/ATLAS techniques, or GPU mechanisms.\n\n")
@@ -432,6 +454,12 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString(renderArmTable(realAnchors))
 		b.WriteString(renderValidityTable("Anchor-only control validity", realAnchors))
 	}
+	if len(benignAnchors) > 0 {
+		b.WriteString("### Benign functional-effect anchor-only controls\n\n")
+		b.WriteString("These anchor observations remain outside attack-mitigation and economics aggregates.\n\n")
+		b.WriteString(renderArmTable(benignAnchors))
+		b.WriteString(renderValidityTable("Benign anchor-only control validity", benignAnchors))
+	}
 
 	// Adaptive observations, reported separately from the ordinary comparison.
 	if len(realAdaptive) > 0 {
@@ -446,6 +474,11 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString("These remain fixture-only observations and are excluded from real attack-defense percentages and economics.\n\n")
 		b.WriteString(renderArmTable(append(markerAnchors, markerAdaptive...)))
 	}
+	if len(benignAdaptive) > 0 {
+		b.WriteString("## Benign functional-effect adaptive observations\n\n")
+		b.WriteString("These observations remain outside attack-mitigation, security-coverage, and economics aggregates.\n\n")
+		b.WriteString(renderArmTable(benignAdaptive))
+	}
 
 	// Pass-B AI split-oracle / MTD-effect surface (only rows that stamped it).
 	b.WriteString(renderMTDEffectTable(metrics))
@@ -453,7 +486,7 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	// Honest R6 grounding per scenario, taken from a row whose oracle was
 	// actually observed (an errored oracle has no observed state to report).
 	b.WriteString("## Honest R6 grounding\n\n")
-	for _, g := range r6Grounding(metrics) {
+	for _, g := range r6Grounding(withoutBenignControls(metrics)) {
 		b.WriteString(g)
 	}
 	b.WriteString("\nEvery number above traces to a raw log + command via provenance.json.\n")
@@ -467,6 +500,19 @@ func ExcludeMarkerSimulations(metrics []core.Metric) []core.Metric {
 	out := make([]core.Metric, 0, len(metrics))
 	for _, m := range metrics {
 		if effectiveMetricRealism(m) != core.RealismMarkerSimulation {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// ExcludeNonAttackControls returns only rows eligible for aggregate attack-
+// mitigation, security-coverage, and economics claims. Raw metrics and the main
+// report retain both excluded groups in explicitly labelled sections.
+func ExcludeNonAttackControls(metrics []core.Metric) []core.Metric {
+	out := make([]core.Metric, 0, len(metrics))
+	for _, m := range metrics {
+		if effectiveMetricRealism(m) != core.RealismMarkerSimulation && !m.ScenarioBenignControl {
 			out = append(out, m)
 		}
 	}
@@ -489,6 +535,50 @@ func splitMarkerSummaries(in []ArmSummary) (other, marker []ArmSummary) {
 		}
 	}
 	return other, marker
+}
+
+func splitControlSummaries(in []ArmSummary) (attack, marker, benign []ArmSummary) {
+	for _, s := range in {
+		switch {
+		case s.BenignControl:
+			benign = append(benign, s)
+		case s.Realism == core.RealismMarkerSimulation:
+			marker = append(marker, s)
+		default:
+			attack = append(attack, s)
+		}
+	}
+	return attack, marker, benign
+}
+
+func withoutBenignControls(metrics []core.Metric) []core.Metric {
+	out := make([]core.Metric, 0, len(metrics))
+	for _, m := range metrics {
+		if !m.ScenarioBenignControl {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func functionalGrounding(metrics []core.Metric) []string {
+	benign := make([]core.Metric, 0, len(metrics))
+	for _, m := range metrics {
+		if m.ScenarioBenignControl {
+			benign = append(benign, m)
+		}
+	}
+	lines := r6Grounding(benign)
+	for i := range lines {
+		// The shared grounding helper includes the R6 catalogue tag. Benign
+		// controls deliberately do not present that tag as a coverage verdict.
+		if start := strings.Index(lines[i], " ["); start >= 0 {
+			if end := strings.Index(lines[i][start:], "]: "); end >= 0 {
+				lines[i] = lines[i][:start] + ": " + lines[i][start+end+3:]
+			}
+		}
+	}
+	return lines
 }
 
 func renderRunCompleteness(run *core.RunOutcome) string {
@@ -550,8 +640,8 @@ func renderArmTable(summaries []ArmSummary) string {
 // so a partially observed control cannot pass as a clean one.
 func armAccounting(s ArmSummary) string {
 	v := s.Validity
-	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
-		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d benignControlExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.BenignControlExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
 		s.NegativeControl, s.NegControlUsable, s.NegControlTotal)
 	if !v.Complete() {
 		acct = "INCOMPLETE " + acct

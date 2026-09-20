@@ -1,0 +1,4 @@
+upstream_commit=ed6e9075d31e32c8548b480a47d1ffb77da1f54c
+operator_base=3d691f5fe15f706ae7cb962d6bdd3293be3196be
+ac9bc950702b5d6ced59e940dc57628f89b9ddb025adccd57d6c8dd155b53304  build/integrations/vllm-0.7.3-reset-ack/manifest.json
+54039d2b4f423fa9921410759d9d7079e40fcea7d620075d427c8af410218b45  build/integrations/vllm-0.7.3-reset-ack/vllm-0.7.3-reset-ack.patch

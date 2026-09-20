@@ -119,6 +119,7 @@ type dollarRow struct {
 	Scenario           string
 	Defender           string
 	Realism            core.ScenarioRealism
+	BenignControl      bool
 	Trials             int
 	MeanDisruption     float64
 	MeanDefensiveActs  float64
@@ -187,7 +188,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 	baselineSeen := map[string]int{}
 	for i := range metrics {
 		m := metrics[i]
-		if m.AnchorOnly || effectiveMetricRealism(m) == core.RealismMarkerSimulation || m.Kind() != core.TrialOrdinary || !m.IsScored() {
+		if m.AnchorOnly || effectiveMetricRealism(m) == core.RealismMarkerSimulation || m.ScenarioBenignControl || m.Kind() != core.TrialOrdinary || !m.IsScored() {
 			continue
 		}
 		if m.Defender == in.BaselineDefender && m.Reuse != nil {
@@ -215,7 +216,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			rowKind = core.TrialNegativeControl
 		}
 		realism := effectiveMetricRealism(m)
-		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender, Realism: realism}
+		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender, Realism: realism, BenignControl: m.ScenarioBenignControl}
 		a, ok := byArm[k]
 		if !ok {
 			a = &acc{negFalseMax: -1}
@@ -251,6 +252,11 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		if realism == core.RealismMarkerSimulation {
 			a.validity.RealismExcluded++
 			a.validity.addReason("marker simulation excluded from real attack-defense economics")
+			continue
+		}
+		if m.ScenarioBenignControl {
+			a.validity.BenignControlExcluded++
+			a.validity.addReason("benign functional-effect control excluded from attack-defense economics")
 			continue
 		}
 
@@ -323,6 +329,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			Scenario:           k.Scenario,
 			Defender:           k.Defender,
 			Realism:            k.Realism,
+			BenignControl:      k.BenignControl,
 			Trials:             len(a.disruption),
 			RotationInterval:   in.RotationIntervals[k.Defender],
 			MTDEffect:          a.mtd,
@@ -367,7 +374,10 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		if rows[i].Defender != rows[j].Defender {
 			return rows[i].Defender < rows[j].Defender
 		}
-		return rows[i].Realism < rows[j].Realism
+		if rows[i].Realism != rows[j].Realism {
+			return rows[i].Realism < rows[j].Realism
+		}
+		return !rows[i].BenignControl && rows[j].BenignControl
 	})
 	return rows
 }
@@ -381,7 +391,7 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	var b strings.Builder
 	b.WriteString("# Phoenix / Phorvex -- Dollars, Schwartau & Attack-Reusability View\n\n")
 	b.WriteString("Pure post-processing over the SAME extended Metric schema (ZERO re-execution). ROI($) is recomputed from the swappable knobs; Schwartau P = the arm's rotation interval, D/R = measured time-to-action; attack-reusability anchors replay-success to the static baseline.\n\n")
-	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only SCORED trials with an OBSERVED defensive cost enter these figures. Marker simulations, invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
+	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only SCORED attack trials with an OBSERVED defensive cost enter these figures. Marker simulations, benign functional-effect controls, invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
 
 	b.WriteString("## Swappable $ inputs (clearly-labeled defaults)\n\n")
 	b.WriteString(fmt.Sprintf("- **gpuCount** = %d (a single DGX-class node)\n", in.ROI.GpuCount))
@@ -420,8 +430,8 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString("| Scenario | Defender | Accounting | Reasons |\n|---|---|---|---|\n")
 	for _, r := range rows {
 		v := r.Validity
-		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
-			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d benignControlExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.BenignControlExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
 			r.NegControlState, r.NegControlUsable, r.NegControlTotal)
 		if !v.Complete() {
 			acct = "INCOMPLETE " + acct

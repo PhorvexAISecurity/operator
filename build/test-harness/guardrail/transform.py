@@ -33,6 +33,14 @@ if sys.argv[1:] == ["--validate-config"]:
     raise SystemExit(0)
 
 d = json.load(open(sys.argv[1]))
+api_key_secret_name = os.environ.get("VLLM_API_KEY_SECRET_NAME", "").strip()
+api_key_secret_key = os.environ.get("VLLM_API_KEY_SECRET_KEY", "api-key").strip()
+if not api_key_secret_name or not api_key_secret_key:
+    raise SystemExit("VLLM_API_KEY_SECRET_NAME and a nonempty VLLM_API_KEY_SECRET_KEY are required")
+api_key_env = {
+    "name": "VLLM_API_KEY",
+    "valueFrom": {"secretKeyRef": {"name": api_key_secret_name, "key": api_key_secret_key}},
+}
 for k in ("resourceVersion", "uid", "creationTimestamp", "generation", "managedFields"):
     d["metadata"].pop(k, None)
 d.pop("status", None)
@@ -50,6 +58,7 @@ for c in spec["containers"]:
         for p in ("readinessProbe", "livenessProbe", "startupProbe"):
             if p in c and "httpGet" in c[p] and c[p]["httpGet"].get("port") == 8000:
                 c[p]["httpGet"]["port"] = 8001
+        c["env"] = [item for item in c.get("env", []) if item.get("name") != "VLLM_API_KEY"] + [api_key_env]
 sidecar = {
     "name": "guardrail",
     "image": "python:3.11-slim",
@@ -59,6 +68,7 @@ sidecar = {
         {"name": "GUARDRAIL_MODE", "value": guardrail_mode},
         {"name": "GUARDRAIL_THRESHOLD_PGV1", "value": threshold_pgv1},
         {"name": "GUARDRAIL_THRESHOLD_PGV2", "value": threshold_pgv2},
+        api_key_env,
         {"name": "HF_HOME", "value": "/tmp/hf"},
         {"name": "TOKENIZERS_PARALLELISM", "value": "false"},
     ],

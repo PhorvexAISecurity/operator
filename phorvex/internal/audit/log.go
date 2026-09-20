@@ -10,10 +10,12 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -127,6 +129,130 @@ type Record struct {
 	// It is nested to preserve the existing phorvex.audit.v2 top-level contract.
 	DecisionTrace *model.DecisionTraceV2        `json:"decisionTrace,omitempty"`
 	Measurements  *model.DecisionMeasurementsV1 `json:"measurements,omitempty"`
+
+	// preparedRepresentation is populated only by Logger.Record after making an
+	// owned, redacted representation. It is never accepted from callers or wire
+	// input and cannot bypass the defensive public Representation marshaler.
+	preparedRepresentation json.RawMessage
+}
+
+type recordJSONField struct {
+	name  string
+	value json.RawMessage
+}
+
+// splitRecordJSONObject scans a compact object produced by encoding/json. It
+// retains each already-encoded value instead of decoding the entire record into
+// interface-backed RawMessages and encoding those values a second time.
+func splitRecordJSONObject(b []byte) ([]recordJSONField, error) {
+	if len(b) < 2 || b[0] != '{' || b[len(b)-1] != '}' {
+		return nil, fmt.Errorf("audit record encoder returned a non-object")
+	}
+	body := b[1 : len(b)-1]
+	if len(body) == 0 {
+		return nil, nil
+	}
+	fields := make([]recordJSONField, 0, 64)
+	start, depth := 0, 0
+	inString, escaped := false, false
+	appendField := func(raw []byte) error {
+		colon := -1
+		quoted, slash := false, false
+		for i, c := range raw {
+			if quoted {
+				if slash {
+					slash = false
+				} else if c == '\\' {
+					slash = true
+				} else if c == '"' {
+					quoted = false
+				}
+				continue
+			}
+			if c == '"' {
+				quoted = true
+			} else if c == ':' {
+				colon = i
+				break
+			}
+		}
+		if colon <= 0 {
+			return fmt.Errorf("audit record encoder returned an invalid field")
+		}
+		var name string
+		if err := json.Unmarshal(raw[:colon], &name); err != nil {
+			return err
+		}
+		fields = append(fields, recordJSONField{name: name, value: raw[colon+1:]})
+		return nil
+	}
+	for i, c := range body {
+		if inString {
+			if escaped {
+				escaped = false
+			} else if c == '\\' {
+				escaped = true
+			} else if c == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
+		case '{', '[':
+			depth++
+		case '}', ']':
+			depth--
+		case ',':
+			if depth == 0 {
+				if err := appendField(body[start:i]); err != nil {
+					return nil, err
+				}
+				start = i + 1
+			}
+		}
+	}
+	if inString || depth != 0 {
+		return nil, fmt.Errorf("audit record encoder returned an unterminated field")
+	}
+	if err := appendField(body[start:]); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
+func marshalSortedRecordObject(b []byte, additions map[string]json.RawMessage) ([]byte, error) {
+	fields, err := splitRecordJSONObject(b)
+	if err != nil {
+		return nil, err
+	}
+	byName := make(map[string]json.RawMessage, len(fields)+len(additions))
+	for _, field := range fields {
+		byName[field.name] = field.value
+	}
+	for name, value := range additions {
+		byName[name] = value
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out bytes.Buffer
+	out.Grow(len(b) + 64)
+	out.WriteByte('{')
+	for i, name := range names {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		nameJSON, _ := json.Marshal(name)
+		out.Write(nameJSON)
+		out.WriteByte(':')
+		out.Write(byName[name])
+	}
+	out.WriteByte('}')
+	return out.Bytes(), nil
 }
 
 // MarshalJSON is the only write direction: canonical v2. Legacy compatibility is intentionally
@@ -141,13 +267,17 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	if err := measurementsMatch(r); err != nil {
 		return nil, err
 	}
+	prepared := r.preparedRepresentation
+	if len(prepared) != 0 {
+		r.Representation = nil
+	}
 	b, err := json.Marshal(recordAlias(r))
 	if err != nil || r.Measurements == nil {
 		return b, err
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(b, &fields); err != nil {
-		return nil, err
+	additions := make(map[string]json.RawMessage, 14)
+	if len(prepared) != 0 {
+		additions["representation"] = prepared
 	}
 	put := func(name string, present bool, value any) error {
 		if !present {
@@ -155,7 +285,7 @@ func (r Record) MarshalJSON() ([]byte, error) {
 		}
 		v, err := json.Marshal(value)
 		if err == nil {
-			fields[name] = v
+			additions[name] = v
 		}
 		return err
 	}
@@ -177,7 +307,7 @@ func (r Record) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 	}
-	return json.Marshal(fields)
+	return marshalSortedRecordObject(b, additions)
 }
 
 // UnmarshalJSON translates v0/v1 records into the canonical v2 in-memory shape. The shim expires
@@ -283,6 +413,10 @@ func New(log logr.Logger, jsonOut io.Writer) *Logger {
 
 // ToRecord converts a Decision to a Record.
 func ToRecord(d model.Decision) Record {
+	return toRecord(d, false)
+}
+
+func toRecord(d model.Decision, prepareWire bool) Record {
 	claim := model.NewClaimScope(nil, false, "", "")
 	if d.Trace != nil {
 		claim = model.NewClaimScope(nil, false, d.Trace.BrainImage, d.Trace.GitSHA)
@@ -299,75 +433,83 @@ func ToRecord(d model.Decision) Record {
 	if dispatchOutcome != "" {
 		dispatchReason = model.SafeDispatchReason(d.DispatchReason)
 	}
+	var representation *model.Representation
+	var preparedRepresentation json.RawMessage
+	if prepareWire && d.Measurements != nil {
+		representation, preparedRepresentation = prepareRepresentation(d.Representation)
+	} else {
+		representation = cloneRepresentation(d.Representation)
+	}
 	return Record{
-		AdapterObservation:    d.AdapterObservation,
-		Representation:        cloneRepresentation(d.Representation),
-		Existential:           d.Existential,
-		Claim:                 &claim,
-		SchemaVersion:         SchemaVersionCurrent,
-		SourceSchemaVersion:   SchemaVersionCurrent,
-		Kind:                  "phorvex.decision",
-		Time:                  d.DecidedAt,
-		Tenant:                d.Tenant,
-		Namespace:             d.Namespace,
-		Pod:                   d.Pod,
-		Node:                  d.Node,
-		Action:                string(d.Action),
-		Selected:              d.Selected,
-		Feasible:              d.Feasible,
-		InfeasibleWhy:         d.InfeasibleWhy,
-		DryRun:                d.DryRun,
-		DryRunCause:           d.DryRunCause,
-		ActuationBrakeCause:   d.ActuationBrakeCause,
-		KillSwitch:            d.KillSwitch,
-		KillSwitchCause:       d.KillSwitchCause,
-		Actuated:              d.Actuated,
-		DispatchOutcome:       dispatchOutcome,
-		DispatchReason:        dispatchReason,
-		CoverageValue:         round4(d.CoverageValue),
-		CoverageBasis:         coverageBasis,
-		ThreatRisk:            round4(d.ThreatRisk),
-		Cost:                  round4(d.Cost),
-		Net:                   round4(d.Net),
-		Residual:              round4(d.Residual),
-		ThreatPosture:         round4(d.ThreatPosture),
-		Exposure:              round4(d.Exposure),
-		AssetValue:            round4(d.AssetValue),
-		BlastRadius:           round4(d.BlastRadius),
-		SLOHeadroom:           round4(d.SLOHeadroom),
-		Phase:                 string(d.Phase),
-		Reason:                d.Reason,
-		R6Counterfactual:      string(d.R6Counterfactual),
-		CounterfactualNote:    d.CounterfactualNote,
-		BlindCost:             round4(d.BlindCost),
-		Engine:                d.Engine,
-		PerDollar:             round4(d.PerDollar),
-		CoveredWeight:         round4(d.CoveredWeight),
-		CoveredFacts:          d.CoveredFacts,
-		Stage:                 d.Stage,
-		NextStage:             d.NextStage,
-		StageHazard:           round4(d.StageHazard),
-		PHold:                 round4(d.PHold),
-		Provenance:            round4(d.Provenance),
-		PHoldInputs:           pHoldInputsRecord(d.PHoldInputs),
-		StageEvent:            d.StageEvent,
-		StageAI:               d.StageAI,
-		StageMergeRule:        d.StageMergeRule,
-		EventEvidence:         round4(d.EventEvidence),
-		Events:                roundEvents(d.Events),
-		Lambda:                round4(d.Lambda),
-		ProactiveRate:         round4(d.ProactiveRate),
-		Attribution:           canonicalizeAttribution(d.Attribution),
-		Handler:               d.Handler,
-		ObjectsTouched:        d.ObjectsTouched,
-		RollbackRef:           d.RollbackRef,
-		MutationKind:          d.MutationKind,
-		Phoenix:               phoenixRecord(d.Phoenix),
-		PreemptMargin:         round4(d.PreemptMargin),
-		ProjectedNextStageSec: round4(d.ProjectedNextStageSec),
-		AIClassified:          d.AIClassified,
-		DecisionTrace:         d.Trace,
-		Measurements:          recordMeasurements(d.Measurements),
+		AdapterObservation:     d.AdapterObservation,
+		Representation:         representation,
+		Existential:            d.Existential,
+		Claim:                  &claim,
+		SchemaVersion:          SchemaVersionCurrent,
+		SourceSchemaVersion:    SchemaVersionCurrent,
+		Kind:                   "phorvex.decision",
+		Time:                   d.DecidedAt,
+		Tenant:                 d.Tenant,
+		Namespace:              d.Namespace,
+		Pod:                    d.Pod,
+		Node:                   d.Node,
+		Action:                 string(d.Action),
+		Selected:               d.Selected,
+		Feasible:               d.Feasible,
+		InfeasibleWhy:          d.InfeasibleWhy,
+		DryRun:                 d.DryRun,
+		DryRunCause:            d.DryRunCause,
+		ActuationBrakeCause:    d.ActuationBrakeCause,
+		KillSwitch:             d.KillSwitch,
+		KillSwitchCause:        d.KillSwitchCause,
+		Actuated:               d.Actuated,
+		DispatchOutcome:        dispatchOutcome,
+		DispatchReason:         dispatchReason,
+		CoverageValue:          round4(d.CoverageValue),
+		CoverageBasis:          coverageBasis,
+		ThreatRisk:             round4(d.ThreatRisk),
+		Cost:                   round4(d.Cost),
+		Net:                    round4(d.Net),
+		Residual:               round4(d.Residual),
+		ThreatPosture:          round4(d.ThreatPosture),
+		Exposure:               round4(d.Exposure),
+		AssetValue:             round4(d.AssetValue),
+		BlastRadius:            round4(d.BlastRadius),
+		SLOHeadroom:            round4(d.SLOHeadroom),
+		Phase:                  string(d.Phase),
+		Reason:                 d.Reason,
+		R6Counterfactual:       string(d.R6Counterfactual),
+		CounterfactualNote:     d.CounterfactualNote,
+		BlindCost:              round4(d.BlindCost),
+		Engine:                 d.Engine,
+		PerDollar:              round4(d.PerDollar),
+		CoveredWeight:          round4(d.CoveredWeight),
+		CoveredFacts:           d.CoveredFacts,
+		Stage:                  d.Stage,
+		NextStage:              d.NextStage,
+		StageHazard:            round4(d.StageHazard),
+		PHold:                  round4(d.PHold),
+		Provenance:             round4(d.Provenance),
+		PHoldInputs:            pHoldInputsRecord(d.PHoldInputs),
+		StageEvent:             d.StageEvent,
+		StageAI:                d.StageAI,
+		StageMergeRule:         d.StageMergeRule,
+		EventEvidence:          round4(d.EventEvidence),
+		Events:                 roundEvents(d.Events),
+		Lambda:                 round4(d.Lambda),
+		ProactiveRate:          round4(d.ProactiveRate),
+		Attribution:            canonicalizeAttribution(d.Attribution),
+		Handler:                d.Handler,
+		ObjectsTouched:         d.ObjectsTouched,
+		RollbackRef:            d.RollbackRef,
+		MutationKind:           d.MutationKind,
+		Phoenix:                phoenixRecord(d.Phoenix),
+		PreemptMargin:          round4(d.PreemptMargin),
+		ProjectedNextStageSec:  round4(d.ProjectedNextStageSec),
+		AIClassified:           d.AIClassified,
+		DecisionTrace:          d.Trace,
+		Measurements:           recordMeasurements(d.Measurements),
+		preparedRepresentation: preparedRepresentation,
 	}
 }
 
@@ -514,7 +656,7 @@ func phoenixRecord(p *model.PhoenixForensics) *model.PhoenixForensics {
 
 // Record logs one decision.
 func (l *Logger) Record(d model.Decision) error {
-	rec := ToRecord(d)
+	rec := toRecord(d, true)
 	err := l.writeRecord(rec.Tenant, rec)
 	if l.OnlySelected && !d.Selected && (d.Existential == nil || (len(d.Existential.Evidence) == 0 && len(d.Existential.Reasons) == 0)) {
 		return err

@@ -1926,7 +1926,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-137 · No scale envelope: per-tick cost is writes + an O(cluster) in-memory cache, zero measurements · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: T20-M137, T24-M137-AUDIT
+Severity: HIGH · Tier: parallel · Fixes: POST25-M137, POST25-M137-TRACE, T20-M137, T24-M137-AUDIT
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -2731,7 +2731,7 @@ Severity: MEDIUM · Tier: unassigned · Fixes: T14-M177
 
 ### M-178 · vLLM prefix-cache reset credits HTTP success without backend confirmation · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: T14-M178
+Severity: HIGH · Tier: unassigned · Fixes: T14-M178, T26-M178
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `ACTUATION` — anatomy locus review required.

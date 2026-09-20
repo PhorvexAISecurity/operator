@@ -1,6 +1,8 @@
 package model
 
-import "encoding/json"
+import (
+	"math"
+)
 
 // RepresentationState is reporting-only. Its safe zero value is unknown.
 // M-99 may reference these definitions, but M-100 adds no selection constraint.
@@ -182,14 +184,12 @@ type Representation struct {
 // authenticated source archive; this audit stores safe references only.
 func (s RepresentationSnapshot) Redacted() RepresentationSnapshot {
 	s, _ = s.withoutCredentialKeys()
-	b, err := marshalOutcomeRedacted(s)
-	if err != nil {
-		return RepresentationSnapshot{Limitations: []string{"invalid-reporting-input"}}
+	for _, value := range s.Weights.Values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return RepresentationSnapshot{Limitations: []string{"invalid-reporting-input"}}
+		}
 	}
-	var out RepresentationSnapshot
-	if json.Unmarshal(b, &out) != nil {
-		return RepresentationSnapshot{Limitations: []string{"invalid-reporting-input"}}
-	}
+	out := cloneRepresentationSnapshot(s, true)
 	for i, f := range s.Facts {
 		if f.Scope != out.Facts[i].Scope {
 			out.Facts[i].Reason = "redacted-scope-binding-unavailable"
@@ -211,17 +211,8 @@ func (s RepresentationSnapshot) Redacted() RepresentationSnapshot {
 
 // MarshalJSON also protects callers persisting an externally decoded report.
 func (r Representation) MarshalJSON() ([]byte, error) {
-	type plain Representation
-	var removed bool
-	r.Snapshot, removed = r.Snapshot.withoutCredentialKeys()
-	if removed {
-		missing := RepresentationAmount{Reason: "weight-key-binding-unavailable"}
-		r.CoverageShare.Covered = missing
-		r.CoverageShare.Coverable = missing
-		r.CoverageShare.Representable = missing
-		r.CoverageShare.Share = missing
-	}
-	return marshalOutcomeRedacted(plain(r))
+	_, raw, err := MarshalOwnedRedactedRepresentation(&r)
+	return raw, err
 }
 
 // The existing redactor cleans JSON values, not map keys. Drop sensitive keys

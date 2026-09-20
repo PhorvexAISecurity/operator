@@ -34,19 +34,24 @@ func amount(v float64) model.RepresentationAmount {
 	return model.RepresentationAmount{Present: true, Value: &v}
 }
 func canonical[T any](xs []T) []T {
-	// Sort/deduplicate copies; callers never share slices/maps with the input.
-	sort.Slice(xs, func(i, j int) bool {
-		a, _ := json.Marshal(xs[i])
-		b, _ := json.Marshal(xs[j])
-		return string(a) < string(b)
-	})
-	out := make([]T, 0, len(xs))
+	// Serialize each sort key once. The former comparator serialized both
+	// operands on every comparison, creating quadratic allocation pressure.
+	type keyed struct {
+		value T
+		key   string
+	}
+	items := make([]keyed, len(xs))
+	for i := range xs {
+		b, _ := json.Marshal(xs[i])
+		items[i] = keyed{value: xs[i], key: string(b)}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].key < items[j].key })
+	out := make([]T, 0, len(items))
 	prev := ""
-	for _, x := range xs {
-		b, _ := json.Marshal(x)
-		if string(b) != prev {
-			out = append(out, x)
-			prev = string(b)
+	for _, item := range items {
+		if item.key != prev {
+			out = append(out, item.value)
+			prev = item.key
 		}
 	}
 	return out
@@ -55,21 +60,7 @@ func canonical[T any](xs []T) []T {
 // Freeze copies all mutable reporting inputs. Invalid numbers remain present as
 // missing/invalid evidence rather than causing JSON cloning to discard a snapshot.
 func Freeze(in model.RepresentationSnapshot) model.RepresentationSnapshot {
-	weights := in.Weights.Values
-	in.Weights.Values = nil
-	b, err := json.Marshal(in)
-	if err != nil {
-		panic(err)
-	} // all other fields are finite-free values
-	var out model.RepresentationSnapshot
-	if err = json.Unmarshal(b, &out); err != nil {
-		panic(err)
-	}
-	out.Weights.Values = make(map[string]float64, len(weights))
-	for k, v := range weights {
-		out.Weights.Values[k] = v
-	}
-	return out
+	return model.CloneRepresentationSnapshot(in)
 }
 
 func validWitness(w model.LossWitness) bool {

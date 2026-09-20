@@ -75,14 +75,14 @@ func (r *m064HTTPReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	if status == 0 {
-		if req.URL.Path == defaultResetPath {
+		if req.URL.Path == defaultResetPath || req.URL.Path == defaultKVInvPath {
 			status = http.StatusOK
 		} else {
 			status = http.StatusNoContent
 		}
 	}
 	w.WriteHeader(status)
-	if req.URL.Path == defaultResetPath && status == http.StatusOK {
+	if (req.URL.Path == defaultResetPath || req.URL.Path == defaultKVInvPath) && status == http.StatusOK {
 		_, _ = w.Write([]byte(`{"success":true}`))
 	}
 }

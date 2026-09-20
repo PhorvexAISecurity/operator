@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "patch_id": "phorvex-vllm-0.7.3-reset-ack-v1",
+  "upstream": {
+    "repository": "https://github.com/vllm-project/vllm.git",
+    "tag": "v0.7.3",
+    "commit": "ed6e9075d31e32c8548b480a47d1ffb77da1f54c"
+  },
+  "base_image": {
+    "reference": "vllm/vllm-openai:v0.7.3",
+    "digest": "sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2",
+    "platform": "linux/amd64"
+  },
+  "patch_sha256": "54039d2b4f423fa9921410759d9d7079e40fcea7d620075d427c8af410218b45",
+  "files": {
+    "vllm/engine/protocol.py": {
+      "before": "58bd7a690ab70c0af4025eeb83830449cbc2e9379e5c44746bebb958b259393f",
+      "after": "73a987aa35a83357d2dc36673c63598a731d4cd8437b67a6f67a9c7fe2e19aa2"
+    },
+    "vllm/engine/async_llm_engine.py": {
+      "before": "6b8b7828f21638441fa16c7afb04c1d39f850f43c076d24dfecaf36496b58fb3",
+      "after": "d766accb1964643351190253620690ade2496424787548d17168783f15206800"
+    },
+    "vllm/engine/multiprocessing/__init__.py": {
+      "before": "2f0b7755e8d4636b44fb559917ee6ce0bd79b54ca44b6038f13813d14e61df94",
+      "after": "2b82a06ef51cc3c8200938b7be7d6900d911ab8147fc2ae7035553409e73afcb"
+    },
+    "vllm/engine/multiprocessing/client.py": {
+      "before": "2e666aaf21c414163d55bd8205e06afa50740a325e46e76b995875b2feee17c6",
+      "after": "dcda6be653e3cfa1b19fb6e94ab0890edf8e196e7556bfbaf7cafc43afd0abb0"
+    },
+    "vllm/engine/multiprocessing/engine.py": {
+      "before": "8e2ad1a4d25685aa09323d285c095df7e8a143f60671e7dd26906e03c885d3de",
+      "after": "bd305268925258838690fd9188dfacd6c22e71146de3b3ab82a8992bc9df4e0e"
+    },
+    "vllm/entrypoints/openai/api_server.py": {
+      "before": "dfad237c7e85a2dde352fc2885bd5f3f21fcb3fa42960ae6dc02770b19da6caa",
+      "after": "fd46acf3cfe1f9e34436eabbdbc91aeb5ae258d40a0d0fb2a60fbe7bedd4afcc"
+    }
+  }
+}
