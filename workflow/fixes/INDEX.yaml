@@ -1240,6 +1240,17 @@ fixes:
     stacked_on: []
     branch: fix/t20-m137
     head_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+  T24-M137-AUDIT:
+    directory: fixes/T24-M137-AUDIT
+    aliases: []
+    issues:
+    - M-137
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t24-m137-audit
+    head_sha: 59500a5c0ffa4c3dabed862d93d52a8aa5cb86d7
   T22-M078:
     directory: fixes/T22-M078
     aliases: []
@@ -1262,3 +1273,14 @@ fixes:
     stacked_on: []
     branch: fix/t22-m180
     head_sha: ee7e57000dbaff856e664bd443056cc33554b99e
+  T24-M181:
+    directory: fixes/T24-M181
+    aliases: []
+    issues:
+    - M-181
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t24-m181
+    head_sha: 5e5fb4ccc436a1f8f208bd2c3dd39ff745ad229e

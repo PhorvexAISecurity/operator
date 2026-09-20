@@ -153,3 +153,10 @@ intakes:
     state: FILED
     issue_id: M-180
     aliases: []
+  RPT-20260919-185000-claim-build-redaction:
+    directory: intake/RPT-20260919-185000-claim-build-redaction
+    kind: BUG
+    title: Claim build metadata bypasses existing credential-pattern redaction
+    state: FILED
+    issue_id: M-181
+    aliases: []
