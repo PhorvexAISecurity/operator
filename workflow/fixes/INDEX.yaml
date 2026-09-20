@@ -1332,3 +1332,15 @@ fixes:
     - POST25-M137
     branch: post25-catalogue
     head_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+  POST25-ECONOMICS:
+    directory: fixes/POST25-ECONOMICS
+    aliases: []
+    issues:
+    - M-144
+    - M-98
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-economics
+    head_sha: null
