@@ -8,7 +8,8 @@
   },
   "base_image": {
     "reference": "vllm/vllm-openai:v0.7.3",
-    "digest": "sha256:4f4039589120397ce64231883a1b8a78e7bc83b2a8999c5951af0bd72f6eea79"
+    "digest": "sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2",
+    "platform": "linux/amd64"
   },
   "patch_sha256": "54039d2b4f423fa9921410759d9d7079e40fcea7d620075d427c8af410218b45",
   "files": {

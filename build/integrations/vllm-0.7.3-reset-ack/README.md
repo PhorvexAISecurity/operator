@@ -28,11 +28,20 @@ Build from this directory:
 docker build -t REGISTRY/phorvex-vllm:v0.7.3-reset-ack .
 ```
 
-The base image is pinned by digest. Only Python modules are replaced, leaving
-the base image's compiled CUDA and extension ABI intact. The build verifies the
-installed distribution version, pre-patch hashes, patch digest, post-patch
-hashes, Python syntax, and focused contract controls. It writes the actual
-installed hashes and Python cache tag to
+The base is the observed Docker v2 `linux/amd64` manifest for official tag
+`v0.7.3`, pinned as
+`vllm/vllm-openai:v0.7.3@sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2`.
+`base-image-receipt.json` retains the registry manifest and config body hashes;
+`verify_recipe.py` binds those hashes and the config platform to the Dockerfile
+`FROM`, OCI base labels, and `manifest.json`. It can also verify the compact
+receipt against retained raw registry responses with `--registry-manifest` and
+`--registry-config`.
+
+Only Python modules are replaced, leaving the base image's compiled CUDA and
+extension ABI intact. The build verifies the recipe binding, installed
+distribution version, pre-patch hashes, patch digest, post-patch hashes, Python
+syntax, and focused contract controls. It writes the actual installed hashes
+and Python cache tag to
 `/opt/phorvex-vllm-reset-ack/runtime-receipt.json`.
 
 For a checked-out upstream source tree, apply and test with:
@@ -40,6 +49,8 @@ For a checked-out upstream source tree, apply and test with:
 ```sh
 python3 apply_patch.py --source-root /path/to/vllm
 python3 test_contract.py --source-root /path/to/vllm
+python3 verify_recipe.py
+python3 -m unittest -v test_recipe.py
 ```
 
 The same producer control demonstrates the original and corrected result:
