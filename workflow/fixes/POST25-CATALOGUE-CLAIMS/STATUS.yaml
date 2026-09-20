@@ -1,0 +1,120 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 840640e1d420a6310f59f23139ff113fc76171e5f6d204f2621d03f8f6cfaa01
+    source_sha: b38e92f5ce4925be034286859b723d14b69136e8
+    at: '2026-09-20T18:43:13+00:00'
+    contract_sha256: 4bc178a5e90287ce559e2c5e7b39fc7b5016f72ce1e6543505b29e662af1af75
+fix_id: POST25-CATALOGUE-CLAIMS
+issues:
+- M-170
+title: Require assessed mechanisms for catalogue security claims
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-catalogue-stateful
+  code_sha: b38e92f5ce4925be034286859b723d14b69136e8
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.139
+  deployed_git_sha: 92f961bd43fa0ba0b34c21095c4a24f446675a26
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-catalogue-claims
+  base_sha: b38e92f5ce4925be034286859b723d14b69136e8
+  head_sha: b38e92f5ce4925be034286859b723d14b69136e8
+  stacked_on:
+  - POST25-CATALOGUE-STATEFUL
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  live_required: false
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Unassessed mechanism audit and real live defense coverage remain open; offline reporting
+  eligibility is not a live defense.
+- Existing source fixes and deployed behavior have separate acceptance and release
+  records.
+next_action:
+  owner: post25-catalogue
+  action: After M182 handoff, implement assessed mechanism report boundaries
+updated_at: '2026-09-20T18:43:13+00:00'
+follow_up_to: T5-M170
+configuration_history:
+- at: '2026-09-20T18:42:51+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T18:43:11+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T18:43:13+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
