@@ -99,6 +99,11 @@ type TargetConfig struct {
 	// ephemeral-session control to the same reviewed CPU node. It has no effect
 	// on any other scenario. Empty retains ordinary Kubernetes scheduling.
 	BenignSessionNodeSelector map[string]string `json:"benignSessionNodeSelector"`
+
+	// BenignCheckpointStorageClass explicitly selects an existing reviewed
+	// provisioner for the benign checkpoint-continuity control. Empty keeps that
+	// control unavailable and causes no storage mutation.
+	BenignCheckpointStorageClass string `json:"benignCheckpointStorageClass"`
 }
 
 // DefaultCredentialObservationWindowSeconds is the observation interval applied
@@ -217,6 +222,11 @@ func (c TargetConfig) Validate() error {
 		}
 		if problems := validation.IsValidLabelValue(value); len(problems) != 0 {
 			return fmt.Errorf("config: benignSessionNodeSelector value for %q is invalid: %s", key, strings.Join(problems, "; "))
+		}
+	}
+	if value := strings.TrimSpace(c.BenignCheckpointStorageClass); value != "" {
+		if problems := validation.IsDNS1123Subdomain(value); len(problems) != 0 {
+			return fmt.Errorf("config: benignCheckpointStorageClass %q is invalid: %s", value, strings.Join(problems, "; "))
 		}
 	}
 	return nil
