@@ -40,6 +40,131 @@ type scriptedDrainV11 struct {
 	statusOnQuery func(string, string, string) drainV11StatusResponse
 }
 
+func journalDecodeReceipt(t *testing.T, receipt operationReceipt) operationReceipt {
+	t.Helper()
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded operationReceipt
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	return decoded
+}
+
+func preparedDrainV11Fixture() *drainV11Receipt {
+	return &drainV11Receipt{
+		OperationID:               strings.Repeat("1", 32),
+		OperationGeneration:       "1",
+		Attempt:                   1,
+		ExpectedIncarnation:       strings.Repeat("2", 64),
+		LedgerID:                  strings.Repeat("3", 32),
+		ProxyBootID:               strings.Repeat("4", 32),
+		EngineBootID:              strings.Repeat("5", 32),
+		Deadline:                  "2026-09-20T20:00:00.000000Z",
+		CancelNotBefore:           "2026-09-20T19:59:50.000000Z",
+		CancellationGraceDeadline: "2026-09-20T20:00:30.000000Z",
+		Owner: drainV11Owner{Tenant: "tenant", NamespaceUID: "namespace-uid", PolicyUID: "policy-uid",
+			PodUID: "pod-uid", ServiceUID: "service-uid"},
+		TargetNamespace:  "ns",
+		TargetName:       "model",
+		CapabilitySHA256: strings.Repeat("6", 64),
+		ProxySource:      "proxy-source",
+		EngineSource:     "engine-source",
+		OperatorBinding:  strings.Repeat("7", 64),
+	}
+}
+
+func TestOperationReceiptVersionsPartitionDrainV11FieldsAndPhases(t *testing.T) {
+	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow})
+	pool := warmPoolIntent{RSName: "rs", RSUID: "rsuid", RSGeneration: 1, Desired: 2,
+		RSTemplateHash: "template", RSSelectorHash: "selector", ServiceName: "svc", ServiceUID: "service-uid",
+		ServiceSelectorHash: "service-selector", Members: []string{string(old.UID), string(next.UID)}}
+	warmV2 := m066ValidV2Receipt(old, next, pool)
+	warmV6 := warmV2
+	warmV6.Version = warmSecureReceiptVersion
+	warmV6.ServingBindingSHA256 = strings.Repeat("8", 64)
+	warmV6.ServingServiceAccount = "default"
+	warmV10 := warmV2
+	warmV10.Version = warmDrainReceiptVersion
+	warmV10.TargetLabels = copyLabels(old.Labels)
+	warmV10.EndpointConfigSHA256 = strings.Repeat("9", 64)
+	warmV10.NewEndpointConfigSHA256 = strings.Repeat("a", 64)
+	warmV10.WarmSelectedUIDs = []string{string(old.UID)}
+	warmV10.AdmittedFloor = 1
+	warmV10.ServingLegacy = true
+	warmV10.ServingServiceAccount = "default"
+
+	pod, service, _, _ := requestDrainFixture(t, "true")
+	requestV3 := testDrainReceipt(pod, service, "withdrawn")
+	requestV7 := requestV3
+	requestV7.Version = requestDrainSecureReceiptVersion
+	requestV7.ServingBindingSHA256 = strings.Repeat("b", 64)
+	requestV7.ServingServiceAccount = "default"
+
+	legacy := []struct {
+		name    string
+		receipt operationReceipt
+	}{
+		{"warm-v2", warmV2},
+		{"warm-v6", warmV6},
+		{"warm-v10", warmV10},
+		{"request-v3", requestV3},
+		{"request-v7", requestV7},
+	}
+	for _, tc := range legacy {
+		t.Run(tc.name+"-positive", func(t *testing.T) {
+			if decoded := journalDecodeReceipt(t, tc.receipt); !decoded.valid() {
+				t.Fatal("valid legacy receipt was rejected after JSON decode")
+			}
+		})
+		for _, phase := range []string{"drain-dispatching-v11", "drain-cancel-dispatching-v11", "backend-reopened-v11"} {
+			t.Run(tc.name+"-rejects-"+phase, func(t *testing.T) {
+				forged := tc.receipt
+				forged.Phase = phase
+				if decoded := journalDecodeReceipt(t, forged); decoded.valid() {
+					t.Fatalf("legacy receipt accepted v11 phase %q", phase)
+				}
+			})
+		}
+		t.Run(tc.name+"-rejects-v11-field", func(t *testing.T) {
+			forged := tc.receipt
+			forged.DrainV11 = preparedDrainV11Fixture()
+			if decoded := journalDecodeReceipt(t, forged); decoded.valid() {
+				t.Fatal("legacy receipt accepted DrainV11 authority")
+			}
+		})
+	}
+
+	unrelated := operationReceipt{Version: 1, Kind: "quarantine", Phase: "prepared", PolicyNamespace: "ns",
+		PolicyName: "policy", PolicyUID: "policy-uid", TargetName: "pod", TargetUID: "pod-uid",
+		TargetLabels: map[string]string{"app": "model"}, NPName: "deny"}
+	if !journalDecodeReceipt(t, unrelated).valid() {
+		t.Fatal("valid unrelated legacy receipt was rejected")
+	}
+	unrelated.DrainV11 = preparedDrainV11Fixture()
+	if journalDecodeReceipt(t, unrelated).valid() {
+		t.Fatal("unrelated legacy receipt accepted DrainV11 authority")
+	}
+
+	warmV11 := warmV10
+	warmV11.Version = operationDrainReceiptVersion
+	warmV11.DrainV11 = preparedDrainV11Fixture()
+	requestV11 := requestV3
+	requestV11.Version = operationDrainReceiptVersion
+	requestV11.ServingLegacy = true
+	requestV11.DrainV11 = preparedDrainV11Fixture()
+	for name, receipt := range map[string]operationReceipt{"warm-v11": warmV11, "request-v11": requestV11} {
+		t.Run(name+"-positive", func(t *testing.T) {
+			if decoded := journalDecodeReceipt(t, receipt); !decoded.valid() {
+				t.Fatal("valid v11 prepared receipt was rejected after JSON decode")
+			}
+		})
+	}
+}
+
 func (s *scriptedDrainV11) DrainV11Capability(context.Context, servingEndpoint) (drainV11CapabilityResponse, error) {
 	return s.capability, nil
 }

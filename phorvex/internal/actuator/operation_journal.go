@@ -270,8 +270,57 @@ func podSpecDigest(p *corev1.Pod) string {
 	return fmt.Sprintf("%x", h[:])
 }
 
+func legacyWarmPoolPhase(phase string) bool {
+	switch phase {
+	case "prepared", "promoted", "retiring", "drain-dispatching", "drain-unsent", "drain-confirmed",
+		"restore-old-claimed", "old-route-observed", "restore-shadow-claimed", "routing-restored",
+		"retired-awaiting-controller", "pool-observed", "pool-warm-ready":
+		return true
+	default:
+		return false
+	}
+}
+
+func operationWarmDrainPhase(phase string) bool {
+	switch phase {
+	case "prepared", "promoted", "retiring", "drain-dispatching-v11", "drain-cancel-dispatching-v11",
+		"drain-cancelled-v11", "reopen-dispatching-v11", "backend-reopened-v11", "drain-unsent",
+		"drain-confirmed-v11", "restore-old-claimed", "old-route-observed", "restore-shadow-claimed",
+		"routing-restored", "retired-awaiting-controller", "pool-observed", "pool-warm-ready":
+		return true
+	default:
+		return false
+	}
+}
+
+func legacyRequestDrainPhase(phase string) bool {
+	switch phase {
+	case "prepared", "claimed", "stopped", "withdrawn", "stack-confirmed", "restored":
+		return true
+	default:
+		return false
+	}
+}
+
+func operationRequestDrainPhase(phase string) bool {
+	switch phase {
+	case "prepared", "claimed", "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent",
+		"drain-cancel-dispatching-v11", "drain-cancelled-v11", "drain-confirmed-v11",
+		"reopen-dispatching-v11", "backend-reopened-v11", "restored":
+		return true
+	default:
+		return false
+	}
+}
+
 func (r operationReceipt) valid() bool {
 	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion && r.Version != servingEffectReceiptVersion && r.Version != warmDrainReceiptVersion && r.Version != operationDrainReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+		return false
+	}
+	// DrainV11 is an authority-bearing extension of receipt version 11. Older
+	// versions must never acquire it, including kinds that do not implement
+	// draining, because journal JSON is an untrusted recovery boundary.
+	if r.Version != operationDrainReceiptVersion && r.DrainV11 != nil {
 		return false
 	}
 	switch r.Kind {
@@ -282,6 +331,10 @@ func (r operationReceipt) valid() bool {
 			return false
 		}
 		if r.Version == 2 || r.Version == warmSecureReceiptVersion || r.Version == warmDrainReceiptVersion || r.Version == operationDrainReceiptVersion {
+			if (r.Version == operationDrainReceiptVersion && !operationWarmDrainPhase(r.Phase)) ||
+				(r.Version != operationDrainReceiptVersion && !legacyWarmPoolPhase(r.Phase)) {
+				return false
+			}
 			p := r.Pool
 			if p == nil || p.RSName == "" || p.RSUID == "" || p.RSGeneration <= 0 || p.Desired < 2 || p.Desired > warmPoolMaxMembers || len(p.Members) != int(p.Desired) || p.RSTemplateHash == "" || p.RSSelectorHash == "" || p.ServiceName == "" || p.ServiceUID == "" || p.ServiceSelectorHash == "" || ((p.ParentName == "") != (p.ParentUID == "")) || r.RewarmSpecHash != "" || r.OldName == "" || r.OldName != r.TargetName || r.OldUID == "" || r.OldUID != r.TargetUID || r.NewName == "" || r.NewUID == "" || r.OldName == r.NewName || r.OldUID == r.NewUID || r.GroupValue == "" || !((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard)) {
 				return false
@@ -296,7 +349,7 @@ func (r operationReceipt) valid() bool {
 			if !members[r.OldUID] || !members[r.NewUID] {
 				return false
 			}
-			preObservation := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "drain-dispatching" || r.Phase == "drain-dispatching-v11" || r.Phase == "drain-cancel-dispatching-v11" || r.Phase == "drain-cancelled-v11" || r.Phase == "reopen-dispatching-v11" || r.Phase == "backend-reopened-v11" || r.Phase == "drain-unsent" || r.Phase == "drain-confirmed" || r.Phase == "drain-confirmed-v11" || r.Phase == "restore-old-claimed" || r.Phase == "old-route-observed" || r.Phase == "restore-shadow-claimed" || r.Phase == "routing-restored" || r.Phase == "retired-awaiting-controller"
+			preObservation := r.Phase != "pool-observed" && r.Phase != "pool-warm-ready"
 			postObservation := r.Phase == "pool-observed" || r.Phase == "pool-warm-ready"
 			valid := (preObservation && r.RewarmName == "" && r.RewarmUID == "") || (postObservation && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.RewarmUID != r.OldUID && r.RewarmUID != r.NewUID && !members[r.RewarmUID])
 			if !valid {
@@ -361,6 +414,10 @@ func (r operationReceipt) valid() bool {
 		return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "policy-bound") && r.NPName != "" && r.TargetLabels != nil && (r.Phase != "policy-bound" || r.NPUID != "")
 	case "request-drain":
 		_, hasServingSelector := r.ServiceSelector[labelServing]
+		if (r.Version == operationDrainReceiptVersion && !operationRequestDrainPhase(r.Phase)) ||
+			(r.Version != operationDrainReceiptVersion && !legacyRequestDrainPhase(r.Phase)) {
+			return false
+		}
 		if (r.Version != requestDrainReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != operationDrainReceiptVersion) || !boundedLabelMap(r.TargetLabels) || !boundedLabelMap(r.ServiceSelector) || !hasServingSelector || r.ServiceName == "" || r.ServiceUID == "" || r.OperationToken == "" || len(r.EndpointAddresses) != 1 || (!r.PriorServingPresent && r.PriorServingValue != "") || r.Aborted < 0 || ((r.Version == requestDrainSecureReceiptVersion || (r.Version == operationDrainReceiptVersion && !r.ServingLegacy)) && (!validDigest(r.ServingBindingSHA256) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0)) || (r.Version == operationDrainReceiptVersion && r.ServingLegacy && r.ServingBindingSHA256 != "") || (r.Version == operationDrainReceiptVersion && (r.DrainV11 == nil || !r.DrainV11.prepared())) {
 			return false
 		}
@@ -391,7 +448,7 @@ func (r operationReceipt) valid() bool {
 		case "reopen-dispatching-v11":
 			return r.Version == operationDrainReceiptVersion && (r.DrainV11.confirmed() || r.DrainV11.cancelled()) && r.DrainV11.ReopenRequests == 1
 		case "backend-reopened-v11":
-			return r.Version != operationDrainReceiptVersion || r.DrainV11.reopened()
+			return r.DrainV11.reopened()
 		case "restored":
 			return true
 		default:
