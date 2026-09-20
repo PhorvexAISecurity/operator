@@ -1240,3 +1240,25 @@ fixes:
     stacked_on: []
     branch: fix/t20-m137
     head_sha: de5e4ad53c9fbc1c3e656e003b8c76f9b8ace04d
+  T22-M078:
+    directory: fixes/T22-M078
+    aliases: []
+    issues:
+    - M-78
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t22-m078
+    head_sha: 24f967dbb57709821fc74279c66add087c13f725
+  T22-M180:
+    directory: fixes/T22-M180
+    aliases: []
+    issues:
+    - M-180
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t22-m180
+    head_sha: ee7e57000dbaff856e664bd443056cc33554b99e
