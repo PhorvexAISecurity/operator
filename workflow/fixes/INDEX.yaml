@@ -1343,4 +1343,4 @@ fixes:
     stacked_on:
     - T25-M067
     branch: post25-drain-v11
-    head_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+    head_sha: a3d0e50a5a1874c413f8367bbdd1aa67bdfadf5e
