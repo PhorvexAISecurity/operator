@@ -1,0 +1,58 @@
+schema_version: 1
+intake_id: RPT-20260920-172300-gpu-fixture-evidence
+kind: BUG
+title: GPU live fixture loses first startup failure diagnostics across container restart
+state: VERIFYING
+reporter: codex-lead
+approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+created_at: '2026-09-20T17:23:49+00:00'
+updated_at: '2026-09-20T17:26:53+00:00'
+pins:
+  source_main_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: dev-existing-cluster
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Reproduce first-failure evidence retention in repaired one-shot producer,
+    independently review, then run a fresh bounded diagnostic case
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-20T17:26:52+00:00'
+  by: codex-lead
+  artifact: REPORT.md
+  note: Campaign test-infrastructure defect; user-authorized investigation and repair;
+    original GPU startup cause remains unknown.
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-20T17:26:53+00:00'
+  by: codex-lead
+  artifact: REPORT.md
+  note: null
+  approval_ref: null
+  forced: false
+revision: 2
