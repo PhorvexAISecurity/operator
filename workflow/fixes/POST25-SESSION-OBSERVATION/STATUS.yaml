@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -78,12 +78,28 @@ checks:
     inputs:
     - build/test-harness/scenarios
     inputs_sha256: e36977e70c2b602adb1e2b46500fc7f52494faebd9b3ddd59a0fa91a96d00bd0
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e028c577ba69cde7d922bf217a5c86f2af3f405fd13c5e97f0e12ca5710e32ba
+    source_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
+    at: '2026-09-20T23:07:44+00:00'
+    baseline_sha: 16111c40b3501cccc988eedadb06382596addcd8
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: fba9f23816890c3dfc46904e44b46d1818cd31ecef62cf4b1708f90cef248cdd
+    source_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
+    at: '2026-09-20T23:07:44+00:00'
+    incident_sha256: e028c577ba69cde7d922bf217a5c86f2af3f405fd13c5e97f0e12ca5710e32ba
 fix_id: POST25-SESSION-OBSERVATION
 issues:
 - M-170
 title: Measure real HTTP session behavior across bounded rotations
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -129,7 +145,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -149,10 +165,10 @@ residuals:
 - Benign process-local state only, zero security/economic/MIG/continuous-availability
   credit.
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-20T23:06:39+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T23:07:47+00:00'
 follow_up_to: POST25-CHECKPOINT-LOCAL-FIXTURE
 configuration_history:
 - at: '2026-09-20T21:00:40+00:00'
@@ -209,10 +225,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T23:07:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T23:07:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-SESSION-OBSERVATION:7:submit
-  from: post25-catalogue
+  id: POST25-SESSION-OBSERVATION:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
