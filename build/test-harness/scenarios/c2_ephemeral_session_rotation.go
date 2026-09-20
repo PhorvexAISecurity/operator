@@ -165,6 +165,9 @@ func (s *c2EphemeralSessionRotation) Setup(ctx context.Context, env *core.Env) e
 	runAsUser := int64(65532)
 	readOnly := true
 	noEscalation := false
+	targetNodeSelector := cloneStringMap(env.Config.BenignSessionNodeSelector)
+	producerNodeSelector := cloneStringMap(env.Config.BenignSessionNodeSelector)
+	selectorEvidence := sessionNodeSelectorEvidence(env.Config.BenignSessionNodeSelector)
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: sessionDeployment, Namespace: env.Config.Namespace, Labels: labels},
 		Spec: appsv1.DeploymentSpec{
@@ -174,6 +177,7 @@ func (s *c2EphemeralSessionRotation) Setup(ctx context.Context, env *core.Env) e
 				ObjectMeta: metav1.ObjectMeta{Labels: podLabels, Annotations: map[string]string{"r6th.io/session-source-sha256": sessionServerSourceSHA256()}},
 				Spec: corev1.PodSpec{
 					AutomountServiceAccountToken: &noToken,
+					NodeSelector:                 targetNodeSelector,
 					SecurityContext:              &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, RunAsUser: &runAsUser, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 					Containers: []corev1.Container{{
 						Name:            "session",
@@ -193,7 +197,7 @@ func (s *c2EphemeralSessionRotation) Setup(ctx context.Context, env *core.Env) e
 			},
 		},
 	}
-	env.Log.Command(fmt.Sprintf("kubectl create deployment %s -n %s  # pinned CPU-only in-memory session fixture", sessionDeployment, env.Config.Namespace))
+	env.Log.Command(fmt.Sprintf("kubectl create deployment %s -n %s  # pinned CPU-only in-memory session fixture nodeSelector=%s", sessionDeployment, env.Config.Namespace, selectorEvidence))
 	createdDeployment, err := env.Kube.AppsV1().Deployments(env.Config.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("create session deployment: %w", err)
@@ -220,6 +224,7 @@ func (s *c2EphemeralSessionRotation) Setup(ctx context.Context, env *core.Env) e
 		ObjectMeta: metav1.ObjectMeta{Name: sessionProducer, Namespace: env.Config.Namespace, Labels: producerLabels},
 		Spec: corev1.PodSpec{
 			AutomountServiceAccountToken: &noToken,
+			NodeSelector:                 producerNodeSelector,
 			SecurityContext:              &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, RunAsUser: &runAsUser, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			Containers: []corev1.Container{{
 				Name:            "producer",
@@ -234,7 +239,7 @@ func (s *c2EphemeralSessionRotation) Setup(ctx context.Context, env *core.Env) e
 			}},
 		},
 	}
-	env.Log.Command(fmt.Sprintf("kubectl run %s -n %s --image=%s  # HTTP producer", sessionProducer, env.Config.Namespace, sessionPythonImage))
+	env.Log.Command(fmt.Sprintf("kubectl run %s -n %s --image=%s  # HTTP producer nodeSelector=%s", sessionProducer, env.Config.Namespace, sessionPythonImage, selectorEvidence))
 	createdProducer, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, producer, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("create session producer: %w", err)
@@ -306,12 +311,35 @@ func (s *c2EphemeralSessionRotation) Execute(ctx context.Context, env *core.Env)
 			"classification":                  "benign functional-effect control",
 			"fixtureImage":                    sessionPythonImage,
 			"serverSourceSHA256":              sessionServerSourceSHA256(),
+			"benignSessionNodeSelector":       sessionNodeSelectorEvidence(env.Config.BenignSessionNodeSelector),
 			"observationWindowSeconds":        fmt.Sprintf("%.0f", benignSessionObservationWindow.Seconds()),
 			"observationWindowStartedAtUTC":   windowStart.UTC().Format(time.RFC3339Nano),
 			"observationWindowEndedAtUTC":     windowEnd.UTC().Format(time.RFC3339Nano),
 			"observationWindowElapsedSeconds": strconv.FormatFloat(windowEnd.Sub(windowStart).Seconds(), 'f', 3, 64),
 		},
 	}, nil
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if len(source) == 0 {
+		return nil
+	}
+	copy := make(map[string]string, len(source))
+	for key, value := range source {
+		copy[key] = value
+	}
+	return copy
+}
+
+func sessionNodeSelectorEvidence(selector map[string]string) string {
+	if len(selector) == 0 {
+		return "{}"
+	}
+	raw, err := json.Marshal(selector)
+	if err != nil {
+		panic(fmt.Sprintf("marshal validated benign session node selector: %v", err))
+	}
+	return string(raw)
 }
 
 func (s *c2EphemeralSessionRotation) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {

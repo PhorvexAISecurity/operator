@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 )
 
@@ -93,6 +94,11 @@ type TargetConfig struct {
 	// omitted (0) gets the default. Bounded to <= 30 minutes so a live matrix
 	// stays finite. Tests inject a wait seam so they never actually sleep.
 	CredentialObservationWindowSeconds int `json:"credentialObservationWindowSeconds"`
+
+	// BenignSessionNodeSelector optionally pins both Pods used by the benign
+	// ephemeral-session control to the same reviewed CPU node. It has no effect
+	// on any other scenario. Empty retains ordinary Kubernetes scheduling.
+	BenignSessionNodeSelector map[string]string `json:"benignSessionNodeSelector"`
 }
 
 // DefaultCredentialObservationWindowSeconds is the observation interval applied
@@ -102,6 +108,10 @@ const DefaultCredentialObservationWindowSeconds = 90
 // MaxCredentialObservationWindowSeconds bounds the observation interval so a
 // live run cannot be made to wait indefinitely (30 minutes).
 const MaxCredentialObservationWindowSeconds = 30 * 60
+
+// MaxBenignSessionNodeSelectorEntries keeps this narrowly-scoped placement
+// override reviewable and prevents an accidentally unbounded config object.
+const MaxBenignSessionNodeSelectorEntries = 8
 
 // ErrAckMissing is returned when OwnedAck is not true.
 var ErrAckMissing = errors.New("config: ownedAck is REQUIRED and must be true — this is an offensive harness; you must acknowledge you OWN/are AUTHORIZED on the target cluster")
@@ -196,6 +206,18 @@ func (c TargetConfig) Validate() error {
 	if c.CredentialObservationWindowSeconds > MaxCredentialObservationWindowSeconds {
 		return fmt.Errorf("config: credentialObservationWindowSeconds must be <= %d (30m), got %d",
 			MaxCredentialObservationWindowSeconds, c.CredentialObservationWindowSeconds)
+	}
+	if len(c.BenignSessionNodeSelector) > MaxBenignSessionNodeSelectorEntries {
+		return fmt.Errorf("config: benignSessionNodeSelector must contain at most %d entries, got %d",
+			MaxBenignSessionNodeSelectorEntries, len(c.BenignSessionNodeSelector))
+	}
+	for key, value := range c.BenignSessionNodeSelector {
+		if problems := validation.IsQualifiedName(key); len(problems) != 0 {
+			return fmt.Errorf("config: benignSessionNodeSelector key %q is invalid: %s", key, strings.Join(problems, "; "))
+		}
+		if problems := validation.IsValidLabelValue(value); len(problems) != 0 {
+			return fmt.Errorf("config: benignSessionNodeSelector value for %q is invalid: %s", key, strings.Join(problems, "; "))
+		}
 	}
 	return nil
 }

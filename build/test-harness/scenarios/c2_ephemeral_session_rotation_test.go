@@ -39,6 +39,7 @@ func TestEphemeralSessionMetadataIsExplicitBenignControl(t *testing.T) {
 
 func TestEphemeralSessionSetupBuildsPinnedControllerOwnedCPUFixture(t *testing.T) {
 	env := fixtureObservationEnv()
+	env.Config.BenignSessionNodeSelector = map[string]string{"kubernetes.io/hostname": "ip-172-27-12-233.us-east-2.compute.internal"}
 	env.ScenarioName = "c2-ephemeral-session-rotation"
 	env.Trial = 2
 	createSessionFixturePod(t, env, sessionFixturePod("controller-fixture-pod", sessionApp, "fixture", false, true))
@@ -78,6 +79,9 @@ func TestEphemeralSessionSetupBuildsPinnedControllerOwnedCPUFixture(t *testing.T
 	if template.Spec.AutomountServiceAccountToken == nil || *template.Spec.AutomountServiceAccountToken || len(template.Spec.Containers) != 1 {
 		t.Fatalf("deployment token/container shape=%+v", template.Spec)
 	}
+	if got := template.Spec.NodeSelector["kubernetes.io/hostname"]; got != "ip-172-27-12-233.us-east-2.compute.internal" {
+		t.Fatalf("deployment selector=%v", template.Spec.NodeSelector)
+	}
 	container := template.Spec.Containers[0]
 	if container.Image != sessionPythonImage || !strings.Contains(strings.Join(container.Command, " "), sessionServerSource) {
 		t.Fatalf("fixture image/source drift: image=%q command=%v", container.Image, container.Command)
@@ -103,6 +107,53 @@ func TestEphemeralSessionSetupBuildsPinnedControllerOwnedCPUFixture(t *testing.T
 	}
 	if producer.Labels["r6th.io/rotation-target"] != "" || producer.Spec.AutomountServiceAccountToken == nil || *producer.Spec.AutomountServiceAccountToken || producer.Spec.Containers[0].Image != sessionPythonImage {
 		t.Fatalf("producer isolation/pin drift: labels=%v spec=%+v", producer.Labels, producer.Spec)
+	}
+	if got := producer.Spec.NodeSelector["kubernetes.io/hostname"]; got != "ip-172-27-12-233.us-east-2.compute.internal" {
+		t.Fatalf("producer selector=%v", producer.Spec.NodeSelector)
+	}
+	// Each object receives its own copy. Mutating config or one created object
+	// cannot silently retarget the other fixture Pod.
+	env.Config.BenignSessionNodeSelector["kubernetes.io/hostname"] = "changed-config"
+	template.Spec.NodeSelector["kubernetes.io/hostname"] = "changed-deployment"
+	if producer.Spec.NodeSelector["kubernetes.io/hostname"] != "ip-172-27-12-233.us-east-2.compute.internal" {
+		t.Fatalf("producer selector aliased deployment/config: %v", producer.Spec.NodeSelector)
+	}
+}
+
+func TestEphemeralSessionSetupDefaultLeavesBothPodsUnscheduled(t *testing.T) {
+	env := fixtureObservationEnv()
+	createSessionFixturePod(t, env, sessionFixturePod("controller-fixture-pod", sessionApp, "fixture", false, true))
+	client := env.Kube.(*k8sfake.Clientset)
+	client.PrependReactor("create", "deployments", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		action.(k8stesting.CreateAction).GetObject().(*appsv1.Deployment).UID = "deployment-owned"
+		return false, nil, nil
+	})
+	client.PrependReactor("create", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		action.(k8stesting.CreateAction).GetObject().(*corev1.Service).UID = "service-owned"
+		return false, nil, nil
+	})
+	client.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		pod := action.(k8stesting.CreateAction).GetObject().(*corev1.Pod)
+		if pod.Name == sessionProducer {
+			pod.UID = "producer-owned"
+			pod.Status.Phase = corev1.PodRunning
+			pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+		}
+		return false, nil, nil
+	})
+	if err := (&c2EphemeralSessionRotation{}).Setup(context.Background(), env); err != nil {
+		t.Fatal(err)
+	}
+	dep, err := env.Kube.AppsV1().Deployments("sandbox").Get(context.Background(), sessionDeployment, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer, err := env.Kube.CoreV1().Pods("sandbox").Get(context.Background(), sessionProducer, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dep.Spec.Template.Spec.NodeSelector != nil || producer.Spec.NodeSelector != nil {
+		t.Fatalf("default scheduling changed: deployment=%v producer=%v", dep.Spec.Template.Spec.NodeSelector, producer.Spec.NodeSelector)
 	}
 }
 
@@ -159,6 +210,7 @@ func TestEphemeralSessionTeardownUsesUIDPrecondition(t *testing.T) {
 
 func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.T) {
 	env := fixtureObservationEnv()
+	env.Config.BenignSessionNodeSelector = map[string]string{"kubernetes.io/hostname": "ip-172-27-12-233.us-east-2.compute.internal"}
 	env.Rand = rand.New(rand.NewSource(19))
 	env.Trial = 4
 	createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
@@ -201,6 +253,9 @@ func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.
 	}
 	if result.Notes["transport"] != "ordinary HTTP via ClusterIP Service" || result.Notes["sessionID"] != s.sessionID || result.Notes["fixtureImage"] != sessionPythonImage || result.Notes["serverSourceSHA256"] != sessionServerSourceSHA256() {
 		t.Fatalf("provenance=%v", result.Notes)
+	}
+	if result.Notes["benignSessionNodeSelector"] != `{"kubernetes.io/hostname":"ip-172-27-12-233.us-east-2.compute.internal"}` {
+		t.Fatalf("placement provenance=%v", result.Notes)
 	}
 	if result.Notes["observationWindowSeconds"] != "20" || result.Notes["observationWindowStartedAtUTC"] != windowStart.Format(time.RFC3339Nano) || result.Notes["observationWindowEndedAtUTC"] != windowStart.Add(20*time.Second).Format(time.RFC3339Nano) || result.Notes["observationWindowElapsedSeconds"] != "20.000" {
 		t.Fatalf("observation timing notes=%v", result.Notes)

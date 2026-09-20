@@ -160,3 +160,39 @@ credentialObservationWindowSeconds: 1800
 		t.Fatalf("max observation window not honored: %d", cfg.CredentialObservationWindowSeconds)
 	}
 }
+
+func TestBenignSessionNodeSelectorValidation(t *testing.T) {
+	valid := []byte(`
+context: kind-amtd-test
+namespace: phorvex-harness
+ownedAck: true
+benignSessionNodeSelector:
+  kubernetes.io/hostname: ip-172-27-12-233.us-east-2.compute.internal
+`)
+	cfg, err := Parse(valid)
+	if err != nil {
+		t.Fatalf("valid benign session selector rejected: %v", err)
+	}
+	if got := cfg.BenignSessionNodeSelector["kubernetes.io/hostname"]; got != "ip-172-27-12-233.us-east-2.compute.internal" {
+		t.Fatalf("selector not retained: %q", got)
+	}
+
+	for _, tc := range []struct {
+		name     string
+		selector map[string]string
+	}{
+		{name: "invalid key", selector: map[string]string{"bad key": "node"}},
+		{name: "invalid value", selector: map[string]string{"kubernetes.io/hostname": "bad value"}},
+		{name: "too many entries", selector: map[string]string{
+			"a": "1", "b": "2", "c": "3", "d": "4", "e": "5",
+			"f": "6", "g": "7", "h": "8", "i": "9",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := TargetConfig{Context: "kind-amtd-test", Namespace: "phorvex-harness", OwnedAck: true, TrialsPerArm: 1, CredentialObservationWindowSeconds: 90, BenignSessionNodeSelector: tc.selector}
+			if err := candidate.Validate(); err == nil {
+				t.Fatalf("invalid selector accepted: %v", tc.selector)
+			}
+		})
+	}
+}
