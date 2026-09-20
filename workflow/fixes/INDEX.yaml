@@ -1301,8 +1301,8 @@ fixes:
     issues:
     - M-178
     related_issues: []
-    state: PR_READY
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: post25-backend
-    head_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    head_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
