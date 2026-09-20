@@ -4,11 +4,11 @@ profile: workflow-v2
 question: Verify available post-Tier25 live behaviors with actual effects, refusal,
   fault and recovery controls; fix validated residuals; retain MIG hardware unavailable
   and unresolved source limits.
-state: ANALYZING
+state: RUNNING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 created_at: '2026-09-20T13:01:38+00:00'
-updated_at: '2026-09-20T13:49:40+00:00'
+updated_at: '2026-09-20T14:50:48+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: 0.4.138
@@ -35,6 +35,8 @@ rounds:
   state: COMPLETE
 - id: round-2
   state: COMPLETE
+- id: round-3
+  state: RUNNING
 findings: []
 verdict:
   result: pending
@@ -46,8 +48,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Review network result and supported CNI prerequisites; continue source repairs
-    and next bounded fixtures
+  action: Execute reviewed temporary managed-EKS CNI enablement, packet controls,
+    exact restoration and cleanup; preserve Dex unavailable.
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -101,5 +103,14 @@ transitions:
   artifact: rounds/round-2/analysis.md
   approval_ref: null
   phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T14:50:48+00:00'
+  by: codex-lead
+  artifact: rounds/round-3/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   note: null
   forced: false
