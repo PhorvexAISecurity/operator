@@ -1,0 +1,105 @@
+schema_version: 2
+campaign_id: 2026-09-20-post25-live
+profile: workflow-v2
+question: Verify available post-Tier25 live behaviors with actual effects, refusal,
+  fault and recovery controls; fix validated residuals; retain MIG hardware unavailable
+  and unresolved source limits.
+state: ANALYZING
+owner: mehrdad
+approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+created_at: '2026-09-20T13:01:38+00:00'
+updated_at: '2026-09-20T13:49:40+00:00'
+scope:
+  environment: dev-existing-cluster
+  source_release: 0.4.138
+  included_fixes: []
+  duration_ceiling: 6h per bounded round, cleanup included; resume subsequent rounds
+    with fresh pins
+  cost_ceiling: existing cluster only; no new GPU, nodes, paid services or external
+    spend; bounded fixture quotas
+  permission: attack
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
+  digest: sha256:5f2707f639111bfb558435f68db6608d5c2dc36fe52b07f9e239362155ce42fe
+  embedded_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+safety:
+  stop_conditions:
+  - 'Unexpected source change, missing identity/cleanup authority, unmanaged service
+    impact: stop affected case and restore'
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  unresolved: []
+  cleanup: pending
+positive_control: PASS
+rounds:
+- id: round-1
+  state: COMPLETE
+- id: round-2
+  state: COMPLETE
+findings: []
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: codex-lead
+  independent_reviewer: post14-live-reviewer
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Review network result and supported CNI prerequisites; continue source repairs
+    and next bounded fixtures
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-09-20T13:05:41+00:00'
+  by: codex-lead
+  artifact: CAMPAIGN.md
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: APPROVED
+  to: BASELINED
+  at: '2026-09-20T13:07:37+00:00'
+  by: codex-lead
+  artifact: rounds/round-1/evidence/BASELINE.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-20T13:07:53+00:00'
+  by: codex-lead
+  artifact: CAMPAIGN.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T13:41:49+00:00'
+  by: codex-lead
+  artifact: rounds/round-1/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T13:42:11+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T13:49:40+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false

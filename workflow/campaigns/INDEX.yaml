@@ -16,3 +16,7 @@ campaigns:
     directory: campaigns/2026-09-10-v3-observe
     state: ANALYZING
     profile: workflow-v2
+  2026-09-20-post25-live:
+    directory: campaigns/2026-09-20-post25-live
+    state: ANALYZING
+    profile: workflow-v2
