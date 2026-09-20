@@ -1,0 +1,124 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a072693ed1577138964cbc082ea7f02f3f3e559ec7ac9e80d89877f38dc2cbb5
+    source_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
+    at: '2026-09-20T16:42:44+00:00'
+    contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+fix_id: POST25-M137-TRACE
+issues:
+- M-137
+title: Index canonical covering actions once per asset trace
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: live-post25
+  code_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-catalogue
+  base_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
+  head_sha: 9949cba2f8bd82d2f95409f31e46e1c99ea342ea
+  stacked_on:
+  - POST25-M137
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  - L4
+  live_required: true
+  soak_required: true
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies:
+- POST25-M137
+blockers: []
+residuals:
+- 1000 Pods under 2 Deployments and 2 policies still exceeds unchanged 30-second warmup
+  context; no full M-137 PASS.
+- Sustained deployed memory, sink latency and historical OOM cause remain unverified.
+next_action:
+  owner: implementer
+  action: Submit existing bounded trace implementation with source-bound checks; preserve
+    full M137 FAIL
+updated_at: '2026-09-20T16:42:44+00:00'
+follow_up_to: POST25-M137
+configuration_history:
+- at: '2026-09-20T16:41:36+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - dependencies
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T16:42:31+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T16:42:44+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
