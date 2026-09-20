@@ -1325,7 +1325,7 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies:
     - POST25-M137
     stacked_on:

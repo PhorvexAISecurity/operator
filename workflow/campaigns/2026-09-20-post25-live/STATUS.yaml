@@ -8,7 +8,7 @@ state: RUNNING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 created_at: '2026-09-20T13:01:38+00:00'
-updated_at: '2026-09-20T16:59:19+00:00'
+updated_at: '2026-09-20T17:14:29+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: 0.4.138
@@ -38,6 +38,8 @@ rounds:
 - id: round-3
   state: ABORTED
 - id: round-4
+  state: COMPLETE
+- id: round-5
   state: RUNNING
 findings: []
 verdict:
@@ -50,8 +52,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Execute reviewed v5 packet control on exact current topology and preserve
-    all prior failures
+  action: Execute reviewed GPU v4 with fresh exact health/GPU/installed-inference
+    guards, own finite cleanup
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -136,4 +138,24 @@ transitions:
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   note: New bounded same-node packet control with approved current topology; earlier
     invalid attempts unchanged
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T17:13:58+00:00'
+  by: codex-lead
+  artifact: rounds/round-4/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Scoped packet control and cleanup PASS; disabled NetworkPolicy backend unavailable;
+    no manager mitigation claim
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T17:14:29+00:00'
+  by: codex-lead
+  artifact: rounds/round-5/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: CPU round4 cleanupPASS; reviewed two-mode shared T4 logical-reset fixture,
+    no MIG or manager-action claim
   forced: false
