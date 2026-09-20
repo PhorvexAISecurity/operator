@@ -7,6 +7,7 @@ import (
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -22,9 +23,10 @@ const DwellOracleSeconds = 8.0
 // attacker oracle succeeds only while the original Pod identity and its marker
 // both remain observable after the dwell window.
 type c2DwellRotation struct {
-	app       string
-	targetUID types.UID
-	plantedAt time.Time
+	app        string
+	targetName string
+	targetUID  types.UID
+	plantedAt  time.Time
 }
 
 func (s *c2DwellRotation) Metadata() core.ScenarioMeta {
@@ -53,12 +55,13 @@ func (s *c2DwellRotation) Execute(ctx context.Context, env *core.Env) (core.Atta
 	// Scenario objects are reused across trials. Clear prior provenance before
 	// this attempt so a failed lookup or plant cannot inherit an earlier UID/time.
 	s.targetUID = ""
+	s.targetName = ""
 	s.plantedAt = time.Time{}
 	pod, err := runningPodByApp(ctx, env, s.app)
 	if err != nil {
 		return core.AttackResult{}, err
 	}
-	s.targetUID = pod.UID
+	s.targetName, s.targetUID = pod.Name, pod.UID
 	cmds, err := plantBackdoorObserved(ctx, env, pod.Name, firstContainer(pod))
 	if err != nil {
 		return core.AttackResult{Stages: []string{"plant bounded in-container marker and sleeper"}, Commands: cmds}, err
@@ -66,6 +69,7 @@ func (s *c2DwellRotation) Execute(ctx context.Context, env *core.Env) (core.Atta
 	s.plantedAt = time.Now()
 	stages := []string{"plant bounded in-container marker and sleeper", "observe ephemeral state across the dwell window"}
 	return core.AttackResult{Stages: stages, Commands: cmds, Notes: map[string]string{
+		"originalPod":    s.targetName,
 		"originalPodUID": string(s.targetUID),
 		"plantedAt":      s.plantedAt.UTC().Format(time.RFC3339Nano),
 		"realism":        string(core.RealismMarkerSimulation),
@@ -73,14 +77,14 @@ func (s *c2DwellRotation) Execute(ctx context.Context, env *core.Env) (core.Atta
 }
 
 func (s *c2DwellRotation) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	if s.targetUID == "" || s.plantedAt.IsZero() {
+	if s.targetName == "" || s.targetUID == "" || s.plantedAt.IsZero() {
 		return core.OracleResult{}, fmt.Errorf("marker stimulus identity or start time missing")
 	}
 	observationPause(time.Duration(DwellOracleSeconds) * time.Second)
 	if err := ctx.Err(); err != nil {
 		return core.OracleResult{}, fmt.Errorf("dwell observation cancelled: %w", err)
 	}
-	pod, originalAbsent, err := c2DwellObservationTarget(ctx, env, s.app, s.targetUID)
+	pod, originalAbsent, err := c2DwellObservationTarget(ctx, env, s.app, s.targetName, s.targetUID)
 	if err != nil {
 		return core.OracleResult{}, err
 	}
@@ -113,12 +117,19 @@ func (s *c2DwellRotation) SuccessOracle(ctx context.Context, env *core.Env) (cor
 // observation target, including while terminating. A replacement is returned
 // only after a successful list proves the original UID absent. Multiple or zero
 // running replacements are ambiguous and remain observation errors.
-func c2DwellObservationTarget(ctx context.Context, env *core.Env, app string, originalUID types.UID) (*corev1.Pod, bool, error) {
+func c2DwellObservationTarget(ctx context.Context, env *core.Env, app, originalName string, originalUID types.UID) (*corev1.Pod, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, fmt.Errorf("dwell target observation cancelled: %w", err)
 	}
-	if originalUID == "" {
-		return nil, false, fmt.Errorf("dwell target original UID missing for app=%s", app)
+	if originalName == "" || originalUID == "" {
+		return nil, false, fmt.Errorf("dwell target original identity missing for app=%s", app)
+	}
+	original, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, originalName, metav1.GetOptions{})
+	if err == nil && original.UID == originalUID {
+		return original, false, nil
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, false, fmt.Errorf("dwell target original get failed for pod=%s: %w", originalName, err)
 	}
 	pods, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + app})
 	if err != nil {

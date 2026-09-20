@@ -54,7 +54,7 @@ func TestC2DwellRotationExecutePreservesStimulusFailure(t *testing.T) {
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
 
-	s := &c2DwellRotation{app: "c2dr-target", targetUID: "stale", plantedAt: time.Now().Add(-time.Hour)}
+	s := &c2DwellRotation{app: "c2dr-target", targetName: "stale-pod", targetUID: "stale", plantedAt: time.Now().Add(-time.Hour)}
 	result, err := s.Execute(context.Background(), env)
 	if err == nil {
 		t.Fatalf("failed marker producer accepted: %+v", result)
@@ -65,18 +65,21 @@ func TestC2DwellRotationExecutePreservesStimulusFailure(t *testing.T) {
 	if !s.plantedAt.IsZero() {
 		t.Fatalf("failed stimulus recorded a start time: %s", s.plantedAt)
 	}
+	if s.targetName != "c2dr-target" {
+		t.Fatalf("selected Pod name not retained: %q", s.targetName)
+	}
 }
 
 func TestC2DwellRotationExecuteClearsProvenanceBeforeLookup(t *testing.T) {
 	env := fixtureObservationEnv()
-	s := &c2DwellRotation{app: "c2dr-target", targetUID: "stale", plantedAt: time.Now().Add(-time.Hour)}
+	s := &c2DwellRotation{app: "c2dr-target", targetName: "stale-pod", targetUID: "stale", plantedAt: time.Now().Add(-time.Hour)}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	if _, err := s.Execute(ctx, env); err == nil {
 		t.Fatal("missing target was accepted")
 	}
-	if s.targetUID != "" || !s.plantedAt.IsZero() {
-		t.Fatalf("failed lookup retained prior provenance: uid=%q plantedAt=%s", s.targetUID, s.plantedAt)
+	if s.targetName != "" || s.targetUID != "" || !s.plantedAt.IsZero() {
+		t.Fatalf("failed lookup retained prior provenance: name=%q uid=%q plantedAt=%s", s.targetName, s.targetUID, s.plantedAt)
 	}
 }
 
@@ -96,10 +99,10 @@ func TestC2DwellRotationExecuteRecordsUIDAndPreciseClock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.targetUID != "original" || s.plantedAt.IsZero() {
-		t.Fatalf("stimulus provenance missing: uid=%q plantedAt=%s", s.targetUID, s.plantedAt)
+	if s.targetName != "c2dr-target" || s.targetUID != "original" || s.plantedAt.IsZero() {
+		t.Fatalf("stimulus provenance missing: name=%q uid=%q plantedAt=%s", s.targetName, s.targetUID, s.plantedAt)
 	}
-	if result.Notes["originalPodUID"] != "original" || result.Notes["plantedAt"] != s.plantedAt.UTC().Format(time.RFC3339Nano) {
+	if result.Notes["originalPod"] != "c2dr-target" || result.Notes["originalPodUID"] != "original" || result.Notes["plantedAt"] != s.plantedAt.UTC().Format(time.RFC3339Nano) {
 		t.Fatalf("reported provenance=%v", result.Notes)
 	}
 	if stages := strings.Join(result.Stages, " "); strings.Contains(stages, "T1543") || strings.Contains(strings.ToLower(stages), "exploit") {
@@ -136,7 +139,7 @@ func TestC2DwellRotationOracleBindsUIDAndMarker(t *testing.T) {
 			core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, _ []string) core.ExecResult {
 				return core.ExecResult{Stdout: tc.output, ExitCode: 0}
 			})
-			s := &c2DwellRotation{app: "c2dr-target", targetUID: tc.originalUID, plantedAt: time.Now().Add(-9 * time.Second)}
+			s := &c2DwellRotation{app: "c2dr-target", targetName: "c2dr-target", targetUID: tc.originalUID, plantedAt: time.Now().Add(-9 * time.Second)}
 			got, err := s.SuccessOracle(context.Background(), env)
 			if err != nil {
 				t.Fatal(err)
@@ -184,7 +187,7 @@ func TestC2DwellRotationOraclePrefersOriginalDuringOverlap(t *testing.T) {
 				observedPod = pod
 				return core.ExecResult{Stdout: BackdoorMarker, ExitCode: 0}
 			})
-			s := &c2DwellRotation{app: "c2dr-target", targetUID: "original", plantedAt: time.Now().Add(-9 * time.Second)}
+			s := &c2DwellRotation{app: "c2dr-target", targetName: "original-pod", targetUID: "original", plantedAt: time.Now().Add(-9 * time.Second)}
 			got, err := s.SuccessOracle(context.Background(), env)
 			if err != nil {
 				t.Fatal(err)
@@ -199,13 +202,40 @@ func TestC2DwellRotationOraclePrefersOriginalDuringOverlap(t *testing.T) {
 	}
 }
 
+func TestC2DwellRotationOracleFindsOriginalAfterLabelRemoval(t *testing.T) {
+	oldPause := observationPause
+	observationPause = func(time.Duration) {}
+	t.Cleanup(func() { observationPause = oldPause; core.SetExecer(nil) })
+	env := fixtureObservationEnv()
+	original := dwellFixturePodNamed("original-pod", "detached-label", "original", false)
+	if _, err := env.Kube.CoreV1().Pods("sandbox").Create(context.Background(), original, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.Kube.CoreV1().Pods("sandbox").Create(context.Background(), dwellFixturePodNamed("replacement-pod", "c2dr-target", "replacement", false), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	observedPod := ""
+	core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, pod, _ string, _ []string) core.ExecResult {
+		observedPod = pod
+		return core.ExecResult{Stdout: BackdoorMarker, ExitCode: 0}
+	})
+	s := &c2DwellRotation{app: "c2dr-target", targetName: "original-pod", targetUID: "original", plantedAt: time.Now().Add(-9 * time.Second)}
+	got, err := s.SuccessOracle(context.Background(), env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Achieved || observedPod != "original-pod" || got.Evidence["originalUIDAbsent"] != "false" {
+		t.Fatalf("label-detached original was lost: observed=%q result=%+v", observedPod, got)
+	}
+}
+
 func TestC2DwellRotationOracleRejectsObservationLoss(t *testing.T) {
 	oldPause := observationPause
 	observationPause = func(time.Duration) {}
 	t.Cleanup(func() { observationPause = oldPause; core.SetExecer(nil) })
 
 	newScenario := func() *c2DwellRotation {
-		return &c2DwellRotation{app: "c2dr-target", targetUID: "original", plantedAt: time.Now()}
+		return &c2DwellRotation{app: "c2dr-target", targetName: "original-pod", targetUID: "original", plantedAt: time.Now()}
 	}
 
 	t.Run("missing stimulus provenance", func(t *testing.T) {
@@ -231,6 +261,16 @@ func TestC2DwellRotationOracleRejectsObservationLoss(t *testing.T) {
 		defer cancel()
 		if _, err := newScenario().SuccessOracle(ctx, env); err == nil {
 			t.Fatal("failed Pod lookup was scored as mitigation")
+		}
+	})
+
+	t.Run("original get failure", func(t *testing.T) {
+		env := fixtureObservationEnv()
+		env.Kube.(*k8sfake.Clientset).PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("fixture original get failed")
+		})
+		if _, err := newScenario().SuccessOracle(context.Background(), env); err == nil {
+			t.Fatal("failed original identity read was scored as mitigation")
 		}
 	})
 
