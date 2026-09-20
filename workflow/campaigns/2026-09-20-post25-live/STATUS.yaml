@@ -4,11 +4,11 @@ profile: workflow-v2
 question: Verify available post-Tier25 live behaviors with actual effects, refusal,
   fault and recovery controls; fix validated residuals; retain MIG hardware unavailable
   and unresolved source limits.
-state: RUNNING
+state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 created_at: '2026-09-20T13:01:38+00:00'
-updated_at: '2026-09-20T14:50:48+00:00'
+updated_at: '2026-09-20T16:31:26+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: 0.4.138
@@ -28,7 +28,7 @@ safety:
     impact: stop affected case and restore'
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   unresolved: []
-  cleanup: pending
+  cleanup: FAIL
 positive_control: PASS
 rounds:
 - id: round-1
@@ -36,7 +36,7 @@ rounds:
 - id: round-2
   state: COMPLETE
 - id: round-3
-  state: RUNNING
+  state: ABORTED
 findings: []
 verdict:
   result: pending
@@ -48,8 +48,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Execute reviewed temporary managed-EKS CNI enablement, packet controls,
-    exact restoration and cleanup; preserve Dex unavailable.
+  action: Review aborted packet retry and catalogue output findings; finish source
+    corrections and refresh stable live prerequisites.
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -113,4 +113,15 @@ transitions:
   approval_ref: null
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T16:31:26+00:00'
+  by: codex-lead
+  artifact: rounds/round-3/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Enabled effect and configuration restoration retained; third post-restore
+    attempt aborted on node inventory change. Owned cleanup separately confirmed;
+    strict health FAIL preserved.
   forced: false
