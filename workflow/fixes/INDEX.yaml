@@ -1301,7 +1301,7 @@ fixes:
     issues:
     - M-178
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: post25-backend

@@ -2,21 +2,36 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 3
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 779458ade90662940d335b8f56ad69aea37793950c4debab8557206c025096d2
+    source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+    at: '2026-09-20T13:59:12+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/incident.md
+    sha256: fba13ff964890844eab1b0b2f55aa4babe2c47d5d76866097b523541198511f3
+    source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+    at: '2026-09-20T14:10:21+00:00'
 fix_id: T26-M178
 issues:
 - M-178
 title: Carry authentic vLLM reset acknowledgement end to end
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
-  implementer: post25-backend
+  implementer: post25-catalogue
   skeptic: codex-lead
   live_verifier: codex-lead
   coordinator: codex-lead
@@ -73,9 +88,11 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Complete independent critique and seal decision after R1/R2 corrections.
-updated_at: '2026-09-20T13:40:26+00:00'
+  owner: post25-catalogue
+  action: Take exact-source verification handoff under own identity; preserve original
+    product authors, lead evidence and open live/capacity limits. Prior workers cannot
+    resume because agent runtime reached thread limit.
+updated_at: '2026-09-20T14:10:42+00:00'
 follow_up_to: T14-M178
 configuration_history:
 - at: '2026-09-20T13:29:15+00:00'
@@ -94,6 +111,12 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-20T14:10:42+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - roles
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -102,4 +125,12 @@ transitions:
   artifact: 00-intake.md
   note: null
   approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T13:59:32+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   forced: false
