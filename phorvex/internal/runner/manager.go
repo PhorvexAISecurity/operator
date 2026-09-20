@@ -2123,13 +2123,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// shared map/slice can rewrite the evidence used for this claim.
 	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	representationInventory := outcomeInventory(snap.Events, pol)
-	representationInputs := make([]model.RepresentationSnapshot, len(decisions))
 	versions := make(map[string]string, len(views))
 	for _, v := range views {
 		versions[v.Pod.Namespace+"/"+v.Pod.Name] = v.Pod.UID
 	}
-	for i, d := range decisions {
-		representationInputs[i] = representationSnapshotV1(d, pol, versions[d.Namespace+"/"+d.Pod], reportClaim, representationInventory)
+	// No effect has been attempted yet. Stop promptly while preparing the
+	// immutable reporting inputs rather than carrying an expired tick into
+	// actuation. After an attempt, the audit loop below must drain completely.
+	representationInputs, complete := representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory)
+	if !complete {
+		return
 	}
 
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired

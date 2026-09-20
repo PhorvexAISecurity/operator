@@ -1,0 +1,98 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 1
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks: {}
+fix_id: POST25-M137
+issues:
+- M-137
+title: Collapse repeated audit serialization without weakening forensic records
+profile: standard
+state: TRIAGED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-post25-m137
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-capacity
+  base_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  live_required: null
+  soak_required: null
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies:
+- T20-M137
+- T24-M137-AUDIT
+blockers: []
+residuals:
+- Historical one-second/1000-Pod target remains unproven until exact head measurement.
+- Prior production OOM cause remains unknown; local allocation evidence does not attribute
+  it.
+- Hard post-effect cancellation and any group-commit/schema change remain outside
+  this bounded plan.
+next_action:
+  owner: sol-post25-m137
+  action: Implement approved serialization-pass collapse and pre-effect cancellation
+    checks; retain complete ordered synchronous audit records.
+updated_at: '2026-09-20T13:14:47+00:00'
+follow_up_to: T20-M137
+configuration_history:
+- at: '2026-09-20T13:14:47+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - dependencies
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/capacity/LEAD-IMPLEMENTATION-PLAN.md
