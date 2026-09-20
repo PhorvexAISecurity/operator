@@ -2,21 +2,36 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: b40972f7c2ca817720f9017830bb8a50c3f70d0bd0ad2da33a7901a46ec2677d
+    source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+    at: '2026-09-20T13:59:59+00:00'
+    contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/incident.md
+    sha256: d8ad421a1cf671ff43f5b513f73e19eb6bcb87135fd1ce825e4f2e63da9054d3
+    source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+    at: '2026-09-20T14:10:21+00:00'
 fix_id: POST25-M137
 issues:
 - M-137
 title: Collapse repeated audit serialization without weakening forensic records
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
-  implementer: sol-post25-m137
+  implementer: post25-catalogue
   skeptic: codex-lead
   live_verifier: codex-lead
   coordinator: codex-lead
@@ -54,8 +69,10 @@ verification:
   - L0
   - L1
   - L2
-  live_required: null
-  soak_required: null
+  - L3
+  - L4
+  live_required: true
+  soak_required: true
   p3: pending
   l0: pending
   l1: pending
@@ -73,16 +90,18 @@ dependencies:
 - T24-M137-AUDIT
 blockers: []
 residuals:
-- Historical one-second/1000-Pod target remains unproven until exact head measurement.
-- Prior production OOM cause remains unknown; local allocation evidence does not attribute
-  it.
-- Hard post-effect cancellation and any group-commit/schema change remain outside
-  this bounded plan.
+- The unchanged 1000-Pod target fails at 30 seconds; full M-137 remains open.
+- Historical production OOM cause is unknown; local cumulative allocation does not
+  establish it.
+- Real filesystem latency and sustained deployed memory observations remain pending.
+- Hard post-effect cancellation and group-commit/schema changes remain outside this
+  bounded plan.
 next_action:
-  owner: sol-post25-m137
-  action: Implement approved serialization-pass collapse and pre-effect cancellation
-    checks; retain complete ordered synchronous audit records.
-updated_at: '2026-09-20T13:14:47+00:00'
+  owner: post25-catalogue
+  action: Take exact-source verification handoff under own identity; preserve original
+    product authors, lead evidence and open live/capacity limits. Prior workers cannot
+    resume because agent runtime reached thread limit.
+updated_at: '2026-09-20T14:10:44+00:00'
 follow_up_to: T20-M137
 configuration_history:
 - at: '2026-09-20T13:14:47+00:00'
@@ -96,3 +115,32 @@ configuration_history:
   - residuals
   - roles
   approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/capacity/LEAD-IMPLEMENTATION-PLAN.md
+- at: '2026-09-20T13:59:35+00:00'
+  by: codex-lead
+  fields:
+  - residuals
+  - verification
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T14:10:44+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - roles
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T13:59:33+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T13:59:59+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  forced: false
