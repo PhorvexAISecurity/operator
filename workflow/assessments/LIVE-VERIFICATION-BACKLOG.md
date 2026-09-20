@@ -1,5 +1,7 @@
 # Outstanding live verification — readiness campaign
 
+**September20 Tier22 deployment:** source `05a80165` / image 0.4.135 confirmed. A 188.3-second sample retained 299 policy ticks and 20 failed KV dispatches, with no sampled restarts. The declared serving endpoint returns a nonempty model inventory; declared/reported model IDs differ by the `Qwen/` prefix and require owner reconciliation for identity-bound controls. Candidate/refusal/recovery/traffic controls and all 29 behavior bundles remain pending. [Evidence](20260916-local-continuation/live/20260920-tier22-deployment/REPORT.md).
+
 **September20 Tier20 deployment:** manager source `47ca44ad` / image 0.4.134 confirmed. The 188.2-second sample contains 330 policy ticks and 54 full-manager histogram completions (mean 1.786s); all 22 observed KV decisions failed dispatch. No sampled restarts; capacity, reference lifetime, prior OOM and all 29 behavior bundles remain unverified. Tier22 is merged but the 06:43 read still finds Tier20 running. [Evidence](20260916-local-continuation/live/20260920-tier20-deployment/REPORT.md).
 
 **September20 Tier19 deployment:** manager source `a480c36f` and image0.4.133 are independently confirmed. The 188.2-second passive sample observes the new normal tick-outcome metrics and329 log ticks with zero sampled restarts. Rejection/recovery/UID and GPU controls were not induced; all29 behavior bundles, prior OOM and source prerequisites remain pending. [Evidence](20260916-local-continuation/live/20260920-tier19-deployment/REPORT.md).
