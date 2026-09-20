@@ -1360,7 +1360,7 @@ fixes:
     issues:
     - M-170
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on:
     - POST25-CHECKPOINT-LOCAL-FIXTURE
