@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,7 +30,7 @@ func TestEphemeralSessionMetadataIsExplicitBenignControl(t *testing.T) {
 	if len(md.AttackTechniqueIDs) != 0 || len(md.ExercisedTechniqueIDs) != 0 {
 		t.Fatalf("benign control claims techniques: declared=%v exercised=%v", md.AttackTechniqueIDs, md.ExercisedTechniqueIDs)
 	}
-	for _, want := range []string{sessionPythonImage, "serverSourceSHA256=" + sessionServerSourceSHA256(), "zero ATT&CK", "does not establish credential revocation"} {
+	for _, want := range []string{sessionPythonImage, "serverSourceSHA256=" + sessionServerSourceSHA256(), "20-second cancellable observation window", "zero ATT&CK", "does not establish credential revocation"} {
 		if !strings.Contains(md.Mechanism+" "+md.ClaimLimits, want) {
 			t.Errorf("metadata omits %q: %+v", want, md)
 		}
@@ -162,16 +163,30 @@ func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.
 	env.Trial = 4
 	createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 	var calls int
+	var events []string
 	core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, pod, _ string, command []string) core.ExecResult {
 		calls++
 		if pod != sessionProducer || len(command) < 3 || command[len(command)-3] != "POST" && command[len(command)-3] != "GET" {
 			t.Fatalf("unexpected producer request: pod=%s command=%v", pod, command)
 		}
 		method := command[len(command)-3]
+		events = append(events, method)
 		id := command[len(command)-1]
 		return sessionExecReply(method, 200+map[string]int{"POST": 1}[method], "original", id, true, method == "POST")
 	})
-	t.Cleanup(func() { core.SetExecer(nil) })
+	oldWait := benignSessionObservationWait
+	windowStart := time.Date(2026, 9, 20, 14, 0, 0, 0, time.UTC)
+	benignSessionObservationWait = func(_ context.Context, interval time.Duration) (time.Time, time.Time, error) {
+		if interval != benignSessionObservationWindow {
+			t.Fatalf("observation interval=%s want=%s", interval, benignSessionObservationWindow)
+		}
+		events = append(events, "WAIT")
+		return windowStart, windowStart.Add(interval), nil
+	}
+	t.Cleanup(func() {
+		benignSessionObservationWait = oldWait
+		core.SetExecer(nil)
+	})
 
 	s := &c2EphemeralSessionRotation{originalName: "stale", originalUID: "stale", sessionID: "stale"}
 	result, err := s.Execute(context.Background(), env)
@@ -181,8 +196,46 @@ func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.
 	if calls != 2 || s.originalName != "original-pod" || s.originalUID != "original" || !strings.HasPrefix(s.sessionID, "session-4-") {
 		t.Fatalf("state/calls not grounded: calls=%d scenario=%+v result=%+v", calls, s, result)
 	}
+	if strings.Join(events, ",") != "POST,GET,WAIT" {
+		t.Fatalf("session establishment/window ordering=%v", events)
+	}
 	if result.Notes["transport"] != "ordinary HTTP via ClusterIP Service" || result.Notes["sessionID"] != s.sessionID || result.Notes["fixtureImage"] != sessionPythonImage || result.Notes["serverSourceSHA256"] != sessionServerSourceSHA256() {
 		t.Fatalf("provenance=%v", result.Notes)
+	}
+	if result.Notes["observationWindowSeconds"] != "20" || result.Notes["observationWindowStartedAtUTC"] != windowStart.Format(time.RFC3339Nano) || result.Notes["observationWindowEndedAtUTC"] != windowStart.Add(20*time.Second).Format(time.RFC3339Nano) || result.Notes["observationWindowElapsedSeconds"] != "20.000" {
+		t.Fatalf("observation timing notes=%v", result.Notes)
+	}
+}
+
+func TestEphemeralSessionObservationWindowIsContextCancellableAfterEstablishment(t *testing.T) {
+	env := fixtureObservationEnv()
+	env.Rand = rand.New(rand.NewSource(29))
+	createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
+	ctx, cancel := context.WithCancel(context.Background())
+	var events []string
+	core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _ string, _ string, command []string) core.ExecResult {
+		method := command[len(command)-3]
+		events = append(events, method)
+		return sessionExecReply(method, 200+map[string]int{"POST": 1}[method], "original", command[len(command)-1], true, method == "POST")
+	})
+	oldWait := benignSessionObservationWait
+	benignSessionObservationWait = func(waitCtx context.Context, interval time.Duration) (time.Time, time.Time, error) {
+		events = append(events, "WAIT")
+		cancel()
+		return waitBenignSessionObservation(waitCtx, interval)
+	}
+	t.Cleanup(func() {
+		cancel()
+		benignSessionObservationWait = oldWait
+		core.SetExecer(nil)
+	})
+	started := time.Now()
+	_, err := (&c2EphemeralSessionRotation{}).Execute(ctx, env)
+	if err == nil || !strings.Contains(err.Error(), "observation window did not complete: context canceled") {
+		t.Fatalf("cancelled post-establishment window result=%v", err)
+	}
+	if strings.Join(events, ",") != "POST,GET,WAIT" || time.Since(started) >= time.Second {
+		t.Fatalf("window cancellation was not prompt or ordered: events=%v elapsed=%s", events, time.Since(started))
 	}
 }
 
@@ -210,7 +263,7 @@ func TestEphemeralSessionOracleNoDefenseRetainsSameUIDAndID(t *testing.T) {
 		return sessionExecReply("GET", 200, "original", command[len(command)-1], true, false)
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
-	s := &c2EphemeralSessionRotation{originalName: "original-pod", originalUID: "original", sessionID: "session-old"}
+	s := observedSessionScenario()
 	got, err := s.SuccessOracle(context.Background(), env)
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +293,7 @@ func TestEphemeralSessionOracleCreditsOnlyConfirmedReplacementLoss(t *testing.T)
 		}
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
-	s := &c2EphemeralSessionRotation{originalName: "original-pod", originalUID: "original", sessionID: "session-old"}
+	s := observedSessionScenario()
 	got, err := s.SuccessOracle(context.Background(), env)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +305,7 @@ func TestEphemeralSessionOracleCreditsOnlyConfirmedReplacementLoss(t *testing.T)
 
 func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T) {
 	newScenario := func() *c2EphemeralSessionRotation {
-		return &c2EphemeralSessionRotation{originalName: "original-pod", originalUID: "original", sessionID: "session-old"}
+		return observedSessionScenario()
 	}
 
 	t.Run("overlap with original label removed", func(t *testing.T) {
@@ -366,6 +419,17 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 			t.Fatalf("client source can follow redirects:\n%s", sessionClientSource)
 		}
 	})
+}
+
+func observedSessionScenario() *c2EphemeralSessionRotation {
+	started := time.Date(2026, 9, 20, 14, 0, 0, 0, time.UTC)
+	return &c2EphemeralSessionRotation{
+		originalName:  "original-pod",
+		originalUID:   "original",
+		sessionID:     "session-old",
+		windowStarted: started,
+		windowEnded:   started.Add(benignSessionObservationWindow),
+	}
 }
 
 func sessionFixturePod(name, app string, uid types.UID, terminating, ready bool) *corev1.Pod {

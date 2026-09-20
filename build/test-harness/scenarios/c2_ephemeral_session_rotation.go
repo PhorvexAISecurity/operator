@@ -33,7 +33,13 @@ const (
 	sessionProducer    = "c2-session-producer"
 	sessionPort        = 8080
 	sessionPythonImage = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
+	// benignSessionObservationWindow is deliberately independent of credential
+	// replay configuration. It gives the already-running defender a bounded
+	// opportunity to replace the fixture after the original state is confirmed.
+	benignSessionObservationWindow = 20 * time.Second
 )
+
+var benignSessionObservationWait = waitBenignSessionObservation
 
 // sessionServerSource is the entire fixture application. It retains only
 // caller-supplied synthetic identifiers in one process-local set. A replacement
@@ -123,6 +129,8 @@ type c2EphemeralSessionRotation struct {
 	deploymentUID types.UID
 	serviceUID    types.UID
 	producerUID   types.UID
+	windowStarted time.Time
+	windowEnded   time.Time
 }
 
 func (s *c2EphemeralSessionRotation) Metadata() core.ScenarioMeta {
@@ -133,8 +141,8 @@ func (s *c2EphemeralSessionRotation) Metadata() core.ScenarioMeta {
 		R6ResponseTag: core.R6Partial,
 		BenignControl: true,
 		Realism:       core.RealismExecutable,
-		Mechanism: fmt.Sprintf("actual HTTP through a stable ClusterIP Service to a controller-owned single-replica process-memory session fixture; image=%s serverSourceSHA256=%s",
-			sessionPythonImage, sessionServerSourceSHA256()),
+		Mechanism: fmt.Sprintf("actual HTTP through a stable ClusterIP Service to a controller-owned single-replica process-memory session fixture, followed by a dedicated %.0f-second cancellable observation window; image=%s serverSourceSHA256=%s",
+			benignSessionObservationWindow.Seconds(), sessionPythonImage, sessionServerSourceSHA256()),
 		ClaimLimits:        "benign application-state control only; executes no attack or exploit, exercises zero ATT&CK techniques, and does not establish credential revocation, attack prevention, detection, or security coverage",
 		OracleDescription:  "original synthetic session remains usable only when the original Pod UID serves it; loss is credited only after exact original-UID absence, an exact replacement UID explicitly reports the old ID absent, and the same replacement creates and retrieves a new ID",
 		CleanupDescription: "delete the owned Deployment, Service, and producer Pod; runner-owned cleanup independently verifies absence",
@@ -246,6 +254,7 @@ func (s *c2EphemeralSessionRotation) Setup(ctx context.Context, env *core.Env) e
 
 func (s *c2EphemeralSessionRotation) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {
 	s.originalName, s.originalUID, s.sessionID = "", "", ""
+	s.windowStarted, s.windowEnded = time.Time{}, time.Time{}
 	if err := ctx.Err(); err != nil {
 		return core.AttackResult{}, fmt.Errorf("session producer cancelled: %w", err)
 	}
@@ -273,16 +282,34 @@ func (s *c2EphemeralSessionRotation) Execute(ctx context.Context, env *core.Env)
 		return core.AttackResult{Stages: []string{"create synthetic process-memory session through stable Service", "retrieve the same synthetic session ID"}}, fmt.Errorf("session retain reply did not confirm original process state: status=%d present=%v replyUID=%q originalUID=%q", retained.HTTPStatus, retained.Body.Present, retained.Body.PodUID, s.originalUID)
 	}
 	s.sessionID = sid
+	windowStart, windowEnd, err := benignSessionObservationWait(ctx, benignSessionObservationWindow)
+	s.windowStarted, s.windowEnded = windowStart, windowEnd
+	stages := []string{
+		"create synthetic process-memory session through stable Service",
+		"retrieve the same synthetic session ID",
+		fmt.Sprintf("hold the established session for a bounded %.0f-second benign observation window", benignSessionObservationWindow.Seconds()),
+	}
+	if err != nil {
+		return core.AttackResult{Stages: stages}, fmt.Errorf("benign session observation window did not complete: %w", err)
+	}
+	if windowStart.IsZero() || windowEnd.Before(windowStart) || windowEnd.Sub(windowStart) < benignSessionObservationWindow {
+		return core.AttackResult{Stages: stages}, fmt.Errorf("benign session observation window was shorter than %.0fs: start=%s end=%s elapsed=%s",
+			benignSessionObservationWindow.Seconds(), windowStart.UTC().Format(time.RFC3339Nano), windowEnd.UTC().Format(time.RFC3339Nano), windowEnd.Sub(windowStart))
+	}
 	return core.AttackResult{
-		Stages: []string{"create synthetic process-memory session through stable Service", "retrieve the same synthetic session ID"},
+		Stages: stages,
 		Notes: map[string]string{
-			"originalPod":        s.originalName,
-			"originalPodUID":     string(s.originalUID),
-			"sessionID":          sid,
-			"transport":          "ordinary HTTP via ClusterIP Service",
-			"classification":     "benign functional-effect control",
-			"fixtureImage":       sessionPythonImage,
-			"serverSourceSHA256": sessionServerSourceSHA256(),
+			"originalPod":                     s.originalName,
+			"originalPodUID":                  string(s.originalUID),
+			"sessionID":                       sid,
+			"transport":                       "ordinary HTTP via ClusterIP Service",
+			"classification":                  "benign functional-effect control",
+			"fixtureImage":                    sessionPythonImage,
+			"serverSourceSHA256":              sessionServerSourceSHA256(),
+			"observationWindowSeconds":        fmt.Sprintf("%.0f", benignSessionObservationWindow.Seconds()),
+			"observationWindowStartedAtUTC":   windowStart.UTC().Format(time.RFC3339Nano),
+			"observationWindowEndedAtUTC":     windowEnd.UTC().Format(time.RFC3339Nano),
+			"observationWindowElapsedSeconds": strconv.FormatFloat(windowEnd.Sub(windowStart).Seconds(), 'f', 3, 64),
 		},
 	}, nil
 }
@@ -290,6 +317,9 @@ func (s *c2EphemeralSessionRotation) Execute(ctx context.Context, env *core.Env)
 func (s *c2EphemeralSessionRotation) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
 	if s.originalName == "" || s.originalUID == "" || s.sessionID == "" {
 		return core.OracleResult{}, errors.New("session stimulus identity or synthetic ID missing")
+	}
+	if s.windowStarted.IsZero() || s.windowEnded.Before(s.windowStarted) || s.windowEnded.Sub(s.windowStarted) < benignSessionObservationWindow {
+		return core.OracleResult{}, errors.New("completed benign session observation window missing or shorter than the declared interval")
 	}
 	pod, originalAbsent, err := c2DwellObservationTarget(ctx, env, sessionApp, s.originalName, s.originalUID)
 	if err != nil {
@@ -303,16 +333,20 @@ func (s *c2EphemeralSessionRotation) SuccessOracle(ctx context.Context, env *cor
 		return core.OracleResult{}, fmt.Errorf("replay original synthetic session: %w", err)
 	}
 	baseEvidence := map[string]string{
-		"originalPodUID":     string(s.originalUID),
-		"observedPodUID":     string(pod.UID),
-		"serviceReplyPodUID": replayed.Body.PodUID,
-		"originalUIDAbsent":  fmt.Sprintf("%v", originalAbsent),
-		"oldSessionPresent":  fmt.Sprintf("%v", replayed.Body.Present),
-		"oldSessionStatus":   fmt.Sprintf("%d", replayed.HTTPStatus),
-		"transport":          "ordinary HTTP via ClusterIP Service",
-		"classification":     "benign functional-effect control",
-		"fixtureImage":       sessionPythonImage,
-		"serverSourceSHA256": sessionServerSourceSHA256(),
+		"originalPodUID":                  string(s.originalUID),
+		"observedPodUID":                  string(pod.UID),
+		"serviceReplyPodUID":              replayed.Body.PodUID,
+		"originalUIDAbsent":               fmt.Sprintf("%v", originalAbsent),
+		"oldSessionPresent":               fmt.Sprintf("%v", replayed.Body.Present),
+		"oldSessionStatus":                fmt.Sprintf("%d", replayed.HTTPStatus),
+		"transport":                       "ordinary HTTP via ClusterIP Service",
+		"classification":                  "benign functional-effect control",
+		"fixtureImage":                    sessionPythonImage,
+		"serverSourceSHA256":              sessionServerSourceSHA256(),
+		"observationWindowSeconds":        fmt.Sprintf("%.0f", benignSessionObservationWindow.Seconds()),
+		"observationWindowStartedAtUTC":   s.windowStarted.UTC().Format(time.RFC3339Nano),
+		"observationWindowEndedAtUTC":     s.windowEnded.UTC().Format(time.RFC3339Nano),
+		"observationWindowElapsedSeconds": strconv.FormatFloat(s.windowEnded.Sub(s.windowStarted).Seconds(), 'f', 3, 64),
 	}
 	if !originalAbsent {
 		if pod.UID != s.originalUID {
@@ -388,6 +422,18 @@ func sessionDeleteOptions(uid types.UID) metav1.DeleteOptions {
 	grace := int64(0)
 	dp := metav1.DeletePropagationBackground
 	return metav1.DeleteOptions{GracePeriodSeconds: &grace, PropagationPolicy: &dp, Preconditions: &metav1.Preconditions{UID: &uid}}
+}
+
+func waitBenignSessionObservation(ctx context.Context, interval time.Duration) (time.Time, time.Time, error) {
+	started := time.Now()
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return started, time.Now(), ctx.Err()
+	case <-timer.C:
+		return started, time.Now(), nil
+	}
 }
 
 type sessionReply struct {
