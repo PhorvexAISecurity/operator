@@ -443,6 +443,7 @@ kind / EKS / CoreWeave / vcluster purely by swapping a per-target config
 | `outDir` | where `metrics.jsonl`, `raw/`, `provenance.json`, `report.md`, `mitre_matrix.md` are written |
 | `defenderFilter` / `scenarioFilter` | optional subset filters (empty = run every registered plugin) |
 | `credentialObservationWindowSeconds` | how long the `c1-credtheft-rbac` scenario holds an exfiltrated credential before re-using it (see below). Omitted/`0` = **90s** default; valid range `1..1800` (30 min max). Larger values lengthen each credential-theft trial by that much. |
+| `benignSessionNodeSelector` | optional Kubernetes label selector applied only to both Pods in `c2-ephemeral-session-rotation`; omitted keeps default scheduling. Keys and values use Kubernetes label syntax and at most 8 entries are accepted. The selected placement is emitted in the trial notes. |
 
 See `config.kind.yaml` (live smoke) and `internal/config/config.example.yaml`. The
 metric schema is **identical** on every environment.
