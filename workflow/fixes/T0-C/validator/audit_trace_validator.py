@@ -81,13 +81,19 @@ NOOP_NOT_SELECTED = "not selected by current greedy round"
 
 TOL = 1e-9  # decision_trace.go Validate(): math.Abs(want-got) > 1e-9
 
-# v3 vocabularies (reserved; laws stated in the task, not yet in Go)
+# V3/V4 vocabularies mirrored from internal/model/decision_trace.go.
 V3_STATUS = {"not-enabled", "not-installable", "no-cover", "candidate", "infeasible",
              "conformal-slo", "priced-out", "budget-exhausted", "selected",
-             "not-evaluated-by-current-model"}
+             "not-evaluated-by-current-model", "ineligible"}
 V3_EXCLUSION_KIND = {"not-enabled", "recon-cover", "feasibility", "cost-nan",
-                     "slo-gate", "reactive-only", "selection", "none"}
-V3_DISPATCH = {"not-attempted", "emitted", "emitted-false", "dispatch-error"}
+                     "slo-gate", "reactive-only", "selection", "none",
+                     "not-installable", "no-rbac", "capability-unsupported",
+                     "action-failure-cooldown", "operator-opt-out"}
+V3_INELIGIBLE_EXCLUSIONS = {"no-rbac", "capability-unsupported",
+                            "action-failure-cooldown", "operator-opt-out"}
+V3_DISPATCH = {"not-attempted", "emitted", "emitted-false", "dispatch-error",
+               "refused-no-effect", "already-satisfied", "reconciled-no-new-mutation",
+               "declared-only"}
 
 # Redaction patterns: the task's four, plus the Go patterns from decision_trace.go:189-192.
 SECRET_PATTERNS = [
@@ -765,10 +771,14 @@ def v3_action_status(tr: dict) -> list[str]:
             problems.append(f"{p}.status={st!r} not in vocabulary")
         if ek not in V3_EXCLUSION_KIND:
             problems.append(f"{p}.exclusionKind={ek!r} not in vocabulary")
-        if (st == "selected") != (ek == "none"):
-            problems.append(f"{p}: status==selected <=> exclusionKind==none violated (status={st!r}, exclusionKind={ek!r})")
+        if st == "selected" and ek != "none":
+            problems.append(f"{p}: status==selected requires exclusionKind==none (got {ek!r})")
         if ek == "cost-nan" and st != "infeasible":
             problems.append(f"{p}: exclusionKind==cost-nan requires status==infeasible (got {st!r})")
+        if st == "not-installable" and ek != "not-installable":
+            problems.append(f"{p}: status==not-installable requires exclusionKind==not-installable (got {ek!r})")
+        if st == "ineligible" and ek not in V3_INELIGIBLE_EXCLUSIONS:
+            problems.append(f"{p}: status==ineligible requires a recognized eligibility exclusion (got {ek!r})")
     return problems
 
 

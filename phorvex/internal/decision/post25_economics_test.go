@@ -96,6 +96,52 @@ func TestPost25EconomicsIndependentValidatorConsumesRealV4Producer(t *testing.T)
 			runEconomicsAuditValidator(t, tampered, false)
 		})
 	}
+
+	// The independent reader must track the same closed capability-gate
+	// vocabulary and status/exclusion relationships as DecisionTraceV2.Validate.
+	// These rows are emitted before scoring, including by deployed V3 producers.
+	for _, tc := range []struct {
+		name      string
+		status    string
+		exclusion string
+		wantPass  bool
+	}{
+		{name: "capability unsupported", status: model.ActionStatusIneligible, exclusion: model.ExclusionCapability, wantPass: true},
+		{name: "unknown status", status: "future-eligibility", exclusion: model.ExclusionCapability, wantPass: false},
+		{name: "unknown exclusion", status: model.ActionStatusIneligible, exclusion: "future-capability", wantPass: false},
+		{name: "wrong ineligible pair", status: model.ActionStatusIneligible, exclusion: model.ExclusionFeasibility, wantPass: false},
+		{name: "wrong not-installable pair", status: model.ActionStatusNotInstallable, exclusion: model.ExclusionCapability, wantPass: false},
+	} {
+		t.Run("eligibility-"+tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(validFixed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var record map[string]any
+			if err := json.Unmarshal(raw, &record); err != nil {
+				t.Fatal(err)
+			}
+			rows := record["decisionTrace"].(map[string]any)["actionStatus"].([]any)
+			var row map[string]any
+			for _, rawRow := range rows {
+				candidate := rawRow.(map[string]any)
+				if candidate["status"] != model.ActionStatusSelected {
+					row = candidate
+					break
+				}
+			}
+			if row == nil {
+				t.Fatal("real producer exposed no non-selected action status row")
+			}
+			row["status"] = tc.status
+			row["exclusionKind"] = tc.exclusion
+			raw, err = json.Marshal(record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runEconomicsAuditValidator(t, raw, tc.wantPass)
+		})
+	}
 }
 
 func TestPost25EconomicsAbsentLegacyAndExplicitZero(t *testing.T) {
