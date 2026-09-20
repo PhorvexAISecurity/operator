@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -95,7 +95,7 @@ issues:
 - M-182
 title: Bound calibration evidence serialization memory
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -122,8 +122,8 @@ implementation:
   head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/244
+  reviewed_head: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -160,10 +160,10 @@ residuals:
   are separate.
 - 1000-Pod full-tick criterion and production capacity remain open.
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-20T19:04:43+00:00'
+  owner: codex-lead
+  action: Await PR244 merge and source/digest rollout; verify memory and manager lifetime;
+    continue independent catalogue work
+updated_at: '2026-09-20T19:06:59+00:00'
 configuration_history:
 - at: '2026-09-20T18:19:34+00:00'
   by: codex-lead
@@ -187,6 +187,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-20T19:06:57+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: operations/AUTONOMY.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -235,6 +240,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-20T19:06:59+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision
