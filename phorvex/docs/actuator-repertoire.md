@@ -69,7 +69,7 @@ route-key with the target Ready and at least two Ready backends.
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `kv-reset` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `endpoint-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `model-shard-replace` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `model-shard-replace` | native | yes | — | parallel-group-unavailable: distributed readiness, atomic activation and replenishment are unverified for every target declaring phorvex.ai/parallel-group | registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable |
 | `adapter-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `request-drain` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `guardrail-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
@@ -91,7 +91,7 @@ route-key with the target Ready and at least two Ready backends.
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `kv-reset` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `endpoint-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `model-shard-replace` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `model-shard-replace` | native | yes | — | parallel-group-unavailable: distributed readiness, atomic activation and replenishment are unverified for every target declaring phorvex.ai/parallel-group | registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable |
 | `adapter-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `request-drain` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `guardrail-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
