@@ -1,5 +1,7 @@
 # Outstanding live verification — readiness campaign
 
+**September20 Tier20 deployment:** manager source `47ca44ad` / image 0.4.134 confirmed. The 188.2-second sample contains 330 policy ticks and 54 full-manager histogram completions (mean 1.786s); all 22 observed KV decisions failed dispatch. No sampled restarts; capacity, reference lifetime, prior OOM and all 29 behavior bundles remain unverified. Tier22 is merged but the 06:43 read still finds Tier20 running. [Evidence](20260916-local-continuation/live/20260920-tier20-deployment/REPORT.md).
+
 **September20 Tier19 deployment:** manager source `a480c36f` and image0.4.133 are independently confirmed. The 188.2-second passive sample observes the new normal tick-outcome metrics and329 log ticks with zero sampled restarts. Rejection/recovery/UID and GPU controls were not induced; all29 behavior bundles, prior OOM and source prerequisites remain pending. [Evidence](20260916-local-continuation/live/20260920-tier19-deployment/REPORT.md).
 
 **September20 Tier18 deployment:** independent reads confirm manager source `b3d41173`, image0.4.132 and digest `sha256:19509e6453497475d643a6a804d398966b9c3246aed64d83d3ead9b1e44a2824`. A 186.5-second passive scheduler sample retained305 ticks across9 tenant values with unchanged sampled manager identity, Ready state and zero restarts. Controlled lifecycle/group tests, backend/guardrail prerequisites, prior OOM and all29 behavior bundles remain pending. [Evidence](20260916-local-continuation/live/20260920-tier18-deployment/REPORT.md).
