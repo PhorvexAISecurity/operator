@@ -602,7 +602,7 @@ func (s *c2CheckpointContinuity) Setup(ctx context.Context, env *core.Env) error
 		return errors.New("checkpoint local bound PV changed after workload readiness")
 	}
 	if s.localFixture {
-		if err := s.validateCheckpointLocalPVC(pvc, s.pvName, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot)); err != nil {
+		if err := s.validateCheckpointLocalPVC(bound, s.pvName, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot)); err != nil {
 			return err
 		}
 		sc, err := env.Kube.StorageV1().StorageClasses().Get(ctx, s.storageClassName, metav1.GetOptions{})
@@ -943,6 +943,9 @@ func (s *c2CheckpointContinuity) verifyStorageIdentity(ctx context.Context, env 
 		return fmt.Errorf("checkpoint PV identity/binding changed: observedUID=%s expectedUID=%s", pv.UID, s.pvUID)
 	}
 	if s.localFixture {
+		if err := s.validateCheckpointLocalPVC(pvc, s.pvName, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot)); err != nil {
+			return err
+		}
 		if err := s.validateCheckpointLocalPV(pv, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot), false); err != nil {
 			return err
 		}

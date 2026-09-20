@@ -536,16 +536,21 @@ func TestCheckpointLocalFixturePrebindsBeforeWriterAndRepeatsMarkerInit(t *testi
 	env, client, pv := checkpointLocalSetupEnv(t)
 	var orderingErr error
 	client.PrependReactor("create", "persistentvolumeclaims", func(a k8stesting.Action) (bool, runtime.Object, error) {
-		pvc := a.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim)
+		pvc := a.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim).DeepCopy()
 		pvc.UID = "pvc-local-uid"
-		pvc.Status.Phase = corev1.ClaimBound
+		pvc.Status.Phase = corev1.ClaimPending
+		boundPVC := pvc.DeepCopy()
+		boundPVC.Status.Phase = corev1.ClaimBound
+		if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("persistentvolumeclaims"), boundPVC, "sandbox"); err != nil {
+			return true, nil, err
+		}
 		bound := pv.DeepCopy()
 		bound.Status.Phase = corev1.VolumeBound
 		bound.Spec.ClaimRef = &corev1.ObjectReference{Namespace: "sandbox", Name: checkpointPVC, UID: pvc.UID}
 		if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("persistentvolumes"), bound, ""); err != nil {
 			return true, nil, err
 		}
-		return false, nil, nil
+		return true, pvc, nil
 	})
 	client.PrependReactor("create", "deployments", func(a k8stesting.Action) (bool, runtime.Object, error) {
 		current, err := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("persistentvolumes"), "", pv.Name)
