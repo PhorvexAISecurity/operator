@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -99,7 +99,7 @@ issues:
 - M-170
 title: Measure real HTTP session behavior across bounded rotations
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -166,9 +166,9 @@ residuals:
   credit.
 next_action:
   owner: codex-lead
-  action: Execute reviewed attempt7 against fresh source/digest/health pins; no full
-    catalogue or security closure
-updated_at: '2026-09-20T23:08:45+00:00'
+  action: PR248 open targeting main; independently execute reviewed attempt7 against
+    current deployment and health pins
+updated_at: '2026-09-20T23:09:55+00:00'
 follow_up_to: POST25-CHECKPOINT-LOCAL-FIXTURE
 configuration_history:
 - at: '2026-09-20T21:00:40+00:00'
@@ -246,6 +246,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-20T23:09:55+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: POST25-SESSION-OBSERVATION:8:review
