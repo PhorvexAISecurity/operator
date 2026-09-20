@@ -160,3 +160,10 @@ intakes:
     state: FILED
     issue_id: M-181
     aliases: []
+  RPT-20260920-131622-propagate-authentic-vllm-prefix-cache-reset-ackn:
+    directory: intake/RPT-20260920-131622-propagate-authentic-vllm-prefix-cache-reset-ackn
+    kind: BUG
+    title: Propagate authentic vLLM prefix-cache reset acknowledgement
+    state: DUPLICATE
+    issue_id: null
+    aliases: []

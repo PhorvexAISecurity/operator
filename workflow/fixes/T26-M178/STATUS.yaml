@@ -1,0 +1,361 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 779458ade90662940d335b8f56ad69aea37793950c4debab8557206c025096d2
+    source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+    at: '2026-09-20T13:59:12+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/incident.md
+    sha256: fba13ff964890844eab1b0b2f55aa4babe2c47d5d76866097b523541198511f3
+    source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+    at: '2026-09-20T14:10:21+00:00'
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 0a3e15e8c2185ef09965ff56eb734e176ed52f12b85fccac0a83c7acc4498766
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:11:05+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 41eef69e57207242fc316db85f18070cd119c2e66f8c0fafb7e62988bff67108
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:11:05+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 0a3e15e8c2185ef09965ff56eb734e176ed52f12b85fccac0a83c7acc4498766
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:11:05+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - workflow
+    inputs_sha256: bd5db056130ae41539345958dac0e548f279ed30abd2ca86c547a9edfd4dad19
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue-r5/recipe-registry-and-packaging.log
+    sha256: ccdc5f83d06e37baae0ac1d96c3de9b8e18b022ac18116dd0a22ecc7cc3c9008
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:11:05+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - workflow/fixes/T26-M178/evidence/lead/docker-config-sha256-a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996.json
+    - workflow/fixes/T26-M178/evidence/lead/docker-manifest-sha256-4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2.json
+    inputs_sha256: 14d124b40d8bf84c421b2417d18b97d741cc1b8caf25a543571299d5f924cf3d
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue-r5/offline-verify.log
+    sha256: ec19b54306b470f69521525d2d43030051908e52b1f799f43e1a65389c4b41d4
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:11:05+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - phorvex/internal/actuator
+    - workflow/fixes/T26-M178/verify.sh
+    inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue-r5/offline-verify.log
+    sha256: ec19b54306b470f69521525d2d43030051908e52b1f799f43e1a65389c4b41d4
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:11:05+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - phorvex/internal/actuator
+    - workflow/fixes/T26-M178/verify.sh
+    inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 1a09bc873f2aa2c30c2646b6abeeb98ea9b8cbe0677e310ab3a61d27f07450e5
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:13:06+00:00'
+    incident_sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
+    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+    at: '2026-09-20T15:13:05+00:00'
+    baseline_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+fix_id: T26-M178
+issues:
+- M-178
+title: Carry authentic vLLM reset acknowledgement end to end
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  deployed_image: vllm/vllm-openai:v0.7.3@sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-backend
+  base_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  head_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T15:13:10+00:00'
+follow_up_to: T14-M178
+configuration_history:
+- at: '2026-09-20T13:29:15+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+- at: '2026-09-20T13:36:06+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-20T14:10:42+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - roles
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T14:45:04+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T14:53:01+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T15:11:05+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T13:40:26+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T13:59:32+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-20T14:45:05+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T14:45:06+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-20T14:51:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T15:11:05+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T15:13:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T15:13:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T26-M178:12:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 12
+check_history:
+- check: preflight
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/preflight/receipt.json
+  sha256: f9f80c8f7c67fc2ad446db333ecec2ee1348e812e15e524cfe04105b2cbf2d26
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:45:04+00:00'
+- check: implementation
+  result: PASS
+  by: post25-catalogue
+  artifact: 04-diff.patch
+  sha256: f013cd66d06e37eb4e2819669b9df81a134ee761cd0a8dc4435648c50d30a99b
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:45:04+00:00'
+- check: l0
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/preflight/receipt.json
+  sha256: f9f80c8f7c67fc2ad446db333ecec2ee1348e812e15e524cfe04105b2cbf2d26
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:45:04+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - deploy/helm/phorvex-stack
+  - phorvex
+  - workflow
+  inputs_sha256: 2b08956443fbe6bb0d826c5d36e7a7f8ccd71d9a2a25c2879a7ca0d8ddc0b13b
+- check: l1
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/post25-catalogue/offline-verify.log
+  sha256: 9a6a54c129fd0531a1573a0a81b844773da0148d2f5787dcb86f0037f5d95908
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:45:04+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - workflow/fixes/T26-M178/verify.sh
+  inputs_sha256: a6d44521d64b04c59e919009d0271524c418623aad24068e8844333e0715175e
+- check: l2
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/post25-catalogue/offline-verify.log
+  sha256: 9a6a54c129fd0531a1573a0a81b844773da0148d2f5787dcb86f0037f5d95908
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:45:04+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - phorvex/internal/actuator
+  - workflow/fixes/T26-M178/verify.sh
+  inputs_sha256: 9e708276b27c963945cf2c28c9e6bd0bc26c7faaec9802a2d8112726909c7a18
+- check: positive_control
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/post25-catalogue/offline-verify.log
+  sha256: 9a6a54c129fd0531a1573a0a81b844773da0148d2f5787dcb86f0037f5d95908
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:45:04+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - phorvex/internal/actuator
+  - workflow/fixes/T26-M178/verify.sh
+  inputs_sha256: 9e708276b27c963945cf2c28c9e6bd0bc26c7faaec9802a2d8112726909c7a18
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 8c32df46a649c0902495d202f0af15a48b9ba9a6ca9fbefc9229bb3281f91a93
+  source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+  at: '2026-09-20T14:51:45+00:00'

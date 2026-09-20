@@ -1,0 +1,34 @@
+test_below_threshold_stream_preserves_status_body_and_streaming (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_below_threshold_stream_preserves_status_body_and_streaming) ... {"event":"guardrail_verdict","mode":"enforce","outcome":"admitted_enforce","score":0.1,"threshold":0.5,"variant":"pgv2","would_block":false}
+ok
+test_default_config_is_enforce_with_half_thresholds (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_default_config_is_enforce_with_half_thresholds) ... ok
+test_drain_aborts_counted_stream_and_next_request_still_works (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_drain_aborts_counted_stream_and_next_request_still_works) ... {"event":"guardrail_verdict","mode":"enforce","outcome":"admitted_enforce","score":0.1,"threshold":0.5,"variant":"pgv2","would_block":false}
+{"event":"guardrail_drain","aborted":1}
+{"event":"guardrail_verdict","mode":"enforce","outcome":"admitted_enforce","score":0.1,"threshold":0.5,"variant":"pgv2","would_block":false}
+ok
+test_enforce_blocks_at_equality_and_forwards_benign_once (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_enforce_blocks_at_equality_and_forwards_benign_once) ... {"event":"guardrail_verdict","mode":"enforce","outcome":"blocked","score":0.5,"threshold":0.5,"variant":"pgv2","would_block":true}
+{"event":"guardrail_verdict","mode":"enforce","outcome":"admitted_enforce","score":0.1,"threshold":0.5,"variant":"pgv2","would_block":false}
+ok
+test_invalid_score_fails_without_upstream_call (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_invalid_score_fails_without_upstream_call) ... ok
+test_invalid_startup_configuration_is_rejected (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_invalid_startup_configuration_is_rejected) ... ok
+test_kv_invalidate_propagates_authenticated_true_and_false (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_kv_invalidate_propagates_authenticated_true_and_false) ... {"event":"guardrail_kv_invalidate","local":true,"scope":"local-prefix-cache","success":true}
+{"event":"guardrail_kv_invalidate","local":true,"scope":"local-prefix-cache","success":false}
+ok
+test_kv_invalidate_rejects_unconfirmed_upstream_responses (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_kv_invalidate_rejects_unconfirmed_upstream_responses) ... ok
+test_kv_invalidate_requires_scope_and_upstream_credential (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_kv_invalidate_requires_scope_and_upstream_credential) ... ok
+test_multiple_user_messages_use_one_conservative_snapshot (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_multiple_user_messages_use_one_conservative_snapshot) ... {"event":"guardrail_verdict","mode":"enforce","outcome":"blocked","score":0.8,"threshold":0.5,"variant":"pgv2","would_block":true}
+ok
+test_observe_records_both_verdicts_and_forwards_exactly_once (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_observe_records_both_verdicts_and_forwards_exactly_once) ... ok
+test_reload_changes_only_variant_and_preserves_effective_config (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_reload_changes_only_variant_and_preserves_effective_config) ... {"event":"guardrail_variant_changed","variant":"pgv1"}
+ok
+test_upstream_connection_failure_does_not_claim_completed_forwarding_and_closes_client (build.test-harness.guardrail.test_guardrail_proxy.GuardrailHTTPTest.test_upstream_connection_failure_does_not_claim_completed_forwarding_and_closes_client) ... ok
+test_deploy_rejects_invalid_config_before_mutation_or_stale_output (build.test-harness.guardrail.test_guardrail_proxy.TransformTest.test_deploy_rejects_invalid_config_before_mutation_or_stale_output) ... ok
+test_transform_rejects_invalid_mode_and_threshold (build.test-harness.guardrail.test_guardrail_proxy.TransformTest.test_transform_rejects_invalid_mode_and_threshold) ... ok
+test_transform_renders_explicit_validated_guardrail_config (build.test-harness.guardrail.test_guardrail_proxy.TransformTest.test_transform_renders_explicit_validated_guardrail_config) ... ok
+test_transform_requires_secret_backed_reset_credential (build.test-harness.guardrail.test_guardrail_proxy.TransformTest.test_transform_requires_secret_backed_reset_credential) ... ok
+test_preserves_true_and_false (build.test-harness.guardrail.test_reset_ack.ResetAcknowledgementParserTest.test_preserves_true_and_false) ... ok
+test_rejects_ambiguous_or_nonconfirming_responses (build.test-harness.guardrail.test_reset_ack.ResetAcknowledgementParserTest.test_rejects_ambiguous_or_nonconfirming_responses) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 3.278s
+
+OK

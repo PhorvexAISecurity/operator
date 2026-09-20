@@ -1,0 +1,3 @@
+command: GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=1 /home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go test ./internal/actuator -run ^TestM178KVInvalidateRequiresExplicitTrueAcknowledgement$ -count=1
+result: PASS
+output: ok github.com/phorvex/phorvex/internal/actuator 0.026s

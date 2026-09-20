@@ -33,6 +33,7 @@ VARIANT_MODELS = {
 }
 DEFAULT_THRESHOLD = 0.5
 MODES = frozenset(("enforce", "observe"))
+RESET_RESPONSE_MAX_BYTES = 1 << 16
 
 
 def _finite_threshold(name: str, raw: str) -> float:
@@ -75,6 +76,37 @@ def _package_version(name: str) -> str:
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
         return "unknown"
+
+
+def _reset_success(body: bytes) -> bool:
+    if not body or len(body) > RESET_RESPONSE_MAX_BYTES:
+        raise ValueError("reset acknowledgement has invalid size")
+
+    def unique_object(pairs):
+        result = {}
+        folded = set()
+        for key, value in pairs:
+            normalized = key.casefold()
+            if key in result or normalized in folded:
+                raise ValueError("reset acknowledgement has ambiguous fields")
+            result[key] = value
+            folded.add(normalized)
+        return result
+
+    def reject_constant(value):
+        raise ValueError(f"invalid JSON constant {value}")
+
+    try:
+        envelope = json.loads(body, object_pairs_hook=unique_object,
+                              parse_constant=reject_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("reset acknowledgement is not valid JSON") from exc
+    if not isinstance(envelope, dict):
+        raise ValueError("reset acknowledgement must be an object")
+    success = envelope.get("success")
+    if type(success) is not bool:
+        raise ValueError("reset acknowledgement requires boolean success")
+    return success
 
 
 class GuardrailRuntime:
@@ -204,8 +236,12 @@ def _verdict_log(*, variant: str, mode: str, threshold: float, score: float,
 
 
 def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTREAM,
-               load_models: bool = True) -> FastAPI:
+               load_models: bool = True,
+               upstream_api_key: str | None = None,
+               admin_api_key: str | None = None) -> FastAPI:
     runtime = runtime or GuardrailRuntime(load_config())
+    upstream_api_key = upstream_api_key if upstream_api_key is not None else os.environ.get("VLLM_API_KEY", "")
+    admin_api_key = admin_api_key if admin_api_key is not None else upstream_api_key
     inflight = set()  # asyncio tasks proxying generation requests — the drain target
 
     @asynccontextmanager
@@ -264,17 +300,41 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
     @app.post("/v1/kv/invalidate")
     async def kv_invalidate(req: Request):
         """Invalidate the deployment's worker-local vLLM prefix cache."""
+        if not upstream_api_key or not admin_api_key:
+            return JSONResponse({"error": "vLLM reset credential unavailable"}, status_code=503)
+        if req.headers.get("Authorization") != f"Bearer {admin_api_key}":
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
         body = await req.json()
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(f"{upstream}/reset_prefix_cache")
-        if response.status_code != 200:
-            return JSONResponse({"invalidated": False, "upstream": response.status_code}, status_code=502)
+        if not isinstance(body, dict) or body.get("local") is not True:
+            return JSONResponse({"error": "local:true is required"}, status_code=400)
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                async with client.stream(
+                    "POST",
+                    f"{upstream}/reset_prefix_cache",
+                    headers={"Authorization": f"Bearer {upstream_api_key}"},
+                ) as response:
+                    upstream_status = response.status_code
+                    response_body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        response_body.extend(chunk)
+                        if len(response_body) > RESET_RESPONSE_MAX_BYTES:
+                            raise ValueError("reset acknowledgement exceeds size limit")
+        except (httpx.HTTPError, ValueError):
+            return JSONResponse({"success": False, "error": "reset acknowledgement unavailable"}, status_code=502)
+        if upstream_status != 200:
+            return JSONResponse({"success": False, "upstream": upstream_status}, status_code=502)
+        try:
+            success = _reset_success(bytes(response_body))
+        except ValueError:
+            return JSONResponse({"success": False, "error": "invalid reset acknowledgement"}, status_code=502)
         print(json.dumps({
             "event": "guardrail_kv_invalidate",
             "local": body.get("local"),
             "scope": "local-prefix-cache",
+            "success": success,
         }, separators=(",", ":")), flush=True)
-        return {"invalidated": True, "scope": "local-prefix-cache"}
+        return {"success": success, "scope": "local-prefix-cache"}
 
     @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
     async def proxy(path: str, req: Request):

@@ -1,0 +1,150 @@
+diff --git a/vllm/engine/async_llm_engine.py b/vllm/engine/async_llm_engine.py
+index 93d9b74..399e85f 100644
+--- a/vllm/engine/async_llm_engine.py
++++ b/vllm/engine/async_llm_engine.py
+@@ -1187,2 +1187,5 @@ class AsyncLLMEngine(EngineClient):
+-    async def reset_prefix_cache(self) -> None:
+-        self.engine.reset_prefix_cache()
++    async def reset_prefix_cache(self) -> bool:
++        success = self.engine.reset_prefix_cache()
++        if type(success) is not bool:
++            raise TypeError("Prefix-cache reset result must be bool")
++        return success
+diff --git a/vllm/engine/multiprocessing/__init__.py b/vllm/engine/multiprocessing/__init__.py
+index 26dfb63..d5e12ad 100644
+--- a/vllm/engine/multiprocessing/__init__.py
++++ b/vllm/engine/multiprocessing/__init__.py
+@@ -126,2 +126,9 @@ class RPCUProfileRequest(Enum):
+-class RPCResetPrefixCacheRequest(Enum):
+-    RESET_PREFIX_CACHE = 1
++@dataclass
++class RPCResetPrefixCacheRequest:
++    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
++
++
++@dataclass
++class RPCResetPrefixCacheResponse:
++    request_id: str
++    success: bool
+@@ -157 +164 @@ REQUEST_OUTPUTS_T = Union[List[RequestOutput], RPCAdapterLoadedResponse,
+-                          RPCError]
++                          RPCResetPrefixCacheResponse, RPCError]
+diff --git a/vllm/engine/multiprocessing/client.py b/vllm/engine/multiprocessing/client.py
+index c12fe24..4b55042 100644
+--- a/vllm/engine/multiprocessing/client.py
++++ b/vllm/engine/multiprocessing/client.py
+@@ -33,0 +34 @@ from vllm.engine.multiprocessing import (ENGINE_DEAD_ERROR, IPC_DATA_EXT,
++                                         RPCResetPrefixCacheResponse,
+@@ -250 +251,2 @@ class MQLLMEngineClient(EngineClient):
+-                elif isinstance(request_outputs, RPCAdapterLoadedResponse):
++                elif isinstance(request_outputs, (RPCAdapterLoadedResponse,
++                                                  RPCResetPrefixCacheResponse)):
+@@ -259,2 +261,4 @@ class MQLLMEngineClient(EngineClient):
+-    def _add_output(self, request_output: Union[RequestOutput,
+-                                                RPCAdapterLoadedResponse]):
++    def _add_output(
++        self, request_output: Union[RequestOutput, RPCAdapterLoadedResponse,
++                                    RPCResetPrefixCacheResponse]
++    ):
+@@ -682 +686 @@ class MQLLMEngineClient(EngineClient):
+-    async def reset_prefix_cache(self) -> None:
++    async def reset_prefix_cache(self) -> bool:
+@@ -683,0 +688,9 @@ class MQLLMEngineClient(EngineClient):
++        request = RPCResetPrefixCacheRequest()
++        queue: asyncio.Queue[Union[RPCResetPrefixCacheResponse,
++                                  BaseException]] = asyncio.Queue()
++        self.output_queues[request.request_id] = queue
++        try:
++            async def send_and_wait():
++                await self._send_one_way_rpc_request(request=request,
++                                                     socket=self.input_socket)
++                return await queue.get()
+@@ -685,3 +698,16 @@ class MQLLMEngineClient(EngineClient):
+-        await self._send_one_way_rpc_request(
+-            request=RPCResetPrefixCacheRequest.RESET_PREFIX_CACHE,
+-            socket=self.input_socket)
++            try:
++                response = await asyncio.wait_for(
++                    send_and_wait(), timeout=VLLM_RPC_TIMEOUT / 1000)
++            except asyncio.TimeoutError as e:
++                raise TimeoutError(
++                    "MQLLMEngine didn't complete prefix-cache reset within "
++                    f"{VLLM_RPC_TIMEOUT}ms") from e
++            if isinstance(response, BaseException):
++                raise response
++            if not isinstance(response, RPCResetPrefixCacheResponse):
++                raise ValueError("Unexpected prefix-cache reset response")
++            if type(response.success) is not bool:
++                raise ValueError("Prefix-cache reset result must be bool")
++            return response.success
++        finally:
++            self.output_queues.pop(request.request_id, None)
+diff --git a/vllm/engine/multiprocessing/engine.py b/vllm/engine/multiprocessing/engine.py
+index ce24aa2..7b37963 100644
+--- a/vllm/engine/multiprocessing/engine.py
++++ b/vllm/engine/multiprocessing/engine.py
+@@ -22,0 +23 @@ from vllm.engine.multiprocessing import (ENGINE_DEAD_ERROR, IPC_DATA_EXT,
++                                         RPCResetPrefixCacheResponse,
+@@ -245 +246 @@ class MQLLMEngine:
+-                    self.reset_prefix_cache()
++                    self._handle_reset_prefix_cache_request(request)
+@@ -313,0 +315,16 @@ class MQLLMEngine:
++    def _handle_reset_prefix_cache_request(
++            self, request: RPCResetPrefixCacheRequest):
++        try:
++            success = self.reset_prefix_cache()
++            if type(success) is not bool:
++                raise TypeError("Prefix-cache reset result must be bool")
++        except BaseException as e:
++            self._send_outputs(
++                RPCError(request_id=request.request_id,
++                         is_engine_errored=False,
++                         exception=e))
++            return
++        self._send_outputs(
++            RPCResetPrefixCacheResponse(request_id=request.request_id,
++                                        success=success))
++
+diff --git a/vllm/engine/protocol.py b/vllm/engine/protocol.py
+index ee9accd..b782e10 100644
+--- a/vllm/engine/protocol.py
++++ b/vllm/engine/protocol.py
+@@ -277 +277 @@ class EngineClient(ABC):
+-    async def reset_prefix_cache(self) -> None:
++    async def reset_prefix_cache(self) -> bool:
+diff --git a/vllm/entrypoints/openai/api_server.py b/vllm/entrypoints/openai/api_server.py
+index f7162fa..867f387 100644
+--- a/vllm/entrypoints/openai/api_server.py
++++ b/vllm/entrypoints/openai/api_server.py
+@@ -156,0 +157,5 @@ async def build_async_engine_client_from_engine_args(
++    if envs.VLLM_USE_V1:
++        raise RuntimeError(
++            "This vLLM 0.7.3 build does not support authenticated prefix "
++            "cache reset acknowledgements with VLLM_USE_V1 enabled.")
++
+@@ -620,4 +625 @@ if envs.VLLM_SERVER_DEV_MODE:
+-        """
+-        Reset the prefix cache. Note that we currently do not check if the
+-        prefix cache is successfully reset in the API server.
+-        """
++        """Reset the prefix cache and return the allocator result."""
+@@ -625,2 +627,4 @@ if envs.VLLM_SERVER_DEV_MODE:
+-        await engine_client(raw_request).reset_prefix_cache()
+-        return Response(status_code=200)
++        success = await engine_client(raw_request).reset_prefix_cache()
++        if type(success) is not bool:
++            raise TypeError("Prefix-cache reset result must be bool")
++        return JSONResponse(content={"success": success}, status_code=200)
+@@ -751 +755,7 @@ def build_app(args: Namespace) -> FastAPI:
+-    if token := envs.VLLM_API_KEY or args.api_key:
++    token = envs.VLLM_API_KEY or args.api_key
++    if envs.VLLM_SERVER_DEV_MODE and not token:
++        raise RuntimeError(
++            "VLLM_API_KEY or --api-key is required when developer endpoints "
++            "are enabled in this build.")
++
++    if token:
+@@ -760 +770,2 @@ def build_app(args: Namespace) -> FastAPI:
+-            if not url_path.startswith("/v1"):
++            if (not url_path.startswith("/v1")
++                    and url_path != "/reset_prefix_cache"):

@@ -1,0 +1,10 @@
+test_correlated_true_false_and_generation_queue (__main__.ContractTest.test_correlated_true_false_and_generation_queue) ... ok
+test_engine_handler_preserves_bool_and_scopes_exception (__main__.ContractTest.test_engine_handler_preserves_bool_and_scopes_exception) ... ok
+test_exception_death_malformed_timeout_and_cancel_cleanup (__main__.ContractTest.test_exception_death_malformed_timeout_and_cancel_cleanup) ... ok
+test_inprocess_pipeline_and_api_preserve_false (__main__.ContractTest.test_inprocess_pipeline_and_api_preserve_false) ... ok
+test_v1_startup_and_actual_reset_middleware_auth (__main__.ContractTest.test_v1_startup_and_actual_reset_middleware_auth) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.264s
+
+OK

@@ -1,0 +1,322 @@
+schema_version: 1
+intake_id: RPT-20260920-131622-propagate-authentic-vllm-prefix-cache-reset-ackn
+kind: BUG
+title: Propagate authentic vLLM prefix-cache reset acknowledgement
+state: DUPLICATE
+reporter: codex-lead
+approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+created_at: '2026-09-20T13:16:22+00:00'
+updated_at: '2026-09-20T13:28:37+00:00'
+pins:
+  source_main_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  source_release: vllm-v0.7.3@ed6e9075d31e32c8548b480a47d1ffb77da1f54c
+  deployed_image: vllm/vllm-openai:v0.7.3
+  deployed_digest: sha256:4f4039589120397ce64231883a1b8a78e7bc83b2a8999c5951af0bd72f6eea79
+  deployed_git_sha: null
+  environment: dev
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-136
+    score: 31
+    overlap:
+    - '200'
+    - any
+    - api
+    - authentication
+    - but
+    - can
+    - client
+    - cluster
+    - control
+    - deployed
+    - deployment
+    - endpoint
+    - evidence
+    - gap
+    - has
+    - http
+    - into
+    - mutation
+    - not
+    - only
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-178
+    score: 31
+    overlap:
+    - '204'
+    - accepts
+    - acknowledgement
+    - behavior
+    - bounded
+    - client
+    - credit
+    - empty
+    - evidence
+    - explicit
+    - 'false'
+    - http
+    - prefix-cache
+    - report
+    - reset
+    - success
+    - unambiguous
+    - vllm
+    - without
+    title: vLLM prefix-cache reset credits HTTP success without backend confirmation
+  - issue_id: M-155
+    score: 27
+    overlap:
+    - any
+    - api
+    - before
+    - build
+    - can
+    - client
+    - cluster
+    - deployed
+    - does
+    - empty
+    - evidence
+    - gap
+    - json
+    - not
+    - observed
+    - only
+    - path
+    - source
+    - then
+    - this
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-144
+    score: 25
+    overlap:
+    - any
+    - before
+    - but
+    - can
+    - cannot
+    - claim
+    - does
+    - evidence
+    - explicit
+    - followed
+    - gap
+    - including
+    - must
+    - not
+    - observed
+    - only
+    - path
+    - records
+    - source
+    - status
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-2
+    score: 24
+    overlap:
+    - any
+    - api
+    - but
+    - cannot
+    - cluster
+    - commit
+    - deployed
+    - does
+    - empty
+    - evidence
+    - has
+    - including
+    - may
+    - not
+    - observed
+    - only
+    - source
+    - status
+    - then
+    - this
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-9
+    score: 24
+    overlap:
+    - alone
+    - before
+    - but
+    - can
+    - cannot
+    - cluster
+    - deployed
+    - deployment
+    - does
+    - has
+    - image
+    - into
+    - not
+    - only
+    - path
+    - records
+    - status
+    - success
+    - this
+    - 'true'
+    title: '`Emitted` is a request-ack, not an effect — the brain never learns what
+      Phoenix did'
+  - issue_id: M-142
+    score: 24
+    overlap:
+    - '200'
+    - any
+    - before
+    - cannot
+    - claim
+    - control
+    - deployed
+    - does
+    - establish
+    - evidence
+    - explicit
+    - has
+    - into
+    - not
+    - observed
+    - only
+    - real
+    - then
+    - this
+    - 'true'
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-149
+    score: 24
+    overlap:
+    - alone
+    - base
+    - build
+    - but
+    - can
+    - deployed
+    - evidence
+    - must
+    - not
+    - only
+    - operator
+    - path
+    - physical
+    - reach
+    - records
+    - source
+    - status
+    - this
+    - vllm
+    - without
+    title: Post-T1-A, the `model-theft` stage is unreachable on GPU fleets without
+      DCGM profiling — the leakage gate's only activity input is honest-absent
+  - issue_id: M-146
+    score: 23
+    overlap:
+    - any
+    - boolean
+    - but
+    - cannot
+    - claim
+    - empty
+    - erasure
+    - evidence
+    - has
+    - must
+    - not
+    - only
+    - producer
+    - records
+    - status
+    - tag
+    - then
+    - this
+    - was
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-158
+    score: 22
+    overlap:
+    - but
+    - client
+    - close
+    - cluster
+    - deployed
+    - does
+    - empty
+    - gap
+    - into
+    - not
+    - scope
+    - status
+    - this
+    - was
+    title: 'T1-E follow-up: boot DISCOVERY of the deployed CRD action enum into `model.NotInstallable`
+      is unwired — the not-installable gate is live but its set is populated empty'
+  determination: DUPLICATE
+  issue_id: M-178
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: post25-backend
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Review follow-up Fix1 for M-178.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-20T13:28:29+00:00'
+  by: post25-backend
+  artifact: REPORT.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-20T13:28:30+00:00'
+  by: post25-backend
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-20T13:28:30+00:00'
+  by: post25-backend
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-20T13:28:30+00:00'
+  by: post25-backend
+  artifact: DEDUP.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: DUPLICATE
+  at: '2026-09-20T13:28:37+00:00'
+  by: post25-backend
+  artifact: DEDUP.md
+  note: null
+  approval_ref: /home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/backend/LEAD-IMPLEMENTATION-PLAN.md
+  forced: false
+revision: 5
