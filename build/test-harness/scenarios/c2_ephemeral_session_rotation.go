@@ -272,14 +272,14 @@ func (s *c2EphemeralSessionRotation) Execute(ctx context.Context, env *core.Env)
 		return core.AttackResult{}, errors.New("session producer has no deterministic trial RNG")
 	}
 	sid := fmt.Sprintf("session-%d-%016x", env.Trial, env.Rand.Uint64())
-	created, err := performSessionRequest(ctx, env, "POST", sid)
+	created, err := performSessionRequest(ctx, env, "POST", sid, s.producerUID)
 	if err != nil {
 		return core.AttackResult{Stages: []string{"create synthetic process-memory session through stable Service"}}, err
 	}
 	if created.HTTPStatus != 201 || !created.Body.Created || !created.Body.Present || created.Body.PodUID != string(s.originalUID) {
 		return core.AttackResult{Stages: []string{"create synthetic process-memory session through stable Service"}}, fmt.Errorf("session create reply did not bind new state to original UID: status=%d created=%v present=%v replyUID=%q originalUID=%q", created.HTTPStatus, created.Body.Created, created.Body.Present, created.Body.PodUID, s.originalUID)
 	}
-	retained, err := performSessionRequest(ctx, env, "GET", sid)
+	retained, err := performSessionRequest(ctx, env, "GET", sid, s.producerUID)
 	if err != nil {
 		return core.AttackResult{Stages: []string{"create synthetic process-memory session through stable Service", "retrieve the same synthetic session ID"}}, err
 	}
@@ -356,7 +356,7 @@ func (s *c2EphemeralSessionRotation) SuccessOracle(ctx context.Context, env *cor
 	if pod.DeletionTimestamp != nil || !podReady(pod) {
 		return core.OracleResult{}, fmt.Errorf("session observation target pod=%s uid=%s is not ready and non-terminating", pod.Name, pod.UID)
 	}
-	replayed, err := performSessionRequest(ctx, env, "GET", s.sessionID)
+	replayed, err := performSessionRequest(ctx, env, "GET", s.sessionID, s.producerUID)
 	if err != nil {
 		return core.OracleResult{}, fmt.Errorf("replay original synthetic session: %w", err)
 	}
@@ -398,14 +398,14 @@ func (s *c2EphemeralSessionRotation) SuccessOracle(ctx context.Context, env *cor
 		return core.OracleResult{}, fmt.Errorf("replacement did not explicitly report old synthetic session absent: status=%d present=%v", replayed.HTTPStatus, replayed.Body.Present)
 	}
 	newID := s.sessionID + "-new"
-	created, err := performSessionRequest(ctx, env, "POST", newID)
+	created, err := performSessionRequest(ctx, env, "POST", newID, s.producerUID)
 	if err != nil {
 		return core.OracleResult{}, fmt.Errorf("create replacement synthetic session: %w", err)
 	}
 	if created.HTTPStatus != 201 || !created.Body.Created || !created.Body.Present || created.Body.PodUID != string(pod.UID) {
 		return core.OracleResult{}, fmt.Errorf("replacement could not create new process state: status=%d created=%v present=%v replyUID=%q replacementUID=%q", created.HTTPStatus, created.Body.Created, created.Body.Present, created.Body.PodUID, pod.UID)
 	}
-	verified, err := performSessionRequest(ctx, env, "GET", newID)
+	verified, err := performSessionRequest(ctx, env, "GET", newID, s.producerUID)
 	if err != nil {
 		return core.OracleResult{}, fmt.Errorf("retrieve replacement synthetic session: %w", err)
 	}
@@ -474,22 +474,93 @@ type sessionReply struct {
 	} `json:"body"`
 }
 
-func performSessionRequest(ctx context.Context, env *core.Env, method, id string) (sessionReply, error) {
-	if err := ctx.Err(); err != nil {
-		return sessionReply{}, fmt.Errorf("HTTP observation cancelled: %w", err)
+const (
+	sessionReceiptStdoutLimit = 4096
+	sessionReceiptStderrLimit = 1024
+)
+
+type sessionHTTPReceipt struct {
+	Method              string `json:"method"`
+	SyntheticSessionID  string `json:"syntheticSessionID"`
+	ServiceURL          string `json:"serviceURL"`
+	ProducerName        string `json:"producerName"`
+	ExpectedProducerUID string `json:"expectedProducerUID"`
+	ObservedProducerUID string `json:"observedProducerUID,omitempty"`
+	IdentityError       string `json:"identityError,omitempty"`
+	ExitCode            int    `json:"exitCode"`
+	Stdout              string `json:"stdout"`
+	StdoutBytes         int    `json:"stdoutBytes"`
+	StdoutSHA256        string `json:"stdoutSHA256"`
+	StdoutTruncated     bool   `json:"stdoutTruncated"`
+	Stderr              string `json:"stderr"`
+	StderrBytes         int    `json:"stderrBytes"`
+	StderrSHA256        string `json:"stderrSHA256"`
+	StderrTruncated     bool   `json:"stderrTruncated"`
+	ExecError           string `json:"execError,omitempty"`
+	ContextError        string `json:"contextError,omitempty"`
+}
+
+func boundedSessionReceipt(value string, limit int) (captured string, size int, digest string, truncated bool) {
+	raw := []byte(value)
+	sum := sha256.Sum256(raw)
+	if len(raw) > limit {
+		raw = raw[:limit]
+		truncated = true
 	}
+	return string(raw), len(value), fmt.Sprintf("%x", sum), truncated
+}
+
+func recordSessionHTTPReceipt(env *core.Env, receipt sessionHTTPReceipt) {
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		env.Log.Logf("c2-ephemeral-session-rotation http-receipt marshal-error=%q", err)
+		return
+	}
+	env.Log.Logf("c2-ephemeral-session-rotation http-receipt=%s", raw)
+}
+
+func performSessionRequest(ctx context.Context, env *core.Env, method, id string, expectedProducerUID types.UID) (sessionReply, error) {
 	url := fmt.Sprintf("http://%s:%d", sessionService, sessionPort)
-	res := env.Exec(ctx, sessionProducer, "producer", []string{"python3", "-B", "-c", sessionClientSource, method, url, id})
+	receipt := sessionHTTPReceipt{Method: method, SyntheticSessionID: id, ServiceURL: url, ProducerName: sessionProducer, ExpectedProducerUID: string(expectedProducerUID), ExitCode: -1}
 	if err := ctx.Err(); err != nil {
+		receipt.ContextError = err.Error()
+		recordSessionHTTPReceipt(env, receipt)
 		return sessionReply{}, fmt.Errorf("HTTP observation cancelled: %w", err)
 	}
+	producer, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, sessionProducer, metav1.GetOptions{})
+	if err != nil {
+		receipt.IdentityError = err.Error()
+		recordSessionHTTPReceipt(env, receipt)
+		return sessionReply{}, fmt.Errorf("read HTTP producer identity: %w", err)
+	}
+	receipt.ObservedProducerUID = string(producer.UID)
+	if expectedProducerUID == "" || producer.UID == "" || producer.UID != expectedProducerUID {
+		receipt.IdentityError = fmt.Sprintf("producer UID mismatch: observed=%q expected=%q", producer.UID, expectedProducerUID)
+		recordSessionHTTPReceipt(env, receipt)
+		return sessionReply{}, errors.New(receipt.IdentityError)
+	}
+	res := env.Exec(ctx, sessionProducer, "producer", []string{"python3", "-B", "-c", sessionClientSource, method, url, id})
+	receipt.ExitCode = res.ExitCode
+	receipt.Stdout, receipt.StdoutBytes, receipt.StdoutSHA256, receipt.StdoutTruncated = boundedSessionReceipt(res.Stdout, sessionReceiptStdoutLimit)
+	receipt.Stderr, receipt.StderrBytes, receipt.StderrSHA256, receipt.StderrTruncated = boundedSessionReceipt(res.Stderr, sessionReceiptStderrLimit)
+	if res.Err != nil {
+		receipt.ExecError = res.Err.Error()
+	}
+	if err := ctx.Err(); err != nil {
+		receipt.ContextError = err.Error()
+		recordSessionHTTPReceipt(env, receipt)
+		return sessionReply{}, fmt.Errorf("HTTP observation cancelled: %w", err)
+	}
+	// Persist the exact bounded exec envelope and source Pod identity before any
+	// protocol parsing or favorable status interpretation.
+	recordSessionHTTPReceipt(env, receipt)
 	if res.Err != nil {
 		return sessionReply{}, fmt.Errorf("HTTP transport/exec failed: %w", res.Err)
 	}
 	if res.ExitCode != 0 {
 		return sessionReply{}, fmt.Errorf("HTTP producer exited %d: %s", res.ExitCode, truncateSessionDetail(res.Stderr))
 	}
-	if len(res.Stdout) > 4096 {
+	if len(res.Stdout) > sessionReceiptStdoutLimit {
 		return sessionReply{}, errors.New("HTTP producer reply exceeded 4096 bytes")
 	}
 	reply, err := parseSessionReply(res.Stdout, method, id)
