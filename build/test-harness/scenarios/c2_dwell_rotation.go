@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -48,6 +50,10 @@ func (s *c2DwellRotation) Setup(ctx context.Context, env *core.Env) error {
 }
 
 func (s *c2DwellRotation) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {
+	// Scenario objects are reused across trials. Clear prior provenance before
+	// this attempt so a failed lookup or plant cannot inherit an earlier UID/time.
+	s.targetUID = ""
+	s.plantedAt = time.Time{}
 	pod, err := runningPodByApp(ctx, env, s.app)
 	if err != nil {
 		return core.AttackResult{}, err
@@ -74,7 +80,7 @@ func (s *c2DwellRotation) SuccessOracle(ctx context.Context, env *core.Env) (cor
 	if err := ctx.Err(); err != nil {
 		return core.OracleResult{}, fmt.Errorf("dwell observation cancelled: %w", err)
 	}
-	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
+	pod, originalAbsent, err := c2DwellObservationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		return core.OracleResult{}, err
 	}
@@ -86,18 +92,55 @@ func (s *c2DwellRotation) SuccessOracle(ctx context.Context, env *core.Env) (cor
 	originalIdentity := pod.UID == s.targetUID
 	alive := originalIdentity && markerPresent
 	ev := map[string]string{
-		"aliveAfterWindow": fmt.Sprintf("%v", alive),
-		"markerPresent":    fmt.Sprintf("%v", markerPresent),
-		"originalIdentity": fmt.Sprintf("%v", originalIdentity),
-		"measuredDwellSec": fmt.Sprintf("%.3f", measuredDwell),
-		"dwellWindowSec":   fmt.Sprintf("%.0f", DwellOracleSeconds),
-		"observedPod":      pod.Name,
-		"originalPodUID":   string(s.targetUID),
-		"observedPodUID":   string(pod.UID),
-		"realism":          string(core.RealismMarkerSimulation),
+		"aliveAfterWindow":  fmt.Sprintf("%v", alive),
+		"markerPresent":     fmt.Sprintf("%v", markerPresent),
+		"originalIdentity":  fmt.Sprintf("%v", originalIdentity),
+		"originalUIDAbsent": fmt.Sprintf("%v", originalAbsent),
+		"measuredDwellSec":  fmt.Sprintf("%.3f", measuredDwell),
+		"dwellWindowSec":    fmt.Sprintf("%.0f", DwellOracleSeconds),
+		"observedPod":       pod.Name,
+		"originalPodUID":    string(s.targetUID),
+		"observedPodUID":    string(pod.UID),
+		"realism":           string(core.RealismMarkerSimulation),
 	}
 	state := fmt.Sprintf("marker simulation: original Pod UID retained=%v and marker present=%v after %.3fs (window %.0fs)", originalIdentity, markerPresent, measuredDwell, DwellOracleSeconds)
 	return core.OracleResult{Achieved: alive, ObservedState: state, Evidence: ev}, nil
+}
+
+// c2DwellObservationTarget resolves the post-window identity without allowing
+// list order to turn a replacement into evidence that the original disappeared.
+// If the original UID is in the complete app-labelled list, it is always the
+// observation target, including while terminating. A replacement is returned
+// only after a successful list proves the original UID absent. Multiple or zero
+// running replacements are ambiguous and remain observation errors.
+func c2DwellObservationTarget(ctx context.Context, env *core.Env, app string, originalUID types.UID) (*corev1.Pod, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, fmt.Errorf("dwell target observation cancelled: %w", err)
+	}
+	if originalUID == "" {
+		return nil, false, fmt.Errorf("dwell target original UID missing for app=%s", app)
+	}
+	pods, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + app})
+	if err != nil {
+		return nil, false, fmt.Errorf("dwell target list failed for app=%s: %w", app, err)
+	}
+	var replacements []*corev1.Pod
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.UID == originalUID {
+			return pod, false, nil
+		}
+		if pod.DeletionTimestamp == nil && pod.Status.Phase == corev1.PodRunning {
+			replacements = append(replacements, pod)
+		}
+	}
+	if len(replacements) != 1 {
+		return nil, true, fmt.Errorf("dwell target original UID %s absent for app=%s, running replacements=%d", originalUID, app, len(replacements))
+	}
+	if replacements[0].UID == "" {
+		return nil, true, fmt.Errorf("dwell target replacement UID missing for app=%s", app)
+	}
+	return replacements[0], true, nil
 }
 
 func (s *c2DwellRotation) Teardown(ctx context.Context, env *core.Env) error {
