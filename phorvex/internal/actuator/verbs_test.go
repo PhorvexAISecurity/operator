@@ -83,12 +83,14 @@ func TestRequiredVerbsFollowResolvedBackend(t *testing.T) {
 		t.Fatalf("debugger subresource permissions = %+v", debugger)
 	}
 	for _, action := range []model.Action{model.ActionWarmSwap, model.ActionModelShardReplace} {
-		var patch bool
+		var patch, serviceGet, endpointList bool
 		for _, verb := range RequiredVerbsForBackend(BackendNative, action) {
 			patch = patch || (verb.Resource == "pods" && verb.Verb == "patch")
+			serviceGet = serviceGet || (verb.Resource == "services" && verb.Verb == "get")
+			endpointList = endpointList || (verb.Group == "discovery.k8s.io" && verb.Resource == "endpointslices" && verb.Verb == "list")
 		}
-		if !patch {
-			t.Fatalf("%s lacks the Pod patch used by compensation/recovery", action)
+		if !patch || !serviceGet || !endpointList {
+			t.Fatalf("%s lacks Pod patch or exact Service/EndpointSlice observation authority", action)
 		}
 	}
 	adapter := RequiredVerbsForBackend(BackendNative, model.ActionAdapterRotate)

@@ -243,21 +243,44 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		return refuseAI(kind, ReasonParallelGroupUnavailable)
 	}
 	leader, shadow = currentOld, currentNew
-	if _, err := servingEndpointForPod(ctx, ec, req, leader); err != nil {
+	servingLegacy := true
+	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
+		servingLegacy = false
+	}
+	leader, oldEndpointDigest, err := warmDrainServingContractCurrent(ctx, ec, leader, servingLegacy)
+	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: current leader serving identity: %w", kind, err)
 	}
-	if _, err := servingEndpointForPod(ctx, ec, req, shadow); err != nil {
+	shadow, newEndpointDigest, err := warmDrainServingContractCurrent(ctx, ec, shadow, servingLegacy)
+	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: current shadow serving identity: %w", kind, err)
 	}
 	pool, err := warmPoolCapture(ctx, ec.Reader, leader, shadow, groupKey, group)
 	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: unsupported warm pool: %w", kind, err)
 	}
-	receiptVersion, bindingDigest, bindingServiceAccount := 2, "", ""
-	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
-		receiptVersion, bindingDigest, bindingServiceAccount = warmSecureReceiptVersion, ec.ServingAttempt.digest, normalizeServiceAccount(leader.Spec.ServiceAccountName)
+	selectedUIDs, err := captureWarmSelectedUIDs(ctx, ec.Reader, pool, leader, shadow, groupKey, group)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: pre-cutover route inventory: %w", kind, err)
 	}
-	receipt := operationReceipt{Version: receiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount}
+	bindingDigest := ""
+	bindingServiceAccount := normalizeServiceAccount(leader.Spec.ServiceAccountName)
+	if normalizeServiceAccount(shadow.Spec.ServiceAccountName) != bindingServiceAccount {
+		return HandlerResult{}, fmt.Errorf("%s: warm pair ServiceAccount differs at admission", kind)
+	}
+	if !servingLegacy {
+		bindingDigest = ec.ServingAttempt.digest
+	}
+	authoritySeed := operationReceipt{Kind: kind, PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID}
+	admittedPolicy, err := receiptAuthority(ctx, ec.Reader, authoritySeed, req.Action)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: policy authority before availability admission: %w", kind, err)
+	}
+	admittedFloor := admittedPolicy.Spec.EffectiveMinAvailableReplicas()
+	if admittedFloor <= 0 || admittedFloor > int(pool.Desired) || admittedFloor > len(selectedUIDs) {
+		return HandlerResult{}, fmt.Errorf("%s: availability floor %d cannot be admitted by recorded serving set size %d", kind, admittedFloor, len(selectedUIDs))
+	}
+	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: oldEndpointDigest, NewEndpointConfigSHA256: newEndpointDigest, WarmSelectedUIDs: selectedUIDs, AdmittedFloor: admittedFloor}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}
@@ -273,6 +296,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if !podReady(shadow) || shadow.UID == "" || leader.ResourceVersion == "" || shadow.ResourceVersion == "" {
 		return HandlerResult{}, fmt.Errorf("%s: observed pod identity/readiness unavailable", kind)
+	}
+	if err := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet, warmProspectiveServingSet); err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: availability admission: %w", kind, err)
 	}
 	journal, err := journalWrite(ctx, ec, receipt)
 	if err != nil {
@@ -324,21 +350,10 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err := warmPoolRecheck(ctx, ec.Reader, receipt, leader, shadow); err != nil {
 		return promotedPartial, err
 	}
-	// (2) FLIP down: old leader -> retiring. On failure, ROLL BACK (re-flip shadow; old leader serves).
-	freshOld, freshNew := &corev1.Pod{}, &corev1.Pod{}
-	flipErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld)
-	if flipErr == nil {
-		flipErr = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, freshNew)
-	}
-	if flipErr == nil {
-		flipErr = warmCurrentScope(pol, receipt, freshOld, freshNew)
-	}
-	if flipErr == nil {
-		flipErr = warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew)
-	}
-	if flipErr == nil && (freshOld.Labels[labelRole] != roleLeader || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.DeletionTimestamp != nil || freshNew.DeletionTimestamp != nil) {
-		flipErr = fmt.Errorf("recorded pair changed before old route removal")
-	}
+	// (2) FLIP down: old leader -> retiring. The exact promoted bridge must be
+	// visible through the recorded Service before old route removal. On failure,
+	// ROLL BACK (re-flip shadow; old leader serves).
+	freshOld, _, flipErr := warmDrainPromotionRouteCurrent(ctx, ec, receipt)
 	if flipErr == nil {
 		before := freshOld.DeepCopy()
 		freshOld.Labels[labelRole] = roleRetiring
@@ -366,6 +381,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		if checkErr == nil && (oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) || rollback.Labels[labelRole] != roleLeader || !podReady(rollback)) {
 			checkErr = fmt.Errorf("exact old/new serving roles or readiness changed")
 		}
+		if checkErr == nil {
+			checkErr = warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet)
+		}
 		if checkErr != nil {
 			if oldAfter.UID == leader.UID && oldAfter.Labels[labelRole] == roleRetiring {
 				promotedPartial.ObjectsTouched = append(promotedPartial.ObjectsTouched, objRef("Pod", req.Namespace, leader.Name))
@@ -382,6 +400,13 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		if checkErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, oldAfter); checkErr != nil || oldAfter.UID != leader.UID || oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) {
 			return promotedPartial, fmt.Errorf("%s rollback could not confirm old leader; receipt retained: %w", kind, errors.Join(flipErr, checkErr))
 		}
+		if availabilityErr := warmDrainAvailabilityCurrent(ctx, ec.Reader, receipt, warmOriginalServingSet); availabilityErr != nil {
+			return promotedPartial, fmt.Errorf("%s rollback availability unconfirmed; receipt retained: %w", kind, errors.Join(flipErr, availabilityErr))
+		}
+		if routeErr := warmDrainOriginalRouteCurrent(ctx, ec, receipt); routeErr != nil {
+			promotedPartial.Note = "cutover role changes compensated; original route observation unresolved"
+			return promotedPartial, fmt.Errorf("%s rollback route unconfirmed; receipt retained: %w", kind, errors.Join(flipErr, routeErr))
+		}
 		if finishErr := journalFinish(ctx, ec, journal); finishErr != nil {
 			promotedPartial.Note = "cutover role changes compensated; receipt cleanup unresolved"
 			return promotedPartial, fmt.Errorf("%s flip-down %s/%s rolled back but receipt cleanup failed: %w", kind, req.Namespace, req.Pod, errors.Join(flipErr, finishErr))
@@ -395,34 +420,23 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		return promotedPartial, fmt.Errorf("%s: old leader retiring but journal phase update failed: %w", kind, err)
 	}
 	partial := HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + shadow.Name, ObjectsTouched: []string{objRef("Pod", req.Namespace, shadow.Name), objRef("Pod", req.Namespace, leader.Name)}, Note: "partial cutover: earlier Pod mutations accepted; completion unresolved"}
-	// (3) DRAIN then RETIRE the old leader. [P-ACTUATOR-SET-COMPLETE] The old leader is already
-	// relabeled `retiring` (admits routed away by step 2); now actually DRAIN its in-flight requests
-	// via the serving stack BEFORE deleting it, so in-flight requests are not dropped ungracefully
-	// (closes the prior ":141 recorded-not-slept" gap). Unreachable stack => the K8s route-drain still
-	// applies; the in-flight abort is [PENDING-GPU-VALIDATION] (recorded in the note).
-	_, drainPending, drainErr := drainInflight(ctx, ec, leader)
+	// (3) Claim one serving send before POST. Only a durable exact-200 result
+	// authorizes retirement. A typed definitely-unsent result may restore the
+	// recorded route in old-first order; every possible-send result is retained.
+	drainResult, drainErr := executeWarmDrainAttempt(ctx, ec, journal, &receipt)
 	if drainErr != nil {
 		return partial, fmt.Errorf("%s drain old leader %s/%s: %w", kind, req.Namespace, req.Pod, drainErr)
 	}
-	pol, err = receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+	if drainResult == warmDrainRestored {
+		partial.Note = "drain was definitely unsent; exact old-first routing roles restored"
+		return partial, fmt.Errorf("%s drain old leader %s/%s definitely unsent; routing restored without retirement", kind, req.Namespace, req.Pod)
+	}
+	if drainResult != warmDrainConfirmed {
+		return partial, fmt.Errorf("%s drain old leader %s/%s retained without confirmed completion", kind, req.Namespace, req.Pod)
+	}
+	freshOld, _, err = warmDrainProspectiveRouteCurrent(ctx, ec, receipt)
 	if err != nil {
-		return partial, fmt.Errorf("%s: authority changed before retirement: %w", kind, err)
-	}
-	freshOld, freshNew = &corev1.Pod{}, &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld); err != nil {
-		return partial, err
-	}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, freshNew); err != nil {
-		return partial, err
-	}
-	if err := warmCurrentScope(pol, receipt, freshOld, freshNew); err != nil {
-		return partial, err
-	}
-	if err := warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew); err != nil {
-		return partial, err
-	}
-	if freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.Labels[labelRole] != roleRetiring {
-		return partial, fmt.Errorf("%s: recorded pair not ready for retirement", kind)
+		return partial, fmt.Errorf("%s: route/authority changed before confirmed retirement: %w", kind, err)
 	}
 	leader = freshOld
 	// [M-69] The Delete is bound to the UID of the leader object observed above (API-enforced
@@ -449,10 +463,7 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		partial.Note = "partial cutover: old leader retired; journal phase unresolved"
 		return partial, fmt.Errorf("%s: old leader retired but journal phase update failed: %w", kind, err)
 	}
-	drainNote := "in-flight drained"
-	if drainPending {
-		drainNote = "in-flight abort [PENDING-GPU-VALIDATION] (stack unreachable; K8s route-drained)"
-	}
+	drainNote := fmt.Sprintf("in-flight drained (aborted=%d)", receipt.Aborted)
 	retireNote := "retired (uid " + string(leader.UID) + ")"
 	if alreadyGone {
 		retireNote = "already gone before retire (no pod of that name; uid " + string(leader.UID) + ")"

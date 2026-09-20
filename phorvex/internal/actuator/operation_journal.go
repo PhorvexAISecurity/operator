@@ -61,7 +61,15 @@ type operationReceipt struct {
 	PriorServingValue    string            `json:"priorServingValue,omitempty"`
 	EndpointAddresses    []string          `json:"endpointAddresses,omitempty"`
 	EndpointConfigSHA256 string            `json:"endpointConfigSHA256,omitempty"`
-	Aborted              int               `json:"aborted,omitempty"`
+	// NewEndpointConfigSHA256 binds the promoted warm participant's immutable
+	// serving declaration and effective endpoint. EndpointConfigSHA256 remains
+	// the corresponding old/drained participant binding.
+	NewEndpointConfigSHA256 string `json:"newEndpointConfigSHA256,omitempty"`
+	Aborted                 int    `json:"aborted,omitempty"`
+	// Scalar warm v10 fields protect each serving drain send and the exact
+	// pre-cutover routing set used by definitely-unsent compensation.
+	DrainAttempts    int      `json:"drainAttempts,omitempty"`
+	WarmSelectedUIDs []string `json:"warmSelectedUIDs,omitempty"`
 	// Adapter-rotate v4 fields bind one protected serving operation to the
 	// selected Pod, authenticated detector event and immutable source mapping.
 	AdapterName           string `json:"adapterName,omitempty"`
@@ -78,9 +86,10 @@ type operationReceipt struct {
 	// Route-cutover v5 fields. The Service-UID-named receipt is the only
 	// authority for route/endpoint continuation or restoration. Tenant metadata
 	// is deliberately not an authority surface.
-	NamespaceUID            string            `json:"namespaceUID,omitempty"`
-	ReceiptID               string            `json:"receiptID,omitempty"`
-	TargetGuardUID          string            `json:"targetGuardUID,omitempty"`
+	NamespaceUID   string `json:"namespaceUID,omitempty"`
+	ReceiptID      string `json:"receiptID,omitempty"`
+	TargetGuardUID string `json:"targetGuardUID,omitempty"`
+	// AdmittedFloor is shared by protected route cutover and scalar warm receipts.
 	AdmittedFloor           int               `json:"admittedFloor,omitempty"`
 	RouteEpochKey           string            `json:"routeEpochKey,omitempty"`
 	RouteValue              string            `json:"routeValue,omitempty"`
@@ -226,6 +235,7 @@ const (
 	requestDrainSecureReceiptVersion  = 7
 	adapterRotateSecureReceiptVersion = 8
 	servingEffectReceiptVersion       = 9
+	warmDrainReceiptVersion           = 10
 	requestDrainMaxLabels             = 64
 	requestDrainMaxAddresses          = 16
 	servingEffectReceiptMaxBytes      = 32 << 10
@@ -257,17 +267,17 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion && r.Version != servingEffectReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion && r.Version != servingEffectReceiptVersion && r.Version != warmDrainReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
 	case string(model.ActionKVReset), string(model.ActionKVMigrateInvalidate), string(model.ActionGuardrailRotate):
 		return validServingEffectReceipt(r)
 	case "warm-swap", "model-shard-replace":
-		if r.Version != 1 && r.Version != 2 && r.Version != warmSecureReceiptVersion {
+		if r.Version != 1 && r.Version != 2 && r.Version != warmSecureReceiptVersion && r.Version != warmDrainReceiptVersion {
 			return false
 		}
-		if r.Version == 2 || r.Version == warmSecureReceiptVersion {
+		if r.Version == 2 || r.Version == warmSecureReceiptVersion || r.Version == warmDrainReceiptVersion {
 			p := r.Pool
 			if p == nil || p.RSName == "" || p.RSUID == "" || p.RSGeneration <= 0 || p.Desired < 2 || p.Desired > warmPoolMaxMembers || len(p.Members) != int(p.Desired) || p.RSTemplateHash == "" || p.RSSelectorHash == "" || p.ServiceName == "" || p.ServiceUID == "" || p.ServiceSelectorHash == "" || ((p.ParentName == "") != (p.ParentUID == "")) || r.RewarmSpecHash != "" || r.OldName == "" || r.OldName != r.TargetName || r.OldUID == "" || r.OldUID != r.TargetUID || r.NewName == "" || r.NewUID == "" || r.OldName == r.NewName || r.OldUID == r.NewUID || r.GroupValue == "" || !((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard)) {
 				return false
@@ -282,10 +292,48 @@ func (r operationReceipt) valid() bool {
 			if !members[r.OldUID] || !members[r.NewUID] {
 				return false
 			}
-			preObservation := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired-awaiting-controller"
+			preObservation := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "drain-dispatching" || r.Phase == "drain-unsent" || r.Phase == "drain-confirmed" || r.Phase == "restore-old-claimed" || r.Phase == "old-route-observed" || r.Phase == "restore-shadow-claimed" || r.Phase == "routing-restored" || r.Phase == "retired-awaiting-controller"
 			postObservation := r.Phase == "pool-observed" || r.Phase == "pool-warm-ready"
 			valid := (preObservation && r.RewarmName == "" && r.RewarmUID == "") || (postObservation && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.RewarmUID != r.OldUID && r.RewarmUID != r.NewUID && !members[r.RewarmUID])
-			return valid && (r.Version != warmSecureReceiptVersion || (validDigest(r.ServingBindingSHA256) && len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) == 0))
+			if !valid {
+				return false
+			}
+			if r.Version == warmSecureReceiptVersion {
+				return validDigest(r.ServingBindingSHA256) && len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) == 0
+			}
+			if r.Version != warmDrainReceiptVersion {
+				return true
+			}
+			if !boundedLabelMap(r.TargetLabels) || !validDigest(r.EndpointConfigSHA256) || !validDigest(r.NewEndpointConfigSHA256) || r.DrainAttempts < 0 || r.DrainAttempts > warmDrainMaxAttempts || len(r.WarmSelectedUIDs) == 0 || len(r.WarmSelectedUIDs) > warmPoolMaxMembers || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(p.Desired) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0 {
+				return false
+			}
+			if r.ServingLegacy {
+				if r.ServingBindingSHA256 != "" {
+					return false
+				}
+			} else if !validDigest(r.ServingBindingSHA256) {
+				return false
+			}
+			selected := make(map[string]bool, len(r.WarmSelectedUIDs))
+			for i, uid := range r.WarmSelectedUIDs {
+				if uid == "" || selected[uid] || (i > 0 && r.WarmSelectedUIDs[i-1] >= uid) || !members[uid] {
+					return false
+				}
+				selected[uid] = true
+			}
+			if !selected[r.OldUID] || selected[r.NewUID] {
+				return false
+			}
+			switch r.Phase {
+			case "prepared", "promoted", "retiring":
+				return r.DrainAttempts == 0 && r.Aborted == 0
+			case "drain-dispatching", "drain-unsent", "restore-old-claimed", "old-route-observed", "restore-shadow-claimed", "routing-restored":
+				return r.DrainAttempts > 0 && r.Aborted == 0
+			case "drain-confirmed", "retired-awaiting-controller", "pool-observed", "pool-warm-ready":
+				return r.DrainAttempts > 0 && r.Aborted >= 0
+			default:
+				return false
+			}
 		}
 		validPhase := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired" || r.Phase == "rewarm-intent" || r.Phase == "rewarmed"
 		validRewarm := (r.Phase != "rewarm-intent" && r.Phase != "rewarmed" && r.RewarmName == "" && r.RewarmUID == "" && r.RewarmSpecHash == "") || (r.Phase == "rewarm-intent" && r.RewarmName != "" && r.RewarmUID == "" && r.RewarmSpecHash != "") || (r.Phase == "rewarmed" && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmSpecHash != "")

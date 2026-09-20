@@ -11,6 +11,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -45,7 +46,9 @@ func m066FakePool(old, next *corev1.Pod, groupKey string) []client.Object {
 		p.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}
 	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "m066-serving", Namespace: old.Namespace, UID: types.UID("m066-service-uid"), ResourceVersion: "9"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": base, groupKey: group, labelRole: roleLeader}, Ports: []corev1.ServicePort{{Port: 8000}}}}
-	return []client.Object{rs, svc}
+	ready := true
+	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "m066-serving-1", Namespace: old.Namespace, UID: types.UID("m066-slice-uid"), ResourceVersion: "10", Labels: map[string]string{discoveryv1.LabelServiceName: svc.Name}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(svc, corev1.SchemeGroupVersion.WithKind("Service"))}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{old.Status.PodIP}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: old.Namespace, Name: old.Name, UID: old.UID}}}}
+	return []client.Object{rs, svc, slice}
 }
 
 func TestM066StableServingSpecDetectsWrongRuntimeAndVolumeSource(t *testing.T) {

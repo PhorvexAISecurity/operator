@@ -68,6 +68,7 @@ REQUIRED = {
         'TestM093RealAPISecretAuthorizationAndProtectedTLSRecovery',
         'TestM064RealAPIAcknowledgementCASAndLifecycle',
         'TestM036RealAPITLSOrderedGuardrailRosterLifecycle',
+        'TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',

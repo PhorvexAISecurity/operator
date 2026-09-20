@@ -18,8 +18,8 @@
  * networkpolicies               : quarantine create/reconcile + migration/cleanup (create/get/list/delete/update)
  * replicasets/statefulsets/daemonsets, jobs : quarantine reads the owning controller's selector to detach (get)
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update);
- *                                 quarantine and request-drain inspect selecting Services (list)
- * endpointslices                : request-drain observes exact withdrawal/return only (list)
+ *                                 quarantine/request-drain inspect Services, scalar warm actions bind one (get/list)
+ * endpointslices                : request-drain and scalar warm actions observe exact routes only (list)
  *
  * Identity-rotate deliberately receives no ServiceAccount/Secret permission: projected tokens
  * cannot be revoked by a pod-scoped action. EndpointSlice mutation remains denied.
