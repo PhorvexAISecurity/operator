@@ -1332,3 +1332,15 @@ fixes:
     - POST25-M137
     branch: post25-catalogue
     head_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+  POST25-M067-DRAIN:
+    directory: fixes/POST25-M067-DRAIN
+    aliases: []
+    issues:
+    - M-67
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on:
+    - T25-M067
+    branch: post25-drain-v11
+    head_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4

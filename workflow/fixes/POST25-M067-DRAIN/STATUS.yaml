@@ -1,0 +1,139 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 6
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0ebb5292943df7228723fc9af0915d8750291feccf20f79ae2a0f22195ee3152
+    source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+    at: '2026-09-20T17:50:58+00:00'
+    contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+    approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+    rationale: Existing owner authorization covers source design; correcting required
+      L4 bookkeeping to match already selected soak requirement before implementation
+fix_id: POST25-M067-DRAIN
+issues:
+- M-67
+title: Require operation-bound engine quiescence before drain completion
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post14-live-reviewer
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: live-post25
+  code_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-drain-v11
+  base_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  head_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  stacked_on:
+  - T25-M067
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  - L4
+  live_required: true
+  soak_required: true
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Real GPU engine cancellation/order and actual traffic/retirement remain pending
+  live acceptance.
+- MIG hardware unavailable; no physical erasure claim.
+next_action:
+  owner: post14-live-reviewer
+  action: Implement actual V0 engine and durable operation-bound protocol; retain
+    source and live limits
+updated_at: '2026-09-20T17:51:06+00:00'
+follow_up_to: T25-M067
+configuration_history:
+- at: '2026-09-20T17:49:15+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T17:50:39+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T17:50:07+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T17:51:06+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 0ebb5292943df7228723fc9af0915d8750291feccf20f79ae2a0f22195ee3152
+  source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  at: '2026-09-20T17:50:19+00:00'
+  contract_sha256: 2024051d8775c9193cf8646692e4e41baa91446f706a3ecab17dea55a6b83f73
