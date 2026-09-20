@@ -4,11 +4,11 @@ profile: workflow-v2
 question: Verify available post-Tier25 live behaviors with actual effects, refusal,
   fault and recovery controls; fix validated residuals; retain MIG hardware unavailable
   and unresolved source limits.
-state: RUNNING
+state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 created_at: '2026-09-20T13:01:38+00:00'
-updated_at: '2026-09-20T17:14:29+00:00'
+updated_at: '2026-09-20T17:53:34+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: 0.4.138
@@ -28,7 +28,7 @@ safety:
     impact: stop affected case and restore'
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   unresolved: []
-  cleanup: pending
+  cleanup: FAIL
 positive_control: PASS
 rounds:
 - id: round-1
@@ -40,7 +40,9 @@ rounds:
 - id: round-4
   state: COMPLETE
 - id: round-5
-  state: RUNNING
+  state: ABORTED
+- id: round-6
+  state: ABORTED
 findings: []
 verdict:
   result: pending
@@ -52,8 +54,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Execute reviewed GPU v4 with fresh exact health/GPU/installed-inference
-    guards, own finite cleanup
+  action: Independently reconcile physical cleanup; retain missing monitor terminal
+    archive failure; review new loader control and catalogue session3
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -158,4 +160,35 @@ transitions:
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   note: CPU round4 cleanupPASS; reviewed two-mode shared T4 logical-reset fixture,
     no MIG or manager-action claim
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T17:23:38+00:00'
+  by: codex-lead
+  artifact: rounds/round-5/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: First model startup failed before reset; exact fixture cleanup and installed
+    recovery PASS; required failure evidence unavailable
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T17:45:23+00:00'
+  by: codex-lead
+  artifact: rounds/round-6/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: Independent 31 controls and exact package hashes PASS; first-mode failure
+    stops second; prior attempts retained
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T17:53:34+00:00'
+  by: codex-lead
+  artifact: rounds/round-6/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: v5 startup failed before reset; model evidence identifies loader pattern mismatch;
+    exact namespace removed but required monitor terminal missing, original cleanup
+    FAIL retained
   forced: false

@@ -196,3 +196,14 @@ benignSessionNodeSelector:
 		})
 	}
 }
+
+func TestBenignCheckpointStorageClassValidation(t *testing.T) {
+	valid := TargetConfig{Context: "kind-amtd-test", Namespace: "phorvex-harness", OwnedAck: true, TrialsPerArm: 1, CredentialObservationWindowSeconds: 90, BenignCheckpointStorageClass: "gp3.reviewed"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid storage class rejected: %v", err)
+	}
+	valid.BenignCheckpointStorageClass = "Bad Storage Class"
+	if err := valid.Validate(); err == nil {
+		t.Fatal("invalid storage class accepted")
+	}
+}
