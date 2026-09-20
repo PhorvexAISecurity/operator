@@ -1338,8 +1338,8 @@ fixes:
     issues:
     - M-182
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: post25-calibration-export
-    head_sha: 4e701f82
+    head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
