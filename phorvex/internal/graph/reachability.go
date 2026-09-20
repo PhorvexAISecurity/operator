@@ -69,12 +69,12 @@ type Input struct {
 
 // Graph is the built reachability graph with per-pod blast-radius scores.
 type Graph struct {
-	pods        []PodNode
-	index       map[string]int
-	adjacency   map[string]map[string]struct{} // directed: A -> reachable B
-	rawScore    map[string]float64
-	normScore   map[string]float64
-	neighbors1  map[string][]string
+	pods       []PodNode
+	index      map[string]int
+	adjacency  map[string]map[string]struct{} // directed: A -> reachable B
+	rawScore   map[string]float64
+	normScore  map[string]float64
+	neighbors1 map[string][]string
 }
 
 const (
@@ -249,6 +249,14 @@ func nsSelMatches(sel labels.Selector, ns string, nsLabels map[string]map[string
 
 // reachScore: hop-decayed, asset-weighted out-reach from start (BFS to maxHops).
 func (g *Graph) reachScore(start string, assetOf map[string]float64) float64 {
+	remaining := len(assetOf)
+	if _, ok := assetOf[start]; ok {
+		remaining--
+	}
+	if remaining == 0 {
+		return 0
+	}
+
 	visited := map[string]int{start: 0}
 	queue := []string{start}
 	score := 0.0
@@ -264,7 +272,13 @@ func (g *Graph) reachScore(start string, assetOf map[string]float64) float64 {
 				continue
 			}
 			visited[nb] = hop + 1
-			score += assetOf[nb] * pow(hopDecay, hop) // hop 0 edge -> weight 1, next -> 0.5, ...
+			if asset, ok := assetOf[nb]; ok {
+				score += asset * pow(hopDecay, hop) // hop 0 edge -> weight 1, next -> 0.5, ...
+				remaining--
+				if remaining == 0 {
+					return score
+				}
+			}
 			queue = append(queue, nb)
 		}
 	}

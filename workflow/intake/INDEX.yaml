@@ -146,3 +146,10 @@ intakes:
     state: FILED
     issue_id: M-179
     aliases: []
+  RPT-20260919-161900-empty-model-readiness:
+    directory: intake/RPT-20260919-161900-empty-model-readiness
+    kind: BUG
+    title: Empty model inventory is reported as serving model ready
+    state: FILED
+    issue_id: M-180
+    aliases: []
