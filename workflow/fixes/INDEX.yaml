@@ -1354,3 +1354,14 @@ fixes:
     stacked_on: []
     branch: post25-checkpoint-live-prep
     head_sha: 85475e7ba32b2bd8cbdef886529849bc3a424b1e
+  POST25-SESSION-OBSERVATION:
+    directory: fixes/POST25-SESSION-OBSERVATION
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: null
+    head_sha: null
