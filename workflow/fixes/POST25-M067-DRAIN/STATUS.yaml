@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,13 +11,22 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 0ebb5292943df7228723fc9af0915d8750291feccf20f79ae2a0f22195ee3152
+    sha256: 6ad2d9db94832ec7d8a849470fd7f1310dac3a18572c4bf4667094ef68e5331a
     source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
-    at: '2026-09-20T17:50:58+00:00'
+    at: '2026-09-20T19:50:49+00:00'
     contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
-    approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
-    rationale: Existing owner authorization covers source design; correcting required
-      L4 bookkeeping to match already selected soak requirement before implementation
+    approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+    rationale: Existing owner authorization delegates remaining source fixes and needed
+      actuator improvements; operations/AUTONOMY.md permits material changes within
+      scope through re-signed lead plan. This specifies existing cancel/compensation
+      semantics without expanding environment, cost, action names or risk acceptance.
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 394a602be9f9132e5065e13e9e6d872ba3ee539dfa86467a0f4cbe9b7cf7872d
+    source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+    at: '2026-09-20T20:52:14+00:00'
 fix_id: POST25-M067-DRAIN
 issues:
 - M-67
@@ -92,7 +101,7 @@ next_action:
   owner: post14-live-reviewer
   action: Implement actual V0 engine and durable operation-bound protocol; retain
     source and live limits
-updated_at: '2026-09-20T17:51:06+00:00'
+updated_at: '2026-09-20T20:52:14+00:00'
 follow_up_to: T25-M067
 configuration_history:
 - at: '2026-09-20T17:49:15+00:00'
@@ -137,3 +146,21 @@ check_history:
   source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
   at: '2026-09-20T17:50:19+00:00'
   contract_sha256: 2024051d8775c9193cf8646692e4e41baa91446f706a3ecab17dea55a6b83f73
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 0ebb5292943df7228723fc9af0915d8750291feccf20f79ae2a0f22195ee3152
+  source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  at: '2026-09-20T17:50:58+00:00'
+  contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  rationale: Existing owner authorization covers source design; correcting required
+    L4 bookkeeping to match already selected soak requirement before implementation
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 732eb572129b60a4c3312ef5d050cc4be0b7985f2ca4a6cc754e728ec7a92086
+  source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  at: '2026-09-20T20:51:15+00:00'

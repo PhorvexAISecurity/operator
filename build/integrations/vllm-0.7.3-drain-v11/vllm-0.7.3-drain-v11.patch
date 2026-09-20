@@ -1,0 +1,585 @@
+diff --git a/vllm/engine/async_llm_engine.py b/vllm/engine/async_llm_engine.py
+index 93d9b74..399e85f 100644
+--- a/vllm/engine/async_llm_engine.py
++++ b/vllm/engine/async_llm_engine.py
+@@ -1187,2 +1187,5 @@ class AsyncLLMEngine(EngineClient):
+-    async def reset_prefix_cache(self) -> None:
+-        self.engine.reset_prefix_cache()
++    async def reset_prefix_cache(self) -> bool:
++        success = self.engine.reset_prefix_cache()
++        if type(success) is not bool:
++            raise TypeError("Prefix-cache reset result must be bool")
++        return success
+diff --git a/vllm/engine/multiprocessing/__init__.py b/vllm/engine/multiprocessing/__init__.py
+index 26dfb63..c4d6075 100644
+--- a/vllm/engine/multiprocessing/__init__.py
++++ b/vllm/engine/multiprocessing/__init__.py
+@@ -6 +6 @@ from enum import Enum
+-from typing import List, Mapping, Optional, Union, overload
++from typing import Dict, List, Mapping, Optional, Union, overload
+@@ -126,2 +126,55 @@ class RPCUProfileRequest(Enum):
+-class RPCResetPrefixCacheRequest(Enum):
+-    RESET_PREFIX_CACHE = 1
++@dataclass
++class RPCResetPrefixCacheRequest:
++    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
++
++
++@dataclass
++class RPCResetPrefixCacheResponse:
++    request_id: str
++    success: bool
++
++
++@dataclass
++class RPCDrainCapabilityRequest:
++    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
++
++
++@dataclass
++class RPCDrainBeginRequest:
++    operation_id: str
++    operation_generation: str
++    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
++
++
++@dataclass
++class RPCDrainObserveRequest:
++    operation_id: str
++    operation_generation: str
++    observation_nonce: str
++    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
++
++
++@dataclass
++class RPCDrainReopenRequest:
++    operation_id: str
++    operation_generation: str
++    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
++
++
++@dataclass
++class RPCDrainResponse:
++    request_id: str
++    action: str
++    supported: bool
++    engine_boot_id: str
++    admission: str
++    admission_generation: str
++    operation_id: Optional[str]
++    operation_generation: Optional[str]
++    observation_nonce: Optional[str]
++    observation_sequence: str
++    virtual_engine_ids: List[int]
++    snapshot: Dict[int, Dict[str, List[str]]]
++    queues: Dict[int, Dict[str, List[str]]]
++    terminal_dispositions: Dict[str, str]
++    error: Optional[str] = None
+@@ -156,0 +210 @@ REQUEST_OUTPUTS_T = Union[List[RequestOutput], RPCAdapterLoadedResponse,
++                          RPCResetPrefixCacheResponse, RPCDrainResponse,
+diff --git a/vllm/engine/multiprocessing/client.py b/vllm/engine/multiprocessing/client.py
+index c12fe24..6d788fd 100644
+--- a/vllm/engine/multiprocessing/client.py
++++ b/vllm/engine/multiprocessing/client.py
+@@ -33,0 +34,6 @@ from vllm.engine.multiprocessing import (ENGINE_DEAD_ERROR, IPC_DATA_EXT,
++                                         RPCResetPrefixCacheResponse,
++                                         RPCDrainBeginRequest,
++                                         RPCDrainCapabilityRequest,
++                                         RPCDrainObserveRequest,
++                                         RPCDrainReopenRequest,
++                                         RPCDrainResponse,
+@@ -133,0 +140,2 @@ class MQLLMEngineClient(EngineClient):
++        self._phorvex_input_lock = asyncio.Lock()
++        self._phorvex_admission_open = True
+@@ -250 +258,3 @@ class MQLLMEngineClient(EngineClient):
+-                elif isinstance(request_outputs, RPCAdapterLoadedResponse):
++                elif isinstance(request_outputs, (RPCAdapterLoadedResponse,
++                                                  RPCResetPrefixCacheResponse,
++                                                  RPCDrainResponse)):
+@@ -259,2 +269,5 @@ class MQLLMEngineClient(EngineClient):
+-    def _add_output(self, request_output: Union[RequestOutput,
+-                                                RPCAdapterLoadedResponse]):
++    def _add_output(
++        self, request_output: Union[RequestOutput, RPCAdapterLoadedResponse,
++                                    RPCResetPrefixCacheResponse,
++                                    RPCDrainResponse]
++    ):
+@@ -645 +658,3 @@ class MQLLMEngineClient(EngineClient):
+-            # 3) Send the RPCGenerateRequest to the MQLLMEngine.
++            # 3) Generation and drain control use one lock and one socket.
++            # Closing the frontend gate while holding this lock creates the
++            # ordering boundary consumed by MQLLMEngine.
+@@ -648 +663,4 @@ class MQLLMEngineClient(EngineClient):
+-            await self.input_socket.send_multipart(parts, copy=False)
++            async with self._phorvex_input_lock:
++                if not self._phorvex_admission_open:
++                    raise RuntimeError("frontend engine admission is closed")
++                await self.input_socket.send_multipart(parts, copy=False)
+@@ -682 +700 @@ class MQLLMEngineClient(EngineClient):
+-    async def reset_prefix_cache(self) -> None:
++    async def reset_prefix_cache(self) -> bool:
+@@ -683,0 +702,9 @@ class MQLLMEngineClient(EngineClient):
++        request = RPCResetPrefixCacheRequest()
++        queue: asyncio.Queue[Union[RPCResetPrefixCacheResponse,
++                                  BaseException]] = asyncio.Queue()
++        self.output_queues[request.request_id] = queue
++        try:
++            async def send_and_wait():
++                await self._send_one_way_rpc_request(request=request,
++                                                     socket=self.input_socket)
++                return await queue.get()
+@@ -685,3 +712,76 @@ class MQLLMEngineClient(EngineClient):
+-        await self._send_one_way_rpc_request(
+-            request=RPCResetPrefixCacheRequest.RESET_PREFIX_CACHE,
+-            socket=self.input_socket)
++            try:
++                response = await asyncio.wait_for(
++                    send_and_wait(), timeout=VLLM_RPC_TIMEOUT / 1000)
++            except asyncio.TimeoutError as e:
++                raise TimeoutError(
++                    "MQLLMEngine didn't complete prefix-cache reset within "
++                    f"{VLLM_RPC_TIMEOUT}ms") from e
++            if isinstance(response, BaseException):
++                raise response
++            if not isinstance(response, RPCResetPrefixCacheResponse):
++                raise ValueError("Unexpected prefix-cache reset response")
++            if type(response.success) is not bool:
++                raise ValueError("Prefix-cache reset result must be bool")
++            return response.success
++        finally:
++            self.output_queues.pop(request.request_id, None)
++
++    async def _phorvex_drain_rpc(self, request) -> RPCDrainResponse:
++        queue: asyncio.Queue[Union[RPCDrainResponse,
++                                  BaseException]] = asyncio.Queue()
++        self.output_queues[request.request_id] = queue
++        try:
++            async def send_and_wait():
++                await self._send_one_way_rpc_request(request=request,
++                                                     socket=self.input_socket)
++                return await queue.get()
++
++            try:
++                response = await asyncio.wait_for(
++                    send_and_wait(), timeout=VLLM_RPC_TIMEOUT / 1000)
++            except asyncio.TimeoutError as e:
++                raise TimeoutError(
++                    "MQLLMEngine didn't complete drain control within "
++                    f"{VLLM_RPC_TIMEOUT}ms") from e
++            if isinstance(response, BaseException):
++                raise response
++            if not isinstance(response, RPCDrainResponse):
++                raise ValueError("Unexpected drain control response")
++            return response
++        finally:
++            self.output_queues.pop(request.request_id, None)
++
++    async def phorvex_drain_capability(self) -> RPCDrainResponse:
++        async with self._phorvex_input_lock:
++            return await self._phorvex_drain_rpc(RPCDrainCapabilityRequest())
++
++    async def phorvex_drain_begin(self, operation_id: str,
++                                  operation_generation: str) -> RPCDrainResponse:
++        request = RPCDrainBeginRequest(
++            operation_id=operation_id,
++            operation_generation=operation_generation)
++        async with self._phorvex_input_lock:
++            self._phorvex_admission_open = False
++            return await self._phorvex_drain_rpc(request)
++
++    async def phorvex_drain_observe(
++            self, operation_id: str, operation_generation: str,
++            observation_nonce: str) -> RPCDrainResponse:
++        request = RPCDrainObserveRequest(
++            operation_id=operation_id,
++            operation_generation=operation_generation,
++            observation_nonce=observation_nonce)
++        async with self._phorvex_input_lock:
++            return await self._phorvex_drain_rpc(request)
++
++    async def phorvex_drain_reopen(
++            self, operation_id: str,
++            operation_generation: str) -> RPCDrainResponse:
++        request = RPCDrainReopenRequest(
++            operation_id=operation_id,
++            operation_generation=operation_generation)
++        async with self._phorvex_input_lock:
++            response = await self._phorvex_drain_rpc(request)
++            if response.error is None and response.admission == "OPEN":
++                self._phorvex_admission_open = True
++            return response
+diff --git a/vllm/engine/multiprocessing/engine.py b/vllm/engine/multiprocessing/engine.py
+index ce24aa2..c9d4501 100644
+--- a/vllm/engine/multiprocessing/engine.py
++++ b/vllm/engine/multiprocessing/engine.py
+@@ -3,0 +4 @@ import pickle
++import re
+@@ -4,0 +6 @@ import signal
++import uuid
+@@ -22,0 +25,6 @@ from vllm.engine.multiprocessing import (ENGINE_DEAD_ERROR, IPC_DATA_EXT,
++                                         RPCResetPrefixCacheResponse,
++                                         RPCDrainBeginRequest,
++                                         RPCDrainCapabilityRequest,
++                                         RPCDrainObserveRequest,
++                                         RPCDrainReopenRequest,
++                                         RPCDrainResponse,
+@@ -103,0 +112,16 @@ class MQLLMEngine:
++        # Drain controls and generation requests are consumed from the same
++        # input socket. This gate is therefore changed at the exact ordering
++        # point at which the engine snapshots scheduler ownership.
++        self._phorvex_drain_supported = (
++            self.engine.parallel_config.pipeline_parallel_size == 1
++            and self.engine.scheduler_config.num_scheduler_steps == 1
++            and len(self.engine.scheduler) == 1
++            and all(type(scheduler).__module__ == "vllm.core.scheduler"
++                    and type(scheduler).__name__ == "Scheduler"
++                    for scheduler in self.engine.scheduler))
++        self._phorvex_engine_boot_id = uuid.uuid4().hex
++        self._phorvex_admission_open = self._phorvex_drain_supported
++        self._phorvex_admission_generation = 0
++        self._phorvex_operation = None
++        self._phorvex_observation_sequence = 0
++
+@@ -245 +269,9 @@ class MQLLMEngine:
+-                    self.reset_prefix_cache()
++                    self._handle_reset_prefix_cache_request(request)
++                elif isinstance(request, RPCDrainCapabilityRequest):
++                    self._handle_drain_capability_request(request)
++                elif isinstance(request, RPCDrainBeginRequest):
++                    self._handle_drain_begin_request(request)
++                elif isinstance(request, RPCDrainObserveRequest):
++                    self._handle_drain_observe_request(request)
++                elif isinstance(request, RPCDrainReopenRequest):
++                    self._handle_drain_reopen_request(request)
+@@ -262,0 +295,7 @@ class MQLLMEngine:
++        if not self._phorvex_admission_open:
++            self._send_outputs(
++                RPCError(request_id=request_id,
++                         is_engine_errored=False,
++                         exception=RuntimeError("engine admission is closed")))
++            return
++
+@@ -313,0 +353,179 @@ class MQLLMEngine:
++    def _handle_reset_prefix_cache_request(
++            self, request: RPCResetPrefixCacheRequest):
++        try:
++            success = self.reset_prefix_cache()
++            if type(success) is not bool:
++                raise TypeError("Prefix-cache reset result must be bool")
++        except BaseException as e:
++            self._send_outputs(
++                RPCError(request_id=request.request_id,
++                         is_engine_errored=False,
++                         exception=e))
++            return
++        self._send_outputs(
++            RPCResetPrefixCacheResponse(request_id=request.request_id,
++                                        success=success))
++
++    def _phorvex_queue_snapshot(self):
++        queues = {}
++        for virtual_engine, scheduler in enumerate(self.engine.scheduler):
++            cached = set()
++            cached_state = self.engine.cached_scheduler_outputs[virtual_engine]
++            if cached_state.seq_group_metadata_list:
++                cached.update(group.request_id
++                              for group in cached_state.seq_group_metadata_list)
++            context = self.engine.scheduler_contexts[virtual_engine]
++            for output in context.output_queue:
++                cached.update(group.request_id
++                              for group in output.seq_group_metadata_list)
++            queues[virtual_engine] = {
++                "waiting": [group.request_id for group in scheduler.waiting],
++                "running": [group.request_id for group in scheduler.running],
++                "swapped": [group.request_id for group in scheduler.swapped],
++                "cached": sorted(cached),
++            }
++        return queues
++
++    @staticmethod
++    def _phorvex_ids(queues):
++        return {
++            request_id
++            for queue in queues.values()
++            for name in ("waiting", "running", "swapped", "cached")
++            for request_id in queue[name]
++        }
++
++    def _phorvex_response(self, request_id, action, *, nonce=None,
++                          error=None):
++        operation = self._phorvex_operation
++        return RPCDrainResponse(
++            request_id=request_id,
++            action=action,
++            supported=self._phorvex_drain_supported,
++            engine_boot_id=self._phorvex_engine_boot_id,
++            admission=("OPEN" if self._phorvex_admission_open else "CLOSED"),
++            admission_generation=str(self._phorvex_admission_generation),
++            operation_id=(operation["operation_id"] if operation else None),
++            operation_generation=(operation["operation_generation"]
++                                  if operation else None),
++            observation_nonce=nonce,
++            observation_sequence=str(self._phorvex_observation_sequence),
++            virtual_engine_ids=list(range(len(self.engine.scheduler))),
++            snapshot=(operation["snapshot"] if operation else {}),
++            queues=self._phorvex_queue_snapshot(),
++            terminal_dispositions=(dict(operation["terminal_dispositions"])
++                                   if operation else {}),
++            error=error)
++
++    def _handle_drain_capability_request(self, request):
++        self._send_outputs(
++            self._phorvex_response(request.request_id, "capability",
++                                   error=(None if self._phorvex_drain_supported
++                                          else "unsupported_engine_mode")))
++
++    def _handle_drain_begin_request(self, request):
++        if not self._phorvex_drain_supported:
++            self._send_outputs(self._phorvex_response(
++                request.request_id, "begin", error="unsupported_engine_mode"))
++            return
++        if self._phorvex_operation is not None:
++            current = self._phorvex_operation
++            if (not self._phorvex_admission_open
++                    and current["operation_id"] == request.operation_id
++                    and current["operation_generation"] == request.operation_generation):
++                self._send_outputs(self._phorvex_response(request.request_id,
++                                                           "begin"))
++            else:
++                self._send_outputs(self._phorvex_response(
++                    request.request_id, "begin", error="operation_in_progress"))
++            return
++        if not (isinstance(request.operation_id, str)
++                and re.fullmatch(r"[0-9a-f]{32}", request.operation_id)):
++            self._send_outputs(self._phorvex_response(
++                request.request_id, "begin", error="invalid_operation_id"))
++            return
++        try:
++            generation = int(request.operation_generation)
++        except (TypeError, ValueError):
++            generation = -1
++        # A replacement engine process has no durable ledger and starts at
++        # generation zero. Its first authenticated BeginDrain is therefore
++        # allowed to adopt the proxy ledger's positive high-water successor;
++        # every later operation in this engine boot remains exactly +1.
++        first_operation_in_boot = self._phorvex_admission_generation == 0
++        expected_generation = self._phorvex_admission_generation + 1
++        generation_valid = (0 < generation <= 18446744073709551615
++                            and (first_operation_in_boot
++                                 or generation == expected_generation))
++        if str(generation) != request.operation_generation or not generation_valid:
++            self._send_outputs(self._phorvex_response(
++                request.request_id, "begin", error="generation_conflict"))
++            return
++        # Close before observing scheduler ownership. Since this handler and
++        # generation ingress share the socket consumer, every earlier request
++        # has already been admitted and every later request sees CLOSED.
++        self._phorvex_admission_open = False
++        self._phorvex_admission_generation = generation
++        snapshot = self._phorvex_queue_snapshot()
++        request_ids = self._phorvex_ids(snapshot)
++        cached_ids = {
++            request_id
++            for queue in snapshot.values()
++            for request_id in queue["cached"]
++        }
++        self._phorvex_operation = {
++            "operation_id": request.operation_id,
++            "operation_generation": request.operation_generation,
++            "snapshot": snapshot,
++            "terminal_dispositions": {
++                request_id: ("completed-before-abort"
++                             if request_id in cached_ids else "aborted")
++                for request_id in request_ids
++            },
++            "zero_observations": 0,
++        }
++        if request_ids:
++            self.engine.abort_request(request_ids)
++        self._send_outputs(self._phorvex_response(request.request_id, "begin"))
++
++    def _handle_drain_observe_request(self, request):
++        operation = self._phorvex_operation
++        if (not isinstance(request.observation_nonce, str)
++                or not re.fullmatch(r"[0-9a-f]{32}", request.observation_nonce)):
++            self._send_outputs(self._phorvex_response(
++                request.request_id, "observe", error="invalid_observation_nonce"))
++            return
++        if (operation is None
++                or operation["operation_id"] != request.operation_id
++                or operation["operation_generation"] != request.operation_generation):
++            self._send_outputs(self._phorvex_response(
++                request.request_id, "observe",
++                nonce=request.observation_nonce,
++                error="unknown_operation"))
++            return
++        self._phorvex_observation_sequence += 1
++        queues = self._phorvex_queue_snapshot()
++        if self._phorvex_ids(queues):
++            operation["zero_observations"] = 0
++        else:
++            operation["zero_observations"] += 1
++        self._send_outputs(self._phorvex_response(
++            request.request_id, "observe", nonce=request.observation_nonce))
++
++    def _handle_drain_reopen_request(self, request):
++        operation = self._phorvex_operation
++        if (operation is None
++                or operation["operation_id"] != request.operation_id
++                or operation["operation_generation"] != request.operation_generation):
++            error = "unknown_operation"
++        elif operation["zero_observations"] < 2:
++            error = "not_quiescent"
++        else:
++            self._phorvex_admission_open = True
++            error = None
++        response = self._phorvex_response(request.request_id,
++                                           "reopen", error=error)
++        if error is None:
++            self._phorvex_operation = None
++        self._send_outputs(response)
++
+diff --git a/vllm/engine/protocol.py b/vllm/engine/protocol.py
+index ee9accd..b782e10 100644
+--- a/vllm/engine/protocol.py
++++ b/vllm/engine/protocol.py
+@@ -277 +277 @@ class EngineClient(ABC):
+-    async def reset_prefix_cache(self) -> None:
++    async def reset_prefix_cache(self) -> bool:
+diff --git a/vllm/entrypoints/openai/api_server.py b/vllm/entrypoints/openai/api_server.py
+index f7162fa..ae10a2a 100644
+--- a/vllm/entrypoints/openai/api_server.py
++++ b/vllm/entrypoints/openai/api_server.py
+@@ -7,0 +8 @@ import inspect
++import json
+@@ -16,0 +18 @@ from contextlib import asynccontextmanager
++from dataclasses import asdict
+@@ -90,0 +93,38 @@ TIMEOUT_KEEP_ALIVE = 5  # seconds
++PHORVEX_DRAIN_HEX = re.compile(r"^[0-9a-f]{32}$")
++
++
++def _phorvex_unique_object(pairs):
++    result = {}
++    for key, value in pairs:
++        if key in result:
++            raise ValueError("duplicate JSON key")
++        result[key] = value
++    return result
++
++
++async def _phorvex_drain_body(raw_request: Request, expected):
++    if raw_request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
++        raise HTTPException(status_code=415, detail="application/json required")
++    body = await raw_request.body()
++    if len(body) > 4096:
++        raise HTTPException(status_code=413, detail="request too large")
++    try:
++        value = json.loads(
++            body.decode("utf-8"), object_pairs_hook=_phorvex_unique_object,
++            parse_constant=lambda token: (_ for _ in ()).throw(
++                ValueError(f"nonfinite {token}")))
++    except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
++        raise HTTPException(status_code=400, detail="invalid JSON") from exc
++    if not isinstance(value, dict) or set(value) != set(expected):
++        raise HTTPException(status_code=400, detail="invalid fields")
++    for name in expected:
++        if not isinstance(value[name], str):
++            raise HTTPException(status_code=400, detail=f"invalid {name}")
++    generation = value.get("operation_generation")
++    if generation is not None and (not re.fullmatch(r"0|[1-9][0-9]*", generation)
++                                   or int(generation) > 18446744073709551615):
++        raise HTTPException(status_code=400, detail="invalid operation_generation")
++    for name in ("operation_id", "observation_nonce"):
++        if name in value and not PHORVEX_DRAIN_HEX.fullmatch(value[name]):
++            raise HTTPException(status_code=400, detail=f"invalid {name}")
++    return value
+@@ -156,0 +197,14 @@ async def build_async_engine_client_from_engine_args(
++    drain_enabled = os.environ.get("PHORVEX_DRAIN_V11") == "1"
++    if drain_enabled and (envs.VLLM_USE_V1
++                          or disable_frontend_multiprocessing
++                          or engine_args.pipeline_parallel_size != 1
++                          or engine_args.num_scheduler_steps != 1):
++        raise RuntimeError(
++            "Phorvex drain v11 requires V0 frontend multiprocessing, "
++            "pipeline_parallel_size=1, and num_scheduler_steps=1.")
++
++    if envs.VLLM_USE_V1:
++        raise RuntimeError(
++            "This vLLM 0.7.3 build does not support authenticated prefix "
++            "cache reset acknowledgements with VLLM_USE_V1 enabled.")
++
+@@ -620,4 +674 @@ if envs.VLLM_SERVER_DEV_MODE:
+-        """
+-        Reset the prefix cache. Note that we currently do not check if the
+-        prefix cache is successfully reset in the API server.
+-        """
++        """Reset the prefix cache and return the allocator result."""
+@@ -625,2 +676,4 @@ if envs.VLLM_SERVER_DEV_MODE:
+-        await engine_client(raw_request).reset_prefix_cache()
+-        return Response(status_code=200)
++        success = await engine_client(raw_request).reset_prefix_cache()
++        if type(success) is not bool:
++            raise TypeError("Prefix-cache reset result must be bool")
++        return JSONResponse(content={"success": success}, status_code=200)
+@@ -646,0 +700,46 @@ if envs.VLLM_SERVER_DEV_MODE:
++@router.get("/phorvex/drain/capability")
++async def phorvex_drain_capability(raw_request: Request):
++    if os.environ.get("PHORVEX_DRAIN_V11") != "1":
++        return JSONResponse(content={"error": "drain unavailable"},
++                            status_code=503)
++    response = await engine_client(raw_request).phorvex_drain_capability()
++    return JSONResponse(content=asdict(response), status_code=200)
++
++
++@router.post("/phorvex/drain/begin")
++async def phorvex_drain_begin(raw_request: Request):
++    if os.environ.get("PHORVEX_DRAIN_V11") != "1":
++        return JSONResponse(content={"error": "drain unavailable"},
++                            status_code=503)
++    body = await _phorvex_drain_body(
++        raw_request, ("operation_id", "operation_generation"))
++    response = await engine_client(raw_request).phorvex_drain_begin(**body)
++    return JSONResponse(content=asdict(response),
++                        status_code=200 if response.error is None else 409)
++
++
++@router.post("/phorvex/drain/observe")
++async def phorvex_drain_observe(raw_request: Request):
++    if os.environ.get("PHORVEX_DRAIN_V11") != "1":
++        return JSONResponse(content={"error": "drain unavailable"},
++                            status_code=503)
++    body = await _phorvex_drain_body(
++        raw_request,
++        ("operation_id", "operation_generation", "observation_nonce"))
++    response = await engine_client(raw_request).phorvex_drain_observe(**body)
++    return JSONResponse(content=asdict(response),
++                        status_code=200 if response.error is None else 409)
++
++
++@router.post("/phorvex/drain/reopen")
++async def phorvex_drain_reopen(raw_request: Request):
++    if os.environ.get("PHORVEX_DRAIN_V11") != "1":
++        return JSONResponse(content={"error": "drain unavailable"},
++                            status_code=503)
++    body = await _phorvex_drain_body(
++        raw_request, ("operation_id", "operation_generation"))
++    response = await engine_client(raw_request).phorvex_drain_reopen(**body)
++    return JSONResponse(content=asdict(response),
++                        status_code=200 if response.error is None else 409)
++
++
+@@ -751 +850,8 @@ def build_app(args: Namespace) -> FastAPI:
+-    if token := envs.VLLM_API_KEY or args.api_key:
++    token = envs.VLLM_API_KEY or args.api_key
++    if ((envs.VLLM_SERVER_DEV_MODE
++         or os.environ.get("PHORVEX_DRAIN_V11") == "1") and not token):
++        raise RuntimeError(
++            "VLLM_API_KEY or --api-key is required when developer endpoints "
++            "are enabled in this build.")
++
++    if token:
+@@ -760 +866,3 @@ def build_app(args: Namespace) -> FastAPI:
+-            if not url_path.startswith("/v1"):
++            if (not url_path.startswith("/v1")
++                    and url_path != "/reset_prefix_cache"
++                    and not url_path.startswith("/phorvex/drain/")):

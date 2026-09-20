@@ -54,6 +54,14 @@ func (m *changingDrainVLLM) DrainRequests(ctx context.Context, ep servingEndpoin
 	return m.mockVLLM.DrainRequests(ctx, ep)
 }
 
+func (m *changingDrainVLLM) DrainV11Create(ctx context.Context, ep servingEndpoint, request drainV11CreateRequest) (drainV11StatusResponse, error) {
+	if m.change != nil {
+		m.change()
+		m.change = nil
+	}
+	return m.mockVLLM.DrainV11Create(ctx, ep, request)
+}
+
 // A real warmCutover producer is interrupted after promotion, then the restarted
 // consumer uses the persisted pair rather than attacker-writable labels.
 func interruptedWarmReceiptFixture(t *testing.T) (client.Client, *NativeActuator, *corev1.Pod, *corev1.Pod) {
@@ -552,14 +560,14 @@ func TestOperationJournalWarmDrainAndCollisionOutcomes(t *testing.T) {
 		vllm := &mockVLLM{drainErr: errStackUnreachable}
 		n.RecoveryVLLM = vllm
 		events, err := n.RecoverOperations(ctx, false)
-		if err != nil || len(events) != 1 || events[0].Err == nil || events[0].Outcome != "partial" || !strings.Contains(events[0].Err.Error(), "possibly sent") {
+		if err != nil || len(events) != 1 || events[0].Err == nil || events[0].Outcome != "partial" || !strings.Contains(events[0].Err.Error(), "GET-only recovery") {
 			t.Fatalf("unreachable drain overclaimed: %+v %v", events, err)
 		}
 		if err := c.Get(ctx, client.ObjectKey{Namespace: old.Namespace, Name: old.Name}, &corev1.Pod{}); err != nil {
 			t.Fatalf("old UID deleted without durable drain confirmation: %v", err)
 		}
 		again, err := n.RecoverOperations(ctx, false)
-		if err != nil || len(again) != 1 || again[0].Err == nil || !strings.Contains(again[0].Err.Error(), "without replay") {
+		if err != nil || len(again) != 1 || again[0].Err == nil {
 			t.Fatalf("possible-send receipt replayed or disappeared: %+v %v", again, err)
 		}
 		if vllm.drainCalls != 1 {
@@ -969,7 +977,7 @@ func TestM067WarmDrainReceiptRequiresBothServingContracts(t *testing.T) {
 }
 
 func TestM067PromotedServingBindingBlocksPostClaimAndPostConfirmation(t *testing.T) {
-	for _, phase := range []string{"drain-dispatching", "drain-confirmed"} {
+	for _, phase := range []string{"drain-dispatching-v11", "drain-confirmed-v11"} {
 		t.Run(phase, func(t *testing.T) {
 			ctx := context.Background()
 			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
@@ -1007,7 +1015,7 @@ func TestM067PromotedServingBindingBlocksPostClaimAndPostConfirmation(t *testing
 				t.Fatalf("promoted binding drift did not stop %s boundary: result=%+v err=%v", phase, result, err)
 			}
 			wantPosts := 0
-			if phase == "drain-confirmed" {
+			if phase == "drain-confirmed-v11" {
 				wantPosts = 1
 			}
 			if vllm.drainCalls != wantPosts || deletes != 0 {
@@ -1163,7 +1171,7 @@ func TestM067ConfirmedReceiptPrecedesExactOldDelete(t *testing.T) {
 		if err := json.Unmarshal([]byte(cm.Data["receipt"]), &receipt); err != nil {
 			return err
 		}
-		if receipt.Phase != "drain-confirmed" || receipt.Aborted != 3 || receipt.DrainAttempts != 1 || receipt.AdmittedFloor != 1 {
+		if receipt.Phase != "drain-confirmed-v11" || receipt.Aborted != 3 || receipt.DrainAttempts != 1 || receipt.AdmittedFloor != 1 {
 			return fmt.Errorf("delete observed without exact durable drain confirmation: %+v", receipt)
 		}
 		deletes++
@@ -1191,7 +1199,7 @@ func TestM067LostDispatchClaimAcknowledgementSendsNothing(t *testing.T) {
 	lost := false
 	guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 		cm, ok := obj.(*corev1.ConfigMap)
-		if ok && !lost && strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+		if ok && !lost && strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 			lost = true
 			if err := inner.Update(ctx, obj, opts...); err != nil {
 				return err
@@ -1211,7 +1219,7 @@ func TestM067LostDispatchClaimAcknowledgementSendsNothing(t *testing.T) {
 	n := NewNativeActuator(base)
 	n.Reader, n.JournalNamespace, n.RecoveryVLLM = base, "operator", vllm
 	events, recoverErr := n.RecoverOperations(ctx, false)
-	if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Err.Error(), "without replay") {
+	if recoverErr != nil || len(events) != 1 || events[0].Err == nil {
 		t.Fatalf("durable dispatching receipt was not retained: events=%+v err=%v", events, recoverErr)
 	}
 	if vllm.drainCalls != 0 {
@@ -1275,7 +1283,7 @@ func TestM067PostDispatchClaimAuthorityDriftRetainsWithoutEffects(t *testing.T) 
 			guard := interceptor.NewClient(modeled.(client.WithWatch), interceptor.Funcs{
 				Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 					cm, ok := obj.(*corev1.ConfigMap)
-					if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+					if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 						return inner.Update(ctx, obj, opts...)
 					}
 					if err := inner.Update(ctx, obj, opts...); err != nil {
@@ -1308,7 +1316,7 @@ func TestM067PostDispatchClaimAuthorityDriftRetainsWithoutEffects(t *testing.T) 
 			if err := json.Unmarshal([]byte(cm.Data["receipt"]), &receipt); err != nil {
 				t.Fatal(err)
 			}
-			if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+			if receipt.Phase != "drain-dispatching-v11" || receipt.DrainAttempts != 1 {
 				t.Fatalf("post-claim drift changed conservative receipt: %+v", receipt)
 			}
 			oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
@@ -1521,7 +1529,7 @@ func TestM067ForwardRouteBarriersProtectDrainAndDeletion(t *testing.T) {
 						return m067SyncFakeRoute(ctx, inner, old)
 					}
 					cm, ok := obj.(*corev1.ConfigMap)
-					if !ok || mutated || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+					if !ok || mutated || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 						return nil
 					}
 					mutated = true
@@ -1552,7 +1560,7 @@ func TestM067ForwardRouteBarriersProtectDrainAndDeletion(t *testing.T) {
 				t.Fatalf("postclaim route drift crossed POST: drift=%s result=%+v err=%v mutated=%t calls=%d", routeDrift, result, err, mutated, vllm.drainCalls)
 			}
 			receipt := m067ReadReceipt(t, ctx, base, old)
-			if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+			if receipt.Phase != "drain-dispatching-v11" || receipt.DrainAttempts != 1 {
 				t.Fatalf("postclaim route drift lost conservative claim: %+v", receipt)
 			}
 			if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); getErr != nil {
@@ -1574,7 +1582,7 @@ func TestM067ForwardRouteBarriersProtectDrainAndDeletion(t *testing.T) {
 			t.Fatalf("confirmed route regression fixture: result=%+v err=%v calls=%d", result, err, vllm.drainCalls)
 		}
 		receipt := m067ReadReceipt(t, ctx, base, old)
-		if receipt.Phase != "drain-confirmed" || receipt.DrainAttempts != 1 {
+		if receipt.Phase != "drain-confirmed-v11" || receipt.DrainAttempts != 1 {
 			t.Fatalf("confirmed route regression lost durable result: %+v", receipt)
 		}
 		if getErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); getErr != nil {
@@ -1781,7 +1789,7 @@ func TestM067AvailabilityAdmissionUsesOnlyProspectiveServingUIDs(t *testing.T) {
 }
 
 func TestM067AvailabilityDriftAtReducingBoundariesRetainsExactState(t *testing.T) {
-	for _, boundary := range []string{"promoted", "drain-dispatching", "drain-confirmed"} {
+	for _, boundary := range []string{"promoted", "drain-dispatching-v11", "drain-confirmed-v11"} {
 		drifts := []string{"third-not-ready", "floor-increase"}
 		if boundary == "promoted" {
 			drifts = append(drifts, "floor-relaxation-with-third-not-ready")
@@ -1813,7 +1821,7 @@ func TestM067AvailabilityDriftAtReducingBoundariesRetainsExactState(t *testing.T
 				modeled := m067ModeledRouteClient(base, old)
 				var enactClient client.Client = modeled
 				vllm := &changingDrainVLLM{mockVLLM: mockVLLM{loaded: true, drained: 2}}
-				if boundary == "drain-confirmed" {
+				if boundary == "drain-confirmed-v11" {
 					vllm.change = func() {
 						if err := mutate(base); err != nil {
 							t.Errorf("apply confirmed-boundary drift: %v", err)
@@ -1836,10 +1844,10 @@ func TestM067AvailabilityDriftAtReducingBoundariesRetainsExactState(t *testing.T
 					t.Fatalf("availability boundary not exercised: result=%+v err=%v mutated=%t", result, err, mutated)
 				}
 				wantCalls, wantOldRole := 0, roleLeader
-				if boundary == "drain-dispatching" {
+				if boundary == "drain-dispatching-v11" {
 					wantOldRole = roleRetiring
 				}
-				if boundary == "drain-confirmed" {
+				if boundary == "drain-confirmed-v11" {
 					wantCalls, wantOldRole = 1, roleRetiring
 				}
 				if vllm.drainCalls != wantCalls {
@@ -2267,7 +2275,7 @@ func TestM067ConfirmedDrainRechecksUnrelatedRecordedRolesBeforeDelete(t *testing
 				}
 				cm := &corev1.ConfigMap{}
 				key := client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}
-				if err := base.Get(ctx, key, cm); err != nil || !strings.Contains(cm.Data["receipt"], `"phase":"drain-confirmed"`) {
+				if err := base.Get(ctx, key, cm); err != nil || !strings.Contains(cm.Data["receipt"], `"phase":"drain-confirmed-v11"`) {
 					t.Fatalf("third-member drift did not retain durable confirmation: err=%v receipt=%s", err, cm.Data["receipt"])
 				}
 				n := NewNativeActuator(modeled)
@@ -2281,85 +2289,92 @@ func TestM067ConfirmedDrainRechecksUnrelatedRecordedRolesBeforeDelete(t *testing
 	}
 }
 
-type m067DrainOutcome struct {
-	aborted int
-	err     error
-}
-
-type m067SequencedDrainVLLM struct {
-	mockVLLM
-	outcomes []m067DrainOutcome
-}
-
-func (m *m067SequencedDrainVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, error) {
-	m.drainCalls++
-	if len(m.outcomes) == 0 {
-		return 0, errors.New("unexpected extra drain request")
+func TestM067DefinitelyUnsentOperationNeverReplaysCreate(t *testing.T) {
+	ctx := context.Background()
+	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	base := fakeC(old, next)
+	guard, lost := m067PhaseLossClient(base, old, next, "drain-unsent")
+	vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+	if _, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap)); err == nil || !*lost || vllm.drainCalls != 1 {
+		t.Fatalf("definitely-unsent claim not retained: err=%v lost=%t calls=%d", err, *lost, vllm.drainCalls)
 	}
-	outcome := m.outcomes[0]
-	m.outcomes = m.outcomes[1:]
-	return outcome.aborted, outcome.err
+	n := NewNativeActuator(guard)
+	n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+	events, err := n.RecoverOperations(ctx, false)
+	if err != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+		t.Fatalf("definitely-unsent operation did not compensate: events=%+v err=%v", events, err)
+	}
+	if vllm.drainCalls != 1 {
+		t.Fatalf("definitely-unsent operation replayed create: calls=%d", vllm.drainCalls)
+	}
+	oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); err != nil || oldCurrent.Labels[labelRole] != roleLeader {
+		t.Fatalf("old route not restored: %v %+v", err, oldCurrent)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleShadow {
+		t.Fatalf("promoted route not restored to shadow: %v %+v", err, nextCurrent)
+	}
+	again, err := n.RecoverOperations(ctx, false)
+	if err != nil || len(again) != 0 || vllm.drainCalls != 1 {
+		t.Fatalf("completed compensation was not idempotent: events=%+v err=%v calls=%d", again, err, vllm.drainCalls)
+	}
 }
 
-func TestM067SecondClaimDistinguishesConfirmedAndUnknownWithoutThirdPost(t *testing.T) {
-	for _, tc := range []struct {
-		name         string
-		second       m067DrainOutcome
-		wantPhase    string
-		wantOldAlive bool
-	}{
-		{name: "unsent-then-confirmed", second: m067DrainOutcome{aborted: 2}, wantPhase: "retired-awaiting-controller"},
-		{name: "unsent-then-unknown", second: m067DrainOutcome{err: errors.New("response lost after send")}, wantPhase: "drain-dispatching", wantOldAlive: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
-			next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
-			base := fakeC(old, next)
-			guard, lost := m067PhaseLossClient(base, old, next, "drain-unsent")
-			vllm := &m067SequencedDrainVLLM{mockVLLM: mockVLLM{loaded: true}, outcomes: []m067DrainOutcome{{err: &definiteServingUnreachableError{cause: errors.New("dial refused")}}, tc.second}}
-			if _, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap)); err == nil || !*lost || vllm.drainCalls != 1 {
-				t.Fatalf("first definitely-unsent claim not retained: err=%v lost=%t calls=%d", err, *lost, vllm.drainCalls)
-			}
-			n := NewNativeActuator(guard)
-			n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
-			_, _ = n.RecoverOperations(ctx, false)
-			if vllm.drainCalls != 2 {
-				t.Fatalf("second admitted attempt calls=%d want=2", vllm.drainCalls)
-			}
-			_, _ = n.RecoverOperations(ctx, false)
-			if vllm.drainCalls != 2 {
-				t.Fatalf("terminal/unknown second attempt admitted a third POST: calls=%d", vllm.drainCalls)
-			}
-			cm := &corev1.ConfigMap{}
-			key := client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}
-			if err := base.Get(ctx, key, cm); err != nil {
-				t.Fatal(err)
-			}
-			var receipt operationReceipt
-			if err := json.Unmarshal([]byte(cm.Data["receipt"]), &receipt); err != nil {
-				t.Fatal(err)
-			}
-			if receipt.Phase != tc.wantPhase || receipt.DrainAttempts != 2 {
-				t.Fatalf("second attempt state=%+v want phase=%s attempts=2", receipt, tc.wantPhase)
-			}
-			oldErr := base.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{})
-			if tc.wantOldAlive && oldErr != nil {
-				t.Fatalf("unknown second attempt removed old UID: %v", oldErr)
-			}
-			if !tc.wantOldAlive && !apierrors.IsNotFound(oldErr) {
-				t.Fatalf("confirmed second attempt did not delete exact old UID: %v", oldErr)
-			}
-			if tc.wantOldAlive {
-				oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
-				if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); err != nil || oldCurrent.Labels[labelRole] != roleRetiring {
-					t.Fatalf("unknown second attempt compensated old route: %v %+v", err, oldCurrent)
-				}
-				if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleLeader {
-					t.Fatalf("unknown second attempt compensated promoted route: %v %+v", err, nextCurrent)
-				}
-			}
-		})
+func TestM067CancelledAndReopenedOperationRestoresRoutesWithoutCreateReplay(t *testing.T) {
+	ctx := context.Background()
+	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	base := fakeC(old, next)
+	guard, lost := m067PhaseLossClient(base, old, next, "drain-unsent")
+	vllm := &mockVLLM{loaded: true, drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}
+	ec := EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm,
+		RouteObservationTimeout: 50 * time.Millisecond, RouteObservationInterval: time.Millisecond}
+	if _, err := (warmSwapHandler{}).Enact(ctx, ec, boundReq(old, model.ActionWarmSwap)); err == nil || !*lost || vllm.drainCalls != 1 {
+		t.Fatalf("retained receipt fixture failed: err=%v lost=%t calls=%d", err, *lost, vllm.drainCalls)
+	}
+	cm := &corev1.ConfigMap{}
+	key := client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}
+	if err := base.Get(ctx, key, cm); err != nil {
+		t.Fatal(err)
+	}
+	var receipt operationReceipt
+	if err := json.Unmarshal([]byte(cm.Data["receipt"]), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	status := testDrainV11Status(t, receipt.DrainV11.Owner, nil)
+	status.OperationID = receipt.DrainV11.OperationID
+	status.OperationGeneration = receipt.DrainV11.OperationGeneration
+	status.Attempt = receipt.DrainV11.Attempt
+	status.BackendIncarnationDigest = receipt.DrainV11.ExpectedIncarnation
+	status.EngineBootID = receipt.DrainV11.EngineBootID
+	status.Deadline = receipt.DrainV11.Deadline
+	status.CancellationGraceDeadline = receipt.DrainV11.CancellationGraceDeadline
+	status.State, status.Admission, status.Revision = "OPENED", "OPEN", "6"
+	status.TransitionReason, status.CancelBoundaryRevision = "operator-requested", "3"
+	resignDrainV11Status(t, &status)
+	receipt.DrainV11.CancelRequests, receipt.DrainV11.ReopenRequests = 1, 1
+	if err := bindDrainV11Status(receipt.DrainV11, status, nil); err != nil || !receipt.DrainV11.reopenedAfterCancellation() {
+		t.Fatalf("opened cancellation fixture invalid: receipt=%#v err=%v", receipt.DrainV11, err)
+	}
+	receipt.Phase, receipt.Aborted = "backend-reopened-v11", 0
+	if err := journalAdvance(ctx, ec, cm, receipt); err != nil {
+		t.Fatal(err)
+	}
+	n := NewNativeActuator(guard)
+	n.Reader, n.JournalNamespace, n.RecoveryVLLM = guard, "operator", vllm
+	n.RouteObservationTimeout, n.RouteObservationInterval = 50*time.Millisecond, time.Millisecond
+	events, err := n.RecoverOperations(ctx, false)
+	if err != nil || len(events) != 1 || !errors.Is(events[0].Err, errDrainV11Cancelled) ||
+		events[0].Outcome != "partial" || vllm.drainCalls != 1 {
+		t.Fatalf("cancelled operation did not compensate without replay: events=%+v err=%v calls=%d", events, err, vllm.drainCalls)
+	}
+	oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(old), oldCurrent); err != nil || oldCurrent.Labels[labelRole] != roleLeader {
+		t.Fatalf("old route not restored: %v %+v", err, oldCurrent)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(next), nextCurrent); err != nil || nextCurrent.Labels[labelRole] != roleShadow {
+		t.Fatalf("promoted route not restored to shadow: %v %+v", err, nextCurrent)
 	}
 }
 
@@ -2496,9 +2511,6 @@ func TestM067CompensationPhaseAcknowledgementLossRecoversWithoutExtraSend(t *tes
 				t.Fatalf("phase %s did not resume compensation: events=%+v err=%v", phase, events, recoverErr)
 			}
 			wantCalls := 1
-			if phase == "drain-unsent" {
-				wantCalls = warmDrainMaxAttempts
-			}
 			if vllm.drainCalls != wantCalls {
 				t.Fatalf("phase %s drain calls=%d want=%d", phase, vllm.drainCalls, wantCalls)
 			}
@@ -2521,7 +2533,7 @@ func TestM067ConfirmedPhaseAcknowledgementLossRecoversWithoutReplay(t *testing.T
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	next := aiPod("ns", "next", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	base := fakeC(old, next)
-	guard, lost := m067PhaseLossClient(base, old, next, "drain-confirmed")
+	guard, lost := m067PhaseLossClient(base, old, next, "drain-confirmed-v11")
 	vllm := &mockVLLM{loaded: true, drained: 4}
 	result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: vllm}, boundReq(old, model.ActionWarmSwap))
 	if enactErr == nil || result.MutationKind != "swap" || !*lost || vllm.drainCalls != 1 {
