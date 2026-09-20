@@ -1325,10 +1325,10 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies:
     - POST25-M137
     stacked_on:
     - POST25-M137
     branch: post25-catalogue
-    head_sha: 9949cba2f8bd82d2f95409f31e46e1c99ea342ea
+    head_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6

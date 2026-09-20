@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,12 +15,77 @@ checks:
     source_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
     at: '2026-09-20T16:42:44+00:00'
     contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: a2ffd20143800bda604960e05331fb06284833522ad530309127c8ba8557d866
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:01:13+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: ae8389c62c2630ca8394f6893b2f54bd38bc8bb487539a7a0e06c96a00d0f49c
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:01:13+00:00'
+  red:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/red-and-controls.md
+    sha256: b7a13343ef7f0147d3a823d1a5613e83a79d5306c511ddfa02acfa72f9fa1511
+    source_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
+    at: '2026-09-20T17:01:13+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: a2ffd20143800bda604960e05331fb06284833522ad530309127c8ba8557d866
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:01:13+00:00'
+    inputs:
+    - End-to-End/pipeline
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: ad983d7aff7c44f1d5dca41cd135052b6975fa4ee4f303a8e448e658113b7cbb
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/trace-controls-9949cba2/controls/decision-full.log
+    sha256: f935f8f9b414f702e966a02c2a8013bb885fd5b35d1790d9fd0f26aa24e38fab
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:01:13+00:00'
+    inputs:
+    - phorvex/internal/decision
+    inputs_sha256: c08942aa1b6a4139c15886542e7e622dc49d13dfdaa5690b4fc49b491db7a853
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/trace-controls-9949cba2/controls/decision-race.log
+    sha256: e781b4e863161978a4e0d35e4e9971eaed47c501d3ecf6af6d08fc3e7a403e58
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:01:13+00:00'
+    inputs:
+    - phorvex/internal/decision
+    inputs_sha256: c08942aa1b6a4139c15886542e7e622dc49d13dfdaa5690b4fc49b491db7a853
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/trace-controls-9949cba2/32-native-two-tenants/report.json
+    sha256: 3aaee19d7b60f87e0adfb0ca18b10b835e074f22dda7c2e928f82dff936040a7
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:01:13+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 2f9efdd9747e5b11317e6b70de540bfed13032a3abb5c6471d4e2a620cb8bbd1
 fix_id: POST25-M137-TRACE
 issues:
 - M-137
 title: Index canonical covering actions once per asset trace
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -44,7 +109,7 @@ blind_derivation:
 implementation:
   branch: post25-catalogue
   base_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
-  head_sha: 9949cba2f8bd82d2f95409f31e46e1c99ea342ea
+  head_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
   stacked_on:
   - POST25-M137
 pull_request:
@@ -68,12 +133,12 @@ verification:
   live_required: true
   soak_required: true
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -87,10 +152,10 @@ residuals:
   context; no full M-137 PASS.
 - Sustained deployed memory, sink latency and historical OOM cause remain unverified.
 next_action:
-  owner: implementer
-  action: Submit existing bounded trace implementation with source-bound checks; preserve
-    full M137 FAIL
-updated_at: '2026-09-20T16:42:44+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-20T17:01:17+00:00'
 follow_up_to: POST25-M137
 configuration_history:
 - at: '2026-09-20T16:41:36+00:00'
@@ -105,6 +170,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T16:49:40+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T16:50:13+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T17:01:13+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -122,3 +202,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-20T17:01:13+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T17:01:15+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-M137-TRACE:7:submit
+  from: post25-catalogue
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 7
