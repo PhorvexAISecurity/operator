@@ -72,13 +72,10 @@ type AblationResult struct {
 // generated set, averaged over the given seeds. Returns recon-weight-invalidated per
 // unit cost for each.
 func (e *CoverageEngine) Ablate(views []*model.WorkloadView, pol model.Policy, seeds []int64) AblationResult {
-	// Substrate FIRST, then the P1 arm. Decide ends by feeding the selected assets' pHold back
-	// into the killchain memory (coverage.go: Memory.Observe), which moves betaMean and with it
-	// every fact weight of the NEXT assembled set. Assembling the exact/random substrate after
-	// Decide therefore compared greedy against a different objective than the one it optimised.
-	// While pHold was pinned at 1 past the proactive floor (M-143) the feedback was invisible in
-	// the weights and the gate read 1.000 by accident; with an informative posterior the
-	// substrate must be the one Decide actually saw (PHORVEXSEC-189).
+	// Substrate FIRST, then the P1 arm. This freezes the exact generated set that
+	// Decide saw for the random/exact comparison. Decide no longer treats its own
+	// pHold prediction as a persistence label; observed outcomes enter only through
+	// the typed trusted boundary.
 	set, ctxByKey := e.AssembleSet(views, pol)
 	decs := e.Decide(views, pol)
 	var wP1, cP1 float64

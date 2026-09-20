@@ -67,6 +67,16 @@ type CoverageEngine struct {
 	// inherit it rather than starting to learn behind the operator's back.
 	calibrationFrozen bool
 
+	// PersistenceAuthority is the separately trusted observed-outcome boundary.
+	// It is intentionally nil in the initial production delivery: optimizer
+	// selections, action acknowledgements, and detector inputs are not labels.
+	PersistenceAuthority PersistenceObservationAuthority
+	// PersistenceDedupLimit bounds accepted evidence IDs per owner lifecycle.
+	// Saturation refuses new labels without evicting an old ID that could replay.
+	PersistenceDedupLimit int
+	persistenceEpochs     map[string]model.PolicyEpoch
+	persistenceLearning   map[string]*persistenceLearningState
+
 	// Capability is the T1-E capability gate, set per tick by the runner (which holds the
 	// snapshot + actuator + SSAR checker to build the witness). nil = gate off (legacy /
 	// tests): the generator then falls back to the pre-T1-E empty-cover check only.
@@ -292,6 +302,7 @@ func (e *CoverageEngine) SetOwnerLive(owner string, live bool) {
 		return
 	}
 	delete(e.live, owner)
+	delete(e.persistenceEpochs, owner)
 }
 
 // ownerAbsent reports whether lifecycle tracking is active AND this owner is not live.
@@ -325,6 +336,8 @@ func (e *CoverageEngine) ForgetOwner(owner string) {
 	delete(e.costByOwner, owner)
 	delete(e.bucketMeta, owner)
 	delete(e.live, owner)
+	delete(e.persistenceEpochs, owner)
+	delete(e.persistenceLearning, owner)
 	if e.Killchain != nil {
 		if e.Killchain.Memory != nil {
 			e.Killchain.Memory.Forget(owner)
@@ -1028,6 +1041,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Events:                ac.assess.Events,
 			Lambda:                lambda,
 			Economics:             cloneEconomicsMetadata(economics),
+			PersistenceLearning:   e.persistenceStatus(pol.Owner()),
 			ProactiveRate:         rate,
 			Attribution:           attribution,
 			PreemptMargin:         ac.assess.PreemptMargin,
@@ -1083,21 +1097,13 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	}
 
 	if persist {
-		// --- persist stateful learning (legacy lambda controller + conjugate memory) ---
+		// Persist the legacy count-pressure controller. Persistence belief changes
+		// only through AdmitPersistenceObservation after independent outcome and
+		// operation-binding validation; selecting an action is not a label.
 		actualUpdate := tcost.Dual.StepDetailed(lambdaDemand, len(selectedAsset), B)
 		for i := range decisions {
 			if decisions[i].Trace != nil {
 				decisions[i].Trace.DualUpdate = traceDualUpdate(actualUpdate)
-			}
-		}
-		for key := range selectedAsset {
-			if ac, ok := ctxByKey[key]; ok {
-				// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
-				// evidence this tenant's footholds tend to be real (alpha up); acting on a
-				// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
-				// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
-				// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
-				e.Killchain.Memory.Observe(pol.Owner(), 0.5*(ac.assess.PHold-0.5))
 			}
 		}
 	}

@@ -706,14 +706,16 @@ type Policy struct {
 	EnabledActions        map[Action]bool
 	AssetWeightFromLabels func(labels map[string]string) float64
 
-	// Decision-trace-only identity. The optimizer never reads these fields while
-	// scoring; they let the post-selection trace name the exact policy/build/tick.
-	PolicyName   string
-	PolicyUID    string
-	TickID       string
-	BrainImage   string
-	GitSHA       string
-	TraceEnabled bool
+	// Post-selection identity. Scoring never reads these fields; traces use them
+	// to name the exact policy/build/tick and the observed-outcome boundary uses
+	// the policy identity/generation as an admission epoch.
+	PolicyName       string
+	PolicyUID        string
+	PolicyGeneration int64
+	TickID           string
+	BrainImage       string
+	GitSHA           string
+	TraceEnabled     bool
 }
 
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
@@ -792,17 +794,18 @@ type Decision struct {
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
-	Engine        string             // "p0-greedy" | "p1-coverage"
-	CoveredWeight float64            // modeled recon-fact selection opportunity; not measured mitigation
-	CoveredFacts  int                // count of modeled recon facts associated with the selected action
-	PerDollar     float64            // legacy full-value / ECost reporting ratio; not the selector
-	Stage         string             // most-likely kill-chain stage (semi-Markov)
-	StageHazard   float64            // stage-exit hazard h_s(t) (predictive horizon signal)
-	NextStage     string             // forward-projected next stage
-	Lambda        float64            // legacy mixed runtime lambda frozen for this decision
-	Economics     *EconomicsMetadata // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
-	ProactiveRate float64            // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
-	Attribution   []AttributionTerm  // SHAP-style decomposition of the move's value
+	Engine              string                     // "p0-greedy" | "p1-coverage"
+	CoveredWeight       float64                    // modeled recon-fact selection opportunity; not measured mitigation
+	CoveredFacts        int                        // count of modeled recon facts associated with the selected action
+	PerDollar           float64                    // legacy full-value / ECost reporting ratio; not the selector
+	Stage               string                     // most-likely kill-chain stage (semi-Markov)
+	StageHazard         float64                    // stage-exit hazard h_s(t) (predictive horizon signal)
+	NextStage           string                     // forward-projected next stage
+	Lambda              float64                    // legacy mixed runtime lambda frozen for this decision
+	Economics           *EconomicsMetadata         // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
+	PersistenceLearning *PersistenceLearningStatus // observed-label source/disposition; never inferred from this decision's PHold
+	ProactiveRate       float64                    // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
+	Attribution         []AttributionTerm          // SHAP-style decomposition of the move's value
 
 	// --- P-CONTEXT predictive horizon (additive, audit-visible). ---
 	PreemptMargin         float64 // P(stage not yet transitioned by move-landing) [0,1]

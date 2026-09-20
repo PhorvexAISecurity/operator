@@ -142,9 +142,9 @@ func (m *ConjugateMemory) Tracked(tenant string) bool {
 	return ok
 }
 
-// Observe accumulates evidence: heldEvidence > 0 adds to alpha (foothold tended to
-// persist), < 0 adds |.| to beta (it did not). Pseudo-counts are capped at maxMass so
-// the prior keeps adapting.
+// Observe is the low-level pseudo-count primitive retained for deterministic model
+// fixtures. Production outcome learning enters through the decision package's typed
+// observed-persistence boundary and calls ObserveBernoulli exactly once.
 func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -176,6 +176,16 @@ func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 			m.gBeta *= scale
 		}
 	}
+}
+
+// ObserveBernoulli applies one qualified categorical outcome: held adds exactly
+// one alpha count and revoked adds exactly one beta count.
+func (m *ConjugateMemory) ObserveBernoulli(tenant string, held bool) {
+	if held {
+		m.Observe(tenant, 1)
+		return
+	}
+	m.Observe(tenant, -1)
 }
 
 // PriorMean is the tenant's prior P(hold) before per-asset evidence.

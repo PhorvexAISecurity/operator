@@ -3,11 +3,11 @@
 **Date:** 2026-06-06 · **Status: BUILT + PROVEN on kind (REAL).** The approved
 **Predictive-Horizon** context model is implemented: the 4 AI kill-chain stages classify
 live, the predictive horizon surfaces a measurable **moved-before-next-stage**, the belief
-layer is sharpened (survival posterior AI-gated, hierarchical fleet prior, negative-evidence,
-UCB), and live-β is resolved to a Tier-1 infection frontier — all through the existing seams
-with the **optimizer / proactive engine / dynamic-action-set generator / actuation / extended
-Phoenix / harness UNTOUCHED.** Deterministic, no LLM in the decision path. AI magnitudes are
-honestly `[SP-0-PENDING]`.
+layer is sharpened (survival posterior AI-gated, hierarchical fleet prior, UCB and a typed
+observed-outcome boundary), and live-β is resolved to a Tier-1 infection frontier. Scoring,
+feasibility, actuation, extended Phoenix and the harness remain unchanged; selection itself no
+longer supplies a persistence label. Deterministic, no LLM in the decision path. AI magnitudes
+are honestly `[SP-0-PENDING]`, and no qualified live persistence-label producer is connected.
 
 ---
 
@@ -19,12 +19,12 @@ honestly `[SP-0-PENDING]`.
 | **AI-gated belief** | `hazard.go` | Survival-form P(hold) (Weibull shape=k) **gated behind `ModelID!=''||HasGPU`** → the generic K8s path stays **byte-identical** to P1; prompt-inject-persist gets **no wipe-damping** (the KV implant survives a rotation). |
 | **Predictive horizon** | `hazard.go` | Two additive `Assessment` fields: `PreemptMargin = 1−weibullCDF(exposure)` (P the stage hasn't transitioned by move-landing) + `ProjectedNextStageSec` (inverse-Weibull median lead-time) = the **moved-before-next-stage** measurable. |
 | **Belief/memory** | `internal/killchain/conjugate.go` | hierarchical fleet prior (a cold tenant inherits the fleet base-rate, seeded to the old constant ⇒ byte-identical at nil-data) + UCB confidence channel (`ConfidenceK` knob, default 0 = the plain mean). |
-| **Negative-evidence** | `internal/decision/coverage.go` | symmetric memory feedback (`Observe(0.5·(PHold−0.5))`) so the posterior can **fall** — fixes the monotone confirmation-bias ratchet. |
+| **Observed persistence outcomes** | `internal/decision/persistence_observation.go` | a separately trusted, operation-bound categorical `held`/`revoked` observation adds exactly one Bernoulli count; an optimizer selection and its predicted `PHold` add no count. No qualified live producer is connected in the initial delivery. |
 | **Live-β Tier-1** | `internal/runner/*`, `ctxprov/sensed.go` | `InfectionFrontier ∈ [1,1+κ]`: a pod adjacent to a known-infected neighbor (high-severity TargetsPod event) gets an AssetValue lift; **zero at empty infected-set** ⇒ preserves the gates. |
 | **AI identity / CLI** | `ingest/kube.go`, `cmd/main.go` | `Pod.{ModelID,EndpointPath}` from annotations; `--scan` prints the live kill-chain context. |
 
-**Untouched (verified by build):** the optimizer/dual/conformal, dynamic-action-set generator,
-actuation, proactive engine, **extended Phoenix, and the harness.**
+**Unchanged by the observed-outcome correction:** scoring/dual/conformal, the
+dynamic-action-set generator, actuation, proactive engine, **extended Phoenix, and the harness.**
 
 ---
 
@@ -58,7 +58,7 @@ pcontext-demo/web-generic  stage=recon                [generic] PHold=1.00 Preem
 | `TestAIStageClassification` | 4 AI stages classify off existing fields; non-AI pod uses the generic chain |
 | `TestPredictiveHorizonFields` | PreemptMargin ∈ [0,1] falls with exposure; ProjectedNextStageSec shrinks/goes negative |
 | `TestKVRecoverScale` | a KV-persisted agent retains more P(hold) after a wipe than a generic foothold |
-| `TestNegativeEvidenceFallsPrior` | the prior **falls** on negative evidence (ratchet fixed) |
+| `TestNegativeEvidenceFallsPrior` | the low-level categorical-count primitive can lower the prior; production requires a qualified operation-bound `revoked` observation |
 | `TestHierarchicalColdTenant` | a cold tenant inherits the elevated fleet base-rate, not the fixed 0.2 |
 
 ### 3c. Baseline preserved (no regression)
@@ -74,8 +74,9 @@ pcontext-demo/web-generic  stage=recon                [generic] PHold=1.00 Preem
 - **IMPROVES (structural now, measurable later):** the AI stages **classify live** and the horizon
   + Tier-1 frontier **measure live** — but **all AI magnitudes (300/180/900/3600s sojourns, leakage
   rates, AIRecoverScale) are `[SP-0-PENDING]`** uncalibrated knobs; the belief upgrades only diverge
-  from the baseline under their trigger (thin evidence, a fleet base-rate gap, a measured no-follow-up
-  outcome, a real infected neighbor). **No AI beat number is falsifiable until a real GPU fleet
+  from the baseline under their trigger (thin evidence, a fleet base-rate gap, a qualified observed
+  outcome, a real infected neighbor). No qualified live persistence-label producer is connected,
+  so this delivery makes no learned-efficacy or calibration claim. **No AI beat number is falsifiable until a real GPU fleet
   calibrates the magnitudes.** The demonstrable deliverables today are the **structure** (4 AI stages,
   successor map, horizon fields, belief upgrades, Tier-1 frontier) + the **generic-equivalence guarantee**.
 - **Deferred + flagged:** the full SIR live-β **value** (β non-falsifiable without injected-infection
@@ -88,8 +89,9 @@ pcontext-demo/web-generic  stage=recon                [generic] PHold=1.00 Preem
 
 ## 5. Extensibility & reproduce
 **One module = one signal/stage:** each AI stage = one entry in {classifier, sojourn, consequence,
-successor map}; each belief upgrade is an independent toggle collapsing to baseline when its condition
-is absent; the horizon fields are pure closed-form reads. Per-tenant, per-platform, deterministic.
+successor map}; conditional belief terms collapse to baseline when their condition is absent, and
+persistence counts change only at the typed trusted admission boundary; the horizon fields are pure
+closed-form reads. Per-owner, per-platform, deterministic.
 ```powershell
 go -C phorvex build ./... ; go -C phorvex test ./...     # green; 1.62x gate + UCW + 5 P-CONTEXT tests
 go -C phorvex build -o bin/phorvex.exe ./cmd/main.go
@@ -101,7 +103,7 @@ phorvex/bin/phorvex.exe --scan --scan-namespace pctx     # -> stage=prompt-injec
 
 **P-CONTEXT COMPLETE (Steps 1–3).** The both-products context model completes the 4 AI kill-chain
 stages (classified live on kind), surfaces a measurable moved-before-next-stage, sharpens belief
-(survival posterior AI-gated, hierarchical prior, negative-evidence fixing the confirmation-bias
-ratchet), and resolves live-β to a Tier-1 infection frontier (full SIR honestly deferred) — preserving
+(survival posterior AI-gated, hierarchical prior and a trusted observed-outcome seam with no live
+producer yet), and resolves live-β to a Tier-1 infection frontier (full SIR honestly deferred) — preserving
 the 1.62× + P3 by construction, with the AI half first-class in definition and honestly SP-0-PENDING
 in value, and extended Phoenix + the harness untouched.

@@ -94,8 +94,11 @@ type Record struct {
 	StageHazard   float64                  `json:"stageHazard,omitempty"`
 	Lambda        float64                  `json:"lambda,omitempty"`
 	Economics     *model.EconomicsMetadata `json:"economics,omitempty"`
-	ProactiveRate float64                  `json:"proactiveRate,omitempty"`
-	Attribution   []model.AttributionTerm  `json:"attribution,omitempty"`
+	// PersistenceLearning reports the source and disposition of independent
+	// categorical labels. It is provenance, not an efficacy claim.
+	PersistenceLearning *model.PersistenceLearningStatus `json:"persistenceLearning,omitempty"`
+	ProactiveRate       float64                          `json:"proactiveRate,omitempty"`
+	Attribution         []model.AttributionTerm          `json:"attribution,omitempty"`
 
 	// P-ACTUATOR native-actuator forensic fields — what the hands actually did, so a
 	// kv-reset is distinguishable from a kill. Present only when the native actuator emitted.
@@ -271,6 +274,9 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	if err := model.ValidateEconomicsMetadata(r.Economics); err != nil {
 		return nil, err
 	}
+	if err := model.ValidatePersistenceLearningStatus(r.PersistenceLearning); err != nil {
+		return nil, err
+	}
 	if !EconomicsMatchesRoundedLambda(r.Economics, r.Lambda) {
 		return nil, fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
 	}
@@ -388,6 +394,9 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	if err := model.ValidateEconomicsMetadata(decoded.Economics); err != nil {
 		return err
 	}
+	if err := model.ValidatePersistenceLearningStatus(decoded.PersistenceLearning); err != nil {
+		return err
+	}
 	if !EconomicsMatchesRoundedLambda(decoded.Economics, decoded.Lambda) {
 		return fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
 	}
@@ -451,6 +460,15 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 	if d.Economics != nil {
 		copy := *d.Economics
 		economics = &copy
+	}
+	var persistenceLearning *model.PersistenceLearningStatus
+	if d.PersistenceLearning != nil {
+		copy := *d.PersistenceLearning
+		if copy.Policy != nil {
+			epoch := *copy.Policy
+			copy.Policy = &epoch
+		}
+		persistenceLearning = &copy
 	}
 	var preparedRepresentation json.RawMessage
 	if prepareWire && d.Measurements != nil {
@@ -516,6 +534,7 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		Events:                 roundEvents(d.Events),
 		Lambda:                 round4(d.Lambda),
 		Economics:              economics,
+		PersistenceLearning:    persistenceLearning,
 		ProactiveRate:          round4(d.ProactiveRate),
 		Attribution:            canonicalizeAttribution(d.Attribution),
 		Handler:                d.Handler,
@@ -698,6 +717,7 @@ func (l *Logger) Record(d model.Decision) error {
 		"stage", rec.Stage, "nextStage", rec.NextStage, "hazard", rec.StageHazard,
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,
 		"economics", rec.Economics,
+		"persistenceLearning", rec.PersistenceLearning,
 		"cost", rec.Cost, "net", rec.Net, "asset", rec.AssetValue, "blast", rec.BlastRadius,
 		"attribution", rec.Attribution,
 		"r6Would", rec.R6Counterfactual, "r6Note", rec.CounterfactualNote,

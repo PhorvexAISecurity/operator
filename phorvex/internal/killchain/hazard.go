@@ -453,7 +453,7 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 	// PHORVEXSEC-189 / M-143 (form A, capped noisy-OR). The old term
 	// clamp01(exposure/floor) reached 1 for every pod older than the floor, and then
 	// pHoldRaw = betaMean + 1*(1-betaMean) = 1 for EVERY betaMean: the posterior, the tenant
-	// prior and the feedback had zero effect (84.6% of live records pinned >= 0.999).
+	// prior and any qualified observed-outcome learning had zero effect (84.6% of live records pinned >= 0.999).
 	// Now p(t) = cap*min(1, t/T_exp) with 0 < cap < 1, so d pHold/d betaMean = 1-p >= 1-cap > 0
 	// at every age, pHold(t=0) = betaMean exactly as before, and pHold reaches 1 only when
 	// betaMean does. cap is INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. T_exp is the

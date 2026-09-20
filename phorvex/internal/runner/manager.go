@@ -817,15 +817,27 @@ func (m *Manager) syncOwnerLiveness() {
 		return
 	}
 	m.mu.RLock()
-	owners := make([]string, 0, len(m.policies))
+	epochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	for _, e := range m.policies {
 		if e != nil {
-			owners = append(owners, e.ownerKey())
+			epochs = append(epochs, model.PolicyEpoch{Namespace: e.namespace, Name: e.key.Name, UID: e.uid, Generation: e.generation})
 		}
 	}
 	m.mu.RUnlock()
-	for _, owner := range owners {
-		ce.SetOwnerLive(owner, true)
+	registerCoverageOwnerEpochs(ce, epochs)
+}
+
+// registerCoverageOwnerEpochs is shared by the controller sync seam and the
+// actual tick snapshot. A future observed-outcome adapter therefore cannot see
+// a different policy identity depending on which manager path established it.
+func registerCoverageOwnerEpochs(ce *decision.CoverageEngine, epochs []model.PolicyEpoch) {
+	for _, epoch := range epochs {
+		// Preserve the established lifecycle guard even for directly constructed
+		// offline fixtures with incomplete epochs. Stored API objects have complete
+		// identity and positive generation, so production also registers the exact
+		// observed-outcome epoch.
+		ce.SetOwnerLive(epoch.Owner(), true)
+		_ = ce.SetOwnerEpoch(epoch, true)
 	}
 }
 
@@ -1137,12 +1149,12 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	// then be rejected as retired. They must describe the same instant.
 	m.mu.Lock()
 	due := make([]duePolicy, 0, len(m.policies))
-	liveOwners := make([]string, 0, len(m.policies))
+	liveEpochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := m.managerClock().Now()
 	for _, e := range m.policies {
 		owner := e.ownerKey()
-		liveOwners = append(liveOwners, owner)
+		liveEpochs = append(liveEpochs, model.PolicyEpoch{Namespace: e.namespace, Name: e.key.Name, UID: e.uid, Generation: e.generation})
 		row := duePolicy{
 			entry: e, namespace: e.namespace, name: e.key.Name, uid: e.uid,
 			owner: owner, epoch: m.epochs[owner], neverRun: e.lastTick.IsZero(),
@@ -1158,9 +1170,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	m.mu.Unlock()
 	sortDuePolicies(due)
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		for _, owner := range liveOwners {
-			ce.SetOwnerLive(owner, true)
-		}
+		registerCoverageOwnerEpochs(ce, liveEpochs)
 	}
 	// The epochs captured with `due` travel with this tick: a producer that writes back
 	// later compares against them, so a replacement that happened mid-tick cannot be
@@ -3096,6 +3106,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		Namespace:                    e.namespace,
 		PolicyName:                   e.key.Name,
 		PolicyUID:                    e.uid,
+		PolicyGeneration:             e.generation,
 		Mode:                         s.EffectiveMode(),
 		DryRun:                       s.IsDryRun(),
 		Lambda:                       s.EffectiveLambda(),

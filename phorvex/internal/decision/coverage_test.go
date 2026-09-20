@@ -210,7 +210,7 @@ func TestLegacyMixedGainMonotonicityProperties(t *testing.T) {
 	}
 }
 
-func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
+func TestShadowAndUnlabelledProductionDoNotAdvancePersistenceLearning(t *testing.T) {
 	e := NewCoverageEngine()
 	views := []*model.WorkloadView{covView("a", true, 2*time.Hour, false)}
 	pol := covPolicy(1)
@@ -229,8 +229,8 @@ func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
 	}
 
 	e.Decide(views, pol)
-	if got := e.Killchain.Memory.PriorMean(pol.Owner()); got == beforePrior {
-		t.Fatal("control production decision did not advance learning; isolation test is vacuous")
+	if got := e.Killchain.Memory.PriorMean(pol.Owner()); got != beforePrior {
+		t.Fatalf("unlabelled production selection self-trained persistence: %v -> %v", beforePrior, got)
 	}
 }
 
