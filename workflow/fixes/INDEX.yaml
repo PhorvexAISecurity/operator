@@ -1339,8 +1339,8 @@ fixes:
     - M-144
     - M-98
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: post25-economics
-    head_sha: null
+    head_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
