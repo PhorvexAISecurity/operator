@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -89,13 +89,29 @@ checks:
     - phorvex/internal/model/decision_trace.go
     - workflow/fixes/T0-C/validator
     inputs_sha256: b2d9378f1ef68ae6fa5a6dfcfc9071604c63f812281de1961b8880b5bdf24bc9
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4f478fea87e975b5f2f4dd402ad3c407b4a706e90d61fbfd315e8b1dd5c82279
+    source_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+    at: '2026-09-20T23:40:40+00:00'
+    baseline_sha: a96cc197a9ab582f69e920ca2ae29b94ffef197e
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d8d83571e46e4a7a1f7369e418a8b553f33656a4a2ea2163128e5fd55b5a2ac2
+    source_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+    at: '2026-09-20T23:40:40+00:00'
+    incident_sha256: 4f478fea87e975b5f2f4dd402ad3c407b4a706e90d61fbfd315e8b1dd5c82279
 fix_id: POST25-ECONOMICS
 issues:
 - M-144
 - M-98
 title: Separate persistent disruption preference from legacy count-driven lambda
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -140,7 +156,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -156,10 +172,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-20T23:37:34+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T23:40:43+00:00'
 configuration_history:
 - at: '2026-09-20T22:33:37+00:00'
   by: codex-lead
@@ -214,10 +230,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T23:40:40+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T23:40:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-ECONOMICS:7:submit
-  from: sol-post25-economics
+  id: POST25-ECONOMICS:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
