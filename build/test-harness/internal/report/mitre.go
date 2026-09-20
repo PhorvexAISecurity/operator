@@ -56,8 +56,14 @@ var mitreNames = map[string]string{
 func RenderMitreMatrix(scenarios []core.Scenario) string {
 	declared := map[string][]string{}
 	exercised := map[string][]string{}
+	attackScenarios, benignControls := 0, 0
 	for _, s := range scenarios {
 		m := s.Metadata()
+		if m.BenignControl {
+			benignControls++
+			continue
+		}
+		attackScenarios++
 		for _, id := range m.AttackTechniqueIDs {
 			declared[id] = append(declared[id], m.Name)
 		}
@@ -71,7 +77,7 @@ func RenderMitreMatrix(scenarios []core.Scenario) string {
 	var b strings.Builder
 	b.WriteString("# MITRE ATT&CK for Containers — Coverage Matrix\n\n")
 	b.WriteString("Declared mappings are narrative context. Exercised mappings require an explicitly executable mechanism. Neither table proves a successful live defense.\n\n")
-	b.WriteString(fmt.Sprintf("%d declared technique mappings and %d executable-mechanism technique mappings across %d scenarios.\n\n", len(declared), len(exercised), len(scenarios)))
+	b.WriteString(fmt.Sprintf("%d declared technique mappings and %d executable-mechanism technique mappings across %d attack scenarios. %d benign functional-effect control(s) are excluded from these coverage counts.\n\n", len(declared), len(exercised), attackScenarios, benignControls))
 	b.WriteString("## Declared narrative mappings\n\n")
 	renderTechniqueTable(&b, declared)
 	b.WriteString("\n## Executed mechanism inventory\n\n")

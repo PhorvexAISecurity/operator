@@ -12,7 +12,8 @@ func TestMitreMatrixSeparatesDeclaredFromExecutable(t *testing.T) {
 	marker := metadataScenario{meta: core.ScenarioMeta{Name: "marker", AttackTechniqueIDs: []string{"T1610"}, Realism: core.RealismMarkerSimulation}}
 	executable := metadataScenario{meta: core.ScenarioMeta{Name: "executable", AttackTechniqueIDs: []string{"T1610"}, ExercisedTechniqueIDs: []string{"T1610"}, Realism: core.RealismExecutable}}
 	legacy := metadataScenario{meta: core.ScenarioMeta{Name: "legacy", AttackTechniqueIDs: []string{"T1190"}}}
-	got := RenderMitreMatrix([]core.Scenario{marker, executable, legacy})
+	benign := metadataScenario{meta: core.ScenarioMeta{Name: "benign", BenignControl: true, AttackTechniqueIDs: []string{"T1499"}, ExercisedTechniqueIDs: []string{"T1499"}, Realism: core.RealismExecutable}}
+	got := RenderMitreMatrix([]core.Scenario{marker, executable, legacy, benign})
 	parts := strings.Split(got, "## Executed mechanism inventory")
 	if len(parts) != 2 {
 		t.Fatalf("missing split inventories:\n%s", got)
@@ -22,6 +23,9 @@ func TestMitreMatrixSeparatesDeclaredFromExecutable(t *testing.T) {
 	}
 	if strings.Contains(parts[1], "marker") || strings.Contains(parts[1], "legacy") || !strings.Contains(parts[1], "executable") {
 		t.Fatalf("unsupported exercise claim leaked:\n%s", parts[1])
+	}
+	if strings.Contains(got, "T1499") || !strings.Contains(got, "across 3 attack scenarios. 1 benign functional-effect control(s) are excluded") {
+		t.Fatalf("benign control entered coverage inventory:\n%s", got)
 	}
 	if !strings.Contains(got, "Neither table proves a successful live defense") {
 		t.Fatalf("missing claim limit:\n%s", got)
