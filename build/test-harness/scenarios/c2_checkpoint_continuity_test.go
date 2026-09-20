@@ -631,6 +631,22 @@ func TestCheckpointLocalFixturePrebindsBeforeWriterAndRepeatsMarkerInit(t *testi
 	if _, err := client.CoreV1().Pods("sandbox").Update(context.Background(), holder, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+	sc, err := client.StorageV1().StorageClasses().Get(context.Background(), env.Config.BenignCheckpointStorageClass, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalNonce := sc.Annotations["fixture.phorvex.ai/nonce"]
+	sc.Annotations["fixture.phorvex.ai/nonce"] = "foreign-nonce"
+	if _, err := client.StorageV1().StorageClasses().Update(context.Background(), sc, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.verifyStorageIdentity(context.Background(), env); err == nil {
+		t.Fatal("later StorageClass mutation accepted")
+	}
+	sc.Annotations["fixture.phorvex.ai/nonce"] = originalNonce
+	if _, err := client.StorageV1().StorageClasses().Update(context.Background(), sc, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	boundPV, err := client.CoreV1().PersistentVolumes().Get(context.Background(), pv.Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -946,6 +946,13 @@ func (s *c2CheckpointContinuity) verifyStorageIdentity(ctx context.Context, env 
 		if err := s.validateCheckpointLocalPVC(pvc, s.pvName, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot)); err != nil {
 			return err
 		}
+		sc, err := env.Kube.StorageV1().StorageClasses().Get(ctx, s.storageClassName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("read checkpoint local StorageClass identity: %w", err)
+		}
+		if err := validateCheckpointLocalStorageClass(sc, s.storageClassUID, s.localNonce); err != nil {
+			return err
+		}
 		if err := s.validateCheckpointLocalPV(pv, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot), false); err != nil {
 			return err
 		}
