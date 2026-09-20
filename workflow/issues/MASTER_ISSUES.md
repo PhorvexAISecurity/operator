@@ -2798,7 +2798,7 @@ Severity: HIGH · Tier: unassigned · Fixes: POST25-CALIB-EXPORT
 
 *Evidence history (claims retain their original versions):*
 
-**What:** Replace with the accepted, falsifiable issue claim.
+**What:** The calibration exporter serializes retained comparison history into whole JSON buffers and CSV row matrices before writing. For the reproduced 24,300-comparison history this raises peak process memory from147,332KiB without export to547,684KiB with export, beyond the current256Mi manager limit; the experiment identifies the source allocation defect but does not establish the cause of the observed live OOM.
 
 **Evidence:** Actual Runtime/Export fresh-process differential:24300 comparisons and12scores/side; maxRSS147332KiB without export and547684KiB with export, exact unchanged calib source7460fe5a/92f961bd. Campaign capacity/calibration-export-probe contains test source/pins/raw results. No live OOM-cause claim.
 
