@@ -1349,8 +1349,8 @@ fixes:
     issues:
     - M-170
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: post25-checkpoint-live-prep
-    head_sha: null
+    head_sha: 85475e7ba32b2bd8cbdef886529849bc3a424b1e
