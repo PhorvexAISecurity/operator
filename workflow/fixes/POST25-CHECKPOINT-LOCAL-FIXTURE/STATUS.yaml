@@ -1,0 +1,125 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 5
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 2e0fef4d4ce7f66b30de00ae705a8a1759e96edc6435740d454672548e13ca3d
+    source_sha: 46823423f5aea0194232b39c1422c23f7483f0a4
+    at: '2026-09-20T20:10:12+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a0addeeeb2d15b0b03f1ff52d368806cd2d03502d2753d591acc602f60645104
+    source_sha: 46823423f5aea0194232b39c1422c23f7483f0a4
+    at: '2026-09-20T20:29:58+00:00'
+fix_id: POST25-CHECKPOINT-LOCAL-FIXTURE
+issues:
+- M-170
+title: Bind checkpoint local fixtures before the first write
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-catalogue-claims
+  code_sha: 46823423f5aea0194232b39c1422c23f7483f0a4
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.139
+  deployed_git_sha: 92f961bd43fa0ba0b34c21095c4a24f446675a26
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-checkpoint-live-prep
+  base_sha: 46823423f5aea0194232b39c1422c23f7483f0a4
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Same-node benign checkpoint continuity only. Live control pending; MIG unavailable.
+- Reviewed PR243 and PR245 source included cumulatively; target main.
+next_action:
+  owner: post25-catalogue
+  action: Implement the signed local fixture contract and actual producer controls
+updated_at: '2026-09-20T20:29:58+00:00'
+follow_up_to: POST25-CATALOGUE-CLAIMS
+configuration_history:
+- at: '2026-09-20T20:09:31+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T20:10:10+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T20:10:12+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false

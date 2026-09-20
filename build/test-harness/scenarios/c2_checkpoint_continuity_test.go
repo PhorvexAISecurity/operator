@@ -1,12 +1,14 @@
 package scenarios
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"os/exec"
@@ -21,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -102,6 +105,60 @@ func TestCheckpointServerWritesAsActualNonRootProcess(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "checkpoint.json")); err != nil {
 		t.Fatalf("non-root writer did not create checkpoint: %v", err)
+	}
+}
+
+func TestCheckpointLocalMarkerInitStrictlyBindsOpenedRegularFile(t *testing.T) {
+	holderUID := "11111111-2222-4333-8444-555555555555"
+	nodeName := "reviewed-node"
+	nonce := "checkpoint-local-r1"
+	valid := []byte(`{"campaignNonce":"checkpoint-local-r1","holderPodUID":"11111111-2222-4333-8444-555555555555","nodeName":"reviewed-node","schema":"post25-checkpoint-local-holder-marker-v1","slot":0}` + "\n")
+	cases := []struct {
+		name    string
+		raw     []byte
+		prepare func(string) error
+		ok      bool
+	}{
+		{name: "canonical", raw: valid, ok: true},
+		{name: "missing"},
+		{name: "null", raw: []byte(`{"campaignNonce":null,"holderPodUID":"11111111-2222-4333-8444-555555555555","nodeName":"reviewed-node","schema":"post25-checkpoint-local-holder-marker-v1","slot":0}` + "\n")},
+		{name: "duplicate", raw: []byte(`{"campaignNonce":"checkpoint-local-r1","campaignNonce":"checkpoint-local-r1","holderPodUID":"11111111-2222-4333-8444-555555555555","nodeName":"reviewed-node","schema":"post25-checkpoint-local-holder-marker-v1","slot":0}` + "\n")},
+		{name: "case-variant", raw: []byte(`{"CampaignNonce":"checkpoint-local-r1","holderPodUID":"11111111-2222-4333-8444-555555555555","nodeName":"reviewed-node","schema":"post25-checkpoint-local-holder-marker-v1","slot":0}` + "\n")},
+		{name: "trailing", raw: append(append([]byte{}, valid...), []byte("{}")...)},
+		{name: "wrong-slot", raw: bytes.Replace(valid, []byte(`"slot":0`), []byte(`"slot":1`), 1)},
+		{name: "bool-slot", raw: bytes.Replace(valid, []byte(`"slot":0`), []byte(`"slot":false`), 1)},
+		{name: "oversized", raw: bytes.Repeat([]byte("x"), 1025)},
+		{name: "directory", prepare: func(dir string) error { return os.Mkdir(filepath.Join(dir, checkpointLocalMarker), 0700) }},
+		{name: "symlink", prepare: func(dir string) error {
+			target := filepath.Join(dir, "target")
+			if err := os.WriteFile(target, valid, 0600); err != nil {
+				return err
+			}
+			return os.Symlink(target, filepath.Join(dir, checkpointLocalMarker))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.prepare != nil {
+				if err := tc.prepare(dir); err != nil {
+					t.Fatal(err)
+				}
+			} else if tc.raw != nil {
+				if err := os.WriteFile(filepath.Join(dir, checkpointLocalMarker), tc.raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.Command("python3", "-B", "-c", checkpointMarkerInitSource)
+			cmd.Env = append(os.Environ(), "STATE_DIR="+dir, "EXPECTED_HOLDER_UID="+holderUID, "EXPECTED_NODE_NAME="+nodeName, "EXPECTED_NONCE="+nonce, "EXPECTED_SLOT=0")
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != tc.ok {
+				t.Fatalf("marker result err=%v output=%s", err, out)
+			}
+			if tc.ok && (!bytes.Contains(out, []byte(`"status":"VERIFIED"`)) || !bytes.Contains(out, []byte(`"markerSHA256"`))) {
+				t.Fatalf("marker receipt=%s", out)
+			}
+		})
 	}
 }
 
@@ -463,6 +520,228 @@ func TestCheckpointSetupCapturesExactOwnedStorageAndWorkloadIdentities(t *testin
 	if probe == nil || probe.HTTPGet == nil || probe.HTTPGet.Path != "/progress" || probe.HTTPGet.Port.IntVal != checkpointPort {
 		t.Fatalf("target HTTP readiness probe=%+v", probe)
 	}
+	if len(dep.Spec.Template.Spec.InitContainers) != 0 {
+		t.Fatalf("ordinary provisioned storage unexpectedly gained local init: %+v", dep.Spec.Template.Spec.InitContainers)
+	}
+	pvc, err := client.CoreV1().PersistentVolumeClaims("sandbox").Get(context.Background(), checkpointPVC, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pvc.Spec.Selector != nil {
+		t.Fatalf("ordinary provisioned storage unexpectedly gained selector: %+v", pvc.Spec.Selector)
+	}
+}
+
+func TestCheckpointLocalFixturePrebindsBeforeWriterAndRepeatsMarkerInit(t *testing.T) {
+	env, client, pv := checkpointLocalSetupEnv(t)
+	var orderingErr error
+	client.PrependReactor("create", "persistentvolumeclaims", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		pvc := a.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim)
+		pvc.UID = "pvc-local-uid"
+		pvc.Status.Phase = corev1.ClaimBound
+		bound := pv.DeepCopy()
+		bound.Status.Phase = corev1.VolumeBound
+		bound.Spec.ClaimRef = &corev1.ObjectReference{Namespace: "sandbox", Name: checkpointPVC, UID: pvc.UID}
+		if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("persistentvolumes"), bound, ""); err != nil {
+			return true, nil, err
+		}
+		return false, nil, nil
+	})
+	client.PrependReactor("create", "deployments", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		current, err := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("persistentvolumes"), "", pv.Name)
+		if err != nil || current.(*corev1.PersistentVolume).Status.Phase != corev1.VolumeBound || current.(*corev1.PersistentVolume).Spec.ClaimRef == nil || current.(*corev1.PersistentVolume).Spec.ClaimRef.UID != "pvc-local-uid" {
+			orderingErr = fmt.Errorf("deployment preceded exact Bound claimRef: pv=%v err=%v", current, err)
+		}
+		dep := a.(k8stesting.CreateAction).GetObject().(*appsv1.Deployment)
+		dep.UID = "deployment-uid"
+		return false, nil, nil
+	})
+	client.PrependReactor("create", "services", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		a.(k8stesting.CreateAction).GetObject().(*corev1.Service).UID = "service-uid"
+		return false, nil, nil
+	})
+	client.PrependReactor("create", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		pod := a.(k8stesting.CreateAction).GetObject().(*corev1.Pod)
+		if pod.Name == checkpointProducer {
+			pod.UID = "producer-uid"
+			pod.Status.Phase = corev1.PodRunning
+			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "producer", Ready: true}}
+		}
+		return false, nil, nil
+	})
+	s := &c2CheckpointContinuity{}
+	if err := s.Setup(context.Background(), env); err != nil {
+		t.Fatal(err)
+	}
+	if orderingErr != nil {
+		t.Fatal(orderingErr)
+	}
+	if s.pvName != pv.Name || s.pvUID != pv.UID || s.storageClassUID != "storage-class-uid" || s.localSlot != 0 {
+		t.Fatalf("local fixture identities=%+v", s)
+	}
+	dep, err := client.AppsV1().Deployments("sandbox").Get(context.Background(), checkpointApp, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dep.Spec.Template.Spec.InitContainers) != 1 {
+		t.Fatalf("marker init=%+v", dep.Spec.Template.Spec.InitContainers)
+	}
+	init := dep.Spec.Template.Spec.InitContainers[0]
+	if init.Name != "verify-local-marker" || init.Command[len(init.Command)-1] != checkpointMarkerInitSource || len(init.VolumeMounts) != 1 || !init.VolumeMounts[0].ReadOnly {
+		t.Fatalf("marker init contract=%+v", init)
+	}
+	if dep.Spec.Template.Spec.NodeSelector["kubernetes.io/hostname"] != "reviewed-node" {
+		t.Fatalf("checkpoint target placement=%v", dep.Spec.Template.Spec.NodeSelector)
+	}
+	pvc, err := client.CoreV1().PersistentVolumeClaims("sandbox").Get(context.Background(), checkpointPVC, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSelector := checkpointLocalSelector("d-nomtd", 0, 0)
+	if pvc.Spec.VolumeName != pv.Name || pvc.Spec.Selector == nil || !maps.Equal(pvc.Spec.Selector.MatchLabels, wantSelector) {
+		t.Fatalf("local PVC prebinding=%+v", pvc.Spec)
+	}
+	if err := s.verifyStorageIdentity(context.Background(), env); err != nil {
+		t.Fatalf("bound local identity rejected: %v", err)
+	}
+	holder, err := client.CoreV1().Pods("sandbox").Get(context.Background(), checkpointLocalHolder, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder.UID = "99999999-2222-4333-8444-555555555555"
+	if _, err := client.CoreV1().Pods("sandbox").Update(context.Background(), holder, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.verifyStorageIdentity(context.Background(), env); err == nil {
+		t.Fatal("later holder UID replacement accepted")
+	}
+	holder.UID = s.localHolderUID
+	if _, err := client.CoreV1().Pods("sandbox").Update(context.Background(), holder, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	boundPV, err := client.CoreV1().PersistentVolumes().Get(context.Background(), pv.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundPV.Spec.Local.Path += "-foreign"
+	if _, err := client.CoreV1().PersistentVolumes().Update(context.Background(), boundPV, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.verifyStorageIdentity(context.Background(), env); err == nil {
+		t.Fatal("later local PV path replacement accepted")
+	}
+	ev := map[string]string{}
+	s.addCheckpointLocalEvidence(ev)
+	if ev["checkpointLocalHolderUID"] != string(s.localHolderUID) || ev["checkpointLocalNodeUID"] != string(s.localNodeUID) || ev["checkpointLocalSlot"] != "0" || ev["checkpointLocalPathSHA256"] == "" || ev["checkpointLocalMarkerInitSourceSHA256"] != checkpointMarkerInitSourceSHA256() {
+		t.Fatalf("local evidence=%v", ev)
+	}
+}
+
+func TestCheckpointLocalFixtureRefusesUnsafeBindingBeforeDeployment(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*storagev1.StorageClass, *corev1.PersistentVolume)
+	}{
+		{name: "wait-for-first-consumer", mutate: func(sc *storagev1.StorageClass, _ *corev1.PersistentVolume) {
+			mode := storagev1.VolumeBindingWaitForFirstConsumer
+			sc.VolumeBindingMode = &mode
+		}},
+		{name: "wrong-path", mutate: func(_ *storagev1.StorageClass, pv *corev1.PersistentVolume) { pv.Spec.Local.Path += "-foreign" }},
+		{name: "foreign-claim", mutate: func(_ *storagev1.StorageClass, pv *corev1.PersistentVolume) {
+			pv.Spec.ClaimRef = &corev1.ObjectReference{Namespace: "other", Name: "foreign", UID: "foreign"}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env, client, pv := checkpointLocalSetupEnv(t)
+			sc, err := client.StorageV1().StorageClasses().Get(context.Background(), env.Config.BenignCheckpointStorageClass, metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.mutate(sc, pv)
+			if _, err := client.StorageV1().StorageClasses().Update(context.Background(), sc, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.CoreV1().PersistentVolumes().Update(context.Background(), pv, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			s := &c2CheckpointContinuity{}
+			if err := s.Setup(context.Background(), env); err == nil {
+				t.Fatal("unsafe local fixture accepted")
+			}
+			for _, action := range client.Actions() {
+				if action.GetVerb() == "create" && action.GetResource().Resource == "deployments" {
+					t.Fatal("writer Deployment created before local binding validation")
+				}
+			}
+		})
+	}
+}
+
+func TestCheckpointLocalFixtureRequiresOneDeterministicSlot(t *testing.T) {
+	for index, tc := range []struct {
+		defender string
+		trial    int
+	}{{"d-nomtd", 0}, {"d-nomtd", 1}, {"d-nomtd", 2}, {"d-r6blindtimer", 0}, {"d-r6blindtimer", 1}, {"d-r6blindtimer", 2}} {
+		got, err := checkpointLocalAssignment(tc.defender, tc.trial)
+		if err != nil || got != index {
+			t.Fatalf("assignment %s/%d=%d err=%v want=%d", tc.defender, tc.trial, got, err, index)
+		}
+	}
+	for _, tc := range []struct {
+		defender string
+		trial    int
+	}{{"d-fullphoenix", 0}, {"d-nomtd", -1}, {"d-r6blindtimer", 3}} {
+		if _, err := checkpointLocalAssignment(tc.defender, tc.trial); err == nil {
+			t.Fatalf("unsupported assignment accepted: %+v", tc)
+		}
+	}
+
+	env, client, pv := checkpointLocalSetupEnv(t)
+	duplicate := pv.DeepCopy()
+	duplicate.Name = "checkpoint-local-duplicate"
+	duplicate.UID = "pv-local-duplicate-uid"
+	if _, err := client.CoreV1().PersistentVolumes().Create(context.Background(), duplicate, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&c2CheckpointContinuity{}).Setup(context.Background(), env); err == nil {
+		t.Fatal("duplicate exact slot candidates accepted")
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "create" && (action.GetResource().Resource == "persistentvolumeclaims" || action.GetResource().Resource == "deployments") {
+			t.Fatalf("duplicate candidates reached writer mutation: %s", action.GetResource().Resource)
+		}
+	}
+}
+
+func TestCheckpointLocalFixtureRefusesBoundClaimRefMismatchBeforeWriter(t *testing.T) {
+	env, client, pv := checkpointLocalSetupEnv(t)
+	client.PrependReactor("create", "persistentvolumeclaims", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		pvc := a.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim)
+		pvc.UID = "pvc-local-uid"
+		pvc.Status.Phase = corev1.ClaimBound
+		bound := pv.DeepCopy()
+		bound.Status.Phase = corev1.VolumeBound
+		bound.Spec.ClaimRef = &corev1.ObjectReference{Namespace: "sandbox", Name: checkpointPVC, UID: "foreign-pvc-uid"}
+		if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("persistentvolumes"), bound, ""); err != nil {
+			return true, nil, err
+		}
+		return false, nil, nil
+	})
+	if err := (&c2CheckpointContinuity{}).Setup(context.Background(), env); err == nil {
+		t.Fatal("Bound PV with foreign claimRef UID accepted")
+	}
+	seenPVC := false
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "create" && action.GetResource().Resource == "persistentvolumeclaims" {
+			seenPVC = true
+		}
+		if action.GetVerb() == "create" && action.GetResource().Resource == "deployments" {
+			t.Fatal("writer Deployment created after claimRef mismatch")
+		}
+	}
+	if !seenPVC {
+		t.Fatal("test did not exercise PVC create/binding path")
+	}
 }
 
 func TestCheckpointSetupWithoutPinnedStorageIsUnavailableAndReadOnly(t *testing.T) {
@@ -480,6 +759,67 @@ func TestCheckpointSetupWithoutPinnedStorageIsUnavailableAndReadOnly(t *testing.
 			t.Fatalf("unpinned storage caused mutation: %s %s", action.GetVerb(), action.GetResource().Resource)
 		}
 	}
+}
+
+func checkpointLocalSetupEnv(t *testing.T) (*core.Env, *k8sfake.Clientset, *corev1.PersistentVolume) {
+	t.Helper()
+	env := fixtureObservationEnv()
+	env.ScenarioName = "c2-checkpoint-continuity"
+	env.DefenderName = "d-nomtd"
+	env.Trial = 0
+	env.Config.BenignCheckpointStorageClass = "checkpoint-local"
+	env.Config.BenignCheckpointLocalFixture = true
+	env.Config.BenignCheckpointNodeSelector = map[string]string{"kubernetes.io/hostname": "reviewed-node"}
+	env.Config.BenignCheckpointLocalHolderUID = "11111111-2222-4333-8444-555555555555"
+	env.Config.BenignCheckpointLocalNodeUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+	env.Config.BenignCheckpointLocalNonce = "checkpoint-local-r1"
+	client := env.Kube.(*k8sfake.Clientset)
+	mode := storagev1.VolumeBindingImmediate
+	reclaim := corev1.PersistentVolumeReclaimRetain
+	expand := false
+	sc := &storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: env.Config.BenignCheckpointStorageClass, UID: "storage-class-uid", Labels: map[string]string{core.OwnedLabelKey: core.OwnedLabelValue, "fixture.phorvex.ai/campaign": checkpointLocalCampaign}, Annotations: map[string]string{"fixture.phorvex.ai/nonce": env.Config.BenignCheckpointLocalNonce}}, Provisioner: "kubernetes.io/no-provisioner", VolumeBindingMode: &mode, ReclaimPolicy: &reclaim, AllowVolumeExpansion: &expand}
+	if _, err := client.StorageV1().StorageClasses().Create(context.Background(), sc, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "reviewed-node", UID: types.UID(env.Config.BenignCheckpointLocalNodeUID)}, Status: corev1.NodeStatus{Allocatable: corev1.ResourceList{corev1.ResourceName("nvidia.com/gpu"): resource.MustParse("0")}, Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
+	if _, err := client.CoreV1().Nodes().Create(context.Background(), node, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	noToken := false
+	nonroot := true
+	uid := int64(65532)
+	noEsc := false
+	ro := true
+	volumes := make([]corev1.Volume, 0, 6)
+	mounts := make([]corev1.VolumeMount, 0, 6)
+	for slot := 0; slot < 6; slot++ {
+		capacity := resource.MustParse(checkpointLocalCapacity)
+		volumes = append(volumes, corev1.Volume{Name: fmt.Sprintf("slot-%d", slot), VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &capacity}}})
+		mounts = append(mounts, corev1.VolumeMount{Name: fmt.Sprintf("slot-%d", slot), MountPath: fmt.Sprintf("/checkpoint/slot-%d", slot)})
+	}
+	holder := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: checkpointLocalHolder, Namespace: "sandbox", UID: types.UID(env.Config.BenignCheckpointLocalHolderUID), Labels: map[string]string{core.OwnedLabelKey: core.OwnedLabelValue, "fixture.phorvex.ai/campaign": checkpointLocalCampaign}, Annotations: map[string]string{"fixture.phorvex.ai/nonce": env.Config.BenignCheckpointLocalNonce}}, Spec: corev1.PodSpec{AutomountServiceAccountToken: &noToken, RestartPolicy: corev1.RestartPolicyNever, NodeName: "reviewed-node", NodeSelector: map[string]string{"kubernetes.io/hostname": "reviewed-node"}, SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &nonroot, RunAsUser: &uid, RunAsGroup: &uid, FSGroup: &uid}, Volumes: volumes, Containers: []corev1.Container{{Name: "holder", Image: checkpointImage, SecurityContext: &corev1.SecurityContext{RunAsNonRoot: &nonroot, RunAsUser: &uid, RunAsGroup: &uid, AllowPrivilegeEscalation: &noEsc, ReadOnlyRootFilesystem: &ro, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, VolumeMounts: mounts}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: "holder", Ready: true}}}}
+	if _, err := client.CoreV1().Pods("sandbox").Create(context.Background(), holder, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	volumeMode := corev1.PersistentVolumeFilesystem
+	selector := checkpointLocalSelector("d-nomtd", 0, 0)
+	path := checkpointLocalPath(holder.UID, 0)
+	pv := &corev1.PersistentVolume{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-local-0", UID: "pv-local-uid", Labels: selector, Annotations: map[string]string{"fixture.phorvex.ai/holder-uid": string(holder.UID), "fixture.phorvex.ai/node-uid": string(node.UID), "fixture.phorvex.ai/nonce": env.Config.BenignCheckpointLocalNonce, "fixture.phorvex.ai/slot": "0", "fixture.phorvex.ai/local-path-sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(path)))}}, Spec: corev1.PersistentVolumeSpec{Capacity: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(checkpointLocalCapacity)}, AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, PersistentVolumeReclaimPolicy: corev1.PersistentVolumeReclaimRetain, StorageClassName: env.Config.BenignCheckpointStorageClass, VolumeMode: &volumeMode, PersistentVolumeSource: corev1.PersistentVolumeSource{Local: &corev1.LocalVolumeSource{Path: path}}, NodeAffinity: &corev1.VolumeNodeAffinity{Required: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{MatchExpressions: []corev1.NodeSelectorRequirement{{Key: "kubernetes.io/hostname", Operator: corev1.NodeSelectorOpIn, Values: []string{"reviewed-node"}}}}}}}}, Status: corev1.PersistentVolumeStatus{Phase: corev1.VolumeAvailable}}
+	if _, err := client.CoreV1().PersistentVolumes().Create(context.Background(), pv, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	controller := true
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-rs", Namespace: "sandbox", UID: "rs-uid", OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: checkpointApp, UID: "deployment-uid", Controller: &controller}}}}
+	if _, err := client.AppsV1().ReplicaSets("sandbox").Create(context.Background(), rs, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	target := sessionFixturePod(checkpointApp, checkpointApp, "target-uid", false, true)
+	target.Name = "target-pod"
+	target.Spec.NodeName = "reviewed-node"
+	target.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: rs.Name, UID: rs.UID, Controller: &controller}}
+	bindCheckpointFixturePod(target)
+	createSessionFixturePod(t, env, target)
+	return env, client, pv
 }
 
 func startCheckpointServer(t *testing.T, dir string, port int, pod, pvc, fault string) *exec.Cmd {

@@ -1343,3 +1343,14 @@ fixes:
     stacked_on: []
     branch: post25-catalogue-claims
     head_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad
+  POST25-CHECKPOINT-LOCAL-FIXTURE:
+    directory: fixes/POST25-CHECKPOINT-LOCAL-FIXTURE
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-checkpoint-live-prep
+    head_sha: null
