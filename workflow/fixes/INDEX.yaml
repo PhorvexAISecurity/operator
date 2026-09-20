@@ -1338,7 +1338,7 @@ fixes:
     issues:
     - M-67
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T25-M067
