@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 
@@ -19,49 +21,51 @@ import (
 
 func init() { core.RegisterScenario(&c2StatefulTraining{}) }
 
-// c2StatefulTraining is the LEAD DEMO + the FEASIBILITY dimension: a long-running
-// STATEFUL training job (a PVC-backed pod doing in-progress work) is compromised. The
-// defense must evict the foothold WITHOUT destroying the running job.
-//
-//   - blind timer / full-Phoenix: their only move is DELETE (rotate) — which on a
-//     stateful pod is PHYSICALLY INFEASIBLE in the sense that it DESTROYS the running
-//     work (the in-memory training state dies). They "disrupt" the foothold but cause
-//     HARM (stateful-destroyed).
-//   - PX: its action-set generator marks rotate INFEASIBLE on a stateful pod
-//     (stateful-integrity hard constraint) and finds the FEASIBLE ALTERNATIVE —
-//     QUARANTINE (deny-all + detach) — which contains the foothold while the job keeps
-//     running. Work preserved, harm = 0.
-//
-// R6 has no feasibility model and cannot score this. ORACLE (attacker wins) = the
-// foothold is alive AND can still act (pod running, not quarantined). The report's
-// harm / feasible-alternative / work-preserved columns are the headline.
+const statefulMarkerObservationWindow = 20 * time.Second
+
+var statefulMarkerObservationWait = waitStatefulMarkerObservation
+
+// c2StatefulTraining is a legacy marker simulation. It provisions a PVC-mounted
+// CPU fixture and plants the same bounded in-container marker used by the other
+// legacy persistence scenarios. It does not read checkpoint bytes, measure
+// application progress, or send packet probes, so those effects remain
+// deliberately unobserved.
 type c2StatefulTraining struct {
-	app    string
-	pvc    string
-	oldUID string
+	app             string
+	pvc             string
+	targetName      string
+	targetUID       types.UID
+	pvcUID          types.UID
+	markerPlantedAt time.Time
 }
 
 func (s *c2StatefulTraining) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{
 		Name:               "c2-stateful-training",
 		Category:           core.CategoryR6Claimed,
-		Source:             "P3 LEAD DEMO; PRD §5.1A feasibility / 'critical stateful workload'; R6 pain point #3/#4",
+		Source:             "Legacy Cat2 stateful-workload narrative; corrected post25 oracle review",
 		R6ResponseTag:      core.R6Partial,
 		AttackTechniqueIDs: []string{"T1543.005", "T1486", "T1496"},
-		R6Justification:    "A blind Delete evicts the foothold but DESTROYS the running stateful job (R6 pain point #3: can't handle critical stateful workloads; #4: prescribed action physically infeasible). PX's feasibility model excludes rotate on a stateful pod and quarantines instead — work preserved. R6 has no feasibility model; partial.",
+		Realism:            core.RealismMarkerSimulation,
+		Mechanism:          "create one owned PVC-mounted BusyBox CPU Pod, plant a bounded synthetic marker and sleeper, wait 20 seconds, then read that marker only from the exact setup-created Pod UID",
+		ClaimLimits:        "marker simulation only; exercises zero ATT&CK techniques and does not measure detection, containment, NetworkPolicy enforcement, checkpoint durability, application progress, in-memory training recovery, work preservation, destructive impact, GPU training, or a feasible alternative",
+		OracleDescription:  "the marker objective succeeds only when the exact setup-created Pod UID remains Running and an error-preserving exec explicitly reads the marker; exact UID absence is reported only as identity replacement/removal",
+		CleanupDescription: "delete only the Pod and PVC whose successful Create responses supplied the retained UIDs, using UID preconditions",
+		R6Justification:    "The fixture can compare exact Pod-identity and ephemeral-marker persistence. Policy or event presence cannot establish containment or preserved application work, so this legacy arm makes no such claim.",
 	}
 }
 
 func (s *c2StatefulTraining) Setup(ctx context.Context, env *core.Env) error {
 	s.app = "c2st-train"
 	s.pvc = s.app + "-work"
+	s.targetName = ""
+	s.targetUID = ""
+	s.pvcUID = ""
+	s.markerPlantedAt = time.Time{}
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return err
 	}
 	ns := env.Config.Namespace
-	// A PVC so the pod is STATEFUL in the defender's eyes (PX's stateful-integrity
-	// constraint keys on a PVC-mounting / StatefulSet pod).
-	waitPodGone(ctx, env, s.app)
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: s.pvc, Namespace: ns, Labels: env.OwnedLabels(nil)},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -69,10 +73,16 @@ func (s *c2StatefulTraining) Setup(ctx context.Context, env *core.Env) error {
 			Resources:   corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("50Mi")}},
 		},
 	}
-	env.Log.Command(fmt.Sprintf("kubectl create pvc %s --size=50Mi -n %s  # training checkpoint volume", s.pvc, ns))
-	if _, err := env.Kube.CoreV1().PersistentVolumeClaims(ns).Create(ctx, pvc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return err
+	env.Log.Command(fmt.Sprintf("kubectl create pvc %s --size=50Mi -n %s  # synthetic checkpoint fixture", s.pvc, ns))
+	createdPVC, err := env.Kube.CoreV1().PersistentVolumeClaims(ns).Create(ctx, pvc, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("create owned stateful marker PVC %s: %w", s.pvc, err)
 	}
+	if createdPVC.UID == "" {
+		return fmt.Errorf("create owned stateful marker PVC %s returned empty UID", s.pvc)
+	}
+	s.pvcUID = createdPVC.UID
+
 	labels := mocks.LabelMap(map[string]string{defenders.RotationTargetLabel: "true", "app": s.app, "tier": "training", "data-class": "restricted"}, nil)
 	pod := mocks.NewPod(env, s.app, labels).
 		WithBusyboxLoop("trainer", []string{"sh", "-c", "echo START > /work/checkpoint; i=0; while true; do i=$((i+1)); echo step=$i > /work/checkpoint; sleep 2; done"}, 100, 64).
@@ -80,119 +90,154 @@ func (s *c2StatefulTraining) Setup(ctx context.Context, env *core.Env) error {
 			corev1.Volume{Name: "work", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: s.pvc}}},
 			corev1.VolumeMount{Name: "work", MountPath: "/work"}).
 		Build()
-	env.Log.Command(fmt.Sprintf("kubectl run %s -n %s --mount pvc=%s  # stateful training job (in-progress work)", s.app, ns, s.pvc))
-	if _, err := env.Kube.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return err
-	}
-	running, err := runningPodByApp(ctx, env, s.app)
+	env.Log.Command(fmt.Sprintf("kubectl create pod %s -n %s --mount pvc=%s  # synthetic stateful marker fixture", s.app, ns, s.pvc))
+	createdPod, err := env.Kube.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
+		return fmt.Errorf("create owned stateful marker Pod %s: %w", s.app, err)
+	}
+	if createdPod.UID == "" {
+		return fmt.Errorf("create owned stateful marker Pod %s returned empty UID", s.app)
+	}
+	s.targetName, s.targetUID = createdPod.Name, createdPod.UID
+	if err := env.WaitForPodRunning(ctx, s.targetName, 60*time.Second); err != nil {
 		return err
 	}
-	s.oldUID = string(running.UID)
+	ready, err := env.Kube.CoreV1().Pods(ns).Get(ctx, s.targetName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("read setup-created stateful marker Pod: %w", err)
+	}
+	if ready.UID != s.targetUID {
+		return fmt.Errorf("setup-created stateful marker Pod UID changed: created=%s observed=%s", s.targetUID, ready.UID)
+	}
 	return nil
 }
 
 func (s *c2StatefulTraining) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {
-	pod, err := runningPodByApp(ctx, env, s.app)
+	s.markerPlantedAt = time.Time{}
+	if s.targetName == "" || s.targetUID == "" || s.pvcUID == "" {
+		return core.AttackResult{}, errors.New("stateful marker setup identity missing")
+	}
+	pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, s.targetName, metav1.GetOptions{})
 	if err != nil {
-		return core.AttackResult{}, err
+		return core.AttackResult{}, fmt.Errorf("read stateful marker target: %w", err)
 	}
-	s.oldUID = string(pod.UID)
-	cmds := plantBackdoor(ctx, env, pod.Name, firstContainer(pod))
-	stages := []string{
-		"compromise the long-running stateful training job (T1543.005)",
-		"the defense must evict WITHOUT destroying the in-progress work (feasibility test)",
+	if pod.UID != s.targetUID {
+		return core.AttackResult{}, fmt.Errorf("stateful marker target UID changed before stimulus: created=%s observed=%s", s.targetUID, pod.UID)
 	}
-	// If the active defender supports the reactive emitter, drive its genuine path too
-	// (so full-Phoenix/reactive-only get a fair shot — they will DELETE, destroying work).
+	cmds, err := plantBackdoorObserved(ctx, env, pod.Name, firstContainer(pod))
+	stages := []string{"plant bounded synthetic marker and sleeper in the PVC-mounted CPU fixture"}
+	if err != nil {
+		return core.AttackResult{Stages: stages, Commands: cmds}, fmt.Errorf("plant stateful synthetic marker: %w", err)
+	}
+	s.markerPlantedAt = time.Now()
 	if em, ok := emitterFromEnv(env); ok {
 		if err := em.EmitSecurityEvent(ctx, env, pod.Name, amtdv1beta1.TypePanic, amtdv1beta1.ThreatLevelHigh); err == nil {
-			cmds = append(cmds, "emit SecurityEvent{panic,high} -> matcher -> Delete (destroys the stateful job)")
+			cmds = append(cmds, "emit synthetic SecurityEvent{panic,high} for defender selection")
 		}
 	}
-	return core.AttackResult{Stages: stages, Commands: cmds}, nil
+	return core.AttackResult{Stages: stages, Commands: cmds, Notes: map[string]string{
+		"classification":      string(core.RealismMarkerSimulation),
+		"originalPod":         s.targetName,
+		"originalPodUID":      string(s.targetUID),
+		"ownedPVC":            s.pvc,
+		"ownedPVCUID":         string(s.pvcUID),
+		"markerPlantedAt":     s.markerPlantedAt.UTC().Format(time.RFC3339Nano),
+		"exercisedTechniques": "none",
+	}}, nil
 }
 
 func (s *c2StatefulTraining) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	// Give the defense its window to act on the high-risk stateful pod.
-	survival, stillAlive := measureSurvival(ctx, env, s.app, 20*time.Second)
-
-	// Did the defense CHOOSE the work-preserving feasible alternative (quarantine), or
-	// the destructive Delete? PX's feasibility model excludes rotate on a stateful pod
-	// and emits a phorvex.quarantine; blind/full-Phoenix Delete. We key on the ACTION
-	// CHOSEN (the feasibility IP) — robust to Phoenix's bare-pod quarantine nuance.
-	quarantineChosen := phorvexQuarantineEmitted(ctx, env) || namespaceHasNetworkPolicy(ctx, env)
-	origRunning := false
-	if cur, err := runningPodByApp(ctx, env, s.app); err == nil && string(cur.UID) == s.oldUID {
-		origRunning = true
+	if s.targetName == "" || s.targetUID == "" || s.markerPlantedAt.IsZero() {
+		return core.OracleResult{}, errors.New("stateful marker stimulus identity or start time missing")
 	}
-	workPreserved := quarantineChosen || origRunning
-
-	// Attacker wins iff the foothold is alive AND can still act (pod intact, NOT
-	// quarantined/contained). A quarantine contains it; a Delete destroys the work.
-	achieved := stillAlive && !quarantineChosen && origRunning
-
-	armAction := "none"
-	harm := "none"
-	infeasibleRotate := false
-	if quarantineChosen {
-		armAction = "quarantine" // feasible alternative found — work-preserving
-	} else if !origRunning {
-		armAction = "delete"
-		harm = "stateful-destroyed" // the defense killed the running training job
-		infeasibleRotate = true     // rotate on a stateful pod is the infeasible/harmful move
+	windowStart, windowEnd, err := statefulMarkerObservationWait(ctx, statefulMarkerObservationWindow)
+	if err != nil {
+		return core.OracleResult{}, fmt.Errorf("stateful marker observation window did not complete: %w", err)
+	}
+	if windowStart.IsZero() || windowEnd.Before(windowStart) || windowEnd.Sub(windowStart) < statefulMarkerObservationWindow {
+		return core.OracleResult{}, fmt.Errorf("stateful marker observation window was shorter than %.0fs", statefulMarkerObservationWindow.Seconds())
 	}
 
-	ev := map[string]string{
-		"workPreserved":        fmt.Sprintf("%v", workPreserved),
-		"quarantined":          fmt.Sprintf("%v", quarantineChosen),
-		"armAction":            armAction,
-		core.EvReactionSeconds: fmt.Sprintf("%.1f", survival),
+	baseEvidence := map[string]string{
+		"classification":           string(core.RealismMarkerSimulation),
+		"originalPod":              s.targetName,
+		"originalPodUID":           string(s.targetUID),
+		"observationWindowSeconds": fmt.Sprintf("%.0f", statefulMarkerObservationWindow.Seconds()),
+		"containment":              "unobserved",
+		"networkEffect":            "unobserved",
+		"checkpointRead":           "not-performed",
+		"applicationProgress":      "unobserved",
+		"workPreserved":            "unobserved",
 	}
-	state := fmt.Sprintf("stateful training job: foothold-alive=%v %s [work-preserved=%v] [harm=%s] [arm-action=%s] [infeasible-rotate=%v] [feasible-alt=%v] [lead-demo=true]",
-		stillAlive, survivalMarker(survival, stillAlive), workPreserved, harm, armAction, infeasibleRotate, quarantineChosen)
-	return core.OracleResult{Achieved: achieved, ObservedState: state, Evidence: ev}, nil
+	pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, s.targetName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		baseEvidence["originalUIDAbsent"] = "true"
+		baseEvidence["markerPresent"] = "false"
+		return core.OracleResult{Achieved: false, ObservedState: "marker simulation: exact original Pod identity is absent; containment and stateful work are unobserved", Evidence: baseEvidence}, nil
+	}
+	if err != nil {
+		return core.OracleResult{}, fmt.Errorf("read exact stateful marker target: %w", err)
+	}
+	baseEvidence["observedPodUID"] = string(pod.UID)
+	if pod.UID != s.targetUID {
+		baseEvidence["originalUIDAbsent"] = "true"
+		baseEvidence["markerPresent"] = "false"
+		return core.OracleResult{Achieved: false, ObservedState: "marker simulation: same-name Pod has a different UID; containment and stateful work are unobserved", Evidence: baseEvidence}, nil
+	}
+	baseEvidence["originalUIDAbsent"] = "false"
+	if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning {
+		return core.OracleResult{}, fmt.Errorf("exact stateful marker target uid=%s is not running and non-terminating", pod.UID)
+	}
+	markerPresent, err := observedMarker(ctx, env.Exec(ctx, pod.Name, firstContainer(pod), markerReadCommand(BackdoorMarkerPath)), BackdoorMarker)
+	if err != nil {
+		return core.OracleResult{}, fmt.Errorf("read exact stateful marker target uid=%s: %w", pod.UID, err)
+	}
+	baseEvidence["markerPresent"] = fmt.Sprintf("%v", markerPresent)
+	baseEvidence[core.EvReactionSeconds] = fmt.Sprintf("%.3f", time.Since(s.markerPlantedAt).Seconds())
+	state := fmt.Sprintf("marker simulation: exact original Pod UID retained=%v and synthetic marker present=%v; containment and stateful work are unobserved", true, markerPresent)
+	return core.OracleResult{Achieved: markerPresent, ObservedState: state, Evidence: baseEvidence}, nil
 }
 
 func (s *c2StatefulTraining) Teardown(ctx context.Context, env *core.Env) error {
-	_ = teardownByApp(ctx, env, s.app)
-	// Best-effort PVC cleanup (idempotent).
-	if env.Kube != nil && s.pvc != "" {
-		_ = env.Kube.CoreV1().PersistentVolumeClaims(env.Config.Namespace).Delete(ctx, s.pvc, metav1.DeleteOptions{})
+	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
+		return err
 	}
-	return nil
-}
-
-// phorvexQuarantineEmitted reports whether PX emitted a phorvex.quarantine
-// SecurityEvent (its feasible, work-preserving alternative to a destructive Delete on
-// a stateful pod). This is the direct signal that PX's feasibility model chose to
-// CONTAIN rather than destroy — the IP R6 cannot produce.
-func phorvexQuarantineEmitted(ctx context.Context, env *core.Env) bool {
-	if env.Ctrl == nil {
-		return false
-	}
-	var list amtdv1beta1.SecurityEventList
-	if err := env.Ctrl.List(ctx, &list); err != nil {
-		return false
-	}
-	for i := range list.Items {
-		if list.Items[i].Spec.Rule.Type == "phorvex.quarantine" {
-			return true
+	var errs []error
+	if s.targetName != "" && s.targetUID != "" {
+		opts := statefulDeleteOptions(s.targetUID, true)
+		env.Log.Command(fmt.Sprintf("kubectl delete pod %s -n %s --grace-period=0 --preconditions uid=%s", s.targetName, env.Config.Namespace, s.targetUID))
+		if err := env.Kube.CoreV1().Pods(env.Config.Namespace).Delete(ctx, s.targetName, opts); err != nil && !apierrors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("delete stateful marker Pod uid=%s: %w", s.targetUID, err))
 		}
 	}
-	return false
+	if s.pvc != "" && s.pvcUID != "" {
+		opts := statefulDeleteOptions(s.pvcUID, false)
+		env.Log.Command(fmt.Sprintf("kubectl delete pvc %s -n %s --preconditions uid=%s", s.pvc, env.Config.Namespace, s.pvcUID))
+		if err := env.Kube.CoreV1().PersistentVolumeClaims(env.Config.Namespace).Delete(ctx, s.pvc, opts); err != nil && !apierrors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("delete stateful marker PVC uid=%s: %w", s.pvcUID, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
-// namespaceHasNetworkPolicy reports whether any NetworkPolicy exists in the sandbox —
-// the harness creates none, so its presence means a defender QUARANTINED (Phoenix's
-// quarantine action applies a deny-all NetworkPolicy).
-func namespaceHasNetworkPolicy(ctx context.Context, env *core.Env) bool {
-	if env.Ctrl == nil {
-		return false
+func statefulDeleteOptions(uid types.UID, immediate bool) metav1.DeleteOptions {
+	dp := metav1.DeletePropagationBackground
+	opts := metav1.DeleteOptions{PropagationPolicy: &dp, Preconditions: &metav1.Preconditions{UID: &uid}}
+	if immediate {
+		grace := int64(0)
+		opts.GracePeriodSeconds = &grace
 	}
-	nps, err := env.Kube.NetworkingV1().NetworkPolicies(env.Config.Namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return false
+	return opts
+}
+
+func waitStatefulMarkerObservation(ctx context.Context, interval time.Duration) (time.Time, time.Time, error) {
+	started := time.Now()
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return started, time.Now(), ctx.Err()
+	case <-timer.C:
+		return started, time.Now(), nil
 	}
-	return len(nps.Items) > 0
 }
