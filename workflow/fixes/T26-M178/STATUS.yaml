@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -22,12 +22,85 @@ checks:
     sha256: fba13ff964890844eab1b0b2f55aa4babe2c47d5d76866097b523541198511f3
     source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
     at: '2026-09-20T14:10:21+00:00'
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: f9f80c8f7c67fc2ad446db333ecec2ee1348e812e15e524cfe04105b2cbf2d26
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:45:04+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: f013cd66d06e37eb4e2819669b9df81a134ee761cd0a8dc4435648c50d30a99b
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:45:04+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: f9f80c8f7c67fc2ad446db333ecec2ee1348e812e15e524cfe04105b2cbf2d26
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:45:04+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - workflow
+    inputs_sha256: 2b08956443fbe6bb0d826c5d36e7a7f8ccd71d9a2a25c2879a7ca0d8ddc0b13b
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue/offline-verify.log
+    sha256: 9a6a54c129fd0531a1573a0a81b844773da0148d2f5787dcb86f0037f5d95908
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:45:04+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - workflow/fixes/T26-M178/verify.sh
+    inputs_sha256: a6d44521d64b04c59e919009d0271524c418623aad24068e8844333e0715175e
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue/offline-verify.log
+    sha256: 9a6a54c129fd0531a1573a0a81b844773da0148d2f5787dcb86f0037f5d95908
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:45:04+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - phorvex/internal/actuator
+    - workflow/fixes/T26-M178/verify.sh
+    inputs_sha256: 9e708276b27c963945cf2c28c9e6bd0bc26c7faaec9802a2d8112726909c7a18
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue/offline-verify.log
+    sha256: 9a6a54c129fd0531a1573a0a81b844773da0148d2f5787dcb86f0037f5d95908
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:45:04+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-reset-ack
+    - build/test-harness/guardrail
+    - phorvex/internal/actuator
+    - workflow/fixes/T26-M178/verify.sh
+    inputs_sha256: 9e708276b27c963945cf2c28c9e6bd0bc26c7faaec9802a2d8112726909c7a18
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 8c32df46a649c0902495d202f0af15a48b9ba9a6ca9fbefc9229bb3281f91a93
+    source_sha: 7ede502c013966929a671f6fdfe28c713489f246
+    at: '2026-09-20T14:51:45+00:00'
 fix_id: T26-M178
 issues:
 - M-178
 title: Carry authentic vLLM reset acknowledgement end to end
 profile: standard
-state: AGREED
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -42,7 +115,7 @@ capabilities_required:
 baseline:
   code_branch: main
   code_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
-  deployed_image: vllm/vllm-openai:v0.7.3@sha256:4f4039589120397ce64231883a1b8a78e7bc83b2a8999c5951af0bd72f6eea79
+  deployed_image: vllm/vllm-openai:v0.7.3@sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2
   deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
 blind_derivation:
   status: pending
@@ -51,7 +124,7 @@ blind_derivation:
 implementation:
   branch: post25-backend
   base_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
-  head_sha: null
+  head_sha: 7ede502c013966929a671f6fdfe28c713489f246
   stacked_on: []
 pull_request:
   url: null
@@ -72,13 +145,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: FAIL
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -88,11 +161,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: post25-catalogue
-  action: Take exact-source verification handoff under own identity; preserve original
-    product authors, lead evidence and open live/capacity limits. Prior workers cannot
-    resume because agent runtime reached thread limit.
-updated_at: '2026-09-20T14:10:42+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-20T14:53:01+00:00'
 follow_up_to: T14-M178
 configuration_history:
 - at: '2026-09-20T13:29:15+00:00'
@@ -117,6 +189,16 @@ configuration_history:
   - next_action
   - roles
   approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T14:45:04+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T14:53:01+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -134,3 +216,34 @@ transitions:
   note: null
   approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-20T14:45:05+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T14:45:06+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-20T14:51:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T26-M178:9:review
+  from: codex-lead
+  to: post25-catalogue
+  role: implementer
+  kind: review
+  revision: 9

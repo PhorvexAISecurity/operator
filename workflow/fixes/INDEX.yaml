@@ -1301,8 +1301,8 @@ fixes:
     issues:
     - M-178
     related_issues: []
-    state: AGREED
+    state: IMPLEMENTED
     dependencies: []
     stacked_on: []
     branch: post25-backend
-    head_sha: null
+    head_sha: 7ede502c013966929a671f6fdfe28c713489f246
