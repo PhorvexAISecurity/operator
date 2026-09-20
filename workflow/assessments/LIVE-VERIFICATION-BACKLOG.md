@@ -1,5 +1,7 @@
 # Outstanding live verification — readiness campaign
 
+**September20 Tier19 deployment:** manager source `a480c36f` and image0.4.133 are independently confirmed. The 188.2-second passive sample observes the new normal tick-outcome metrics and329 log ticks with zero sampled restarts. Rejection/recovery/UID and GPU controls were not induced; all29 behavior bundles, prior OOM and source prerequisites remain pending. [Evidence](20260916-local-continuation/live/20260920-tier19-deployment/REPORT.md).
+
 **September20 Tier18 deployment:** independent reads confirm manager source `b3d41173`, image0.4.132 and digest `sha256:19509e6453497475d643a6a804d398966b9c3246aed64d83d3ead9b1e44a2824`. A 186.5-second passive scheduler sample retained305 ticks across9 tenant values with unchanged sampled manager identity, Ready state and zero restarts. Controlled lifecycle/group tests, backend/guardrail prerequisites, prior OOM and all29 behavior bundles remain pending. [Evidence](20260916-local-continuation/live/20260920-tier18-deployment/REPORT.md).
 
 **September20 02:19–02:20 UTC:** Tier18 PR235 is merged (`b3d41173`), but independent reads still find the Tier17 manager binary (`8650fa46`, image0.4.131). The same Pod is Ready with zero restarts after roughly4h40m. Reset remains dispatching; the old guardrail and unchecked reset backend contracts remain. All29 behavior bundles and the OOM/source residuals stay open. [Evidence](20260916-local-continuation/live/20260920-tier18-merge/REPORT.md).
