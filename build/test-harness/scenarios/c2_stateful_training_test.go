@@ -67,6 +67,9 @@ func TestStatefulTrainingOracleIgnoresUnrelatedPolicyAndEvent(t *testing.T) {
 			if _, exists := got.Evidence["quarantined"]; exists {
 				t.Fatalf("legacy favorable quarantine field survived correction: %v", got.Evidence)
 			}
+			if _, exists := got.Evidence[core.EvReactionSeconds]; exists {
+				t.Fatalf("marker observation window was mislabeled as defense reaction: %v", got.Evidence)
+			}
 		})
 	}
 }

@@ -193,7 +193,6 @@ func (s *c2StatefulTraining) SuccessOracle(ctx context.Context, env *core.Env) (
 		return core.OracleResult{}, fmt.Errorf("read exact stateful marker target uid=%s: %w", pod.UID, err)
 	}
 	baseEvidence["markerPresent"] = fmt.Sprintf("%v", markerPresent)
-	baseEvidence[core.EvReactionSeconds] = fmt.Sprintf("%.3f", time.Since(s.markerPlantedAt).Seconds())
 	state := fmt.Sprintf("marker simulation: exact original Pod UID retained=%v and synthetic marker present=%v; containment and stateful work are unobserved", true, markerPresent)
 	return core.OracleResult{Achieved: markerPresent, ObservedState: state, Evidence: baseEvidence}, nil
 }
