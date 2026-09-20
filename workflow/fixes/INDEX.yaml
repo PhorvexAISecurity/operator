@@ -1340,7 +1340,6 @@ fixes:
     related_issues: []
     state: AGREED
     dependencies: []
-    stacked_on:
-    - POST25-CATALOGUE-STATEFUL
+    stacked_on: []
     branch: post25-catalogue-claims
-    head_sha: b38e92f5ce4925be034286859b723d14b69136e8
+    head_sha: 8d52179859aa03a0aa61ce75d5c639101b80249d

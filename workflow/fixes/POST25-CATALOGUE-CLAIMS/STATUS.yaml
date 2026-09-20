@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -13,7 +13,7 @@ checks:
     artifact: 03-decision.md
     sha256: 840640e1d420a6310f59f23139ff113fc76171e5f6d204f2621d03f8f6cfaa01
     source_sha: b38e92f5ce4925be034286859b723d14b69136e8
-    at: '2026-09-20T18:43:13+00:00'
+    at: '2026-09-20T19:14:44+00:00'
     contract_sha256: 4bc178a5e90287ce559e2c5e7b39fc7b5016f72ce1e6543505b29e662af1af75
 fix_id: POST25-CATALOGUE-CLAIMS
 issues:
@@ -44,9 +44,8 @@ blind_derivation:
 implementation:
   branch: post25-catalogue-claims
   base_sha: b38e92f5ce4925be034286859b723d14b69136e8
-  head_sha: b38e92f5ce4925be034286859b723d14b69136e8
-  stacked_on:
-  - POST25-CATALOGUE-STATEFUL
+  head_sha: 8d52179859aa03a0aa61ce75d5c639101b80249d
+  stacked_on: []
 pull_request:
   url: null
   reviewed_head: null
@@ -84,10 +83,13 @@ residuals:
   eligibility is not a live defense.
 - Existing source fixes and deployed behavior have separate acceptance and release
   records.
+- Base b38e92f5 contains reviewed PR243 source. PR delivery targets main cumulatively;
+  verify that source is included before merging/verification. PR243 has no separate
+  POST25-CATALOGUE-STATEFUL fix record.
 next_action:
   owner: post25-catalogue
   action: After M182 handoff, implement assessed mechanism report boundaries
-updated_at: '2026-09-20T18:43:13+00:00'
+updated_at: '2026-09-20T19:37:05+00:00'
 follow_up_to: T5-M170
 configuration_history:
 - at: '2026-09-20T18:42:51+00:00'
@@ -100,6 +102,17 @@ configuration_history:
   - residuals
   - roles
   - verification
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T19:14:43+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  - residuals
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T19:37:05+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
   approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
@@ -118,3 +131,12 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 840640e1d420a6310f59f23139ff113fc76171e5f6d204f2621d03f8f6cfaa01
+  source_sha: b38e92f5ce4925be034286859b723d14b69136e8
+  at: '2026-09-20T18:43:13+00:00'
+  contract_sha256: 4bc178a5e90287ce559e2c5e7b39fc7b5016f72ce1e6543505b29e662af1af75
