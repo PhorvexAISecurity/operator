@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -127,8 +127,8 @@ implementation:
   stacked_on:
   - POST25-CHECKPOINT-LOCAL-FIXTURE
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/248
+  reviewed_head: 91727e68acd99fe1b38fabaef962f67bdb875e45
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -165,10 +165,10 @@ residuals:
 - Benign process-local state only, zero security/economic/MIG/continuous-availability
   credit.
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-20T23:07:47+00:00'
+  owner: codex-lead
+  action: Execute reviewed attempt7 against fresh source/digest/health pins; no full
+    catalogue or security closure
+updated_at: '2026-09-20T23:08:45+00:00'
 follow_up_to: POST25-CHECKPOINT-LOCAL-FIXTURE
 configuration_history:
 - at: '2026-09-20T21:00:40+00:00'
@@ -191,6 +191,12 @@ configuration_history:
   by: post25-catalogue
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-20T23:08:45+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
