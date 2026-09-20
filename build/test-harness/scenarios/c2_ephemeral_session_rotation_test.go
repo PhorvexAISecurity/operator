@@ -2,10 +2,14 @@ package scenarios
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -209,7 +213,7 @@ func TestEphemeralSessionTeardownUsesUIDPrecondition(t *testing.T) {
 }
 
 func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.T) {
-	env := fixtureObservationEnv()
+	env := sessionRequestEnv(t)
 	env.Config.BenignSessionNodeSelector = map[string]string{"kubernetes.io/hostname": "ip-172-27-12-233.us-east-2.compute.internal"}
 	env.Rand = rand.New(rand.NewSource(19))
 	env.Trial = 4
@@ -240,7 +244,7 @@ func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.
 		core.SetExecer(nil)
 	})
 
-	s := &c2EphemeralSessionRotation{originalName: "stale", originalUID: "stale", sessionID: "stale"}
+	s := &c2EphemeralSessionRotation{originalName: "stale", originalUID: "stale", sessionID: "stale", producerUID: "producer-owned"}
 	result, err := s.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +267,7 @@ func TestEphemeralSessionExecuteUsesActualServiceReplyAndClearsState(t *testing.
 }
 
 func TestEphemeralSessionObservationWindowIsContextCancellableAfterEstablishment(t *testing.T) {
-	env := fixtureObservationEnv()
+	env := sessionRequestEnv(t)
 	env.Rand = rand.New(rand.NewSource(29))
 	createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -285,7 +289,7 @@ func TestEphemeralSessionObservationWindowIsContextCancellableAfterEstablishment
 		core.SetExecer(nil)
 	})
 	started := time.Now()
-	_, err := (&c2EphemeralSessionRotation{}).Execute(ctx, env)
+	_, err := (&c2EphemeralSessionRotation{producerUID: "producer-owned"}).Execute(ctx, env)
 	if err == nil || !strings.Contains(err.Error(), "observation window did not complete: context canceled") {
 		t.Fatalf("cancelled post-establishment window result=%v", err)
 	}
@@ -295,14 +299,14 @@ func TestEphemeralSessionObservationWindowIsContextCancellableAfterEstablishment
 }
 
 func TestEphemeralSessionExecutePreservesProducerFailure(t *testing.T) {
-	env := fixtureObservationEnv()
+	env := sessionRequestEnv(t)
 	env.Rand = rand.New(rand.NewSource(23))
 	createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
 		return core.ExecResult{Err: errors.New("fixture producer failed"), ExitCode: -1}
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
-	s := &c2EphemeralSessionRotation{originalName: "stale", originalUID: "stale", sessionID: "stale"}
+	s := &c2EphemeralSessionRotation{originalName: "stale", originalUID: "stale", sessionID: "stale", producerUID: "producer-owned"}
 	if _, err := s.Execute(context.Background(), env); err == nil {
 		t.Fatal("producer failure was accepted")
 	}
@@ -312,7 +316,7 @@ func TestEphemeralSessionExecutePreservesProducerFailure(t *testing.T) {
 }
 
 func TestEphemeralSessionOracleNoDefenseRetainsSameUIDAndID(t *testing.T) {
-	env := fixtureObservationEnv()
+	env := sessionRequestEnv(t)
 	createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 	core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _ string, _ string, command []string) core.ExecResult {
 		return sessionExecReply("GET", 200, "original", command[len(command)-1], true, false)
@@ -329,7 +333,7 @@ func TestEphemeralSessionOracleNoDefenseRetainsSameUIDAndID(t *testing.T) {
 }
 
 func TestEphemeralSessionOracleCreditsOnlyConfirmedReplacementLoss(t *testing.T) {
-	env := fixtureObservationEnv()
+	env := sessionRequestEnv(t)
 	createSessionFixturePod(t, env, sessionFixturePod("replacement-pod", sessionApp, "replacement", false, true))
 	var call int
 	core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _ string, _ string, command []string) core.ExecResult {
@@ -364,7 +368,7 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	}
 
 	t.Run("overlap with original label removed", func(t *testing.T) {
-		env := fixtureObservationEnv()
+		env := sessionRequestEnv(t)
 		createSessionFixturePod(t, env, sessionFixturePod("replacement-pod", sessionApp, "replacement", false, true))
 		createSessionFixturePod(t, env, sessionFixturePod("original-pod", "detached", "original", false, true))
 		core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _ string, _ string, command []string) core.ExecResult {
@@ -377,7 +381,7 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	})
 
 	t.Run("original terminating", func(t *testing.T) {
-		env := fixtureObservationEnv()
+		env := sessionRequestEnv(t)
 		createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", true, true))
 		if _, err := newScenario().SuccessOracle(context.Background(), env); err == nil || !strings.Contains(err.Error(), "not ready and non-terminating") {
 			t.Fatalf("terminating original was scored: %v", err)
@@ -391,7 +395,7 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	})
 
 	t.Run("malformed reply", func(t *testing.T) {
-		env := fixtureObservationEnv()
+		env := sessionRequestEnv(t)
 		createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 		core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
 			return core.ExecResult{Stdout: "{", ExitCode: 0}
@@ -403,7 +407,7 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	})
 
 	t.Run("server error", func(t *testing.T) {
-		env := fixtureObservationEnv()
+		env := sessionRequestEnv(t)
 		createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 		core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _ string, _ string, command []string) core.ExecResult {
 			return sessionExecReply("GET", 503, "original", command[len(command)-1], false, false)
@@ -415,7 +419,7 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	})
 
 	t.Run("transport timeout", func(t *testing.T) {
-		env := fixtureObservationEnv()
+		env := sessionRequestEnv(t)
 		createSessionFixturePod(t, env, sessionFixturePod("original-pod", sessionApp, "original", false, true))
 		core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
 			return core.ExecResult{Err: context.DeadlineExceeded, ExitCode: -1}
@@ -446,12 +450,12 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 			{name: "trailing object", raw: `{"podUID":"original","id":"session-old","present":false} {}`},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				env := fixtureObservationEnv()
+				env := sessionRequestEnv(t)
 				core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
 					return core.ExecResult{Stdout: sessionEnvelope(404, tc.raw), ExitCode: 0}
 				})
 				defer core.SetExecer(nil)
-				if _, err := performSessionRequest(context.Background(), env, "GET", "session-old"); err == nil {
+				if _, err := performSessionRequest(context.Background(), env, "GET", "session-old", "producer-owned"); err == nil {
 					t.Fatalf("%s presence reply was accepted", tc.name)
 				}
 			})
@@ -459,12 +463,12 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	})
 
 	t.Run("POST requires explicit created field", func(t *testing.T) {
-		env := fixtureObservationEnv()
+		env := sessionRequestEnv(t)
 		core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
 			return core.ExecResult{Stdout: sessionEnvelope(201, `{"podUID":"original","id":"session-old","present":true}`), ExitCode: 0}
 		})
 		defer core.SetExecer(nil)
-		if _, err := performSessionRequest(context.Background(), env, "POST", "session-old"); err == nil {
+		if _, err := performSessionRequest(context.Background(), env, "POST", "session-old", "producer-owned"); err == nil {
 			t.Fatal("POST without explicit created field was accepted")
 		}
 	})
@@ -476,6 +480,99 @@ func TestEphemeralSessionOracleRejectsOverlapAndObservationFailures(t *testing.T
 	})
 }
 
+func TestEphemeralSessionHTTPReceiptPersistsThroughRealTrialLogger(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		result        core.ExecResult
+		wantError     bool
+		wantTruncated bool
+	}{
+		{name: "success", result: sessionExecReply("GET", 200, "original", "session-old", true, false)},
+		{name: "malformed", result: core.ExecResult{Stdout: "malformed-envelope", ExitCode: 0}, wantError: true},
+		{name: "transport", result: core.ExecResult{Stderr: "bounded transport detail", ExitCode: -1, Err: context.DeadlineExceeded}, wantError: true},
+		{name: "oversized", result: core.ExecResult{Stdout: strings.Repeat("x", sessionReceiptStdoutLimit+1), ExitCode: 0}, wantError: true, wantTruncated: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "out", "raw", "session.log")
+			logger, err := core.NewTrialLogger(path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			env := sessionRequestEnv(t)
+			env.Log = logger
+			core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				return tc.result
+			})
+			t.Cleanup(func() { core.SetExecer(nil) })
+			_, requestErr := performSessionRequest(context.Background(), env, "GET", "session-old", "producer-owned")
+			if (requestErr != nil) != tc.wantError {
+				t.Fatalf("request error=%v wantError=%v", requestErr, tc.wantError)
+			}
+			closer, ok := logger.(interface{ Close() error })
+			if !ok {
+				t.Fatal("real trial logger has no close seam")
+			}
+			if err := closer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			receipt := persistedSessionReceipt(t, string(raw))
+			if receipt.ProducerName != sessionProducer || receipt.ExpectedProducerUID != "producer-owned" || receipt.ObservedProducerUID != "producer-owned" {
+				t.Fatalf("producer identity missing from persisted receipt: %+v", receipt)
+			}
+			wantStdout := tc.result.Stdout
+			if tc.wantTruncated {
+				wantStdout = wantStdout[:sessionReceiptStdoutLimit]
+			}
+			if receipt.Stdout != wantStdout || receipt.StdoutBytes != len(tc.result.Stdout) || receipt.StdoutTruncated != tc.wantTruncated {
+				t.Fatalf("actual HTTP envelope not retained exactly: receipt=%+v result=%+v", receipt, tc.result)
+			}
+			wantDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(tc.result.Stdout)))
+			if receipt.StdoutSHA256 != wantDigest {
+				t.Fatalf("stdout digest=%s want=%s", receipt.StdoutSHA256, wantDigest)
+			}
+			if tc.result.Err != nil && !strings.Contains(receipt.ExecError, tc.result.Err.Error()) {
+				t.Fatalf("transport failure missing from persisted receipt: %+v", receipt)
+			}
+		})
+	}
+}
+
+func TestEphemeralSessionHTTPReceiptRejectsReplacedProducerBeforeExec(t *testing.T) {
+	env := sessionRequestEnv(t)
+	called := false
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		called = true
+		return core.ExecResult{}
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	if _, err := performSessionRequest(context.Background(), env, "GET", "session-old", "different-producer-uid"); err == nil || !strings.Contains(err.Error(), "producer UID mismatch") {
+		t.Fatalf("replaced producer error=%v", err)
+	}
+	if called {
+		t.Fatal("request ran through a producer whose UID did not match the setup identity")
+	}
+}
+
+func persistedSessionReceipt(t *testing.T, rawLog string) sessionHTTPReceipt {
+	t.Helper()
+	const marker = "c2-ephemeral-session-rotation http-receipt="
+	for _, line := range strings.Split(rawLog, "\n") {
+		if at := strings.Index(line, marker); at >= 0 {
+			var receipt sessionHTTPReceipt
+			if err := json.Unmarshal([]byte(line[at+len(marker):]), &receipt); err != nil {
+				t.Fatalf("persisted receipt malformed: %v\n%s", err, line)
+			}
+			return receipt
+		}
+	}
+	t.Fatalf("raw log omitted HTTP receipt:\n%s", rawLog)
+	return sessionHTTPReceipt{}
+}
+
 func observedSessionScenario() *c2EphemeralSessionRotation {
 	started := time.Date(2026, 9, 20, 14, 0, 0, 0, time.UTC)
 	return &c2EphemeralSessionRotation{
@@ -484,7 +581,17 @@ func observedSessionScenario() *c2EphemeralSessionRotation {
 		sessionID:     "session-old",
 		windowStarted: started,
 		windowEnded:   started.Add(benignSessionObservationWindow),
+		producerUID:   "producer-owned",
 	}
+}
+
+func sessionRequestEnv(t *testing.T) *core.Env {
+	t.Helper()
+	env := fixtureObservationEnv()
+	producer := sessionFixturePod(sessionProducer, sessionProducer, "producer-owned", false, true)
+	producer.Spec.Containers[0].Name = "producer"
+	createSessionFixturePod(t, env, producer)
+	return env
 }
 
 func sessionFixturePod(name, app string, uid types.UID, terminating, ready bool) *corev1.Pod {
