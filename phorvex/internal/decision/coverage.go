@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"math/bits"
 	"sort"
 	"strings"
 	"time"
@@ -1119,6 +1120,77 @@ func cloneVectorSteering(in *model.VectorSteeringAttribution) *model.VectorSteer
 	return &out
 }
 
+// coveringActionIndex inverts one asset's immutable declared cover map once.
+// Bits represent positions rather than action values, preserving duplicate
+// actions should the canonical vocabulary ever contain them. The wide form is
+// the semantics-preserving fallback when the vocabulary grows beyond 64.
+type coveringActionIndex struct {
+	actions []model.Action
+	small   map[string]uint64
+	wide    map[string][]uint64
+}
+
+func newCoveringActionIndex(actions []model.Action, cover map[model.Action][]string) coveringActionIndex {
+	index := coveringActionIndex{actions: append([]model.Action(nil), actions...)}
+	if len(actions) <= 64 {
+		index.small = make(map[string]uint64)
+		for position, action := range actions {
+			bit := uint64(1) << position
+			for _, factKey := range cover[action] {
+				index.small[factKey] |= bit // repeated keys within one action collapse to one bit
+			}
+		}
+		return index
+	}
+	words := (len(actions) + 63) / 64
+	index.wide = make(map[string][]uint64)
+	for position, action := range actions {
+		word, bit := position/64, uint(position%64)
+		for _, factKey := range cover[action] {
+			mask := index.wide[factKey]
+			if mask == nil {
+				mask = make([]uint64, words)
+				index.wide[factKey] = mask
+			}
+			mask[word] |= uint64(1) << bit
+		}
+	}
+	return index
+}
+
+func (i coveringActionIndex) actionsFor(factKey string) []string {
+	if i.small != nil {
+		mask := i.small[factKey]
+		if mask == 0 {
+			return nil
+		}
+		out := make([]string, 0, bits.OnesCount64(mask))
+		for mask != 0 {
+			position := bits.TrailingZeros64(mask)
+			out = append(out, string(i.actions[position]))
+			mask &= mask - 1
+		}
+		return out
+	}
+	mask := i.wide[factKey]
+	count := 0
+	for _, word := range mask {
+		count += bits.OnesCount64(word)
+	}
+	if count == 0 {
+		return nil
+	}
+	out := make([]string, 0, count)
+	for wordIndex, word := range mask {
+		for word != 0 {
+			position := wordIndex*64 + bits.TrailingZeros64(word)
+			out = append(out, string(i.actions[position]))
+			word &= word - 1
+		}
+	}
+	return out
+}
+
 func (e *CoverageEngine) buildDecisionTrace(
 	v *model.WorkloadView,
 	pol model.Policy,
@@ -1259,19 +1331,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 		source = e.Recon.Name()
 	}
 	// T0-C: invert the declared cover map (ALL actions, not only enabled ones)
-	// into per-fact covering actions, in canonical order.
-	coveringActions := func(factKey string) []string {
-		var out []string
-		for _, a := range model.MutatingActions {
-			for _, k := range set.CoverByAsset[assetKey][a] {
-				if k == factKey {
-					out = append(out, string(a))
-					break
-				}
-			}
-		}
-		return out
-	}
+	// into per-fact covering actions, in canonical order. Each fact receives an
+	// owned copy so duplicate fact rows cannot alias one another or this index.
+	coveringActions := newCoveringActionIndex(model.MutatingActions, set.CoverByAsset[assetKey])
 	for _, fact := range set.FactsByAsset[assetKey] {
 		weight, presented := set.FactWeights[fact.Key()]
 		if !presented {
@@ -1294,7 +1356,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 			UrgencyContribution:    model.OptionalFloat{Present: false},
 			DispersionContribution: model.OptionalFloat{Present: false},
 			RelativeWeight:         model.OptionalFloat{Present: false},
-			CoveringActions:        coveringActions(fact.Key()),
+			CoveringActions:        coveringActions.actionsFor(fact.Key()),
 			DecompositionAvailable: false,
 			CoveredRound:           traceOptionalInt(factCovered, factCoveredRound),
 			SteeredBy:              cloneVectorSteering(fact.SteeredBy),
