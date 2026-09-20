@@ -1319,3 +1319,16 @@ fixes:
     stacked_on: []
     branch: post25-backend
     head_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+  POST25-M137-TRACE:
+    directory: fixes/POST25-M137-TRACE
+    aliases: []
+    issues:
+    - M-137
+    related_issues: []
+    state: AGREED
+    dependencies:
+    - POST25-M137
+    stacked_on:
+    - POST25-M137
+    branch: post25-catalogue
+    head_sha: 9949cba2f8bd82d2f95409f31e46e1c99ea342ea
