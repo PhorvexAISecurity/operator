@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 15
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -26,37 +26,37 @@ checks:
     result: PASS
     by: post25-catalogue
     artifact: evidence/preflight/receipt.json
-    sha256: 0a3e15e8c2185ef09965ff56eb734e176ed52f12b85fccac0a83c7acc4498766
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:11:05+00:00'
+    sha256: 9bc457414901e16237df9a877ce247ea4fa99add4b619826fa54ba6695c585a5
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:48:12+00:00'
   implementation:
     result: PASS
     by: post25-catalogue
     artifact: 04-diff.patch
-    sha256: 41eef69e57207242fc316db85f18070cd119c2e66f8c0fafb7e62988bff67108
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:11:05+00:00'
+    sha256: cb57f35e755134ebb45b7996105761284cfdcc0c396ac247f858ea4b61d46bd9
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:48:12+00:00'
   l0:
     result: PASS
     by: post25-catalogue
     artifact: evidence/preflight/receipt.json
-    sha256: 0a3e15e8c2185ef09965ff56eb734e176ed52f12b85fccac0a83c7acc4498766
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:11:05+00:00'
+    sha256: 9bc457414901e16237df9a877ce247ea4fa99add4b619826fa54ba6695c585a5
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:48:13+00:00'
     inputs:
     - build/integrations/vllm-0.7.3-reset-ack
     - build/test-harness/guardrail
     - deploy/helm/phorvex-stack
     - phorvex
     - workflow
-    inputs_sha256: bd5db056130ae41539345958dac0e548f279ed30abd2ca86c547a9edfd4dad19
+    inputs_sha256: 7d05422ba90eefa8af6c6805cfbdd703dacc9eb7b70e7f8eb3e665893fd1b1e2
   l1:
     result: PASS
     by: post25-catalogue
     artifact: evidence/post25-catalogue-r5/recipe-registry-and-packaging.log
     sha256: ccdc5f83d06e37baae0ac1d96c3de9b8e18b022ac18116dd0a22ecc7cc3c9008
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:11:05+00:00'
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:48:13+00:00'
     inputs:
     - build/integrations/vllm-0.7.3-reset-ack
     - workflow/fixes/T26-M178/evidence/lead/docker-config-sha256-a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996.json
@@ -65,44 +65,40 @@ checks:
   l2:
     result: PASS
     by: post25-catalogue
-    artifact: evidence/post25-catalogue-r5/offline-verify.log
-    sha256: ec19b54306b470f69521525d2d43030051908e52b1f799f43e1a65389c4b41d4
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:11:05+00:00'
+    artifact: evidence/post25-catalogue-r6/m064-envtest-positive.log
+    sha256: 141c3a591e79cf0cbde47674a509dbd69bf24f0e4630f321a3805e7ecbda5421
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:48:13+00:00'
     inputs:
-    - build/integrations/vllm-0.7.3-reset-ack
-    - build/test-harness/guardrail
     - phorvex/internal/actuator
-    - workflow/fixes/T26-M178/verify.sh
-    inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+    - phorvex/internal/runner
+    inputs_sha256: 39d09d9eead4f7de14c27edb1e37195ef89d9e0955bea85fdf526491c58e2c02
   positive_control:
     result: PASS
     by: post25-catalogue
-    artifact: evidence/post25-catalogue-r5/offline-verify.log
-    sha256: ec19b54306b470f69521525d2d43030051908e52b1f799f43e1a65389c4b41d4
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:11:05+00:00'
+    artifact: evidence/post25-catalogue-r6/m064-envtest-positive.log
+    sha256: 141c3a591e79cf0cbde47674a509dbd69bf24f0e4630f321a3805e7ecbda5421
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:48:13+00:00'
     inputs:
-    - build/integrations/vllm-0.7.3-reset-ack
-    - build/test-harness/guardrail
     - phorvex/internal/actuator
-    - workflow/fixes/T26-M178/verify.sh
-    inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+    - phorvex/internal/runner
+    inputs_sha256: 39d09d9eead4f7de14c27edb1e37195ef89d9e0955bea85fdf526491c58e2c02
   p3:
     result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 1a09bc873f2aa2c30c2646b6abeeb98ea9b8cbe0677e310ab3a61d27f07450e5
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:13:06+00:00'
-    incident_sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
+    sha256: 7bf480c04a3b57c45e217d85177376f6e87406407b0c9438f770b89deb755e13
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:52:31+00:00'
+    incident_sha256: 84c5468e626f16b93c97a42be11b1787ca2e2e925d452663ea4a72da8cc92bbb
   incident:
     result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
-    source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
-    at: '2026-09-20T15:13:05+00:00'
+    sha256: 84c5468e626f16b93c97a42be11b1787ca2e2e925d452663ea4a72da8cc92bbb
+    source_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
+    at: '2026-09-20T15:52:31+00:00'
     baseline_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
 fix_id: T26-M178
 issues:
@@ -133,7 +129,7 @@ blind_derivation:
 implementation:
   branch: post25-backend
   base_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
-  head_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  head_sha: 309e440e276ca4a84d961bdad61bd3a1b554136f
   stacked_on: []
 pull_request:
   url: null
@@ -173,7 +169,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-20T15:13:10+00:00'
+updated_at: '2026-09-20T15:52:35+00:00'
 follow_up_to: T14-M178
 configuration_history:
 - at: '2026-09-20T13:29:15+00:00'
@@ -209,6 +205,11 @@ configuration_history:
   - baseline
   approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 - at: '2026-09-20T15:11:05+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T15:48:12+00:00'
   by: post25-catalogue
   fields:
   - implementation
@@ -278,13 +279,46 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: PR_READY
+  to: IMPLEMENTED
+  at: '2026-09-20T15:45:17+00:00'
+  by: codex-lead
+  artifact: null
+  note: Integration exposed two stale KV positive fixtures. Prior 84c69d83 source
+    review is preserved; revised source needs a fresh handoff and review.
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T15:48:13+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T15:52:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T15:52:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T26-M178:12:review
+  id: T26-M178:15:review
   from: codex-lead
   to: codex-lead
   role: coordinator
   kind: review
-  revision: 12
+  revision: 15
 check_history:
 - check: preflight
   result: PASS
@@ -359,3 +393,85 @@ check_history:
   sha256: 8c32df46a649c0902495d202f0af15a48b9ba9a6ca9fbefc9229bb3281f91a93
   source_sha: 7ede502c013966929a671f6fdfe28c713489f246
   at: '2026-09-20T14:51:45+00:00'
+- check: preflight
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/preflight/receipt.json
+  sha256: 0a3e15e8c2185ef09965ff56eb734e176ed52f12b85fccac0a83c7acc4498766
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:11:05+00:00'
+- check: implementation
+  result: PASS
+  by: post25-catalogue
+  artifact: 04-diff.patch
+  sha256: 41eef69e57207242fc316db85f18070cd119c2e66f8c0fafb7e62988bff67108
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:11:05+00:00'
+- check: l0
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/preflight/receipt.json
+  sha256: 0a3e15e8c2185ef09965ff56eb734e176ed52f12b85fccac0a83c7acc4498766
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:11:05+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - deploy/helm/phorvex-stack
+  - phorvex
+  - workflow
+  inputs_sha256: bd5db056130ae41539345958dac0e548f279ed30abd2ca86c547a9edfd4dad19
+- check: l1
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/post25-catalogue-r5/recipe-registry-and-packaging.log
+  sha256: ccdc5f83d06e37baae0ac1d96c3de9b8e18b022ac18116dd0a22ecc7cc3c9008
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:11:05+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - workflow/fixes/T26-M178/evidence/lead/docker-config-sha256-a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996.json
+  - workflow/fixes/T26-M178/evidence/lead/docker-manifest-sha256-4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2.json
+  inputs_sha256: 14d124b40d8bf84c421b2417d18b97d741cc1b8caf25a543571299d5f924cf3d
+- check: l2
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/post25-catalogue-r5/offline-verify.log
+  sha256: ec19b54306b470f69521525d2d43030051908e52b1f799f43e1a65389c4b41d4
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:11:05+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - phorvex/internal/actuator
+  - workflow/fixes/T26-M178/verify.sh
+  inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+- check: positive_control
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/post25-catalogue-r5/offline-verify.log
+  sha256: ec19b54306b470f69521525d2d43030051908e52b1f799f43e1a65389c4b41d4
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:11:05+00:00'
+  inputs:
+  - build/integrations/vllm-0.7.3-reset-ack
+  - build/test-harness/guardrail
+  - phorvex/internal/actuator
+  - workflow/fixes/T26-M178/verify.sh
+  inputs_sha256: 9ea460c6f0608aafc271b3ebe6f3cb1e69dd0488c5f113c5b42cdfd8bfca3f27
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:13:05+00:00'
+  baseline_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 1a09bc873f2aa2c30c2646b6abeeb98ea9b8cbe0677e310ab3a61d27f07450e5
+  source_sha: 84c69d83dfa033a4516da9cc5625166104cf7247
+  at: '2026-09-20T15:13:06+00:00'
+  incident_sha256: 2963f5e49396bd88b19225a7efe93f74f36a839d0b19f493730a0e2dd87190ed
