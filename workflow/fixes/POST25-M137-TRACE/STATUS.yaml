@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -80,12 +80,28 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: 2f9efdd9747e5b11317e6b70de540bfed13032a3abb5c6471d4e2a620cb8bbd1
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e66ddcce07eee796b6fcec0028f94bda8c4e3fbe59a2d022d39492c3dc44a190
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:02:41+00:00'
+    baseline_sha: 1ce182b27269a84a8f7ecbf680cb84ddaaab6daf
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 18276086e99f7848aaf118a0aa42ff07653a57ccfd340127803971950c5b0fb7
+    source_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+    at: '2026-09-20T17:02:41+00:00'
+    incident_sha256: e66ddcce07eee796b6fcec0028f94bda8c4e3fbe59a2d022d39492c3dc44a190
 fix_id: POST25-M137-TRACE
 issues:
 - M-137
 title: Index canonical covering actions once per asset trace
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -132,7 +148,7 @@ verification:
   - L4
   live_required: true
   soak_required: true
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +168,10 @@ residuals:
   context; no full M-137 PASS.
 - Sustained deployed memory, sink latency and historical OOM cause remain unverified.
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-20T17:01:17+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T17:02:44+00:00'
 follow_up_to: POST25-M137
 configuration_history:
 - at: '2026-09-20T16:41:36+00:00'
@@ -218,10 +234,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T17:02:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T17:02:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-M137-TRACE:7:submit
-  from: post25-catalogue
+  id: POST25-M137-TRACE:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8

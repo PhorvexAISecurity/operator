@@ -1325,7 +1325,7 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies:
     - POST25-M137
     stacked_on:
