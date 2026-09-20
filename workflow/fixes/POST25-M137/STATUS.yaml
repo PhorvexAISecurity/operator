@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -22,12 +22,96 @@ checks:
     sha256: d8ad421a1cf671ff43f5b513f73e19eb6bcb87135fd1ce825e4f2e63da9054d3
     source_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
     at: '2026-09-20T14:10:21+00:00'
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: ffdc04cc83305d815dd7e4c824ec0d973f9860ba718da7383fd1e2759affdb7a
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:45:15+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 740827d3eb200ad5d4c442feeb9c0f22e6b2d24b10efc9e939ae2d2ecff527b4
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:45:15+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: ffdc04cc83305d815dd7e4c824ec0d973f9860ba718da7383fd1e2759affdb7a
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:45:15+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: c716aa51d7909db4077db011550fc832a78b14ed0a5fee2ceb9ab95b2423e91e
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue/focused.log
+    sha256: eadcd698776cdba6050f9bedd46b48b3d8fd3d2a29cf985e382738b657025ee6
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:45:15+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/model
+    - phorvex/internal/representation
+    - phorvex/internal/runner
+    - workflow/fixes/POST25-M137/verify.sh
+    inputs_sha256: 121d3ae4851e6dca6e67e2ae31c7d375f8aa1b41e0d2fae481ecd57a0200d8ce
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue/l2-capacity-boundary.txt
+    sha256: a71b9612b2612621bf5c0f7a71a748a845441f4069e07b8717d7412488418de2
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:45:15+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/model
+    - phorvex/internal/representation
+    - phorvex/internal/runner
+    - phorvex/internal/scaleprobe
+    - workflow/fixes/POST25-M137/evidence/lead
+    inputs_sha256: d8f6c94ccad1e7483b56af96b274e0e231cba64e2c09ae4c2a929f8f3b2787f8
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/post25-catalogue/sync-sink-benchmark.log
+    sha256: 2d15e168b9ae8fc4ae1357c64107b25aad205291553aa74e0f812950059f6ca8
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:45:15+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/model
+    - phorvex/internal/representation
+    inputs_sha256: 278f32468757cd680dd37f07a05393ca123cd7858f2f8dfa27c34f683843fdbe
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 08d545b0e7f09a58c4ca28dc48994a3d7452739f8fddb7677645e30a53af7c8d
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:52:17+00:00'
+    baseline_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: bf28d4823c8a47f5b42956beba336a4cc3c0a979c1edd50a4128e5ec502b7c29
+    source_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
+    at: '2026-09-20T14:52:17+00:00'
+    incident_sha256: 08d545b0e7f09a58c4ca28dc48994a3d7452739f8fddb7677645e30a53af7c8d
 fix_id: POST25-M137
 issues:
 - M-137
 title: Collapse repeated audit serialization without weakening forensic records
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -51,7 +135,7 @@ blind_derivation:
 implementation:
   branch: post25-capacity
   base_sha: 3d691f5fe15f706ae7cb962d6bdd3293be3196be
-  head_sha: null
+  head_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
   stacked_on: []
 pull_request:
   url: null
@@ -73,13 +157,13 @@ verification:
   - L4
   live_required: true
   soak_required: true
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -97,11 +181,10 @@ residuals:
 - Hard post-effect cancellation and group-commit/schema changes remain outside this
   bounded plan.
 next_action:
-  owner: post25-catalogue
-  action: Take exact-source verification handoff under own identity; preserve original
-    product authors, lead evidence and open live/capacity limits. Prior workers cannot
-    resume because agent runtime reached thread limit.
-updated_at: '2026-09-20T14:10:44+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-20T14:52:21+00:00'
 follow_up_to: T20-M137
 configuration_history:
 - at: '2026-09-20T13:14:47+00:00'
@@ -127,6 +210,11 @@ configuration_history:
   - next_action
   - roles
   approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T14:45:14+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -144,3 +232,42 @@ transitions:
   note: null
   approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-20T14:45:15+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T14:45:17+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T14:52:18+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T14:52:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-M137:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

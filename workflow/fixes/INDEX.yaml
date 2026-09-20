@@ -1301,10 +1301,10 @@ fixes:
     issues:
     - M-137
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies:
     - T20-M137
     - T24-M137-AUDIT
     stacked_on: []
     branch: post25-capacity
-    head_sha: null
+    head_sha: 46f6b6d8f4275a4f70a27f41c1bd97b2e407d96f
