@@ -88,6 +88,10 @@ type ScenarioMeta struct {
 	// ExercisedTechniqueIDs are supported by the executable mechanism. Empty is
 	// honest for marker simulations and for legacy, unassessed scenarios.
 	ExercisedTechniqueIDs []string
+	// BenignControl marks a non-adversarial executable mechanism that exists to
+	// measure one defensive side effect. It must not invent declared or exercised
+	// ATT&CK mappings merely to satisfy catalogue shape.
+	BenignControl bool
 	// Realism classifies the implementation. Empty means unassessed.
 	Realism ScenarioRealism
 	// Mechanism describes the concrete setup/stimulus/oracle under test.

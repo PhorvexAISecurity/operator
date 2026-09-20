@@ -35,6 +35,17 @@ func TestMarkerSummariesAreSeparatedFromRealPercentages(t *testing.T) {
 	}
 }
 
+func TestBenignControlsAreSeparatedFromAttackAggregates(t *testing.T) {
+	attack, marker, benign := splitControlSummaries([]ArmSummary{
+		{Scenario: "attack", Realism: core.RealismExecutable},
+		{Scenario: "marker", Realism: core.RealismMarkerSimulation},
+		{Scenario: "benign", Realism: core.RealismExecutable, BenignControl: true},
+	})
+	if len(attack) != 1 || attack[0].Scenario != "attack" || len(marker) != 1 || marker[0].Scenario != "marker" || len(benign) != 1 || benign[0].Scenario != "benign" {
+		t.Fatalf("attack=%v marker=%v benign=%v", attack, marker, benign)
+	}
+}
+
 func TestRunnerReaderRowsAreOrderIndependentAtReportBoundaries(t *testing.T) {
 	produced := r1ProducerRow(t)
 	marker := produced
@@ -63,6 +74,53 @@ func TestRunnerReaderRowsAreOrderIndependentAtReportBoundaries(t *testing.T) {
 		rendered := RenderDollars(read, DollarInputs{BaselineDefender: "d-v161-nomtd"}, 0.95)
 		if !strings.Contains(rendered, "realismExcluded=1") || !strings.Contains(rendered, "marker simulation excluded") {
 			t.Fatalf("excluded marker not disclosed:\n%s", rendered)
+		}
+	}
+}
+
+func TestBenignControlBoundaryIsOrderIndependentAndVisible(t *testing.T) {
+	produced := r1ProducerRow(t)
+	produced.ScenarioRealism = core.RealismExecutable
+	attack := produced
+	attack.Scenario = "attack"
+	benign := produced
+	benign.Scenario = "benign"
+	benign.ScenarioBenignControl = true
+
+	for _, rows := range [][]core.Metric{{attack, benign}, {benign, attack}} {
+		read := replayThroughReader(t, rows...)
+		ordinary, markers, controls := splitControlSummaries(Aggregate(read, 0.95))
+		if len(ordinary) != 1 || ordinary[0].Scenario != "attack" || len(markers) != 0 || len(controls) != 1 || controls[0].Scenario != "benign" || controls[0].Trials != 1 {
+			t.Fatalf("aggregate boundary changed by order: attack=%+v marker=%+v benign=%+v", ordinary, markers, controls)
+		}
+		filtered := ExcludeNonAttackControls(read)
+		if len(filtered) != 1 || filtered[0].Scenario != "attack" {
+			t.Fatalf("coverage filter leaked benign control: %+v", filtered)
+		}
+		economics := recomputeEconomics(read, DollarInputs{BaselineDefender: "d-v161-nomtd"})
+		var excluded, scored int
+		for _, row := range economics {
+			if row.BenignControl && row.Validity.BenignControlExcluded == 1 && !row.Economics {
+				excluded++
+			}
+			if row.Economics {
+				scored++
+			}
+		}
+		if excluded != 1 || scored != 1 {
+			t.Fatalf("economics boundary leaked benign control: %+v", economics)
+		}
+		mainReport := RenderMarkdown(read, 0.95, nil)
+		if !strings.Contains(mainReport, "Benign functional-effect controls") || !strings.Contains(mainReport, "do not enter attack-coverage or economics denominators") {
+			t.Fatalf("benign grouping not disclosed:\n%s", mainReport)
+		}
+		parts := strings.Split(mainReport, "## Honest R6 grounding")
+		if len(parts) != 2 || strings.Contains(parts[1], "**benign**") || !strings.Contains(mainReport, "### Benign functional-effect grounding") {
+			t.Fatalf("benign control leaked into R6 coverage grounding:\n%s", mainReport)
+		}
+		dollars := RenderDollars(read, DollarInputs{BaselineDefender: "d-v161-nomtd"}, 0.95)
+		if !strings.Contains(dollars, "benignControlExcluded=1") || !strings.Contains(dollars, "benign functional-effect control excluded") {
+			t.Fatalf("benign economics exclusion not disclosed:\n%s", dollars)
 		}
 	}
 }

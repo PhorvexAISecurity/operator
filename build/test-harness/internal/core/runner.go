@@ -498,6 +498,7 @@ func (r *Runner) newTrialRun(s trialSpec) *trialRun {
 			R6Tag:                 smeta.R6ResponseTag,
 			Category:              smeta.Category,
 			ScenarioRealism:       smeta.EffectiveRealism(),
+			ScenarioBenignControl: smeta.BenignControl,
 			ScenarioMechanism:     smeta.Mechanism,
 			ScenarioClaimLimits:   smeta.ClaimLimits,
 			DeclaredTechniqueIDs:  append([]string(nil), smeta.AttackTechniqueIDs...),

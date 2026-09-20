@@ -103,11 +103,15 @@ func RenderScenarioInventory(scenarios []core.Scenario) string {
 	sort.Slice(scenarios, func(i, j int) bool { return scenarios[i].Metadata().Name < scenarios[j].Metadata().Name })
 	var b strings.Builder
 	b.WriteString("# Scenario mechanism inventory\n\n")
-	b.WriteString("`marker-simulation` rows measure only their stated marker oracle. `unassessed` is the legacy default and makes no executable-coverage claim. Declared technique mappings are context until a concrete mechanism supports them.\n\n")
+	b.WriteString("`marker-simulation` rows measure only their stated marker oracle. Benign controls are executable functional-effect checks with no ATT&CK mapping and are excluded from attack-coverage aggregates. `unassessed` is the legacy default and makes no executable-coverage claim. Declared technique mappings are context until a concrete mechanism supports them.\n\n")
 	b.WriteString("| Stable ID | Status | Actual mechanism | Actual capabilities | Oracle | Cleanup | Claim limits |\n|---|---|---|---|---|---|---|\n")
 	for _, s := range scenarios {
 		m := s.Metadata()
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n", m.Name, m.EffectiveRealism(), inventoryCell(m.Mechanism), inventoryCell(fmt.Sprint(m.CapabilityRequirements)), inventoryCell(m.OracleDescription), inventoryCell(m.CleanupDescription), inventoryCell(m.ClaimLimits)))
+		status := string(m.EffectiveRealism())
+		if m.BenignControl {
+			status += " (benign control)"
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n", m.Name, status, inventoryCell(m.Mechanism), inventoryCell(fmt.Sprint(m.CapabilityRequirements)), inventoryCell(m.OracleDescription), inventoryCell(m.CleanupDescription), inventoryCell(m.ClaimLimits)))
 	}
 	return b.String()
 }

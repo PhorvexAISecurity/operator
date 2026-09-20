@@ -84,7 +84,7 @@ func listPlugins() {
 	fmt.Println("Registered scenarios:")
 	for _, s := range core.Scenarios() {
 		m := s.Metadata()
-		fmt.Printf("  - %-26s [%s] R6=%s realism=%s declared=%v exercised=%v caps=%v limits=%q\n", m.Name, m.Category, m.R6ResponseTag, m.EffectiveRealism(), m.AttackTechniqueIDs, m.ExercisedTechniqueIDs, m.CapabilityRequirements, m.ClaimLimits)
+		fmt.Printf("  - %-26s [%s] R6=%s realism=%s benign=%v declared=%v exercised=%v caps=%v limits=%q\n", m.Name, m.Category, m.R6ResponseTag, m.EffectiveRealism(), m.BenignControl, m.AttackTechniqueIDs, m.ExercisedTechniqueIDs, m.CapabilityRequirements, m.ClaimLimits)
 	}
 	fmt.Println("Registered defenders:")
 	for _, d := range core.Defenders() {
@@ -294,7 +294,7 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 
 	// Pass-B dollars / Schwartau / reusability + H1/H2/H3 view (uses the live config
 	// $ knobs and the per-arm rotation intervals from defender metadata).
-	dollarsPath, derr := report.WriteDollarsReport(outDir, "report-dollars.md", report.ExcludeMarkerSimulations(metrics), dollarInputsFromConfig(cfg), opts.CILevel)
+	dollarsPath, derr := report.WriteDollarsReport(outDir, "report-dollars.md", metrics, dollarInputsFromConfig(cfg), opts.CILevel)
 	if derr != nil {
 		fmt.Fprintf(os.Stderr, "WARN: dollars report: %v\n", derr)
 	}
