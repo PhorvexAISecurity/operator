@@ -47,7 +47,7 @@ Severity: MAJOR · Tier: 0 · Fixes: none
 
 ### M-144 · λ decays to its floor and is structurally trapped there — after a brief seed-decay, the cost stack becomes inert · **OPEN** · `ECONOMICS`
 
-Severity: MAJOR · Tier: 0 · Fixes: none
+Severity: MAJOR · Tier: 0 · Fixes: POST25-ECONOMICS
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -552,7 +552,7 @@ Severity: HIGH · Tier: 2 · Fixes: T11-M012
 
 ### M-71 · adapter-rotate: no post-unload verification; retry errors instead of no-op · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: HIGH · Tier: 2 · Fixes: none
+Severity: HIGH · Tier: 2 · Fixes: T9-M071
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
@@ -607,7 +607,7 @@ Severity: MAJOR · Tier: 3 · Fixes: T17-M109
 
 ### M-98 · C1 — the mathematical spine: value and cost are incommensurable, and λ can't fix it · **OPEN** · `ECONOMICS`
 
-Severity: HIGH · Tier: 3 · Fixes: none
+Severity: HIGH · Tier: 3 · Fixes: POST25-ECONOMICS
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -640,7 +640,7 @@ Severity: HIGH (claim validation) · Tier: 3 · Fixes: none
 
 ### M-156 · RLS prices `Unknown`/`Draining` phases at the idle floor — the learned path's cheapest rotation is the least-known pod · **OPEN** · `MATH-GATE`
 
-Severity: HIGH once active · Tier: 3 · Fixes: none
+Severity: HIGH once active · Tier: 3 · Fixes: POST25-M156
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · slo.contract
@@ -1396,7 +1396,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T3-M033
 
 ### M-35 · `endpoint-rotate`: unconditional cover, conditional effect · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T9-M035
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334

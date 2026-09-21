@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -60,7 +60,7 @@ blind_derivation:
 implementation:
   branch: post25-m054
   base_sha: ad072dc41ff4363eae650d59e630a6e842a18aa9
-  head_sha: 4ee72e22b964d4ae96e49dcb80a9cb561f1efedf
+  head_sha: f3a59f9f385add56d186f1af2999a73ed78d3f2d
   stacked_on:
   - POST25-M043
   - POST25-M103
@@ -102,7 +102,7 @@ residuals: []
 next_action:
   owner: implementer
   action: Implement signed M54 typed grace contract; reserve Go before validation
-updated_at: '2026-09-21T04:11:56+00:00'
+updated_at: '2026-09-21T04:43:14+00:00'
 configuration_history:
 - at: '2026-09-21T02:48:49+00:00'
   by: codex-lead
@@ -114,6 +114,11 @@ configuration_history:
   - verification
   approval_ref: AUTHORIZATION.md
 - at: '2026-09-21T04:08:02+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T04:43:14+00:00'
   by: post25-catalogue
   fields:
   - implementation

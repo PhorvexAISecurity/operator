@@ -1413,7 +1413,7 @@ fixes:
     - POST25-M103
     - POST25-SESSION-GVK
     branch: post25-m054
-    head_sha: 4ee72e22b964d4ae96e49dcb80a9cb561f1efedf
+    head_sha: f3a59f9f385add56d186f1af2999a73ed78d3f2d
   POST25-M103:
     directory: fixes/POST25-M103
     aliases: []
@@ -1426,3 +1426,48 @@ fixes:
     - POST25-M156
     branch: post25-m103
     head_sha: fd66a147146681b8bb67170711dc6bab4a32e42e
+  POST25-M156:
+    directory: fixes/POST25-M156
+    aliases: []
+    issues:
+    - M-156
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-m156
+    head_sha: null
+  POST25-ECONOMICS:
+    directory: fixes/POST25-ECONOMICS
+    aliases: []
+    issues:
+    - M-144
+    - M-98
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-economics
+    head_sha: null
+  T9-M035:
+    directory: fixes/T9-M035
+    aliases: []
+    issues:
+    - M-35
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t9-m035
+    head_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  T9-M071:
+    directory: fixes/T9-M071
+    aliases: []
+    issues:
+    - M-71
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t9-m071
+    head_sha: b74bc120430d1562e4b1e18a59f5d769b1820622
