@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 14
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -29,7 +29,7 @@ checks:
     artifact: evidence/incident.md
     sha256: bc68b6d0a7d6ad2483499534ef856679d4dfb7d08cf9e531d8004ee551166ba4
     source_sha: fd66a147146681b8bb67170711dc6bab4a32e42e
-    at: '2026-09-21T02:16:12+00:00'
+    at: '2026-09-21T02:26:49+00:00'
     baseline_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
   preflight:
     result: PASS
@@ -98,12 +98,20 @@ checks:
     - phorvex/internal/decision
     - phorvex/internal/runner
     inputs_sha256: e57008b9f9f75b77a6887e0bc7b4fa6ac4fe6a914761a9e369102a0579d392f4
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 9adaf48260b98ebba88b235199c8b727c406251225d041215a643fed2cca8a7e
+    source_sha: fd66a147146681b8bb67170711dc6bab4a32e42e
+    at: '2026-09-21T02:26:49+00:00'
+    incident_sha256: bc68b6d0a7d6ad2483499534ef856679d4dfb7d08cf9e531d8004ee551166ba4
 fix_id: POST25-M103
 issues:
 - M-103
 title: Enforce typed shared resource capacity across selection and outstanding actions
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -149,7 +157,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -165,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T02:23:44+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T02:26:53+00:00'
 configuration_history:
 - at: '2026-09-21T00:36:46+00:00'
   by: codex-lead
@@ -237,6 +245,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T02:26:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T02:26:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: incident
   result: PASS
@@ -254,10 +278,18 @@ check_history:
   source_sha: c496f21b8e9ae54bcd9f5f0c4a5381bf818540b6
   at: '2026-09-21T01:56:15+00:00'
   baseline_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: bc68b6d0a7d6ad2483499534ef856679d4dfb7d08cf9e531d8004ee551166ba4
+  source_sha: fd66a147146681b8bb67170711dc6bab4a32e42e
+  at: '2026-09-21T02:16:12+00:00'
+  baseline_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
 handoff:
-  id: POST25-M103:13:submit
-  from: post14-live-reviewer
+  id: POST25-M103:14:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 13
+  role: coordinator
+  kind: review
+  revision: 14
