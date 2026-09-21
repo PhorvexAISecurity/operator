@@ -753,6 +753,7 @@ jobs:
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
           V:       ${{ steps.version.outputs.version }}
+          MARKERS: ${{ steps.built.outputs.markers }}
         run: |
           # Validate before interpolating this tag into any shell command.
           [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
@@ -767,7 +768,7 @@ jobs:
              && aws eks update-kubeconfig --region "$AWS_REGION" --name phorvex-dev-eks --kubeconfig "$RUNNER_TEMP/kubeconfig" >/dev/null 2>&1 \
              && KUBECONFIG="$RUNNER_TEMP/kubeconfig" kubectl auth can-i get applications.argoproj.io -n argocd --request-timeout=15s 2>/dev/null | grep -qx yes; then
             echo "rollout waiter: direct read-only cluster access"
-            KUBECONFIG="$RUNNER_TEMP/kubeconfig" V="$V" bash deploy/argocd/wait-for-rollout.sh
+            KUBECONFIG="$RUNNER_TEMP/kubeconfig" V="$V" MARKERS="$MARKERS" bash deploy/argocd/wait-for-rollout.sh
             exit $?
           fi
           echo "::notice::rollout waiter: no direct cluster access for the CI role; using the SSH jump host"
@@ -787,7 +788,7 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS" \
             -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no \
             -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V bash -s" \
+            -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V MARKERS='$MARKERS' bash -s" \
             < deploy/argocd/wait-for-rollout.sh
 
   # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
