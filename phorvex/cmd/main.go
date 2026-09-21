@@ -42,6 +42,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/codeexec"
@@ -50,6 +51,7 @@ import (
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/epssfeed"
+	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
@@ -91,6 +93,15 @@ func main() {
 		promURL                          string
 		epssCachePath                    string
 		epssCacheRefresh                 time.Duration
+		epssAuthoritative                bool
+		epssMetadataPath                 string
+		epssCacheKey                     string
+		epssConfigMapNamespace           string
+		epssConfigMapName                string
+		epssMetadataKey                  string
+		epssAuthoritativeTimeout         time.Duration
+		epssAuthoritativeNamespaces      string
+		epssAuthoritativeDigests         string
 		epssFeed                         bool
 		epssFeedApply                    bool
 		epssFeedPartial                  bool
@@ -100,6 +111,9 @@ func main() {
 		epssFeedFIRSTURL                 string
 		epssFeedTrivy                    string
 		epssFeedTimeout                  time.Duration
+		epssFeedScopeNamespaces          string
+		epssFeedScopeDigests             string
+		epssFeedMetadataTTL              time.Duration
 		killSwitch                       bool
 		auditJSON                        string
 		operatorNS                       string
@@ -212,6 +226,15 @@ func main() {
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
 	flag.DurationVar(&epssCacheRefresh, "epss-cache-refresh", 0, "Re-read --epss-cache at this interval so a scanner pipeline that owns the ConfigMap is actually observed (0 = read once at startup, the previous behaviour). A failed read keeps the existing cache.")
+	flag.BoolVar(&epssAuthoritative, "epss-authoritative", false, "Require mounted EPSS cache and metadata to match the current ConfigMap API object before use.")
+	flag.StringVar(&epssMetadataPath, "epss-metadata", "", "[epss-authoritative] path to canonical provenance metadata beside --epss-cache.")
+	flag.StringVar(&epssCacheKey, "epss-cache-key", "epss-cache.json", "[epss-authoritative] source ConfigMap cache data key.")
+	flag.StringVar(&epssConfigMapNamespace, "epss-configmap-namespace", os.Getenv("POD_NAMESPACE"), "[epss-authoritative] namespace of the source ConfigMap.")
+	flag.StringVar(&epssConfigMapName, "epss-configmap-name", "phorvex-epss", "[epss-authoritative] source ConfigMap name.")
+	flag.StringVar(&epssMetadataKey, "epss-metadata-key", "epss-metadata.json", "EPSS provenance metadata ConfigMap key.")
+	flag.DurationVar(&epssAuthoritativeTimeout, "epss-authoritative-timeout", 5*time.Second, "Bound for each authoritative EPSS API verification.")
+	flag.StringVar(&epssAuthoritativeNamespaces, "epss-authoritative-scope-namespaces", "", "[epss-authoritative] exact namespace authority used by the producer.")
+	flag.StringVar(&epssAuthoritativeDigests, "epss-authoritative-scope-digests", "", "[epss-authoritative] exact digest authority used by the producer.")
 	flag.BoolVar(&epssFeed, "epss-feed", false, "One-shot: scan running images with Trivy, resolve CVEs through FIRST EPSS, and refresh the EPSS ConfigMap.")
 	flag.BoolVar(&epssFeedApply, "epss-feed-apply", false, "[epss-feed] apply the generated cache; false is a non-mutating dry-run.")
 	flag.BoolVar(&epssFeedPartial, "epss-feed-allow-partial", false, "[epss-feed] permit apply when an image scan fails; the default rejects partial refreshes.")
@@ -221,6 +244,9 @@ func main() {
 	flag.StringVar(&epssFeedFIRSTURL, "epss-feed-first-url", "https://api.first.org/data/v1/epss", "[epss-feed] FIRST EPSS API endpoint.")
 	flag.StringVar(&epssFeedTrivy, "epss-feed-trivy", "/trivy", "[epss-feed] path to the Trivy executable.")
 	flag.DurationVar(&epssFeedTimeout, "epss-feed-scan-timeout", 10*time.Minute, "[epss-feed] maximum duration for each image scan.")
+	flag.StringVar(&epssFeedScopeNamespaces, "epss-feed-scope-namespaces", "", "[epss-feed] comma-separated exact namespaces; requires exact digest scope.")
+	flag.StringVar(&epssFeedScopeDigests, "epss-feed-scope-digests", "", "[epss-feed] comma-separated repo@sha256 digests; requires namespace scope.")
+	flag.DurationVar(&epssFeedMetadataTTL, "epss-feed-metadata-ttl", 26*time.Hour, "[scoped epss-feed] authoritative metadata validity interval.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
 	flag.StringVar(&auditSourceAddr, "audit-source-addr", "", "Optional mTLS read-only audit listener; disabled when empty.")
@@ -333,8 +359,8 @@ func main() {
 	setupLog.Info("serving control security configured", "mode", securityMode, "bindings", len(servingSecurity.Bindings))
 
 	if epssFeed {
-		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
-			setupLog.Error(err, "epss-feed failed; last-known-good cache was not changed")
+		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssMetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests); err != nil {
+			setupLog.Error(err, "epss-feed failed; inspect the emitted result mode for the cache outcome")
 			os.Exit(1)
 		}
 		return
@@ -343,10 +369,22 @@ func main() {
 	// Seed the exploitability (EPSS/CVSS) cache from the scanner export, if wired. This makes the
 	// EPSS physics leg data-driven for BOTH the --scan path and the live operator loop; a missing/empty
 	// path leaves EPSS honest-absent (1.0). One package-level cache, seeded once at startup.
-	if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
-		setupLog.Error(err, "epss-cache load failed (continuing with EPSS honest-absent)", "path", epssCachePath)
-	} else if n := platform.EPSSLoaded(); n > 0 {
-		setupLog.Info("epss: exploitability cache seeded", "images", n, "path", epssCachePath)
+	if epssAuthoritative {
+		if epssCachePath == "" || epssMetadataPath == "" || epssCacheKey == "" || epssMetadataKey == "" || epssCacheKey == epssMetadataKey || epssConfigMapNamespace == "" || epssConfigMapName == "" || epssCacheRefresh <= 0 || epssAuthoritativeTimeout <= 0 {
+			setupLog.Error(fmt.Errorf("incomplete authoritative EPSS configuration"), "refusing to start")
+			os.Exit(2)
+		}
+		if _, err := (epssmeta.Scope{Namespaces: splitNonempty(epssAuthoritativeNamespaces), Digests: splitNonempty(epssAuthoritativeDigests)}).Canonical(); err != nil {
+			setupLog.Error(err, "invalid authoritative EPSS scope; refusing to start")
+			os.Exit(2)
+		}
+		platform.ConfigureAuthoritativeEPSSUnavailable()
+	} else {
+		if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
+			setupLog.Error(err, "epss-cache load failed (continuing with EPSS honest-absent)", "path", epssCachePath)
+		} else if n := platform.EPSSLoaded(); n > 0 {
+			setupLog.Info("epss: exploitability cache seeded", "images", n, "path", epssCachePath)
+		}
 	}
 
 	if integrationEmit {
@@ -616,7 +654,22 @@ func main() {
 	// Re-read the exploitability cache while running. Off by default: with a hand-curated
 	// ConfigMap there is nothing to observe, and a startup-only read is the honest description
 	// of that. It is turned on where a scanner pipeline owns the file (PHVX-14b).
-	if epssCachePath != "" && epssCacheRefresh > 0 {
+	if epssAuthoritative && epssCachePath != "" && epssCacheRefresh > 0 {
+		refresher := &platform.AuthoritativeEPSSRefresher{CachePath: epssCachePath, MetadataPath: epssMetadataPath,
+			Namespace: epssConfigMapNamespace, ConfigMapName: epssConfigMapName, CacheKey: epssCacheKey, MetadataKey: epssMetadataKey,
+			Scope:  epssmeta.Scope{Namespaces: splitNonempty(epssAuthoritativeNamespaces), Digests: splitNonempty(epssAuthoritativeDigests)},
+			Reader: mgr.GetAPIReader(), Interval: epssCacheRefresh, Timeout: epssAuthoritativeTimeout,
+			OnReload: func(entries int, changed bool) {
+				if changed {
+					setupLog.Info("epss: authoritative snapshot published", "images", entries)
+				}
+			},
+			OnError: func(err error) { setupLog.Error(err, "epss: authoritative refresh unavailable") }}
+		if err = mgr.Add(refresher); err != nil {
+			setupLog.Error(err, "unable to add authoritative epss refresher")
+			os.Exit(1)
+		}
+	} else if epssCachePath != "" && epssCacheRefresh > 0 {
 		refresher := &platform.EPSSRefresher{
 			Path:     epssCachePath,
 			Interval: epssCacheRefresh,
@@ -658,13 +711,17 @@ func main() {
 	}
 }
 
-func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, firstURL, trivyPath string, scanTimeout time.Duration) error {
+func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, metadataKey, firstURL, trivyPath string, scanTimeout, metadataTTL time.Duration, scopeNamespaces, scopeDigests string) error {
 	if namespace == "" {
 		return fmt.Errorf("epss-feed-namespace is required (set POD_NAMESPACE in-cluster)")
 	}
 	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
 	if err != nil {
 		return err
+	}
+	var scope *epssmeta.Scope
+	if strings.TrimSpace(scopeNamespaces) != "" || strings.TrimSpace(scopeDigests) != "" {
+		scope = &epssmeta.Scope{Namespaces: splitNonempty(scopeNamespaces), Digests: splitNonempty(scopeDigests)}
 	}
 	result, err := epssfeed.Run(ctrl.SetupSignalHandler(), epssfeed.Options{
 		Client: clientset,
@@ -673,7 +730,8 @@ func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKe
 		},
 		EPSS:      epssfeed.FIRSTClient{BaseURL: firstURL},
 		Namespace: namespace, ConfigMapName: configMapName, ConfigMapKey: configMapKey,
-		Apply: apply, AllowPartial: allowPartial,
+		Apply: apply, AllowPartial: allowPartial, InventoryScope: scope, MetadataKey: metadataKey,
+		MetadataTTL: metadataTTL, ProducerSource: buildinfo.Current().GitSHA,
 		Progress: func(image string, done, total int) {
 			if image == "" {
 				setupLog.Info("epss-feed: image scans complete", "completed", done, "total", total)
@@ -688,6 +746,16 @@ func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKe
 		}
 	}
 	return err
+}
+
+func splitNonempty(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // runIntegrationEmit proves Seam 1 without the full operator: it ensures the tenant

@@ -280,7 +280,7 @@ Severity: HIGH · Tier: 1 · Fixes: none
 
 ### M-104 · F7/C4 — EPSS: a gameable external anchor, applied at the wrong layer · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: 1 · Fixes: none
+Severity: MEDIUM · Tier: 1 · Fixes: POST25-M104-SCOPED-FEED
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.first_epss

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ACTUATOR = 'github.com/phorvex/phorvex/internal/actuator'
 RUNNER = 'github.com/phorvex/phorvex/internal/runner'
 CONTROLLER = 'github.com/phorvex/phorvex/internal/controller'
+PLATFORM = 'github.com/phorvex/phorvex/internal/platform'
 AUTHZ = 'github.com/phorvex/phorvex/internal/authz'
 STARTUPAUTHZ = 'github.com/phorvex/phorvex/internal/startupauthz'
 CONSOLE = 'github.com/phorvex/phorvex/internal/console'
@@ -64,7 +65,7 @@ class EvaluateTests(unittest.TestCase):
         self.assertTrue(required <= set(verdicts))
         self.assertEqual(len(verdicts), 3 * len(required))  # parents + two subtests each
         self.assertEqual(packages, {
-            API: 'pass', ACTUATOR: 'pass', RUNNER: 'pass', CONTROLLER: 'pass', AUTHZ: 'pass',
+            API: 'pass', ACTUATOR: 'pass', RUNNER: 'pass', CONTROLLER: 'pass', PLATFORM: 'pass', AUTHZ: 'pass',
             STARTUPAUTHZ: 'pass', CONSOLE: 'pass', CMD: 'pass',
         })
 
@@ -256,7 +257,7 @@ class SourceBindingTests(unittest.TestCase):
                 self.assertIn(test, declared, f'{test} is no longer declared in {package}')
                 self.assertEqual(len(declared[test]), 1,
                                  f'{test} has multiple Go Test declarations in {package}: {declared[test]}')
-        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 35)
+        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 36)
 
     def test_envtest_importing_test_files_are_all_inside_the_selected_packages(self):
         # Textual import scan only: it flags an envtest-bearing test file the full-package

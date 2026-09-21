@@ -60,6 +60,24 @@ spec:
         {{- if .Values.phorvex.epss.enabled }}
         - --epss-cache={{ printf "%s/%s" (.Values.phorvex.epss.mountPath | trimSuffix "/") .Values.phorvex.epss.fileName }}
         - --epss-cache-refresh={{ .Values.phorvex.epss.refreshInterval }}
+        {{- if .Values.phorvex.epss.authoritative }}
+        {{- if or (empty .Values.phorvex.epss.feed.scopeNamespaces) (empty .Values.phorvex.epss.feed.scopeDigests) }}
+        {{- fail "authoritative EPSS requires non-empty feed.scopeNamespaces and feed.scopeDigests" }}
+        {{- end }}
+        - --epss-authoritative=true
+        - --epss-metadata={{ printf "%s/%s" (.Values.phorvex.epss.mountPath | trimSuffix "/") .Values.phorvex.epss.metadataFileName }}
+        - --epss-cache-key={{ .Values.phorvex.epss.fileName }}
+        - --epss-configmap-namespace={{ .Release.Namespace }}
+        - --epss-configmap-name={{ .Values.phorvex.epss.configMapName }}
+        - --epss-metadata-key={{ .Values.phorvex.epss.metadataFileName }}
+        - --epss-authoritative-timeout={{ .Values.phorvex.epss.authoritativeTimeout }}
+        {{- if .Values.phorvex.epss.feed.scopeNamespaces }}
+        - --epss-authoritative-scope-namespaces={{ join "," .Values.phorvex.epss.feed.scopeNamespaces }}
+        {{- end }}
+        {{- if .Values.phorvex.epss.feed.scopeDigests }}
+        - --epss-authoritative-scope-digests={{ join "," .Values.phorvex.epss.feed.scopeDigests }}
+        {{- end }}
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}

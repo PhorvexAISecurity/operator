@@ -646,9 +646,13 @@ type PhysicsWitness struct {
 	// EPSSBasis says HOW the cache answered (M-141): "exact" (running digest scored),
 	// "repo-fallback" (latest scan of the same repository, flagged), "miss" (nothing —
 	// multiplier neutral, EPSSPresent=false), "" when the pod has no image identity.
-	EPSSBasis        string
-	EPSSCachedDigest string // the cache key that supplied the value (differs from ImageID on repo-fallback)
-	EPSSScanTS       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
+	EPSSBasis                                                        string
+	EPSSCachedDigest                                                 string // the cache key that supplied the value (differs from ImageID on repo-fallback)
+	EPSSScanTS                                                       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
+	EPSSFeedMode, EPSSFeedStatus                                     string
+	EPSSFeedScopeSHA256, EPSSFeedCacheSHA256, EPSSFeedMetadataSHA256 string
+	EPSSFeedConfigMapUID, EPSSFeedConfigMapResourceVersion           string
+	EPSSFeedProducerSource, EPSSFeedObservedAt, EPSSFeedExpiresAt    string
 	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
 	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
 	// learned cap accidentally.

@@ -258,21 +258,31 @@ type DecisionModelInputsV2 struct {
 	// Leakage is the model-theft gate's ACTIVITY input as actually tested (T1-A): SMOccupancy
 	// only, never allocation. Present iff SMOccupancy was measured (SMSource != ""), so an
 	// honest-absent scrape is recorded as absent rather than as an idle GPU.
-	Leakage           OptionalFloat `json:"leakage"`
-	ImageRarity       OptionalFloat `json:"imageRarity"`
-	ModelRarity       OptionalFloat `json:"modelRarity"`
-	CoResidency       OptionalFloat `json:"coResidency"`
-	CoResidencyBasis  string        `json:"coResidencyBasis,omitempty"`
-	EPSS              OptionalFloat `json:"epss"`                        // RAW exploit probability [0,1] (M-104; was the multiplier before)
-	CVSS              OptionalFloat `json:"cvss"`                        // raw base severity [0,10]
-	EPSSMultiplier    OptionalFloat `json:"epssMultiplier"`              // 1 + epss·(cvss/10) ∈ [1,2]; present only for a usable pair
-	EPSSReason        string        `json:"epssReason,omitempty"`        // absent | non-finite | invalid-domain
-	EPSSBasis         string        `json:"epssBasis,omitempty"`         // exact | repo-fallback | miss (M-141)
-	EPSSCachedDigest  string        `json:"epssCachedDigest,omitempty"`  // cache key that supplied the value
-	EPSSRunningDigest string        `json:"epssRunningDigest,omitempty"` // the pod's running ImageID
-	EPSSScanTS        string        `json:"epssScanTS,omitempty"`        // feed-run time the pair (CVE scan + EPSS score) was produced = EPSS as-of; a matched digest with an old scanTS is a stale pair
-	PhysicsScanned    bool          `json:"physicsScanned"`
-	DispersionMult    OptionalFloat `json:"dispersionMult"`
+	Leakage                          OptionalFloat `json:"leakage"`
+	ImageRarity                      OptionalFloat `json:"imageRarity"`
+	ModelRarity                      OptionalFloat `json:"modelRarity"`
+	CoResidency                      OptionalFloat `json:"coResidency"`
+	CoResidencyBasis                 string        `json:"coResidencyBasis,omitempty"`
+	EPSS                             OptionalFloat `json:"epss"`                        // RAW exploit probability [0,1] (M-104; was the multiplier before)
+	CVSS                             OptionalFloat `json:"cvss"`                        // raw base severity [0,10]
+	EPSSMultiplier                   OptionalFloat `json:"epssMultiplier"`              // 1 + epss·(cvss/10) ∈ [1,2]; present only for a usable pair
+	EPSSReason                       string        `json:"epssReason,omitempty"`        // absent | non-finite | invalid-domain
+	EPSSBasis                        string        `json:"epssBasis,omitempty"`         // exact | repo-fallback | miss (M-141)
+	EPSSCachedDigest                 string        `json:"epssCachedDigest,omitempty"`  // cache key that supplied the value
+	EPSSRunningDigest                string        `json:"epssRunningDigest,omitempty"` // the pod's running ImageID
+	EPSSScanTS                       string        `json:"epssScanTS,omitempty"`        // feed-run time the pair (CVE scan + EPSS score) was produced = EPSS as-of; a matched digest with an old scanTS is a stale pair
+	EPSSFeedMode                     string        `json:"epssFeedMode,omitempty"`
+	EPSSFeedStatus                   string        `json:"epssFeedStatus,omitempty"`
+	EPSSFeedScopeSHA256              string        `json:"epssFeedScopeSHA256,omitempty"`
+	EPSSFeedCacheSHA256              string        `json:"epssFeedCacheSHA256,omitempty"`
+	EPSSFeedMetadataSHA256           string        `json:"epssFeedMetadataSHA256,omitempty"`
+	EPSSFeedConfigMapUID             string        `json:"epssFeedConfigMapUID,omitempty"`
+	EPSSFeedConfigMapResourceVersion string        `json:"epssFeedConfigMapResourceVersion,omitempty"`
+	EPSSFeedProducerSource           string        `json:"epssFeedProducerSource,omitempty"`
+	EPSSFeedObservedAt               string        `json:"epssFeedObservedAt,omitempty"`
+	EPSSFeedExpiresAt                string        `json:"epssFeedExpiresAt,omitempty"`
+	PhysicsScanned                   bool          `json:"physicsScanned"`
+	DispersionMult                   OptionalFloat `json:"dispersionMult"`
 	// FactsAbsentReason is set when a non-finite belief/physics input meant no fact was
 	// minted for this asset (M-111): the weights are absent, not zero and not NaN.
 	FactsAbsentReason string `json:"factsAbsentReason,omitempty"`
