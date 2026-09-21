@@ -79,7 +79,8 @@ type PersistenceObservation struct {
 }
 
 // PersistenceLearningStatus is audit provenance, not an efficacy or
-// calibration claim. QualifiedLabels counts only admitted held/revoked labels.
+// calibration claim. QualifiedLabels counts raw admitted held/revoked outcomes;
+// it is not the effective conjugate pseudo-count mass, which remains capped.
 type PersistenceLearningStatus struct {
 	SchemaVersion   string       `json:"schemaVersion"`
 	Source          string       `json:"source"`

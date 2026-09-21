@@ -21,7 +21,8 @@ wire meaning changes.
 - `pHold` is authoritative. `belief` is not emitted.
 - `persistenceLearning` is optional typed provenance for independently observed
   categorical persistence labels. It names the trusted source, disposition and
-  bounded per-owner counts. `no-qualified-live-label-producer` is the initial
+  bounded per-owner raw outcome counts; those counts are distinct from the
+  conjugate store's capped effective pseudo-count mass. `no-qualified-live-label-producer` is the initial
   production state. Selection, `pHold`, dispatch acknowledgement and health do
   not populate a held or revoked label.
 - `threatPosture` and `residual` are observational under the default P1 coverage
