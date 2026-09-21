@@ -1400,3 +1400,17 @@ fixes:
     - POST25-M043
     branch: post25-session-gvk
     head_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+  POST25-M054:
+    directory: fixes/POST25-M054
+    aliases: []
+    issues:
+    - M-54
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on:
+    - POST25-M043
+    - POST25-M103
+    - POST25-SESSION-GVK
+    branch: post25-m054
+    head_sha: null

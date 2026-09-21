@@ -47,7 +47,7 @@ Severity: MAJOR · Tier: 0 · Fixes: none
 
 ### M-144 · λ decays to its floor and is structurally trapped there — after a brief seed-decay, the cost stack becomes inert · **OPEN** · `ECONOMICS`
 
-Severity: MAJOR · Tier: 0 · Fixes: POST25-ECONOMICS
+Severity: MAJOR · Tier: 0 · Fixes: none
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -607,7 +607,7 @@ Severity: MAJOR · Tier: 3 · Fixes: T17-M109
 
 ### M-98 · C1 — the mathematical spine: value and cost are incommensurable, and λ can't fix it · **OPEN** · `ECONOMICS`
 
-Severity: HIGH · Tier: 3 · Fixes: POST25-ECONOMICS
+Severity: HIGH · Tier: 3 · Fixes: none
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -640,7 +640,7 @@ Severity: HIGH (claim validation) · Tier: 3 · Fixes: none
 
 ### M-156 · RLS prices `Unknown`/`Draining` phases at the idle floor — the learned path's cheapest rotation is the least-known pod · **OPEN** · `MATH-GATE`
 
-Severity: HIGH once active · Tier: 3 · Fixes: POST25-M156
+Severity: HIGH once active · Tier: 3 · Fixes: none
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · slo.contract
@@ -951,7 +951,7 @@ Severity: HIGH · Tier: parallel · Fixes: T6-M052
 
 ### M-54 · rotate honors the pod's own grace period · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M054
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -1941,7 +1941,7 @@ Severity: HIGH · Tier: parallel · Fixes: POST25-M137, POST25-M137-TRACE, T20-M
 
 ### M-103 · F6b — the per-tick move budget rate-limits the defender, not the attacker · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: parallel · Fixes: POST25-M103
+Severity: MEDIUM · Tier: parallel · Fixes: none
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
