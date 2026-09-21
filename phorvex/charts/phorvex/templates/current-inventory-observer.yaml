@@ -1,0 +1,95 @@
+{{- if .Values.phorvex.lossHistory.currentInventory.observer.enabled }}
+{{- if not .Values.phorvex.lossHistory.currentInventory.enabled }}{{ fail "currentInventory.observer.enabled requires currentInventory.enabled" }}{{- end }}
+{{- $o := .Values.phorvex.lossHistory.currentInventory.observer -}}
+{{- if ne $o.policyNamespace $o.targetNamespace }}{{ fail "current inventory observer policyNamespace must equal targetNamespace" }}{{- end }}
+{{- $name := printf "%s-current-inventory-observer" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- $jobName := printf "%s-%s" ($name | trunc 54 | trimSuffix "-") (toJson $o | sha256sum | trunc 8) -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: {{ $name }}, namespace: {{ .Release.Namespace }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: {{ $name }}}
+rules:
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: {{ $name }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ $name }}}
+subjects:
+- {kind: ServiceAccount, name: {{ $name }}, namespace: {{ .Release.Namespace }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $name }}, namespace: {{ required "current inventory targetNamespace required" $o.targetNamespace }}}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  resources: ["replicasets", "deployments", "statefulsets", "daemonsets"]
+  verbs: ["get"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $name }}, namespace: {{ $o.targetNamespace }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $name }}}
+subjects:
+- {kind: ServiceAccount, name: {{ $name }}, namespace: {{ .Release.Namespace }}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: {{ $jobName }}, namespace: {{ .Release.Namespace }}}
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $name }}
+      containers:
+      - name: observer
+        image: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+        imagePullPolicy: {{ .Values.phorvex.image.pullPolicy }}
+        command: ["/current-inventory-observer"]
+        args:
+        - --target-namespace={{ $o.targetNamespace }}
+        - --target-name={{ required "current inventory targetName required" $o.targetName }}
+        - --target-uid={{ required "current inventory targetUID required" $o.targetUID }}
+        - --policy-namespace={{ required "current inventory policyNamespace required" $o.policyNamespace }}
+        - --policy-name={{ required "current inventory policyName required" $o.policyName }}
+        - --manifest-url={{ required "current inventory manifestURL required" $o.manifestURL }}
+        - --server-name={{ required "current inventory serverName required" $o.serverName }}
+        - --ca-file=/etc/current-inventory-ca/ca.crt
+        - --client-cert-file=/etc/current-inventory-client/tls.crt
+        - --client-key-file=/etc/current-inventory-client/tls.key
+        - --configmap-name={{ required "current inventory configMapName required" $o.configMapName }}
+        - --configmap-key={{ required "current inventory configMapKey required" $o.configMapKey }}
+        - --volume-name={{ required "current inventory volumeName required" $o.volumeName }}
+        - --container-name={{ required "current inventory containerName required" $o.containerName }}
+        - --mount-path={{ required "current inventory mountPath required" $o.mountPath }}
+        - --projected-path={{ required "current inventory projectedPath required" $o.projectedPath }}
+        - --protected-asset={{ required "current inventory protectedAsset required" $o.protectedAsset }}
+        - --protected-version={{ required "current inventory protectedVersion required" $o.protectedVersion }}
+        - --protected-property={{ required "current inventory protectedProperty required" $o.protectedProperty }}
+        - --evidence-id={{ required "current inventory evidenceID required" $o.evidenceID }}
+        - --rule-sha256={{ required "current inventory ruleSHA256 required" $o.ruleSHA256 }}
+        - --observer-identity=system:serviceaccount:{{ .Release.Namespace }}:{{ $name }}
+        - --ttl={{ $o.ttl }}
+        - --timeout={{ $o.timeout }}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: ["ALL"]}}
+        volumeMounts:
+        - {name: serving-ca, mountPath: /etc/current-inventory-ca, readOnly: true}
+        - {name: observer-client, mountPath: /etc/current-inventory-client, readOnly: true}
+      volumes:
+      - name: serving-ca
+        secret: {secretName: {{ required "current inventory caSecretName required" $o.caSecretName }}}
+      - name: observer-client
+        secret: {secretName: {{ required "current inventory clientSecretName required" $o.clientSecretName }}}
+{{- end }}

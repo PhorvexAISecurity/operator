@@ -205,7 +205,7 @@ def transaction(w, args, mode):
                 w.validate_schema_instance('evidence-manifest.schema.json', w.load_yaml(fix/'evidence/manifest.yaml'), args.fix_id, errors)
                 if errors: raise ValueError('; '.join(errors))
                 w.write_yaml(fix/'STATUS.yaml',status)
-                w.write_yaml(w.FIXES/'INDEX.yaml',w.synchronized_index(w.load_yaml(w.FIXES/'INDEX.yaml')))
+                w.refresh_fix_index()
             print(f'{args.fix_id}: {status["state"]}; revision={status["revision"]}; next={owner}')
         if not args.no_notify: print(notification(w,args.fix_id,args.by))
         return 0

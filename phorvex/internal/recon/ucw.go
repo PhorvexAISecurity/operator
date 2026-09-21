@@ -79,10 +79,10 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	pHold, _ := clamp01(fctx.PHold) // finite: standardRecon validated the inputs above
 	base := fctx.AssetValue * pHold
 	if base <= 0 {
-		base = 0.001 * pHold
+		base = minimumHeldAssetWeight * pHold
 	}
 	stageUrg, _ := clamp01(fctx.StageUrgency)
-	urg := 0.5 + 0.5*stageUrg
+	urg := stageUrgencyBase + stageUrgencySpan*stageUrg
 
 	// AI recon facts are scoped to three independent producer witnesses: a declared model,
 	// an explicit serving context, and an actual GPU resource. Cover is granted per physical mechanism,
@@ -151,8 +151,8 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// fact dominant while preserving zero weight at zero PHold and finite policy scaling.
 	if view.Pod.HasBoundAdapterObservation() {
 		o := view.Pod.AdapterObservation
-		ai := Fact{Scope: ScopePod, Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
-		ai.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorAdapter, AppliedMultiplier: 3.0,
+		ai := Fact{Scope: ScopePod, Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * vectorDominance}
+		ai.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorAdapter, AppliedMultiplier: vectorDominance,
 			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorAdapter,
 				TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID, AdapterName: o.AdapterName}}}
 		af.Facts = append(af.Facts, ai)

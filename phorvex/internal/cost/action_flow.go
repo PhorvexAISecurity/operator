@@ -56,6 +56,10 @@ const (
 	estimatedServingLoadSpan  = 0.10
 	estimatedLightweightFlow  = 0.02
 	unknownActionFlowMax      = model.CFlowMaximum
+	quarantineBase            = 0.25
+	quarantineConnectionSpan  = 0.15
+	requestRateNormalizer     = 200.0
+	connectionCountNormalizer = 100.0
 
 	// Twenty paired samples on Qwen2.5-7B-Instruct-AWQ/vLLM 0.7.3 measured an
 	// idle cached median TTFT of 325.196 ms and first-post-reset median TTFT of
@@ -102,10 +106,10 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 	case flowRespawn:
 		return c.respawnFlow(view, action).Effective
 	case flowQuarantine:
-		flow := 0.25
+		flow := quarantineBase
 		// cAdvisor ConnCount is infra-universal; gate on its own usability, not any-signal.
 		if view.Telemetry.ConnCount.Usable() {
-			flow += 0.15 * sat(view.Telemetry.ConnCount.Value/100.0)
+			flow += quarantineConnectionSpan * sat(view.Telemetry.ConnCount.Value/connectionCountNormalizer)
 		}
 		return flow
 	case flowCutover:
@@ -190,10 +194,10 @@ func servingLoadPressure(view *model.WorkloadView) float64 {
 	// Per-signal gates: an absent app signal contributes 0 pressure, never a measured zero.
 	req, conn := 0.0, 0.0
 	if view.Telemetry.ReqRate.Usable() {
-		req = sat(view.Telemetry.ReqRate.Value / 200.0)
+		req = sat(view.Telemetry.ReqRate.Value / requestRateNormalizer)
 	}
 	if view.Telemetry.ConnCount.Usable() {
-		conn = sat(view.Telemetry.ConnCount.Value / 100.0)
+		conn = sat(view.Telemetry.ConnCount.Value / connectionCountNormalizer)
 	}
 	return maxf(req, conn)
 }

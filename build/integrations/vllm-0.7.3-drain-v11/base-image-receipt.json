@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "repository": "vllm/vllm-openai",
+  "tag": "v0.7.3",
+  "manifest": {
+    "status": 200,
+    "media_type": "application/vnd.docker.distribution.manifest.v2+json",
+    "digest": "sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2",
+    "body_sha256": "4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2",
+    "config_digest": "sha256:a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996"
+  },
+  "config": {
+    "status": 200,
+    "digest": "sha256:a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996",
+    "body_sha256": "a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996",
+    "os": "linux",
+    "architecture": "amd64"
+  },
+  "retained_evidence": {
+    "manifest": "docker-manifest-sha256-4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2.json",
+    "config": "docker-config-sha256-a0b3e59739e948620f54cdd8a1a0ba3901199caf586267e8b17f5146a92ce996.json"
+  }
+}

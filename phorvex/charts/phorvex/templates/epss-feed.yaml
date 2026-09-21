@@ -1,12 +1,21 @@
 {{- if and .Values.phorvex.epss.enabled .Values.phorvex.epss.feed.enabled }}
 {{- $name := printf "%s-epss-feed" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- if or (and .Values.phorvex.epss.feed.scopeNamespaces (empty .Values.phorvex.epss.feed.scopeDigests)) (and .Values.phorvex.epss.feed.scopeDigests (empty .Values.phorvex.epss.feed.scopeNamespaces)) }}
+{{- fail "scoped EPSS feed requires both scopeNamespaces and scopeDigests" }}
+{{- end }}
+{{- if and .Values.phorvex.epss.feed.registryAuth.enabled (or (empty .Values.phorvex.epss.feed.registryAuth.secretName) (empty .Values.phorvex.epss.feed.registryAuth.secretKey) (empty .Values.phorvex.epss.feed.registryAuth.registries)) }}
+{{- fail "EPSS registry authentication requires secretName, secretKey, and exact registries" }}
+{{- end }}
+{{- if and (not .Values.phorvex.epss.feed.registryAuth.enabled) (or .Values.phorvex.epss.feed.registryAuth.secretName .Values.phorvex.epss.feed.registryAuth.registries) }}
+{{- fail "EPSS registry authentication values require registryAuth.enabled=true" }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $name }}
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ $.Release.Namespace }}
   labels:
-    {{- include "phorvex.labels" . | nindent 4 }}
+    {{- include "phorvex.labels" $ | nindent 4 }}
     app.kubernetes.io/component: epss-feed
   {{- with .Values.phorvex.epss.feed.serviceAccount.annotations }}
   annotations:
@@ -14,6 +23,40 @@ metadata:
   {{- end }}
 ---
 # Inventory only. The feed cannot mutate workloads or read Secrets.
+{{- if .Values.phorvex.epss.feed.scopeNamespaces }}
+{{- range $i, $namespace := .Values.phorvex.epss.feed.scopeNamespaces }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-pods-%d" $name $i | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-pods-%d" $name $i | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-pods-%d" $name $i | trunc 63 | trimSuffix "-" }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+---
+{{- end }}
+{{- else }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -42,6 +85,7 @@ subjects:
   name: {{ $name }}
   namespace: {{ .Release.Namespace }}
 ---
+{{- end }}
 # Kubernetes cannot resourceName-restrict list/create, so the chart bootstraps the
 # ConfigMap and grants this ServiceAccount only get/update on that exact object.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -138,9 +182,21 @@ spec:
             - --epss-feed-namespace={{ .Release.Namespace }}
             - --epss-feed-configmap={{ .Values.phorvex.epss.configMapName }}
             - --epss-feed-key={{ .Values.phorvex.epss.fileName }}
+            - --epss-metadata-key={{ .Values.phorvex.epss.metadataFileName }}
+            - --epss-feed-metadata-ttl={{ .Values.phorvex.epss.feed.metadataTTL }}
+            {{- if .Values.phorvex.epss.feed.scopeNamespaces }}
+            - --epss-feed-scope-namespaces={{ join "," .Values.phorvex.epss.feed.scopeNamespaces }}
+            {{- end }}
+            {{- if .Values.phorvex.epss.feed.scopeDigests }}
+            - --epss-feed-scope-digests={{ join "," .Values.phorvex.epss.feed.scopeDigests }}
+            {{- end }}
             - --epss-feed-first-url={{ .Values.phorvex.epss.feed.firstURL }}
             - --epss-feed-trivy={{ .Values.phorvex.epss.feed.trivyPath }}
             - --epss-feed-scan-timeout={{ .Values.phorvex.epss.feed.scanTimeout }}
+            {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
+            - --epss-feed-registry-auth-file=/var/run/secrets/phorvex-epss-registry-auth/config.json
+            - --epss-feed-registry-auth-registries={{ join "," .Values.phorvex.epss.feed.registryAuth.registries }}
+            {{- end }}
             env:
             - name: POD_NAMESPACE
               valueFrom:
@@ -162,11 +218,25 @@ spec:
             - name: trivy-bin
               mountPath: /tools
               readOnly: true
+            {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
+            - name: registry-auth
+              mountPath: /var/run/secrets/phorvex-epss-registry-auth
+              readOnly: true
+            {{- end }}
           volumes:
           - name: trivy-cache
             emptyDir: {}
           - name: trivy-bin
             emptyDir: {}
+          {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
+          - name: registry-auth
+            secret:
+              secretName: {{ .Values.phorvex.epss.feed.registryAuth.secretName | quote }}
+              defaultMode: 0440
+              items:
+              - key: {{ .Values.phorvex.epss.feed.registryAuth.secretKey | quote }}
+                path: config.json
+          {{- end }}
           {{- with .Values.phorvex.epss.feed.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
@@ -180,4 +250,3 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
 {{- end }}
-

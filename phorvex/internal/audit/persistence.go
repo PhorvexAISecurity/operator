@@ -13,7 +13,12 @@ var persistenceErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "Observed failed audit record persistence attempts, not a census of missing records.",
 })
 
-func init() { crmetrics.Registry.MustRegister(persistenceErrors) }
+var parameterMaterialErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "phorvex_audit_parameter_material_errors_total",
+	Help: "Observed unavailable or failed exact parameter-material retention attempts.",
+}, []string{"outcome"})
+
+func init() { crmetrics.Registry.MustRegister(persistenceErrors, parameterMaterialErrors) }
 
 // writeRecord serializes routing, writing, flushing and synchronization in this
 // process. Only sinks exposing Sync can acknowledge synchronized persistence.

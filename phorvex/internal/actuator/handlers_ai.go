@@ -270,6 +270,8 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if !servingLegacy {
 		bindingDigest = ec.ServingAttempt.digest
+	} else if ec.ServingSecurity != nil || ec.VLLM == nil {
+		return HandlerResult{}, fmt.Errorf("%s: operation-bound drain v11 requires secure serving credentials", kind)
 	}
 	authoritySeed := operationReceipt{Kind: kind, PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID}
 	admittedPolicy, err := receiptAuthority(ctx, ec.Reader, authoritySeed, req.Action)
@@ -280,7 +282,11 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if admittedFloor <= 0 || admittedFloor > int(pool.Desired) || admittedFloor > len(selectedUIDs) {
 		return HandlerResult{}, fmt.Errorf("%s: availability floor %d cannot be admitted by recorded serving set size %d", kind, admittedFloor, len(selectedUIDs))
 	}
-	receipt := operationReceipt{Version: warmDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: oldEndpointDigest, NewEndpointConfigSHA256: newEndpointDigest, WarmSelectedUIDs: selectedUIDs, AdmittedFloor: admittedFloor}
+	drainReceipt, _, err := prepareDrainV11(ctx, ec, req, leader, pool.ServiceUID, 3*time.Minute)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: operation-bound drain capability: %w", kind, err)
+	}
+	receipt := operationReceipt{Version: operationDrainReceiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount, ServingLegacy: servingLegacy, EndpointConfigSHA256: oldEndpointDigest, NewEndpointConfigSHA256: newEndpointDigest, WarmSelectedUIDs: selectedUIDs, AdmittedFloor: admittedFloor, DrainV11: drainReceipt}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}
@@ -437,6 +443,13 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	freshOld, _, err = warmDrainProspectiveRouteCurrent(ctx, ec, receipt)
 	if err != nil {
 		return partial, fmt.Errorf("%s: route/authority changed before confirmed retirement: %w", kind, err)
+	}
+	if err := ensureWarmDrainV11Current(ctx, ec, journal, &receipt, freshOld); err != nil {
+		return partial, fmt.Errorf("%s: backend incarnation changed before confirmed retirement: %w", kind, err)
+	}
+	freshOld, _, err = warmDrainProspectiveRouteCurrent(ctx, ec, receipt)
+	if err != nil {
+		return partial, fmt.Errorf("%s: route/authority changed after backend revalidation: %w", kind, err)
 	}
 	leader = freshOld
 	// [M-69] The Delete is bound to the UID of the leader object observed above (API-enforced

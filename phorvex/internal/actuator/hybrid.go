@@ -115,24 +115,75 @@ func (p RoutePreparation) ForAction(a model.Action) error {
 // selector leaves native actions available, while a Phoenix-routed action sees
 // the refusal through the preparation result.
 func (h *HybridActuator) PrepareRoutes(ctx context.Context, target TenantTarget) RoutePreparation {
-	prep := RoutePreparation{PhoenixSkipped: true, NativeSkipped: true}
-	for a, enabled := range target.EnabledActions {
+	return h.ReconcileStandingPolicy(ctx, target).Preparation
+}
+
+func requiredStandingRoutes(target TenantTarget) (phoenix, native bool) {
+	// Nil retains the documented default rotate+quarantine set. An explicit
+	// policy map remains authoritative, including declared/manual actions outside
+	// MutatingActions that still route through the native adapter.
+	if target.EnabledActions == nil {
+		return true, true // default quarantine uses Phoenix; bounded rotate uses native
+	}
+	for action, enabled := range target.EnabledActions {
 		if !enabled {
 			continue
 		}
-		if RouteFor(BackendHybrid, a) == BackendPhoenix {
-			prep.PhoenixSkipped = false
+		if RouteFor(BackendHybrid, action) == BackendPhoenix {
+			phoenix = true
 		} else {
-			prep.NativeSkipped = false
+			native = true
 		}
 	}
-	if !prep.PhoenixSkipped {
-		prep.PhoenixErr = h.phoenix.EnsurePolicy(ctx, target)
+	return phoenix, native
+}
+
+func initialHybridMaintenance() PolicyMaintenanceResult {
+	return PolicyMaintenanceResult{
+		Preparation: RoutePreparation{PhoenixSkipped: true, NativeSkipped: true},
+		Phoenix:     PolicyRouteMaintenance{State: PolicyMaintenanceNotRequired, Detail: "Phoenix route not required"},
+		Native:      PolicyRouteMaintenance{State: PolicyMaintenanceNotRequired, Detail: "native route not required"},
 	}
-	if !prep.NativeSkipped {
-		prep.NativeErr = h.native.EnsurePolicy(ctx, target)
+}
+
+// ObserveStandingPolicy checks only the applicable backends and never repairs
+// their state. It is safe under dry-run, namespace brake and kill switch.
+func (h *HybridActuator) ObserveStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult {
+	result := initialHybridMaintenance()
+	phoenixRequired, nativeRequired := requiredStandingRoutes(target)
+	if phoenixRequired {
+		observed := h.phoenix.ObserveStandingPolicy(ctx, target)
+		result.Preparation.PhoenixSkipped = false
+		result.Preparation.PhoenixErr = observed.Preparation.PhoenixErr
+		result.Phoenix = observed.Phoenix
 	}
-	return prep
+	if nativeRequired {
+		observed := h.native.ObserveStandingPolicy(ctx, target)
+		result.Preparation.NativeSkipped = false
+		result.Preparation.NativeErr = observed.Preparation.NativeErr
+		result.Native = observed.Native
+	}
+	return result
+}
+
+// ReconcileStandingPolicy repairs each applicable backend independently so a
+// Phoenix refusal cannot suppress a valid native route.
+func (h *HybridActuator) ReconcileStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult {
+	result := initialHybridMaintenance()
+	phoenixRequired, nativeRequired := requiredStandingRoutes(target)
+	if phoenixRequired {
+		maintained := h.phoenix.ReconcileStandingPolicy(ctx, target)
+		result.Preparation.PhoenixSkipped = false
+		result.Preparation.PhoenixErr = maintained.Preparation.PhoenixErr
+		result.Phoenix = maintained.Phoenix
+	}
+	if nativeRequired {
+		maintained := h.native.ReconcileStandingPolicy(ctx, target)
+		result.Preparation.NativeSkipped = false
+		result.Preparation.NativeErr = maintained.Preparation.NativeErr
+		result.Native = maintained.Native
+	}
+	return result
 }
 
 // Actuate routes quarantine to Phoenix and bounded rotate plus all remaining actions to
@@ -152,6 +203,7 @@ func (h *HybridActuator) RetirePolicyBinding(policyUID string) {
 
 // compile-time guard: the hybrid satisfies the Actuator contract.
 var (
-	_ Actuator               = (*HybridActuator)(nil)
-	_ PolicyBindingLifecycle = (*HybridActuator)(nil)
+	_ Actuator                 = (*HybridActuator)(nil)
+	_ PolicyBindingLifecycle   = (*HybridActuator)(nil)
+	_ StandingPolicyMaintainer = (*HybridActuator)(nil)
 )

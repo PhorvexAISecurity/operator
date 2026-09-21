@@ -233,7 +233,7 @@ func warmPoolCapture(ctx context.Context, reader client.Reader, old, next *corev
 }
 
 func warmPoolRecheck(ctx context.Context, reader client.Reader, r operationReceipt, old, next *corev1.Pod) error {
-	if (r.Version != 2 && r.Version != warmSecureReceiptVersion && r.Version != warmDrainReceiptVersion) || r.Pool == nil {
+	if (r.Version != 2 && r.Version != warmSecureReceiptVersion && r.Version != warmDrainReceiptVersion && r.Version != operationDrainReceiptVersion) || r.Pool == nil {
 		return fmt.Errorf("warm pool receipt intent unavailable")
 	}
 	if reader == nil {

@@ -51,31 +51,43 @@ type RepresentationAmount struct {
 }
 
 type RepresentationFact struct {
-	Key                 string         `json:"key"` // original recon key; Tenant provides qualification
-	Kind                string         `json:"kind"`
-	Scope               ProtectedScope `json:"scope"`
-	RuleVersion         string         `json:"ruleVersion"`
-	ObservationRef      string         `json:"observationRef"`
-	ReversibleCondition string         `json:"reversibleCondition"`
-	Reason              string         `json:"reason,omitempty"`
-	Actionability       []string       `json:"actionability"`
+	Key                 string                      `json:"key"` // original recon key; Tenant provides qualification
+	Kind                string                      `json:"kind"`
+	Scope               ProtectedScope              `json:"scope"`
+	RuleVersion         string                      `json:"ruleVersion"`
+	ObservationRef      string                      `json:"observationRef"`
+	ReversibleCondition string                      `json:"reversibleCondition"`
+	Reason              string                      `json:"reason,omitempty"`
+	Actionability       []string                    `json:"actionability"`
+	CurrentInventory    *CurrentInventoryProvenance `json:"currentInventory,omitempty"`
 }
 
 // LossWitness is an already-bound evidence record supplied by a trusted adapter,
 // not a SecurityEvent/source string. Nonempty references are necessary, not a
 // substitute for independent review of the referenced event-to-outcome rule.
 type LossWitness struct {
-	Scope                           ProtectedScope `json:"scope"`
-	EventRef                        string         `json:"eventRef"`
-	EventTime                       string         `json:"eventTime"`
-	IngestionTime                   string         `json:"ingestionTime"`
-	AuthenticatedIdentity           string         `json:"authenticatedIdentity"`
-	TrustAtIngestionRef             string         `json:"trustAtIngestionRef"`
-	RuleVersion                     string         `json:"ruleVersion"`
-	PayloadPredicateRef             string         `json:"payloadPredicateRef"`
-	CompletedUnauthorizedOutcomeRef string         `json:"completedUnauthorizedOutcomeRef"`
-	IrreversibilitySemantics        string         `json:"irreversibilitySemantics"`
-	ClassificationRef               string         `json:"classificationRef"`
+	SchemaVersion                   string                    `json:"schemaVersion,omitempty"`
+	EvidenceID                      string                    `json:"evidenceID,omitempty"`
+	PolicyEpoch                     *PolicyEpoch              `json:"policyEpoch,omitempty"`
+	DecisionAsset                   *DecisionAssetIdentity    `json:"decisionAsset,omitempty"`
+	ImmediateController             *ObjectIdentity           `json:"immediateController,omitempty"`
+	StableWorkloadOwner             *ObjectIdentity           `json:"stableWorkloadOwner,omitempty"`
+	Classification                  *DisclosureClassification `json:"classification,omitempty"`
+	Observation                     *DisclosureObservation    `json:"observation,omitempty"`
+	CanonicalPayloadSHA256          string                    `json:"canonicalPayloadSHA256,omitempty"`
+	SecurityEventUID                string                    `json:"securityEventUID,omitempty"`
+	Scope                           ProtectedScope            `json:"scope"`
+	EventRef                        string                    `json:"eventRef"`
+	EventTime                       string                    `json:"eventTime"`
+	AdmissionTime                   string                    `json:"admissionTime,omitempty"`
+	IngestionTime                   string                    `json:"ingestionTime"`
+	AuthenticatedIdentity           string                    `json:"authenticatedIdentity"`
+	TrustAtIngestionRef             string                    `json:"trustAtIngestionRef"`
+	RuleVersion                     string                    `json:"ruleVersion"`
+	PayloadPredicateRef             string                    `json:"payloadPredicateRef"`
+	CompletedUnauthorizedOutcomeRef string                    `json:"completedUnauthorizedOutcomeRef"`
+	IrreversibilitySemantics        string                    `json:"irreversibilitySemantics"`
+	ClassificationRef               string                    `json:"classificationRef"`
 }
 
 type RetainedLoss struct {
@@ -108,30 +120,33 @@ type RepresentationCovers struct {
 // copies source bindings before actuation and appends dispatch evidence afterward. It must
 // never be passed back into the optimizer. Claim retains record-time metadata.
 type RepresentationSnapshot struct {
-	Ref                    string                `json:"ref"`
-	Scope                  ProtectedScope        `json:"scope"`
-	Aggregation            string                `json:"aggregation"` // per-decision or fleet-union
-	PopulationVersion      string                `json:"populationVersion"`
-	InventoryComplete      bool                  `json:"inventoryComplete"`
-	ClassificationComplete bool                  `json:"classificationComplete"`
-	Claim                  *ClaimScope           `json:"claim"`
-	DetectorBasis          string                `json:"detectorBasis"`
-	CapabilityStatus       string                `json:"capabilityStatus"`
-	CapabilityVersion      string                `json:"capabilityVersion"`
-	UnresolvedEntries      []RepresentationGap   `json:"unresolvedEntries"`
-	UnknownKinds           []RepresentationGap   `json:"unknownKinds"`
-	Facts                  []RepresentationFact  `json:"facts"`
-	Weights                RepresentationWeights `json:"weights"`
-	ActionBasis            string                `json:"actionBasis"`
-	Covers                 RepresentationCovers  `json:"covers"`
-	Candidates             RepresentationCovers  `json:"candidates"`
-	HistoryStatus          string                `json:"historyStatus"`
-	LossMappingVersion     string                `json:"lossMappingVersion"`
-	DispatchEvidence       string                `json:"dispatchEvidence"`
-	LossAssessment         string                `json:"lossAssessment"`
-	History                []RetainedLoss        `json:"history"`
-	Witnesses              []LossWitness         `json:"witnesses"`
-	Limitations            []string              `json:"limitations"`
+	Ref                     string                `json:"ref"`
+	Scope                   ProtectedScope        `json:"scope"`
+	Aggregation             string                `json:"aggregation"` // per-decision or fleet-union
+	PopulationVersion       string                `json:"populationVersion"`
+	InventoryComplete       bool                  `json:"inventoryComplete"`
+	ClassificationComplete  bool                  `json:"classificationComplete"`
+	Claim                   *ClaimScope           `json:"claim"`
+	DetectorBasis           string                `json:"detectorBasis"`
+	CapabilityStatus        string                `json:"capabilityStatus"`
+	CapabilityVersion       string                `json:"capabilityVersion"`
+	UnresolvedEntries       []RepresentationGap   `json:"unresolvedEntries"`
+	UnknownKinds            []RepresentationGap   `json:"unknownKinds"`
+	Facts                   []RepresentationFact  `json:"facts"`
+	Weights                 RepresentationWeights `json:"weights"`
+	ActionBasis             string                `json:"actionBasis"`
+	Covers                  RepresentationCovers  `json:"covers"`
+	Candidates              RepresentationCovers  `json:"candidates"`
+	HistoryStatus           string                `json:"historyStatus"`
+	HistoryPolicyUID        string                `json:"historyPolicyUID,omitempty"`
+	HistoryPolicyGeneration int64                 `json:"historyPolicyGeneration,omitempty"`
+	HistoryStableOwnerUID   string                `json:"historyStableOwnerUID,omitempty"`
+	LossMappingVersion      string                `json:"lossMappingVersion"`
+	DispatchEvidence        string                `json:"dispatchEvidence"`
+	LossAssessment          string                `json:"lossAssessment"`
+	History                 []RetainedLoss        `json:"history"`
+	Witnesses               []LossWitness         `json:"witnesses"`
+	Limitations             []string              `json:"limitations"`
 }
 
 type ReportedFact struct {

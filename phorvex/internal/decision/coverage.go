@@ -67,6 +67,15 @@ type CoverageEngine struct {
 	// inherit it rather than starting to learn behind the operator's back.
 	calibrationFrozen bool
 
+	// PersistenceAuthority is the separately trusted observed-outcome boundary.
+	// It is intentionally nil in the initial production delivery: optimizer
+	// selections, action acknowledgements, and detector inputs are not labels.
+	PersistenceAuthority PersistenceObservationAuthority
+	// scopedOutcomes retains reporting-only synthetic session outcomes. It is a
+	// pointer so shadow/sensitivity copies share one read-only snapshot instead of
+	// copying a mutex or allocating counterfactual state.
+	scopedOutcomes *scopedOutcomeStore
+
 	// Capability is the T1-E capability gate, set per tick by the runner (which holds the
 	// snapshot + actuator + SSAR checker to build the witness). nil = gate off (legacy /
 	// tests): the generator then falls back to the pre-T1-E empty-cover check only.
@@ -358,6 +367,7 @@ func (e *CoverageEngine) ForgetOwner(owner string) {
 	delete(e.costByOwner, owner)
 	delete(e.bucketMeta, owner)
 	delete(e.live, owner)
+	e.retireScopedOutcomeOwner(owner)
 	if e.Killchain != nil {
 		if e.Killchain.Memory != nil {
 			e.Killchain.Memory.Forget(owner)
@@ -484,7 +494,7 @@ func (e *CoverageEngine) ObserveRotation(owner string, view *model.WorkloadView,
 // NewCoverageEngine builds the engine from the registered defaults + fresh stateful
 // calibrators.
 func NewCoverageEngine() *CoverageEngine {
-	e := &CoverageEngine{Killchain: killchain.NewModel(), Cost: cost.NewP1Cost()}
+	e := &CoverageEngine{Killchain: killchain.NewModel(), Cost: cost.NewP1Cost(), scopedOutcomes: newScopedOutcomeStore()}
 	if r, ok := recon.Registry.Default(); ok {
 		e.Recon = r
 	}
@@ -762,6 +772,10 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	economics, err := pol.Economics(lambda)
 	if err != nil {
 		return nil, err
+	}
+	parameterSet, _, _, err := ParameterSetForPolicy(pol)
+	if err != nil {
+		return nil, fmt.Errorf("decision parameter provenance: %w", err)
 	}
 	costCoefficient := economics.EffectiveCostCoefficient
 
@@ -1065,6 +1079,8 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Events:                ac.assess.Events,
 			Lambda:                lambda,
 			Economics:             cloneEconomicsMetadata(economics),
+			ParameterSet:          cloneParameterSetReference(parameterSet),
+			ScopedOutcomes:        e.scopedOutcomeReport(pol.Owner()),
 			ProactiveRate:         rate,
 			Attribution:           attribution,
 			Resources:             nil,
@@ -1125,21 +1141,13 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	}
 
 	if persist {
-		// --- persist stateful learning (legacy lambda controller + conjugate memory) ---
+		// Persist the legacy count-pressure controller. Persistence belief changes
+		// only through AdmitPersistenceObservation after independent outcome and
+		// operation-binding validation; selecting an action is not a label.
 		actualUpdate := tcost.Dual.StepDetailed(lambdaDemand, len(selectedAsset), B)
 		for i := range decisions {
 			if decisions[i].Trace != nil {
 				decisions[i].Trace.DualUpdate = traceDualUpdate(actualUpdate)
-			}
-		}
-		for key := range selectedAsset {
-			if ac, ok := ctxByKey[key]; ok {
-				// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
-				// evidence this tenant's footholds tend to be real (alpha up); acting on a
-				// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
-				// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
-				// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
-				e.Killchain.Memory.Observe(pol.Owner(), 0.5*(ac.assess.PHold-0.5))
 			}
 		}
 	}
@@ -1175,6 +1183,14 @@ func traceOptionalFloatPtr(present bool, value float64) *model.OptionalFloat {
 
 func cloneEconomicsMetadata(in model.EconomicsMetadata) *model.EconomicsMetadata {
 	out := in
+	return &out
+}
+
+func cloneParameterSetReference(in *model.ParameterSetReference) *model.ParameterSetReference {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 
@@ -1408,34 +1424,44 @@ func (e *CoverageEngine) buildDecisionTrace(
 	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
 	dispersionMult, dispersionOK := recon.DispersionMultiplier(v)
 	trace.Inputs = model.DecisionModelInputsV2{
-		Phase:             string(v.Phase),
-		PhaseReason:       v.PhaseReason,
-		RequestRate:       traceOptional(v.Telemetry.ReqRate.Usable(), v.Telemetry.ReqRate.Value),
-		ConnectionCount:   traceOptional(v.Telemetry.ConnCount.Usable(), v.Telemetry.ConnCount.Value),
-		GPUUtilization:    traceOptional(v.Telemetry.GPUUtil.Usable(), v.Telemetry.GPUUtil.Value),
-		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
-		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
-		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
-		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
-		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
-		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
-		CoResidencyBasis:  v.Physics.CoResidencyBasis,
-		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSScore),
-		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
-		EPSSMultiplier:    traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSMultiplier),
-		EPSSReason:        v.Physics.EPSSReason,
-		EPSSBasis:         v.Physics.EPSSBasis,
-		EPSSCachedDigest:  v.Physics.EPSSCachedDigest,
-		EPSSRunningDigest: v.Pod.ImageID,
-		EPSSScanTS:        v.Physics.EPSSScanTS,
-		PhysicsScanned:    v.Physics.Scanned,
-		DispersionMult:    traceOptional(dispersionPresent && dispersionOK, dispersionMult),
-		FactsAbsentReason: set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
-		Flow:              flowRecord(v),
-		TelemetryStates:   telemetryStates(v.Telemetry),
-		PCIe:              pcieRecord(v.Physics),
-		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
-		Primed:            primed,
+		Phase:                            string(v.Phase),
+		PhaseReason:                      v.PhaseReason,
+		RequestRate:                      traceOptional(v.Telemetry.ReqRate.Usable(), v.Telemetry.ReqRate.Value),
+		ConnectionCount:                  traceOptional(v.Telemetry.ConnCount.Usable(), v.Telemetry.ConnCount.Value),
+		GPUUtilization:                   traceOptional(v.Telemetry.GPUUtil.Usable(), v.Telemetry.GPUUtil.Value),
+		SMOccupancy:                      traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
+		VRAMFraction:                     traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
+		Leakage:                          traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
+		ImageRarity:                      traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
+		ModelRarity:                      traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
+		CoResidency:                      traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+		CoResidencyBasis:                 v.Physics.CoResidencyBasis,
+		EPSS:                             traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSScore),
+		CVSS:                             traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
+		EPSSMultiplier:                   traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSMultiplier),
+		EPSSReason:                       v.Physics.EPSSReason,
+		EPSSBasis:                        v.Physics.EPSSBasis,
+		EPSSCachedDigest:                 v.Physics.EPSSCachedDigest,
+		EPSSRunningDigest:                v.Pod.ImageID,
+		EPSSScanTS:                       v.Physics.EPSSScanTS,
+		EPSSFeedMode:                     v.Physics.EPSSFeedMode,
+		EPSSFeedStatus:                   v.Physics.EPSSFeedStatus,
+		EPSSFeedScopeSHA256:              v.Physics.EPSSFeedScopeSHA256,
+		EPSSFeedCacheSHA256:              v.Physics.EPSSFeedCacheSHA256,
+		EPSSFeedMetadataSHA256:           v.Physics.EPSSFeedMetadataSHA256,
+		EPSSFeedConfigMapUID:             v.Physics.EPSSFeedConfigMapUID,
+		EPSSFeedConfigMapResourceVersion: v.Physics.EPSSFeedConfigMapResourceVersion,
+		EPSSFeedProducerSource:           v.Physics.EPSSFeedProducerSource,
+		EPSSFeedObservedAt:               v.Physics.EPSSFeedObservedAt,
+		EPSSFeedExpiresAt:                v.Physics.EPSSFeedExpiresAt,
+		PhysicsScanned:                   v.Physics.Scanned,
+		DispersionMult:                   traceOptional(dispersionPresent && dispersionOK, dispersionMult),
+		FactsAbsentReason:                set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
+		Flow:                             flowRecord(v),
+		TelemetryStates:                  telemetryStates(v.Telemetry),
+		PCIe:                             pcieRecord(v.Physics),
+		DispersionCap:                    traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
+		Primed:                           primed,
 		// M-163: reporting the learned prior must not be what CREATES it. The number is
 		// identical in both modes; only the shadow read declines to seed an unseen owner.
 		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMeanMode(pol.Owner(), mode)),

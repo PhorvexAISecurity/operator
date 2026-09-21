@@ -142,4 +142,74 @@ webhooks:
     operations: ["CREATE", "UPDATE"]
     resources: ["securityevents"]
     scope: Cluster
+{{- if .Values.phorvex.lossHistory.enabled }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ printf "%s-completed-disclosure-stamp" $fullname | trunc 63 | trimSuffix "-" }}
+  annotations:
+    phorvex.ai/completed-disclosure-boundary-contract: completed-disclosure-boundary-v2
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+webhooks:
+- name: stamp-completed-disclosures.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  matchConditions:
+  - name: completed-disclosures
+    expression: "(has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations) || (request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in oldObject.metadata.annotations)"
+  clientConfig:
+    caBundle: {{ $caCert | b64enc | quote }}
+    service:
+      name: {{ $serviceName }}
+      namespace: {{ .Release.Namespace }}
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
+{{- end }}
+{{- if .Values.phorvex.lossHistory.currentInventory.enabled }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ printf "%s-current-inventory-stamp" $fullname | trunc 63 | trimSuffix "-" }}
+  annotations:
+    phorvex.ai/current-inventory-boundary-contract: current-protected-inventory-boundary-v1
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+webhooks:
+- name: stamp-current-protected-inventory.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  matchConditions:
+  - name: current-protected-inventory
+    expression: "(has(object.metadata.annotations) && 'phorvex.ai/current-protected-inventory-v1' in object.metadata.annotations) || (request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/current-protected-inventory-v1' in oldObject.metadata.annotations)"
+  clientConfig:
+    caBundle: {{ $caCert | b64enc | quote }}
+    service:
+      name: {{ $serviceName }}
+      namespace: {{ .Release.Namespace }}
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
+{{- end }}
 {{- end }}

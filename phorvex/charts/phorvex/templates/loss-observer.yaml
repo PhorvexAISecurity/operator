@@ -1,0 +1,126 @@
+{{- if .Values.phorvex.lossHistory.observer.enabled }}
+{{- if not .Values.phorvex.lossHistory.enabled }}{{ fail "lossHistory.observer.enabled requires lossHistory.enabled" }}{{- end }}
+{{- $o := .Values.phorvex.lossHistory.observer -}}
+{{- if ne $o.policyNamespace $o.targetNamespace }}{{ fail "loss observer policyNamespace must equal targetNamespace for least-privilege Role binding" }}{{- end }}
+{{- $name := printf "%s-loss-observer" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+rules:
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ required "loss observer targetNamespace required" $o.targetNamespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  resources: ["replicasets", "deployments", "statefulsets", "daemonsets"]
+  verbs: ["get"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $o.targetNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "phorvex.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: loss-observer
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $name }}
+      containers:
+      - name: observer
+        image: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+        imagePullPolicy: {{ .Values.phorvex.image.pullPolicy }}
+        command: ["/loss-observer"]
+        args:
+        - --target-namespace={{ $o.targetNamespace }}
+        - --target-name={{ required "loss observer targetName required" $o.targetName }}
+        - --target-uid={{ required "loss observer targetUID required" $o.targetUID }}
+        - --policy-namespace={{ required "loss observer policyNamespace required" $o.policyNamespace }}
+        - --policy-name={{ required "loss observer policyName required" $o.policyName }}
+        - --canary-url={{ required "loss observer canaryURL required" $o.canaryURL }}
+        - --server-name={{ required "loss observer serverName required" $o.serverName }}
+        - --ca-file=/etc/loss-observer-ca/ca.crt
+        - --client-cert-file=/etc/loss-observer-client/tls.crt
+        - --client-key-file=/etc/loss-observer-client/tls.key
+        - --protected-asset={{ required "loss observer protectedAsset required" $o.protectedAsset }}
+        - --protected-version={{ required "loss observer protectedVersion required" $o.protectedVersion }}
+        - --protected-property={{ required "loss observer protectedProperty required" $o.protectedProperty }}
+        - --evidence-id={{ required "loss observer evidenceID required" $o.evidenceID }}
+        - --rule-version={{ required "loss observer ruleVersion required" $o.ruleVersion }}
+        - --rule-sha256={{ required "loss observer ruleSHA256 required" $o.ruleSHA256 }}
+        - --observer-identity=system:serviceaccount:{{ .Release.Namespace }}:{{ $name }}
+        - --expected-bytes={{ required "loss observer expectedBytes required" $o.expectedBytes }}
+        - --expected-sha256={{ required "loss observer expectedSHA256 required" $o.expectedSHA256 }}
+        - --timeout={{ $o.timeout }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: canary-ca
+          mountPath: /etc/loss-observer-ca
+          readOnly: true
+        - name: observer-client
+          mountPath: /etc/loss-observer-client
+          readOnly: true
+      volumes:
+      - name: canary-ca
+        secret:
+          secretName: {{ required "loss observer caSecretName required" $o.caSecretName }}
+      - name: observer-client
+        secret:
+          secretName: {{ required "loss observer clientSecretName required" $o.clientSecretName }}
+{{- end }}

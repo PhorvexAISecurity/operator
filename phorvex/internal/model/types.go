@@ -541,9 +541,21 @@ type SecurityEventInfo struct {
 	Trust string
 	// CreatorIdentity is the authenticated identity the admission stamp recorded, e.g.
 	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
-	CreatorIdentity  string
-	AdapterName      string // event-owned phorvex.ai/adapter-name, never copied from a Pod
-	AdapterTargetUID string // event-owned phorvex.ai/target-pod-uid
+	CreatorIdentity string
+	// CompletedDisclosureRaw is an admission-validated producer payload candidate.
+	// It still requires current boundary, API UID, policy epoch and exact admission
+	// authority before durable retention. The owner chain was frozen by the
+	// fail-closed admission transaction. Generic event trust never consumes it.
+	CompletedDisclosureRaw               string
+	CompletedDisclosureAdmittedAt        string
+	CompletedDisclosureAdmissionContract string
+	// Current inventory is independently admitted and never inherits generic
+	// detector or completed-disclosure authority.
+	CurrentInventoryRaw               string
+	CurrentInventoryAdmittedAt        string
+	CurrentInventoryAdmissionContract string
+	AdapterName                       string // event-owned phorvex.ai/adapter-name, never copied from a Pod
+	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -634,9 +646,13 @@ type PhysicsWitness struct {
 	// EPSSBasis says HOW the cache answered (M-141): "exact" (running digest scored),
 	// "repo-fallback" (latest scan of the same repository, flagged), "miss" (nothing —
 	// multiplier neutral, EPSSPresent=false), "" when the pod has no image identity.
-	EPSSBasis        string
-	EPSSCachedDigest string // the cache key that supplied the value (differs from ImageID on repo-fallback)
-	EPSSScanTS       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
+	EPSSBasis                                                        string
+	EPSSCachedDigest                                                 string // the cache key that supplied the value (differs from ImageID on repo-fallback)
+	EPSSScanTS                                                       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
+	EPSSFeedMode, EPSSFeedStatus                                     string
+	EPSSFeedScopeSHA256, EPSSFeedCacheSHA256, EPSSFeedMetadataSHA256 string
+	EPSSFeedConfigMapUID, EPSSFeedConfigMapResourceVersion           string
+	EPSSFeedProducerSource, EPSSFeedObservedAt, EPSSFeedExpiresAt    string
 	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
 	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
 	// learned cap accidentally.
@@ -793,10 +809,9 @@ type Policy struct {
 	EnabledActions        map[Action]bool
 	AssetWeightFromLabels func(labels map[string]string) float64
 
-	// Policy identity does not affect optimizer scoring. PolicyName/UID/Generation
-	// bind post-selection native dispatch to the exact current policy epoch and are
-	// rechecked at the mutation boundary, while the remaining fields name the
-	// decision build and tick in its trace.
+	// Policy identity binds both post-selection native dispatch and observed-outcome
+	// admission to the exact current policy epoch; optimizer scoring ignores it.
+	// The remaining fields identify the decision build and tick in its trace.
 	PolicyName       string
 	PolicyUID        string
 	PolicyGeneration int64
@@ -900,17 +915,20 @@ type Decision struct {
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
-	Engine        string             // "p0-greedy" | "p1-coverage"
-	CoveredWeight float64            // modeled recon-fact selection opportunity; not measured mitigation
-	CoveredFacts  int                // count of modeled recon facts associated with the selected action
-	PerDollar     float64            // legacy full-value / ECost reporting ratio; not the selector
-	Stage         string             // most-likely kill-chain stage (semi-Markov)
-	StageHazard   float64            // stage-exit hazard h_s(t) (predictive horizon signal)
-	NextStage     string             // forward-projected next stage
-	Lambda        float64            // legacy mixed runtime lambda frozen for this decision
-	Economics     *EconomicsMetadata // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
-	ProactiveRate float64            // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
-	Attribution   []AttributionTerm  // SHAP-style decomposition of the move's value
+	Engine              string                     // "p0-greedy" | "p1-coverage"
+	CoveredWeight       float64                    // modeled recon-fact selection opportunity; not measured mitigation
+	CoveredFacts        int                        // count of modeled recon facts associated with the selected action
+	PerDollar           float64                    // legacy full-value / ECost reporting ratio; not the selector
+	Stage               string                     // most-likely kill-chain stage (semi-Markov)
+	StageHazard         float64                    // stage-exit hazard h_s(t) (predictive horizon signal)
+	NextStage           string                     // forward-projected next stage
+	Lambda              float64                    // legacy mixed runtime lambda frozen for this decision
+	Economics           *EconomicsMetadata         // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
+	ParameterSet        *ParameterSetReference     // compact source/default and exact effective-policy identity; present for new P1 decisions
+	PersistenceLearning *PersistenceLearningStatus // legacy audit compatibility only; new outcomes never write or consume it
+	ScopedOutcomes      *ScopedOutcomeReport       // reporting-only synthetic session outcome cohorts; never consumed by PHold or selection
+	ProactiveRate       float64                    // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
+	Attribution         []AttributionTerm          // SHAP-style decomposition of the move's value
 	// Resources is the selected candidate's exact hard-capacity consumption.
 	// It is empty for noop and legacy engines.
 	Resources []ResourceConsumption

@@ -10,14 +10,16 @@ prompt-free would-block verdict, but admits the request to one upstream attempt.
 Admission does not claim a completed response or a safe prompt, and the proxy
 never emits a SecurityEvent.
 """
-
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from functools import wraps
 import importlib.metadata
+import hmac
 import json
 import math
 import os
+from pathlib import Path
 import sys
 import threading
 from typing import Mapping
@@ -25,6 +27,18 @@ from typing import Mapping
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+
+try:
+    from drain_v11 import (Coordinator, DrainError, EngineHTTPClient, Ledger,
+                           strict_loads)
+except ModuleNotFoundError:
+    Coordinator = EngineHTTPClient = Ledger = None
+
+    class DrainError(Exception):
+        pass
+
+    def strict_loads(*_args, **_kwargs):
+        raise DrainError("drain v11 module unavailable")
 
 UPSTREAM = "http://127.0.0.1:8001"
 VARIANT_MODELS = {
@@ -238,14 +252,50 @@ def _verdict_log(*, variant: str, mode: str, threshold: float, score: float,
 def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTREAM,
                load_models: bool = True,
                upstream_api_key: str | None = None,
-               admin_api_key: str | None = None) -> FastAPI:
+               admin_api_key: str | None = None,
+               drain_coordinator=None) -> FastAPI:
     runtime = runtime or GuardrailRuntime(load_config())
     upstream_api_key = upstream_api_key if upstream_api_key is not None else os.environ.get("VLLM_API_KEY", "")
     admin_api_key = admin_api_key if admin_api_key is not None else upstream_api_key
     inflight = set()  # asyncio tasks proxying generation requests — the drain target
 
+    async def snapshot_proxy():
+        active = [task for task in inflight if not task.done()]
+        return {"active": len(active)}
+
+    async def terminate_proxy():
+        active = [task for task in inflight if not task.done()]
+        for task in active:
+            task.cancel()
+        if active:
+            await asyncio.gather(*active, return_exceptions=True)
+        return {"cancelled": len(active), "remaining": sum(
+            1 for task in inflight if not task.done())}
+
+    drain_control = drain_coordinator
+    if drain_control is None and os.environ.get("PHORVEX_DRAIN_V11") == "1":
+        if Coordinator is None:
+            raise RuntimeError("drain v11 module is unavailable")
+        if not upstream_api_key or not admin_api_key:
+            raise RuntimeError("drain v11 requires upstream and admin credentials")
+        pod_uid = os.environ.get("POD_UID", "")
+        proxy_source = os.environ.get("PHORVEX_PROXY_SOURCE", "")
+        engine_source = os.environ.get("PHORVEX_ENGINE_SOURCE", "")
+        model_digest = os.environ.get("PHORVEX_MODEL_DIGEST", "")
+        if not all((pod_uid, proxy_source, engine_source, model_digest)):
+            raise RuntimeError("drain v11 source and identity bindings are required")
+        drain_control = Coordinator(
+            Ledger(Path(os.environ.get("PHORVEX_DRAIN_LEDGER_DIR",
+                                      "/var/lib/phorvex-drain")), pod_uid),
+            EngineHTTPClient(upstream, upstream_api_key, engine_source),
+            pod_uid=pod_uid, proxy_source=proxy_source,
+            model_digest=model_digest, snapshot_proxy=snapshot_proxy,
+            terminate_proxy=terminate_proxy)
+
     @asynccontextmanager
     async def lifespan(_app):
+        if drain_control is not None:
+            await drain_control.initialize()
         if load_models:
             threading.Thread(target=runtime.load_all, daemon=True).start()
         yield
@@ -285,8 +335,11 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
             return JSONResponse({"error": "guardrail score unavailable", "error_type": type(exc).__name__}, status_code=503)
 
     @app.post("/v1/drain")
-    async def drain(req: Request):
+    async def legacy_drain(req: Request):
         """Deployment-specific drain-all: abort in-flight generation proxy tasks."""
+        if drain_coordinator is not None or os.environ.get("PHORVEX_DRAIN_V11") == "1":
+            return JSONResponse({"error": "operation-bound drain required"},
+                                status_code=410)
         body = await req.json()
         aborted = 0
         if body.get("abort_inflight", True):
@@ -296,6 +349,82 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
                     aborted += 1
         print(json.dumps({"event": "guardrail_drain", "aborted": aborted}, separators=(",", ":")), flush=True)
         return {"aborted": aborted}
+
+    def admin_authorized(req):
+        presented = req.headers.get("Authorization", "")
+        expected = f"Bearer {admin_api_key}" if admin_api_key else ""
+        return bool(expected) and hmac.compare_digest(presented, expected)
+
+    async def admin_body(req, required, optional=()):
+        if not admin_authorized(req):
+            raise DrainError(401, "unauthorized")
+        content_type = req.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            raise DrainError(415, "application_json_required")
+        value = strict_loads(await req.body(), max_bytes=16384)
+        if (not isinstance(value, dict)
+                or set(value) not in (set(required), set(required) | set(optional))):
+            raise DrainError(400, "invalid_fields")
+        return value
+
+    def drain_response(call):
+        @wraps(call)
+        async def wrapped(*args, **kwargs):
+            if drain_control is None:
+                return JSONResponse({"error": "drain_unavailable"}, status_code=503)
+            try:
+                return await call(*args, **kwargs)
+            except DrainError as exc:
+                return JSONResponse({"error": exc.code}, status_code=exc.status)
+            except Exception:
+                return JSONResponse({"error": "drain_unavailable"}, status_code=503)
+        return wrapped
+
+    @app.get("/v1/drain/capability")
+    @drain_response
+    async def drain_capability(req: Request):
+        if not admin_authorized(req):
+            raise DrainError(401, "unauthorized")
+        return JSONResponse(await drain_control.capability(), status_code=200)
+
+    @app.post("/v1/drain/operations")
+    @drain_response
+    async def drain_create(req: Request):
+        body = await admin_body(req, {
+            "schema", "operation_id", "operation_generation", "attempt",
+            "owner", "expected_incarnation_digest", "deadline", "mode",
+        }, {"supersedes"})
+        status, response = await drain_control.create(body)
+        return JSONResponse(response, status_code=status)
+
+    @app.get("/v1/drain/operations/{generation}/{operation_id}")
+    @drain_response
+    async def drain_status(generation: str, operation_id: str, req: Request):
+        if not admin_authorized(req):
+            raise DrainError(401, "unauthorized")
+        return JSONResponse(await drain_control.status(
+            generation, operation_id, req.query_params.get("observation_nonce")),
+            status_code=200)
+
+    @app.post("/v1/drain/operations/{generation}/{operation_id}/cancel")
+    @drain_response
+    async def drain_cancel(generation: str, operation_id: str, req: Request):
+        body = await admin_body(req, {
+            "owner_digest", "expected_incarnation_digest", "expected_revision"})
+        return JSONResponse(await drain_control.cancel(
+            generation, operation_id, body["owner_digest"],
+            body["expected_incarnation_digest"], body["expected_revision"]),
+            status_code=200)
+
+    @app.post("/v1/drain/operations/{generation}/{operation_id}/reopen")
+    @drain_response
+    async def drain_reopen(generation: str, operation_id: str, req: Request):
+        body = await admin_body(req, {
+            "owner_digest", "expected_incarnation_digest", "expected_revision"})
+        return JSONResponse(await drain_control.reopen(
+            generation, operation_id, body["owner_digest"],
+            body["expected_incarnation_digest"], body["expected_revision"]),
+            status_code=200)
 
     @app.post("/v1/kv/invalidate")
     async def kv_invalidate(req: Request):
@@ -379,6 +508,13 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
         task = asyncio.current_task()
         if track and task is not None:
             inflight.add(task)
+        if track and drain_control is not None:
+            try:
+                drain_control.admit_generation()
+            except DrainError as exc:
+                if task is not None:
+                    inflight.discard(task)
+                return JSONResponse({"error": exc.code}, status_code=exc.status)
         client = httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=5.0))
         try:
             response = await client.send(

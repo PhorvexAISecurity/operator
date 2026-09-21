@@ -80,7 +80,19 @@ const minConsequence = 0.1
 // This matters because a caller testing `StageUrgency > 0` to mean "has evidence" is testing a
 // condition that is ALWAYS true, i.e. testing nothing. Compare against this baseline instead.
 // Derived from the model rather than hardcoded so it cannot drift if consequence() changes.
-const BaselineStageUrgency = 0.5 * minConsequence
+const BaselineStageUrgency = StageUrgencyCurrentWeight * minConsequence
+
+const (
+	AIEndpointGPUUtilThreshold = 0.8
+	EventSeverityMaximumRank   = 4.0
+	EventHeldEvidenceBase      = 1.0
+	EventHeldEvidenceSpan      = 2.0
+	LateralPressureBase        = 0.5
+	LateralPressureSpan        = 0.5
+	StageUrgencyCurrentWeight  = 0.5
+	StageUrgencyNextWeight     = 0.5
+	ProjectedTransitionTarget  = 0.5
+)
 
 // NOTE (PHVX-72): a scalar StageUrgency threshold was evaluated for the anti-decoy gate and
 // REJECTED. Measurement showed it cannot discriminate evidence: a low- or medium-severity event on
@@ -309,7 +321,7 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 		return StagePromptInjectPersist, true
 	}
 	// (2) LLM-jacking: an exposed endpoint + a compute-abuse / exploit signal.
-	if p.EndpointPath != "" && (exploitEvent || (view.Telemetry.GPUUtil.Usable() && view.Telemetry.GPUUtil.Value > 0.8)) {
+	if p.EndpointPath != "" && (exploitEvent || (view.Telemetry.GPUUtil.Usable() && view.Telemetry.GPUUtil.Value > AIEndpointGPUUtilThreshold)) {
 		return StageLLMJacking, true
 	}
 	return 0, false
@@ -349,7 +361,7 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 		eventRecords = make([]model.EventEvidence, 0, len(view.Events))
 	}
 	for _, e := range view.Events {
-		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / 4.0
+		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / EventSeverityMaximumRank
 		w := 0.0
 		if !e.TimestampMissing {
 			w = model.EventAgeWeight(e.Age, eventAgeHorizon(pol))
@@ -370,11 +382,11 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 			if s := stageFromEvent(e); !eventStageSet || s > eventStage {
 				eventStage, eventStageSet = s, true
 			}
-			eventAlpha += w * (1.0 + 2.0*sev) // stronger AND fresher events => stronger held-evidence
+			eventAlpha += w * (EventHeldEvidenceBase + EventHeldEvidenceSpan*sev) // stronger AND fresher events => stronger held-evidence
 			evidence += w * sev
 		} else {
 			// A compromised NEIGHBOR means the attacker is about to pivot HERE.
-			lateralPressure = math.Max(lateralPressure, w*(0.5+0.5*sev))
+			lateralPressure = math.Max(lateralPressure, w*(LateralPressureBase+LateralPressureSpan*sev))
 		}
 	}
 	if eventStageSet && eventStage > stage {
@@ -434,7 +446,7 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 
 	// StageUrgency = blend(current consequence, hazard * next consequence): we invalidate
 	// the recon the attacker is ABOUT TO exploit, not only what they hold now.
-	stageUrg := clamp01(0.5*consequence(stage) + 0.5*hazard*consequence(next))
+	stageUrg := clamp01(StageUrgencyCurrentWeight*consequence(stage) + StageUrgencyNextWeight*hazard*consequence(next))
 	// Evidence is the PRESENCE of a real observation, independent of how severe it is or how much
 	// urgency it happens to produce. eventAlpha>0 covers every event targeting this pod (any
 	// severity); lateralPressure>0 covers a compromised neighbour; aiClassified covers an AI
@@ -453,7 +465,7 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 	// PHORVEXSEC-189 / M-143 (form A, capped noisy-OR). The old term
 	// clamp01(exposure/floor) reached 1 for every pod older than the floor, and then
 	// pHoldRaw = betaMean + 1*(1-betaMean) = 1 for EVERY betaMean: the posterior, the tenant
-	// prior and the feedback had zero effect (84.6% of live records pinned >= 0.999).
+	// prior and any qualified observed-outcome learning had zero effect (84.6% of live records pinned >= 0.999).
 	// Now p(t) = cap*min(1, t/T_exp) with 0 < cap < 1, so d pHold/d betaMean = 1-p >= 1-cap > 0
 	// at every age, pHold(t=0) = betaMean exactly as before, and pHold reaches 1 only when
 	// betaMean does. cap is INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. T_exp is the
@@ -539,7 +551,7 @@ func projectedNextStageSec(scale, shape, exposureSec float64) float64 {
 	if scale <= 0 || shape <= 0 {
 		return 0
 	}
-	median := scale * math.Pow(-math.Log(0.5), 1/shape)
+	median := scale * math.Pow(-math.Log(1-ProjectedTransitionTarget), 1/shape)
 	return median - exposureSec
 }
 

@@ -25,6 +25,9 @@ const (
 	// recovery on the production EKS Tesla T4 node: 117s creation-to-Ready divided by
 	// the documented 400s top of the model warm-load scale.
 	MeasuredT4GPUEnvelopeMax = 117.0 / 400.0
+	ConformalWindow          = 200
+	ConformalAlpha           = 0.1
+	ConformalMinimumSamples  = 20
 )
 
 var gpuEnvelopeMaxBits atomic.Uint64
@@ -60,7 +63,7 @@ type ConformalBound struct {
 
 // NewConformalBound returns a bound with a default 90% long-run coverage target.
 func NewConformalBound() *ConformalBound {
-	return &ConformalBound{cap: 200, alpha: 0.1}
+	return &ConformalBound{cap: ConformalWindow, alpha: ConformalAlpha}
 }
 
 // Observe records one absolute residual.
@@ -99,4 +102,4 @@ func (c *ConformalBound) Quantile() float64 {
 
 // Calibrated reports whether enough residuals exist for a meaningful (non-cold-start)
 // quantile.
-func (c *ConformalBound) Calibrated() bool { return len(c.residuals) >= 20 }
+func (c *ConformalBound) Calibrated() bool { return len(c.residuals) >= ConformalMinimumSamples }

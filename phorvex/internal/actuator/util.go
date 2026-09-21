@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -23,6 +24,9 @@ const (
 	identityVersionAnnotation   = "phorvex.ai/identity-version"
 	rawTenantAnnotation         = "phorvex.ai/tenant-raw"
 	rawNamespaceAnnotation      = "phorvex.ai/namespace-raw"
+	policyNameAnnotation        = "phorvex.ai/policy-name"
+	policyUIDAnnotation         = "phorvex.ai/policy-uid"
+	policyGenerationAnnotation  = "phorvex.ai/policy-generation"
 	metadataIdentityVersion     = "v1"
 	metadataIdentityDigestBytes = 16
 )
@@ -105,6 +109,17 @@ func identityAnnotations(namespace, tenant string) map[string]string {
 		identityVersionAnnotation: metadataIdentityVersion,
 		rawNamespaceAnnotation:    namespace,
 		rawTenantAnnotation:       tenant,
+	}
+}
+
+func policyIdentityAnnotations(target TenantTarget) map[string]string {
+	if target.PolicyUID == "" {
+		return nil
+	}
+	return map[string]string{
+		policyNameAnnotation:       target.PolicyName,
+		policyUIDAnnotation:        target.PolicyUID,
+		policyGenerationAnnotation: strconv.FormatInt(target.Generation, 10),
 	}
 }
 

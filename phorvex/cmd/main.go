@@ -42,14 +42,18 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/epssfeed"
+	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/physics"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -82,80 +86,97 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr              string
-		probeAddr                string
-		enableLeader             bool
-		baseInterval             time.Duration
-		promURL                  string
-		epssCachePath            string
-		epssCacheRefresh         time.Duration
-		epssFeed                 bool
-		epssFeedApply            bool
-		epssFeedPartial          bool
-		epssFeedNS               string
-		epssFeedCM               string
-		epssFeedKey              string
-		epssFeedFIRSTURL         string
-		epssFeedTrivy            string
-		epssFeedTimeout          time.Duration
-		killSwitch               bool
-		auditJSON                string
-		operatorNS               string
-		integrationEmit          bool
-		emitNamespace            string
-		emitPod                  string
-		emitAction               string
-		emitTenant               string
-		emitMatchLabels          string
-		engineName               string
-		ablation                 bool
-		ablationNS               string
-		ablationSelector         string
-		ablationBudget           int
-		ablationSeeds            int
-		scan                     bool
-		scanNS                   string
-		kubeContext              string
-		nativeDemo               bool
-		nativeDemoNS             string
-		auditMaxBytes            int64
-		auditMaxBackups          int
-		gpuEnvelopeMax           float64
-		supportDebounce          int
-		calibrationShadow        bool
-		calibrationRefresh       time.Duration
-		calibrationSample        time.Duration
-		calibrationLookback      time.Duration
-		calibrationExportDir     string
-		admissionWebhook         bool
-		webhookPort              int
-		webhookCertDir           string
-		pcieClassTableRaw        string
-		flowClasses              string
-		trustedDetectors         string
-		auditSourceAddr          string
-		auditSourceCert          string
-		auditSourceKey           string
-		auditSourceCA            string
-		auditSourceClientDNS     string
-		auditSourceVClusterPath  string
-		loraCleanSourcesFile     string
-		migProfilesFile          string
-		servingSecurityFile      string
-		servingSecurityMode      string
-		migNodeExec              bool
-		migAgentNamespace        string
-		migAgentServiceAccounts  string
-		migAgentDaemonSet        string
-		migAgentGPUContainer     string
-		migAgentHelperContainer  string
-		migAllocationHelper      string
-		migAllocationSocket      string
-		migExecTimeout           time.Duration
-		migAllocationReadTimeout time.Duration
-		migReleaseTimeout        time.Duration
-		migExclusiveMaintenance  bool
-		maxRetainedQuarantines   int
+		metricsAddr                      string
+		probeAddr                        string
+		enableLeader                     bool
+		baseInterval                     time.Duration
+		promURL                          string
+		epssCachePath                    string
+		epssCacheRefresh                 time.Duration
+		epssAuthoritative                bool
+		epssMetadataPath                 string
+		epssCacheKey                     string
+		epssConfigMapNamespace           string
+		epssConfigMapName                string
+		epssMetadataKey                  string
+		epssAuthoritativeTimeout         time.Duration
+		epssAuthoritativeNamespaces      string
+		epssAuthoritativeDigests         string
+		epssFeed                         bool
+		epssFeedApply                    bool
+		epssFeedPartial                  bool
+		epssFeedNS                       string
+		epssFeedCM                       string
+		epssFeedKey                      string
+		epssFeedFIRSTURL                 string
+		epssFeedTrivy                    string
+		epssFeedTimeout                  time.Duration
+		epssFeedScopeNamespaces          string
+		epssFeedScopeDigests             string
+		epssFeedMetadataTTL              time.Duration
+		epssFeedRegistryAuthFile         string
+		epssFeedRegistryAuthRegistries   string
+		killSwitch                       bool
+		auditJSON                        string
+		operatorNS                       string
+		integrationEmit                  bool
+		emitNamespace                    string
+		emitPod                          string
+		emitAction                       string
+		emitTenant                       string
+		emitMatchLabels                  string
+		engineName                       string
+		ablation                         bool
+		ablationNS                       string
+		ablationSelector                 string
+		ablationBudget                   int
+		ablationSeeds                    int
+		scan                             bool
+		scanNS                           string
+		kubeContext                      string
+		nativeDemo                       bool
+		nativeDemoNS                     string
+		auditMaxBytes                    int64
+		auditMaxBackups                  int
+		gpuEnvelopeMax                   float64
+		supportDebounce                  int
+		calibrationShadow                bool
+		calibrationRefresh               time.Duration
+		calibrationSample                time.Duration
+		calibrationLookback              time.Duration
+		calibrationExportDir             string
+		admissionWebhook                 bool
+		webhookPort                      int
+		webhookCertDir                   string
+		pcieClassTableRaw                string
+		flowClasses                      string
+		trustedDetectors                 string
+		trustedLossObservers             string
+		trustedCurrentInventoryObservers string
+		lossHistoryDir                   string
+		auditSourceAddr                  string
+		auditSourceCert                  string
+		auditSourceKey                   string
+		auditSourceCA                    string
+		auditSourceClientDNS             string
+		auditSourceVClusterPath          string
+		loraCleanSourcesFile             string
+		migProfilesFile                  string
+		servingSecurityFile              string
+		servingSecurityMode              string
+		migNodeExec                      bool
+		migAgentNamespace                string
+		migAgentServiceAccounts          string
+		migAgentDaemonSet                string
+		migAgentGPUContainer             string
+		migAgentHelperContainer          string
+		migAllocationHelper              string
+		migAllocationSocket              string
+		migExecTimeout                   time.Duration
+		migAllocationReadTimeout         time.Duration
+		migReleaseTimeout                time.Duration
+		migExclusiveMaintenance          bool
+		maxRetainedQuarantines           int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -177,6 +198,9 @@ func main() {
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
 	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
+	flag.StringVar(&trustedLossObservers, "trusted-loss-observers", os.Getenv("PHORVEX_TRUSTED_LOSS_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic completed-disclosure evidence. General detector trust does not grant this authority.")
+	flag.StringVar(&trustedCurrentInventoryObservers, "trusted-current-inventory-observers", os.Getenv("PHORVEX_TRUSTED_CURRENT_INVENTORY_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic current protected-version observations.")
+	flag.StringVar(&lossHistoryDir, "loss-history-dir", os.Getenv("PHORVEX_LOSS_HISTORY_DIR"), "Private durable directory for immutable completed-disclosure history. Empty keeps M100 history unavailable.")
 	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
 	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
 	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "Operator-owned versioned exact policy/workload binding configuration for serving TLS credentials.")
@@ -204,6 +228,15 @@ func main() {
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
 	flag.DurationVar(&epssCacheRefresh, "epss-cache-refresh", 0, "Re-read --epss-cache at this interval so a scanner pipeline that owns the ConfigMap is actually observed (0 = read once at startup, the previous behaviour). A failed read keeps the existing cache.")
+	flag.BoolVar(&epssAuthoritative, "epss-authoritative", false, "Require mounted EPSS cache and metadata to match the current ConfigMap API object before use.")
+	flag.StringVar(&epssMetadataPath, "epss-metadata", "", "[epss-authoritative] path to canonical provenance metadata beside --epss-cache.")
+	flag.StringVar(&epssCacheKey, "epss-cache-key", "epss-cache.json", "[epss-authoritative] source ConfigMap cache data key.")
+	flag.StringVar(&epssConfigMapNamespace, "epss-configmap-namespace", os.Getenv("POD_NAMESPACE"), "[epss-authoritative] namespace of the source ConfigMap.")
+	flag.StringVar(&epssConfigMapName, "epss-configmap-name", "phorvex-epss", "[epss-authoritative] source ConfigMap name.")
+	flag.StringVar(&epssMetadataKey, "epss-metadata-key", "epss-metadata.json", "EPSS provenance metadata ConfigMap key.")
+	flag.DurationVar(&epssAuthoritativeTimeout, "epss-authoritative-timeout", 5*time.Second, "Bound for each authoritative EPSS API verification.")
+	flag.StringVar(&epssAuthoritativeNamespaces, "epss-authoritative-scope-namespaces", "", "[epss-authoritative] exact namespace authority used by the producer.")
+	flag.StringVar(&epssAuthoritativeDigests, "epss-authoritative-scope-digests", "", "[epss-authoritative] exact digest authority used by the producer.")
 	flag.BoolVar(&epssFeed, "epss-feed", false, "One-shot: scan running images with Trivy, resolve CVEs through FIRST EPSS, and refresh the EPSS ConfigMap.")
 	flag.BoolVar(&epssFeedApply, "epss-feed-apply", false, "[epss-feed] apply the generated cache; false is a non-mutating dry-run.")
 	flag.BoolVar(&epssFeedPartial, "epss-feed-allow-partial", false, "[epss-feed] permit apply when an image scan fails; the default rejects partial refreshes.")
@@ -213,6 +246,11 @@ func main() {
 	flag.StringVar(&epssFeedFIRSTURL, "epss-feed-first-url", "https://api.first.org/data/v1/epss", "[epss-feed] FIRST EPSS API endpoint.")
 	flag.StringVar(&epssFeedTrivy, "epss-feed-trivy", "/trivy", "[epss-feed] path to the Trivy executable.")
 	flag.DurationVar(&epssFeedTimeout, "epss-feed-scan-timeout", 10*time.Minute, "[epss-feed] maximum duration for each image scan.")
+	flag.StringVar(&epssFeedScopeNamespaces, "epss-feed-scope-namespaces", "", "[epss-feed] comma-separated exact namespaces; requires exact digest scope.")
+	flag.StringVar(&epssFeedScopeDigests, "epss-feed-scope-digests", "", "[epss-feed] comma-separated repo@sha256 digests; requires namespace scope.")
+	flag.DurationVar(&epssFeedMetadataTTL, "epss-feed-metadata-ttl", 26*time.Hour, "[scoped epss-feed] authoritative metadata validity interval.")
+	flag.StringVar(&epssFeedRegistryAuthFile, "epss-feed-registry-auth-file", "", "[epss-feed] read-only Docker config.json with strict x-phorvex expiry metadata for allowlisted private ECR hosts.")
+	flag.StringVar(&epssFeedRegistryAuthRegistries, "epss-feed-registry-auth-registries", "", "[epss-feed] comma-separated exact private ECR hosts whose credentials must be present in the registry auth file.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
 	flag.StringVar(&auditSourceAddr, "audit-source-addr", "", "Optional mTLS read-only audit listener; disabled when empty.")
@@ -245,6 +283,10 @@ func main() {
 	physics.ConfigureFlowActivation(strings.Split(flowClasses, ","))
 	detectors := ingest.NewTrustedDetectors(strings.Split(trustedDetectors, ","))
 	ingest.ConfigureEventTrust(detectors)
+	lossObservers := ingest.NewTrustedDetectors(strings.Split(trustedLossObservers, ","))
+	ingest.ConfigureCompletedDisclosureTrust(lossObservers)
+	currentObservers := ingest.NewTrustedDetectors(strings.Split(trustedCurrentInventoryObservers, ","))
+	ingest.ConfigureCurrentInventoryTrust(currentObservers)
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	if detectors.Empty() {
@@ -255,6 +297,14 @@ func main() {
 		// binding the chart ships. This process cannot observe that from its own flags.
 		setupLog.Info("SecurityEvent detector allowlist configured (M-94); trusting a stamp additionally requires the creator-identity ValidatingAdmissionPolicy + binding to be installed in the cluster",
 			"trustedDetectors", detectors.List())
+	}
+	if (lossHistoryDir == "") != lossObservers.Empty() {
+		setupLog.Error(fmt.Errorf("loss-history-dir and trusted-loss-observers must be configured together"), "invalid completed-disclosure configuration")
+		os.Exit(2)
+	}
+	if !currentObservers.Empty() && lossHistoryDir == "" {
+		setupLog.Error(fmt.Errorf("current inventory requires exact completed-loss history"), "invalid current inventory configuration")
+		os.Exit(2)
 	}
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
@@ -313,8 +363,8 @@ func main() {
 	setupLog.Info("serving control security configured", "mode", securityMode, "bindings", len(servingSecurity.Bindings))
 
 	if epssFeed {
-		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
-			setupLog.Error(err, "epss-feed failed; last-known-good cache was not changed")
+		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssMetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests, epssFeedRegistryAuthFile, epssFeedRegistryAuthRegistries); err != nil {
+			setupLog.Error(err, "epss-feed failed; inspect the emitted result mode for the cache outcome")
 			os.Exit(1)
 		}
 		return
@@ -323,10 +373,22 @@ func main() {
 	// Seed the exploitability (EPSS/CVSS) cache from the scanner export, if wired. This makes the
 	// EPSS physics leg data-driven for BOTH the --scan path and the live operator loop; a missing/empty
 	// path leaves EPSS honest-absent (1.0). One package-level cache, seeded once at startup.
-	if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
-		setupLog.Error(err, "epss-cache load failed (continuing with EPSS honest-absent)", "path", epssCachePath)
-	} else if n := platform.EPSSLoaded(); n > 0 {
-		setupLog.Info("epss: exploitability cache seeded", "images", n, "path", epssCachePath)
+	if epssAuthoritative {
+		if epssCachePath == "" || epssMetadataPath == "" || epssCacheKey == "" || epssMetadataKey == "" || epssCacheKey == epssMetadataKey || epssConfigMapNamespace == "" || epssConfigMapName == "" || epssCacheRefresh <= 0 || epssAuthoritativeTimeout <= 0 {
+			setupLog.Error(fmt.Errorf("incomplete authoritative EPSS configuration"), "refusing to start")
+			os.Exit(2)
+		}
+		if _, err := (epssmeta.Scope{Namespaces: splitNonempty(epssAuthoritativeNamespaces), Digests: splitNonempty(epssAuthoritativeDigests)}).Canonical(); err != nil {
+			setupLog.Error(err, "invalid authoritative EPSS scope; refusing to start")
+			os.Exit(2)
+		}
+		platform.ConfigureAuthoritativeEPSSUnavailable()
+	} else {
+		if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
+			setupLog.Error(err, "epss-cache load failed (continuing with EPSS honest-absent)", "path", epssCachePath)
+		} else if n := platform.EPSSLoaded(); n > 0 {
+			setupLog.Info("epss: exploitability cache seeded", "images", n, "path", epssCachePath)
+		}
 	}
 
 	if integrationEmit {
@@ -429,6 +491,22 @@ func main() {
 		hybrid.SetServingSecurity(servingSecurity)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
+	rmgr.LossHistoryReader = mgr.GetAPIReader()
+	if lossHistoryDir != "" {
+		lossStore, storeErr := losshistory.New(lossHistoryDir)
+		if storeErr != nil {
+			// M100 history is optional reporting evidence. Its failure is explicit,
+			// but cannot disable otherwise authorized defensive actuation.
+			setupLog.Error(storeErr, "loss history store unavailable; retained disclosure history disabled")
+		} else {
+			rmgr.LossHistory = lossStore
+			if !currentObservers.Empty() {
+				rmgr.CurrentInventory = currentinventory.NewStore()
+				setupLog.Info("synthetic current protected-version inventory enabled", "trustedCurrentInventoryObservers", currentObservers.List())
+			}
+			setupLog.Info("synthetic completed-disclosure history enabled", "history", lossStore.String(), "trustedLossObservers", lossObservers.List())
+		}
+	}
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
@@ -533,7 +611,14 @@ func main() {
 					setupLog.Error(err, "audit close failed")
 				}
 			}()
-			rmgr.Audit = audit.New(ctrl.Log, f)
+			logger := audit.New(ctrl.Log, f)
+			parameterStore, parameterErr := audit.NewParameterMaterialStore(auditJSON)
+			if parameterErr != nil {
+				setupLog.Error(parameterErr, "parameter material store unavailable; decision rows will mark provenance retention unavailable")
+			} else {
+				logger.SetParameterMaterialStore(parameterStore)
+			}
+			rmgr.Audit = logger
 			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
 		}
 	}
@@ -573,7 +658,22 @@ func main() {
 	// Re-read the exploitability cache while running. Off by default: with a hand-curated
 	// ConfigMap there is nothing to observe, and a startup-only read is the honest description
 	// of that. It is turned on where a scanner pipeline owns the file (PHVX-14b).
-	if epssCachePath != "" && epssCacheRefresh > 0 {
+	if epssAuthoritative && epssCachePath != "" && epssCacheRefresh > 0 {
+		refresher := &platform.AuthoritativeEPSSRefresher{CachePath: epssCachePath, MetadataPath: epssMetadataPath,
+			Namespace: epssConfigMapNamespace, ConfigMapName: epssConfigMapName, CacheKey: epssCacheKey, MetadataKey: epssMetadataKey,
+			Scope:  epssmeta.Scope{Namespaces: splitNonempty(epssAuthoritativeNamespaces), Digests: splitNonempty(epssAuthoritativeDigests)},
+			Reader: mgr.GetAPIReader(), Interval: epssCacheRefresh, Timeout: epssAuthoritativeTimeout,
+			OnReload: func(entries int, changed bool) {
+				if changed {
+					setupLog.Info("epss: authoritative snapshot published", "images", entries)
+				}
+			},
+			OnError: func(err error) { setupLog.Error(err, "epss: authoritative refresh unavailable") }}
+		if err = mgr.Add(refresher); err != nil {
+			setupLog.Error(err, "unable to add authoritative epss refresher")
+			os.Exit(1)
+		}
+	} else if epssCachePath != "" && epssCacheRefresh > 0 {
 		refresher := &platform.EPSSRefresher{
 			Path:     epssCachePath,
 			Interval: epssCacheRefresh,
@@ -615,22 +715,31 @@ func main() {
 	}
 }
 
-func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, firstURL, trivyPath string, scanTimeout time.Duration) error {
+func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, metadataKey, firstURL, trivyPath string, scanTimeout, metadataTTL time.Duration, scopeNamespaces, scopeDigests, registryAuthFile, registryAuthRegistries string) error {
 	if namespace == "" {
 		return fmt.Errorf("epss-feed-namespace is required (set POD_NAMESPACE in-cluster)")
+	}
+	registryAuth, err := epssfeed.LoadRegistryAuthConfiguration(registryAuthFile, registryAuthRegistries, time.Now().UTC(), scanTimeout)
+	if err != nil {
+		return err
 	}
 	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
 	if err != nil {
 		return err
 	}
+	var scope *epssmeta.Scope
+	if strings.TrimSpace(scopeNamespaces) != "" || strings.TrimSpace(scopeDigests) != "" {
+		scope = &epssmeta.Scope{Namespaces: splitNonempty(scopeNamespaces), Digests: splitNonempty(scopeDigests)}
+	}
 	result, err := epssfeed.Run(ctrl.SetupSignalHandler(), epssfeed.Options{
 		Client: clientset,
-		Scanner: epssfeed.TrivyScanner{
-			Path: trivyPath, CacheDir: "/tmp/trivy", Timeout: scanTimeout,
+		Scanner: &epssfeed.TrivyScanner{
+			Path: trivyPath, CacheDir: "/tmp/trivy", Timeout: scanTimeout, RegistryAuth: registryAuth,
 		},
 		EPSS:      epssfeed.FIRSTClient{BaseURL: firstURL},
 		Namespace: namespace, ConfigMapName: configMapName, ConfigMapKey: configMapKey,
-		Apply: apply, AllowPartial: allowPartial,
+		Apply: apply, AllowPartial: allowPartial, InventoryScope: scope, MetadataKey: metadataKey,
+		MetadataTTL: metadataTTL, ProducerSource: buildinfo.Current().GitSHA,
 		Progress: func(image string, done, total int) {
 			if image == "" {
 				setupLog.Info("epss-feed: image scans complete", "completed", done, "total", total)
@@ -645,6 +754,16 @@ func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKe
 		}
 	}
 	return err
+}
+
+func splitNonempty(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // runIntegrationEmit proves Seam 1 without the full operator: it ensures the tenant

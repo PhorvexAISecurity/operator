@@ -1,0 +1,287 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6d2a8d1bc84d852b0285ca876d6583bb76a0a7be2b265928aa3daed973d036e3
+    source_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
+    at: '2026-09-21T01:44:12+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-producer.log
+    sha256: 538ae3e21c0908836c71fdb0fb629159b225fb2363d100764e00791ebbb23546
+    source_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
+    at: '2026-09-21T01:53:09+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 55e90fe84c23ccb7cc85170534a04ddb08dba60d6a3fd421485381eac28a14e9
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T02:01:09+00:00'
+    baseline_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
+  preflight:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: a9073c3672106d33b27a373679d45bcd873cc9af8f9faf7e9ca0d1dda83acc66
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T01:59:28+00:00'
+  implementation:
+    result: PASS
+    by: sol-post25-economics
+    artifact: 04-diff.patch
+    sha256: 91dd5e24cccdb8e65b979dd27071da1f71f4faf82bc195334562e50bcc434086
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T01:59:28+00:00'
+  l0:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/run-1789955512022464915/go-phorvex.log
+    sha256: f2d1f5bd197713e69c05d2ff74a32514bf810ae70df55c046d0544c61e623228
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T01:59:28+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: bd468d62085ee212c0a86733112ab741c2f531321d9a731edcb7283c0d94032e
+  l1:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/focused-r4.log
+    sha256: d43b2831c092af3436f55ac14b4be00a2ffc25ecb983278fc9507456728c7486
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T01:59:28+00:00'
+    inputs:
+    - phorvex
+    - workflow/fixes/POST25-M108/verify.sh
+    inputs_sha256: ffa1c17b3001b82e58ef41b53f52aad6f9547972c0ca0f9dd6c4b6d1d4f162da
+  l2:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/focused-r4.log
+    sha256: d43b2831c092af3436f55ac14b4be00a2ffc25ecb983278fc9507456728c7486
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T01:59:28+00:00'
+    inputs:
+    - phorvex
+    - workflow/fixes/POST25-M108/verify.sh
+    inputs_sha256: ffa1c17b3001b82e58ef41b53f52aad6f9547972c0ca0f9dd6c4b6d1d4f162da
+  positive_control:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/focused-r4.log
+    sha256: d43b2831c092af3436f55ac14b4be00a2ffc25ecb983278fc9507456728c7486
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T01:59:28+00:00'
+    inputs:
+    - phorvex
+    - workflow/fixes/POST25-M108/verify.sh
+    inputs_sha256: ffa1c17b3001b82e58ef41b53f52aad6f9547972c0ca0f9dd6c4b6d1d4f162da
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 4f39fce4dd965e7b78340affca0037bf6dd100a9b0c205968af51bb5e8e7b82e
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T02:01:09+00:00'
+    incident_sha256: 55e90fe84c23ccb7cc85170534a04ddb08dba60d6a3fd421485381eac28a14e9
+fix_id: POST25-M108
+issues:
+- M-108
+title: Version decision parameters and shadow sensitivity
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-post25-economics
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-m108
+  code_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-m108
+  base_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
+  head_sha: e540933cd924e39bedc622b401f27482e6205d96
+  stacked_on:
+  - POST25-M106
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/255
+  reviewed_head: e540933cd924e39bedc622b401f27482e6205d96
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Await merge/deployment then verify actual parameter retention export and
+    restart; empirical calibration remains bounded by measured evidence
+updated_at: '2026-09-21T02:01:47+00:00'
+configuration_history:
+- at: '2026-09-21T00:01:32+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T01:11:48+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T01:12:15+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T01:39:26+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T01:59:28+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T02:01:46+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T00:01:33+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T00:01:35+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T01:59:28+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T01:59:30+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T02:01:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T02:01:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T02:01:47+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 6d2a8d1bc84d852b0285ca876d6583bb76a0a7be2b265928aa3daed973d036e3
+  source_sha: ac4de8f385224e4038238b28cbd8cdd473155b3d
+  at: '2026-09-21T00:01:35+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  approval_ref: AUTHORIZATION.md
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 55e90fe84c23ccb7cc85170534a04ddb08dba60d6a3fd421485381eac28a14e9
+  source_sha: e540933cd924e39bedc622b401f27482e6205d96
+  at: '2026-09-21T01:53:09+00:00'
+  baseline_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
+handoff:
+  id: POST25-M108:12:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 12

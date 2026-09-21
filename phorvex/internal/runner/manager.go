@@ -41,10 +41,12 @@ import (
 	"github.com/phorvex/phorvex/internal/capability"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -197,6 +199,30 @@ type Manager struct {
 	// BoundaryReader bypasses informer staleness for admission enforcement and
 	// actuation-brake authority reads.
 	BoundaryReader client.Reader
+	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
+	// leaves representation history honestly unavailable.
+	LossHistory losshistory.Ledger
+	// CurrentInventory is bounded, expiring evidence for explicitly configured
+	// synthetic protected versions. Nil keeps current inventory unavailable.
+	CurrentInventory currentinventory.Ledger
+	// ScopedOutcomeProducer is an optional reporting-only synthetic session
+	// observer. Its operation hook and Drain are nonblocking; unavailable or full
+	// reporting never delays or suppresses defensive dispatch.
+	ScopedOutcomeProducer interface {
+		decision.PersistenceObservationAuthority
+		RecordNativeRotate(model.Policy, *model.WorkloadView, actuator.Request, actuator.Result, time.Time) bool
+		Drain(int) []model.ScopedOutcomeDelivery
+	}
+	// LossHistoryReader performs optional completed-disclosure authority and
+	// replacement-owner reads under a separate bounded context. Production sets
+	// it to the uncached API reader; a stall cannot consume the actuation tick.
+	LossHistoryReader client.Reader
+	// LossHistoryReadTimeout bounds the whole optional representation-evidence
+	// transaction, including current-inventory revalidation. Zero uses the
+	// conservative default in completed_disclosure.go.
+	LossHistoryReadTimeout time.Duration
+	lossHistoryWorkerMu    sync.Mutex
+	lossHistoryWorker      *lossHistoryCoordinator
 	// ActuationBrakeReadTimeout bounds each uncached Namespace/Pod authority read.
 	// Zero uses actuationbrake.DefaultReadTimeout.
 	ActuationBrakeReadTimeout time.Duration
@@ -830,15 +856,34 @@ func (m *Manager) syncOwnerLiveness() {
 		return
 	}
 	m.mu.RLock()
-	owners := make([]string, 0, len(m.policies))
+	epochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	for _, e := range m.policies {
 		if e != nil {
-			owners = append(owners, e.ownerKey())
+			epochs = append(epochs, model.PolicyEpoch{Namespace: e.namespace, Name: e.key.Name, UID: e.uid, Generation: e.generation})
 		}
 	}
 	m.mu.RUnlock()
-	for _, owner := range owners {
-		ce.SetOwnerLive(owner, true)
+	registerCoverageOwnerEpochs(ce, epochs)
+}
+
+func (m *Manager) drainScopedOutcomes(limit int) []model.ScopedOutcomeDelivery {
+	if m.ScopedOutcomeProducer == nil || limit <= 0 {
+		return nil
+	}
+	return m.ScopedOutcomeProducer.Drain(limit)
+}
+
+// registerCoverageOwnerEpochs is shared by the controller sync seam and the
+// actual tick snapshot. A future observed-outcome adapter therefore cannot see
+// a different policy identity depending on which manager path established it.
+func registerCoverageOwnerEpochs(ce *decision.CoverageEngine, epochs []model.PolicyEpoch) {
+	for _, epoch := range epochs {
+		// Preserve the established lifecycle guard even for directly constructed
+		// offline fixtures with incomplete epochs. Stored API objects have complete
+		// identity and positive generation, so production also registers the exact
+		// observed-outcome epoch.
+		ce.SetOwnerLive(epoch.Owner(), true)
+		_ = ce.SetOwnerEpoch(epoch, true)
 	}
 }
 
@@ -1150,12 +1195,12 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	// then be rejected as retired. They must describe the same instant.
 	m.mu.Lock()
 	due := make([]duePolicy, 0, len(m.policies))
-	liveOwners := make([]string, 0, len(m.policies))
+	liveEpochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := m.managerClock().Now()
 	for _, e := range m.policies {
 		owner := e.ownerKey()
-		liveOwners = append(liveOwners, owner)
+		liveEpochs = append(liveEpochs, model.PolicyEpoch{Namespace: e.namespace, Name: e.key.Name, UID: e.uid, Generation: e.generation})
 		row := duePolicy{
 			entry: e, namespace: e.namespace, name: e.key.Name, uid: e.uid,
 			owner: owner, epoch: m.epochs[owner], neverRun: e.lastTick.IsZero(),
@@ -1171,8 +1216,16 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	m.mu.Unlock()
 	sortDuePolicies(due)
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		for _, owner := range liveOwners {
-			ce.SetOwnerLive(owner, true)
+		registerCoverageOwnerEpochs(ce, liveEpochs)
+		if m.ScopedOutcomeProducer != nil {
+			ce.PersistenceAuthority = m.ScopedOutcomeProducer
+		}
+		for _, delivery := range m.drainScopedOutcomes(32) {
+			if delivery.Observation != nil {
+				ce.AdmitPersistenceObservation(*delivery.Observation)
+			} else {
+				ce.RecordScopedOutcomeUnavailable(delivery.Policy, delivery.Reason)
+			}
 		}
 	}
 	// The epochs captured with `due` travel with this tick: a producer that writes back
@@ -1843,6 +1896,16 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	m.processTenantWithPhysicsObserved(ctx, snap, e, &observation, physicsByKey)
 }
 
+// actuatorUsesNativeRotate reports whether rotate reaches the native delete
+// handler for the configured actuator. Hybrid routes rotate to native so it
+// must apply the same owner-identity feasibility law as the native backend.
+func actuatorUsesNativeRotate(a actuator.Actuator) bool {
+	if a == nil {
+		return false
+	}
+	return actuator.RouteFor(actuator.Backend(a.Name()), model.ActionRotate) == actuator.BackendNative
+}
+
 func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killObservation *KillSwitchObservation, physicsByKey map[string]model.PhysicsWitness) {
 	if ctx.Err() != nil {
 		return
@@ -1888,7 +1951,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 	}
-	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
+	pol.NativeRotate = actuatorUsesNativeRotate(m.Actuator)
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
 	pol.GitSHA = m.GitSHA
@@ -2040,6 +2103,22 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 	}
 
+	// Standing route state belongs to the policy tick, not to a selected move.
+	// Observe it before selection so zero-Pod, zero-selection and rejected ticks
+	// all retain the same owned configuration evidence.
+	namespaceObservation := snap.NamespaceDryRun[e.namespace]
+	if namespaceObservation.Cause == "" {
+		namespaceObservation = actuationbrake.Namespace(nil)
+	}
+	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
+	standingPolicy, ownerCurrent := m.maintainStandingPolicy(ctx, e, pol, admittedOwnerEpoch, killState, brakeState)
+	if !ownerCurrent || ctx.Err() != nil {
+		return
+	}
+	actionsSupport.standingPolicy = &standingPolicy
+	killEngaged = killState.observation.Engaged
+	namespaceObservation = brakeState.namespace
+
 	var shadowDecisions []model.Decision
 	shadowAvailable := false
 	if m.Calibration != nil {
@@ -2052,6 +2131,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 					m.Log.Error(shadowErr, "shadow scale optimizer comparison unavailable", "tenant", pol.Tenant)
 				}
 			}
+		}
+	}
+	// Retain exact source and effective policy material once per content hash in
+	// the production audit sibling store. Persistence failure follows the audit
+	// degradation contract and never changes defensive selection or actuation;
+	// Logger.Record marks every affected row unavailable/failed explicitly.
+	if m.Audit != nil && m.Optimizer.Name() == "p1-coverage" {
+		ref, manifest, overrides, provenanceErr := decision.ParameterSetForPolicy(pol)
+		if provenanceErr == nil {
+			_ = m.Audit.RetainParameterSet(pol.Tenant, ref, manifest, overrides)
 		}
 	}
 
@@ -2077,7 +2166,11 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name(), "reason", string(reason))
 		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
 			killState.observation.Engaged, string(killState.observation.Cause))
-		rejected := decision.ExistentialRejectedDecisions(views, pol, string(reason), snap.Now)
+		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), snap.Now)
+		if provenanceErr != nil {
+			m.Log.Error(provenanceErr, "rejected decision parameter provenance unavailable", "tenant", pol.Tenant)
+			return
+		}
 		for _, d := range rejected {
 			m.Audit.Record(d)
 		}
@@ -2087,10 +2180,6 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 		if len(rejected) > 0 || inventory != nil {
 			m.updateExistentialStatus(ctx, e, rejected, inventory)
-		}
-		namespaceObservation := snap.NamespaceDryRun[e.namespace]
-		if namespaceObservation.Cause == "" {
-			namespaceObservation = actuationbrake.Namespace(nil)
 		}
 		actionsSupport.namespaceDryRun = namespaceObservation
 		m.updateRejectedStatusObserved(ctx, e, len(views), killState.observation, time.Now(), reason, actionsSupport)
@@ -2114,13 +2203,6 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}, availabilityViolations, sloViolations)
 	}
 
-	// The snapshot observation excludes opted-out targets before allocation. A fresh,
-	// uncached observation is still required at route and dispatch boundaries below.
-	namespaceObservation := snap.NamespaceDryRun[e.namespace]
-	if namespaceObservation.Cause == "" {
-		namespaceObservation = actuationbrake.Namespace(nil)
-	}
-	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
 	effectiveDryRun := pol.DryRun || namespaceObservation.Engaged
 	for i := range decisions {
 		if decisions[i].Measurements == nil {
@@ -2146,11 +2228,19 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			stampKillSwitchRefusal(&decisions[i], killState.observation)
 		}
 	}
+	if !standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && standingPolicy.blockedCause != "" {
+		for i := range decisions {
+			if decisions[i].Selected {
+				stampDispatchEvidence(&decisions[i], model.DispatchNotAttempted, "standing-policy-guard-unavailable")
+			}
+		}
+	}
 	if ctx.Err() != nil {
 		return
 	}
 
-	// M100: freeze the reporting source BEFORE actuation; no later resnapshot or
+	// M100: admit the dedicated evidence stream and freeze the reporting source
+	// BEFORE actuation; no later resnapshot or
 	// shared map/slice can rewrite the evidence used for this claim.
 	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	representationInventory := outcomeInventory(snap.Events, pol)
@@ -2161,7 +2251,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// No effect has been attempted yet. Stop promptly while preparing the
 	// immutable reporting inputs rather than carrying an expired tick into
 	// actuation. After an attempt, the audit loop below must drain completely.
-	representationInputs, complete := representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory)
+	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, snap.Events, snap.Now)
 	if !complete {
 		return
 	}
@@ -2170,7 +2260,10 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// (actuate marks decisions[i].Actuated on a successful emit).
 	m.fallbackDecisions = nil
 	var currentPreparation *actuator.RoutePreparation
-	if !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
+	if standingPolicy.observed {
+		currentPreparation = &standingPolicy.result.Preparation
+	}
+	if standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
@@ -2179,7 +2272,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 		var attempted bool
-		_, currentPreparation, attempted = m.actuatePreparedWithKillSwitchObserved(ctx, e, pol, decisions, viewByKey, killState, brakeState)
+		_, currentPreparation, attempted = m.actuatePreparedMode(ctx, e, pol, decisions, viewByKey, true, killState, brakeState, currentPreparation)
 		if ctx.Err() != nil && !attempted {
 			return
 		}
@@ -2211,8 +2304,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		if m.fallbackDecisions[i].Trace != nil {
 			m.fallbackDecisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
 		}
-		appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
-			versions[m.fallbackDecisions[i].Namespace+"/"+m.fallbackDecisions[i].Pod], reportClaim, representationInventory))
+		fallbackKey := m.fallbackDecisions[i].Namespace + "/" + m.fallbackDecisions[i].Pod
+		if historyInputs == nil {
+			appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+				versions[fallbackKey], reportClaim, representationInventory))
+		} else {
+			appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+				versions[fallbackKey], reportClaim, representationInventory, historyInputs[fallbackKey]))
+		}
 		m.Audit.Record(m.fallbackDecisions[i])
 		m.recordColocation(assessmentInput, m.fallbackDecisions[i], pol)
 	}
@@ -2570,7 +2669,7 @@ func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEn
 }
 
 func (m *Manager) actuatePreparedWithKillSwitchObserved(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
-	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState)
+	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState, nil)
 }
 
 func actuationAttemptOutcome(res actuator.Result, err error, disposition actuator.NoEffectDisposition, contradictory bool) metrics.ActuationAttemptOutcome {
@@ -2647,11 +2746,11 @@ func releaseSharedCapacityNoEffect(ctx context.Context, store *sharedcapacity.St
 	return store.ReleaseNoEffect(releaseCtx, reservation)
 }
 
-func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
-	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil)
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
+	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil, prepared)
 }
 
-func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation) (int, *actuator.RoutePreparation, bool) {
+func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
 	attempted := false
 	inheritedHandled := inheritedReservation == nil
 	defer func() {
@@ -2720,7 +2819,9 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 	}
 	var preparation actuator.RoutePreparation
 	var err error
-	if routed, ok := m.Actuator.(interface {
+	if prepared != nil {
+		preparation = *prepared
+	} else if routed, ok := m.Actuator.(interface {
 		PrepareRoutes(context.Context, actuator.TenantTarget) actuator.RoutePreparation
 	}); ok {
 		preparation = routed.PrepareRoutes(ctx, target)
@@ -3040,6 +3141,14 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
 		}
+		if err == nil && res.Emitted && !contradictoryDisposition && disposition == actuator.NoEffectUnknown &&
+			res.MutationKind == "forward-only" && res.RollbackRef == "" && len(res.ObjectsTouched) == 1 &&
+			res.ObjectsTouched[0] == "Pod/"+request.Namespace+"/"+request.Pod && decisions[i].Action == model.ActionRotate &&
+			m.Actuator.Name() == "native" && m.ScopedOutcomeProducer != nil {
+			// The producer hook only binds a previously authenticated synthetic
+			// session. It queues work without network or durable I/O on this tick.
+			m.ScopedOutcomeProducer.RecordNativeRotate(pol, v, request, res, time.Now())
+		}
 		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil || disposition == actuator.NoEffectRefused || contradictoryDisposition {
 			fallbackObservation := state.observe(ctx, m.KillSwitch)
@@ -3140,7 +3249,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
 						reservationTransferred = capacityReservation != nil
-						more, _, fallbackAttempted := m.actuatePreparedModeWithCapacity(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState, capacityReservation)
+						more, _, fallbackAttempted := m.actuatePreparedModeWithCapacity(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState, capacityReservation, &preparation)
 						attempted = attempted || fallbackAttempted
 						actuated += more
 						// The recursive call modifies its local slice's owned trace;

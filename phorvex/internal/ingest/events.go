@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/currentinventory"
+	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -83,20 +85,26 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			// A future or deleting object is marked timestamp-unusable above.
 		}
 		base := model.SecurityEventInfo{
-			CreatedAt:        se.CreationTimestamp.Time,
-			Name:             se.Name,
-			UID:              string(se.UID),
-			Trust:            trust,
-			CreatorIdentity:  identity,
-			TimestampMissing: missing,
-			Type:             se.Spec.Rule.Type,
-			ThreatLevel:      se.Spec.Rule.ThreatLevel,
-			Source:           se.Spec.Rule.Source,
-			Description:      se.Spec.Description,
-			AnomalyScore:     score,
-			Age:              age,
-			AdapterName:      se.Annotations["phorvex.ai/adapter-name"],
-			AdapterTargetUID: se.Annotations["phorvex.ai/target-pod-uid"],
+			CreatedAt:                            se.CreationTimestamp.Time,
+			Name:                                 se.Name,
+			UID:                                  string(se.UID),
+			Trust:                                trust,
+			CreatorIdentity:                      identity,
+			CompletedDisclosureRaw:               se.Annotations[disclosure.Annotation],
+			CompletedDisclosureAdmittedAt:        se.Annotations[disclosure.AdmissionTimeAnnotation],
+			CompletedDisclosureAdmissionContract: se.Annotations[disclosure.AdmissionContractAnnotation],
+			CurrentInventoryRaw:                  se.Annotations[currentinventory.Annotation],
+			CurrentInventoryAdmittedAt:           se.Annotations[currentinventory.AdmissionTimeAnnotation],
+			CurrentInventoryAdmissionContract:    se.Annotations[currentinventory.AdmissionContractAnnotation],
+			TimestampMissing:                     missing,
+			Type:                                 se.Spec.Rule.Type,
+			ThreatLevel:                          se.Spec.Rule.ThreatLevel,
+			Source:                               se.Spec.Rule.Source,
+			Description:                          se.Spec.Description,
+			AnomalyScore:                         score,
+			Age:                                  age,
+			AdapterName:                          se.Annotations["phorvex.ai/adapter-name"],
+			AdapterTargetUID:                     se.Annotations["phorvex.ai/target-pod-uid"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
 		// It used to be turned into a bare name that matched no key — silently dropped. It is
@@ -119,6 +127,13 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			}
 		}
 		all = append(all, base)
+		// Dedicated current-inventory events feed only the independently admitted
+		// reporting ledger. Even if an operator accidentally also allowlists the
+		// observer as a generic detector, its required high severity must never
+		// become kill-chain evidence or change PHold, ranking, or cadence.
+		if base.CurrentInventoryRaw != "" && base.Type == model.CurrentInventoryRuleType && base.Source == model.CurrentInventorySource {
+			continue
+		}
 		if trust != TrustTrusted {
 			continue // recorded above; an unauthenticated detector supplies no belief evidence
 		}

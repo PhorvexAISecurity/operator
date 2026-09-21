@@ -1,0 +1,305 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6e32a7bd17a04b09ad27348d64e5b5871831ecf5a9b85b37ada5ca28cd465881
+    source_sha: efe101208544017086debe82278866f9772f0ac7
+    at: '2026-09-21T05:55:08+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 450094b9899cf85bdac70928020256f96e879ffe6539287ce40263c443fa34cd
+    source_sha: efe101208544017086debe82278866f9772f0ac7
+    at: '2026-09-21T09:54:09+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 450094b9899cf85bdac70928020256f96e879ffe6539287ce40263c443fa34cd
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:03:35+00:00'
+    baseline_sha: efe101208544017086debe82278866f9772f0ac7
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 9653135b64a7b0beb4da11333228d20730e832dde17906c9435bd1fd326d46e9
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:03:35+00:00'
+    incident_sha256: 450094b9899cf85bdac70928020256f96e879ffe6539287ce40263c443fa34cd
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: ca03e2897370855e68ed5e3502fb2f0a8b9a7a6c624ae0c60bbfd94c813a1ccb
+    source_sha: 88949f44f10806b88b02b8bfba20c4fcc3359a94
+    at: '2026-09-21T09:58:16+00:00'
+    baseline_sha: efe101208544017086debe82278866f9772f0ac7
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 6752db144dd3bc200c474a67666579072a84c125fa6e942561f1ace3e8ef5b37
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:01:04+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 2aebf1f001ab58195642aed549b85bbf3d0e295b0b2e0c239592cce910803dab
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:01:04+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 6752db144dd3bc200c474a67666579072a84c125fa6e942561f1ace3e8ef5b37
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:01:04+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 596a5485d6b2804bdbee63c5212740fc18729a304335441d0330b27ceebde8de
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/lead-source-controls.log
+    sha256: 461144c9c789d1a3ebcd8d2f486acf656f124d47db0b9295b91b5dd43926d148
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:01:04+00:00'
+    inputs:
+    - phorvex/cmd
+    - phorvex/internal/decision
+    - phorvex/internal/epssfeed
+    - phorvex/internal/epssmeta
+    - phorvex/internal/model
+    - phorvex/internal/platform
+    - workflow/fixes/POST25-M104-SCOPED-FEED/verify.sh
+    inputs_sha256: 85154818c02f58e7ac3f544f0ad95d12f8f6be7f48d8392426330f586f6b96d7
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/independent-integration-review.json
+    sha256: 4ad9ace8f62ac7b0e88cfeec761bb5c20f2e1f991316c49b85851f6f98bf7a90
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:01:04+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools/envtest_gate.py
+    - tools/test_envtest_gate.py
+    - workflow/fixes/INDEX.yaml
+    - workflow/fixes/POST25-M104-SCOPED-FEED/evidence
+    inputs_sha256: 071914d82be53f9c4c2350a3d62ea7a26118028bad281aac8e887e667744618c
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/scope-producer-integrated.log
+    sha256: 3c7ce44e6a1d03dc5f1dc2a60d238e14e1beb9ec855573a6e1d3dab9f6c53465
+    source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+    at: '2026-09-21T10:01:04+00:00'
+    inputs:
+    - phorvex/internal/epssfeed
+    - phorvex/internal/epssfeed/m104_scope_reproduction_test.go
+    - phorvex/internal/epssmeta
+    - phorvex/internal/platform
+    inputs_sha256: 2464190e102708c1a39bf9bb88cfb0116cef7cf455f38e69b43401b0096a517f
+fix_id: POST25-M104-SCOPED-FEED
+issues:
+- M-104
+title: Bind scoped EPSS feed provenance
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-m104-scoped-feed
+  code_sha: efe101208544017086debe82278866f9772f0ac7
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.141
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-math-design
+  base_sha: 88949f44f10806b88b02b8bfba20c4fcc3359a94
+  head_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/262
+  reviewed_head: 724ac1b81c33197c057c760d3255f63905b2c9e7
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Published in combined PR262; await merge/deployment and dedicated live scoped-feed
+    acceptance. Private-registry authentication/fleet coverage remain open.
+updated_at: '2026-09-21T10:08:35+00:00'
+configuration_history:
+- at: '2026-09-21T05:54:32+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-21T09:44:43+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  - next_action
+  - roles
+  approval_ref: null
+- at: '2026-09-21T09:45:53+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T10:01:04+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T10:08:33+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T05:54:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T05:55:26+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T10:01:04+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T10:01:06+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T10:03:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T10:03:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T10:08:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: POST25-M104-SCOPED-FEED:12:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 12
+check_history:
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 450094b9899cf85bdac70928020256f96e879ffe6539287ce40263c443fa34cd
+  source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+  at: '2026-09-21T09:54:09+00:00'
+  baseline_sha: efe101208544017086debe82278866f9772f0ac7
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 9653135b64a7b0beb4da11333228d20730e832dde17906c9435bd1fd326d46e9
+  source_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
+  at: '2026-09-21T09:54:09+00:00'
+  incident_sha256: 450094b9899cf85bdac70928020256f96e879ffe6539287ce40263c443fa34cd

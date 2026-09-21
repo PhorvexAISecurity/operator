@@ -8,14 +8,19 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type blockedAuditWriter struct {
@@ -274,5 +279,61 @@ func TestAuditClientRefusesRedirect(t *testing.T) {
 	}
 	if visits != 1 {
 		t.Fatalf("audit redirect followed, visits=%d", visits)
+	}
+}
+
+func TestPost25M108AuthenticatedParameterMaterialRetrieval(t *testing.T) {
+	_, client, auditPath, _, _, _ := fixture(t)
+	store, err := audit.NewParameterMaterialStore(auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := model.DecisionParameterManifest{SchemaVersion: model.DecisionParameterManifestV1, ID: "source-a", Parameters: []model.DecisionParameter{{
+		Name: "parameter-a", Group: "group-a", Unit: "ratio", Domain: "[0,1]", Default: 0.5,
+		Source: "fixture", Provenance: model.ParameterUnknown, Limitations: "fixture only", DependencyGroup: "group-a",
+	}}}
+	overrides := model.EffectivePolicyOverrides{SchemaVersion: model.DecisionPolicyOverridesV1, ID: "ns/policy@uid:1",
+		Values: []model.EffectivePolicyParameter{{Name: "policy-a", Unit: "ratio", Present: true, Value: 0.25}}}
+	mh, _ := manifest.CanonicalHash()
+	oh, _ := overrides.CanonicalHash()
+	ref := &model.ParameterSetReference{SchemaVersion: model.DecisionParameterSetV1, ManifestID: manifest.ID, ManifestHash: mh,
+		PolicyOverridesID: overrides.ID, PolicyOverridesHash: oh}
+	if err := store.Store(ref, manifest, overrides); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := client.ParameterMaterial(context.Background(), audit.ParameterMaterialManifest, mh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got model.DecisionParameterManifest
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if hash, _ := got.CanonicalHash(); hash != mh {
+		t.Fatalf("remote manifest changed hash: %s != %s", hash, mh)
+	}
+	unknown := "sha256:" + strings.Repeat("0", 64)
+	if _, err := client.ParameterMaterial(context.Background(), audit.ParameterMaterialManifest, unknown); err == nil {
+		t.Fatal("unknown remote material accepted")
+	}
+}
+
+func TestPost25M108ClientRejectsWrongParameterMaterialBody(t *testing.T) {
+	_, client, _, ca, key, dir := fixture(t)
+	cert, private := leaf(t, ca, key, "audit-source.test", time.Now().Add(time.Hour))
+	sc, sk := writeLeaf(t, dir, "wrong-material-server", cert, private)
+	wanted := "sha256:" + strings.Repeat("1", 64)
+	cfg := ServerConfig{CertFile: sc, KeyFile: sk, CAFile: filepath.Join(dir, "ca.crt"), ClientDNSName: "audit-console.test"}
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Parameter-Material-Hash", wanted)
+		_, _ = w.Write([]byte(`{"wrong":true}`))
+	}))
+	ts.TLS = cfg.tlsConfig()
+	ts.StartTLS()
+	defer ts.Close()
+	other := *client
+	other.cfg.URL = ts.URL
+	if _, err := other.ParameterMaterial(context.Background(), audit.ParameterMaterialManifest, wanted); err == nil {
+		t.Fatal("wrong-hash parameter material body accepted")
 	}
 }

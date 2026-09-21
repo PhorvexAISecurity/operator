@@ -274,6 +274,11 @@ func TestM99InactiveProductionControl(t *testing.T) {
 	after := e.Decide([]*model.WorkloadView{v}, p)[0]
 	before.Existential = nil
 	after.Existential = nil
+	// M108 adds exact effective-policy provenance. The mayBreachSLO input is
+	// deliberately distinct even when this untrusted outcome cannot activate it;
+	// the numerical/selection control remains the invariant under test here.
+	before.ParameterSet = nil
+	after.ParameterSet = nil
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("inactive override changed baseline decision or numerical fields")
 	}
