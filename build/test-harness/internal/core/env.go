@@ -721,12 +721,21 @@ type ExecResult struct {
 // not import internal/safety (which would create a cycle through the guard).
 type Execer func(ctx context.Context, restCfg *rest.Config, kube kubernetes.Interface, ns, pod, container string, command []string) ExecResult
 
+// TimedExecer is the explicitly bounded foreground in-pod exec primitive.
+// It is separate from Execer so ordinary and detached-process callers retain
+// the default timeout contract unless they deliberately select this path.
+type TimedExecer func(ctx context.Context, restCfg *rest.Config, kube kubernetes.Interface, ns, pod, container string, timeout time.Duration, command []string) ExecResult
+
 // exec is the injected exec implementation (set by SetExecer at startup).
 var execFn Execer
+var timedExecFn TimedExecer
 
 // SetExecer installs the in-pod exec implementation. Called once at startup by
 // the cmd wiring; kept as a package var so the unit tests can stub it.
 func SetExecer(fn Execer) { execFn = fn }
+
+// SetTimedExecer installs the explicitly bounded foreground exec implementation.
+func SetTimedExecer(fn TimedExecer) { timedExecFn = fn }
 
 // Exec runs a command in a sandbox pod container and returns its captured output.
 // It records the command for provenance. Returns an error result if no execer is
@@ -737,6 +746,16 @@ func (e *Env) Exec(ctx context.Context, pod, container string, command []string)
 		return ExecResult{ExitCode: -1, Err: fmt.Errorf("no execer/rest config available (non-live env)")}
 	}
 	return execFn(ctx, e.Rest, e.Kube, e.Config.Namespace, pod, container, command)
+}
+
+// ExecWithTimeout runs a foreground command with a caller-selected finite bound.
+// The injected safety implementation validates the supported duration range.
+func (e *Env) ExecWithTimeout(ctx context.Context, pod, container string, timeout time.Duration, command []string) ExecResult {
+	e.Log.Command(fmt.Sprintf("kubectl exec -n %s %s -c %s -- %v", e.Config.Namespace, pod, container, command))
+	if timedExecFn == nil || e.Rest == nil {
+		return ExecResult{ExitCode: -1, Err: fmt.Errorf("no timed execer/rest config available (non-live env)")}
+	}
+	return timedExecFn(ctx, e.Rest, e.Kube, e.Config.Namespace, pod, container, timeout, command)
 }
 
 // WaitForPodRunning polls until the named pod is Running (or ctx/timeout). It is

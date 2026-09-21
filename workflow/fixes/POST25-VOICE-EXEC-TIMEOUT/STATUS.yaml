@@ -1,0 +1,131 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 6
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: aeb36ce4935699d2f9e85fb9691a36e64c6afc0eb9a9c9168d151cc127e60b2c
+    source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+    at: '2026-09-21T17:41:04+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+    rationale: 'Lead amendment under standing owner delegation: unchanged plan; strengthen
+      explicit required verification list to include already required live L3. No
+      evidence waived.'
+fix_id: POST25-VOICE-EXEC-TIMEOUT
+issues: []
+title: Surface in-pod exec deadlines and bound voice producer explicitly
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: voice-package-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-voice-exec-timeout
+  base_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: voice-package-worker
+  action: Implement signed plan, regression/positive controls and focused preflight
+updated_at: '2026-09-21T17:41:04+00:00'
+configuration_history:
+- at: '2026-09-21T17:39:54+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-21T17:40:32+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T17:40:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T17:41:04+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: aeb36ce4935699d2f9e85fb9691a36e64c6afc0eb9a9c9168d151cc127e60b2c
+  source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+  at: '2026-09-21T17:40:22+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322

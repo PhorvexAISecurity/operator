@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 
 	"github.com/r6security/phoenix-test-harness/internal/config"
 )
@@ -96,5 +99,32 @@ func TestOwnedLabelsAndSelector(t *testing.T) {
 	}
 	if OwnedSelector() != OwnedLabelKey+"="+OwnedLabelValue {
 		t.Fatalf("owned selector malformed: %s", OwnedSelector())
+	}
+}
+
+func TestDefaultAndExplicitTimeoutExecUseSeparateWiring(t *testing.T) {
+	env := newTestEnv("sandbox", "sandbox")
+	env.Rest = &rest.Config{Host: "https://example.invalid"}
+	defaultCalls, timedCalls := 0, 0
+	SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) ExecResult {
+		defaultCalls++
+		return ExecResult{Stdout: "default"}
+	})
+	SetTimedExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, timeout time.Duration, _ []string) ExecResult {
+		timedCalls++
+		if timeout != 30*time.Second {
+			return ExecResult{ExitCode: -1, Err: errors.New("wrong timeout")}
+		}
+		return ExecResult{Stdout: "timed"}
+	})
+	t.Cleanup(func() { SetExecer(nil); SetTimedExecer(nil) })
+	if got := env.Exec(t.Context(), "pod", "container", []string{"default"}); got.Stdout != "default" || got.Err != nil {
+		t.Fatalf("default result=%+v", got)
+	}
+	if got := env.ExecWithTimeout(t.Context(), "pod", "container", 30*time.Second, []string{"timed"}); got.Stdout != "timed" || got.Err != nil {
+		t.Fatalf("timed result=%+v", got)
+	}
+	if defaultCalls != 1 || timedCalls != 1 {
+		t.Fatalf("default/timed calls=%d/%d", defaultCalls, timedCalls)
 	}
 }

@@ -2,6 +2,9 @@ package scenarios
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +17,9 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 )
 
 func completeVoiceWSReceipt(uid string, frames int) voiceWSReceipt {
@@ -233,6 +238,61 @@ func TestValidateVoiceWSControllerReadsDeploymentAndReplicaSet(t *testing.T) {
 	forged.OwnerReferences[0].UID = types.UID("forged-rs")
 	if err := validateVoiceWSController(context.Background(), env, forged, voiceWSTargetDeployment, targetDeployment.UID); err == nil {
 		t.Fatal("forged ReplicaSet UID accepted")
+	}
+}
+
+func TestVoiceWSProducerUsesExplicitThirtySecondForegroundExec(t *testing.T) {
+	serviceUID, producerUID := types.UID("service-uid"), types.UID("producer-uid")
+	selector := map[string]string{"app": voiceWSApp, "role": "target"}
+	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: voiceWSTargetService, Namespace: "owned", UID: serviceUID}, Spec: corev1.ServiceSpec{Selector: selector}}
+	producer := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: voiceWSProducer, Namespace: "owned", UID: producerUID}, Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
+	env := &core.Env{Config: config.TargetConfig{Namespace: "owned"}, Kube: k8sfake.NewSimpleClientset(service, producer), Rest: &rest.Config{Host: "https://example.invalid"}, Log: &ctLogger{}}
+	receipt := completeVoiceWSReceipt("target-uid", voiceWSExpectedFrames)
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultCalls, timedCalls := 0, 0
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		defaultCalls++
+		return core.ExecResult{ExitCode: -1, Err: errors.New("default exec used")}
+	})
+	core.SetTimedExecer(func(ctx context.Context, _ *rest.Config, _ kubernetes.Interface, _, pod, container string, timeout time.Duration, command []string) core.ExecResult {
+		timedCalls++
+		deadline, ok := ctx.Deadline()
+		remaining := time.Until(deadline)
+		if !ok || timeout != voiceWSExecTimeout || remaining <= 29*time.Second || remaining > voiceWSExecTimeout || pod != voiceWSProducer || container != "producer" {
+			return core.ExecResult{ExitCode: -1, Err: fmt.Errorf("exec contract timeout=%s remaining=%s pod=%s container=%s", timeout, remaining, pod, container)}
+		}
+		if len(command) != 8 || command[0] != "python3" || command[5] != "voice-1" || command[6] != "20" || command[7] != "0.900" {
+			return core.ExecResult{ExitCode: -1, Err: fmt.Errorf("producer argv=%v", command)}
+		}
+		timer := time.NewTimer(20*time.Second + 100*time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return core.ExecResult{ExitCode: -1, Err: ctx.Err()}
+		case <-timer.C:
+		}
+		return core.ExecResult{Stdout: string(raw)}
+	})
+	t.Cleanup(func() { core.SetExecer(nil); core.SetTimedExecer(nil) })
+	got, err := performVoiceWS(t.Context(), env, voiceWSTargetService, serviceUID, selector, "voice-1", voiceWSExpectedFrames, voiceWSFrameInterval, producerUID)
+	if err != nil || !voiceWSReceiptCompleted(got) || defaultCalls != 0 || timedCalls != 1 {
+		t.Fatalf("receipt=%+v default/timed=%d/%d err=%v", got, defaultCalls, timedCalls, err)
+	}
+	core.SetTimedExecer(func(ctx context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, timeout time.Duration, _ []string) core.ExecResult {
+		deadline, ok := ctx.Deadline()
+		remaining := time.Until(deadline)
+		if !ok || timeout <= time.Second || timeout > 2*time.Second || remaining <= time.Second || remaining > 2*time.Second {
+			return core.ExecResult{ExitCode: -1, Err: fmt.Errorf("short parent bound not propagated: timeout=%s remaining=%s", timeout, remaining)}
+		}
+		return core.ExecResult{Stdout: `{"partial":true}`, ExitCode: -1, Err: context.DeadlineExceeded}
+	})
+	shortCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	if _, err := performVoiceWS(shortCtx, env, voiceWSTargetService, serviceUID, selector, "voice-1", voiceWSExpectedFrames, voiceWSFrameInterval, producerUID); err == nil || !strings.Contains(err.Error(), "producer failed") || !strings.Contains(err.Error(), "deadline exceeded") {
+		t.Fatalf("earlier parent deadline was not a producer failure: %v", err)
 	}
 }
 
