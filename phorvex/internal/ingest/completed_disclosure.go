@@ -15,7 +15,7 @@ import (
 // AdmitCompletedDisclosures is the dedicated producer-to-ledger transaction.
 // Every authority input is API-observed; malformed or forged evidence remains
 // an explicit gap and never disables unrelated selection or actuation.
-func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store *losshistory.Store, events []model.SecurityEventInfo, p model.Policy, now time.Time, log logr.Logger) []string {
+func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store losshistory.Ledger, events []model.SecurityEventInfo, p model.Policy, now time.Time, log logr.Logger) []string {
 	if store == nil {
 		return []string{"retained-loss-history-source-unavailable"}
 	}
@@ -39,8 +39,7 @@ func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store 
 		if store.ContainsExact(p.PolicyUID, payload.EvidenceID, digest, event.UID) {
 			continue // retained immutable history survives policy generation changes
 		}
-		if payload.PolicyEpoch.Namespace != p.Namespace || payload.PolicyEpoch.Name != p.PolicyName ||
-			payload.PolicyEpoch.Generation != p.PolicyGeneration || payload.ProtectedScope.Tenant != p.Tenant {
+		if payload.PolicyEpoch.Namespace != p.Namespace || payload.PolicyEpoch.Name != p.PolicyName {
 			gaps = append(gaps, "completed-disclosure-policy-epoch-mismatch")
 			continue
 		}
@@ -79,6 +78,7 @@ func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store 
 		record := model.AdmittedLossV1{
 			SchemaVersion: model.AdmittedLossSchemaV1, Disclosure: payload, CanonicalPayloadSHA256: digest,
 			SecurityEvent:        model.SecurityEventIdentity{Name: event.Name, UID: event.UID, CreationTimestamp: event.CreatedAt},
+			AdmissionTime:        admittedAt,
 			AuthenticatedCreator: event.CreatorIdentity, TrustBoundary: boundary, IngestedAt: now,
 		}
 		if err := store.Put(record); err != nil {

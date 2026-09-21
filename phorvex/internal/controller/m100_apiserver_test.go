@@ -248,6 +248,14 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	if err := other.Create(ctx, forged); err == nil {
 		t.Fatal("allowlisted identity substituted another observer's payload")
 	}
+	admittedGeneration := payload.PolicyEpoch.Generation
+	policyObject.Spec.Budget.ProactiveFloor = metav1.Duration{Duration: 2 * time.Hour}
+	if err := admin.Update(ctx, policyObject); err != nil {
+		t.Fatal(err)
+	}
+	if policyObject.Generation == admittedGeneration {
+		t.Fatalf("policy update did not advance generation: %d", policyObject.Generation)
+	}
 
 	// The original Pod may be deleted immediately after authoritative admission;
 	// the frozen owner binding must still reach durable history on the first tick.
@@ -284,6 +292,9 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	result := store.Query(policy.PolicyUID, string(dep.UID))
 	if result.Status != "available" || len(result.Records) != 1 || result.Records[0].SecurityEvent.UID != string(event.UID) {
 		t.Fatalf("durable API observation missing: %+v", result)
+	}
+	if result.Records[0].Disclosure.PolicyEpoch.Generation != admittedGeneration || result.Records[0].Disclosure.PolicyEpoch.Generation == policyObject.Generation {
+		t.Fatalf("admitted historical epoch was not preserved across policy update: record=%d admitted=%d current=%d", result.Records[0].Disclosure.PolicyEpoch.Generation, admittedGeneration, policyObject.Generation)
 	}
 
 	if got := store.Query(policy.PolicyUID, string(dep.UID)); len(got.Records) != 1 {

@@ -112,8 +112,11 @@ func validTypedWitness(w model.LossWitness) bool {
 		return false
 	}
 	eventTime, eventErr := time.Parse(time.RFC3339Nano, w.EventTime)
+	admissionTime, admissionErr := time.Parse(time.RFC3339Nano, w.AdmissionTime)
 	ingestTime, ingestErr := time.Parse(time.RFC3339Nano, w.IngestionTime)
-	return eventErr == nil && ingestErr == nil && !eventTime.Before(o.CompletedAt) && !ingestTime.Before(eventTime)
+	return eventErr == nil && admissionErr == nil && ingestErr == nil &&
+		!admissionTime.Before(o.CompletedAt) && !admissionTime.Before(eventTime) && admissionTime.Before(eventTime.Add(time.Second)) &&
+		!ingestTime.Before(admissionTime)
 }
 
 // Build consumes a trusted source adapter's frozen bindings, NOT detector payloads.

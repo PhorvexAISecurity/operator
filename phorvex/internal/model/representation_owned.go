@@ -158,6 +158,7 @@ func representationWitness(in LossWitness, redact bool) LossWitness {
 	in.Scope = representationScope(in.Scope, redact)
 	in.EventRef = representationString(in.EventRef, redact)
 	in.EventTime = representationString(in.EventTime, redact)
+	in.AdmissionTime = representationString(in.AdmissionTime, redact)
 	in.IngestionTime = representationString(in.IngestionTime, redact)
 	in.AuthenticatedIdentity = representationString(in.AuthenticatedIdentity, redact)
 	in.TrustAtIngestionRef = representationString(in.TrustAtIngestionRef, redact)

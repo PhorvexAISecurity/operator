@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/model"
@@ -31,6 +32,15 @@ type Result struct {
 	Records []model.AdmittedLossV1
 	Status  string
 	Gaps    []string
+}
+
+// Ledger is the bounded durable history boundary consumed by ingest and the
+// runner. The interface also permits deterministic blocked-I/O controls without
+// weakening the production Store implementation.
+type Ledger interface {
+	ContainsExact(policyUID, evidenceID, payloadDigest, eventUID string) bool
+	Put(model.AdmittedLossV1) error
+	Query(policyUID, ownerUID string) Result
 }
 
 type stored struct {
@@ -154,11 +164,15 @@ func canonicalRecord(r model.AdmittedLossV1) ([]byte, error) {
 	if err != nil || digest != r.CanonicalPayloadSHA256 || len(payload) == 0 {
 		return nil, errors.New("admitted payload digest mismatch")
 	}
-	if r.SecurityEvent.Name == "" || r.SecurityEvent.UID == "" || r.SecurityEvent.CreationTimestamp.IsZero() ||
+	if r.SecurityEvent.Name == "" || r.SecurityEvent.UID == "" || r.SecurityEvent.CreationTimestamp.IsZero() || r.AdmissionTime.IsZero() ||
 		r.AuthenticatedCreator == "" || r.TrustBoundary.ConfigurationUID == "" ||
 		r.TrustBoundary.ConfigurationResourceVersion == "" || r.TrustBoundary.ActivationTime.IsZero() ||
 		r.TrustBoundary.ContractVersion != disclosure.BoundaryContract || r.IngestedAt.IsZero() {
 		return nil, errors.New("incomplete admitted authority")
+	}
+	if r.AdmissionTime.Before(r.Disclosure.Observation.CompletedAt) || r.AdmissionTime.Before(r.SecurityEvent.CreationTimestamp) ||
+		!r.AdmissionTime.Before(r.SecurityEvent.CreationTimestamp.Add(time.Second)) || r.IngestedAt.Before(r.AdmissionTime) {
+		return nil, errors.New("invalid admitted authority timeline")
 	}
 	b, err := json.Marshal(r)
 	if err != nil || len(b) == 0 || len(b) > MaxRecordBytes {

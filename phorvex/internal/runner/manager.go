@@ -199,7 +199,7 @@ type Manager struct {
 	BoundaryReader client.Reader
 	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
 	// leaves representation history honestly unavailable.
-	LossHistory *losshistory.Store
+	LossHistory losshistory.Ledger
 	// LossHistoryReader performs optional completed-disclosure authority and
 	// replacement-owner reads under a separate bounded context. Production sets
 	// it to the uncached API reader; a stall cannot consume the actuation tick.
@@ -207,6 +207,8 @@ type Manager struct {
 	// LossHistoryReadTimeout bounds the whole optional history transaction. Zero
 	// uses the conservative default in completed_disclosure.go.
 	LossHistoryReadTimeout time.Duration
+	lossHistoryWorkerMu    sync.Mutex
+	lossHistoryWorker      *lossHistoryCoordinator
 	// ActuationBrakeReadTimeout bounds each uncached Namespace/Pod authority read.
 	// Zero uses actuationbrake.DefaultReadTimeout.
 	ActuationBrakeReadTimeout time.Duration

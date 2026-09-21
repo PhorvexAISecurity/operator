@@ -78,6 +78,7 @@ type LossWitness struct {
 	Scope                           ProtectedScope            `json:"scope"`
 	EventRef                        string                    `json:"eventRef"`
 	EventTime                       string                    `json:"eventTime"`
+	AdmissionTime                   string                    `json:"admissionTime,omitempty"`
 	IngestionTime                   string                    `json:"ingestionTime"`
 	AuthenticatedIdentity           string                    `json:"authenticatedIdentity"`
 	TrustAtIngestionRef             string                    `json:"trustAtIngestionRef"`

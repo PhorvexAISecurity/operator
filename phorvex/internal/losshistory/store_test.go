@@ -37,6 +37,7 @@ func admittedRecord(t *testing.T, evidence, version string) model.AdmittedLossV1
 	}
 	return model.AdmittedLossV1{SchemaVersion: model.AdmittedLossSchemaV1, Disclosure: p, CanonicalPayloadSHA256: payloadDigest,
 		SecurityEvent:        model.SecurityEventIdentity{Name: "event-" + evidence, UID: "event-uid-" + evidence, CreationTimestamp: now.Add(2 * time.Second)},
+		AdmissionTime:        now.Add(2500 * time.Millisecond),
 		AuthenticatedCreator: "system:serviceaccount:ns:observer",
 		TrustBoundary:        model.DisclosureTrustBoundary{ConfigurationUID: "mwc-uid", ConfigurationResourceVersion: "7", ActivationTime: now, ContractVersion: disclosure.BoundaryContract},
 		IngestedAt:           now.Add(3 * time.Second)}
@@ -87,6 +88,11 @@ func TestM100LossHistoryImmutableRestartAndOwnerIsolation(t *testing.T) {
 	_, conflict.CanonicalPayloadSHA256, _ = disclosure.Marshal(conflict.Disclosure)
 	if err := restarted.Put(conflict); err == nil {
 		t.Fatal("conflicting evidence ID replaced original")
+	}
+	missingAdmission := admittedRecord(t, "missing-admission", "v2")
+	missingAdmission.AdmissionTime = time.Time{}
+	if err := restarted.Put(missingAdmission); err == nil {
+		t.Fatal("record without exact admission time was retained")
 	}
 }
 

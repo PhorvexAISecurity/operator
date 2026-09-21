@@ -80,6 +80,7 @@ type AdmittedLossV1 struct {
 	Disclosure             CompletedDisclosureV1   `json:"disclosure"`
 	CanonicalPayloadSHA256 string                  `json:"canonicalPayloadSHA256"`
 	SecurityEvent          SecurityEventIdentity   `json:"securityEvent"`
+	AdmissionTime          time.Time               `json:"admissionTime"`
 	AuthenticatedCreator   string                  `json:"authenticatedCreator"`
 	TrustBoundary          DisclosureTrustBoundary `json:"trustBoundary"`
 	IngestedAt             time.Time               `json:"ingestedAt"`
