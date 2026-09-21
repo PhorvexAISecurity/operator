@@ -2,12 +2,16 @@ package jetstreamprobe
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	server "github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -108,6 +112,226 @@ func TestRealServerRefusesWrongStoredIdentity(t *testing.T) {
 	}
 }
 
+func TestOpenRefusesPreexistingStreamAndConsumerWithoutMutation(t *testing.T) {
+	for _, matchingOwnership := range []bool{false, true} {
+		t.Run(fmt.Sprintf("matching-ownership-%t", matchingOwnership), func(t *testing.T) {
+			srv := startServer(t)
+			cfg := testConfig(srv.ClientURL())
+			nc, err := nats.Connect(cfg.URL, nats.Timeout(cfg.ConnectTimeout), nats.MaxReconnects(0))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(nc.Close)
+			js, err := jetstream.New(nc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			metadata := ownershipMetadata("foreign-owner")
+			if matchingOwnership {
+				metadata = ownershipMetadata(cfg.OwnerNonce)
+			}
+			stream, err := js.CreateStream(t.Context(), jetstream.StreamConfig{Name: cfg.Stream, Subjects: []string{cfg.Subject}, Storage: jetstream.FileStorage, Replicas: cfg.Replicas, Duplicates: cfg.DuplicateWindow, Metadata: metadata})
+			if err != nil {
+				t.Fatal(err)
+			}
+			consumer, err := stream.CreateConsumer(t.Context(), jetstream.ConsumerConfig{Durable: cfg.Consumer, AckPolicy: jetstream.AckExplicitPolicy, AckWait: cfg.AckWait, MaxDeliver: 2, FilterSubject: cfg.Subject, Metadata: metadata})
+			if err != nil {
+				t.Fatal(err)
+			}
+			msg := nats.NewMsg(cfg.Subject)
+			msg.Header.Set(messageIDHeader, "foreign-message")
+			msg.Data = []byte("foreign-payload")
+			if _, err := js.PublishMsg(t.Context(), msg); err != nil {
+				t.Fatal(err)
+			}
+			beforeStream, err := stream.Info(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeConsumer, err := consumer.Info(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if opened, err := Open(t.Context(), cfg); err == nil || opened != nil || !strings.Contains(err.Error(), "refusing preexisting stream") {
+				t.Fatalf("preexisting fixture result probe=%v err=%v", opened, err)
+			}
+			afterStream, err := stream.Info(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			afterConsumer, err := consumer.Info(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(beforeStream.Config, afterStream.Config) || !reflect.DeepEqual(beforeStream.State, afterStream.State) || !reflect.DeepEqual(beforeConsumer.Config, afterConsumer.Config) || beforeConsumer.Delivered != afterConsumer.Delivered || beforeConsumer.AckFloor != afterConsumer.AckFloor || beforeConsumer.NumPending != afterConsumer.NumPending || beforeConsumer.NumAckPending != afterConsumer.NumAckPending {
+				t.Fatalf("preexisting stream or consumer mutated\nbefore stream=%+v\nafter stream=%+v\nbefore consumer=%+v\nafter consumer=%+v", beforeStream, afterStream, beforeConsumer, afterConsumer)
+			}
+		})
+	}
+}
+
+func TestDistinctStorageCheckRefusesPreexistingConsumerWithoutMutation(t *testing.T) {
+	for _, matchingOwnership := range []bool{false, true} {
+		t.Run(fmt.Sprintf("matching-ownership-%t", matchingOwnership), func(t *testing.T) {
+			srv := startServer(t)
+			cfg := testConfig(srv.ClientURL())
+			probe, err := Open(t.Context(), cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(probe.Close)
+			message := Message{ID: "nonce-a", Payload: []byte("payload-a")}
+			ack, err := probe.Publish(t.Context(), message, false, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			metadata := ownershipMetadata("foreign-owner")
+			if matchingOwnership {
+				metadata = ownershipMetadata(cfg.OwnerNonce)
+			}
+			const name = "preexisting-storage-check"
+			consumer, err := probe.stream.CreateConsumer(t.Context(), jetstream.ConsumerConfig{Name: name, AckPolicy: jetstream.AckExplicitPolicy, DeliverPolicy: jetstream.DeliverByStartSequencePolicy, OptStartSeq: ack.Sequence, FilterSubject: cfg.Subject, AckWait: cfg.AckWait, MaxDeliver: 1, Metadata: metadata})
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := consumer.Info(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := probe.ConsumeStoredWithFreshConsumer(t.Context(), name, message, ack.Sequence); err == nil || !strings.Contains(err.Error(), "refusing preexisting distinct consumer") {
+				t.Fatalf("preexisting distinct consumer accepted: %v", err)
+			}
+			after, err := consumer.Info(t.Context())
+			if err != nil {
+				t.Fatalf("preexisting consumer was deleted: %v", err)
+			}
+			if !reflect.DeepEqual(before.Config, after.Config) || before.Delivered != after.Delivered || before.AckFloor != after.AckFloor || before.NumPending != after.NumPending || before.NumAckPending != after.NumAckPending {
+				t.Fatalf("preexisting distinct consumer mutated\nbefore=%+v\nafter=%+v", before, after)
+			}
+			stored, err := probe.GetStored(t.Context(), message, ack.Sequence)
+			if err != nil || stored.StreamSequence != ack.Sequence {
+				t.Fatalf("stored message changed: %+v err=%v", stored, err)
+			}
+		})
+	}
+}
+
+type testMessageBatch struct {
+	messages chan jetstream.Msg
+	err      error
+}
+
+func (b testMessageBatch) Messages() <-chan jetstream.Msg { return b.messages }
+func (b testMessageBatch) Error() error                   { return b.err }
+
+func TestCompletedNoRedeliveryWindowDrainsQueuedMessageBeforePassing(t *testing.T) {
+	srv := startServer(t)
+	cfg := testConfig(srv.ClientURL())
+	probe, err := Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(probe.Close)
+	message := Message{ID: "queued-after-window", Payload: []byte("must-not-pass")}
+	ack, err := probe.Publish(t.Context(), message, false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := probe.consumer.Fetch(1, jetstream.FetchMaxWait(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := <-batch.Messages()
+	if msg == nil {
+		t.Fatal("real server did not deliver queued message")
+	}
+	meta, err := msg.Metadata()
+	if err != nil || meta.Sequence.Stream != ack.Sequence {
+		t.Fatalf("queued message metadata=%+v err=%v", meta, err)
+	}
+	queued := make(chan jetstream.Msg, 1)
+	queued <- msg
+	close(queued)
+	if err := probe.finishNoRedeliveryWindow(t.Context(), testMessageBatch{messages: queued, err: context.Canceled}); err == nil || !strings.Contains(err.Error(), "redelivered") {
+		t.Fatalf("queued delivery after completed window was accepted: %v", err)
+	}
+}
+
+func TestCanceledNoRedeliveryWindowNeverPasses(t *testing.T) {
+	srv := startServer(t)
+	cfg := testConfig(srv.ClientURL())
+	cfg.FetchTimeout = 2 * time.Second
+	probe, err := Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(probe.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if err := probe.RequireNoSameConsumerRedelivery(ctx); err == nil {
+		t.Fatal("canceled observation was accepted as no redelivery")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("canceled observation exceeded caller bound: %s", elapsed)
+	}
+}
+
+func TestConnectHonorsCallerCancellationDuringHandshake(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- conn
+		}
+	}()
+	cfg := testConfig("nats://" + listener.Addr().String())
+	cfg.ConnectTimeout = 2 * time.Second
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if probe, err := Open(ctx, cfg); err == nil || probe != nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("canceled handshake probe=%v err=%v", probe, err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("canceled handshake exceeded caller bound: %s", elapsed)
+	}
+	select {
+	case conn := <-accepted:
+		_ = conn.Close()
+	default:
+	}
+}
+
+func TestDistinctConsumerCleanupFailureIsSurfaced(t *testing.T) {
+	srv := startServer(t)
+	cfg := testConfig(srv.ClientURL())
+	probe, err := Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(probe.Close)
+	message := Message{ID: "nonce-a", Payload: []byte("payload-a")}
+	ack, err := probe.Publish(t.Context(), message, false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteConsumer := probe.deleteConsumer
+	probe.deleteConsumer = func(ctx context.Context, name string) error {
+		srv.Shutdown()
+		srv.WaitForShutdown()
+		return deleteConsumer(ctx, name)
+	}
+	if _, err := probe.ConsumeStoredWithFreshConsumer(t.Context(), "cleanup-must-surface", message, ack.Sequence); err == nil || !strings.Contains(err.Error(), "cleanup distinct consumer") {
+		t.Fatalf("cleanup failure was hidden: %v", err)
+	}
+}
+
 func TestPubAckIdentityValidatorRefusesMalformedOrWrongReceipt(t *testing.T) {
 	valid := &jetstream.PubAck{Stream: "DURABILITY", Sequence: 7}
 	if err := validatePubAck(valid, "DURABILITY", false, 7); err != nil {
@@ -173,6 +397,7 @@ func TestConfigRequiresEveryPositiveBound(t *testing.T) {
 		"ack":       func(c *Config) { c.AckWait = 0 },
 		"duplicate": func(c *Config) { c.DuplicateWindow = 0 },
 		"replicas":  func(c *Config) { c.Replicas = 0 },
+		"owner":     func(c *Config) { c.OwnerNonce = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := base
@@ -230,6 +455,7 @@ func testConfig(url string) Config {
 		Stream:          "DURABILITY",
 		Subject:         "fixture.durability",
 		Consumer:        "durability-main",
+		OwnerNonce:      "test-fixture-owner-7f2710f8",
 		Replicas:        1,
 		ConnectTimeout:  250 * time.Millisecond,
 		RequestTimeout:  time.Second,

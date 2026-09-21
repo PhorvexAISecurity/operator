@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -17,11 +18,18 @@ import (
 
 const messageIDHeader = "Nats-Msg-Id"
 
+const (
+	ownerMetadataKey  = "fixture.phorvex.ai/owner-nonce"
+	schemaMetadataKey = "fixture.phorvex.ai/schema"
+	fixtureSchema     = "post25-nats-jetstream-durability-v1"
+)
+
 type Config struct {
 	URL             string
 	Stream          string
 	Subject         string
 	Consumer        string
+	OwnerNonce      string
 	Replicas        int
 	ConnectTimeout  time.Duration
 	RequestTimeout  time.Duration
@@ -73,25 +81,21 @@ type StateReceipt struct {
 }
 
 type Probe struct {
-	cfg      Config
-	nc       *nats.Conn
-	js       jetstream.JetStream
-	stream   jetstream.Stream
-	consumer jetstream.Consumer
+	cfg            Config
+	nc             *nats.Conn
+	js             jetstream.JetStream
+	stream         jetstream.Stream
+	consumer       jetstream.Consumer
+	deleteConsumer func(context.Context, string) error
 }
 
 func Open(ctx context.Context, cfg Config) (*Probe, error) {
 	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
-	nc, err := nats.Connect(cfg.URL,
-		nats.Name("phorvex-jetstream-durability-probe"),
-		nats.Timeout(cfg.ConnectTimeout),
-		nats.MaxReconnects(0),
-		nats.NoCallbacksAfterClientClose(),
-	)
+	nc, err := connect(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("connect NATS: %w", err)
+		return nil, err
 	}
 	closeOnError := func(err error) (*Probe, error) {
 		nc.Close()
@@ -102,30 +106,130 @@ func Open(ctx context.Context, cfg Config) (*Probe, error) {
 		return closeOnError(fmt.Errorf("create JetStream context: %w", err))
 	}
 	reqCtx, cancel := bounded(ctx, cfg.RequestTimeout)
+	_, err = js.Stream(reqCtx, cfg.Stream)
+	cancel()
+	if err == nil {
+		return closeOnError(fmt.Errorf("refusing preexisting stream %q", cfg.Stream))
+	}
+	if !errors.Is(err, jetstream.ErrStreamNotFound) {
+		return closeOnError(fmt.Errorf("check stream freshness %q: %w", cfg.Stream, err))
+	}
+	reqCtx, cancel = bounded(ctx, cfg.RequestTimeout)
 	stream, err := js.CreateStream(reqCtx, jetstream.StreamConfig{
 		Name:       cfg.Stream,
 		Subjects:   []string{cfg.Subject},
 		Storage:    jetstream.FileStorage,
 		Replicas:   cfg.Replicas,
 		Duplicates: cfg.DuplicateWindow,
+		Metadata:   ownershipMetadata(cfg.OwnerNonce),
 	})
 	cancel()
 	if err != nil {
-		return closeOnError(fmt.Errorf("create exact stream %q: %w", cfg.Stream, err))
+		return closeOnError(fmt.Errorf("create fresh stream %q: %w", cfg.Stream, err))
 	}
 	reqCtx, cancel = bounded(ctx, cfg.RequestTimeout)
-	consumer, err := stream.CreateOrUpdateConsumer(reqCtx, jetstream.ConsumerConfig{
+	streamInfo, err := stream.Info(reqCtx)
+	cancel()
+	if err != nil {
+		return closeOnError(fmt.Errorf("verify newly created stream %q ownership before cleanup authority: %w", cfg.Stream, err))
+	}
+	if err := validateFreshOwnedStream(streamInfo, cfg); err != nil {
+		return closeOnError(err)
+	}
+	cleanupCreatedStream := func(cause error) (*Probe, error) {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+		defer cleanupCancel()
+		cleanupErr := js.DeleteStream(cleanupCtx, cfg.Stream)
+		if cleanupErr != nil {
+			cause = errors.Join(cause, fmt.Errorf("cleanup newly created stream %q: %w", cfg.Stream, cleanupErr))
+		}
+		return closeOnError(cause)
+	}
+	reqCtx, cancel = bounded(ctx, cfg.RequestTimeout)
+	_, err = stream.Consumer(reqCtx, cfg.Consumer)
+	cancel()
+	if err == nil {
+		return cleanupCreatedStream(fmt.Errorf("refusing preexisting consumer %q", cfg.Consumer))
+	}
+	if !errors.Is(err, jetstream.ErrConsumerNotFound) {
+		return cleanupCreatedStream(fmt.Errorf("check consumer freshness %q: %w", cfg.Consumer, err))
+	}
+	reqCtx, cancel = bounded(ctx, cfg.RequestTimeout)
+	consumer, err := stream.CreateConsumer(reqCtx, jetstream.ConsumerConfig{
 		Durable:       cfg.Consumer,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		AckWait:       cfg.AckWait,
 		MaxDeliver:    2,
 		FilterSubject: cfg.Subject,
+		Metadata:      ownershipMetadata(cfg.OwnerNonce),
 	})
 	cancel()
 	if err != nil {
-		return closeOnError(fmt.Errorf("create exact consumer %q: %w", cfg.Consumer, err))
+		return cleanupCreatedStream(fmt.Errorf("create fresh consumer %q: %w", cfg.Consumer, err))
 	}
-	return &Probe{cfg: cfg, nc: nc, js: js, stream: stream, consumer: consumer}, nil
+	reqCtx, cancel = bounded(ctx, cfg.RequestTimeout)
+	consumerInfo, err := consumer.Info(reqCtx)
+	cancel()
+	if err != nil {
+		return closeOnError(fmt.Errorf("verify newly created consumer %q ownership; cleanup authority withheld: %w", cfg.Consumer, err))
+	}
+	if err := validateOwnedConsumer(consumerInfo, cfg.Stream, cfg.Subject, cfg.Consumer, cfg.OwnerNonce); err != nil {
+		return closeOnError(err)
+	}
+	p := &Probe{cfg: cfg, nc: nc, js: js, stream: stream, consumer: consumer}
+	p.deleteConsumer = stream.DeleteConsumer
+	return p, nil
+}
+
+type contextDialer struct {
+	ctx     context.Context
+	timeout time.Duration
+}
+
+func (d contextDialer) Dial(network, address string) (net.Conn, error) {
+	return (&net.Dialer{Timeout: d.timeout}).DialContext(d.ctx, network, address)
+}
+
+type connectResult struct {
+	nc  *nats.Conn
+	err error
+}
+
+func connect(ctx context.Context, cfg Config) (*nats.Conn, error) {
+	connectCtx, cancel := bounded(ctx, cfg.ConnectTimeout)
+	defer cancel()
+	result := make(chan connectResult, 1)
+	go func() {
+		nc, err := nats.Connect(cfg.URL,
+			nats.Name("phorvex-jetstream-durability-probe"),
+			nats.Timeout(cfg.ConnectTimeout),
+			nats.MaxReconnects(0),
+			nats.NoCallbacksAfterClientClose(),
+			nats.SetCustomDialer(contextDialer{ctx: connectCtx, timeout: cfg.ConnectTimeout}),
+		)
+		result <- connectResult{nc: nc, err: err}
+	}()
+	select {
+	case got := <-result:
+		if err := connectCtx.Err(); err != nil {
+			if got.nc != nil {
+				got.nc.Close()
+			}
+			return nil, fmt.Errorf("connect NATS: %w", err)
+		}
+		if got.err != nil {
+			return nil, fmt.Errorf("connect NATS: %w", got.err)
+		}
+		return got.nc, nil
+	case <-connectCtx.Done():
+		go func() {
+			got := <-result
+			if got.nc != nil {
+				got.nc.Close()
+			}
+		}()
+		return nil, fmt.Errorf("connect NATS: %w", connectCtx.Err())
+	}
 }
 
 func (p *Probe) Close() {
@@ -147,10 +251,10 @@ func (p *Probe) State(ctx context.Context) (StateReceipt, error) {
 	if err != nil {
 		return StateReceipt{}, fmt.Errorf("read consumer state: %w", err)
 	}
-	if streamInfo.Config.Name != p.cfg.Stream || len(streamInfo.Config.Subjects) != 1 || streamInfo.Config.Subjects[0] != p.cfg.Subject || streamInfo.Config.Replicas != p.cfg.Replicas || streamInfo.Config.Duplicates != p.cfg.DuplicateWindow {
+	if streamInfo.Config.Name != p.cfg.Stream || len(streamInfo.Config.Subjects) != 1 || streamInfo.Config.Subjects[0] != p.cfg.Subject || streamInfo.Config.Replicas != p.cfg.Replicas || streamInfo.Config.Duplicates != p.cfg.DuplicateWindow || !exactOwnership(streamInfo.Config.Metadata, p.cfg.OwnerNonce) {
 		return StateReceipt{}, fmt.Errorf("stream config identity differs: %+v", streamInfo.Config)
 	}
-	if consumerInfo.Stream != p.cfg.Stream || consumerInfo.Name != p.cfg.Consumer || consumerInfo.Config.FilterSubject != p.cfg.Subject || consumerInfo.Config.AckPolicy != jetstream.AckExplicitPolicy {
+	if consumerInfo.Stream != p.cfg.Stream || consumerInfo.Name != p.cfg.Consumer || consumerInfo.Config.FilterSubject != p.cfg.Subject || consumerInfo.Config.AckPolicy != jetstream.AckExplicitPolicy || !exactOwnership(consumerInfo.Config.Metadata, p.cfg.OwnerNonce) {
 		return StateReceipt{}, fmt.Errorf("consumer config identity differs: %+v", consumerInfo)
 	}
 	return StateReceipt{
@@ -208,21 +312,65 @@ func (p *Probe) ConsumeAndAck(ctx context.Context, expected Message, sequence ui
 }
 
 func (p *Probe) RequireNoSameConsumerRedelivery(ctx context.Context) error {
-	batch, err := p.consumer.Fetch(1, jetstream.FetchMaxWait(p.cfg.FetchTimeout))
+	window, cancel := context.WithCancel(ctx)
+	defer cancel()
+	batch, err := p.consumer.Fetch(1, jetstream.FetchContext(window))
 	if err != nil {
 		return fmt.Errorf("start no-redelivery fetch: %w", err)
 	}
-	for msg := range batch.Messages() {
-		meta, metaErr := msg.Metadata()
-		if metaErr != nil {
-			return fmt.Errorf("unexpected same-consumer delivery with unreadable metadata: %w", metaErr)
+	timer := time.NewTimer(p.cfg.FetchTimeout)
+	defer timer.Stop()
+	select {
+	case msg, ok := <-batch.Messages():
+		if !ok {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("no-redelivery observation aborted: %w", err)
+			}
+			if err := batch.Error(); err != nil {
+				return fmt.Errorf("no-redelivery fetch: %w", err)
+			}
+			return errors.New("no-redelivery observation ended before its complete window")
 		}
-		return fmt.Errorf("acknowledged stream sequence %d redelivered to consumer %q", meta.Sequence.Stream, p.cfg.Consumer)
+		return p.unexpectedSameConsumerDelivery(msg)
+	case <-timer.C:
+		cancel()
+		return p.finishNoRedeliveryWindow(ctx, batch)
+	case <-ctx.Done():
+		cancel()
+		return fmt.Errorf("no-redelivery observation aborted: %w", ctx.Err())
 	}
-	if err := batch.Error(); err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, nats.ErrTimeout) {
-		return fmt.Errorf("no-redelivery fetch: %w", err)
+}
+
+func (p *Probe) finishNoRedeliveryWindow(ctx context.Context, batch jetstream.MessageBatch) error {
+	deadline := time.NewTimer(p.cfg.RequestTimeout)
+	defer deadline.Stop()
+	for {
+		select {
+		case msg, ok := <-batch.Messages():
+			if ok {
+				return p.unexpectedSameConsumerDelivery(msg)
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("no-redelivery observation aborted: %w", err)
+			}
+			if err := batch.Error(); err != nil && !errors.Is(err, context.Canceled) {
+				return fmt.Errorf("no-redelivery fetch after completed window: %w", err)
+			}
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("no-redelivery observation aborted: %w", ctx.Err())
+		case <-deadline.C:
+			return errors.New("no-redelivery fetch did not quiesce after completed window")
+		}
 	}
-	return nil
+}
+
+func (p *Probe) unexpectedSameConsumerDelivery(msg jetstream.Msg) error {
+	meta, err := msg.Metadata()
+	if err != nil {
+		return fmt.Errorf("unexpected same-consumer delivery with unreadable metadata: %w", err)
+	}
+	return fmt.Errorf("acknowledged stream sequence %d redelivered to consumer %q", meta.Sequence.Stream, p.cfg.Consumer)
 }
 
 func (p *Probe) GetStored(ctx context.Context, expected Message, sequence uint64) (StoredReceipt, error) {
@@ -240,6 +388,15 @@ func (p *Probe) ConsumeStoredWithFreshConsumer(ctx context.Context, name string,
 		return DeliveryReceipt{}, errors.New("fresh consumer must have a distinct nonempty name")
 	}
 	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
+	_, err := p.stream.Consumer(reqCtx, name)
+	cancel()
+	if err == nil {
+		return DeliveryReceipt{}, fmt.Errorf("refusing preexisting distinct consumer %q", name)
+	}
+	if !errors.Is(err, jetstream.ErrConsumerNotFound) {
+		return DeliveryReceipt{}, fmt.Errorf("check distinct consumer freshness %q: %w", name, err)
+	}
+	reqCtx, cancel = bounded(ctx, p.cfg.RequestTimeout)
 	consumer, err := p.stream.CreateConsumer(reqCtx, jetstream.ConsumerConfig{
 		Name:          name,
 		AckPolicy:     jetstream.AckExplicitPolicy,
@@ -248,47 +405,77 @@ func (p *Probe) ConsumeStoredWithFreshConsumer(ctx context.Context, name string,
 		FilterSubject: p.cfg.Subject,
 		AckWait:       p.cfg.AckWait,
 		MaxDeliver:    1,
+		Metadata:      ownershipMetadata(p.cfg.OwnerNonce),
 	})
 	cancel()
 	if err != nil {
 		return DeliveryReceipt{}, fmt.Errorf("create distinct consumer %q: %w", name, err)
 	}
-	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), p.cfg.RequestTimeout)
-		defer cleanupCancel()
-		_ = p.stream.DeleteConsumer(cleanupCtx, name)
+	reqCtx, cancel = bounded(ctx, p.cfg.RequestTimeout)
+	consumerInfo, err := consumer.Info(reqCtx)
+	cancel()
+	if err != nil {
+		return DeliveryReceipt{}, fmt.Errorf("verify distinct consumer %q ownership; cleanup authority withheld: %w", name, err)
+	}
+	if err := validateOwnedConsumer(consumerInfo, p.cfg.Stream, p.cfg.Subject, name, p.cfg.OwnerNonce); err != nil {
+		return DeliveryReceipt{}, err
+	}
+	receipt, operationErr := func() (DeliveryReceipt, error) {
+		msg, err := p.fetchOne(ctx, consumer, p.cfg.FetchTimeout)
+		if err != nil {
+			return DeliveryReceipt{}, err
+		}
+		receipt, err := validateDelivery(msg, expected, p.cfg.Stream, p.cfg.Subject, sequence)
+		if err != nil {
+			return DeliveryReceipt{}, err
+		}
+		ackCtx, ackCancel := bounded(ctx, p.cfg.RequestTimeout)
+		defer ackCancel()
+		if err := msg.DoubleAck(ackCtx); err != nil {
+			return DeliveryReceipt{}, fmt.Errorf("ack distinct-consumer stream sequence %d: %w", sequence, err)
+		}
+		return receipt, nil
 	}()
-	msg, err := p.fetchOne(ctx, consumer, p.cfg.FetchTimeout)
-	if err != nil {
-		return DeliveryReceipt{}, err
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), p.cfg.RequestTimeout)
+	cleanupErr := p.deleteConsumer(cleanupCtx, name)
+	cleanupCancel()
+	if cleanupErr != nil {
+		cleanupErr = fmt.Errorf("cleanup distinct consumer %q: %w", name, cleanupErr)
 	}
-	receipt, err := validateDelivery(msg, expected, p.cfg.Stream, p.cfg.Subject, sequence)
-	if err != nil {
-		return DeliveryReceipt{}, err
-	}
-	ackCtx, ackCancel := bounded(ctx, p.cfg.RequestTimeout)
-	defer ackCancel()
-	if err := msg.DoubleAck(ackCtx); err != nil {
-		return DeliveryReceipt{}, fmt.Errorf("ack distinct-consumer stream sequence %d: %w", sequence, err)
-	}
-	return receipt, nil
+	return receipt, errors.Join(operationErr, cleanupErr)
 }
 
 func (p *Probe) fetchOne(ctx context.Context, consumer jetstream.Consumer, wait time.Duration) (jetstream.Msg, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	batch, err := consumer.Fetch(1, jetstream.FetchMaxWait(wait))
+	window, cancel := context.WithCancel(ctx)
+	defer cancel()
+	batch, err := consumer.Fetch(1, jetstream.FetchContext(window))
 	if err != nil {
 		return nil, fmt.Errorf("start bounded fetch: %w", err)
 	}
-	for msg := range batch.Messages() {
-		return msg, nil
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case msg, ok := <-batch.Messages():
+		if ok {
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("bounded fetch aborted: %w", err)
+			}
+			return msg, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("bounded fetch aborted: %w", err)
+		}
+		if err := batch.Error(); err != nil {
+			return nil, fmt.Errorf("bounded fetch: %w", err)
+		}
+		return nil, errors.New("bounded fetch returned no message before its window completed")
+	case <-timer.C:
+		cancel()
+		return nil, errors.New("bounded fetch observation window expired")
+	case <-ctx.Done():
+		cancel()
+		return nil, fmt.Errorf("bounded fetch aborted: %w", ctx.Err())
 	}
-	if err := batch.Error(); err != nil {
-		return nil, fmt.Errorf("bounded fetch: %w", err)
-	}
-	return nil, errors.New("bounded fetch returned no message")
 }
 
 func (p *Probe) waitAckFloor(ctx context.Context, sequence uint64) error {
@@ -313,8 +500,8 @@ func (p *Probe) waitAckFloor(ctx context.Context, sequence uint64) error {
 }
 
 func validateConfig(cfg Config) error {
-	if cfg.URL == "" || cfg.Stream == "" || cfg.Subject == "" || cfg.Consumer == "" {
-		return errors.New("URL, stream, subject, and consumer are required")
+	if cfg.URL == "" || cfg.Stream == "" || cfg.Subject == "" || cfg.Consumer == "" || cfg.OwnerNonce == "" {
+		return errors.New("URL, stream, subject, consumer, and owner nonce are required")
 	}
 	if cfg.Replicas < 1 {
 		return errors.New("replicas must be positive")
@@ -323,6 +510,31 @@ func validateConfig(cfg Config) error {
 		if value <= 0 {
 			return fmt.Errorf("%s must be positive", name)
 		}
+	}
+	return nil
+}
+
+func ownershipMetadata(nonce string) map[string]string {
+	return map[string]string{ownerMetadataKey: nonce, schemaMetadataKey: fixtureSchema}
+}
+
+func exactOwnership(metadata map[string]string, nonce string) bool {
+	return len(metadata) == 2 && metadata[ownerMetadataKey] == nonce && metadata[schemaMetadataKey] == fixtureSchema
+}
+
+func validateFreshOwnedStream(info *jetstream.StreamInfo, cfg Config) error {
+	if info == nil || info.Config.Name != cfg.Stream || len(info.Config.Subjects) != 1 || info.Config.Subjects[0] != cfg.Subject || info.Config.Storage != jetstream.FileStorage || info.Config.Replicas != cfg.Replicas || info.Config.Duplicates != cfg.DuplicateWindow || !exactOwnership(info.Config.Metadata, cfg.OwnerNonce) {
+		return fmt.Errorf("new stream ownership/config differs; cleanup authority withheld: %+v", info)
+	}
+	if info.State.Msgs != 0 || info.State.Bytes != 0 || info.State.Consumers != 0 {
+		return fmt.Errorf("new stream was not fresh; cleanup authority withheld: %+v", info.State)
+	}
+	return nil
+}
+
+func validateOwnedConsumer(info *jetstream.ConsumerInfo, stream, subject, name, ownerNonce string) error {
+	if info == nil || info.Stream != stream || info.Name != name || info.Config.FilterSubject != subject || info.Config.AckPolicy != jetstream.AckExplicitPolicy || !exactOwnership(info.Config.Metadata, ownerNonce) {
+		return fmt.Errorf("consumer ownership/config differs; cleanup authority withheld: %+v", info)
 	}
 	return nil
 }
