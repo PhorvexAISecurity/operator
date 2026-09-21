@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,10 +11,13 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 83e81dfc7e1432ad4d78c4851af77c466c7655575e4c891a39bb1c9fe9136b9f
+    sha256: c9f706db1169e76ae54b3a64c147b5d2f3ea1fda289933ceebce59280ed02e4b
     source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
-    at: '2026-09-21T17:44:17+00:00'
+    at: '2026-09-21T18:07:53+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+    rationale: 'In-scope lead plan correction: guarantee acknowledged durable continuity
+      across observed identities; record unavailable complete lineage explicitly'
 fix_id: POST25-CHECKPOINT-MULTI-ROTATION
 issues: []
 title: Verify checkpoint continuity across repeated Pod replacements
@@ -82,7 +85,7 @@ residuals: []
 next_action:
   owner: checkpoint-worker
   action: Implement signed plan and focused real-producer tests
-updated_at: '2026-09-21T17:44:17+00:00'
+updated_at: '2026-09-21T18:07:53+00:00'
 configuration_history:
 - at: '2026-09-21T17:44:14+00:00'
   by: codex-lead
@@ -111,3 +114,12 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 83e81dfc7e1432ad4d78c4851af77c466c7655575e4c891a39bb1c9fe9136b9f
+  source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+  at: '2026-09-21T17:44:17+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4

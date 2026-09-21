@@ -195,8 +195,8 @@ type checkpointIncarnationObservation struct {
 func (s *c2CheckpointContinuity) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{Name: "c2-checkpoint-continuity", Category: core.CategoryR6Claimed, Source: "Post25 benign stateful checkpoint continuity control", R6ResponseTag: core.R6Partial, BenignControl: true, Realism: core.RealismExecutable,
 		Mechanism:          fmt.Sprintf("PVC-mounted Python CPU counter with atomic fsync+replace+directory-fsync checkpoints and ordinary HTTP observation; image=%s sourceSHA256=%s", checkpointImage, checkpointSourceSHA256()),
-		ClaimLimits:        "benign functional control only; zero ATT&CK techniques; no attack, detection, containment, network-isolation, continuous-availability, GPU-training, mitigation, security-coverage, or ROI claim",
-		OracleDescription:  "same identity must continue acknowledged progress; every bounded successive replacement must prove its predecessor UID absent, retain the same owner/storage/service authority, use a new Pod UID and process incarnation, boot at or above its predecessor's latest acknowledgement, and preserve monotonic progress through the final incarnation",
+		ClaimLimits:        "benign functional control only; zero ATT&CK techniques; no attack, detection, containment, network-isolation, continuous-availability, GPU-training, mitigation, security-coverage, ROI, or proof of every wholly unobserved intermediate Pod/process incarnation",
+		OracleDescription:  "same identity must continue acknowledged progress; every observed bounded successive replacement must prove its last observed predecessor UID absent, retain the same owner/storage/service authority, use a new observed Pod UID and process incarnation, boot at or above that predecessor's latest acknowledgement, and preserve monotonic progress through the final observed incarnation",
 		CleanupDescription: "UID-preconditioned deletion of only the successfully created Deployment, ReplicaSet/target Pod identities, Service, producer Pod, and PVC",
 		R6Justification:    "Measures only acknowledged synthetic checkpoint continuity across Pod replacement through a real application protocol."}
 }

@@ -40,7 +40,7 @@ func TestCheckpointContinuityMetadataIsBenign(t *testing.T) {
 	if !m.BenignControl || m.EffectiveRealism() != core.RealismExecutable || len(m.AttackTechniqueIDs) != 0 || len(m.ExercisedTechniqueIDs) != 0 {
 		t.Fatalf("metadata=%+v", m)
 	}
-	for _, s := range []string{"zero ATT&CK", "continuous-availability", "GPU-training", "security-coverage"} {
+	for _, s := range []string{"zero ATT&CK", "continuous-availability", "GPU-training", "security-coverage", "wholly unobserved intermediate"} {
 		if !strings.Contains(m.ClaimLimits, s) {
 			t.Errorf("missing limit %q", s)
 		}
@@ -444,7 +444,7 @@ func TestCheckpointSuccessiveIncarnationChainRejectsRollbackOrphanAndPVCSubstitu
 	}
 }
 
-func TestCheckpointActualRound40MultiRotationValuesAreAcceptedAsCompleteChain(t *testing.T) {
+func TestCheckpointActualRound40MultiRotationValuesAreAcceptedAsObservedChain(t *testing.T) {
 	const originalUID = "23a7d52d-d7b4-41d7-9e14-f94c7219f517"
 	const firstUID = "11823ef5-06e6-40d0-acfd-cc5ee11fadd0"
 	const finalUID = "917ecc02-efc6-4350-9f85-ed548641560a"
