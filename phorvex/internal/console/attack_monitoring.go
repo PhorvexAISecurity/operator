@@ -93,7 +93,24 @@ func (s *Server) attackMonitoringHandler(w http.ResponseWriter, r *http.Request)
 	// [M-136] Same cross-tenant control as /api/attack-results: the ledger is cluster-wide, so a
 	// tenant-limited grant monitors only its own namespaces.
 	p := principalOf(r)
-	recs := realAttackSnapshots(p)
+	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	exactID := strings.TrimSpace(r.URL.Query().Get("id"))
+	pg, err := collectionPagingFromRequest(r, "/api/attack-monitoring", p, map[string]string{"id": exactID, "q": search})
+	if err != nil {
+		writeCollectionPagingError(w, err)
+		return
+	}
+	var page collectionPage
+	var recs []*attackRecord
+	if pg.Enabled {
+		recs, page, err = pagedRealAttackSnapshots("/api/attack-monitoring", p, pg, search, exactID)
+		if err != nil {
+			writeCollectionPagingError(w, err)
+			return
+		}
+	} else {
+		recs = realAttackSnapshots(p)
+	}
 
 	samples, sampleErr := readUptimeSamples(uptimePath(s.cfg))
 	if sampleErr != nil {
@@ -228,7 +245,7 @@ func (s *Server) attackMonitoringHandler(w http.ResponseWriter, r *http.Request)
 		out = append(out, m)
 	}
 
-	writeJSON(w, 200, map[string]any{
+	response := map[string]any{
 		"attacks":        out,
 		"sampleInterval": uptimeInterval.Seconds(),
 		"preWindowSec":   monPreWindow.Seconds(),
@@ -236,7 +253,11 @@ func (s *Server) attackMonitoringHandler(w http.ResponseWriter, r *http.Request)
 		"note": "availability reconstructed from the background sampler (" + uptimeInterval.String() +
 			" cadence), windowed around each real attack. Before = the " + monPreWindow.String() +
 			" baseline preceding the attack.",
-	})
+	}
+	if pg.Enabled {
+		response["page"] = page
+	}
+	writeJSON(w, 200, response)
 }
 
 func phaseStats(v []float64) monPhase {

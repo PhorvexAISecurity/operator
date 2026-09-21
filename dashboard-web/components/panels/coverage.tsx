@@ -2,24 +2,24 @@
 import * as React from "react";
 import { api, Lens, CoverageTechnique, Posture } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { Segmented, Loading, ErrorBox } from "@/components/ui/more";
+import { Segmented, Loading, ReadStatus } from "@/components/ui/more";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle } from "lucide-react";
+import { useApiRead } from "@/lib/query";
 
 export function ThreatMatrixPanel({ lens }: { lens: Lens }) {
-  const [tech, setTech] = React.useState<CoverageTechnique[] | null>(null);
-  const [err, setErr] = React.useState("");
   const [prod, setProd] = React.useState<"all" | "k8s" | "ai">("all");
-  React.useEffect(() => { api.threatMatrix(lens).then((d) => setTech(d.techniques ?? [])).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!tech) return <Loading label="Building the threat-coverage matrix…" />;
+  const read = useApiRead({ lens, resource: "threat-matrix", fetcher: (signal) => api.threatMatrix(lens, signal), staleTime: 60_000 });
+  const tech = read.data ? (read.data.techniques ?? []) : undefined;
+  if (!tech) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Building the threat-coverage matrix…" />;
 
   const filtered = tech.filter((t) => prod === "all" || t.product === prod);
   const covered = filtered.filter((t) => t.covered).length;
 
   return (
     <div className="animate-fade-up space-y-6">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <PageHead title="Threat-Coverage Matrix" sub="MITRE ATT&CK techniques exercised by the attack catalog, and which Phorvex has demonstrably disrupted in a real run. AI techniques are mapped structurally; demonstrated coverage on K8s is real, AI is [SP-0-PENDING-P4]." />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented value={prod} onChange={setProd} tabs={[{ id: "all", label: "All techniques", count: tech.length }, { id: "k8s", label: "K8s" }, { id: "ai", label: "AI" }]} />
@@ -43,14 +43,13 @@ export function ThreatMatrixPanel({ lens }: { lens: Lens }) {
 }
 
 export function PosturePanel({ lens }: { lens: Lens }) {
-  const [p, setP] = React.useState<Posture | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.posture(lens).then(setP).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!p) return <Loading label="Scoring posture…" rows={3} />;
+  const read = useApiRead({ lens, resource: "posture", fetcher: (signal) => api.posture(lens, signal), staleTime: 60_000 });
+  const p = read.data;
+  if (!p) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Scoring posture…" rows={3} />;
 
   return (
     <div className="animate-fade-up space-y-6">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <PageHead title="Security Posture" sub="A composite readiness grade from Phorvex's proven gates. The weighting is disclosed and simple — AI defense is excluded from the grade and shown honestly as pending (never inflated)." />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">

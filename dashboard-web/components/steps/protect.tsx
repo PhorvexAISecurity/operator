@@ -2,8 +2,8 @@
 import * as React from "react";
 import { Lens } from "@/lib/api";
 import { StepId } from "@/lib/journey";
-import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Segmented } from "@/components/ui/more";
+import { Card, CardContent, Button } from "@/components/ui/primitives";
+import { GroupedSegmented } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { LiveOpsPanel } from "@/components/panels/liveops";
 import { LiveLauncherPanel } from "@/components/panels/live-launcher";
@@ -15,34 +15,46 @@ import { BrainBreakdownPanel } from "@/components/panels/brain-breakdown";
 import { OptimizationPanel, CostPanel, ActuatorPanel, HealthPanel } from "@/components/subsystems/panels";
 import { RiskHeatmap } from "@/components/subsystems/analytics";
 import { ApplyFixPanel } from "@/components/panels/apply-fix";
-import { cn } from "@/lib/utils";
-import { Play, Pause, Radar, Swords, Hand } from "lucide-react";
+import { Radar, Swords } from "lucide-react";
+import { useSelectedTarget } from "@/lib/provider-store";
+import { useScopedUIState } from "@/lib/use-scoped-ui-state";
+
+type Sub = "live" | "launcher" | "policy" | "mtd" | "cost" | "uptime" | "monitoring" | "arms" | "brain" | "actuator" | "health" | "risk" | "applyfix";
 
 export function ProtectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
-  const [sub, setSub] = React.useState<"live" | "launcher" | "policy" | "mtd" | "cost" | "uptime" | "monitoring" | "arms" | "brain" | "actuator" | "health" | "risk" | "applyfix">("live");
+  const selected = useSelectedTarget();
+  const [sub, setSub] = useScopedUIState<Sub>(`protect-tab\u0000${lens}\u0000${selected.context}`, "live");
   const owner = lens === "owner";
+  const operator = lens === "operator";
+  const activeSub = !operator && sub === "policy" ? "live" : sub;
+  React.useEffect(() => {
+    if (activeSub !== sub) setSub(activeSub);
+  }, [activeSub, sub]);
+  const primaryTabs: { id: Sub; label: string }[] = [
+    { id: "live", label: "Live theatre" }, { id: "launcher", label: "Attack launcher" },
+    ...(operator ? [{ id: "policy" as const, label: "Policy control" }] : []),
+    { id: "brain", label: "Brain / reason" },
+  ];
+  const detailTabs: { id: Sub; label: string }[] = [
+    { id: "mtd", label: "MTD / Optimization" },
+    { id: "cost", label: "Cost" }, { id: "uptime", label: "Uptime" },
+    { id: "monitoring", label: "Attack monitoring" }, { id: "arms", label: "Availability: 3-way" },
+    { id: "actuator", label: "Actuator" }, { id: "applyfix", label: "Apply-fix" },
+    { id: "risk", label: "Risk heatmap" }, { id: "health", label: "Health" },
+  ];
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={4} title="Protect / Run" sub={owner ? "Phorvex protecting your platform, in plain language — what it did and that it helped." : "The home for every method. Start Phorvex, watch the optimizer DECIDE and the actuator ACTUATE in real time, and drill into the action set, the coverage−λ·cost scoring, and why each move was chosen."} lens={lens} />
-      {!owner && <Segmented value={sub} onChange={setSub} tabs={[{ id: "live", label: "Live theatre" }, { id: "launcher", label: "Attack launcher" }, { id: "policy", label: "Policy control" }, { id: "mtd", label: "MTD / Optimization" }, { id: "brain", label: "Brain breakdown" }, { id: "cost", label: "Cost" }, { id: "uptime", label: "Uptime" }, { id: "monitoring", label: "Attack monitoring" }, { id: "arms", label: "Availability: 3-way" }, { id: "actuator", label: "Actuator" }, { id: "applyfix", label: "Apply-fix" }, { id: "risk", label: "Risk heatmap" }, { id: "health", label: "Health" }]} />}
+      <StepHead n={5} title="Protect / Run" sub={owner ? "Phorvex protecting your platform, in plain language — what it did and that it helped." : "The home for every method. Start Phorvex, watch the optimizer DECIDE and the actuator ACTUATE in real time, and drill into the action set, the coverage−λ·cost scoring, and why each move was chosen."} lens={lens} />
+      {!owner && <GroupedSegmented value={activeSub} onChange={setSub} primary={primaryTabs} secondary={detailTabs} />}
 
-      {owner || sub === "live" ? (
+      {owner || activeSub === "live" ? (
         <>
-          {!owner && (
+          {operator && (
             <Card><CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
-              <div className="flex items-center gap-3">
-                {/* [P2 #2] The operator MODE control is a cluster WRITE (patch the PhorvexPolicy mode /
-                    start-stop the operator). The console is read-only + safe-triggers only, so this is
-                    HONESTLY DISABLED ([coming]) rather than a dead button that looks live. The operator
-                    is controlled out-of-band (kubectl/Helm); the dashboard streams its real audit. */}
-                <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-panel/40 p-1 opacity-60">
-                  <span className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-muted-foreground"><Play className="h-3 w-3" /> Active</span>
-                  <span className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-muted-foreground"><Pause className="h-3 w-3" /> Dry-run</span>
-                </div>
-                <Badge variant="pending">operator control · coming</Badge>
-                <span className="text-[12px] text-muted-foreground">start/stop &amp; mode are an out-of-band cluster write (kubectl/Helm); this view streams the operator's real decision audit.</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                <Button variant="outline" onClick={() => setSub("policy")}>Open policy control</Button>
+                <span className="min-w-0 text-sm text-muted-foreground">Change Active / Dry-run mode and allowed actions in Policy control. Starting or stopping the operator service requires cluster administration.</span>
               </div>
-              <div className="flex items-center gap-2"><span className="flex items-center gap-1.5 text-[12px] text-muted-foreground"><Hand className="h-3.5 w-3.5" /> native actuator</span><Badge variant="real">streaming the live decision audit</Badge></div>
             </CardContent></Card>
           )}
           <LiveOpsPanel lens={lens} />
@@ -57,17 +69,17 @@ export function ProtectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void 
             </CardContent></Card>
           )}
         </>
-      ) : sub === "launcher" ? <LiveLauncherPanel lens={lens} />
-        : sub === "policy" ? <PolicyControlPanel lens={lens} />
-        : sub === "brain" ? <BrainBreakdownPanel lens={lens} />
-        : sub === "mtd" ? <OptimizationPanel lens={lens} />
-        : sub === "cost" ? <CostPanel lens={lens} />
-        : sub === "uptime" ? <UptimePanel lens={lens} />
-        : sub === "monitoring" ? <AttackMonitoringPanel lens={lens} />
-        : sub === "arms" ? <AvailabilityArmsPanel lens={lens} />
-        : sub === "actuator" ? <ActuatorPanel lens={lens} />
-        : sub === "applyfix" ? <ApplyFixPanel lens={lens} />
-        : sub === "risk" ? <RiskHeatmap lens={lens} />
+      ) : activeSub === "launcher" ? <LiveLauncherPanel lens={lens} />
+        : activeSub === "policy" && operator ? <PolicyControlPanel lens={lens} />
+        : activeSub === "brain" ? <BrainBreakdownPanel lens={lens} />
+        : activeSub === "mtd" ? <OptimizationPanel lens={lens} />
+        : activeSub === "cost" ? <CostPanel lens={lens} />
+        : activeSub === "uptime" ? <UptimePanel lens={lens} />
+        : activeSub === "monitoring" ? <AttackMonitoringPanel lens={lens} />
+        : activeSub === "arms" ? <AvailabilityArmsPanel lens={lens} />
+        : activeSub === "actuator" ? <ActuatorPanel lens={lens} />
+        : activeSub === "applyfix" ? <ApplyFixPanel lens={lens} />
+        : activeSub === "risk" ? <RiskHeatmap lens={lens} />
         : <HealthPanel lens={lens} />}
     </div>
   );

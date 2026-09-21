@@ -252,12 +252,13 @@ func TestRemoteAuditFeedsHistoryAndDerivedReaders(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := NewServer(Config{AuditSource: client})
+	t.Cleanup(func() { _ = s.Close() })
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, _, err := explainabilityFromAuditContext(canceled, "audit://live", client); err == nil {
 		t.Fatal("canceled request continued remote explainability read")
 	}
-	q := url.Values{"lens": {"operator"}, "limit": {"10"}}
+	q := url.Values{"lens": {"operator"}, "limit": {"10"}, "includeNoop": {"true"}}
 	page, _ := getHistory(t, s, q, 200)
 	if len(page.Events) != 2 {
 		t.Fatalf("history failed to read complete remote source: %+v", page)
@@ -266,7 +267,7 @@ func TestRemoteAuditFeedsHistoryAndDerivedReaders(t *testing.T) {
 		t.Fatalf("derived audit count=%d error=%v", total, err)
 	}
 	owner := testOperatorPrincipal("acme")
-	ownPage, _ := getHistoryAs(t, s, owner, url.Values{"lens": {"operator"}, "tenant": {"acme"}}, 200)
+	ownPage, _ := getHistoryAs(t, s, owner, url.Values{"lens": {"operator"}, "tenant": {"acme"}, "includeNoop": {"true"}}, 200)
 	if len(ownPage.Events) != 1 {
 		t.Fatalf("remote history tenant scope widened: %+v", ownPage)
 	}
@@ -288,7 +289,7 @@ func TestRemoteAuditFeedsHistoryAndDerivedReaders(t *testing.T) {
 	if len(page.Events) != 3 {
 		t.Fatalf("remote history lost retained rotation: %+v", page)
 	}
-	paged := url.Values{"lens": {"operator"}, "limit": {"1"}}
+	paged := url.Values{"lens": {"operator"}, "limit": {"1"}, "includeNoop": {"true"}}
 	var pages []historyItem
 	for i := 0; i < 4; i++ {
 		p, _ := getHistory(t, s, paged, 200)

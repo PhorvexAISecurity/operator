@@ -1,4 +1,5 @@
 // Phorvex Console — typed client for the Go data backend (proxied at /api).
+import { captureQueryEventProvider, emitQueryChange, isCurrentQueryEventProvider } from "@/lib/query-events";
 //
 // [M-136] Authentication is the ALB Cognito session (the browser already carries it) or a bearer
 // token for CLI callers. The console sends NO credential of its own: there is no ?user=, no
@@ -61,9 +62,21 @@ export interface OwnerEvent {
 }
 export interface ArmResult { defender: string; trials: number; disruption: number; dwellMean: number }
 export interface RunStatus {
-  id: string; config: string; state: "running" | "done" | "error" | "stopped"; started: string;
+  id: string; config: string; state: "queued" | "running" | "done" | "error" | "stopped"; started: string;
   date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
   trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean; compare3?: boolean;
+}
+export interface PageMeta {
+  limit: number;
+  total: number;
+  nextCursor?: string;
+  currentCursor?: string;
+}
+function pageQuery(limit: number, filters: Record<string, string | undefined> = {}, cursor?: string): string {
+  const q = new URLSearchParams({ limit: String(limit) });
+  Object.entries(filters).forEach(([key, value]) => { if (value?.trim()) q.set(key, key === "q" ? value.trim().toLowerCase() : value.trim()); });
+  if (cursor) q.set("cursor", cursor);
+  return q.toString();
 }
 export interface Suite { Name: string; Desc: string }
 
@@ -74,17 +87,30 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 // credentials: "include" carries the ALB session cookie. It is not a credential this client
 // creates — the browser already holds it, and the server treats Origin as a CSRF boundary rather
 // than as an authentication factor.
-async function get<T>(path: string, lens: Lens, signal?: AbortSignal): Promise<T> {
+function staleProviderAbort(): DOMException {
+  return new DOMException("Request belongs to a retired authenticated provider", "AbortError");
+}
+
+async function get<T>(path: string, lens: Lens, signal?: AbortSignal, bindProvider = true): Promise<T> {
+  const provider = bindProvider ? captureQueryEventProvider() : null;
   let r: Response;
   try {
     r = await fetch(API_BASE + path, { headers: { "X-Phorvex-Lens": lens }, cache: "no-store", credentials: "include", signal });
-  } catch {
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) throw error;
     throw new Error("BACKEND_UNREACHABLE");
   }
-  if (!r.ok) throw new ApiError((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`, r.status);
+  if (signal?.aborted || (provider && !isCurrentQueryEventProvider(provider))) throw staleProviderAbort();
+  if (!r.ok) {
+    const error = new ApiError((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`, r.status);
+    if (r.status === 401 && provider && isCurrentQueryEventProvider(provider) && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("phorvex-auth-lost", { detail: { providerToken: provider.token } }));
+    throw error;
+  }
+  if (provider && !isCurrentQueryEventProvider(provider)) throw staleProviderAbort();
   return r.json();
 }
-async function post<T>(path: string, body: unknown, lens: Lens): Promise<T> {
+async function post<T>(path: string, body: unknown, lens: Lens, context?: string): Promise<T> {
+  const provider = captureQueryEventProvider();
   let r: Response;
   try {
     r = await fetch(API_BASE + path, {
@@ -94,8 +120,27 @@ async function post<T>(path: string, body: unknown, lens: Lens): Promise<T> {
   } catch {
     throw new Error("BACKEND_UNREACHABLE");
   }
-  if (!r.ok) throw new ApiError((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`, r.status);
-  return r.json();
+  if (provider && !isCurrentQueryEventProvider(provider)) throw staleProviderAbort();
+  if (!r.ok) {
+    const error = new ApiError((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`, r.status);
+    if (r.status === 401 && provider && isCurrentQueryEventProvider(provider) && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("phorvex-auth-lost", { detail: { providerToken: provider.token } }));
+    throw error;
+  }
+  const result = await r.json() as T;
+  if (provider && !isCurrentQueryEventProvider(provider)) throw staleProviderAbort();
+  if (result && typeof result === "object" && "ok" in result && (result as { ok?: boolean }).ok === false) {
+    throw new Error(String((result as { message?: string; error?: string }).error || (result as { message?: string }).message || "Mutation was not accepted"));
+  } else {
+    const resources = path.startsWith("/api/runs/") ? ["runs", "runs-summary", "run-status", "run-evidence", "reports", "effectiveness", "posture", "benchmarks", "cost", "cost-timeseries", "uptime", "matrix"]
+      : path.startsWith("/api/availability-arms/") ? ["availability-arms", "cost", "uptime"]
+      : path === "/api/policy/edit" ? ["targets", "catalog", "reports", "workloads", "cluster", "workload-attacks"]
+      : path.includes("attack") || path.includes("fire-scenario") ? ["attack-results", "attack-monitoring", "workload-attacks", "cost", "cost-timeseries", "uptime", "owner-events"] : [];
+    const runId = path.startsWith("/api/runs/")
+      ? String((result as { id?: string }).id || (body as { id?: string } | null)?.id || "") || undefined
+      : undefined;
+    if (resources.length && provider) emitQueryChange({ identity: provider.identity, providerToken: provider.token, lens, context, runId, resources, kind: "mutation" });
+  }
+  return result;
 }
 
 export interface CatalogItem { name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string; techniques: string[]; caps: string[]; hasRun: boolean; expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[] }
@@ -186,92 +231,100 @@ export const applyFixApi = {
 export const api = {
   // session reports what the signed-in identity may actually do, so the UI can offer only the
   // lenses and controls the grant supports. The server re-checks every request regardless.
-  session: (lens: Lens = "operator") => get<Session>("/api/session", lens),
+  session: (lens: Lens = "operator", signal?: AbortSignal) => get<Session>("/api/session", lens, signal, false),
   liveHistory: (lens: Lens, filters: Record<string, string>, signal?: AbortSignal) =>
     get<LiveHistoryPage>(`/api/live/history?${new URLSearchParams(filters)}`, lens, signal),
   health: (lens: Lens = "operator") => get<any>("/api/health", lens),
   // diagnostics is the authenticated form of what /api/health used to disclose.
-  diagnostics: (lens: Lens = "operator") => get<any>("/api/diagnostics", lens),
-  effectiveness: (lens: Lens) => get<{ stats: Stat[] }>("/api/effectiveness", lens),
-  frontier: (lens: Lens) => get<{ rows: FrontierRow[] }>("/api/frontier", lens),
-  suites: (lens: Lens) => get<{ suites: Suite[] }>("/api/suites", lens),
+  diagnostics: (lens: Lens = "operator", signal?: AbortSignal) => get<any>("/api/diagnostics", lens, signal),
+  effectiveness: (lens: Lens, signal?: AbortSignal) => get<{ stats: Stat[] }>("/api/effectiveness", lens, signal),
+  frontier: (lens: Lens, signal?: AbortSignal) => get<{ rows: FrontierRow[] }>("/api/frontier", lens, signal),
+  suites: (lens: Lens, signal?: AbortSignal) => get<{ suites: Suite[] }>("/api/suites", lens, signal),
   // owner endpoints are tenant-scoped: the owner lens MUST pass its tenant (the backend fail-closes
   // on an empty tenant to prevent cross-tenant leak). ownerTenants lists the selectable tenants.
-  ownerEvents: (lens: Lens, tenant?: string) => get<{ events: OwnerEvent[]; empty: boolean; rollup: OwnerRollup; note: string; partial: boolean; coveredFrom?: string; coveredTo?: string }>(`/api/owner/events${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`, lens),
-  ownerTenants: (lens: Lens) => get<{ tenants: string[]; partial: boolean; coveredFrom?: string; coveredTo?: string }>("/api/owner/tenants", lens),
-  reports: (lens: Lens) => get<{ reports: ReportMeta[] }>("/api/reports", lens),
-  cost: (lens: Lens, context = "") => get<CostResult>(`/api/cost${context ? `?context=${encodeURIComponent(context)}` : ""}`, lens),
-  costTimeseries: (lens: Lens) => get<CostTimeseries>("/api/cost-timeseries", lens),
-  uptime: (lens: Lens, window = "1h", context = "") => get<UptimeResult>(`/api/uptime?window=${encodeURIComponent(window)}${context ? `&context=${encodeURIComponent(context)}` : ""}`, lens),
-  report: (id: string, lens: Lens) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens),
+  ownerEvents: (lens: Lens, tenant?: string, signal?: AbortSignal) => get<{ events: OwnerEvent[]; empty: boolean; rollup: OwnerRollup; note: string; partial: boolean; coveredFrom?: string; coveredTo?: string }>(`/api/owner/events${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`, lens, signal),
+  ownerTenants: (lens: Lens, signal?: AbortSignal) => get<{ tenants: string[]; partial: boolean; coveredFrom?: string; coveredTo?: string }>("/api/owner/tenants", lens, signal),
+  reports: (lens: Lens, signal?: AbortSignal) => get<{ reports: ReportMeta[] }>("/api/reports", lens, signal),
+  cost: (lens: Lens, context = "", signal?: AbortSignal) => get<CostResult>(`/api/cost${context ? `?context=${encodeURIComponent(context)}` : ""}`, lens, signal),
+  costTimeseries: (lens: Lens, signal?: AbortSignal) => get<CostTimeseries>("/api/cost-timeseries", lens, signal),
+  uptime: (lens: Lens, window = "1h", context = "", signal?: AbortSignal) => get<UptimeResult>(`/api/uptime?window=${encodeURIComponent(window)}${context ? `&context=${encodeURIComponent(context)}` : ""}`, lens, signal),
+  report: (id: string, lens: Lens, signal?: AbortSignal) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens, signal),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
-  version: (lens: Lens) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens),
-  vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
-  workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string }>("/api/workload/attack", { namespace, action }, lens),
+  version: (lens: Lens, signal?: AbortSignal) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens, signal),
+  vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
+  workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens) => get<{ attacks: AttackResult[] }>("/api/attack-results", lens),
+  attackResultsPage: (lens: Lens, limit: number, filters: { q?: string; id?: string } = {}, cursor?: string, signal?: AbortSignal) =>
+    get<{ attacks: AttackResult[]; page?: PageMeta }>(`/api/attack-results?${pageQuery(limit, filters, cursor)}`, lens, signal),
   // Per-app attack compatibility: which attacks THIS app's stack supports, which are armed to
   // fire now, and — when the harness binary is in the image — the catalogue filtered per app.
-  workloadAttacks: (namespace: string, lens: Lens) =>
-    get<WorkloadAttacks>(`/api/workload/attacks?namespace=${encodeURIComponent(namespace)}`, lens),
+  workloadAttacks: (namespace: string, lens: Lens, signal?: AbortSignal) =>
+    get<WorkloadAttacks>(`/api/workload/attacks?namespace=${encodeURIComponent(namespace)}`, lens, signal),
   // Fire a catalogue scenario as a REAL SecurityEvent at a live app's pod (not the sandbox).
   fireScenarioLive: (body: { namespace: string; scenario: string; mitre?: string; expected?: string; action?: "fire" | "clear" }, lens: Lens) =>
-    post<{ ok: boolean; scenario: string; namespace: string; pod?: string; expect?: string; message: string }>("/api/workload/fire-scenario", body, lens),
+    post<{ ok: boolean; scenario: string; namespace: string; pod?: string; expect?: string; message: string; attackId?: string }>("/api/workload/fire-scenario", body, lens),
   // LIVE-ATTACK MONITORING — availability before/during/after each real attack + downtime $.
   attackMonitoring: (lens: Lens) =>
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),
+  attackMonitoringPage: (lens: Lens, limit: number, filters: { q?: string; id?: string } = {}, cursor?: string, signal?: AbortSignal) =>
+    get<AttackMonitoringResult & { page?: PageMeta }>(`/api/attack-monitoring?${pageQuery(limit, filters, cursor)}`, lens, signal),
   // three-arm availability: no-defense vs blind timer vs Phorvex, measured on the same app.
   // start a three-arm comparison for one app (disruptive, ~7 min) — the 3-way tab shows it live.
   runAvailabilityArms: (namespace: string, attack: string, lens: Lens) =>
     post<{ ok: boolean; namespace: string; note: string }>("/api/availability-arms/run", { namespace, attack }, lens),
   availabilityArms: (ns: string, lens: Lens) =>
     get<AvailabilityArms>(`/api/availability-arms${ns ? `?ns=${encodeURIComponent(ns)}` : ""}`, lens),
+  availabilityArmsPage: (lens: Lens, limit: number, filters: { ns?: string; q?: string } = {}, cursor?: string, signal?: AbortSignal) =>
+    get<AvailabilityArms & { page?: PageMeta }>(`/api/availability-arms?${pageQuery(limit, filters, cursor)}`, lens, signal),
   // Optimizer Bench — run the REAL p1-coverage engine over a config sweep, in-process (no live attack).
   // horizonSec>0 adds the temporal (over-time) simulation where tickInterval + anti-rotation manifest.
   benchmarkSim: (scenario: string, configs: BenchConfigInput[], horizonSec: number, r6IntervalSec: number, lens: Lens) =>
     post<BenchResult>("/api/benchmark-sim", { scenario, configs, horizonSec, r6IntervalSec }, lens),
-  runStatus: (id: string, lens: Lens) => get<RunStatus>(`/api/runs/status?id=${id}`, lens),
+  runStatus: (id: string, lens: Lens, signal?: AbortSignal) => get<RunStatus>(`/api/runs/status?id=${encodeURIComponent(id)}`, lens, signal),
   runsList: (lens: Lens) => get<{ runs: RunStatus[] }>("/api/runs/list", lens),
+  runsPage: (lens: Lens, limit: number, filters: { context?: string; provider?: string; q?: string } = {}, cursor?: string, signal?: AbortSignal) =>
+    get<{ runs: RunStatus[]; page?: PageMeta }>(`/api/runs/list?${pageQuery(limit, filters, cursor)}`, lens, signal),
   stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
-  runEvidence: (id: string, lens: Lens) => get<RunEvidence>(`/api/runs/evidence?id=${encodeURIComponent(id)}`, lens),
-  catalog: (lens: Lens) => get<{ items: CatalogItem[] }>("/api/catalog", lens),
-  benchmarks: (lens: Lens) => get<{ groups: BenchGroup[] }>("/api/benchmarks", lens),
-  threatMatrix: (lens: Lens) => get<{ techniques: CoverageTechnique[] }>("/api/threat-matrix", lens),
-  posture: (lens: Lens) => get<Posture>("/api/posture", lens),
+  runEvidence: (id: string, lens: Lens, signal?: AbortSignal) => get<RunEvidence>(`/api/runs/evidence?id=${encodeURIComponent(id)}`, lens, signal),
+  catalog: (lens: Lens, signal?: AbortSignal) => get<{ items: CatalogItem[] }>("/api/catalog", lens, signal),
+  benchmarks: (lens: Lens, signal?: AbortSignal) => get<{ groups: BenchGroup[] }>("/api/benchmarks", lens, signal),
+  threatMatrix: (lens: Lens, signal?: AbortSignal) => get<{ techniques: CoverageTechnique[] }>("/api/threat-matrix", lens, signal),
+  posture: (lens: Lens, signal?: AbortSignal) => get<Posture>("/api/posture", lens, signal),
   rawlog: (path: string, lens: Lens) => get<{ log: string }>(`/api/rawlog?path=${encodeURIComponent(path)}`, lens),
-  targets: (lens: Lens) => get<{ targets: ClusterTarget[] }>("/api/targets", lens),
+  targets: (lens: Lens, signal?: AbortSignal) => get<{ targets: ClusterTarget[] }>("/api/targets", lens, signal),
   // workloads enumerates the REAL workloads on the selected cluster (live get/list — read-only).
-  workloads: (target: string, lens: Lens) =>
-    get<{ context: string; namespaces: WorkloadNS[] }>(`/api/workloads${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
+  workloads: (target: string, lens: Lens, signal?: AbortSignal) =>
+    get<{ context: string; namespaces: WorkloadNS[] }>(`/api/workloads${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens, signal),
   // capabilities reports live cluster GPU/MIG/multi-node so the UI gates only genuinely-unmet scenarios.
-  capabilities: (target: string, lens: Lens) =>
-    get<{ gpu: boolean; mig: boolean; multiNode: boolean; nodes: number; gpuCount: number }>(`/api/capabilities${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
-  startScenario: (scenarios: string | string[], withPX: boolean, target: string, namespace: string, lens: Lens, compare3 = false) =>
-    post<{ id: string }>("/api/runs/scenario", { scenarios: Array.isArray(scenarios) ? scenarios : [scenarios], withPX, compare3, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
+  capabilities: (target: string, lens: Lens, signal?: AbortSignal) =>
+    get<{ gpu: boolean; mig: boolean; multiNode: boolean; nodes: number; gpuCount: number }>(`/api/capabilities${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens, signal),
+  startScenario: (scenarios: string | string[], withPX: boolean, target: string, namespace: string, lens: Lens, compare3 = false, context?: string) =>
+    post<{ id: string }>("/api/runs/scenario", { scenarios: Array.isArray(scenarios) ? scenarios : [scenarios], withPX, compare3, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens, context),
   // scan execs `phorvex --scan` LIVE (fresh exec each call — not a cached corpus). ns="" scans all
   // namespaces; context targets a specific kubeconfig context (the selected environment).
-  scan: (ns: string, lens: Lens, context?: string) => {
+  scan: (ns: string, lens: Lens, context?: string, signal?: AbortSignal) => {
     const q = new URLSearchParams();
     if (ns) q.set("ns", ns);
     if (context) q.set("context", context);
     const s = q.toString();
-    return get<ScanResult>(`/api/scan${s ? `?${s}` : ""}`, lens);
+    return get<ScanResult>(`/api/scan${s ? `?${s}` : ""}`, lens, signal);
   },
   ablation: (ns: string, lens: Lens) => get<AblationResult>(`/api/ablation${ns ? `?ns=${encodeURIComponent(ns)}` : ""}`, lens),
-  cluster: (lens: Lens) => get<{ policies: PolicyView[]; available: boolean; note: string }>("/api/cluster", lens),
+  cluster: (lens: Lens, signal?: AbortSignal) => get<{ policies: PolicyView[]; available: boolean; note: string }>("/api/cluster", lens, signal),
   // LIVE cluster control: patch a PhorvexPolicy. Only the fields present are changed. A real
   // cluster write, gated to the operator lens behind the console's Cognito auth.
-  policyEdit: (body: PolicyEdit, lens: Lens) =>
-    post<{ ok: boolean; namespace: string; name: string; patched: Record<string, unknown>; result: string }>("/api/policy/edit", body, lens),
-  handlers: (lens: Lens) => get<RegistryView>("/api/handlers", lens),
-  matrix: (lens: Lens) => get<MatrixResult>("/api/matrix", lens),
-  aiSurface: (lens: Lens) => get<AISurface>("/api/ai-surface", lens),
-  metrics: (lens: Lens) => get<MetricsResult>("/api/metrics", lens),
+  policyEdit: (body: PolicyEdit, lens: Lens, context?: string) =>
+    post<{ ok: boolean; namespace: string; name: string; patched: Record<string, unknown>; result: string }>("/api/policy/edit", body, lens, context),
+  handlers: (lens: Lens, signal?: AbortSignal) => get<RegistryView>("/api/handlers", lens, signal),
+  matrix: (lens: Lens, signal?: AbortSignal) => get<MatrixResult>("/api/matrix", lens, signal),
+  aiSurface: (lens: Lens, signal?: AbortSignal) => get<AISurface>("/api/ai-surface", lens, signal),
+  metrics: (lens: Lens, signal?: AbortSignal) => get<MetricsResult>("/api/metrics", lens, signal),
   // Red-team READ endpoints (previously backend-only; now wired). run/continuous/live trigger compute /
   // need a real cluster — surfaced as [PENDING] actions, not auto-run.
-  redteamFindings: (lens: Lens) => get<{ findings: RTFinding[] }>("/api/redteam/findings", lens),
+  redteamFindings: (lens: Lens, signal?: AbortSignal) => get<{ findings: RTFinding[] }>("/api/redteam/findings", lens, signal),
   redteamGates: (lens: Lens) => get<{ gates: RTGate[]; allPass: boolean; ranAt: string }>("/api/redteam/gates", lens),
-  redteamCampaigns: (lens: Lens) => get<{ campaigns: RTCampaign[] }>("/api/redteam/campaigns", lens),
+  redteamCampaigns: (lens: Lens, signal?: AbortSignal) => get<{ campaigns: RTCampaign[] }>("/api/redteam/campaigns", lens, signal),
   // clearLive empties the live decision-audit the SSE replays (operator-only write).
   clearLive: (lens: Lens, context = "") => post<{ cleared: boolean; note?: string }>(`/api/live/clear?${new URLSearchParams({ context })}`, {}, lens),
 };
@@ -296,7 +349,7 @@ export interface ScanResult { platform: string; nodes: number; pods: number; nod
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 // A partial live edit to one PhorvexPolicy — only the present fields are patched.
 export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "dryRun"; enabledActions?: string[] }
-export interface ClusterTarget { id: string; context: string; label: string; provider: string; runnable: boolean; note: string }
+export interface ClusterTarget { id: string; context: string; label: string; provider: string; runnable: boolean; note: string; defaultMutationTarget?: boolean }
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
 export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }
 export interface WorkloadNS { namespace: string; system: boolean; podCount: number; workloads: Workload[] }
@@ -348,7 +401,8 @@ export interface AttackResult {
   claim?: ClaimScope;
   id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
-  status: "running" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
+  status: "running" | "partial" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
+  decisionEvidence?: { correlation: "temporal-workload"; time: string; action: string; reason: string; selected: boolean; actuated: boolean };
   dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "flushed" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
@@ -429,7 +483,7 @@ export interface LiveHistoryPage {
 // liveStream opens the SSE decision stream (per-lens projected server-side). Returns a
 // cleanup fn. Each message is the per-lens payload (full Record for investor/operator;
 // OwnerEvent for owner).
-export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: string, tail = 80, context = ""): () => void {
+export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: string, tail = 80, context = "", onError?: (error: Error) => void): () => void {
   // tail=N: replay only the last N decisions on connect (avoids the "fast train" flood after the
   // operator has run for hours), then tail live. tail=0 replays the whole audit (opt-in).
   // context=<kubeconfig context>: SCOPE the stream to that provider's operator audit (EKS vs vCluster).
@@ -444,6 +498,7 @@ export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: st
     { withCredentials: true },
   );
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
+  if (onError) es.onerror = () => onError(new Error("Decision stream connection failed"));
   return () => es.close();
 }
 
@@ -477,7 +532,7 @@ export interface ArmResult {
   responseObserved: boolean;
 }
 export interface ArmRun {
-  runAt: string; namespace: string; deploy: string; attack: string;
+  operation?: string; runAt: string; namespace: string; deploy: string; attack: string;
   nodeRatePerHr: number; arms: ArmResult[];
 }
 export interface ArmsJob {

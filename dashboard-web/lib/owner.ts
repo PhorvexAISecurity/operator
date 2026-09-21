@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens } from "./api";
+import { useApiRead } from "./query";
 
 const KEY = "phorvex-owner-tenant";
 const EVT = "phorvex-owner-tenant";
@@ -10,38 +11,37 @@ const EVT = "phorvex-owner-tenant";
 // pick), and syncs the selection across owner components via a window event. Demo-trust: real
 // per-tenant authn is [PENDING-P-VCLUSTER].
 export function useOwnerTenant(lens: Lens) {
-  const [tenants, setTenants] = React.useState<string[]>([]);
-  const [tenantListPartial, setTenantListPartial] = React.useState(false);
   const [tenant, setT] = React.useState<string>("");
+  const tenantRead = useApiRead({ lens, resource: "owner-tenants", fetcher: (signal) => api.ownerTenants(lens, signal), staleTime: 60_000, enabled: lens === "owner" });
   React.useEffect(() => {
     if (lens !== "owner") {
       setT("");
       return;
     }
-    let live = true;
-    api.ownerTenants(lens).then((d) => {
-      if (!live) return;
+    const d = tenantRead.data;
+    if (d) {
       const ts = d.tenants ?? [];
-      setTenants(ts);
-      setTenantListPartial(!!d.partial);
-      const saved = typeof window !== "undefined" ? localStorage.getItem(KEY) || "" : "";
+      let saved = "";
+      try { saved = typeof window !== "undefined" ? localStorage.getItem(KEY) || "" : ""; } catch {}
       const next = saved && ts.includes(saved) ? saved : ts[0] || "";
       setT(next);
-      if (next && typeof window !== "undefined") localStorage.setItem(KEY, next);
-    }).catch(() => {});
-    const onSync = () => setT((typeof window !== "undefined" && localStorage.getItem(KEY)) || "");
+      if (next && typeof window !== "undefined") { try { localStorage.setItem(KEY, next); } catch {} }
+    } else if (tenantRead.error) setT("");
+    const onSync = () => { try { setT((typeof window !== "undefined" && localStorage.getItem(KEY)) || ""); } catch { setT(""); } };
     if (typeof window !== "undefined") window.addEventListener(EVT, onSync);
     return () => {
-      live = false;
       if (typeof window !== "undefined") window.removeEventListener(EVT, onSync);
     };
-  }, [lens]);
+  }, [lens, tenantRead.data]);
+  const tenants = tenantRead.data?.tenants ?? [];
+  const selected = tenants.includes(tenant) ? tenant : "";
   const setTenant = React.useCallback((t: string) => {
+    if (!tenants.includes(t)) return;
     if (typeof window !== "undefined") {
-      localStorage.setItem(KEY, t);
+      try { localStorage.setItem(KEY, t); } catch {}
       window.dispatchEvent(new Event(EVT));
     }
     setT(t);
-  }, []);
-  return { tenant, tenants, tenantListPartial, setTenant };
+  }, [tenants]);
+  return { tenant: selected, tenants, tenantListPartial: !!tenantRead.data?.partial, error: tenantRead.error, retry: tenantRead.refetch, setTenant };
 }

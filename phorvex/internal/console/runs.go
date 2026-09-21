@@ -25,7 +25,6 @@ import (
 	"syscall"
 	"time"
 
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 )
 
@@ -372,12 +371,13 @@ func (rm *RunManager) Stop(id string) error {
 // are wired into the selector but execution remains tracked by PHORVEXSEC-151 (guarded by the harness
 // safety check). NOT hardcoded to kind — the binary is cluster-agnostic.
 type ClusterTarget struct {
-	ID       string `json:"id"`
-	Context  string `json:"context"`
-	Label    string `json:"label"`
-	Provider string `json:"provider"` // short provider name: "AWS EKS" | "vCluster" | "kind" | "CoreWeave" | "Kubernetes"
-	Runnable bool   `json:"runnable"`
-	Note     string `json:"note"`
+	ID                    string `json:"id"`
+	Context               string `json:"context"`
+	Label                 string `json:"label"`
+	Provider              string `json:"provider"` // short provider name: "AWS EKS" | "vCluster" | "kind" | "CoreWeave" | "Kubernetes"
+	Runnable              bool   `json:"runnable"`
+	Note                  string `json:"note"`
+	DefaultMutationTarget bool   `json:"defaultMutationTarget,omitempty"`
 }
 
 // ClusterTargets DERIVES the selectable targets from the operator's live kubeconfig contexts
@@ -387,26 +387,27 @@ type ClusterTarget struct {
 // honestly empty (the UI shows a
 // "no clusters found — point KUBECONFIG at a cluster" state).
 func (rm *RunManager) ClusterTargets() []ClusterTarget {
-	ctxs := kubeContexts()
+	ctxs, defaultContext, inClusterDefault := kubeTargetResolution()
 	out := make([]ClusterTarget, 0, len(ctxs))
 	for _, c := range ctxs {
-		out = append(out, classifyContext(c))
+		target := classifyContext(c)
+		target.DefaultMutationTarget = c == defaultContext
+		out = append(out, target)
 	}
 	// In-cluster (Deployment) fallback: no kubeconfig contexts resolve, but the pod has a mounted
 	// ServiceAccount — surface THIS cluster as a runnable read-only target so the live workload
 	// view works at the public console URL without any kubeconfig.
-	if len(out) == 0 {
-		if _, err := rest.InClusterConfig(); err == nil {
-			out = append(out, ClusterTarget{
-				ID: "in-cluster", Context: "in-cluster", Runnable: true,
-				Label: "This cluster (in-cluster)",
-				// The label used to say "read-only live view", which understated it: behind the
-				// Cognito auth gate the console fires real attacks AND edits PhorvexPolicy live
-				// (mode, budget, actuators) via the operator ServiceAccount. It is a control
-				// plane for an authenticated operator, not a read-only viewer.
-				Note: "DERIVED from the pod ServiceAccount — live control (authenticated operator)",
-			})
-		}
+	if len(out) == 0 && inClusterDefault {
+		out = append(out, ClusterTarget{
+			ID: "in-cluster", Context: "in-cluster", Runnable: true,
+			DefaultMutationTarget: true,
+			Label:                 "This cluster (in-cluster)",
+			// The label used to say "read-only live view", which understated it: behind the
+			// Cognito auth gate the console fires real attacks AND edits PhorvexPolicy live
+			// (mode, budget, actuators) via the operator ServiceAccount. It is a control
+			// plane for an authenticated operator, not a read-only viewer.
+			Note: "DERIVED from the pod ServiceAccount — live control (authenticated operator)",
+		})
 	}
 	return out
 }
@@ -666,6 +667,71 @@ func (rm *RunManager) List() []RunStatus {
 	}
 	// newest first (run ids are run-N / scn-N; sort by the trailing sequence number desc).
 	sort.Slice(out, func(i, j int) bool { return seqOf(out[i].ID) > seqOf(out[j].ID) })
+	return out
+}
+
+// ListMetadata snapshots every run without touching its metrics file. Paged callers use this to
+// authorize, filter and select a page before doing any filesystem work.
+func (rm *RunManager) ListMetadata() ([]RunStatus, int, []string) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	out := make([]RunStatus, 0, len(rm.runs))
+	maxSeq := 0
+	ids := make([]string, 0, len(rm.runs))
+	for id, st := range rm.runs {
+		cp := *st
+		cp.Arms = nil
+		cp.QueuePos = rm.queuePosLocked(id)
+		out = append(out, cp)
+		ids = append(ids, id)
+		if n := seqOf(id); n > maxSeq {
+			maxSeq = n
+		}
+	}
+	sort.Strings(ids)
+	sort.Slice(out, func(i, j int) bool {
+		si, sj := seqOf(out[i].ID), seqOf(out[j].ID)
+		if si != sj {
+			return si > sj
+		}
+		return out[i].ID > out[j].ID
+	})
+	return out, maxSeq, ids
+}
+
+// HydrateList refreshes metrics only for the already-selected run ids. No manager lock is held
+// during file I/O; live status fields are re-snapshotted after each read.
+func (rm *RunManager) HydrateList(selected []RunStatus) []RunStatus {
+	out := make([]RunStatus, 0, len(selected))
+	for _, meta := range selected {
+		rm.mu.Lock()
+		st := rm.runs[meta.ID]
+		if st == nil {
+			rm.mu.Unlock()
+			continue
+		}
+		path := filepath.Join(rm.cfg.runOutputPath(rm.runOut[meta.ID]), "metrics.jsonl")
+		rm.mu.Unlock()
+
+		var arms []ArmResult
+		var trials int
+		if rows, ok := readMetrics(path); ok {
+			arms, trials = summarizeArms(rows)
+		}
+
+		rm.mu.Lock()
+		st = rm.runs[meta.ID]
+		if st != nil {
+			cp := *st
+			if arms != nil {
+				cp.Arms, cp.Trials = arms, trials
+				st.Arms, st.Trials = arms, trials
+			}
+			cp.QueuePos = rm.queuePosLocked(meta.ID)
+			out = append(out, cp)
+		}
+		rm.mu.Unlock()
+	}
 	return out
 }
 

@@ -1,10 +1,12 @@
 "use client";
 import * as React from "react";
-import { api, Lens, PolicyView, PolicyEdit } from "@/lib/api";
+import { api, ApiError, Lens, PolicyView, PolicyEdit } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Empty } from "@/components/ui/more";
+import { Empty, ReadStatus } from "@/components/ui/more";
 import { Loader2, SlidersHorizontal, Save, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { queryKeys, useApiRead, useQueryScope, useTargets } from "@/lib/query";
+import { useQueries } from "@tanstack/react-query";
 
 // PolicyControlPanel — LIVE editing of the PhorvexPolicy that governs each app.
 //
@@ -34,40 +36,41 @@ function readDraft(p: PolicyView): Draft {
 }
 
 export function PolicyControlPanel({ lens }: { lens: Lens }) {
-  const [policies, setPolicies] = React.useState<PolicyView[] | null>(null);
-  const [available, setAvailable] = React.useState(true);
+  const queryScope = useQueryScope(lens);
+  const targetsQuery = useTargets(lens);
+  const mutationTarget = (targetsQuery.data?.targets || []).find((target) => target.runnable && target.defaultMutationTarget === true) || null;
   const [drafts, setDrafts] = React.useState<Record<string, Draft>>({});
   // per-namespace applicable actuators, fetched from the compat endpoint (stack-scoped).
-  const [actuatorsByNs, setActuatorsByNs] = React.useState<Record<string, string[]>>({});
   const [saving, setSaving] = React.useState("");
   const [msg, setMsg] = React.useState("");
   const [err, setErr] = React.useState("");
 
-  const load = React.useCallback(() => {
-    setErr("");
-    api.cluster(lens)
-      .then((d) => {
-        const ps = d.policies || [];
-        setPolicies(ps);
-        setAvailable(d.available);
-        setDrafts(Object.fromEntries(ps.map((p) => [`${p.namespace}/${p.name}`, readDraft(p)])));
-        // Fetch the stack-applicable actuator set for each governed namespace, so the picker
-        // offers only what the brain can actually run there.
-        Array.from(new Set(ps.map((p) => p.namespace))).forEach((ns) => {
-          api.workloadAttacks(ns, lens)
-            .then((w) => { if (w.policyActuators) setActuatorsByNs((m) => ({ ...m, [ns]: w.policyActuators! })); })
-            .catch(() => {});
-        });
-      })
-      .catch((e) => setErr(String(e.message || e)));
-  }, [lens]);
-
-  React.useEffect(() => { load(); }, [load]);
+  const clusterRead = useApiRead({ lens, resource: "cluster", fetcher: (signal) => api.cluster(lens, signal), staleTime: 30_000 });
+  const policies = clusterRead.data ? (clusterRead.data.policies ?? []) : undefined;
+  const available = clusterRead.data?.available ?? true;
+  const namespaces = React.useMemo(() => Array.from(new Set((policies || []).map((p) => p.namespace))), [policies]);
+  const compatibilityReads = useQueries({ queries: namespaces.map((namespace) => ({ queryKey: queryKeys.read(queryScope, "workload-attacks", { namespace, context: mutationTarget?.context || "" }), queryFn: ({ signal }: { signal: AbortSignal }) => api.workloadAttacks(namespace, lens, signal), enabled: queryScope.ready, staleTime: 30_000, gcTime: 300_000 })) });
+  const draftScope = `${queryScope.identity}\u0000${lens}\u0000${mutationTarget?.context || ""}`;
+  const previousDraftScope = React.useRef("");
+  React.useEffect(() => {
+    if (!policies) return;
+    if (previousDraftScope.current === draftScope) return;
+    previousDraftScope.current = draftScope;
+    setDrafts(Object.fromEntries(policies.map((p) => [`${p.namespace}/${p.name}`, readDraft(p)])));
+  }, [draftScope, policies]);
+  const compatibilityDenied = compatibilityReads.some((read) => read.error instanceof ApiError && (read.error.status === 401 || read.error.status === 403));
+  const compatibilityError = compatibilityReads.find((read) => read.error)?.error;
+  const actuatorsByNs = Object.fromEntries(compatibilityReads.flatMap((read, index) => read.error instanceof ApiError && (read.error.status === 401 || read.error.status === 403) ? [] : read.data?.policyActuators ? [[namespaces[index], read.data.policyActuators ?? []]] : []));
+  const load = () => { setErr(""); void clusterRead.refetch(); compatibilityReads.forEach((read) => void read.refetch()); };
 
   const key = (p: PolicyView) => `${p.namespace}/${p.name}`;
   const set = (k: string, patch: Partial<Draft>) => setDrafts((d) => ({ ...d, [k]: { ...d[k], ...patch } }));
 
   const save = async (p: PolicyView) => {
+    if (!queryScope.ready || !mutationTarget?.context || compatibilityDenied) {
+      setErr("Policy edit refused because the server did not verify a default mutation target.");
+      return;
+    }
     const k = key(p);
     const d = drafts[k];
     setSaving(k); setMsg(""); setErr("");
@@ -79,7 +82,7 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
     }
     body.enabledActions = d.enabled;
     try {
-      const r = await api.policyEdit(body, lens);
+      const r = await api.policyEdit(body, lens, mutationTarget.context);
       setMsg(`Patched ${r.namespace}/${r.name} — live now.`);
       load();
     } catch (e: any) {
@@ -89,9 +92,9 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
     }
   };
 
-  if (err && !policies) return <div className="text-[12px] text-danger">error: {err}</div>;
+  if ((err || clusterRead.error) && !policies) return <ReadStatus error={clusterRead.error || new Error(err)} hasData={false} onRetry={load} />;
   if (!policies) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading policies…</div>;
-  if (!available || policies.length === 0) return <Empty msg="No PhorvexPolicy found on this cluster." />;
+  if (!available || policies.length === 0) return <div className="space-y-3"><ReadStatus error={clusterRead.error || compatibilityError} hasData updatedAt={clusterRead.dataUpdatedAt} refreshing={clusterRead.isFetching} onRetry={load} /><Empty msg="No PhorvexPolicy found on this cluster." /></div>;
 
   return (
     <div className="space-y-4">
@@ -104,6 +107,9 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
         <button onClick={load} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"><RefreshCw className="h-3 w-3" /> refresh</button>
       </CardContent></Card>
 
+      {clusterRead.error && <div role="alert" className="rounded-md border border-warning/30 p-3 text-xs text-warning">Showing the last authorized policy snapshot; refresh failed. <button className="underline" onClick={load}>Retry</button></div>}
+      {compatibilityDenied && <div role="alert" className="rounded-md border border-danger/30 p-3 text-xs text-danger">Actuator compatibility is no longer authorized. Policy mutation is disabled.</div>}
+      {compatibilityError && !compatibilityDenied && <ReadStatus error={compatibilityError} hasData={false} onRetry={load} />}
       {policies.map((p) => {
         const k = key(p);
         const d = drafts[k];
@@ -161,7 +167,7 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
               ))}
             </div>
             <div className="mt-3 flex justify-end">
-              <Button size="sm" variant="primary" disabled={saving !== ""} onClick={() => save(p)}>
+              <Button size="sm" variant="primary" disabled={!queryScope.ready || !!targetsQuery.error || compatibilityDenied || !mutationTarget?.context || saving !== ""} onClick={() => save(p)}>
                 {saving === k ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> patching…</> : <><Save className="h-3.5 w-3.5" /> Apply live</>}
               </Button>
             </div>

@@ -29,6 +29,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -42,8 +43,10 @@ import (
 
 // Server is the console API.
 type Server struct {
-	cfg  Config
-	runs *RunManager
+	cfg            Config
+	runs           *RunManager
+	history        *historyStore
+	historyInitErr string
 	// auth is the identity/authorization boundary. Nil means the console has NO trust boundary,
 	// and in that state every API route answers 503 rather than serving anything.
 	auth *Authenticator
@@ -77,6 +80,9 @@ func NewServer(cfg Config) *Server {
 			cfg.StateDir = cfg.HarnessDir
 		}
 	}
+	if cfg.AuditPath == "" && cfg.AuditSource == nil {
+		cfg.AuditPath = cfg.auditFile()
+	}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
 	if cfg.StateDir == "" {
 		s.stateErr = "console state directory is not configured"
@@ -85,8 +91,25 @@ func NewServer(cfg Config) *Server {
 	}
 	if cfg.StateDir != "" {
 		s.recoverExperiments()
+		if cfg.AuditPath != "" || cfg.AuditSource != nil {
+			store, err := openHistoryStore(cfg)
+			if err != nil {
+				historyErr := fmt.Errorf("audit history database: %w", err)
+				s.historyInitErr = historyErr.Error()
+			} else {
+				s.history = store
+			}
+		}
 	}
 	return s
+}
+
+// Close flushes and closes console-owned durable stores. It is safe to call more than once.
+func (s *Server) Close() error {
+	if s.history != nil {
+		return s.history.Close()
+	}
+	return nil
 }
 
 // EnableAuth installs the verified-identity boundary. Without it the API is closed: there is no
@@ -497,6 +520,58 @@ func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
 // cluster, or in an out-of-scope namespace, is simply absent rather than redacted.
 func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r)
+	q := r.URL.Query()
+	contextFilter := strings.TrimSpace(q.Get("context"))
+	providerFilter := strings.TrimSpace(q.Get("provider"))
+	search := strings.ToLower(strings.TrimSpace(q.Get("q")))
+	pg, err := collectionPagingFromRequest(r, "/api/runs/list", p, map[string]string{
+		"context": contextFilter, "provider": providerFilter, "q": search,
+	})
+	if err != nil {
+		writeCollectionPagingError(w, err)
+		return
+	}
+	if pg.Enabled {
+		all, snapshot, sourceIDs := s.runs.ListMetadata()
+		cursor := pg.establish("/api/runs/list", snapshot, collectionAnchor(sourceIDs))
+		if cursor.Snapshot > snapshot {
+			writeCollectionPagingError(w, fmt.Errorf("cursor snapshot is no longer available; refresh latest"))
+			return
+		}
+		anchorIDs := make([]string, 0, len(sourceIDs))
+		for _, id := range sourceIDs {
+			if seqOf(id) <= cursor.Snapshot {
+				anchorIDs = append(anchorIDs, id)
+			}
+		}
+		if collectionAnchor(anchorIDs) != cursor.Anchor {
+			writeCollectionPagingError(w, fmt.Errorf("cursor snapshot changed; refresh latest"))
+			return
+		}
+		matching := make([]RunStatus, 0, len(all))
+		for _, st := range all {
+			if seqOf(st.ID) > cursor.Snapshot || !runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant}) {
+				continue
+			}
+			if contextFilter != "" && st.Target != contextFilter && !(st.Target == "" && providerFilter != "" && st.Provider == providerFilter) {
+				continue
+			}
+			if contextFilter == "" && providerFilter != "" && (st.Target != "" || st.Provider != providerFilter) {
+				continue
+			}
+			if !containsFold(st.ID+" "+st.Config+" "+st.Namespace, search) {
+				continue
+			}
+			matching = append(matching, st)
+		}
+		start, end, page, err := collectionPageFor(cursor, len(matching))
+		if err != nil {
+			writeCollectionPagingError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"runs": s.runs.HydrateList(matching[start:end]), "page": page})
+		return
+	}
 	all := s.runs.List()
 	out := make([]RunStatus, 0, len(all))
 	for _, st := range all {

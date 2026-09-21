@@ -1,9 +1,11 @@
 "use client";
 import * as React from "react";
 import { api, Lens, Stat } from "@/lib/api";
+import { useApiRead } from "@/lib/query";
 import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { Info, FileText } from "lucide-react";
+import { ReadStatus } from "@/components/ui/more";
 
 const HERO = ["disruption", "work-preserved", "prevention", "explainability"];
 
@@ -61,14 +63,9 @@ function StatTile({ s, hero }: { s: Stat; hero?: boolean }) {
 }
 
 export function EffectivenessPanel({ lens }: { lens: Lens }) {
-  const [stats, setStats] = React.useState<Stat[] | null>(null);
-  const [err, setErr] = React.useState<string>("");
-  React.useEffect(() => {
-    api.effectiveness(lens).then((d) => setStats(d.stats ?? [])).catch((e) => setErr(String(e.message || e)));
-  }, [lens]);
-
-  if (err) return <ErrorState msg={err} />;
-  if (!stats) return <Skeleton rows={8} />;
+  const query = useApiRead({ lens, resource: "effectiveness", fetcher: (signal) => api.effectiveness(lens, signal), staleTime: 60_000 });
+  const stats = query.data ? (query.data.stats ?? []) : undefined;
+  if (!stats) return query.error ? <ReadStatus error={query.error} hasData={false} onRetry={() => void query.refetch()} /> : <Skeleton rows={8} />;
 
   const hero = stats.filter((s) => HERO.includes(s.key));
   const dwell = stats.filter((s) => s.key.startsWith("dwell-"));
@@ -76,6 +73,7 @@ export function EffectivenessPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="animate-fade-up space-y-7">
+      <ReadStatus error={query.error} hasData updatedAt={query.dataUpdatedAt} refreshing={query.isFetching} onRetry={() => void query.refetch()} />
       <PageHead
         title="Effectiveness"
         sub="The proven outcomes — every number traced to a real metrics file, with 95% confidence intervals. K8s is proven on AWS EKS; the AI product's defense is honestly GPU-pending."

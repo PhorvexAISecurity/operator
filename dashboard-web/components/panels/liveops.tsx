@@ -8,7 +8,11 @@ import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { cn } from "@/lib/utils";
+import { useApiRead, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
+import { LIVE_SELECTION_EVENT, LiveSelectionEvent, clearLiveSelection, readLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import { Radio, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2, BarChart3 } from "lucide-react";
+import { useLocalPage } from "@/lib/use-local-page";
+import { PaginationBar } from "@/components/ui/pagination";
 
 // parseTs parses a UTC tsNow() string ("2026-06-28 14:30:00 UTC") to epoch ms.
 function parseTs(s?: string): number {
@@ -69,15 +73,23 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [actionFilter, setActionFilter] = React.useState("");  // "" = all actuator types
   const [query, setQuery] = React.useState("");                // pod / namespace text search
   const [actuatedOnly, setActuatedOnly] = React.useState(false);
+  const [showNoop, setShowNoop] = React.useState(false);
   const owner = lens === "owner";
   const { tenant, tenants, tenantListPartial, setTenant } = useOwnerTenant(lens);
   const sel = useSelectedTarget(); // SCOPE the live stream to the selected provider (EKS vs vCluster)
+  const mutationGeneration = React.useRef(0);
+  const targetQuery = useTargets(lens);
+  const workloadQuery = useWorkloads(sel.context, lens, !owner && !!sel.context);
+  const queryScope = useQueryScope(lens);
+  const verifiedSession = queryScope.session;
+  const selectedTarget = (targetQuery.data?.targets || []).find((t) => t.runnable && t.context === sel.context) || null;
 
-  React.useEffect(() => {
-    let alive=true;
-    api.session(lens).then((session)=>{if(alive)setAuditClearAvailable(session.auditClearAvailable);}).catch(()=>{if(alive)setAuditClearAvailable(false);});
-    return ()=>{alive=false};
-  },[lens]);
+  const mutatesDefaultContext = !sel.context || (selectedTarget?.context === sel.context && selectedTarget.defaultMutationTarget === true);
+  const mutationScopeMessage = selectedTarget
+    ? "Controls are unavailable because this named context is not the server-resolved target of unscoped mutation endpoints."
+    : "Controls are unavailable because the server could not verify this named context as the target of unscoped mutation endpoints.";
+
+  React.useEffect(() => { setAuditClearAvailable(verifiedSession.auditClearAvailable); }, [verifiedSession]);
 
   // This remains an explicit destructive action, scoped to the selected provider.
   async function clearDecisions() {
@@ -91,50 +103,72 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   // ATTACK ↔ DECISION TRACE: pull the attack runs, build their UTC time windows, and correlate each
   // live decision to the attack that was running at that instant — so you can SEE/SEARCH "this
   // decision happened DURING attack X".
-  const [runs, setRuns] = React.useState<RunStatus[]>([]);
+  const runsRead = useApiRead({ lens, resource: "runs-summary", parameters: { context: sel.context, provider: sel.provider }, fetcher: () => api.runsList(lens), staleTime: 5_000, refetchInterval: 5_000 });
+  const runs = runsRead.data?.runs || [];
   const [traceRun, setTraceRun] = React.useState(""); // "" = show all; else only decisions in this attack's window
+  const [traceQuery, setTraceQuery] = React.useState("");
+  React.useEffect(() => { setTraceRun(""); setTraceQuery(""); }, [lens, sel.context, sel.provider]);
   React.useEffect(() => {
-    let alive = true;
-    const load = () => api.runsList(lens).then((d) => { if (alive) setRuns(d.runs || []); }).catch(() => {});
-    load();
-    const t = setInterval(load, 5000);
-    return () => { alive = false; clearInterval(t); };
-  }, [lens]);
+    const apply = (selection: LiveSelectionEvent | null) => {
+      if (!selection) { setTraceRun(""); return; }
+      if (selection?.lens !== lens || selection.context !== sel.context) return;
+      if (selection?.kind === "run" && selection.lens === lens && selection.context === sel.context) setTraceRun(selection.id);
+      else setTraceRun("");
+    };
+    apply(readLiveSelection(lens, sel.context));
+    const onSelection = (event: Event) => apply((event as CustomEvent<LiveSelectionEvent>).detail);
+    window.addEventListener(LIVE_SELECTION_EVENT, onSelection);
+    return () => window.removeEventListener(LIVE_SELECTION_EVENT, onSelection);
+  }, [lens, sel.context]);
   const windows: AttackWindow[] = React.useMemo(() => runs
-    .filter((r) => !sel.provider || (r.provider || "") === sel.provider)
+    .filter((r) => r.target ? !!sel.context && r.target === sel.context : !!sel.provider && (r.provider || "") === sel.provider)
     .map((r) => {
       const start = parseTs(r.date);
       const running = r.state === "running";
       const end = r.finished ? parseTs(r.finished) : running ? Date.now() + 60_000 : start + 600_000;
       return { id: r.id, scenario: r.config, start, end, running };
     })
-    .filter((w) => !isNaN(w.start)), [runs, sel.provider]);
+    .filter((w) => !isNaN(w.start)), [runs, sel.context, sel.provider]);
   const attackOf = React.useCallback((timeStr?: string): AttackWindow | null => {
     const t = Date.parse(timeStr || "");
     if (isNaN(t)) return null;
     return windows.find((w) => t >= w.start - 5000 && t <= w.end + 5000) || null; // small margin
   }, [windows]);
   const traceWin = windows.find((w) => w.id === traceRun) || null;
+  const traceUnavailable = !!traceRun && !traceWin;
+  const normalizedTraceQuery = traceQuery.trim().toLowerCase();
+  const matchingWindows = windows.filter((w) => !normalizedTraceQuery || `${w.scenario} ${w.id}`.toLowerCase().includes(normalizedTraceQuery));
+  const tracePage = useLocalPage(matchingWindows, 20, `${lens}\u0000${sel.context}\u0000${sel.provider}\u0000${traceQuery}`);
+  const traceOptions = traceWin && !tracePage.pageItems.some((w) => w.id === traceWin.id) ? [traceWin, ...tracePage.pageItems] : tracePage.pageItems;
 
   const filters = {
     context: sel.context || "", tenant: owner ? tenant : "", action: actionFilter,
     actuated: actuatedOnly ? "true" : "", q: query.trim(), limit: String(PAGE_SIZE),
+    includeNoop: showNoop ? "true" : "false",
     from: traceWin ? new Date(traceWin.start - 5000).toISOString() : "",
     to: traceWin && !traceWin.running ? new Date(traceWin.end + 5000).toISOString() : "",
   };
-  const scopeKey = JSON.stringify([lens, filters, reloadKey]);
-  const [navigation, setNavigation] = React.useState<{ scope: string; cursors: string[] }>({ scope: "", cursors: [""] });
+  const scopeKey = JSON.stringify([lens, filters, traceRun, reloadKey]);
+  const [navigation, setNavigation] = React.useState<{ scope: string; cursors: string[]; frozen: boolean }>({ scope: "", cursors: [""], frozen: false });
   const cursors = navigation.scope === scopeKey ? navigation.cursors : [""];
+  const frozen = navigation.scope === scopeKey && navigation.frozen;
   const page = cursors.length - 1;
   const cursor = cursors[page];
   const requestKey = JSON.stringify([scopeKey, cursor]);
-  const [history, setHistory] = React.useState<{ key: string; data: LiveHistoryPage }>({ key: "", data: { events: [], partial: false, notice: "", projection: "", scannedBytes: 0 } });
+  const [pageCache, setPageCache] = React.useState<Array<{ scope: string; key: string; data: LiveHistoryPage }>>([]);
+  const pageCacheRef = React.useRef(pageCache);
+  pageCacheRef.current = pageCache;
+  React.useEffect(() => {
+    setPageCache((entries) => entries.filter((entry) => entry.scope === scopeKey));
+  }, [scopeKey]);
   const [failure, setFailure] = React.useState<{ key: string; message: string }>({ key: "", message: "" });
   const [busyKey, setBusyKey] = React.useState("");
   // Both response writes AND rendering are scope-keyed. A provider/tenant change
   // cannot flash a previous scope's data, even before effect cleanup runs.
   React.useEffect(() => {
     if (owner && !tenant) return;
+    if (traceUnavailable) return;
+    if (frozen && pageCacheRef.current.some((entry) => entry.key === requestKey)) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
@@ -142,12 +176,22 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       setBusyKey(requestKey);
       try {
         const data = await api.liveHistory(lens, { ...filters, cursor }, controller.signal);
-        if (alive) { setHistory({ key: requestKey, data }); setFailure({ key: requestKey, message: "" }); }
+        if (alive) {
+          setPageCache((entries) => {
+            const current = entries.filter((entry) => entry.scope === scopeKey && entry.key !== requestKey);
+            const next = [...current, { scope: scopeKey, key: requestKey, data }];
+            const rootKey = JSON.stringify([scopeKey, ""]);
+            const root = next.find((entry) => entry.key === rootKey);
+            const cursorPages = next.filter((entry) => entry.key !== rootKey);
+            return root ? [root, ...cursorPages.slice(-19)] : cursorPages.slice(-20);
+          });
+          setFailure({ key: requestKey, message: "" });
+        }
       } catch (e: any) { if (alive) setFailure({ key: requestKey, message: String(e.message || e) }); }
       finally {
         if (alive) {
           setBusyKey("");
-          if (!cursor) timer = setTimeout(load, 5000);
+          if (!cursor && !frozen) timer = setTimeout(load, 5000);
         }
       }
     };
@@ -155,65 +199,94 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     return () => { alive = false; controller.abort(); clearTimeout(timer); };
     // requestKey contains every request parameter; polling never mutates history pages.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestKey]);
-  const result = history.key === requestKey ? history.data : null;
+  }, [requestKey, traceUnavailable, frozen]);
+  const result = pageCache.find((entry) => entry.key === requestKey)?.data || null;
   const error = failure.key === requestKey ? failure.message : "";
-  const events = result?.events || [];
+  const retainedEvents = result?.events || [];
+  const events = retainedEvents;
   const actuated = events.filter(({ event }) => event.actuated).length;
   const loading = !result && !error && (!owner || !!tenant);
   const refreshing = busyKey === requestKey;
-  const actions = Array.from(new Set(["noop", "rotate", "quarantine", "kv-reset", "adapter-rotate", ...events.map(({ event }) => event.action).filter(Boolean)])).sort();
-  const latest = () => { setNavigation({ scope: "", cursors: [""] }); setReloadKey((k) => k + 1); };
-  const newer = () => setNavigation({ scope: scopeKey, cursors: cursors.slice(0, -1) });
-  const older = () => { if (result?.nextCursor) setNavigation({ scope: scopeKey, cursors: [...cursors, result.nextCursor] }); };
+  const actions = Array.from(new Set(["noop", "rotate", "quarantine", "kv-reset", "adapter-rotate", ...retainedEvents.map(({ event }) => event.action).filter(Boolean)])).sort();
+  const latest = () => { setPageCache([]); setNavigation({ scope: "", cursors: [""], frozen: false }); setReloadKey((k) => k + 1); };
+  const newer = () => setNavigation({ scope: scopeKey, cursors: cursors.slice(0, -1), frozen: true });
+  const older = () => { if (result?.nextCursor) setNavigation({ scope: scopeKey, cursors: [...cursors, result.nextCursor], frozen: true }); };
+  const clearTraceSelection = () => {
+    setTraceRun("");
+    if (sel.context) clearLiveSelection(lens, sel.context);
+  };
 
   // LIVE vLLM ATTACK: fire a real attack on the live vLLM; the operator's actuator choice streams below.
   const [attacking, setAttacking] = React.useState("");
   const [attackMsg, setAttackMsg] = React.useState("");
   const fireAttack = async (action: string) => {
+    const workload = selWl;
+    if (!queryScope.ready || targetQuery.error || workloadQuery.error || lens !== "operator" || !mutatesDefaultContext || !workload || !wls.some((item) => `${item.ns}/${item.name}` === workload)) {
+      setAttackMsg(mutationScopeMessage);
+      return;
+    }
+    const request = mutationGeneration.current;
     setAttacking(action); setAttackMsg("");
+    clearLiveSelection(lens, sel.context);
     try {
       if (action === "poison" || action === "kvcache" || action === "reset") {
         const r = await api.vllmAttack(action as any, lens);
-        setAttackMsg(r.message);
-        if (action !== "reset") setActionFilter(action === "poison" ? "adapter-rotate" : "kv-reset");
+        if (request !== mutationGeneration.current || workload !== selWl) return;
+        setAttackMsg(r.message + (r.attackId ? "" : " No attack record ID was returned; no exact result can be selected."));
+        setActionFilter("");
+        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
       } else {
         // foothold | clear — a REAL detector signal on the selected reactiveOnly-armed workload.
-        const ns = (selWl.split("/")[0] || "").trim();
+        const ns = (workload.split("/")[0] || "").trim();
         const r = await api.workloadAttack(ns, action as any, lens);
-        setAttackMsg(r.message + (r.expect ? "  (expected actuator: " + r.expect + ")" : ""));
-        if (action === "foothold") setActionFilter("");
+        if (request !== mutationGeneration.current || workload !== selWl) return;
+        setAttackMsg(r.message + (r.expect ? "  (expected actuator: " + r.expect + ")" : "") + (r.attackId ? "" : " No attack record ID was returned; no exact result can be selected."));
+        setActionFilter("");
+        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
       }
-    } catch (e: any) { setAttackMsg("error: " + String(e.message || e)); }
-    finally { setAttacking(""); }
+    } catch (e: any) { if (request === mutationGeneration.current && workload === selWl) setAttackMsg("error: " + String(e.message || e)); }
+    finally { if (request === mutationGeneration.current && workload === selWl) setAttacking(""); }
   };
   // THREE-ARM COMPARISON — user-triggered from here, streams live into Availability: 3-way.
   const [comparing, setComparing] = React.useState("");
   const [compareMsg, setCompareMsg] = React.useState("");
   const runComparison = async (attack: string) => {
-    const ns = (selWl.split("/")[0] || "").trim();
+    const workload = selWl;
+    if (!queryScope.ready || targetQuery.error || workloadQuery.error || lens !== "operator" || !mutatesDefaultContext || !workload || !wls.some((item) => `${item.ns}/${item.name}` === workload)) {
+      setCompareMsg(mutationScopeMessage);
+      return;
+    }
+    const ns = (workload.split("/")[0] || "").trim();
     if (!ns) return;
+    const request = mutationGeneration.current;
     setComparing(attack); setCompareMsg("");
     try {
       const r = await api.runAvailabilityArms(ns, attack, lens);
+      if (request !== mutationGeneration.current || workload !== selWl) return;
       setCompareMsg(r.note || "started");
-    } catch (e: any) { setCompareMsg("error: " + String(e.message || e)); }
-    finally { setComparing(""); }
+    } catch (e: any) { if (request === mutationGeneration.current && workload === selWl) setCompareMsg("error: " + String(e.message || e)); }
+    finally { if (request === mutationGeneration.current && workload === selWl) setComparing(""); }
   };
 
   // STEP 1 — pick a workload; STEP 2 shows the attacks meaningful for its type.
-  const [wls, setWls] = React.useState<{ ns: string; name: string; images: string[] }[]>([]);
+  const wls = React.useMemo(() => {
+    if (owner || !workloadQuery.data) return [];
+    const flat: { ns: string; name: string; images: string[] }[] = [];
+    for (const n of workloadQuery.data.namespaces || []) { if (n.system) continue; for (const w of n.workloads || []) flat.push({ ns: n.namespace, name: w.name, images: w.images || [] }); }
+    return flat;
+  }, [owner, workloadQuery.data]);
   const [selWl, setSelWl] = React.useState("");
   React.useEffect(() => {
-    if (owner) return;
-    api.workloads(sel.context || "", lens).then((d) => {
-      const flat: { ns: string; name: string; images: string[] }[] = [];
-      for (const n of d.namespaces || []) { if (n.system) continue; for (const w of n.workloads || []) flat.push({ ns: n.namespace, name: w.name, images: w.images || [] }); }
-      setWls(flat);
-      const def = flat.find((w) => w.images.join(" ").toLowerCase().includes("vllm")) || flat[0];
-      if (def) setSelWl((cur) => cur || def.ns + "/" + def.name);
-    }).catch(() => {});
-  }, [sel.context, lens, owner]);
+    setSelWl(""); setAttackMsg("");
+  }, [lens, owner, sel.context]);
+  React.useEffect(() => {
+    mutationGeneration.current++;
+    setAttacking(""); setAttackMsg(""); setComparing(""); setCompareMsg("");
+  }, [lens, sel.context, sel.provider, selWl]);
+  React.useEffect(() => {
+    const def = wls.find((w) => w.images.join(" ").toLowerCase().includes("vllm")) || wls[0];
+    setSelWl((current) => wls.some((w) => `${w.ns}/${w.name}` === current) ? current : def ? `${def.ns}/${def.name}` : "");
+  }, [wls]);
   const curWl = wls.find((w) => w.ns + "/" + w.name === selWl);
   const curType = curWl ? wlType(curWl.images) : null;
   // reactiveOnly-armed namespaces: calm until attacked, so a fired foothold is a clean attributable reaction.
@@ -225,10 +298,10 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       <PageHead title="Live Operations" sub="Search retained decision history by workload, action or actual actuation. Latest results refresh every 5 seconds; older pages stay paused. Expand a decision for reasoning and record-time claim provenance. Large decisionTrace payloads are omitted from this summary view." />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 rounded-md border border-border bg-panel/60 px-3 py-1.5 text-[12px]">
-          <Radio className={cn("h-3.5 w-3.5", !error && page === 0 ? "text-success" : "text-muted-foreground")} />
-          <span>{error ? "Refresh failed" : page > 0 ? "History paused" : refreshing ? "Refreshing latest…" : "Latest · refresh every 5s"}</span>
+          <Radio className={cn("h-3.5 w-3.5", !traceUnavailable && !error && page === 0 ? "text-success" : "text-muted-foreground")} />
+          <span>{traceUnavailable ? "Selection unavailable" : error ? "Refresh failed" : frozen ? "History paused" : refreshing ? "Refreshing latest…" : "Latest · refresh every 5s"}</span>
         </div>
-        <div className="text-[12px] text-muted-foreground">{events.length} on this page · {actuated} actuated</div>
+        {!traceUnavailable && <div className="text-[12px] text-muted-foreground">{events.length} on this page · {actuated} actuated</div>}
         {owner && tenants.length > 0 && (
           <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             platform:
@@ -255,9 +328,10 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             <Swords className="mr-1.5 inline-block h-3.5 w-3.5 align-text-bottom text-primary" /> Live attack
             <span className="text-[11px] font-normal text-muted-foreground">— pick a workload, fire a meaningful attack, watch Phorvex pick the actuator below</span>
           </summary>
+          {!mutatesDefaultContext && <div className="rounded-md border border-warning/30 bg-warning/[0.05] p-2 text-[11px] text-warning">{mutationScopeMessage}</div>}
           <div className="flex flex-wrap items-center gap-2 text-[12px]">
             <span className="text-[11px] text-muted-foreground">1 · target workload:</span>
-            <select value={selWl} onChange={(e) => { setSelWl(e.target.value); setAttackMsg(""); }} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[11px] text-foreground">
+            <select value={selWl} onChange={(e) => { mutationGeneration.current++; setSelWl(e.target.value); setAttacking(""); setAttackMsg(""); setComparing(""); setCompareMsg(""); }} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[11px] text-foreground">
               {wls.length === 0 && <option value="">(loading…)</option>}
               {wls.map((w) => <option key={w.ns + "/" + w.name} value={w.ns + "/" + w.name}>{w.ns}/{w.name}</option>)}
             </select>
@@ -268,7 +342,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
               <div className="text-[11px] text-muted-foreground">2 · meaningful attacks for this workload:</div>
               <div className="flex flex-wrap items-center gap-2">
                 {attacksFor(curType.type, armed).map((a) => a.runnable ? (
-                  <Button key={a.id} size="sm" variant="outline" disabled={!!attacking} onClick={() => fireAttack(a.id as any)} className="gap-1.5" title={a.label}>
+                  <Button key={a.id} size="sm" variant="outline" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!attacking || !mutatesDefaultContext} onClick={() => fireAttack(a.id as any)} className="gap-1.5" title={a.label}>
                     {attacking === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldOff className="h-3.5 w-3.5 text-danger" />}
                     {a.label.split(" (")[0]} <span className="text-muted-foreground">→ {a.actuator}</span>
                   </Button>
@@ -277,7 +351,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                     <Lock className="h-3 w-3" /> {a.label} <span className="font-mono">→ {a.actuator}</span>
                   </span>
                 ))}
-                <Button size="sm" variant="ghost" disabled={!!attacking} onClick={() => fireAttack(curType.type === "model-server" ? "reset" : "clear")} className="gap-1.5 text-muted-foreground">
+                <Button size="sm" variant="ghost" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!attacking || !mutatesDefaultContext} onClick={() => fireAttack(curType.type === "model-server" ? "reset" : "clear")} className="gap-1.5 text-muted-foreground">
                   {(attacking === "reset" || attacking === "clear") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} {curType.type === "model-server" ? "Reset" : "Clear attack"}
                 </Button>
               </div>
@@ -290,7 +364,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                     <BarChart3 className="h-3.5 w-3.5 text-primary" />
                     <span className="text-[11px] font-medium text-foreground">Compare availability: no defense vs blind rotator vs Phorvex</span>
                     {attacksFor(curType.type, armed).filter((a) => a.runnable).map((a) => (
-                      <Button key={"cmp-" + a.id} size="sm" variant="outline" disabled={!!comparing}
+                      <Button key={"cmp-" + a.id} size="sm" variant="outline" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!comparing || !mutatesDefaultContext}
                         onClick={() => runComparison(a.id)} className="gap-1.5">
                         {comparing === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BarChart3 className="h-3.5 w-3.5" />}
                         run for {a.label.split(" (")[0]}
@@ -312,22 +386,26 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             </div>
           )}
           {attackMsg && <div className="text-[11px] text-primary">{attackMsg}</div>}
-          {/* measured outcome of the attacks you just fired — full detail + cost/uptime in the Report tab */}
-          <div className="mt-1 border-t border-border/40 pt-2"><AttackResultsPanel lens={lens} compact /></div>
         </details>
       )}
+      {!owner && <div aria-label="Selected attack receipt"><AttackResultsPanel lens={lens} compact /></div>}
 
       {/* FILTER BAR — by actuator type + free-text pod/namespace search */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant={actuatedOnly ? "primary" : "outline"} size="sm" aria-pressed={actuatedOnly} onClick={() => setActuatedOnly((v) => !v)}>Actuated only</Button>
-        <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
+        {!traceUnavailable && <Button variant={actuatedOnly ? "primary" : "outline"} size="sm" aria-pressed={actuatedOnly} onClick={() => setActuatedOnly((v) => !v)}>Actuated only</Button>}
+        {!traceUnavailable && <Button variant={showNoop ? "primary" : "outline"} size="sm" aria-pressed={showNoop} onClick={() => {
+          const next = !showNoop;
+          if (!next && actionFilter === "noop") setActionFilter("");
+          setShowNoop(next);
+        }}>{showNoop ? "Showing no-op" : "Show no-op"}</Button>}
+        {!traceUnavailable && <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
           <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-muted-foreground">actuator</span>
-          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[12px] text-foreground">
+          <select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); if (e.target.value === "noop") setShowNoop(true); }} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[12px] text-foreground">
             <option value="">all</option>
             {actions.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
-        </div>
+        </div>}
         <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5">
           <Search className="h-3.5 w-3.5 text-muted-foreground" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="search pod / namespace / tenant…"
@@ -335,50 +413,54 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
           {query && <button onClick={() => setQuery("")} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>}
         </div>
         {/* TRACE AN ATTACK — show only the decisions that fell inside a chosen attack's time window */}
-        {windows.length > 0 && (
-          <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
+        {(windows.length > 0 || !!traceRun) && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
             <Swords className="h-3.5 w-3.5 text-warning" />
-            <span className="text-muted-foreground">trace attack</span>
+            <span className="text-muted-foreground">candidate window</span>
+            <input value={traceQuery} onChange={(e) => setTraceQuery(e.target.value)} placeholder="search run…" aria-label="Search candidate attack runs" className="w-28 rounded border border-border bg-panel px-2 py-1 text-[12px] focus:outline-none" />
             <select value={traceRun} onChange={(e) => setTraceRun(e.target.value)} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[12px] text-foreground">
               <option value="">— none —</option>
-              {windows.slice(0, 25).map((w) => (
-                <option key={w.id} value={w.id}>{w.scenario} · {new Date(w.start).toLocaleTimeString()}{w.running ? " (running)" : ""}</option>
+              {traceUnavailable && <option value={traceRun}>unavailable · run {traceRun}</option>}
+              {traceOptions.map((w) => (
+                <option key={w.id} value={w.id}>{w.scenario} · run {w.id} · {new Date(w.start).toLocaleTimeString()}{w.running ? " (running)" : ""}</option>
               ))}
             </select>
+            <PaginationBar page={tracePage.page} pageSize={20} total={matchingWindows.length} hasNext={tracePage.hasNext} onPrevious={() => tracePage.setPage((p) => Math.max(0, p - 1))} onNext={() => tracePage.setPage((p) => p + 1)} />
           </div>
         )}
         {/* quick actuator chips */}
-        <div className="flex flex-wrap items-center gap-1">
+        {!traceUnavailable && <div className="flex flex-wrap items-center gap-1">
           {actions.slice(0, 6).map((a) => (
-            <button key={a} onClick={() => setActionFilter(actionFilter === a ? "" : a)}
+            <button key={a} onClick={() => { setActionFilter(actionFilter === a ? "" : a); if (a === "noop" && actionFilter !== a) setShowNoop(true); }}
               className={cn("rounded-full border px-2 py-0.5 font-mono text-[11px] transition-colors",
                 actionFilter === a ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
               {a}
             </button>
           ))}
-        </div>
-        <div className="ml-auto text-[12px] text-muted-foreground">Server-filtered retained history</div>
+        </div>}
+        {!traceUnavailable && <div className="ml-auto text-[12px] text-muted-foreground">Server-filtered retained history · no-op {showNoop ? "included" : "excluded"}</div>}
       </div>
 
       <section className="min-w-0 space-y-3" aria-label="Decision history">
-          {error && <div role="alert" className="rounded-md border border-danger/30 p-3 text-sm text-danger">Could not load history: {error}. {result && "Showing the last successful response; it may be stale."} <button onClick={latest} className="underline">Refresh latest</button></div>}
+          {!traceUnavailable && error && <div role="alert" className="rounded-md border border-danger/30 p-3 text-sm text-danger">Could not load history: {error}. {result && "Showing the last successful response; it may be stale."} <button onClick={latest} className="underline">Refresh latest</button></div>}
           {traceWin && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning/[0.05] px-3 py-2 text-[12px] text-warning">
               <Swords className="h-3.5 w-3.5" />
-              <span>Tracing decisions during attack <span className="font-mono text-foreground">{traceWin.scenario}</span> — {new Date(traceWin.start).toLocaleTimeString()} → {traceWin.running ? "now (running)" : new Date(traceWin.end).toLocaleTimeString()}</span>
-              <button onClick={() => setTraceRun("")} className="text-muted-foreground hover:text-foreground">clear</button>
+              <span>Showing candidate time-window evidence for <span className="font-mono text-foreground">{traceWin.scenario}</span> — temporal overlap only, not exact run attribution · {new Date(traceWin.start).toLocaleTimeString()} → {traceWin.running ? "now (running)" : new Date(traceWin.end).toLocaleTimeString()}</span>
+              <button onClick={clearTraceSelection} className="text-muted-foreground hover:text-foreground">clear</button>
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          {traceUnavailable && <div role="alert" className="rounded-md border border-warning/30 p-3 text-sm text-warning">The selected run is not available for this exact target. No all-history fallback is shown. <button onClick={clearTraceSelection} className="underline">Clear selection</button></div>}
+          {!traceUnavailable && <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionLabel>Decision history {owner ? "(owner projection)" : "(summary)"}</SectionLabel>
             <Pagination page={page} hasOlder={!!result?.nextCursor} onNewer={newer} onOlder={older} onLatest={latest} />
-          </div>
-          {loading ? <div role="status" className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading retained history…</div> : !error && events.length === 0 && <div className="rounded-md border border-border p-6 text-sm text-muted-foreground">{owner && !tenant ? "Select a platform tenant to view history." : result?.nextCursor ? "No matches in this scanned portion. Search older to continue through retained history." : result?.partial ? "No readable matches found. Some records could not be read; see the notice below." : "No decisions match in the retained audit history."}</div>}
+          </div>}
+          {!traceUnavailable && (loading ? <div role="status" className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading retained history…</div> : !error && events.length === 0 && <div className="rounded-md border border-border p-6 text-sm text-muted-foreground">{owner && !tenant ? "Select a platform tenant to view history." : result?.nextCursor ? "No matches in this scanned portion. Search older to continue through retained history." : result?.partial ? "No readable matches found. Some records could not be read; see the notice below." : "No decisions match in the retained audit history."}</div>)}
           <div className="space-y-2">
-            {events.map(({ id, event: e }) => owner ? <OwnerCard key={`${scopeKey}:${id}`} e={e} /> : <DecisionCard key={`${scopeKey}:${id}`} e={e} attack={attackOf(e.time || e.Time)} />)}
+            {!traceUnavailable && events.map(({ id, event: e }) => owner ? <OwnerCard key={`${scopeKey}:${id}`} e={e} /> : <DecisionCard key={`${scopeKey}:${id}`} e={e} attack={attackOf(e.time || e.Time)} />)}
           </div>
-          {result && <div role="status" className={cn("text-[11px] leading-relaxed", result.partial ? "text-warning" : "text-muted-foreground")}>{result.notice}</div>}
-          {!!result?.nextCursor && <div className="flex justify-center pt-1"><Pagination page={page} hasOlder onNewer={newer} onOlder={older} onLatest={latest} /></div>}
+          {!traceUnavailable && result && <div role="status" className={cn("text-[11px] leading-relaxed", result.partial ? "text-warning" : "text-muted-foreground")}>{result.notice}</div>}
+          {!traceUnavailable && !!result?.nextCursor && <div className="flex justify-center pt-1"><Pagination page={page} hasOlder onNewer={newer} onOlder={older} onLatest={latest} /></div>}
         </section>
     </div>
   );
@@ -476,7 +558,7 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
           {acted && <Badge variant="accent">actuated · dispatched</Badge>}
           {!acted && !sel && <Badge variant="neutral">not actuated</Badge>}
           {e.dryRun && <Badge variant="pending">dry-run{acted ? " flag" : ""}</Badge>}
-          {attack && <span className="inline-flex items-center gap-1 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning" title={`a live decision made while attack '${attack.scenario}' was running`}><Swords className="h-3 w-3" /> during {attack.scenario}</span>}
+          {attack && <span className="inline-flex items-center gap-1 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning" title={`candidate evidence: timestamp overlaps '${attack.scenario}', without an exact run identifier`}><Swords className="h-3 w-3" /> overlaps {attack.scenario} window</span>}
           </div>
         </CardContent>
       </button>

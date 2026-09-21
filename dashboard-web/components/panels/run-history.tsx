@@ -1,11 +1,17 @@
 "use client";
 import * as React from "react";
-import { api, Lens, RunStatus, ArmResult, RunEvidence } from "@/lib/api";
+import { api, ApiError, Lens, RunStatus, ArmResult, RunEvidence } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
+import { Input } from "@/components/ui/more";
+import { DataFreshness, PaginationBar } from "@/components/ui/pagination";
+import { useServerPage } from "@/lib/use-server-page";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { Loader2, CheckCircle2, ShieldCheck, ShieldOff, Clock, FileText, Terminal, Server, Boxes } from "lucide-react";
+import { LIVE_SELECTION_EVENT, LiveSelectionEvent, clearLiveSelection, readLiveSelection, selectLiveRecord } from "@/lib/live-selection";
+import { useExactRecord, useQueryScope, useRunEvidence } from "@/lib/query";
+import { emitQueryChange } from "@/lib/query-events";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -28,12 +34,11 @@ function ProviderTag({ provider, label }: { provider?: string; label?: string })
 
 // Full per-run evidence ledger (per-arm aggregates + per-trial rows with attack command steps).
 function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?: string }) {
-  const [ev, setEv] = React.useState<RunEvidence | null>(null);
-  const [err, setErr] = React.useState("");
   const [openTrial, setOpenTrial] = React.useState<string>("");
-  React.useEffect(() => { api.runEvidence(id, lens).then(setEv).catch((e) => setErr(String(e.message || e))); }, [id, lens]);
-  if (err) return <div className="text-[12px] text-danger">{err}</div>;
-  if (!ev) return <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading evidence…</div>;
+  const evidence = useRunEvidence(id, lens);
+  if (evidence.error) return <div className="text-[12px] text-danger">{String((evidence.error as Error).message || evidence.error)} <button className="text-primary" onClick={() => evidence.refetch()}>Retry</button></div>;
+  if (!evidence.data) return <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading evidence…</div>;
+  const ev = evidence.data;
   const ms = (x: number) => (x > 0 ? `${x.toFixed(1)}s` : "—");
   return (
     <div className="space-y-3">
@@ -113,29 +118,85 @@ const armLabel = (def: string) => def === "d-phorvex" ? "Phorvex" : def === "d-n
 // Post-attack report history: every live attack you launched, newest first, with its date and
 // the real with/without-Phorvex metrics. Polls so it refreshes as runs finish.
 export function RunHistoryPanel({ lens }: { lens: Lens }) {
-  const [allRuns, setRuns] = React.useState<RunStatus[] | null>(null);
-  const [err, setErr] = React.useState("");
+  const queryScope = useQueryScope(lens);
   const [open, setOpen] = React.useState<string>("");
+  const [q, setQ] = React.useState("");
   const sel = useSelectedTarget(); // SCOPE the report list to the selected provider
+  const previousStates = React.useRef<Map<string, RunStatus["state"]> | null>(null);
+  const matchesSelectedScope = React.useCallback((run: RunStatus) => {
+    if (run.target) return !!sel.context && run.target === sel.context;
+    return !sel.provider || (run.provider || "") === sel.provider;
+  }, [sel.context, sel.provider]);
+  React.useEffect(() => {
+    const apply = (selection: LiveSelectionEvent | null) => {
+      if (!selection) { setOpen(""); return; }
+      if (selection?.lens !== lens || selection.context !== sel.context) return;
+      if (selection?.kind === "run" && selection.lens === lens && selection.context === sel.context) setOpen(selection.id);
+      else setOpen("");
+    };
+    apply(readLiveSelection(lens, sel.context));
+    const onSelection = (event: Event) => apply((event as CustomEvent<LiveSelectionEvent>).detail);
+    window.addEventListener(LIVE_SELECTION_EVENT, onSelection);
+    return () => window.removeEventListener(LIVE_SELECTION_EVENT, onSelection);
+  }, [lens, sel.context]);
+
+  const normalizedQ = q.trim().toLowerCase();
+  const scopeKey = `${lens}\u0000${sel.context}\u0000${sel.provider}\u0000${normalizedQ}`;
+  const pager = useServerPage<RunStatus>({
+    resource: "runs", lens,
+    key: scopeKey,
+    network: { context: sel.context || undefined, provider: sel.provider || undefined, q: normalizedQ || undefined },
+    pageSize: 20,
+    pollMs: 4000,
+    fetchPage: (cursor, signal) => api.runsPage(lens, 20, { context: sel.context || undefined, provider: sel.provider || undefined, q: normalizedQ || undefined }, cursor, signal)
+      .then((d) => ({ items: d.runs || [], page: d.page })),
+    legacyFilter: (run) => matchesSelectedScope(run) && (!normalizedQ || `${run.id} ${run.config} ${run.namespace || ""}`.toLowerCase().includes(normalizedQ)),
+  });
+
+  React.useEffect(() => { previousStates.current = null; }, [lens, sel.context, sel.provider, normalizedQ]);
 
   React.useEffect(() => {
-    let alive = true;
-    const load = () => api.runsList(lens).then((d) => { if (alive) setRuns(d.runs || []); }).catch((e) => setErr(String(e.message || e)));
-    load();
-    const t = setInterval(load, 4000); // refresh as live attacks finish
-    return () => { alive = false; clearInterval(t); };
-  }, [lens]);
+    const next = pager.items;
+    if (!pager.loading) {
+        const states = new Map(next.map((r) => [r.id, r.state]));
+        if (previousStates.current) {
+          next.forEach((r) => {
+            const prior = previousStates.current?.get(r.id);
+            if (r.target && matchesSelectedScope(r) && r.state === "done" && (prior === "running" || prior === "queued")) {
+              emitQueryChange({ identity: queryScope.identity, providerToken: queryScope.providerToken, context: sel.context || undefined, runId: r.id, lens, resources: ["runs", "runs-summary", "run-status", "run-evidence", "reports", "report", "effectiveness", "posture", "benchmarks", "cost", "cost-timeseries", "uptime", "matrix", "audit-snapshot", "diagnostics"], kind: "completion" });
+            }
+          });
+        }
+        previousStates.current = states;
+    }
+  }, [pager.items, pager.loading, lens, matchesSelectedScope]);
 
-  if (err && !allRuns) return <ErrorState msg={err} />;
-  if (!allRuns) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> loading attack reports…</CardContent></Card>;
-  // show ONLY attacks that ran on the selected provider (header scope).
-  const runs = sel.provider ? allRuns.filter((r) => (r.provider || "") === sel.provider) : allRuns;
+  const openOnPage = !!open && pager.items.some((r) => r.id === open);
+  const needsPinned = !!open && (!openOnPage || pager.hasSnapshot || pager.page > 0);
+  const pinnedQuery = useExactRecord({ resource: "run-status", context: `${sel.context}\u0000${sel.provider}`, id: open, lens, enabled: needsPinned,
+    fetcher: async (signal) => { try { const run = await api.runStatus(open, lens, signal); return matchesSelectedScope(run) ? run : null; } catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; } },
+    active: (run) => run.state === "running" || run.state === "queued" });
+  const pinned = needsPinned ? pinnedQuery.data || null : null;
+  const pinnedMissing = needsPinned && pinnedQuery.data === null;
+  const pinnedError = pinnedQuery.error ? String((pinnedQuery.error as Error).message || pinnedQuery.error) : "";
+  const pinnedPending = needsPinned && pinnedQuery.isPending;
+  const runs = pinned
+    ? (pager.items.some((r) => r.id === pinned.id) ? pager.items.map((r) => r.id === pinned.id ? pinned : r) : [pinned, ...pager.items])
+    : pager.items;
 
   return (
     <div className="space-y-5">
       <PageHead title="Attack reports" sub="Every attack you launched from the Attack Lab — newest first, with the date it ran and the real measured metrics: attack disruption without Phorvex vs with Phorvex, attacker dwell, and defensive actions. This list refreshes automatically as live attacks finish." />
-      {runs.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No attacks {sel.provider ? <>on <span className="text-foreground">{sel.label || sel.provider}</span></> : "run"} yet — go to <span className="text-primary">Attack Lab</span>, launch a scenario {sel.provider ? "on this provider" : ""}, and its report appears here when it finishes.</CardContent></Card>
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all reports by run, scenario, or namespace…" aria-label="Search attack reports" />
+      {pager.legacy && <div className="text-[11px] text-warning">Legacy/preview response: paging and search cover the full history returned by this fixture, not server snapshot pages.</div>}
+      {pager.error && <div className="text-[11px] text-danger">Page refresh failed: {pager.error} <button className="text-primary" onClick={pager.retry}>Retry</button></div>}
+      <DataFreshness updatedAt={pager.updatedAt} refreshing={pager.refreshing} failed={!!pager.error} />
+      {pinned && <div className="text-[11px] text-muted-foreground">The selected run is refreshed independently for this frozen/older view; snapshot membership and page statistics are unchanged.</div>}
+      {pinnedMissing && <div className="text-[11px] text-warning">Selected run <span className="font-mono">{open}</span> is missing or outside the authorized scope. <button className="text-primary" onClick={() => pinnedQuery.refetch()}>Retry</button></div>}
+      {pinnedError && <div className="text-[11px] text-danger">Could not load selected run: {pinnedError} <button className="text-primary" onClick={() => pinnedQuery.refetch()}>Retry</button></div>}
+      {pinnedPending && <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading exact selected run…</div>}
+      {pager.loading && !pager.pageMeta ? <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> loading attack reports…</CardContent></Card> : pager.error && !pager.pageMeta ? <ErrorState msg={pager.error} /> : runs.length === 0 ? (
+        open && (pinnedPending || pinnedMissing || pinnedError) ? (pinnedPending ? <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">Waiting for exact selected run <span className="font-mono">{open}</span>…</CardContent></Card> : null) : <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No attacks {sel.provider ? <>on <span className="text-foreground">{sel.label || sel.provider}</span></> : "run"} yet — go to <span className="text-primary">Attack Lab</span>, launch a scenario {sel.provider ? "on this provider" : ""}, and its report appears here when it finishes.</CardContent></Card>
       ) : (
         <Card><CardContent className="p-0">
           <div className="overflow-x-auto p-3">
@@ -157,10 +218,15 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                   const px = withPx || arm(r.arms, "d-r6blindtimer");
                   return (
                     <React.Fragment key={r.id}>
-                      <tr className="cursor-pointer border-t border-border/40 hover:bg-elevated/40" onClick={() => setOpen(open === r.id ? "" : r.id)}>
+                      <tr className={cn("cursor-pointer border-t border-border/40 hover:bg-elevated/40", open === r.id && "bg-primary/[0.04]")} onClick={() => {
+                        const next = open === r.id ? "" : r.id;
+                        setOpen(next);
+                        if (next && r.target && r.target === sel.context) selectLiveRecord({ kind: "run", id: r.id, lens, context: sel.context });
+                        else if (!next) clearLiveSelection(lens, sel.context);
+                      }}>
                         <td className="px-2 py-2 tabular text-muted-foreground"><span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{r.date || r.started}</span></td>
-                        <td className="px-2 py-2 font-mono text-foreground/90">{r.config}</td>
-                        <td className="px-2 py-2"><ProviderTag provider={r.provider} label={r.targetLabel || r.target} /></td>
+                        <td className="px-2 py-2 font-mono text-foreground/90"><div>{r.config}</div><div className="text-[10px] text-muted-foreground" title={r.id}>run {r.id}</div></td>
+                        <td className="px-2 py-2"><ProviderTag provider={r.provider} label={r.targetLabel || r.target} />{!r.target && <div className="mt-1 text-[10px] text-warning">legacy provider match</div>}</td>
                         <td className="px-2 py-2 font-mono text-muted-foreground">{r.namespace || "—"}</td>
                         <td className="px-2 py-2">
                           {r.state === "running" ? <Badge variant="accent"><Loader2 className="h-3 w-3 animate-spin" />running</Badge>
@@ -185,8 +251,10 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
             </table>
           </div>
           <div className="px-4 pb-3 text-[11px] text-muted-foreground">Click a row for the per-arm breakdown. Metrics are read live from each run's metrics.jsonl; the cost/ROI report is regenerated automatically when a run finishes.</div>
+          <div className="px-4 pb-4"><PaginationBar page={pager.page} pageSize={20} total={pager.pageMeta?.total} hasNext={pager.hasNext} onPrevious={pager.previous} onNext={pager.next} onLatest={pager.latest} showLatest={pager.hasSnapshot || pager.page > 0} loading={pager.loading} /></div>
         </CardContent></Card>
       )}
+      {((pager.loading && !pager.pageMeta) || (pager.error && !pager.pageMeta) || runs.length === 0) && <PaginationBar page={pager.page} pageSize={20} total={pager.pageMeta?.total} hasNext={pager.hasNext} onPrevious={pager.previous} onNext={pager.next} onLatest={pager.latest} showLatest={pager.hasSnapshot || pager.page > 0} loading={pager.loading} />}
     </div>
   );
 }

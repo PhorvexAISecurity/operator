@@ -1,7 +1,10 @@
 // Phorvex Console — the guided-journey model. Step states derive from REAL backend signals
 // (never hardcoded): a step is "done"/"ready"/"locked" based on what data actually exists.
-import * as React from "react";
-import { api, Lens, API_BASE } from "./api";
+import { api, Lens } from "./api";
+import { useSelectedTarget } from "./provider-store";
+import { useOwnerTenant } from "./owner";
+import { useApiRead, useAuditSnapshot, useScanSnapshot, useTargets } from "./query";
+import { useQueryScope } from "./query";
 
 export type StepId = "landing" | "connect" | "scan" | "discovered" | "attacklab" | "protect" | "prove" | "report" | "bench";
 export type NodeState = "done" | "active" | "ready" | "locked";
@@ -21,7 +24,7 @@ export const STEPS: StepDef[] = [
 
 export interface JourneySignals {
   connected: boolean;   // a runnable target exists
-  hasCorpus: boolean;   // scan/metrics corpus on disk
+  hasCorpus: boolean;   // scan evidence for the selected scope (or unscoped retained corpus)
   hasAudit: boolean;    // live decisions have streamed (audit exists)
   hasBench: boolean;    // benchmark corpus present
   loading: boolean;
@@ -30,7 +33,10 @@ export interface JourneySignals {
 
 // Health is deliberately public/minimal. Corpus availability requires the same verified
 // identity and grant as the panels it unlocks; denied diagnostics remain unavailable.
-export async function loadCorpusSignal(lens: Lens): Promise<Pick<JourneySignals, "hasCorpus" | "diagnosticsError">> {
+export async function loadCorpusSignal(lens: Lens, context = ""): Promise<Pick<JourneySignals, "hasCorpus" | "diagnosticsError">> {
+  // Diagnostics describes process-wide retained files, so it is useful only when no concrete
+  // provider context is selected. It must not unlock a selected cluster based on another scope.
+  if (context) return { hasCorpus: false };
   try {
     const diagnostics = await api.diagnostics(lens);
     return { hasCorpus: !!(diagnostics.hasP3Deep || diagnostics.hasPactuator) };
@@ -40,28 +46,23 @@ export async function loadCorpusSignal(lens: Lens): Promise<Pick<JourneySignals,
 }
 
 export function useJourneySignals(lens: Lens): JourneySignals {
-  const [s, setS] = React.useState<JourneySignals>({ connected: false, hasCorpus: false, hasAudit: false, hasBench: false, loading: true });
-  React.useEffect(() => {
-    let live = false;
-    let cancelled = false;
-    (async () => {
-      const out: JourneySignals = { connected: false, hasCorpus: false, hasAudit: false, hasBench: false, loading: false };
-      Object.assign(out, await loadCorpusSignal(lens));
-      try { const t = await api.targets(lens); out.connected = (t.targets || []).some((x) => x.runnable); } catch {}
-      try { const b = await api.benchmarks(lens); out.hasBench = (b.groups || []).length > 0; } catch {}
-      // a 1.5s probe of the SSE: did any decision stream?
-      try {
-        const es = new EventSource(`${API_BASE}/api/live?lens=${lens}`);
-        es.onmessage = () => { live = true; };
-        await new Promise((r) => setTimeout(r, 1500));
-        es.close();
-      } catch {}
-      out.hasAudit = live;
-      if (!cancelled) setS(out);
-    })();
-    return () => { cancelled = true; };
-  }, [lens]);
-  return s;
+  const selected = useSelectedTarget();
+  const { tenant } = useOwnerTenant(lens);
+  const targetsQuery = useTargets(lens);
+  const queryScope = useQueryScope(lens);
+  const scanSnapshot = useScanSnapshot(lens, selected.context, "", false);
+  const diagnostics = useApiRead({ lens, resource: "diagnostics", fetcher: (signal) => api.diagnostics(lens, signal), staleTime: 60_000, enabled: !selected.context });
+  const benchmarkRead = useApiRead({ lens, resource: "benchmarks", fetcher: (signal) => api.benchmarks(lens, signal), staleTime: 60_000 });
+  const auditSnapshot = useAuditSnapshot(lens, selected.context, lens === "owner" ? tenant : "", 1500, lens !== "owner" || !!tenant);
+  const hasAudit = (auditSnapshot.data ?? []).length > 0;
+  return {
+    connected: (targetsQuery.data?.targets ?? []).some((x) => x.runnable && (!selected.context || x.context === selected.context)),
+    hasCorpus: !!scanSnapshot.data || (!selected.context && !!(diagnostics.data?.hasP3Deep || diagnostics.data?.hasPactuator)) || (lens === "owner" && hasAudit),
+    hasAudit,
+    hasBench: (benchmarkRead.data?.groups ?? []).length > 0,
+    loading: !queryScope.ready || targetsQuery.isPending || benchmarkRead.isPending || ((lens !== "owner" || !!tenant) && auditSnapshot.isPending) || (!selected.context && diagnostics.isPending),
+    diagnosticsError: diagnostics.error ? String((diagnostics.error as Error).message || diagnostics.error) : undefined,
+  };
 }
 
 export function stepState(id: StepId, sig: JourneySignals, active: StepId): NodeState {

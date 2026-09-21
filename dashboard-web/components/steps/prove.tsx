@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Lens } from "@/lib/api";
-import { Segmented } from "@/components/ui/more";
+import { GroupedSegmented } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { CatalogPanel } from "@/components/panels/catalog";
 import { EffectivenessPanel } from "@/components/panels/effectiveness";
@@ -14,49 +14,60 @@ import { UncoveredFrontier, MatrixPanel, AIBoundary } from "@/components/subsyst
 import { ReportsPanel } from "@/components/panels/reports";
 import { RedTeamPanel } from "@/components/panels/redteam";
 import { CostPanel } from "@/components/panels/cost";
+import { useSelectedTarget } from "@/lib/provider-store";
+import { useScopedUIState } from "@/lib/use-scoped-ui-state";
 
 type Sub = "launch" | "run" | "effectiveness" | "cost" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation" | "comparison" | "redteam";
 
 export function ProveStep({ lens }: { lens: Lens }) {
-  const [sub, setSub] = React.useState<Sub>("launch");
+  const selected = useSelectedTarget();
+  const [sub, setSub] = useScopedUIState<Sub>(`prove-tab\u0000${lens}\u0000${selected.context}`, "launch");
   const owner = lens === "owner";
-  const tabs = [
+  const primaryTabs: { id: Sub; label: string }[] = [
     { id: "launch", label: "Attack catalog" },
     { id: "run", label: "Live run" },
     { id: "effectiveness", label: "Effectiveness" },
+    { id: "coverage", label: "Threat coverage" },
+    { id: "posture", label: "Posture" },
+  ];
+  const operatorDetailTabs: { id: Sub; label: string }[] = owner ? [] : [
+    { id: "gap", label: "Coverage gap" },
+    { id: "matrix", label: "52×N matrix" },
+    { id: "aiboundary", label: "AI boundary" },
+    { id: "ablation", label: "Recon-per-$" },
+    { id: "redteam", label: "RL red-team" },
+  ];
+  const detailTabs: { id: Sub; label: string }[] = [
     { id: "cost", label: "Cost (with/without)" },
     { id: "frontier", label: "Zero-day frontier" },
     { id: "benchmarks", label: "Benchmarks" },
     { id: "comparison", label: "vs Without-Phorvex" },
-    { id: "coverage", label: "Threat coverage" },
-    ...(owner ? [] : [
-      { id: "gap", label: "Coverage gap" },
-      { id: "matrix", label: "52×N matrix" },
-      { id: "aiboundary", label: "AI boundary" },
-      { id: "ablation", label: "Recon-per-$" },
-      { id: "redteam", label: "RL red-team" },
-    ]),
-    { id: "posture", label: "Posture" },
+    ...operatorDetailTabs,
   ];
+  const availableTabs = [...primaryTabs, ...detailTabs];
+  const activeSub = availableTabs.some((tab) => tab.id === sub) ? sub : "launch";
+  React.useEffect(() => {
+    if (activeSub !== sub) setSub(activeSub);
+  }, [activeSub, sub]);
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={5} title="Prove" sub="Attack the platform — with and without Phorvex — and watch the proof land: live eviction, the effectiveness board, the structural zero-day certificate, the scenario×arm matrix, the honest coverage gaps, and the benchmark evidence. AI defense is honestly [SP-0-PENDING-P4]." lens={lens} />
-      <Segmented value={sub} onChange={(v) => setSub(v as Sub)} tabs={tabs} />
+      <StepHead n={6} title="Prove" sub="Attack the platform — with and without Phorvex — and watch the proof land: live eviction, the effectiveness board, the structural zero-day certificate, the scenario×arm matrix, the honest coverage gaps, and the benchmark evidence. AI defense is honestly [SP-0-PENDING-P4]." lens={lens} />
+      <GroupedSegmented value={activeSub} onChange={setSub} primary={primaryTabs} secondary={detailTabs} />
       <div>
-        {sub === "launch" && <CatalogPanel lens={lens} />}
-        {sub === "run" && <RunAttackPanel lens={lens} />}
-        {sub === "effectiveness" && <EffectivenessPanel lens={lens} />}
-        {sub === "cost" && <CostPanel lens={lens} />}
-        {sub === "frontier" && <FrontierPanel lens={lens} />}
-        {sub === "benchmarks" && <BenchmarksPanel lens={lens} />}
-        {sub === "comparison" && <ReportsPanel lens={lens} only="Comparison" intro="Phorvex vs Without-Phorvex (baseline Phoenix) — the head-to-head, served live from COMPARISON.md." />}
-        {sub === "coverage" && <ThreatMatrixPanel lens={lens} />}
-        {sub === "gap" && <UncoveredFrontier lens={lens} />}
-        {sub === "matrix" && <MatrixPanel lens={lens} />}
-        {sub === "aiboundary" && <AIBoundary lens={lens} />}
-        {sub === "ablation" && <AblationPanel lens={lens} />}
-        {sub === "redteam" && <RedTeamPanel lens={lens} />}
-        {sub === "posture" && <PosturePanel lens={lens} />}
+        {activeSub === "launch" && <CatalogPanel lens={lens} />}
+        {activeSub === "run" && <RunAttackPanel lens={lens} />}
+        {activeSub === "effectiveness" && <EffectivenessPanel lens={lens} />}
+        {activeSub === "cost" && <CostPanel lens={lens} />}
+        {activeSub === "frontier" && <FrontierPanel lens={lens} />}
+        {activeSub === "benchmarks" && <BenchmarksPanel lens={lens} />}
+        {activeSub === "comparison" && <ReportsPanel lens={lens} only="Comparison" intro="Phorvex vs Without-Phorvex (baseline Phoenix) — the head-to-head, served live from COMPARISON.md." />}
+        {activeSub === "coverage" && <ThreatMatrixPanel lens={lens} />}
+        {activeSub === "gap" && <UncoveredFrontier lens={lens} />}
+        {activeSub === "matrix" && <MatrixPanel lens={lens} />}
+        {activeSub === "aiboundary" && <AIBoundary lens={lens} />}
+        {activeSub === "ablation" && <AblationPanel lens={lens} />}
+        {activeSub === "redteam" && <RedTeamPanel lens={lens} />}
+        {activeSub === "posture" && <PosturePanel lens={lens} />}
       </div>
     </div>
   );

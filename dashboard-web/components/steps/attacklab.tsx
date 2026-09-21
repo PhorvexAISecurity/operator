@@ -1,14 +1,17 @@
 "use client";
 import * as React from "react";
-import { api, runStream, Lens, ClusterTarget, WorkloadNS, CatalogItem, TimelineEvent } from "@/lib/api";
+import { api, runStream, Lens, TimelineEvent } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "@/components/panels/effectiveness";
 import { cn } from "@/lib/utils";
+import { clearLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import {
   Server, Boxes, Swords, Play, Loader2, ShieldCheck, ShieldOff, Crosshair, Check,
   Radio, Terminal, AlertTriangle, CheckCircle2, Skull, StopCircle, FileText,
 } from "lucide-react";
+import { useApiRead, useCatalog, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
+import { emitQueryChange } from "@/lib/query-events";
 
 // one streamed trial outcome (a completed attack attempt under one defender arm).
 interface Trial extends TimelineEvent { key: string }
@@ -24,12 +27,9 @@ function capUnmet(cap: string, caps: Caps): boolean {
 const scenarioGated = (scenarioCaps: string[], caps: Caps) => (scenarioCaps || []).some((c) => capUnmet(c, caps));
 
 export function AttackLab({ lens }: { lens: Lens }) {
-  const [targets, setTargets] = React.useState<ClusterTarget[]>([]);
   const [target, setTarget] = React.useState("");
-  const [nss, setNss] = React.useState<WorkloadNS[]>([]);
   const [nsLoading, setNsLoading] = React.useState(false);
   const ns = "amtd-attack-test"; // attacks always run in a dedicated disposable sandbox (backend-enforced)
-  const [scenarios, setScenarios] = React.useState<CatalogItem[]>([]);
   const [picked, setPicked] = React.useState<string[]>([]); // BATCH: multi-select scenarios
   const [runScenarios, setRunScenarios] = React.useState<string[]>([]); // the scenarios of the LIVE run (in order)
   // mode: px = Phorvex vs no-defense · base = no-defense vs blind · three = live 3-way (drives cost/uptime)
@@ -40,55 +40,100 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const [running, setRunning] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState("");
-  const [toolchain, setToolchain] = React.useState(true); // harness present? (false on the slim in-cluster pod)
-  const [caps, setCaps] = React.useState<Caps>({ gpu: false, mig: false, multiNode: false });
+  const [readErr, setReadErr] = React.useState("");
   const [expectedTrials, setExpectedTrials] = React.useState(6);
   const [startedMs, setStartedMs] = React.useState(0);
   const [nowMs, setNowMs] = React.useState(0);
   const [stopping, setStopping] = React.useState(false);
   const [ended, setEnded] = React.useState<string>(""); // "" | "done" | "stopped"
   const [queuePos, setQueuePos] = React.useState(0); // >0 while THIS run waits in the FIFO behind an active run
+  const [runScope, setRunScope] = React.useState<{ id: string; lens: Lens; context: string } | null>(null);
+  const notifiedTerminalRef = React.useRef("");
+  const scopeGenerationRef = React.useRef(0);
+  const stopRequestRef = React.useRef(0);
   const sel = useSelectedTarget(); // header provider scope — the attack defaults to this cluster
+  const targetQuery = useTargets(lens);
+  const catalogQuery = useCatalog(lens);
+  const workloadQuery = useWorkloads(target, lens, !!target);
+  const diagnosticsQuery = useApiRead({ lens, resource: "diagnostics", fetcher: (signal) => api.diagnostics(lens, signal), staleTime: 60_000 });
+  const capabilitiesQuery = useApiRead({ lens, resource: "capabilities", parameters: { target }, fetcher: (signal) => api.capabilities(target, lens, signal), staleTime: 30_000, enabled: !!target });
+  const toolchain = diagnosticsQuery.data ? !!diagnosticsQuery.data.harnessBin : null;
+  const diagnosticsError = diagnosticsQuery.error ? String((diagnosticsQuery.error as Error).message || diagnosticsQuery.error) : "";
+  const caps: Caps = capabilitiesQuery.data ? { gpu: !!capabilitiesQuery.data.gpu, mig: !!capabilitiesQuery.data.mig, multiNode: !!capabilitiesQuery.data.multiNode } : { gpu: false, mig: false, multiNode: false };
+  const queryScope = useQueryScope(lens);
+  const targets = targetQuery.data?.targets || [];
+  const scenarios = (catalogQuery.data?.items || []).filter((i) => !i.name.endsWith("-apt"));
+  const nss = workloadQuery.data?.namespaces || [];
+  const scopeIdentityRef = React.useRef("");
+  scopeIdentityRef.current = `${lens}\u0000${sel.context}\u0000${target}`;
 
-  // load the live clusters + the scenario catalog once.
+  const invalidateRequests = React.useCallback(() => {
+    scopeGenerationRef.current += 1;
+    stopRequestRef.current += 1;
+    setBusy(false);
+    setStopping(false);
+  }, []);
+
   React.useEffect(() => {
-    api.health(lens).then((h) => setToolchain(!!h.harnessBin)).catch(() => {});
-    api.targets(lens).then((d) => {
-      const ts = d.targets || [];
-      setTargets(ts);
-      // default the attack target to the globally-selected provider (header scope), else first runnable.
-      const pick = ts.find((t) => t.runnable && t.context === sel.context) ?? ts.find((t) => t.runnable);
-      if (pick) setTarget(pick.id);
-    }).catch((e) => setErr(String(e.message || e)));
-    api.catalog(lens).then((d) => {
-      const items = (d.items || []).filter((i) => !i.name.endsWith("-apt"));
-      setScenarios(items);
-      if (items.length) setPicked((p) => (p.length ? p : [items[0].name]));
-    }).catch(() => {});
+    invalidateRequests();
+  }, [lens, sel.context, target, invalidateRequests]);
+
+  React.useEffect(() => () => {
+    scopeGenerationRef.current += 1;
+    stopRequestRef.current += 1;
+  }, []);
+
+  // A real presentation/provider scope change invalidates the old target and run display.
+  React.useEffect(() => {
+    setTarget(""); setPicked([]);
+    setRunId(""); setRunScope(null); setEvents([]); setStage(null); setRunning(false); setEnded(""); setQueuePos(0); setErr(""); setReadErr("");
   }, [lens, sel.context]);
 
-  // live cluster capabilities (GPU/MIG/multi-node) — drives scenario gating.
+  // Background refreshes update choices without stopping a run or discarding valid selections.
   React.useEffect(() => {
-    if (!target) return;
-    api.capabilities(target, lens).then((c) => setCaps({ gpu: !!c.gpu, mig: !!c.mig, multiNode: !!c.multiNode })).catch(() => {});
-  }, [target, lens]);
+    if (targetQuery.data) {
+      const ts = targetQuery.data.targets || [];
+      setTarget((current) => {
+        const stillValid = ts.find((t) => t.id === current && t.runnable && (!sel.context || t.context === sel.context));
+        if (stillValid) return current;
+        return (sel.context ? ts.find((t) => t.runnable && t.context === sel.context) : ts.find((t) => t.runnable))?.id || "";
+      });
+    }
+    if (catalogQuery.data) {
+      const items = (catalogQuery.data.items || []).filter((i) => !i.name.endsWith("-apt"));
+      setPicked((current) => {
+        const valid = current.filter((name) => items.some((item) => item.name === name));
+        return valid.length ? valid : items[0] ? [items[0].name] : [];
+      });
+    }
+  }, [sel.context, targetQuery.data, catalogQuery.data]);
+  React.useEffect(() => {
+    const queryError = targetQuery.error || catalogQuery.error || (target ? workloadQuery.error : null);
+    setReadErr(queryError ? String((queryError as Error).message || queryError) : "");
+  }, [target, targetQuery.error, catalogQuery.error, workloadQuery.error]);
+
 
   // load the live workloads whenever the target cluster changes.
+  React.useEffect(() => { setNsLoading(!!target); }, [target]);
   React.useEffect(() => {
-    if (!target) return;
-    setNsLoading(true);
-    api.workloads(target, lens)
-      .then((d) => setNss(d.namespaces || []))
-      .catch((e) => setErr(String(e.message || e)))
-      .finally(() => setNsLoading(false));
+    if (!target) { setNsLoading(false); return; }
+    setNsLoading(workloadQuery.isPending && !workloadQuery.data);
+  }, [target, workloadQuery.data, workloadQuery.error, workloadQuery.isPending]);
+
+  // A target is part of the effective scope. Never leave a prior target's run/timeline visible.
+  React.useEffect(() => {
+    setRunId(""); setRunScope(null); setEvents([]); setStage(null);
+    setRunning(false); setStopping(false); setEnded(""); setQueuePos(0); setRunScenarios([]);
   }, [target, lens]);
 
   // subscribe to the attack timeline while a run is live.
   React.useEffect(() => {
-    if (!runId) return;
+    if (!runScope || runScope.id !== runId) return;
+    let active = true;
     setEvents([]); setStage(null); setRunning(true); setStopping(false); setEnded(""); setQueuePos(0);
     setStartedMs(Date.now()); setNowMs(Date.now());
-    const close = runStream(runId, lens, (e) => {
+    const close = runStream(runId, runScope.lens, (e) => {
+      if (!active) return;
       if (e.type === "meta") { if (e.expectedTrials) setExpectedTrials(e.expectedTrials); setQueuePos(e.queuePos || 0); if ((e.queuePos || 0) === 0) { setStartedMs(Date.now()); setNowMs(Date.now()); } }
       else if (e.type === "stage") { setQueuePos(0); setStage(e); }
       else if (e.type === "trial") setEvents((prev) => {
@@ -99,10 +144,17 @@ export function AttackLab({ lens }: { lens: Lens }) {
         const k = `${e.scenario}-${e.defender}-${e.trial}`;
         return prev.some((p) => `${p.scenario}-${p.defender}-${p.trial}` === k) ? prev : [...prev, e];
       });
-      else if (e.type === "end") { setRunning(false); setStage(null); setEnded(e.state || "done"); }
+      else if (e.type === "end") {
+        setRunning(false); setStage(null); setEnded(e.state || "done");
+        const terminalKey = `${runScope.lens}:${runId}`;
+        if (notifiedTerminalRef.current !== terminalKey) {
+          notifiedTerminalRef.current = terminalKey;
+          emitQueryChange({ identity: queryScope.identity, providerToken: queryScope.providerToken, context: runScope.context, runId, lens: runScope.lens, resources: ["runs", "runs-summary", "run-status", "run-evidence", "reports", "report", "effectiveness", "posture", "benchmarks", "cost", "cost-timeseries", "uptime", "matrix", "audit-snapshot", "diagnostics"], kind: "completion" });
+        }
+      }
     });
-    return close;
-  }, [runId, lens]);
+    return () => { active = false; close(); };
+  }, [queryScope.identity, runId, runScope]);
 
   // tick the elapsed clock while running (for the ETA / progress bar).
   React.useEffect(() => {
@@ -112,26 +164,62 @@ export function AttackLab({ lens }: { lens: Lens }) {
   }, [running]);
 
   async function stop() {
-    if (!runId) return;
+    if (!runId || !runScope || runScope.id !== runId || stopping) return;
+    const scopeGeneration = scopeGenerationRef.current;
+    const scopeIdentity = scopeIdentityRef.current;
+    const request = ++stopRequestRef.current;
+    const capturedRun = runScope;
     setStopping(true);
-    try { await api.stopRun(runId, lens); } catch (e: any) { setErr(String(e.message || e)); setStopping(false); }
+    try {
+      await api.stopRun(capturedRun.id, capturedRun.lens);
+    } catch (e: any) {
+      if (scopeGenerationRef.current === scopeGeneration && scopeIdentityRef.current === scopeIdentity && stopRequestRef.current === request) setErr(String(e.message || e));
+    } finally {
+      if (scopeGenerationRef.current === scopeGeneration && scopeIdentityRef.current === scopeIdentity && stopRequestRef.current === request) setStopping(false);
+    }
   }
 
   async function launch() {
-    if (picked.length === 0 || !target) return;
+    if (busy || !queryScope.ready) return;
+    const capturedTarget = targets.find((t) => t.id === target);
+    const authorizedPicked = picked.filter((name) => scenarios.some((scenario) => scenario.name === name));
+    if (lens !== "operator" || toolchain !== true || targetQuery.error || catalogQuery.error || workloadQuery.error || authorizedPicked.length === 0 || !capturedTarget?.runnable) {
+      setErr(lens !== "operator"
+        ? "Attack creation requires the Operator view."
+        : toolchain !== true
+          ? "Attack launch is unavailable until operator diagnostics confirm the harness is ready."
+          : "Select an available runnable target before launching.");
+      return;
+    }
+    const request = ++scopeGenerationRef.current;
+    const scopeIdentity = scopeIdentityRef.current;
+    const capturedLens = lens;
+    const capturedTargetId = capturedTarget.id;
+    const capturedContext = capturedTarget.context || capturedTarget.id;
+    const capturedPicked = [...authorizedPicked];
+    const capturedMode = mode;
     setBusy(true); setErr("");
-    setRunScenarios([...picked]); // freeze the run's scenario list (in order) for the per-attack tracker
+    clearLiveSelection(capturedLens, capturedContext);
+    setRunScenarios(capturedPicked); // freeze the run's scenario list (in order) for the per-attack tracker
     try {
-      const { id } = await api.startScenario(picked, mode === "px", target, ns, lens, mode === "three");
+      const { id } = await api.startScenario(capturedPicked, capturedMode === "px", capturedTargetId, ns, capturedLens, capturedMode === "three", capturedContext);
+      if (scopeGenerationRef.current !== request || scopeIdentityRef.current !== scopeIdentity) return;
+      const captured = { id, lens: capturedLens, context: capturedContext };
+      setRunScope(captured);
       setRunId(id);
-    } catch (e: any) { setErr(String(e.message || e)); }
-    finally { setBusy(false); }
+      selectLiveRecord({ kind: "run", ...captured });
+    } catch (e: any) {
+      if (scopeGenerationRef.current === request && scopeIdentityRef.current === scopeIdentity) setErr(String(e.message || e));
+    } finally {
+      if (scopeGenerationRef.current === request && scopeIdentityRef.current === scopeIdentity) setBusy(false);
+    }
   }
 
   const targetObj = targets.find((t) => t.id === target);
   const trials = events.filter((e) => e.type === "trial") as Trial[];
 
-  if (err && !targets.length) return <ErrorState msg={err} />;
+  const displayErr = err || readErr;
+  if (displayErr && !targets.length) return <ErrorState msg={displayErr} />;
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -150,7 +238,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
           {targets.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {targets.map((t) => (
-                <button key={t.id} disabled={!t.runnable} onClick={() => setTarget(t.id)}
+                <button key={t.id} disabled={!t.runnable} onClick={() => { invalidateRequests(); setTarget(t.id); }}
                   className={cn("rounded-md border px-3 py-1.5 text-[12px] transition-colors",
                     t.id === target ? "border-primary/50 bg-primary/[0.06] text-foreground" : "border-border text-muted-foreground hover:bg-elevated",
                     !t.runnable && "opacity-40")}>
@@ -301,19 +389,27 @@ export function AttackLab({ lens }: { lens: Lens }) {
               {mode === "three"
                 ? <span className="text-[11px] text-success">After this run, the Cost &amp; Uptime panels read THIS attack (not the static benchmark).</span>
                 : <span className="text-[11px] text-muted-foreground">For the live Cost/Uptime 3-way, pick “3-way (live)”.</span>}
-              <Button onClick={launch} disabled={busy || picked.length === 0 || !toolchain}>
+              <Button onClick={launch} disabled={!queryScope.ready || !!targetQuery.error || !!catalogQuery.error || !!workloadQuery.error || busy || picked.length === 0 || !picked.every((name) => scenarios.some((scenario) => scenario.name === name)) || toolchain !== true || lens !== "operator" || !targetObj?.runnable}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 {running ? `Queue ${picked.length > 1 ? picked.length + " attacks" : "attack"}` : picked.length > 1 ? `Launch ${picked.length} attacks${mode === "three" ? " (3-way)" : ""}` : mode === "three" ? "Launch live 3-way attack" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
               </Button>
             </div>
           </div>
-          {!toolchain && (
-            <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-2 text-[12px] text-warning">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>This console is the read-only in-cluster build — the live workload view above is fully functional, but <span className="font-medium">launching the attacker needs the operator toolchain</span> (Go + harness). Run attacks from the operator console (see the deploy runbook); results then appear in Prove / Report.</span>
+          {diagnosticsError && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-2 text-[12px] text-warning">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">Launch availability could not be verified. Retry diagnostics; no permanent availability decision has been made.</span>
+              <Button variant="outline" size="sm" onClick={() => void diagnosticsQuery.refetch()}>Retry diagnostics</Button>
             </div>
           )}
-          {err && <div className="text-[12px] text-danger">{err}</div>}
+          {toolchain === false && !diagnosticsError && (
+            <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-2 text-[12px] text-warning">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>The authenticated diagnostics response reports that the attack harness is unavailable in this console. Live workload inspection remains available.</span>
+            </div>
+          )}
+          {lens !== "operator" && <div className="text-[12px] text-muted-foreground">Attack creation requires the Operator view and is still enforced by the server-side session grant.</div>}
+          {displayErr && <div className="text-[12px] text-danger">{displayErr}</div>}
         </CardContent>
       </Card>
 

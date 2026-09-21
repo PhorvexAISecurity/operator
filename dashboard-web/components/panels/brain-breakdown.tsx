@@ -4,6 +4,9 @@ import { Lens, liveStream } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Loader2, Eye, Cpu, Zap, ArrowRight, Pause, Play, ShieldCheck, ShieldOff, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSelectedTarget } from "@/lib/provider-store";
+import { useLocalPage } from "@/lib/use-local-page";
+import { PaginationBar } from "@/components/ui/pagination";
 
 /* BrainBreakdown — the whole decision, end to end, for one real tick.
  *
@@ -23,23 +26,51 @@ const n = (v: any, d = 2) => (typeof v === "number" && isFinite(v) ? v.toFixed(d
 const pct = (v: any) => (typeof v === "number" && isFinite(v) ? `${(v * 100).toFixed(0)}%` : "—");
 
 export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
+  const target = useSelectedTarget();
   const [recs, setRecs] = React.useState<Rec[]>([]);
+  const [snapshot, setSnapshot] = React.useState<Rec[] | null>(null);
+  const [newCount, setNewCount] = React.useState(0);
   const [live, setLive] = React.useState(true);
   const [sel, setSel] = React.useState<Rec | null>(null);
   const [flash, setFlash] = React.useState(0);
+  const [dataScope, setDataScope] = React.useState("");
   const liveRef = React.useRef(live);
-  liveRef.current = live;
+  const snapshotRef = React.useRef<Rec[] | null>(null);
+  const scopeKey = `${lens}\u0000${target.context}`;
 
   React.useEffect(() => {
+    let alive = true;
+    liveRef.current = true;
+    snapshotRef.current = null;
+    setRecs([]); setSnapshot(null); setNewCount(0); setSel(null); setLive(true); setFlash(0);
     const stop = liveStream(lens, (d) => {
-      if (d?.kind !== "phorvex.decision") return;
+      if (!alive || d?.kind !== "phorvex.decision") return;
+      setDataScope(scopeKey);
       setRecs((prev) => [d, ...prev].slice(0, 60));
+      if (snapshotRef.current) setNewCount((count) => count + 1);
       if (liveRef.current) { setSel(d); setFlash((f) => f + 1); }
-    }, undefined, 40);
-    return stop;
-  }, [lens]);
+    }, undefined, 40, target.context);
+    return () => { alive = false; liveRef.current = false; stop(); };
+  }, [lens, target.context, scopeKey]);
 
-  if (!sel) {
+  const decisionList = dataScope === scopeKey ? (snapshot ?? recs) : [];
+  const decisionPage = useLocalPage(decisionList, 12, scopeKey);
+  const freezeHistory = () => {
+    if (snapshotRef.current) return;
+    const frozen = recs.slice(0, 60);
+    snapshotRef.current = frozen;
+    setSnapshot(frozen);
+    setNewCount(0);
+  };
+  const showLatest = () => {
+    snapshotRef.current = null;
+    setSnapshot(null);
+    setNewCount(0);
+    decisionPage.setPage(0);
+    if (liveRef.current && recs[0]) { setSel(recs[0]); setFlash((f) => f + 1); }
+  };
+
+  if (!sel || dataScope !== scopeKey) {
     return (
       <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
         <Loader2 className="h-3.5 w-3.5 animate-spin" /> waiting for the operator&apos;s next decision…
@@ -64,10 +95,15 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
         <span className="text-[11px] text-muted-foreground">
           every value below is read from the operator&apos;s own decision audit — nothing is recomputed here
         </span>
-        <button onClick={() => setLive(!live)}
+        <button onClick={() => {
+          const nextLive = !liveRef.current;
+          liveRef.current = nextLive;
+          setLive(nextLive);
+          if (nextLive && recs[0]) { setSel(recs[0]); setFlash((f) => f + 1); }
+        }}
           className={cn("ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] transition-colors",
             live ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-elevated/40 text-muted-foreground")}>
-          {live ? <><Play className="h-3 w-3" /> following live</> : <><Pause className="h-3 w-3" /> frozen — inspecting</>}
+          {live ? <><Play className="h-3 w-3" /> following incoming decisions</> : <><Pause className="h-3 w-3" /> frozen selection</>}
         </button>
       </div>
 
@@ -151,14 +187,14 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
       {/* recent ticks — click to freeze and inspect one */}
       <div>
         <div className="mb-1.5 text-[11px] text-muted-foreground">
-          recent decisions — click one to freeze the pipeline on it ({recs.length} buffered)
+          {snapshot ? `frozen history (${decisionList.length} decisions) · ${newCount} new since snapshot` : `incoming decisions (${recs.length} buffered)`}; click one to keep that selection frozen while new decisions continue buffering
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {recs.slice(0, 24).map((r, i) => {
+          {decisionPage.pageItems.map((r, i) => {
             const act = r.action || "noop";
             const on = sel === r;
             return (
-              <button key={i} onClick={() => { setLive(false); setSel(r); setFlash((f) => f + 1); }}
+              <button key={`${r.time || r.Time || "decision"}-${decisionPage.start + i}`} onClick={() => { liveRef.current = false; setLive(false); setSel(r); setFlash((f) => f + 1); }}
                 className={cn("rounded border px-2 py-1 font-mono text-[10px] transition-colors",
                   on ? "border-primary bg-primary/15 text-primary"
                     : act === "noop" ? "border-border bg-elevated/30 text-muted-foreground hover:bg-elevated/60"
@@ -167,6 +203,9 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
               </button>
             );
           })}
+        </div>
+        <div className="mt-2">
+          <PaginationBar page={decisionPage.page} pageSize={12} total={decisionList.length} hasNext={decisionPage.hasNext} onPrevious={() => decisionPage.setPage((p) => Math.max(0, p - 1))} onNext={() => { freezeHistory(); decisionPage.setPage((p) => p + 1); }} onLatest={showLatest} showLatest={!!snapshot} />
         </div>
       </div>
     </div>
