@@ -95,6 +95,15 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	if warmSwapProcessCoverEligible(&view.Pod) {
 		cover[model.ActionWarmSwap] = append(cover[model.ActionWarmSwap], pid.Key(), memFact.Key(), sessFact.Key())
 	}
+	// Scalar model-shard replacement uses the same exact-UID warmCutover retirement
+	// producer as warm-swap, with a distinct family key. Once ingestion has verified
+	// the owning ReplicaSet template and role-routed Service, retiring the selected old
+	// process invalidates these same three process-scoped facts. The loaded model
+	// fingerprint, stable route, GPU placement and durable credentials remain untouched.
+	// Parallel TP/PP groups use a different grouped producer and are deliberately withheld.
+	if modelShardProcessCoverEligible(&view.Pod) {
+		cover[model.ActionModelShardReplace] = append(cover[model.ActionModelShardReplace], pid.Key(), memFact.Key(), sessFact.Key())
+	}
 	if view.Pod.ServingEndpointReady {
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
 	}
@@ -127,6 +136,16 @@ func warmSwapProcessCoverEligible(p *model.Pod) bool {
 		return false
 	}
 	return p.Labels["phorvex.ai/role"] != "warm-shadow" && p.Labels["phorvex.ai/swap-group"] != ""
+}
+
+func modelShardProcessCoverEligible(p *model.Pod) bool {
+	if p == nil || !p.HasServingDeclaration() || !p.WarmPoolConfigured ||
+		p.WarmPoolOwnerUID == "" || p.RouteService == "" || p.Labels == nil {
+		return false
+	}
+	return p.Labels["phorvex.ai/role"] != "warm-shadow" &&
+		p.Labels["phorvex.ai/model-shard"] != "" &&
+		p.Labels["phorvex.ai/parallel-group"] == ""
 }
 
 // clamp01 clamps a FINITE x into [0,1]. A non-finite x (NaN/±Inf) is not a value: ok=false

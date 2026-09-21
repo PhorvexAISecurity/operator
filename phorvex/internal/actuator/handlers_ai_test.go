@@ -2,6 +2,7 @@ package actuator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -544,6 +546,7 @@ func TestMIGRebindDefaultRunnerFailsClosed(t *testing.T) {
 func TestModelShardReplaceWarmCutover(t *testing.T) {
 	leader := aiPod("ns", "shard0", map[string]string{labelModelShard: "s", labelRole: roleLeader})
 	shadow := aiPod("ns", "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"})
+	oldUID, promotedUID := string(leader.UID), string(shadow.UID)
 	base := fakeC(leader, shadow)
 	c := m067ModeledRouteClient(base, leader)
 	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
@@ -554,6 +557,26 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "shard0b"}, &s)
 	if leaderRole(&s) != roleLeader {
 		t.Errorf("replacement shard not promoted, role=%q result=%+v err=%v", leaderRole(&s), hr, err)
+	}
+	if string(s.UID) != promotedUID {
+		t.Errorf("promoted shard identity changed: got %s want %s", s.UID, promotedUID)
+	}
+	var old corev1.Pod
+	if getErr := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "shard0"}, &old); !apierrors.IsNotFound(getErr) {
+		t.Fatalf("old shard UID %s absence unconfirmed: %v", oldUID, getErr)
+	}
+	var receipts corev1.ConfigMapList
+	if listErr := c.List(context.Background(), &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); listErr != nil || len(receipts.Items) != 1 {
+		t.Fatalf("retirement receipt inventory: count=%d err=%v", len(receipts.Items), listErr)
+	}
+	var receipt operationReceipt
+	if decodeErr := json.Unmarshal([]byte(receipts.Items[0].Data["receipt"]), &receipt); decodeErr != nil {
+		t.Fatalf("decode retirement receipt: %v", decodeErr)
+	}
+	if receipt.Kind != string(model.ActionModelShardReplace) || receipt.GroupKey != labelModelShard || receipt.GroupValue != "s" ||
+		receipt.OldUID != oldUID || receipt.NewUID != promotedUID || receipt.Pool == nil ||
+		receipt.Pool.RSUID == "" || receipt.Pool.ServiceUID == "" {
+		t.Fatalf("retirement receipt did not bind family/owner/service/old/new identities: %+v", receipt)
 	}
 }
 

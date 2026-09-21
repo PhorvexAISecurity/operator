@@ -76,6 +76,8 @@ type PodSpec struct {
 	WarmPoolConfigured   bool   `json:"warmPoolConfigured,omitempty"`
 	WarmPoolOwnerUID     string `json:"warmPoolOwnerUID,omitempty"`
 	SwapGroup            string `json:"swapGroup,omitempty"`
+	ModelShard           string `json:"modelShard,omitempty"`
+	ParallelGroup        string `json:"parallelGroup,omitempty"`
 	Role                 string `json:"role,omitempty"`
 }
 
@@ -211,6 +213,16 @@ func Fixtures() []Fixture {
 				p.Role = "leader"
 				return p
 			}(), Ctx: gpuCtx},
+		{Name: "gpu-model-shard-pool", Why: "Verified scalar model-shard pool leader: model-shard-replace predicts only exact old-process identity, memory and session retirement; model identity, route and placement facts remain audit-only.",
+			Pod: func() PodSpec {
+				p := gpuPod
+				p.Name = "gpu-model-shard-pool"
+				p.WarmPoolConfigured = true
+				p.WarmPoolOwnerUID = "rs-uid"
+				p.ModelShard = "main"
+				p.Role = "leader"
+				return p
+			}(), Ctx: gpuCtx},
 		{Name: "gpu-mig", Why: "Same pod with a MIG device: mig-rebind covers gpuContentionChannel only; gpuColocation stays audit-only.",
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-mig"; p.MIGDevice = "1g.10gb"; return p }(), Ctx: gpuCtx},
 		{Name: "cpu-served-model", Why: "Ready CPU served model: both session erasers share the produced serving-endpoint prerequisite while the non-GPU session weight remains 0.6.",
@@ -243,8 +255,13 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
 		WarmPoolConfigured:   f.Pod.WarmPoolConfigured, WarmPoolOwnerUID: f.Pod.WarmPoolOwnerUID,
 	}
-	if f.Pod.SwapGroup != "" || f.Pod.Role != "" {
-		pod.Labels = map[string]string{"phorvex.ai/swap-group": f.Pod.SwapGroup, "phorvex.ai/role": f.Pod.Role}
+	if f.Pod.SwapGroup != "" || f.Pod.ModelShard != "" || f.Pod.ParallelGroup != "" || f.Pod.Role != "" {
+		pod.Labels = map[string]string{
+			"phorvex.ai/swap-group":     f.Pod.SwapGroup,
+			"phorvex.ai/model-shard":    f.Pod.ModelShard,
+			"phorvex.ai/parallel-group": f.Pod.ParallelGroup,
+			"phorvex.ai/role":           f.Pod.Role,
+		}
 	}
 	if pod.SuspectAdapter != "" {
 		pod.UID = "fixture-pod-uid"

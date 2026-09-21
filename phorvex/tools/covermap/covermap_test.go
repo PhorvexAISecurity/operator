@@ -281,8 +281,8 @@ func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {
 		if got := coverOf(r, model.ActionEndpointRotate); len(got) != 0 {
 			t.Errorf("%s: endpoint-rotate must be coverless, got %v", id, got)
 		}
-		if got := coverOf(r, model.ActionModelShardReplace); len(got) != 0 {
-			t.Errorf("%s: model-shard-replace must be coverless, got %v", id, got)
+		if got := coverOf(r, model.ActionModelShardReplace); len(got) > 0 && strings.Join(got, ",") != "inMemory,podIdentity,session" {
+			t.Errorf("%s: model-shard-replace may cover only old-process facts, got %v", id, got)
 		}
 		for _, a := range []model.Action{model.ActionDebugger, model.ActionCustomInject, model.ActionNoop, model.ActionDisable} {
 			if got := coverOf(r, a); len(got) != 0 {
@@ -309,8 +309,10 @@ func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {
 
 	// Conditions: which fixtures reach which grant.
 	want := map[string][]string{ // "profile:action" -> fixtures where the grant appears
-		"ucw-recon:mig-rebind":     {"gpu-mig"},
-		"ucw-recon:adapter-rotate": {"gpu-adapter"},
+		"ucw-recon:mig-rebind":               {"gpu-mig"},
+		"ucw-recon:adapter-rotate":           {"gpu-adapter"},
+		"standard-recon:model-shard-replace": {"gpu-model-shard-pool"},
+		"ucw-recon:model-shard-replace":      {"gpu-model-shard-pool"},
 	}
 	for key, fixtures := range want {
 		profile, action, _ := strings.Cut(key, ":")
