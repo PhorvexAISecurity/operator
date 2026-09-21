@@ -15,7 +15,9 @@
 package console
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -90,11 +92,12 @@ type attackRecord struct {
 	Containment string `json:"containment"`
 	// A synthetic detector signal can prove only an identity-bound workload response.
 	// Keep that evidence separate from attacker outcome, containment and dwell.
-	ResponseObserved bool    `json:"responseObserved,omitempty"`
-	ResponseAction   string  `json:"responseAction,omitempty"`
-	ResponsePod      string  `json:"responsePod,omitempty"`
-	ResponseSeconds  float64 `json:"responseSeconds,omitempty"`
-	ObservationError string  `json:"observationError,omitempty"`
+	ResponseObserved bool              `json:"responseObserved,omitempty"`
+	ResponseAction   string            `json:"responseAction,omitempty"`
+	ResponsePod      string            `json:"responsePod,omitempty"`
+	ResponseSeconds  float64           `json:"responseSeconds,omitempty"`
+	ObservationError string            `json:"observationError,omitempty"`
+	DecisionEvidence *decisionEvidence `json:"decisionEvidence,omitempty"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
 	Why                       string  `json:"why"`
@@ -128,6 +131,15 @@ type attackRecord struct {
 	baseKVEpoch string          // pre-attack kv-reset epoch (kvcache detection)
 	baseQuar    map[string]bool // pre-attack quarantine SecurityEvent names
 	baseNP      map[string]bool // pre-attack quarantine NetworkPolicy names
+}
+
+type decisionEvidence struct {
+	Correlation string `json:"correlation"`
+	Time        string `json:"time"`
+	Action      string `json:"action"`
+	Reason      string `json:"reason"`
+	Selected    bool   `json:"selected"`
+	Actuated    bool   `json:"actuated"`
 }
 
 // defenseBaseline is the snapshot of pre-existing defense artifacts, taken by the attack handler BEFORE
@@ -171,6 +183,10 @@ var (
 // boundary. Add copies here if attackRecord gains another map, slice or pointer field.
 func cloneAttackRecord(r *attackRecord) *attackRecord {
 	c := *r
+	if r.DecisionEvidence != nil {
+		evidence := *r.DecisionEvidence
+		c.DecisionEvidence = &evidence
+	}
 	if r.Claim != nil {
 		claim := *r.Claim
 		claim.DetectorSet = append([]string(nil), r.Claim.DetectorSet...)
@@ -227,6 +243,49 @@ func realAttackSnapshots(p *Principal) []*attackRecord {
 		}
 	}
 	return out
+}
+
+func pagedRealAttackSnapshots(endpoint string, p *Principal, pg collectionPaging, search, exactID string) ([]*attackRecord, collectionPage, error) {
+	attackMu.Lock()
+	defer attackMu.Unlock()
+	snapshot := len(attackList)
+	if pg.Cursor.Version != 0 {
+		snapshot = pg.Cursor.Snapshot
+	}
+	if snapshot < 0 || snapshot > len(attackList) {
+		return nil, collectionPage{}, fmt.Errorf("cursor snapshot is no longer available; refresh latest")
+	}
+	ids := make([]string, 0, snapshot)
+	for i := 0; i < snapshot; i++ {
+		ids = append(ids, strconv.Itoa(i)+":"+attackList[i].ID)
+	}
+	cursor := pg.establish(endpoint, snapshot, collectionAnchor(ids))
+	if cursor.Anchor != collectionAnchor(ids) {
+		return nil, collectionPage{}, fmt.Errorf("cursor snapshot changed; refresh latest")
+	}
+	matching := make([]*attackRecord, 0, snapshot)
+	for i := snapshot - 1; i >= 0; i-- {
+		rec := attackList[i]
+		if rec.EvidenceKind != "" || (!p.TenantWildcard() && !p.AllowsTenant(rec.Namespace)) {
+			continue
+		}
+		if exactID != "" && rec.ID != exactID {
+			continue
+		}
+		if !containsFold(rec.ID+" "+rec.Service+" "+rec.Namespace+" "+rec.Attack, search) {
+			continue
+		}
+		matching = append(matching, rec)
+	}
+	start, end, page, err := collectionPageFor(cursor, len(matching))
+	if err != nil {
+		return nil, collectionPage{}, err
+	}
+	out := make([]*attackRecord, 0, end-start)
+	for _, rec := range matching[start:end] {
+		out = append(out, cloneAttackRecord(rec))
+	}
+	return out, page, nil
 }
 
 func (s *Server) attacksPath() string {
@@ -683,75 +742,44 @@ func (s *Server) workloadUptime(ns, deploy string) float64 {
 	return round2(float64(ready) / float64(desired) * 100)
 }
 
-// fillReasoning pulls the ACTUAL decision (action, why, per-$, stage, r6) for the attacked pod from
-// the in-cluster operator's audit log — the operator that really actuated.
+// fillReasoning preserves event-derived facts and, separately, attaches a bounded temporal
+// candidate from the canonical decision audit. Time/workload proximity is evidence, not identity.
 func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
-	op, _ := s.cfg.execText(8*time.Second, "kubectl", "get", "pods", "-n", "phorvex-system",
-		"-l", "app.kubernetes.io/name=phorvex", "-o", "jsonpath={.items[0].metadata.name}")
-	op = strings.TrimSpace(op)
-	if op == "" {
-		return
-	}
-	logs, _ := s.cfg.execText(10*time.Second, "kubectl", "logs", "-n", "phorvex-system", op, "--tail=400")
-	// the real decision is for the pod Phorvex actuated on — the quarantined/rotated pod, which on a
-	// stateful cluster may be a neighbor of the attacked pod. Fall back to the attacked pod.
+	s.parseDescReasoning(r)
 	target := r.Pod
 	if r.DefendedPod != "" {
 		target = r.DefendedPod
 	}
-	var best map[string]any
-	for _, ln := range strings.Split(logs, "\n") {
-		i := strings.Index(ln, "decision\t")
-		if i < 0 || !strings.Contains(ln, r.Namespace+"/"+target) {
-			continue
-		}
-		var d map[string]any
-		if json.Unmarshal([]byte(ln[i+len("decision\t"):]), &d) != nil {
-			continue
-		}
-		// prefer a non-noop selected decision; else keep the last
-		if best == nil {
-			best = d
-		}
-		if act, _ := d["action"].(string); act != "noop" && act != "" {
-			best = d
-		}
-	}
-	if best == nil {
-		// no structured audit decision (e.g. in-cluster Phoenix actuator records reasoning in the
-		// SecurityEvent, not the operator audit log): derive the numbers from the event description.
-		s.parseDescReasoning(r)
+	fired, err := time.Parse(time.RFC3339Nano, r.FiredAt)
+	if err != nil {
 		return
 	}
-	if v, ok := best["action"].(string); ok && v != "" && v != "noop" {
-		r.Action = v
+	deadline := s.cfg.now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	records, err := s.readDecisionWindow(ctx, ctxName)
+	if err != nil {
+		return
 	}
-	if w, _ := best["why"].(string); w != "" { // don't clobber an event-derived reason with an empty audit why
-		r.Why = w
-	}
-	// Preserve only the original audit claim; never infer historical configuration.
-	if raw, ok := best["claim"]; ok && raw != nil {
-		if data, err := json.Marshal(raw); err == nil {
-			var claim model.ClaimScope
-			if json.Unmarshal(data, &claim) == nil && claim.Scope == "modeled" {
-				r.Claim = &claim
-			}
+	var best *audit.Record
+	for i := range records {
+		d := &records[i]
+		if d.Namespace != r.Namespace || d.Pod != target || (!d.Selected && !d.Actuated) || d.Time.Before(fired) || d.Time.After(deadline) {
+			continue
+		}
+		// When an observed action exists, a different selected action is not evidence for it.
+		if r.Action != "" && r.Action != "noop" && d.Action != r.Action {
+			continue
+		}
+		if best == nil || d.Time.Before(best.Time) {
+			best = d
 		}
 	}
-	r.Stage, _ = best["stage"].(string)
-	r.R6Would, _ = best["r6Would"].(string)
-	r.R6Note, _ = best["r6Note"].(string)
-	r.PerDollarAvailable = auditFieldAvailable(best, "perDollar")
-	if r.PerDollarAvailable {
-		r.PerDollar = numf(best["perDollar"])
-	}
-	r.PHold = numf(best["pHold"])
-	r.LambdaAvailable = auditFieldAvailable(best, "lambda")
-	if r.LambdaAvailable {
-		r.Lambda = numf(best["lambda"])
-	}
-	if raw, ok := best["economics"]; ok && raw != nil {
-		if economics, ok := decodeAuditEconomics(raw, r.Lambda); ok {
+	if best != nil {
+		r.DecisionEvidence = &decisionEvidence{Correlation: "temporal-workload", Time: best.Time.UTC().Format(time.RFC3339Nano), Action: best.Action, Reason: best.Reason, Selected: best.Selected, Actuated: best.Actuated}
+		if economics, ok := decodeAuditEconomics(best.Economics, best.Lambda); ok {
+			r.Lambda = best.Lambda
+			r.LambdaAvailable = true
 			r.EconomicsVersion = economics.Version
 			r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
 			r.DisruptionAversionPresent = economics.DisruptionAversion.Present
@@ -761,11 +789,99 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 			r.EconomicsAvailable = true
 		}
 	}
-	r.CoveredFactsAvailable = auditFieldAvailable(best, "coveredFacts")
-	if r.CoveredFactsAvailable {
-		r.CoveredFacts = int(numf(best["coveredFacts"]))
+}
+
+func (s *Server) readDecisionWindow(ctx context.Context, ctxName string) ([]audit.Record, error) {
+	path := s.cfg.auditPathForContext(ctxName)
+	f, err := openDecisionSource(ctx, path, s.cfg.AuditSource)
+	if err != nil {
+		return nil, err
 	}
-	s.parseDescReasoning(r) // backfill any numbers the audit line lacked (e.g. per-$ from the event desc)
+	defer f.Close()
+	generation, err := auditGeneration(f)
+	if err != nil {
+		return nil, err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	const window = int64(16 << 20)
+	start := max(int64(0), st.Size()-window)
+	startAnchor, err := auditAnchor(f, start)
+	if err != nil {
+		return nil, err
+	}
+	snapshotAnchor, err := auditAnchor(f, st.Size())
+	if err != nil {
+		return nil, err
+	}
+	b := make([]byte, st.Size()-start)
+	if len(b) > 0 {
+		if _, err = f.ReadAt(b, start); err != nil {
+			return nil, err
+		}
+	}
+	if remote, ok := f.(interface{ Verify() error }); ok {
+		if err = remote.Verify(); err != nil {
+			return nil, err
+		}
+	} else {
+		capturedHash := sha256.Sum256(b)
+		verify, openErr := openDecisionSource(ctx, path, s.cfg.AuditSource)
+		if openErr != nil {
+			return nil, errAuditChanged
+		}
+		defer verify.Close()
+		verifyGeneration, verifyErr := auditGeneration(verify)
+		if verifyErr != nil || verifyGeneration != generation {
+			return nil, errAuditChanged
+		}
+		if anchor, anchorErr := auditAnchor(verify, start); anchorErr != nil || anchor != startAnchor {
+			return nil, errAuditChanged
+		}
+		if anchor, anchorErr := auditAnchor(verify, st.Size()); anchorErr != nil || anchor != snapshotAnchor {
+			return nil, errAuditChanged
+		}
+		verifiedHash, hashErr := auditRangeHash(verify, uint64(start), uint64(len(b)))
+		if hashErr != nil || verifiedHash != capturedHash {
+			return nil, errAuditChanged
+		}
+	}
+	if start > 0 {
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			b = b[i+1:]
+		} else {
+			return nil, nil
+		}
+	}
+	if len(b) > 0 && b[len(b)-1] != '\n' {
+		if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
+			b = b[:i+1]
+		} else {
+			return nil, nil
+		}
+	}
+	var out []audit.Record
+	for len(b) > 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		i := bytes.IndexByte(b, '\n')
+		if i < 0 {
+			break
+		}
+		line := b[:i]
+		b = b[i+1:]
+		if len(line) == 0 || len(line) > liveRecordBytes {
+			continue
+		}
+		var rec audit.Record
+		if json.Unmarshal(line, &rec) == nil && rec.Kind == "phorvex.decision" {
+			out = append(out, rec)
+		}
+	}
+	return out, nil
 }
 
 func decodeAuditEconomics(raw any, roundedLambda float64) (model.EconomicsMetadata, bool) {
@@ -916,6 +1032,22 @@ func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
 	// [M-136] The attack ledger spans every namespace the console has ever fired at, so it is
 	// filtered to the tenants this identity is granted. A cross-tenant grant sees all of it.
 	p := principalOf(r)
+	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	exactID := strings.TrimSpace(r.URL.Query().Get("id"))
+	pg, err := collectionPagingFromRequest(r, "/api/attack-results", p, map[string]string{"id": exactID, "q": search})
+	if err != nil {
+		writeCollectionPagingError(w, err)
+		return
+	}
+	if pg.Enabled {
+		out, page, err := pagedRealAttackSnapshots("/api/attack-results", p, pg, search, exactID)
+		if err != nil {
+			writeCollectionPagingError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"attacks": out, "page": page})
+		return
+	}
 	// Synthetic detector signals support the dedicated three-arm comparison, but
 	// they are not exploits and therefore do not belong in the global attack report.
 	out := realAttackSnapshots(p)

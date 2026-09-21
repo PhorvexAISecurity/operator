@@ -5,39 +5,66 @@ import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { Swords, Play, Loader2, CheckCircle2, Hand } from "lucide-react";
+import { clearLiveSelection, selectLiveRecord } from "@/lib/live-selection";
+import { useSelectedTarget } from "@/lib/provider-store";
+import { useApiRead } from "@/lib/query";
+import { Loading, ReadStatus } from "@/components/ui/more";
 
 export function RunAttackPanel({ lens }: { lens: Lens }) {
-  const [suites, setSuites] = React.useState<Suite[]>([]);
+  const target = useSelectedTarget();
+  const suitesRead = useApiRead({ lens, resource: "suites", fetcher: (signal) => api.suites(lens, signal), staleTime: 60_000 });
+  const suites = suitesRead.data ? (suitesRead.data.suites ?? []) : undefined;
   const [sel, setSel] = React.useState("p3-v3");
   const [native, setNative] = React.useState(true);
   const [run, setRun] = React.useState<RunStatus | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState("");
+  const requestGeneration = React.useRef(0);
 
-  React.useEffect(() => { api.suites(lens).then((d) => setSuites(d.suites)).catch((e) => setErr(String(e.message || e))); }, [lens]);
+  React.useEffect(() => {
+    requestGeneration.current++;
+    setRun(null); setBusy(false); setErr("");
+  }, [lens]);
+  React.useEffect(() => () => { requestGeneration.current++; }, []);
 
   // poll the live status while running.
   React.useEffect(() => {
-    if (!run || run.state !== "running") return;
-    const t = setInterval(async () => {
-      try { setRun(await api.runStatus(run.id, lens)); } catch { /* keep last */ }
-    }, 1500);
-    return () => clearInterval(t);
-  }, [run, lens]);
+    if (!run || (run.state !== "running" && run.state !== "queued")) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const next = await api.runStatus(run.id, lens);
+        if (!alive) return;
+        setRun(next);
+        if (next.state === "running" || next.state === "queued") timer = setTimeout(poll, 1500);
+      } catch { if (alive) timer = setTimeout(poll, 1500); }
+    };
+    timer = setTimeout(poll, 1500);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [run?.id, run?.state, lens]);
 
   async function start() {
+    const request = ++requestGeneration.current;
     setBusy(true); setErr("");
+    clearLiveSelection(lens, target.context);
     try {
       const { id } = await api.startRun(sel, native, lens);
-      setRun(await api.runStatus(id, lens));
-    } catch (e: any) { setErr(String(e.message || e)); }
-    finally { setBusy(false); }
+      if (request !== requestGeneration.current) return;
+      const status = await api.runStatus(id, lens);
+      if (request !== requestGeneration.current) return;
+      if (status.target) selectLiveRecord({ kind: "run", id, lens, context: status.target });
+      setRun(status);
+    } catch (e: any) { if (request === requestGeneration.current) setErr(String(e.message || e)); }
+    finally { if (request === requestGeneration.current) setBusy(false); }
   }
 
+  if (!suites) return suitesRead.error ? <ReadStatus error={suitesRead.error} hasData={false} onRetry={() => void suitesRead.refetch()} /> : <Loading label="Reading attack suites…" rows={2} />;
   if (err && !suites.length) return <ErrorState msg={err} />;
 
   return (
     <div className="animate-fade-up space-y-6">
+      <ReadStatus error={suitesRead.error} hasData updatedAt={suitesRead.dataUpdatedAt} refreshing={suitesRead.isFetching} onRetry={() => void suitesRead.refetch()} />
       <PageHead
         title="Run Attack Agents"
         sub="Trigger a real attack-scenario suite against the live AWS EKS cluster and watch Phorvex defend in real time. This invokes the existing harness — no fabricated results."
@@ -65,9 +92,9 @@ export function RunAttackPanel({ lens }: { lens: Lens }) {
               </button>
               <Hand className="h-3.5 w-3.5" /> Native actuator <span className="font-mono text-foreground/70">(PHORVEX_ACTUATOR=native)</span>
             </label>
-            <Button onClick={start} disabled={busy || run?.state === "running"}>
-              {busy || run?.state === "running" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {run?.state === "running" ? "Running…" : "Launch attack run"}
+            <Button onClick={start} disabled={busy || run?.state === "running" || run?.state === "queued"}>
+              {busy || run?.state === "running" || run?.state === "queued" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              {run?.state === "queued" ? "Queued…" : run?.state === "running" ? "Running…" : "Launch attack run"}
             </Button>
           </div>
           {err && <div className="text-[12px] text-danger">{err}</div>}
@@ -79,9 +106,10 @@ export function RunAttackPanel({ lens }: { lens: Lens }) {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">
-                {run.state === "running" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : run.state === "done" ? <CheckCircle2 className="h-4 w-4 text-success" /> : <span className="h-2 w-2 rounded-full bg-danger" />}
+                {run.state === "running" || run.state === "queued" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : run.state === "done" ? <CheckCircle2 className="h-4 w-4 text-success" /> : <span className="h-2 w-2 rounded-full bg-danger" />}
                 <span className="font-medium">{run.config}</span>
-                <Badge variant={run.state === "done" ? "real" : run.state === "running" ? "accent" : "danger"}>{run.state}</Badge>
+                <span className="font-mono text-[10px] text-muted-foreground" title={run.id}>run {run.id}</span>
+                <Badge variant={run.state === "done" ? "real" : run.state === "running" || run.state === "queued" ? "accent" : "danger"}>{run.state}</Badge>
                 {run.nativeActuator && <Badge variant="accent">native hands</Badge>}
               </div>
               <span className="text-[12px] tabular text-muted-foreground">{run.trials} trials · started {run.started}</span>
@@ -102,7 +130,7 @@ export function RunAttackPanel({ lens }: { lens: Lens }) {
                   </div>
                 );
               })}
-              {run.state === "running" && !(run.arms || []).length && <div className="py-6 text-center text-[13px] text-muted-foreground">Deploying victims + arming attack agents…</div>}
+              {(run.state === "running" || run.state === "queued") && !(run.arms || []).length && <div className="py-6 text-center text-[13px] text-muted-foreground">{run.state === "queued" ? "Waiting for an execution slot…" : "Deploying victims + arming attack agents…"}</div>}
             </div>
           </CardContent>
         </Card>

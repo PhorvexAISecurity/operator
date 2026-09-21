@@ -1,13 +1,16 @@
 "use client";
 import * as React from "react";
-import { api, Lens, ScanResult } from "@/lib/api";
+import { Lens } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { ErrorBox } from "@/components/ui/more";
+import { ErrorBox, ReadStatus } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { cn } from "@/lib/utils";
 import { Radar, Check, Loader2, ArrowRight } from "lucide-react";
+import { useLocalPage } from "@/lib/use-local-page";
+import { PaginationBar } from "@/components/ui/pagination";
+import { useScanSnapshot } from "@/lib/query";
 
 const PHASES = [
   { k: "ingest", label: "Ingest cluster snapshot", detail: "nodes · PDBs · image digests · requests" },
@@ -17,56 +20,60 @@ const PHASES = [
 ];
 
 export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
-  const [scanning, setScanning] = React.useState(false);
-  const [scan, setScan] = React.useState<ScanResult | null>(null);
-  const [err, setErr] = React.useState("");
-  const [at, setAt] = React.useState("");
+  const [listQuery, setListQuery] = React.useState("");
   const sel = useSelectedTarget(); // the header's provider scope drives which cluster is scanned
   const ctxLabel = sel.label || sel.context || "current kubeconfig context";
+  const scopeKey = `${lens}\u0000${sel.context}`;
+  const scanQuery = useScanSnapshot(lens, sel.context, "", false);
 
-  // run() execs `phorvex --scan` LIVE via /api/scan (a fresh exec each click — not a cached corpus).
+  // run() requests a fresh `phorvex --scan` result via /api/scan (not a cached corpus).
   // The PHASES below are the real server-side pipeline this single exec runs; we show them all
   // in-progress during the exec and done on completion — NOT a fake sequential per-phase timer.
   async function run() {
-    setScanning(true); setErr(""); setScan(null);
-    const context = sel.context;
-    try {
-      const res = await api.scan("", lens, context); // ns="" => all namespaces; live exec
-      setScan(res);
-      setAt(new Date().toLocaleTimeString());
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-    } finally {
-      setScanning(false);
-    }
+    if (lens === "owner") return;
+    await scanQuery.refetch({ cancelRefetch: true });
   }
 
-  const witness = scan?.witness ?? [];
-  const done = !!scan && !scanning;
+  const shownScan = scanQuery.data ?? null;
+  const shownScanning = scanQuery.isFetching;
+  const err = scanQuery.error ? String((scanQuery.error as Error).message || scanQuery.error) : "";
+  const witness = shownScan?.witness ?? [];
+  const nodes = shownScan?.nodeList ?? [];
+  const normalizedQuery = listQuery.trim().toLowerCase();
+  const matchingNodes = nodes.filter((node) => !normalizedQuery || node.name.toLowerCase().includes(normalizedQuery));
+  const matchingWitness = witness.filter((row) => !normalizedQuery || row.pod.toLowerCase().includes(normalizedQuery));
+  const nodePage = useLocalPage(matchingNodes, 10, `${scopeKey}\u0000${listQuery}`);
+  const witnessPage = useLocalPage(matchingWitness, 10, `${scopeKey}\u0000${listQuery}`);
+  const done = !!shownScan && !shownScanning;
 
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={2} title="Scan" sub="Derive the platform's real physics — the discovered, both-products signal Phorvex optimizes over. On a CPU-only AWS EKS cluster the GPU half is honestly [SP-0-PENDING-P4]." />
+      <StepHead n={2} title="Scan" sub="Derive the selected target's physics/context inputs. Synthetic fixture responses remain explicitly labeled; GPU validation stays [SP-0-PENDING-P4]." />
 
       <Card>
         <CardContent className="flex flex-col items-center gap-5 py-10">
-          <div className={cn("grid h-16 w-16 place-items-center rounded-2xl ring-1 transition-colors", !scanning && !done ? "bg-primary/10 ring-primary/30" : done ? "bg-success/10 ring-success/30" : "bg-primary/15 ring-primary/40")}>
-            {scanning ? <Loader2 className="h-7 w-7 animate-spin text-primary" /> : done ? <Check className="h-7 w-7 text-success" /> : <Radar className="h-7 w-7 text-primary" />}
+          <div className={cn("grid h-16 w-16 place-items-center rounded-2xl ring-1 transition-colors", !shownScanning && !done ? "bg-primary/10 ring-primary/30" : done ? "bg-success/10 ring-success/30" : "bg-primary/15 ring-primary/40")}>
+            {shownScanning ? <Loader2 className="h-7 w-7 animate-spin text-primary" /> : done ? <Check className="h-7 w-7 text-success" /> : <Radar className="h-7 w-7 text-primary" />}
           </div>
 
-          {!scanning && !done ? (
+          {lens === "owner" ? (
+            <div className="w-full max-w-md rounded-md border border-border px-4 py-3 text-center text-sm text-muted-foreground">
+              Live vendor scans are available to operator and investor roles. The customer-owner view uses tenant-scoped decision evidence and cannot invoke cluster scan endpoints.
+            </div>
+          ) : !shownScanning && !done ? (
             <>
               <div className="text-center text-sm text-muted-foreground">
-                Run a <span className="text-foreground">live</span> platform-physics scan — execs <span className="font-mono text-foreground/80">phorvex --scan</span> against
+                Request a fresh platform-physics scan — runs <span className="font-mono text-foreground/80">phorvex --scan</span> for
                 <span className="font-mono text-foreground/80"> {ctxLabel}</span> and returns fresh results.
               </div>
-              <Button onClick={run}><Radar className="h-4 w-4" /> Run live scan</Button>
+              <Button onClick={run}><Radar className="h-4 w-4" /> Run scan</Button>
               {err && <div className="w-full max-w-md"><ErrorBox msg={err} /></div>}
             </>
           ) : (
             <div className="w-full max-w-md space-y-2.5">
+              <ReadStatus error={scanQuery.error} hasData={!!shownScan} updatedAt={scanQuery.dataUpdatedAt} refreshing={shownScanning} onRetry={() => void scanQuery.refetch()} />
               {PHASES.map((p) => {
-                const st = scanning ? "run" : "done"; // all server-side stages of the one exec
+                const st = shownScanning ? "run" : "done"; // retained rows describe the last completed exec
                 return (
                   <div key={p.k} className={cn("flex items-center gap-3 rounded-md border px-3 py-2", st === "done" ? "border-success/20 bg-success/[0.04]" : st === "run" ? "border-primary/30 bg-primary/[0.05]" : "border-border/50 opacity-50")}>
                     {st === "done" ? <Check className="h-4 w-4 text-success" /> : st === "run" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <span className="h-4 w-4 rounded-full border border-border" />}
@@ -79,21 +86,22 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
 
           {done && (
             <div className="w-full max-w-lg space-y-3">
+              <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="Search node or pod…" aria-label="Search scan nodes and pods" className="w-full rounded-md border border-border bg-panel px-3 py-2 text-sm focus:outline-none" />
               <div className="flex flex-wrap items-center justify-center gap-2 text-[12px] text-muted-foreground">
-                <Badge variant="real"><Check className="h-2.5 w-2.5" /> live exec</Badge>
-                <Badge variant="accent">{scan?.platform || "generic-k8s"}</Badge>
-                <span>{scan?.nodes ?? 0} node · <span className="tabular text-foreground">{scan?.pods ?? witness.length}</span> pods · {witness.length} physics rows</span>
-                {(scan?.nodeList ?? []).some((n) => n.allocGPU > 0) && (
-                  <Badge variant="accent">{(scan?.nodeList ?? []).filter((n) => n.allocGPU > 0).reduce((s, n) => s + n.allocGPU, 0)}× GPU on {(scan?.nodeList ?? []).filter((n) => n.allocGPU > 0).length} node</Badge>
+                <Badge variant={shownScan?.platform === "local-fixture" ? "modeled" : "neutral"}><Check className="h-2.5 w-2.5" /> {err ? "cached scan snapshot · refresh failed" : shownScan?.platform === "local-fixture" ? "synthetic fixture response" : "scan response · source not attested"}</Badge>
+                <Badge variant="accent">{shownScan?.platform || "generic-k8s"}</Badge>
+                <span>{shownScan?.nodes ?? 0} node · <span className="tabular text-foreground">{shownScan?.pods ?? witness.length}</span> pods · {witness.length} physics rows</span>
+                {(shownScan?.nodeList ?? []).some((n) => n.allocGPU > 0) && (
+                  <Badge variant="accent">{(shownScan?.nodeList ?? []).filter((n) => n.allocGPU > 0).reduce((s, n) => s + n.allocGPU, 0)}× GPU on {(shownScan?.nodeList ?? []).filter((n) => n.allocGPU > 0).length} node</Badge>
                 )}
-                <span className="text-muted-foreground/60">scanned {at}</span>
+                <span className="text-muted-foreground/60">snapshot {scanQuery.dataUpdatedAt ? new Date(scanQuery.dataUpdatedAt).toLocaleTimeString() : ""}</span>
               </div>
-              {(scan?.nodeList?.length ?? 0) > 0 && (
+              {nodes.length > 0 && (
                 <Card><CardContent className="p-0">
                   <div className="max-h-40 overflow-y-auto">
                     <table className="w-full text-[12px]">
                       <thead className="sticky top-0 bg-panel"><tr className="text-left text-[10px] uppercase text-muted-foreground"><th className="px-3 py-1.5">Node</th><th className="px-3 py-1.5">CPU</th><th className="px-3 py-1.5">Mem</th><th className="px-3 py-1.5">GPU</th></tr></thead>
-                      <tbody>{scan!.nodeList.map((n) => (
+                      <tbody>{nodePage.pageItems.map((n) => (
                         <tr key={n.name} className={"border-t border-border/40 " + (n.allocGPU > 0 ? "bg-accent/[0.06]" : "")}>
                           <td className="px-3 py-1.5 font-mono">{n.name.split(".")[0]}</td>
                           <td className="px-3 py-1.5 tabular">{(n.allocCPUm / 1000).toFixed(1)}</td>
@@ -103,6 +111,7 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
                       ))}</tbody>
                     </table>
                   </div>
+                  <div className="border-t border-border/40 px-3 py-2">{matchingNodes.length === 0 && <div className="mb-1 text-[11px] text-muted-foreground">No nodes match this search.</div>}<PaginationBar page={nodePage.page} pageSize={10} total={matchingNodes.length} hasNext={nodePage.hasNext} onPrevious={() => nodePage.setPage((p) => Math.max(0, p - 1))} onNext={() => nodePage.setPage((p) => p + 1)} /></div>
                 </CardContent></Card>
               )}
               {witness.length === 0 ? (
@@ -114,7 +123,7 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
                   <div className="max-h-56 overflow-y-auto">
                     <table className="w-full text-[12px]">
                       <thead className="sticky top-0 bg-panel"><tr className="text-left text-[10px] uppercase text-muted-foreground"><th className="px-3 py-1.5">Pod</th><th className="px-3 py-1.5">imgRarity</th><th className="px-3 py-1.5">coRes</th><th className="px-3 py-1.5">slack</th><th className="px-3 py-1.5">EPSS</th></tr></thead>
-                      <tbody>{witness.map((w) => (
+                      <tbody>{witnessPage.pageItems.map((w) => (
                         <tr key={w.pod} className="border-t border-border/40">
                           <td className="px-3 py-1.5 font-mono">{w.pod}</td>
                           <td className="px-3 py-1.5 tabular">{w.imageRarity.toFixed(2)}</td>
@@ -125,10 +134,11 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
                       ))}</tbody>
                     </table>
                   </div>
+                  <div className="border-t border-border/40 px-3 py-2">{matchingWitness.length === 0 && <div className="mb-1 text-[11px] text-muted-foreground">No pods match this search.</div>}<PaginationBar page={witnessPage.page} pageSize={10} total={matchingWitness.length} hasNext={witnessPage.hasNext} onPrevious={() => witnessPage.setPage((p) => Math.max(0, p - 1))} onNext={() => witnessPage.setPage((p) => p + 1)} /></div>
                 </CardContent></Card>
               )}
               <div className="flex items-center justify-center gap-3">
-                <Button onClick={run} disabled={scanning}><Radar className="h-4 w-4" /> Re-scan (fresh)</Button>
+                <Button onClick={run} disabled={shownScanning}><Radar className="h-4 w-4" /> Re-scan (fresh)</Button>
                 <Button onClick={() => go("discovered")}>See what was discovered <ArrowRight className="h-4 w-4" /></Button>
               </div>
             </div>

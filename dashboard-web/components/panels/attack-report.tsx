@@ -3,52 +3,94 @@ import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, AttackResult, AttackCost } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { csvDownload, Empty } from "@/components/ui/more";
+import { csvDownload, Empty, Input } from "@/components/ui/more";
+import { DataFreshness, PaginationBar } from "@/components/ui/pagination";
+import { useServerPage } from "@/lib/use-server-page";
 import { ShieldCheck, ShieldAlert, Loader2, Download, Swords, Activity, Clock, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LIVE_SELECTION_EVENT, LiveSelectionEvent, readLiveSelection } from "@/lib/live-selection";
+import { useSelectedTarget } from "@/lib/provider-store";
+import { useExactRecord } from "@/lib/query";
 
 // AttackResultsPanel — the REAL outcome of every attack fired from Live Operations: landed vs defended,
 // the actuator Phorvex chose + why, uptime before/dip/after, and the three-way cost (without / R6 / with).
 // Everything is measured on the live cluster — polled from /api/attack-results (persisted per attack).
 export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: boolean }) {
-  const [rows, setRows] = React.useState<AttackResult[] | null>(null);
-  const [err, setErr] = React.useState("");
+  const target = useSelectedTarget();
+  const [selectedId, setSelectedId] = React.useState("");
+  const [q, setQ] = React.useState("");
+  const pageSize = compact ? 3 : 20;
+  const normalizedQ = q.trim().toLowerCase();
+  const pager = useServerPage<AttackResult>({
+    resource: "attack-results", lens,
+    key: `${lens}\u0000${normalizedQ}\u0000${pageSize}`,
+    network: { q: normalizedQ || undefined },
+    pageSize,
+    pollMs: 4000,
+    fetchPage: (cursor, signal) => api.attackResultsPage(lens, pageSize, { q: normalizedQ || undefined }, cursor, signal).then((d) => ({ items: d.attacks || [], page: d.page })),
+    legacyFilter: (r) => !normalizedQ || `${r.id} ${r.service} ${r.namespace} ${r.attack}`.toLowerCase().includes(normalizedQ),
+  });
   React.useEffect(() => {
-    let alive = true;
-    const load = () => api.attackResults(lens).then((d) => { if (alive) setRows(d.attacks || []); }).catch((e) => { if (alive) setErr(String(e.message || e)); });
-    load();
-    const t = setInterval(load, 4000); // live: running → done
-    return () => { alive = false; clearInterval(t); };
-  }, [lens]);
+    const apply = (selection: LiveSelectionEvent | null) => {
+      if (!selection) { setSelectedId(""); return; }
+      if (selection?.lens !== lens || selection.context !== target.context) return;
+      setSelectedId(selection.kind === "attack" ? selection.id : "");
+    };
+    apply(readLiveSelection(lens, target.context));
+    const onSelection = (event: Event) => apply((event as CustomEvent<LiveSelectionEvent>).detail);
+    window.addEventListener(LIVE_SELECTION_EVENT, onSelection);
+    return () => window.removeEventListener(LIVE_SELECTION_EVENT, onSelection);
+  }, [lens, target.context]);
 
-  if (err) return <div className="text-[12px] text-danger">error: {err}</div>;
-  if (!rows) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading attack results…</div>;
-  if (rows.length === 0) return <Empty msg="No attacks fired yet. Go to Protect → Live theatre, pick a workload, and fire a real attack — its measured outcome, uptime impact and 3-way cost will appear here." />;
-
-  const shown = compact ? rows.slice(0, 3) : rows;
+  const selectedOnPage = !!selectedId && pager.items.some((r) => r.id === selectedId);
+  const needsExact = !!selectedId && (!selectedOnPage || pager.hasSnapshot || pager.page > 0);
+  const exactQuery = useExactRecord({ resource: "attack-results", context: target.context, id: selectedId, lens, enabled: needsExact,
+    fetcher: (signal) => api.attackResultsPage(lens, 1, { id: selectedId }, undefined, signal).then((d) => (d.attacks || []).find((r) => r.id === selectedId) || null),
+    active: (record) => record.status === "running" });
+  const exact = needsExact ? exactQuery.data || null : null;
+  const exactMissing = needsExact && exactQuery.data === null;
+  const exactError = exactQuery.error ? String((exactQuery.error as Error).message || exactQuery.error) : "";
+  const exactPending = needsExact && exactQuery.isPending;
+  const rows = exact
+    ? (pager.items.some((r) => r.id === exact.id) ? pager.items.map((r) => r.id === exact.id ? exact : r) : [exact, ...pager.items])
+    : pager.items;
+  const shown = selectedId ? [...rows].sort((a, b) => Number(b.id === selectedId) - Number(a.id === selectedId)) : rows;
   function exportCSV() {
-    const rs = rows || [];
+    const rs = pager.items;
     const head = ["fired", "service", "attack", "mitre", "outcome", "actuator", "containment", "time_to_action_s", "dwell_s", "dwell_ongoing", "uptime_before", "uptime_dip", "uptime_after", "cost_without", "cost_r6", "cost_with", "savings", "why"];
     const body = rs.map((r) => [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, r.phorvexAction, r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
-    csvDownload("phorvex-attack-results.csv", [head, ...body]);
+    csvDownload("phorvex-attack-results-page.csv", [head, ...body]);
   }
 
-  const defended = rows.filter((r) => r.outcome === "DEFENDED").length;
-  const landed = rows.filter((r) => r.outcome === "LANDED").length;
-  const boundedRows = rows.filter((r) => (r.containment === "evicted" || r.containment === "contained" || r.containment === "flushed") && r.dwellSec > 0);
+  const defended = pager.items.filter((r) => r.outcome === "DEFENDED").length;
+  const landed = pager.items.filter((r) => r.outcome === "LANDED").length;
+  const boundedRows = pager.items.filter((r) => (r.containment === "evicted" || r.containment === "contained" || r.containment === "flushed") && r.dwellSec > 0);
   const meanDwell = boundedRows.length ? (boundedRows.reduce((a, r) => a + r.dwellSec, 0) / boundedRows.length).toFixed(1) : null;
 
   return (
     <div className="space-y-3">
-      <ClaimScopeNote />
+      <div className="text-[11px] text-muted-foreground">Cluster-wide recorded attack history for this console; changing the selected target does not filter these rows.</div>
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all attacks by ID, service, namespace, or attack…" aria-label="Search attack results" />
+      {pager.legacy && <div className="text-[11px] text-warning">Legacy/preview response: paging and search cover the full history returned by this fixture.</div>}
+      {pager.error && <div className="text-[11px] text-danger">Page refresh failed: {pager.error} <button className="text-primary" onClick={pager.retry}>Retry</button></div>}
+      <DataFreshness updatedAt={pager.updatedAt} refreshing={pager.refreshing} failed={!!pager.error} />
       {!compact && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-[12px] font-medium"><Swords className="h-3.5 w-3.5 text-primary" /> Live attack results</div>
-          <div className="text-[11px] text-muted-foreground">{rows.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span>{meanDwell && <> · mean recorded response time <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
-          <Button size="sm" variant="outline" onClick={exportCSV} className="ml-auto gap-1.5"><Download className="h-3.5 w-3.5" /> CSV</Button>
+          <div className="text-[11px] text-muted-foreground">Current page: {pager.items.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span>{meanDwell && <> · mean recorded response time <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
+          <Button size="sm" variant="outline" onClick={exportCSV} className="ml-auto gap-1.5"><Download className="h-3.5 w-3.5" /> CSV (page)</Button>
         </div>
       )}
-      {shown.map((r) => <AttackCard key={r.id} r={r} />)}
+      {exact && <div className="text-[11px] text-muted-foreground">The selected attack is refreshed independently for this frozen/older view; snapshot membership, page statistics, and CSV are unchanged.</div>}
+      {selectedId && exactMissing && <div className="text-[11px] text-warning">Exact selected attack <span className="font-mono">{selectedId}</span> is missing; no other attack was substituted. <button className="text-primary" onClick={() => exactQuery.refetch()}>Retry</button></div>}
+      {selectedId && exactError && <div className="text-[11px] text-danger">Could not load exact selected attack: {exactError} <button className="text-primary" onClick={() => exactQuery.refetch()}>Retry</button></div>}
+      {exactPending && <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading exact selected attack…</div>}
+      {pager.loading && !pager.pageMeta && <div className="flex items-center gap-2 py-8 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading attack results…</div>}
+      {rows.length === 0 && !pager.loading && !pager.error && (selectedId
+        ? (!exactMissing && !exactError && <div className="text-[12px] text-muted-foreground">Waiting for exact attack result <span className="font-mono">{selectedId}</span>…</div>)
+        : <Empty msg={q ? "No attack results match this search." : "No attacks fired yet. Go to Protect → Live theatre, pick a workload, and fire a real attack — its measured outcome, uptime impact and 3-way cost will appear here."} />)}
+      {shown.map((r) => <AttackCard key={r.id} r={r} selected={r.id === selectedId} />)}
+      <PaginationBar page={pager.page} pageSize={pageSize} total={pager.pageMeta?.total} hasNext={pager.hasNext} onPrevious={pager.previous} onNext={pager.next} onLatest={pager.latest} showLatest={pager.hasSnapshot || pager.page > 0} loading={pager.loading} />
     </div>
   );
 }
@@ -71,21 +113,27 @@ function containmentInfo(r: AttackResult): { tone: "good" | "warn" | "bad"; cls:
   }
 }
 
-function AttackCard({ r }: { r: AttackResult }) {
+function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boolean }) {
   const running = r.status === "running";
+  const partial = r.status === "partial";
   const defended = r.outcome === "DEFENDED";
   const landed = r.outcome === "LANDED";
+  const confirmed = defended || landed;
   const cinfo = containmentInfo(r);
   return (
-    <Card className={cn("border-l-2", defended ? "border-l-success" : landed ? "border-l-danger" : "border-l-warning")}>
+    <Card className={cn("border-l-2", selected && "ring-1 ring-primary/60", defended ? "border-l-success" : landed ? "border-l-danger" : "border-l-warning")}>
       <CardContent className="space-y-3 p-4">
         {/* header */}
         <div className="flex flex-wrap items-center gap-2">
+          {selected && <Badge variant="accent">selected attack</Badge>}
           {running ? <Badge variant="modeled" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> measuring…</Badge>
+            : partial ? <Badge variant="pending">PARTIAL RECORD</Badge>
             : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> RESPONSE RECORDED</Badge>
-              : <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> LANDED</Badge>}
+              : landed ? <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> LANDED</Badge>
+                : <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> UNCONFIRMED</Badge>}
           <span className="font-mono text-[12px] font-medium text-foreground">{r.service}</span>
           <span className="text-[12px] text-muted-foreground">· {r.attack}</span>
+          <span className="font-mono text-[10px] text-muted-foreground" title={r.id}>attack {r.id}</span>
           <span className="rounded border border-border bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{r.mitre}</span>
           <span className="ml-auto font-mono text-[10px] text-muted-foreground/60">{new Date(r.firedAt).toLocaleTimeString()}</span>
         </div>
@@ -94,11 +142,12 @@ function AttackCard({ r }: { r: AttackResult }) {
         {/* actuator line */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
           <span className="text-muted-foreground">Phorvex →
-            <span className={cn("ml-1 font-mono font-semibold", defended ? "text-success" : "text-foreground")}>{r.phorvexAction || r.expectedActuator}</span>
+            <span className={cn("ml-1 font-mono font-semibold", defended ? "text-success" : "text-foreground")}>{r.phorvexAction || "—"}</span>
           </span>
+          {!r.phorvexAction && <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{r.expectedActuator || "—"}</span> (not observed)</span>}
           {defended && r.timeToDefendSec > 0 && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.timeToDefendSec}s</span></span>}
           <span className="text-muted-foreground">target pod <span className="font-mono text-[11px] text-foreground/80">{r.pod?.split("-").slice(-1)[0]}</span></span>
-          {!running && cinfo.line && <span className={cinfo.cls}>{cinfo.line}</span>}
+          {!running && confirmed && cinfo.line && <span className={cinfo.cls}>{cinfo.line}</span>}
         </div>
 
         {/* attacker dwell time — how long the intruder held effective access */}
@@ -107,12 +156,23 @@ function AttackCard({ r }: { r: AttackResult }) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
             {running
               ? <span className="text-muted-foreground">measuring…</span>
+              : !confirmed
+                ? <span className="text-warning">outcome not confirmed by the recorded result</span>
               : cinfo.bounded
                 ? <><span className="tabular text-[15px] font-semibold text-success">{r.dwellSec}s</span><span className="text-muted-foreground">{cinfo.dwellNote}</span></>
                 : <><span className="tabular text-[15px] font-semibold text-danger">≥ {r.dwellSec}s</span><span className="text-warning">ongoing — {cinfo.dwellNote}</span></>}
             <span className="ml-auto text-[10px] text-muted-foreground/60">Recorded response timing is not a bound on attacker access or out-of-band gains.</span>
           </div>
         </div>
+
+        {r.decisionEvidence && (
+          <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
+            <div className="font-medium text-warning">Decision during observation window</div>
+            <div className="mt-1 text-muted-foreground">Temporal workload candidate at {new Date(r.decisionEvidence.time).toLocaleTimeString()}; no causal audit record is linked.</div>
+            <div className="mt-1 font-mono text-foreground/85">{r.decisionEvidence.action || "—"}{r.decisionEvidence.reason ? ` · ${r.decisionEvidence.reason}` : ""}</div>
+            <div className="mt-1 text-muted-foreground">candidate selected: {r.decisionEvidence.selected ? "yes" : "no"} · candidate actuated: {r.decisionEvidence.actuated ? "yes" : "no"}</div>
+          </div>
+        )}
 
         {/* uptime before / dip / after */}
         <div>

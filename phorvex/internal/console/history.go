@@ -299,6 +299,14 @@ func (s *reverseAuditReader) next(budget int64) (line []byte, start int64, overs
 }
 
 func (s *Server) liveHistory(w http.ResponseWriter, r *http.Request) {
+	if s.historyInitErr != "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": s.historyInitErr})
+		return
+	}
+	if s.history != nil {
+		s.history.serve(w, r)
+		return
+	}
 	s.liveHistoryWithOpener(w, r, openAuditFile)
 }
 
@@ -321,6 +329,11 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 	actuated := q.Get("actuated")
 	if actuated != "" && actuated != "true" && actuated != "false" {
 		writeJSON(w, 400, map[string]string{"error": "actuated must be true or false"})
+		return
+	}
+	includeNoop := q.Get("includeNoop") == "true"
+	if raw := q.Get("includeNoop"); raw != "" && raw != "true" && raw != "false" {
+		writeJSON(w, 400, map[string]string{"error": "includeNoop must be true or false"})
 		return
 	}
 	var from, to time.Time
@@ -355,7 +368,7 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 		writeJSON(w, 400, map[string]string{"error": "history filter too long"})
 		return
 	}
-	key, _ := json.Marshal([]string{path, q.Get("context"), lens, tenant, q.Get("action"), actuated, search, q.Get("from"), q.Get("to")})
+	key, _ := json.Marshal([]string{path, q.Get("context"), lens, tenant, q.Get("action"), actuated, search, q.Get("from"), q.Get("to"), strconv.FormatBool(includeNoop)})
 	sum := sha256.Sum256(key)
 	scope := hex.EncodeToString(sum[:])
 	var cursor historyCursor
@@ -425,6 +438,10 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 			return
 		}
 		writeJSON(w, 503, map[string]string{"error": "audit history unavailable: " + err.Error()})
+		return
+	}
+	if len(segments) == 0 {
+		writeJSON(w, 503, map[string]string{"error": "configured audit source is unavailable"})
 		return
 	}
 	found := cursor.Generation == ""
@@ -532,7 +549,7 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 			} else if !p.TenantWildcard() && !p.AllowsTenant(rec.Tenant) {
 				continue
 			}
-			if q.Get("action") != "" && rec.Action != q.Get("action") {
+			if q.Get("action") != "" && rec.Action != q.Get("action") || !includeNoop && q.Get("action") == "" && rec.Action == "noop" {
 				continue
 			}
 			if (actuated == "true" && !rec.Actuated) || (actuated == "false" && rec.Actuated) {

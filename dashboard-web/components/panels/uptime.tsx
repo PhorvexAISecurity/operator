@@ -3,10 +3,11 @@ import * as React from "react";
 import { api, Lens, UptimeResult, UptimeWorkload, UptimeMarker, UptimeStrategy, UptimeScenario, UptimeScenarioArm } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { Segmented } from "@/components/ui/more";
-import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
+import { Segmented, ReadStatus } from "@/components/ui/more";
+import { PageHead, SectionLabel } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { Activity, ShieldCheck, ShieldOff, Clock, Loader2, Zap, Scissors, RefreshCw } from "lucide-react";
+import { useApiRead } from "@/lib/query";
 
 // AttackOutcome — the THIRD baseline the user asked for: what happens to the service if there were
 // NO defense at all and an attack lands, next to the blind R6 timer and Phorvex. All MEASURED from
@@ -265,35 +266,22 @@ function parseTs(s?: string): number {
 }
 
 export function UptimePanel({ lens }: { lens: Lens }) {
-  const [d, setD] = React.useState<UptimeResult | null>(null);
-  const [err, setErr] = React.useState("");
   const [win, setWin] = React.useState("1h");
-  const [attacks, setAttacks] = React.useState<{ scenario: string; start: number; end: number }[]>([]);
   const sel = useSelectedTarget(); // SCOPE uptime to the selected provider
-  React.useEffect(() => {
-    let live = true;
-    const load = () => {
-      api.uptime(lens, win, sel.context).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
-      // attack-run windows (scoped to the provider) to overlay on the chart.
-      api.runsList(lens).then((rl) => { if (live) setAttacks((rl.runs || [])
-        .filter((r) => !sel.provider || (r.provider || "") === sel.provider)
-        .map((r) => ({ scenario: r.config, start: parseTs(r.date), end: r.finished ? parseTs(r.finished) : (r.state === "running" ? Date.now() + 60_000 : parseTs(r.date) + 600_000) }))
-        .filter((a) => !isNaN(a.start))); }).catch(() => {});
-    };
-    load();
-    const iv = setInterval(load, 8000); // live refresh — the sampler appends every 5s
-    return () => { live = false; clearInterval(iv); };
-  }, [lens, win, sel.context, sel.provider]);
+  const uptimeRead = useApiRead({ lens, resource: "uptime", parameters: { window: win, context: sel.context }, fetcher: (signal) => api.uptime(lens, win, sel.context, signal), staleTime: 10_000, refetchInterval: 10_000 });
+  const runsRead = useApiRead({ lens, resource: "runs-summary", parameters: { context: sel.context, provider: sel.provider }, fetcher: () => api.runsList(lens), staleTime: 10_000, refetchInterval: 10_000 });
+  const d = uptimeRead.data;
+  const attacks = (runsRead.data?.runs || []).filter((r) => !sel.provider || (r.provider || "") === sel.provider).map((r) => ({ scenario: r.config, start: parseTs(r.date), end: r.finished ? parseTs(r.finished) : (r.state === "running" ? Date.now() + 60_000 : parseTs(r.date) + 600_000) })).filter((a) => !isNaN(a.start));
+  if (!d) return uptimeRead.error ? <ReadStatus error={uptimeRead.error} hasData={false} onRetry={() => void uptimeRead.refetch()} /> : <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> measuring service availability…</CardContent></Card>;
 
-  if (err) return <ErrorState msg={err} />;
-  if (!d) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> measuring service availability…</CardContent></Card>;
-
-  const totalActs = d.workloads.reduce((s, w) => s + w.actuations, 0);
-  const totalKills = d.workloads.reduce((s, w) => s + w.killingActs, 0);
-  const meanUp = d.workloads.length ? d.workloads.reduce((s, w) => s + w.uptimePct, 0) / d.workloads.length : 0;
+  const workloads = d.workloads ?? [];
+  const totalActs = workloads.reduce((s, w) => s + w.actuations, 0);
+  const totalKills = workloads.reduce((s, w) => s + w.killingActs, 0);
+  const meanUp = workloads.length ? workloads.reduce((s, w) => s + w.uptimePct, 0) / workloads.length : 0;
 
   return (
     <div className="space-y-5">
+      <ReadStatus error={uptimeRead.error || runsRead.error} hasData updatedAt={uptimeRead.dataUpdatedAt} refreshing={uptimeRead.isFetching || runsRead.isFetching} onRetry={() => { void uptimeRead.refetch(); void runsRead.refetch(); }} />
       <PageHead title="Uptime — what the actuators cost the service" sub="MEASURED from the Kubernetes API (readyReplicas ÷ desired) for every workload Phorvex acted on, overlaid with the exact moments it acted (live decision audit). A quarantine detaches a pod (it leaves the ReplicaSet → brief dip → replacement Ready); a rotate deletes it; a kv-reset is an in-process flush that NEVER kills the pod — so it never dents availability. Nothing here is synthesized." />
 
       {d.markerPartial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">Actuation markers and counts cover only the latest 24 MiB audit window. Availability samples are separate; use paged Live Ops history for older actions.</div>}
@@ -325,12 +313,12 @@ export function UptimePanel({ lens }: { lens: Lens }) {
       {/* Per-app three-way breakdown: attack landed / defense by Phorvex / defense by R6Blind */}
       <ScenarioBreakdown scenarios={d.scenarios || []} source={d.strategiesSource} runId={d.strategiesRun} />
 
-      {d.workloads.length === 0 ? (
+      {workloads.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No actuations yet in this window — once Phorvex acts on a service (quarantine / rotate / kv-reset), its availability series and the action markers appear here.</CardContent></Card>
       ) : (
         <div className="space-y-4">
           <SectionLabel>Per-service availability vs actuation</SectionLabel>
-          {d.workloads.map((wl) => <WorkloadCard key={`${wl.ns}/${wl.workload}`} wl={wl} attacks={attacks} />)}
+          {workloads.map((wl) => <WorkloadCard key={`${wl.ns}/${wl.workload}`} wl={wl} attacks={attacks} />)}
         </div>
       )}
     </div>

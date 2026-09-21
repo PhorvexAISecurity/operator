@@ -551,7 +551,7 @@ func performVoiceWS(ctx context.Context, env *core.Env, service string, serviceU
 		return receipt, fmt.Errorf("voice websocket producer identity/readiness invalid: pod=%v err=%v", producer, err)
 	}
 	base := fmt.Sprintf("http://%s:%d", service, voiceWSPort)
-	result := env.Exec(execCtx, voiceWSProducer, "producer", []string{"python3", "-B", "-c", voiceWSClientSource, base, sessionID, strconv.Itoa(frames), strconv.FormatFloat(interval.Seconds(), 'f', 3, 64)})
+	result := env.ExecWithTimeout(execCtx, voiceWSProducer, "producer", deadline, []string{"python3", "-B", "-c", voiceWSClientSource, base, sessionID, strconv.Itoa(frames), strconv.FormatFloat(interval.Seconds(), 'f', 3, 64)})
 	raw := []byte(result.Stdout)
 	env.Log.Logf("c2-voice-websocket-continuity receipt service=%s producerUID=%s stdoutBytes=%d stdoutSHA256=%x exit=%d", service, producer.UID, len(raw), sha256.Sum256(raw), result.ExitCode)
 	if result.Err != nil || result.ExitCode != 0 {

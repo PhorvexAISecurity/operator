@@ -217,10 +217,10 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return
 	}
-	s.startAttackRecord("", ns, ns, pod, scenario, scenario, mitre, expected, stateful, base)
+	attackID := s.startAttackRecord("", ns, ns, pod, scenario, scenario, mitre, expected, stateful, base)
 	writeJSON(w, 200, map[string]any{
 		"ok": true, "action": "fire", "scenario": scenario, "namespace": ns, "pod": pod,
-		"expect": expected,
+		"expect": expected, "attackId": attackID,
 		"message": scenario + " fired as a real SecurityEvent at " + ns + "/" + pod +
 			" — Phorvex is now reacting; the outcome appears in Attack monitoring and on the dashboard.",
 	})

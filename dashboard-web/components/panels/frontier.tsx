@@ -1,9 +1,10 @@
 "use client";
-import * as React from "react";
 import { api, Lens, FrontierRow } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { PageHead, SectionLabel, Skeleton, ErrorState } from "./effectiveness";
+import { PageHead, SectionLabel, Skeleton } from "./effectiveness";
+import { ReadStatus } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
+import { useApiRead } from "@/lib/query";
 
 function pct(c: { mean: number; lo: number; hi: number }) {
   return `${(c.mean * 100).toFixed(0)}% [${(c.lo * 100).toFixed(0)},${(c.hi * 100).toFixed(0)}]`;
@@ -29,16 +30,13 @@ function readingCards(rows: FrontierRow[]): [string, string, string][] {
 }
 
 export function FrontierPanel({ lens }: { lens: Lens }) {
-  const [rows, setRows] = React.useState<FrontierRow[] | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => {
-    api.frontier(lens).then((d) => setRows(d.rows ?? [])).catch((e) => setErr(String(e.message || e)));
-  }, [lens]);
-  if (err) return <ErrorState msg={err} />;
-  if (!rows) return <Skeleton rows={4} />;
+  const read = useApiRead({ lens, resource: "frontier", fetcher: (signal) => api.frontier(lens, signal), staleTime: 60_000 });
+  const rows = read.data ? (read.data.rows ?? []) : undefined;
+  if (!rows) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Skeleton rows={4} />;
 
   return (
     <div className="animate-fade-up space-y-6">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <PageHead
         title="Structural Zero-Day Frontier"
         sub="The decisive certificate (P3-DEEP): on the constrained class, NO blind interval is a clean win — fast intervals prevent but destroy the workload; slow intervals are too late. Phorvex is the unique WIN. The clean blind win on the unconstrained case is reported honestly elsewhere."

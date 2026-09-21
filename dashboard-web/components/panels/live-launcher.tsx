@@ -1,127 +1,219 @@
 "use client";
 import * as React from "react";
-import { api, Lens, WorkloadNS, WorkloadAttacks, CompatEntry, CatalogCompat, VllmAttackAction, AttackResult, ClusterTarget, RunStatus } from "@/lib/api";
+import { api, Lens, WorkloadAttacks, CompatEntry, CatalogCompat, VllmAttackAction, AttackResult, ClusterTarget, RunStatus } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Empty } from "@/components/ui/more";
 import { useSelectedTarget } from "@/lib/provider-store";
-import { Loader2, Swords, ShieldCheck, Crosshair, RefreshCw, Check, X } from "lucide-react";
+import { Loader2, Swords, ShieldCheck, Crosshair, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clearLiveSelection, selectLiveRecord } from "@/lib/live-selection";
+import { useApiRead, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
+import { emitQueryChange } from "@/lib/query-events";
 
 // LiveLauncherPanel — the per-app attack launcher with actuator verdicts.
 //
 // Pick one of YOUR real apps: the backend (GET /api/workload/attacks) reports which attacks its
 // STACK supports and which are armed. Fire a LIVE attack and the panel polls /api/attack-results
-// to show whether Phorvex called the CORRECT actuator on your real pod. Run a CATALOGUE scenario
+// to show the observed actuator beside the catalogue expectation on your real pod. Run a CATALOGUE scenario
 // and it launches the harness (in its sandbox — the backend forbids firing those at your real
-// pods) and streams back the run verdict. Both answer the same question: did the right actuator
-// fire, or not.
+// pods) and streams back the recorded run status without reclassifying valid actuator alternatives.
 export function LiveLauncherPanel({ lens }: { lens: Lens }) {
   const sel = useSelectedTarget();
-  const [targetId, setTargetId] = React.useState("");
-  const [nss, setNss] = React.useState<WorkloadNS[] | null>(null);
   const [app, setApp] = React.useState("");
-  const [compat, setCompat] = React.useState<WorkloadAttacks | null>(null);
-  const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState("");
   const [firing, setFiring] = React.useState("");
   const [msg, setMsg] = React.useState("");
   // per-live-attack verdict, keyed by attack id, filled by polling attack-results after a fire.
   const [verdicts, setVerdicts] = React.useState<Record<string, AttackResult>>({});
+  const [verdictNotes, setVerdictNotes] = React.useState<Record<string, string>>({});
   // per-catalogue-scenario run, keyed by scenario name.
   const [runs, setRuns] = React.useState<Record<string, RunStatus>>({});
+  const [runNotes, setRunNotes] = React.useState<Record<string, string>>({});
+  const runsRef = React.useRef(runs);
+  runsRef.current = runs;
+  const generation = React.useRef(0);
+  const timers = React.useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const targetQuery = useTargets(lens);
+  const workloadQuery = useWorkloads(sel.context, lens, !!sel.context);
+  const queryScope = useQueryScope(lens);
+  const nss = workloadQuery.data ? (workloadQuery.data.namespaces || []).filter((n) => !n.system && n.workloads.length > 0) : null;
+  const selectedTarget = (targetQuery.data?.targets || []).find((t: ClusterTarget) => t.runnable && t.context === sel.context) || null;
+  const targetId = selectedTarget?.id || "";
+  const readError = targetQuery.error || workloadQuery.error;
+  const readErrorMessage = readError ? String((readError as Error).message || readError) : "";
 
-  // Resolve the runnable target id (startScenario keys on it), preferring the header scope.
+  const cancelPending = React.useCallback((markVerdicts = true) => {
+    generation.current++;
+    timers.current.forEach(clearTimeout);
+    timers.current.clear();
+    if (markVerdicts) {
+      setVerdictNotes((notes) => Object.fromEntries(Object.entries(notes).map(([key, note]) => [key,
+        note.startsWith("Waiting for exact result") ? "Polling cancelled; this exact result is no longer being followed in this view." : note])));
+      setRunNotes((notes) => {
+        const next = { ...notes };
+        Object.entries(runsRef.current).forEach(([name, run]) => {
+          if (run.state === "running" || run.state === "queued") next[name] = "Status follow-up cancelled; this run is no longer being followed in this view.";
+        });
+        return next;
+      });
+    }
+  }, []);
+
+  React.useEffect(() => () => cancelPending(false), [cancelPending]);
   React.useEffect(() => {
-    let alive = true;
-    api.targets(lens).then((d) => {
-      if (!alive) return;
-      const ts = d.targets || [];
-      const pick = ts.find((t: ClusterTarget) => t.runnable && t.context === sel.context) ?? ts.find((t: ClusterTarget) => t.runnable);
-      if (pick) setTargetId(pick.id);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, [lens, sel.context]);
+    cancelPending(false);
+    setApp("");
+    setVerdicts({}); setVerdictNotes({}); setRuns({}); setRunNotes({}); setErr(""); setMsg(""); setFiring("");
+  }, [lens, sel.context, cancelPending]);
 
-  // Load the real (non-system) apps.
-  React.useEffect(() => {
-    let alive = true;
-    api.workloads(sel.context || "", lens)
-      .then((d) => { if (alive) setNss((d.namespaces || []).filter((n) => !n.system && n.workloads.length > 0)); })
-      .catch((e) => { if (alive) setErr(String(e.message || e)); });
-    return () => { alive = false; };
-  }, [sel.context, lens]);
+  const mutatesDefaultContext = !sel.context || (selectedTarget?.context === sel.context && selectedTarget.defaultMutationTarget === true);
+  const mutationScopeMessage = selectedTarget
+    ? "Live attack controls are unavailable because this named context is not the server-resolved target of unscoped mutation endpoints."
+    : "Live attack controls are unavailable because the server could not verify this named context as the target of unscoped mutation endpoints.";
+  const compatibilityQuery = useApiRead({ lens, resource: "workload-attacks", parameters: { namespace: app, context: sel.context }, fetcher: (signal) => api.workloadAttacks(app, lens, signal), staleTime: 30_000, enabled: !!app && mutatesDefaultContext });
+  const compat = compatibilityQuery.data ?? null;
+  const loading = compatibilityQuery.isFetching && !compat;
+  const compatibilityError = compatibilityQuery.error ? String((compatibilityQuery.error as Error).message || compatibilityQuery.error) : "";
+  const canMutateApp = queryScope.ready && !targetQuery.error && !workloadQuery.error && lens === "operator" && mutatesDefaultContext && !!app && nss?.some((item) => item.namespace === app) === true && compat?.namespace === app;
 
-  const loadCompat = React.useCallback((ns: string) => {
-    if (!ns) return;
-    setLoading(true); setErr(""); setCompat(null);
-    api.workloadAttacks(ns, lens).then(setCompat).catch((e) => setErr(String(e.message || e))).finally(() => setLoading(false));
-  }, [lens]);
-
-  const pick = (ns: string) => { setApp(ns); setMsg(""); setVerdicts({}); setRuns({}); loadCompat(ns); };
+  const pick = (ns: string) => {
+    cancelPending(false); setFiring(""); setApp(ns); setMsg(""); setErr(mutatesDefaultContext ? "" : mutationScopeMessage); setVerdicts({}); setVerdictNotes({}); setRuns({}); setRunNotes({});
+  };
 
   // After a live fire, poll attack-results for ~60s to surface the actuator + outcome for THIS app.
-  const pollVerdict = React.useCallback((attackId: string, ns: string) => {
+  const pollVerdict = React.useCallback((key: string, recordId?: string) => {
+    const request = generation.current;
+    if (!recordId) {
+      setVerdictNotes((v) => ({ ...v, [key]: "Attack accepted, but this response did not include a record ID. Outcome remains uncorrelated; no namespace/time result will be attributed to this fire." }));
+      return;
+    }
+    setVerdictNotes((v) => ({ ...v, [key]: `Waiting for exact result ${recordId}…` }));
     let tries = 0;
     const tick = () => {
+      if (request !== generation.current) return;
       tries++;
       api.attackResults(lens).then((d) => {
-        const mine = (d.attacks || [])
-          .filter((a) => a.namespace === ns || a.service === ns)
-          .sort((a, b) => (b.firedAt || "").localeCompare(a.firedAt || ""))[0];
+        if (request !== generation.current) return;
+        const mine = (d.attacks || []).find((a) => a.id === recordId);
         if (mine && (mine.outcome || mine.status === "done")) {
-          setVerdicts((v) => ({ ...v, [attackId]: mine }));
+          setVerdicts((v) => ({ ...v, [key]: mine }));
+          setVerdictNotes((v) => { const next = { ...v }; delete next[key]; return next; });
           return; // resolved
         }
-        if (tries < 20) setTimeout(tick, 3000);
-      }).catch(() => { if (tries < 20) setTimeout(tick, 3000); });
+        if (tries < 20) schedule();
+        else setVerdictNotes((v) => ({ ...v, [key]: `No completed result was recorded for ${recordId} within the polling window.` }));
+      }).catch(() => {
+        if (request !== generation.current) return;
+        if (tries < 20) schedule();
+        else setVerdictNotes((v) => ({ ...v, [key]: `Could not confirm result ${recordId} within the polling window.` }));
+      });
     };
-    setTimeout(tick, 2500);
+    const schedule = (delay = 3000) => {
+      const timer = setTimeout(() => { timers.current.delete(timer); tick(); }, delay);
+      timers.current.add(timer);
+    };
+    schedule(2500);
   }, [lens]);
 
   const fire = async (a: CompatEntry) => {
+    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.compatible && entry.armed)) {
+      setErr("Live attack refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
+      return;
+    }
+    cancelPending();
+    const request = generation.current;
     setFiring(a.id); setMsg(""); setErr("");
+    clearLiveSelection(lens, sel.context);
     setVerdicts((v) => { const n = { ...v }; delete n[a.id]; return n; });
+    setVerdictNotes((v) => { const n = { ...v }; delete n[a.id]; return n; });
     try {
       const r = a.endpoint === "/api/vllm/attack"
         ? await api.vllmAttack(a.id as VllmAttackAction, lens)
         : await api.workloadAttack(app, "foothold", lens);
+      if (request !== generation.current) return;
       setMsg(r.message || `Fired ${a.name}.`);
-      pollVerdict(a.id, app);
-    } catch (e: any) { setErr(String(e.message || e)); }
-    finally { setFiring(""); }
+      if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
+      pollVerdict(a.id, r.attackId);
+    } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
+    finally { if (request === generation.current) setFiring(""); }
   };
 
   const clearAttack = async (a: CompatEntry) => {
+    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.compatible && entry.armed)) {
+      setErr("Clear refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
+      return;
+    }
+    cancelPending();
+    clearLiveSelection(lens, sel.context);
+    const request = generation.current;
     setFiring(a.id + ":clear"); setMsg(""); setErr("");
     try {
       const r = a.endpoint === "/api/vllm/attack"
         ? await api.vllmAttack("reset", lens)
         : await api.workloadAttack(app, "clear", lens);
+      if (request !== generation.current) return;
       setMsg(r.message || "Cleared.");
-    } catch (e: any) { setErr(String(e.message || e)); }
-    finally { setFiring(""); }
+    } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
+    finally { if (request === generation.current) setFiring(""); }
   };
 
   // Launch a catalogue scenario in the harness sandbox, then poll its run status to a verdict.
   const runScenario = async (c: CatalogCompat) => {
+    if (!queryScope.ready || targetQuery.error || workloadQuery.error || lens !== "operator" || !selectedTarget || selectedTarget.id !== targetId || selectedTarget.context !== sel.context || nss?.some((item) => item.namespace === app) !== true || compat?.namespace !== app || !c.compatible) {
+      setErr("Scenario run refused because the operator lens, selected target, app, or current compatibility no longer matches this control.");
+      return;
+    }
+    cancelPending();
+    clearLiveSelection(lens, sel.context);
+    const request = generation.current;
     setFiring("scn:" + c.name); setErr("");
+    setRunNotes((notes) => { const next = { ...notes }; delete next[c.name]; return next; });
     try {
-      const { id } = await api.startScenario([c.name], true, targetId, "", lens);
-      const tick = () => api.runStatus(id, lens).then((st) => {
+      const { id } = await api.startScenario([c.name], true, targetId, "", lens, false, selectedTarget.context);
+      if (request !== generation.current) return;
+      const actualScope = { context: selectedTarget.context, lens };
+      selectLiveRecord({ kind: "run", id, ...actualScope });
+      let tries = 0;
+      const tick = () => {
+        if (request !== generation.current) return;
+        tries++;
+        api.runStatus(id, lens).then((st) => {
+        if (request !== generation.current) return;
         setRuns((r) => ({ ...r, [c.name]: st }));
-        if (st.state === "running") setTimeout(tick, 3000);
-      }).catch(() => {});
+        if (st.state === "running" || st.state === "queued") {
+          if (tries < 40) schedule();
+          else setRunNotes((notes) => ({ ...notes, [c.name]: "Status polling stopped after the bounded follow-up window; the run may still be active." }));
+        } else {
+          emitQueryChange({ identity: queryScope.identity, providerToken: queryScope.providerToken, runId: id, ...actualScope, resources: ["runs", "runs-summary", "run-status", "run-evidence", "reports", "report", "effectiveness", "posture", "benchmarks", "cost", "cost-timeseries", "uptime", "matrix", "audit-snapshot", "diagnostics", "workload-attacks"], kind: "completion" });
+        }
+      }).catch((e) => {
+        if (request !== generation.current) return;
+        if (tries < 40) schedule();
+        else setRunNotes((notes) => ({ ...notes, [c.name]: `Status polling stopped after repeated failures: ${String(e?.message || e)}` }));
+      });
+      };
+      const schedule = () => {
+        const timer = setTimeout(() => { timers.current.delete(timer); tick(); }, 3000);
+        timers.current.add(timer);
+      };
       tick();
-    } catch (e: any) { setErr(String(e.message || e)); }
-    finally { setFiring(""); }
+    } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
+    finally { if (request === generation.current) setFiring(""); }
   };
 
   // Fire a catalogue scenario as a REAL SecurityEvent at the live app's pod (not the sandbox),
   // then poll the outcome the same way the live attacks do.
   const fireScenario = async (c: CatalogCompat) => {
-    if (!app) return;
+    if (!canMutateApp || !compat?.stack.armed || !compat.catalog.some((entry) => entry.name === c.name && entry.compatible)) {
+      setErr("Live scenario refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
+      return;
+    }
+    cancelPending();
+    const request = generation.current;
     setFiring("scnlive:" + c.name); setMsg(""); setErr("");
+    clearLiveSelection(lens, sel.context);
     setVerdicts((v) => { const n = { ...v }; delete n["scn:" + c.name]; return n; });
+    setVerdictNotes((v) => { const n = { ...v }; delete n["scn:" + c.name]; return n; });
     try {
       const r = await api.fireScenarioLive({
         namespace: app, scenario: c.name,
@@ -129,12 +221,15 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
         expected: (c.expectedActuators || [])[0] || "",
         action: "fire",
       }, lens);
+      if (request !== generation.current) return;
       setMsg(r.message || `Fired ${c.name} at ${app}.`);
-      pollVerdict("scn:" + c.name, app);
-    } catch (e: any) { setErr(String(e.message || e)); }
-    finally { setFiring(""); }
+      if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
+      pollVerdict("scn:" + c.name, r.attackId);
+    } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
+    finally { if (request === generation.current) setFiring(""); }
   };
 
+  if (readErrorMessage && !nss) return <div className="text-[12px] text-danger">error: {readErrorMessage}</div>;
   if (err && !compat && !nss) return <div className="text-[12px] text-danger">error: {err}</div>;
   if (!nss) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading your apps…</div>;
   if (nss.length === 0) return <Empty msg="No non-system workloads found on this cluster." />;
@@ -144,6 +239,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="space-y-4">
+      {readErrorMessage && <div className="rounded-md border border-danger/25 bg-danger/[0.06] p-3 text-[12.5px] text-danger">error: {readErrorMessage}</div>}
       {/* app picker */}
       <Card><CardContent className="p-4">
         <div className="mb-2.5 flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground"><Crosshair className="h-3.5 w-3.5" /> Pick an app to attack</div>
@@ -160,6 +256,8 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
       </CardContent></Card>
 
       {loading && <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> reading {app}'s stack…</div>}
+      {compatibilityError && <div className="rounded-md border border-warning/30 p-3 text-[12px] text-warning">{compat ? "Showing the last compatibility snapshot; refresh failed." : compatibilityError} <button className="ml-2 underline" onClick={() => void compatibilityQuery.refetch()}>Retry</button></div>}
+      {err && !compat && <div className="rounded-md border border-danger/25 bg-danger/[0.06] p-3 text-[12.5px] text-danger">{err}</div>}
 
       {compat && (
         <>
@@ -167,7 +265,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
           <Card><CardContent className="p-4">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-[13px] font-medium">{compat.namespace} — detected stack</div>
-              <button onClick={() => loadCompat(compat.namespace)} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"><RefreshCw className="h-3 w-3" /> refresh</button>
+              <button onClick={() => { cancelPending(); setFiring(""); void compatibilityQuery.refetch(); }} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"><RefreshCw className="h-3 w-3" /> refresh</button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {compat.stack.vllm && <Badge variant="accent">vLLM serving</Badge>}
@@ -185,7 +283,8 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
               {liveCompatible.length === 0 && <div className="text-[12px] text-muted-foreground">No live attack is compatible with this app's stack.</div>}
               {liveCompatible.map((a) => {
                 const v = verdicts[a.id];
-                const correct = v ? (v.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator) : null;
+                const verdictNote = verdictNotes[a.id];
+                const matches = !!(v?.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator);
                 return (
                   <div key={a.id} className={cn("rounded-md border p-3", a.armed ? "border-border" : "border-border/50 opacity-70")}>
                     <div className="flex flex-wrap items-center gap-2">
@@ -193,10 +292,10 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                       <span className="font-mono text-[10px] text-muted-foreground">{a.mitre}</span>
                       {a.armed ? <Badge variant="real">armed</Badge> : <Badge variant="pending">not armed</Badge>}
                       <span className="ml-auto flex gap-2">
-                        <Button size="sm" variant={a.armed ? "primary" : "outline"} disabled={!a.armed || firing !== ""} onClick={() => fire(a)}>
+                        <Button size="sm" variant={a.armed ? "primary" : "outline"} disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => fire(a)}>
                           {firing === a.id ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> firing…</> : <>Fire</>}
                         </Button>
-                        <Button size="sm" variant="ghost" disabled={!a.armed || firing !== ""} onClick={() => clearAttack(a)}>
+                        <Button size="sm" variant="ghost" disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => clearAttack(a)}>
                           {firing === a.id + ":clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Clear</>}
                         </Button>
                       </span>
@@ -206,18 +305,17 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                     {/* actuator verdict, once the fire resolves */}
                     {a.armed && (verdicts[a.id] !== undefined || firing === a.id) && (
                       v ? (
-                        <div className={cn("mt-2 flex flex-wrap items-center gap-2 rounded-md border p-2 text-[12px]",
-                          correct ? "border-success/30 bg-success/[0.06]" : "border-warning/30 bg-warning/[0.06]")}>
-                          {correct ? <Check className="h-3.5 w-3.5 text-success" /> : <X className="h-3.5 w-3.5 text-warning" />}
-                          <span>{v.outcome || v.status}</span>
-                          <span className="text-muted-foreground">fired <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
-                          <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator}</span></span>
-                          <span className={cn("ml-auto font-medium", correct ? "text-success" : "text-warning")}>{correct ? "correct actuator" : v.phorvexAction ? "different actuator" : "no actuation yet"}</span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
+                          <span>{v.outcome || (v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
+                          <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
+                          <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || a.expectedActuator || "—"}</span></span>
+                          <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches expected" : "differs from expected") : "no actuation recorded"}</span>
                         </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> measuring the outcome…</div>
                       )
                     )}
+                    {verdictNote && <div className="mt-2 rounded-md border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">{verdictNote}</div>}
                   </div>
                 );
               })}
@@ -228,7 +326,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
           <Card><CardContent className="p-4">
             <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Scenario catalogue — compatible with this app</div>
             <div className="mb-3 text-[11px] text-muted-foreground/70">
-              <b>Fire live</b> sends the scenario as a real SecurityEvent at this app's actual pod — Phorvex reacts for real, the pod rotates/quarantines, the actuator verdict shows below (needs the app armed). <b>Run</b> instead executes the full harness against synthetic sandbox pods (it can't touch your real pods) and scores the correct actuator.
+              <b>Fire live</b> sends the scenario as a real SecurityEvent at this app&apos;s actual pod — Phorvex reacts for real and the recorded outcome appears below (needs the app armed). <b>Run</b> instead executes the full harness against synthetic sandbox pods (it can&apos;t touch your real pods) and reports its recorded run status.
             </div>
             {compat.catalogNote ? (
               <div className="text-[12px] text-muted-foreground">{compat.catalogNote}</div>
@@ -239,7 +337,8 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                 {catCompatible.map((c) => {
                   const run = runs[c.name];
                   const v = verdicts["scn:" + c.name];
-                  const correct = v ? (v.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator) : null;
+                  const verdictNote = verdictNotes["scn:" + c.name];
+                  const matches = !!(v?.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator);
                   return (
                     <div key={c.name} className="rounded-md border border-border/60 p-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -248,30 +347,31 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                         <span className="ml-auto flex items-center gap-2">
                           {run && (
                             <span className={cn("text-[11px]", run.state === "done" ? "text-success" : run.state === "error" ? "text-danger" : "text-muted-foreground")}>
-                              {run.state === "running" ? <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> running · {run.trials}/{run.expectedTrials ?? "?"}</span> : run.state}
+                              <span className="font-mono" title={run.id}>run {run.id}</span> · {run.state === "running" ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> running · {run.trials}/{run.expectedTrials ?? "?"}</span> : run.state}
                             </span>
                           )}
-                          <Button size="sm" variant={compat.stack.armed ? "primary" : "outline"} disabled={!compat.stack.armed || firing !== ""} onClick={() => fireScenario(c)}>
+                          <Button size="sm" variant={compat.stack.armed ? "primary" : "outline"} disabled={!compat.stack.armed || !canMutateApp || firing !== ""} onClick={() => fireScenario(c)}>
                             {firing === "scnlive:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Fire live</>}
                           </Button>
-                          <Button size="sm" variant="ghost" disabled={!targetId || firing !== "" || run?.state === "running"} onClick={() => runScenario(c)}>
+                          <Button size="sm" variant="ghost" disabled={lens !== "operator" || !targetId || selectedTarget?.id !== targetId || selectedTarget.context !== sel.context || compat.namespace !== app || firing !== "" || run?.state === "running"} onClick={() => runScenario(c)}>
                             {firing === "scn:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Run</>}
                           </Button>
                         </span>
                       </div>
                       {(v || firing === "scnlive:" + c.name) && (
                         v ? (
-                          <div className={cn("mt-2 flex flex-wrap items-center gap-2 rounded-md border p-2 text-[12px]",
-                            correct ? "border-success/30 bg-success/[0.06]" : "border-warning/30 bg-warning/[0.06]")}>
-                            {correct ? <Check className="h-3.5 w-3.5 text-success" /> : <X className="h-3.5 w-3.5 text-warning" />}
-                            <span>{v.outcome || v.status}</span>
-                            <span className="text-muted-foreground">fired <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
-                            <span className={cn("ml-auto font-medium", correct ? "text-success" : "text-warning")}>{correct ? "correct actuator" : v.phorvexAction ? "different actuator" : "no actuation yet"}</span>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
+                            <span>{v.outcome || (v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
+                            <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
+                            <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || c.expectedActuators?.join(", ") || "—"}</span></span>
+                            <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches expected" : "differs from expected") : "no actuation recorded"}</span>
                           </div>
                         ) : (
                           <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> firing at the real pod, measuring the outcome…</div>
                         )
                       )}
+                      {verdictNote && <div className="mt-2 rounded-md border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">{verdictNote}</div>}
+                      {runNotes[c.name] && <div className="mt-2 rounded-md border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">{runNotes[c.name]}</div>}
                     </div>
                   );
                 })}

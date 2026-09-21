@@ -1,53 +1,61 @@
 "use client";
 import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
-import { api, Lens, liveStream, ScanResult, PolicyView, RegistryView, AblationResult } from "@/lib/api";
+import { api, Lens, ScanResult, PolicyView, RegistryView, AblationResult } from "@/lib/api";
+import { useSelectedTarget } from "@/lib/provider-store";
+import { useOwnerTenant } from "@/lib/owner";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Table, THead, TH, TR, TD, Loading, ErrorBox, Empty, Pending, Segmented } from "@/components/ui/more";
+import { Table, THead, TH, TR, TD, Loading, ErrorBox, Empty, Pending, Segmented, ReadStatus } from "@/components/ui/more";
 import { SectionLabel } from "@/components/panels/effectiveness";
 import { cn } from "@/lib/utils";
 import { Cpu, Radar, GitBranch, Boxes, Coins, FlaskConical, Activity, Check, X, Loader2 } from "lucide-react";
+import { useLocalPage } from "@/lib/use-local-page";
+import { PaginationBar } from "@/components/ui/pagination";
+import { useApiRead, useAuditSnapshot, useScanSnapshot } from "@/lib/query";
 
 // collect live audit Records over `ms` (operator/investor get full internals).
 function useAudit(lens: Lens, ms = 3000) {
-  const [recs, setRecs] = React.useState<any[] | null>(null);
-  React.useEffect(() => {
-    const map = new Map<string, any>();
-    const stop = liveStream(lens, (e) => { if (e.pod) map.set(`${e.namespace}/${e.pod}`, e); });
-    const t = setTimeout(() => { stop(); setRecs(Array.from(map.values())); }, ms);
-    return () => { stop(); clearTimeout(t); };
-  }, [lens]);
-  return recs;
+  const sel = useSelectedTarget();
+  const { tenant } = useOwnerTenant(lens);
+  const snapshot = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", ms, lens !== "owner" || !!tenant);
+  return lens === "owner" && !tenant ? { ...snapshot, data: [] } : snapshot;
 }
 
 /* ---------- PHYSICS (from --scan) ---------- */
 export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: string }) {
-  const [scan, setScan] = React.useState<ScanResult | null>(null);
-  const [err, setErr] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const run = React.useCallback((n: string) => { setLoading(true); setErr(""); api.scan(n, lens).then(setScan).catch((e) => setErr(String(e.message || e))).finally(() => setLoading(false)); }, [lens]);
-  React.useEffect(() => { run(ns); }, [run, ns]);
-  if (err) return <ErrorBox msg={err} />;
-  if (loading || !scan) return <Loading label="Running phorvex --scan (live physics)…" rows={3} />;
+  const [query, setQuery] = React.useState("");
+  const sel = useSelectedTarget();
+  const scopeKey = `${lens}\u0000${sel.context}\u0000${ns}`;
+  const scanQuery = useScanSnapshot(lens, sel.context, ns, lens !== "owner");
+  const scan = scanQuery.data;
+  const err = scanQuery.error ? String((scanQuery.error as Error).message || scanQuery.error) : "";
+  const matchingWitness = (scan?.witness ?? []).filter((row) => !query.trim() || row.pod.toLowerCase().includes(query.trim().toLowerCase()));
+  const witnessPage = useLocalPage(matchingWitness, 12, `${scopeKey}\u0000${query}`);
+  if (lens === "owner") return <ErrorBox msg="Live vendor physics scans are not available in the customer-owner view." />;
+  if (err && !scan) return <div className="space-y-3"><ErrorBox msg={err} /><Button onClick={() => void scanQuery.refetch()}><Radar className="h-4 w-4" /> Retry scan</Button></div>;
+  if (!scan) return <Loading label="Requesting a fresh phorvex --scan response…" rows={3} />;
 
   // [P4-dash null-guard] NEVER read .length/.map on a possibly-null wire field.
   const witness = scan.witness ?? [];
   const killchain = scan.killchain ?? [];
   const scope = ns ? `namespace "${ns}"` : "all namespaces";
+  const fixture = scan.platform === "local-fixture";
 
   return (
     <div className="space-y-4">
+      <ReadStatus error={scanQuery.error} hasData updatedAt={scanQuery.dataUpdatedAt} refreshing={scanQuery.isFetching} onRetry={() => void scanQuery.refetch()} />
       <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
         <Badge variant="accent">{scan.platform || "generic-k8s"}</Badge>
-        <span>{scan.nodes} node · {scan.pods || witness.length} pods scanned</span>
-        <Badge variant="real">K8s API · live</Badge>
-        {witness.some((w) => w.gpuPresent) ? <Badge variant="real">DCGM/GPU · live</Badge> : <Badge variant="pending">DCGM/GPU [SP-0-PENDING-P4a]</Badge>}
+        <span>{scan.nodes} node · {scan.pods ?? witness.length} pods scanned</span>
+        <Badge variant={fixture ? "modeled" : "neutral"}>{fixture ? "Sample data" : "Scan data"}</Badge>
+        {witness.some((w) => w.gpuPresent) ? <Badge variant="neutral">GPU fields returned · telemetry source unverified</Badge> : <Badge variant="pending">GPU telemetry not returned [SP-0-PENDING-P4a]</Badge>}
       </div>
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search pod…" aria-label="Search physics witness pods" className="w-full max-w-sm rounded-md border border-border bg-panel px-3 py-2 text-sm focus:outline-none" />
       {witness.length === 0 ? <Empty msg={`No pods discovered in ${scope}. Start Phorvex (Protect) or run a scenario, or check the cluster context.`} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <THead><TH>Pod</TH><TH>Image-rarity</TH><TH>Co-residency</TH><TH>Sched-slack</TH><TH>EPSS</TH><TH>Stateful</TH><TH>MIG</TH><TH>GPU VRAM</TH><TH>GPU SM</TH></THead>
-            <tbody>{witness.map((w) => (
+            <tbody>{witnessPage.pageItems.map((w) => (
               <TR key={w.pod}>
                 <TD className="font-mono text-[12px]">{w.pod}</TD>
                 <TD className="tabular"><Bar v={(w.imageRarity - 1)} max={1} tone="primary" label={w.imageRarity.toFixed(2)} /></TD>
@@ -61,6 +69,7 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
               </TR>
             ))}</tbody>
           </Table>
+          <div className="border-t border-border/40 px-3 py-2">{matchingWitness.length === 0 && <div className="mb-1 text-[11px] text-muted-foreground">No pods match this search.</div>}<PaginationBar page={witnessPage.page} pageSize={12} total={matchingWitness.length} hasNext={witnessPage.hasNext} onPrevious={() => witnessPage.setPage((p) => Math.max(0, p - 1))} onNext={() => witnessPage.setPage((p) => p + 1)} /></div>
         </CardContent></Card>
       )}
       <Card><CardContent className="p-4">
@@ -80,12 +89,14 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
 
 /* ---------- CONTEXT (from --scan kill-chain) ---------- */
 export function ContextDetail({ scan }: { scan: ScanResult }) {
+  const rows = scan.killchain ?? [];
+  const page = useLocalPage(rows, 12, rows.map((row) => row.pod).join("\u0000"));
   if (!scan.killchain?.length) return null;
   return (
     <Card><CardContent className="p-0">
       <Table>
         <THead><TH>Pod</TH><TH>Stage</TH><TH>P(hold)</TH><TH>Preempt margin</TH><TH>Moved-before-next-stage</TH></THead>
-        <tbody>{scan.killchain.map((k) => (
+        <tbody>{page.pageItems.map((k) => (
           <TR key={k.pod}>
             <TD className="font-mono text-[12px]">{k.pod}</TD>
             <TD><Badge variant={k.ai ? "modeled" : "neutral"}>{k.stage}{k.ai ? " · AI" : ""}</Badge></TD>
@@ -95,14 +106,16 @@ export function ContextDetail({ scan }: { scan: ScanResult }) {
           </TR>
         ))}</tbody>
       </Table>
+      <div className="border-t border-border/40 px-3 py-2"><PaginationBar page={page.page} pageSize={12} total={rows.length} hasNext={page.hasNext} onPrevious={() => page.setPage((p) => Math.max(0, p - 1))} onNext={() => page.setPage((p) => p + 1)} /></div>
     </CardContent></Card>
   );
 }
 
 /* ---------- MTD / OPTIMIZATION (from live audit) ---------- */
 export function OptimizationPanel({ lens }: { lens: Lens }) {
-  const recs = useAudit(lens);
-  if (!recs) return <Loading label="Reading the optimizer's decisions from the live stream…" rows={3} />;
+  const audit = useAudit(lens);
+  const recs = audit.data;
+  if (!recs) return audit.error ? <ReadStatus error={audit.error} hasData={false} onRetry={() => void audit.refetch()} /> : <Loading label="Reading the optimizer's decisions from the live stream…" rows={3} />;
   if (recs.length === 0) return <Empty msg="No live decisions yet — start Phorvex (Protect) or run a scenario to populate the optimizer view." />;
   const acted = recs.filter((r) => r.selected || r.action !== "noop");
   const rows = acted.length ? acted : recs;
@@ -161,8 +174,9 @@ function ShapAndR6({ rec }: { rec: any }) {
 
 /* ---------- COST ---------- */
 export function CostPanel({ lens }: { lens: Lens }) {
-  const recs = useAudit(lens);
-  if (!recs) return <Loading label="Reading the cost solution from the live stream…" rows={3} />;
+  const audit = useAudit(lens);
+  const recs = audit.data;
+  if (!recs) return audit.error ? <ReadStatus error={audit.error} hasData={false} onRetry={() => void audit.refetch()} /> : <Loading label="Reading the cost solution from the live stream…" rows={3} />;
   if (recs.length === 0) return <Empty msg="No live decisions yet — start Phorvex (Protect) to see the cost-vs-coverage tradeoff." />;
   const lambda = recs.find((r) => typeof r.lambda === "number" && r.lambda > 0)?.lambda ?? 0;
   const pts = recs.map((r) => ({ cov: r.coveredWeight ?? r.risk ?? 0, cost: r.cost ?? 0, sel: r.selected }));
@@ -200,12 +214,14 @@ export function CostPanel({ lens }: { lens: Lens }) {
 // as "K8s live".
 const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace", "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate"]);
 export function ActuatorPanel({ lens }: { lens: Lens }) {
-  const recs = useAudit(lens);
-  const [reg, setReg] = React.useState<RegistryView | null>(null);
-  React.useEffect(() => { api.handlers(lens).then(setReg).catch(() => {}); }, [lens]);
+  const audit = useAudit(lens);
+  const recs = audit.data;
+  const registryRead = useApiRead({ lens, resource: "handlers", fetcher: (signal) => api.handlers(lens, signal), staleTime: 60_000 });
+  const reg = registryRead.data;
   const enacted = (recs || []).filter((r) => r.actuated);
   return (
     <div className="space-y-4">
+      <ReadStatus error={audit.error || registryRead.error} hasData={!!recs || !!reg} updatedAt={Math.max(audit.dataUpdatedAt, registryRead.dataUpdatedAt)} refreshing={audit.isFetching || registryRead.isFetching} onRetry={() => { void audit.refetch(); void registryRead.refetch(); }} />
       <div className="flex items-center gap-2 text-[12px]">
         {reg ? <Badge variant={reg.complete ? "real" : "pending"}><Check className="h-2.5 w-2.5" /> {reg.generatables - (reg.missing ?? []).length}/{reg.generatables} generatable actions covered</Badge> : <Badge variant="neutral">reading registry…</Badge>}
         <span className="text-muted-foreground">live from <span className="font-mono">actuator.HandlerRegistry</span> · {reg ? reg.count : "…"} handlers · MissingHandlers={reg ? (reg.missing ?? []).length : "…"}</span>
@@ -284,13 +300,12 @@ export function AblationPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: stri
 
 /* ---------- HEALTH ---------- */
 export function HealthPanel({ lens }: { lens: Lens }) {
-  const [d, setD] = React.useState<{ policies: PolicyView[]; available: boolean; note: string } | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.cluster(lens).then(setD).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!d) return <Loading label="Reading the operator control-plane…" rows={2} />;
+  const read = useApiRead({ lens, resource: "cluster", fetcher: (signal) => api.cluster(lens, signal), staleTime: 30_000 });
+  const d = read.data;
+  if (!d) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Reading the operator control-plane…" rows={2} />;
   return (
     <div className="space-y-3">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       {!d.available ? <ErrorBox msg="kubectl could not read PhorvexPolicy CRDs (no cluster access)." />
         : (d.policies ?? []).length === 0 ? <Empty msg="No PhorvexPolicy deployed. Apply a policy (or run a scenario) to see the live operator status: last-tick, decisions, kill-switch, conditions." />
         : (

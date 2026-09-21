@@ -102,12 +102,13 @@ type armRun struct {
 }
 
 type armsResponse struct {
-	Running   []armsJob `json:"running"` // experiments in flight right now, with live progress
-	Runs      []armRun  `json:"runs"`
-	Available bool      `json:"available"`
-	Note      string    `json:"note"`
-	HowItRan  string    `json:"howItRan"`
-	WhyNoDrop string    `json:"whyNoDrop"`
+	Running   []armsJob       `json:"running"` // experiments in flight right now, with live progress
+	Runs      []armRun        `json:"runs"`
+	Available bool            `json:"available"`
+	Note      string          `json:"note"`
+	HowItRan  string          `json:"howItRan"`
+	WhyNoDrop string          `json:"whyNoDrop"`
+	Page      *collectionPage `json:"page,omitempty"`
 }
 
 func armsPath(cfg Config) string {
@@ -117,18 +118,42 @@ func armsPath(cfg Config) string {
 func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 	nsFilter := r.URL.Query().Get("ns") // optional; empty = every app
 	p := principalOf(r)
+	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	pg, pageErr := collectionPagingFromRequest(r, "/api/availability-arms", p, map[string]string{"ns": nsFilter, "q": search})
+	if pageErr != nil {
+		writeCollectionPagingError(w, pageErr)
+		return
+	}
 
 	b, err := readStateLedger(armsPath(s.cfg))
-	if err != nil || len(b) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Running: s.visibleArmsJobs(p),
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, armsResponse{Available: false, Note: "retained experiment records are unavailable: " + err.Error()})
+		return
+	}
+	if len(b) == 0 {
+		response := armsResponse{Available: false, Running: s.visibleArmsJobs(p),
 			Note: "no three-arm experiment has been run yet. It is a real, disruptive procedure (it puts " +
-				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."})
+				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."}
+		if pg.Enabled {
+			cursor := pg.establish("/api/availability-arms", 0, collectionAnchor(nil))
+			if cursor.Snapshot != 0 || cursor.Anchor != collectionAnchor(nil) {
+				writeCollectionPagingError(w, fmt.Errorf("cursor snapshot changed; refresh latest"))
+				return
+			}
+			_, _, page, pageErr := collectionPageFor(cursor, 0)
+			if pageErr != nil {
+				writeCollectionPagingError(w, pageErr)
+				return
+			}
+			response.Page = &page
+		}
+		writeJSON(w, 200, response)
 		return
 	}
 	// [M-136] The experiment log spans every app that has been run. An explicit ?ns= is already
 	// checked against the grant by the boundary; an omitted one is filtered here rather than
 	// returning every tenant's experiments.
-	var exps []armExperiment
+	var allExps []armExperiment
 	for _, ln := range strings.Split(string(b), "\n") {
 		if strings.TrimSpace(ln) == "" {
 			continue
@@ -138,15 +163,60 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 503, armsResponse{Available: false, Note: "retained experiment record is malformed: " + err.Error()})
 			return
 		}
-		if !p.TenantWildcard() && !p.AllowsTenant(e.Namespace) {
-			continue
+		allExps = append(allExps, e)
+	}
+	exps := make([]armExperiment, 0, len(allExps))
+	var page collectionPage
+	if pg.Enabled {
+		snapshot := len(allExps)
+		if pg.Cursor.Version != 0 {
+			snapshot = pg.Cursor.Snapshot
 		}
-		if nsFilter == "" || e.Namespace == nsFilter {
-			exps = append(exps, e)
+		if snapshot < 0 || snapshot > len(allExps) {
+			writeCollectionPagingError(w, fmt.Errorf("cursor snapshot is no longer available; refresh latest"))
+			return
+		}
+		ids := make([]string, 0, snapshot)
+		for i, e := range allExps[:snapshot] {
+			ids = append(ids, fmt.Sprintf("%d:%s:%s:%s:%s:%s", i, e.Operation, e.RunAt, e.Namespace, e.Deploy, e.Attack))
+		}
+		cursor := pg.establish("/api/availability-arms", snapshot, collectionAnchor(ids))
+		if cursor.Anchor != collectionAnchor(ids) {
+			writeCollectionPagingError(w, fmt.Errorf("cursor snapshot changed; refresh latest"))
+			return
+		}
+		matching := make([]armExperiment, 0, snapshot)
+		for i := snapshot - 1; i >= 0; i-- {
+			e := allExps[i]
+			if (!p.TenantWildcard() && !p.AllowsTenant(e.Namespace)) || (nsFilter != "" && e.Namespace != nsFilter) || !containsFold(e.Namespace+" "+e.Deploy+" "+e.Attack, search) {
+				continue
+			}
+			matching = append(matching, e)
+		}
+		start, end, builtPage, err := collectionPageFor(cursor, len(matching))
+		if err != nil {
+			writeCollectionPagingError(w, err)
+			return
+		}
+		page = builtPage
+		exps = append(exps, matching[start:end]...)
+	} else {
+		for i := len(allExps) - 1; i >= 0; i-- {
+			e := allExps[i]
+			if !p.TenantWildcard() && !p.AllowsTenant(e.Namespace) {
+				continue
+			}
+			if nsFilter == "" || e.Namespace == nsFilter {
+				exps = append(exps, e)
+			}
 		}
 	}
 	if len(exps) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Running: s.visibleArmsJobs(p), Note: "no experiment recorded for that app yet."})
+		response := armsResponse{Available: false, Running: s.visibleArmsJobs(p), Note: "no experiment recorded for that app yet."}
+		if pg.Enabled {
+			response.Page = &page
+		}
+		writeJSON(w, 200, response)
 		return
 	}
 	journal, journalErr := retainedExperimentEvents(s.cfg)
@@ -167,8 +237,11 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		WhyNoDrop: "Availability alone does not establish attack execution or containment. Security status is shown only when the correlated observation proves it.",
 		Note:      "Unknown or incomplete evidence remains unknown and is not scored as a successful defense.",
 	}
+	if pg.Enabled {
+		out.Page = &page
+	}
 
-	for i := len(exps) - 1; i >= 0; i-- { // newest first
+	for i := range exps {
 		exp := exps[i]
 		deploy := exp.Deploy
 		if deploy == "" {

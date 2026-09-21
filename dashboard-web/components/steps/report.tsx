@@ -9,24 +9,23 @@ import { ReportsPanel } from "@/components/panels/reports";
 import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { RunHistoryPanel } from "@/components/panels/run-history";
 import { FileText, Download, Printer, Swords } from "lucide-react";
+import { useApiRead } from "@/lib/query";
 
 export function ReportStep({ lens }: { lens: Lens }) {
-  const [stats, setStats] = React.useState<Stat[]>([]);
-  const [posture, setPosture] = React.useState<Posture | null>(null);
-  const [bench, setBench] = React.useState<BenchGroup[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  React.useEffect(() => {
-    Promise.allSettled([api.effectiveness(lens), api.posture(lens), api.benchmarks(lens)]).then(([e, p, b]) => {
-      if (e.status === "fulfilled") setStats(e.value.stats);
-      if (p.status === "fulfilled") setPosture(p.value);
-      if (b.status === "fulfilled") setBench(b.value.groups);
-      setLoading(false);
-    });
-  }, [lens]);
-  if (loading) return <Loading label="Assembling the evidence pack…" rows={3} />;
+  const effectiveness = useApiRead({ lens, resource: "effectiveness", fetcher: (signal) => api.effectiveness(lens, signal), staleTime: 60_000 });
+  const postureRead = useApiRead({ lens, resource: "posture", fetcher: (signal) => api.posture(lens, signal), staleTime: 60_000 });
+  const benchmarks = useApiRead({ lens, resource: "benchmarks", fetcher: (signal) => api.benchmarks(lens, signal), staleTime: 60_000 });
+  const stats = effectiveness.data?.stats ?? [];
+  const posture = postureRead.data ?? null;
+  const bench = benchmarks.data?.groups ?? [];
+  const errors = [effectiveness.error && "effectiveness metrics", postureRead.error && "posture", benchmarks.error && "benchmarks"].filter(Boolean) as string[];
+  const complete = effectiveness.data !== undefined && postureRead.data !== undefined && benchmarks.data !== undefined;
+  const pending = !complete && (effectiveness.isPending || effectiveness.isFetching || postureRead.isPending || postureRead.isFetching || benchmarks.isPending || benchmarks.isFetching);
+  if (!effectiveness.data && !postureRead.data && !benchmarks.data && (effectiveness.isPending || postureRead.isPending || benchmarks.isPending)) return <Loading label="Assembling the evidence pack…" rows={3} />;
 
   const real = stats.filter((s) => s.status === "real");
   function exportCSV() {
+    if (errors.length || !complete) return;
     const rows: (string | number)[][] = [["metric", "value", "unit", "ci_low", "ci_high", "n", "status", "source"]];
     stats.forEach((s) => rows.push([s.label, s.value, s.unit || "", s.ci?.lo ?? "", s.ci?.hi ?? "", s.ci?.n ?? "", s.status, s.source]));
     csvDownload("phorvex-evidence.csv", rows);
@@ -34,10 +33,15 @@ export function ReportStep({ lens }: { lens: Lens }) {
 
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={6} title="Report" sub="Generate the evidence pack — every metric with its 95% CI and its source file. Honest about what's proven (K8s) and what's pending (AI/GPU)." lens={lens} />
+      <StepHead n={7} title="Report" sub="Generate the evidence pack — every metric with its 95% CI and its source file. Honest about what's proven (K8s) and what's pending (AI/GPU)." lens={lens} />
+      {errors.length > 0 && <div role="alert" className="rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
+        <p>Report incomplete: could not load {errors.join(", ")}. Evidence exports remain disabled until every summary source loads successfully.</p>
+        <Button variant="outline" className="mt-2" onClick={() => void Promise.all([effectiveness.refetch(), postureRead.refetch(), benchmarks.refetch()])}>Retry report sources</Button>
+      </div>}
+      {!errors.length && pending && <div role="status" className="rounded-lg border border-border bg-panel/50 p-4 text-sm text-muted-foreground">Report sources are still loading. The available summary remains visible, but exports are disabled until effectiveness, posture, and benchmarks are all present.</div>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={exportCSV}><Download className="h-4 w-4" /> Export evidence CSV</Button>
-        <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
+        <Button disabled={!complete || errors.length > 0} onClick={exportCSV}><Download className="h-4 w-4" /> Export evidence CSV</Button>
+        <Button disabled={!complete || errors.length > 0} variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
         {bench.length > 0 && <span className="text-[12px] text-muted-foreground">· {bench.length} benchmark scenarios in the pack</span>}
       </div>
 

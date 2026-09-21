@@ -138,9 +138,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
-			"message": "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset). See the Report tab for the measured outcome."})
+			"attackId": attackID,
+			"message":  "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset). See the Report tab for the measured outcome."})
 	case "kvcache":
 		// ATTACK: prime a secret prefix into the shared prefix-cache. kv-reset (proactive hygiene)
 		// flushes it; the timing-oracle leak/close numbers are the CLI oracle.
@@ -149,9 +150,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kvcache",
-			"message": "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
+			"attackId": attackID,
+			"message":  "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
 
 	case "endpoint-rotate":
 		// ATTACK: attacker pins the serving route (route-key=ep-old) for model-extraction/SSRF.
@@ -164,9 +166,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Inference-endpoint pinning", "endpoint-rotate", "SSRF / model-extraction", "endpoint-rotate", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Inference-endpoint pinning", "endpoint-rotate", "SSRF / model-extraction", "endpoint-rotate", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "endpoint-rotate",
-			"message": "Endpoint pinned on " + pod + " — Phorvex re-keys the route + restitches the Service (endpoint-rotate); the route follows the pod with zero downtime. Watch the vllm tenant below; Reset restores the route."})
+			"attackId": attackID,
+			"message":  "Endpoint pinned on " + pod + " — Phorvex re-keys the route + restitches the Service (endpoint-rotate); the route follows the pod with zero downtime. Watch the vllm tenant below; Reset restores the route."})
 
 	case "guardrail-rotate":
 		// ATTACK: a many-shot jailbreak that the ACTIVE guardrail variant misses. Set active=pgv1 (the
@@ -176,9 +179,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Guardrail bypass (jailbreak)", "guardrail-rotate", "OWASP LLM01 / ASI01", "guardrail-rotate", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Guardrail bypass (jailbreak)", "guardrail-rotate", "OWASP LLM01 / ASI01", "guardrail-rotate", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "guardrail-rotate",
-			"message": "Guardrail set to the weak variant + GuardrailBypass fired on " + pod + " — Phorvex hot-swaps the guardrail variant (guardrail-rotate); the same jailbreak is then blocked, pod never restarts. Watch the vllm tenant below."})
+			"attackId": attackID,
+			"message":  "Guardrail set to the weak variant + GuardrailBypass fired on " + pod + " — Phorvex hot-swaps the guardrail variant (guardrail-rotate); the same jailbreak is then blocked, pod never restarts. Watch the vllm tenant below."})
 
 	case "request-drain":
 		// ATTACK: expensive-turn flood (denial-of-wallet). request-drain aborts the in-flight flood
@@ -188,9 +192,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Denial-of-wallet flood", "request-drain", "OWASP LLM10", "request-drain", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Denial-of-wallet flood", "request-drain", "OWASP LLM10", "request-drain", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "request-drain",
-			"message": "Expensive-request flood started + DenialOfWallet fired on " + pod + " — Phorvex drains/aborts the in-flight requests (request-drain) without restarting the pod. Watch the vllm tenant below."})
+			"attackId": attackID,
+			"message":  "Expensive-request flood started + DenialOfWallet fired on " + pod + " — Phorvex drains/aborts the in-flight requests (request-drain) without restarting the pod. Watch the vllm tenant below."})
 
 	case "kv-migrate-invalidate":
 		// ATTACK: plant a distinctive long prefix (2nd send = cache HIT) — poisoned KV. kv-migrate-invalidate
@@ -200,9 +205,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Disaggregated-KV poisoning", "kv-migrate-invalidate", "CWE-208 / KV poisoning", "kv-migrate-invalidate", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Disaggregated-KV poisoning", "kv-migrate-invalidate", "CWE-208 / KV poisoning", "kv-migrate-invalidate", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kv-migrate-invalidate",
-			"message": "Crafted prefix planted + KVPoisoning fired on " + pod + " — Phorvex invalidates the poisoned KV locally (kv-migrate-invalidate); the planted cache state is evicted, pod never restarts. Watch the vllm tenant below."})
+			"attackId": attackID,
+			"message":  "Crafted prefix planted + KVPoisoning fired on " + pod + " — Phorvex invalidates the poisoned KV locally (kv-migrate-invalidate); the planted cache state is evicted, pod never restarts. Watch the vllm tenant below."})
 
 	case "warm-swap":
 		// ATTACK: hostile co-tenant GPU pressure. warm-swap promotes the warm stand-in with zero cold-load
@@ -213,9 +219,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "GPU co-tenant eviction", "warm-swap", "GPU co-residency", "warm-swap", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "GPU co-tenant eviction", "warm-swap", "GPU co-residency", "warm-swap", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "warm-swap",
-			"message": "GPUEviction fired on " + pod + " — Phorvex promotes the warm stand-in with zero cold-load and retires the leader (warm-swap). DESTRUCTIVE: the 7B leader is retired (the Deployment recreates it over a few minutes); serving continues via the smaller stand-in meanwhile. Reset after the leader is back."})
+			"attackId": attackID,
+			"message":  "GPUEviction fired on " + pod + " — Phorvex promotes the warm stand-in with zero cold-load and retires the leader (warm-swap). DESTRUCTIVE: the 7B leader is retired (the Deployment recreates it over a few minutes); serving continues via the smaller stand-in meanwhile. Reset after the leader is back."})
 
 	case "model-shard-replace":
 		// ATTACK: served-model weight tamper (fingerprint drift). model-shard-replace swaps in the known-good
@@ -225,9 +232,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
 		}
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Model weight tamper / extraction", "model-shard-replace", "OWASP LLM05 / supply-chain", "model-shard-replace", false, base)
+		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Model weight tamper / extraction", "model-shard-replace", "OWASP LLM05 / supply-chain", "model-shard-replace", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "model-shard-replace",
-			"message": "ModelTampering fired on " + pod + " — Phorvex swaps in the known-good shard shadow with zero cold-load (model-shard-replace). DESTRUCTIVE: the 7B leader is retired (recreated over a few minutes). Reset after the leader is back."})
+			"attackId": attackID,
+			"message":  "ModelTampering fired on " + pod + " — Phorvex swaps in the known-good shard shadow with zero cold-load (model-shard-replace). DESTRUCTIVE: the 7B leader is retired (recreated over a few minutes). Reset after the leader is back."})
 
 	case "reset":
 		// clear detector flags + fired events, unload the poisoned adapter, un-stage route/serving labels,

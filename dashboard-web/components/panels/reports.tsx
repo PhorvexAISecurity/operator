@@ -6,34 +6,20 @@ import { PageHead, Skeleton, ErrorState } from "./effectiveness";
 import { Loading, ErrorBox, Empty } from "@/components/ui/more";
 import { FileText, Check, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useReport, useReports } from "@/lib/query";
 
 // ReportsPanel lists the curated on-disk evidence reports (/api/reports) and renders the SELECTED
 // one's live markdown — dynamic from disk, never hardcoded. Optional `only` filters to one group
 // (e.g. "Comparison" for the vs-R6 view).
 export function ReportsPanel({ lens, only, intro }: { lens: Lens; only?: string; intro?: string }) {
-  const [list, setList] = React.useState<ReportMeta[] | null>(null);
-  const [err, setErr] = React.useState("");
   const [sel, setSel] = React.useState<string>("");
-  const [doc, setDoc] = React.useState<{ id: string; title: string; content: string } | null>(null);
-  const [loadingDoc, setLoadingDoc] = React.useState(false);
-
-  React.useEffect(() => {
-    api.reports(lens).then((d) => {
-      let rs = (d.reports ?? []).filter((r) => r.exists);
-      if (only) rs = rs.filter((r) => r.group === only);
-      setList(rs);
-      if (rs[0]) setSel(rs[0].id);
-    }).catch((e) => setErr(String(e.message || e)));
-  }, [lens, only]);
-
-  React.useEffect(() => {
-    if (!sel) return;
-    setLoadingDoc(true);
-    api.report(sel, lens).then(setDoc).catch((e) => setErr(String(e.message || e))).finally(() => setLoadingDoc(false));
-  }, [sel, lens]);
-
-  if (err) return <ErrorState msg={err} />;
-  if (!list) return <Skeleton rows={3} />;
+  const reportsQuery = useReports(lens);
+  const list = React.useMemo(() => (reportsQuery.data?.reports || []).filter((r) => r.exists && (!only || r.group === only)), [only, reportsQuery.data]);
+  React.useEffect(() => { setSel((current) => list.some((r) => r.id === current) ? current : list[0]?.id || ""); }, [list]);
+  const reportQuery = useReport(sel, lens);
+  const doc = reportQuery.data;
+  if (reportsQuery.error) return <ErrorState msg={String((reportsQuery.error as Error).message || reportsQuery.error)} />;
+  if (reportsQuery.isPending) return <Skeleton rows={3} />;
   if (list.length === 0) return <Empty msg="No curated reports found on disk. Run the benchmark suites (Prove) to generate them." />;
 
   const groups = Array.from(new Set(list.map((r) => r.group)));
@@ -62,11 +48,14 @@ export function ReportsPanel({ lens, only, intro }: { lens: Lens; only?: string;
         {/* document */}
         <Card><CardContent className="p-0">
           <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <span className="flex items-center gap-2 text-[13px] font-medium">{doc?.title || "…"} <Badge variant="real"><Check className="h-2.5 w-2.5" /> live from disk</Badge></span>
+            <span className="flex items-center gap-2 text-[13px] font-medium">{doc?.title || "…"} <Badge variant="real"><Check className="h-2.5 w-2.5" /> report file</Badge></span>
             {doc && <button onClick={() => downloadMd(doc.id, doc.content)} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"><Download className="h-3 w-3" /> .md</button>}
           </div>
+          {reportQuery.dataUpdatedAt > 0 && <div className={cn("border-b border-border px-4 py-1.5 text-[11px]", reportQuery.error ? "text-warning" : "text-muted-foreground")}>
+            Updated {new Date(reportQuery.dataUpdatedAt).toLocaleTimeString()}{reportQuery.isFetching ? " · refreshing…" : reportQuery.error ? " · refresh failed" : ""}
+          </div>}
           <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
-            {loadingDoc || !doc ? <Loading label="Reading report…" rows={6} /> : <Markdown src={doc.content} />}
+            {reportQuery.error ? <ErrorState msg={String((reportQuery.error as Error).message || reportQuery.error)} /> : reportQuery.isPending || !doc ? <Loading label="Reading report…" rows={6} /> : <Markdown src={doc.content} />}
           </div>
         </CardContent></Card>
       </div>

@@ -33,12 +33,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audittransport"
@@ -46,6 +49,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	var (
 		root            string
 		addr            string
@@ -97,6 +104,7 @@ func main() {
 		}
 		source = client
 		cfg.AuditSource = client
+		cfg.AuditSourceIdentity = auditSourceURL + "|" + auditServerDNS
 	}
 	if web != "" {
 		cfg.Web = web
@@ -162,6 +170,11 @@ func main() {
 	}
 
 	srv := console.NewServer(cfg)
+	defer func() {
+		if err := srv.Close(); err != nil {
+			log.Printf("audit history close: %v", err)
+		}
+	}()
 	srv.EnableAuth(auth)
 	// The applier is nil => record-only until a deployment injects the per-namespace-SA CRD
 	// patch (the UI labels this honestly).
@@ -185,9 +198,24 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	if err := httpSrv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	stop, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- httpSrv.ListenAndServe() }()
+	select {
+	case <-stop.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("console shutdown: %v", err)
+		}
+	case err := <-serveErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("console server: %v", err)
+			return 1
+		}
 	}
+	return 0
 }
 
 func auditGate(next http.Handler, source *audittransport.Client) http.Handler {

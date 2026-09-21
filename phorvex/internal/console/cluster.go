@@ -13,8 +13,36 @@ import (
 	"sort"
 	"strings"
 
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// kubeTargetResolution loads the kubeconfig once and determines which advertised context, if
+// any, is the target used by unscoped mutation endpoints. ClientConfig is local resolution only:
+// it does not contact the API server. If kubeconfig resolution fails, it mirrors restConfigFor("")
+// by recognizing a usable in-cluster fallback without exposing either REST config.
+func kubeTargetResolution() (contexts []string, defaultContext string, inClusterDefault bool) {
+	cfg, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	if err == nil && cfg != nil {
+		contexts = make([]string, 0, len(cfg.Contexts))
+		for name := range cfg.Contexts {
+			contexts = append(contexts, name)
+		}
+		sort.Strings(contexts)
+
+		cc := clientcmd.NewDefaultClientConfig(*cfg, &clientcmd.ConfigOverrides{})
+		if _, err := cc.ClientConfig(); err == nil {
+			if _, ok := cfg.Contexts[cfg.CurrentContext]; ok && cfg.CurrentContext != "" {
+				defaultContext = cfg.CurrentContext
+			}
+			return contexts, defaultContext, false
+		}
+	}
+	if _, err := rest.InClusterConfig(); err == nil {
+		return contexts, "", true
+	}
+	return contexts, "", false
+}
 
 // kubeContexts returns the context names from the operator's kubeconfig (KUBECONFIG / the
 // default loading rules). Read-only; never mutates the kubeconfig.

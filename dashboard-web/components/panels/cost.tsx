@@ -1,11 +1,12 @@
 "use client";
-import * as React from "react";
 import { api, Lens, CostResult, CostTimeseries } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
+import { PageHead, SectionLabel } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { ShieldOff, ShieldCheck, TrendingDown, Loader2, Clock } from "lucide-react";
+import { useApiRead } from "@/lib/query";
+import { ReadStatus } from "@/components/ui/more";
 
 function usd(n: number): string {
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
@@ -63,27 +64,17 @@ function CostOverTimeChart({ ts }: { ts: CostTimeseries }) {
 }
 
 export function CostPanel({ lens }: { lens: Lens }) {
-  const [d, setD] = React.useState<CostResult | null>(null);
-  const [ts, setTs] = React.useState<CostTimeseries | null>(null);
-  const [err, setErr] = React.useState("");
   const sel = useSelectedTarget(); // SCOPE cost to the selected provider
-  React.useEffect(() => {
-    let live = true;
-    const load = () => {
-      api.cost(lens, sel.context).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
-      api.costTimeseries(lens).then((r) => { if (live) setTs(r); }).catch(() => { if (live) setTs(null); }); // optional — never blocks the panel
-    };
-    load();
-    const iv = setInterval(load, 6000); // live refresh — picks up the latest 3-way attack run
-    return () => { live = false; clearInterval(iv); };
-  }, [lens, sel.context]);
-
-  if (err) return <ErrorState msg={err} />;
-  if (!d) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> computing cost…</CardContent></Card>;
-  if (!d.available || !d.scenarios.length) return <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No benchmark cost data yet — run the with/without-Phorvex benchmark (or an Attack Lab scenario) to populate it.</CardContent></Card>;
+  const costRead = useApiRead({ lens, resource: "cost", parameters: { context: sel.context }, fetcher: (signal) => api.cost(lens, sel.context, signal), staleTime: 10_000, refetchInterval: 10_000 });
+  const seriesRead = useApiRead({ lens, resource: "cost-timeseries", fetcher: (signal) => api.costTimeseries(lens, signal), staleTime: 15_000, refetchInterval: 15_000 });
+  const d = costRead.data;
+  const ts = seriesRead.data ?? null;
+  if (!d) return costRead.error ? <ReadStatus error={costRead.error} hasData={false} onRetry={() => void costRead.refetch()} /> : <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> computing cost…</CardContent></Card>;
+  if (!d.available || !(d.scenarios ?? []).length) return <div className="space-y-3"><ReadStatus error={costRead.error || seriesRead.error} hasData updatedAt={costRead.dataUpdatedAt} refreshing={costRead.isFetching || seriesRead.isFetching} onRetry={() => { void costRead.refetch(); void seriesRead.refetch(); }} /><Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No benchmark cost data yet — run the with/without-Phorvex benchmark (or an Attack Lab scenario) to populate it.</CardContent></Card></div>;
 
   return (
     <div className="space-y-5">
+      <ReadStatus error={costRead.error || seriesRead.error} hasData updatedAt={costRead.dataUpdatedAt} refreshing={costRead.isFetching || seriesRead.isFetching} onRetry={() => { void costRead.refetch(); void seriesRead.refetch(); }} />
       <PageHead title="Cost — three strategies (real AWS prices)" sub="Grounded entirely in your live AWS on-demand pricing — no fabricated breach figures. The value at risk is your cluster's real infrastructure cost/yr; under No defense it is fully exposed, the Blind R6 timer barely helps, and Phorvex shrinks the residual by the measured disruption for a small real defense cost." />
 
       {d.actuationPartial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">The annual actuation-cost estimate uses only the latest 8 MiB decision window. It is an extrapolated recent rate and does not summarize the full retained audit. Page older decisions in Live Ops history.</div>}

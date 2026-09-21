@@ -1,22 +1,20 @@
 "use client";
-import * as React from "react";
 import { api, Lens, BenchGroup } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Table, THead, TH, TR, TD, Loading, ErrorBox, csvDownload } from "@/components/ui/more";
+import { Table, THead, TH, TR, TD, Loading, ReadStatus, csvDownload } from "@/components/ui/more";
 import { PageHead } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { Download } from "lucide-react";
+import { useApiRead } from "@/lib/query";
 
 const armLabel = (d: string) => d === "d-phorvex" ? "Phorvex" : d === "d-nomtd" ? "No MTD" : d.replace("d-r6blindtimer", "Without Phorvex (blind 15s)").replace("d-blind-", "Blind ");
 const fmtPct = (c: any) => c && c.n ? `${(c.mean * 100).toFixed(0)}% [${(c.lo * 100).toFixed(0)},${(c.hi * 100).toFixed(0)}]` : "—";
 const fmtS = (c: any) => c && c.n ? `${c.mean.toFixed(1)}s [${c.lo.toFixed(1)},${c.hi.toFixed(1)}]` : "—";
 
 export function BenchmarksPanel({ lens }: { lens: Lens }) {
-  const [groups, setGroups] = React.useState<BenchGroup[] | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.benchmarks(lens).then((d) => setGroups(d.groups ?? [])).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!groups) return <Loading label="Aggregating the benchmark corpus…" />;
+  const read = useApiRead({ lens, resource: "benchmarks", fetcher: (signal) => api.benchmarks(lens, signal), staleTime: 60_000 });
+  const groups = read.data ? (read.data.groups ?? []) : undefined;
+  if (!groups) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Aggregating the benchmark corpus…" />;
 
   function exportCSV() {
     if (!groups) return;
@@ -27,6 +25,7 @@ export function BenchmarksPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="animate-fade-up space-y-6">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <div className="flex items-start justify-between gap-4">
         <PageHead title="Benchmarks & Evidence" sub="The decisive scenarios across the real metrics corpus — disruption, dwell-to-eviction, and harm, every value with a 95% CI, each row sourced to its metrics file." />
         <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-3.5 w-3.5" /> Export CSV</Button>

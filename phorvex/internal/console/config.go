@@ -20,8 +20,11 @@ type Config struct {
 	StateDir    string                 // writable console-owned state; never the manager decision audit
 	AuditPath   string                 // optional explicit audit JSONL (owner-view source)
 	AuditSource *audittransport.Client // remote mTLS source; nil keeps local-file mode
-	Addr        string                 // http listen address
-	Web         string                 // static SPA dir (dashboard-web/out) served at / alongside /api
+	// AuditSourceIdentity binds durable history to the configured endpoint. Production sets this
+	// to the remote origin and TLS server identity; it contains no credential material.
+	AuditSourceIdentity string
+	Addr                string // http listen address
+	Web                 string // static SPA dir (dashboard-web/out) served at / alongside /api
 	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
 	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
 	MetricsAllow []string
