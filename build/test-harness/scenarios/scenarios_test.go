@@ -58,6 +58,7 @@ func TestCategory1And2Registered(t *testing.T) {
 		// CATEGORY 2 — R6-claimed.
 		{"c2-dwell-rotation", core.CategoryR6Claimed},
 		{"c2-ephemeral-session-rotation", core.CategoryR6Claimed},
+		{"c2-voice-websocket-continuity", core.CategoryR6Claimed},
 		{"c2-persistence-evict", core.CategoryR6Claimed},
 		{"c2-recon-window", core.CategoryR6Claimed},
 		{"c2-lateral-disrupt", core.CategoryR6Claimed},
@@ -146,6 +147,7 @@ func TestR6TagsMatchLockedPlan(t *testing.T) {
 		// CATEGORY 2 — note: two product-claimed-COVERS resolve to PARTIAL honestly.
 		"c2-dwell-rotation":             core.R6Covers,
 		"c2-ephemeral-session-rotation": core.R6Partial,
+		"c2-voice-websocket-continuity": core.R6Partial,
 		"c2-persistence-evict":          core.R6Covers,
 		"c2-recon-window":               core.R6Partial,
 		"c2-lateral-disrupt":            core.R6Partial,
@@ -172,7 +174,7 @@ func TestR6TagsMatchLockedPlan(t *testing.T) {
 func TestCat1And2NeedNoSpecialCapabilities(t *testing.T) {
 	names := []string{
 		"c1-escape-persist", "c1-lateral", "c1-credtheft-rbac", "c1-c2-exfil", "c1-stealth-dweller",
-		"c2-dwell-rotation", "c2-ephemeral-session-rotation", "c2-persistence-evict", "c2-recon-window",
+		"c2-dwell-rotation", "c2-ephemeral-session-rotation", "c2-voice-websocket-continuity", "c2-persistence-evict", "c2-recon-window",
 		"c2-lateral-disrupt", "c2-c2-disrupt", "c2-supplychain-foothold",
 	}
 	reg := allScenarios()
