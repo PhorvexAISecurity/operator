@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,6 +15,21 @@ checks:
     source_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
     at: '2026-09-21T06:58:32+00:00'
     contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a46d7fb1ba23e7a73ba0781378ba4fe7ae8a4bce6ba0afec77e09a1328c16be7
+    source_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
+    at: '2026-09-21T11:36:12+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: ff3523c62599381f285f46793ab5928ecead20ac37d5faf6b2e06de902b30042
+    source_sha: 0cedb615a5fef21e3f8fd209ac87f43f3cdebc54
+    at: '2026-09-21T11:36:12+00:00'
+    baseline_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
 fix_id: POST25-M106-SCOPED-OUTCOMES
 issues:
 - M-106
@@ -42,11 +57,10 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: post25-m106-scoped-outcomes
-  base_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
-  head_sha: 04fb6432d52e166722d1bdb88f311592999378ee
-  stacked_on:
-  - POST25-M104-SCOPED-FEED
+  branch: post25-math-design-remaining
+  base_sha: 0cedb615a5fef21e3f8fd209ac87f43f3cdebc54
+  head_sha: 0bba4c3507309d5c49c29a825da862bbdbb432d2
+  stacked_on: []
 pull_request:
   url: null
   reviewed_head: null
@@ -85,7 +99,7 @@ next_action:
   owner: sol-post25-economics
   action: Implement signed scoped outcomes with incident/control evidence; keep unknown
     and censored distinct
-updated_at: '2026-09-21T11:21:53+00:00'
+updated_at: '2026-09-21T11:36:12+00:00'
 follow_up_to: POST25-M106
 configuration_history:
 - at: '2026-09-21T06:58:29+00:00'
@@ -100,6 +114,11 @@ configuration_history:
   approval_ref: null
 - at: '2026-09-21T11:21:53+00:00'
   by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T11:36:11+00:00'
+  by: codex-lead
   fields:
   - implementation
   approval_ref: null
