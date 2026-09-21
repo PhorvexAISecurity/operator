@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -18,11 +18,75 @@ checks:
     approval_ref: operations/AUTONOMY.md
     rationale: 'In-scope lead plan correction: guarantee acknowledged durable continuity
       across observed identities; record unavailable complete lineage explicitly'
+  red:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/red.txt
+    sha256: 4f39248d5b2b349100d43c75f5fda9afe919da7490749f6432d294cb18e82c03
+    source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+    at: '2026-09-21T18:22:54+00:00'
+  preflight:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: ab73b6cb326912986f304b9716bcda40f555f8e4b59ef487b816162c5c3c77ac
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:23:01+00:00'
+  implementation:
+    result: PASS
+    by: checkpoint-worker
+    artifact: 04-diff.patch
+    sha256: c59a43702cc0067848489ba5ad53d5275eca6f3f215265a2bc35c438b6f93fa7
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:23:01+00:00'
+  l0:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: ab73b6cb326912986f304b9716bcda40f555f8e4b59ef487b816162c5c3c77ac
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:23:01+00:00'
+    inputs:
+    - build/test-harness
+    - workflow
+    inputs_sha256: 2c066e00be26a01acd5de87cde8c460cfe96010d0b1eb055f3af64438ab99c4d
+  l1:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/go-test-focused.txt
+    sha256: 889ee966ab77d42df2de60e863b3292f7a23ca58dbfbcda232f22f9521367614
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:23:01+00:00'
+    inputs:
+    - build/test-harness/scenarios/c2_checkpoint_continuity.go
+    - build/test-harness/scenarios/c2_checkpoint_continuity_test.go
+    inputs_sha256: b611d03a38a2dfe05054dc33949ef178041aef16a7035837a7cf206e4e2fb71f
+  l2:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/go-test-all.txt
+    sha256: 3b6d8c8ec390fc8b7380511694aa2189f29468bda6ab5fea1a9f80dae6f354db
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:23:01+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: 6ea1896f2360344d5e5078986eeab0451a358ff9b298e14a35555d358a069373
+  positive_control:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/go-test-focused.txt
+    sha256: 889ee966ab77d42df2de60e863b3292f7a23ca58dbfbcda232f22f9521367614
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:23:01+00:00'
+    inputs:
+    - build/test-harness/scenarios/c2_checkpoint_continuity.go
+    - build/test-harness/scenarios/c2_checkpoint_continuity_test.go
+    inputs_sha256: b611d03a38a2dfe05054dc33949ef178041aef16a7035837a7cf206e4e2fb71f
 fix_id: POST25-CHECKPOINT-MULTI-ROTATION
 issues: []
 title: Verify checkpoint continuity across repeated Pod replacements
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -46,7 +110,7 @@ blind_derivation:
 implementation:
   branch: post25-checkpoint-multi-rotation
   base_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
-  head_sha: null
+  head_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
   stacked_on: []
 pull_request:
   url: null
@@ -68,12 +132,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -83,9 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: checkpoint-worker
-  action: Implement signed plan and focused real-producer tests
-updated_at: '2026-09-21T18:07:53+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-21T18:23:05+00:00'
 configuration_history:
 - at: '2026-09-21T17:44:14+00:00'
   by: codex-lead
@@ -96,6 +161,11 @@ configuration_history:
   - next_action
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-21T18:23:01+00:00'
+  by: checkpoint-worker
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -114,6 +184,22 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T18:23:01+00:00'
+  by: checkpoint-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T18:23:03+00:00'
+  by: checkpoint-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -123,3 +209,10 @@ check_history:
   source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
   at: '2026-09-21T17:44:17+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+handoff:
+  id: POST25-CHECKPOINT-MULTI-ROTATION:7:submit
+  from: checkpoint-worker
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 7
