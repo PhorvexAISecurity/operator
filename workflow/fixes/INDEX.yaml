@@ -1372,8 +1372,8 @@ fixes:
     issues:
     - M-44
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: post25-m044-route-claims
-    head_sha: 405efc1fe1f11c39397e60eb146f60ac31668a70
+    head_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
