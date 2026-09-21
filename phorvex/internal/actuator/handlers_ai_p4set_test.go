@@ -254,15 +254,15 @@ func TestRequestDrainStampsDrainEpochRollbackUntouched(t *testing.T) {
 	}
 }
 
-func TestRequestDrainReachableFailRestoresAdmits(t *testing.T) {
+func TestRequestDrainPossibleSendFailureRetainsClosedOperation(t *testing.T) {
 	pod, _, _, c := requestDrainFixture(t, "true")
 	hr, err := requestDrainHandler{}.Enact(context.Background(), requestDrainEC(c, &mockVLLM{drainErr: errors.New("HTTP 500")}), requestDrainReq(pod))
 	if err == nil {
 		t.Fatal("request-drain must FAIL-CLOSED on a reachable-but-failing abort")
 	}
 	p := getDrainPod(t, c)
-	if p.Labels[labelServing] != "true" {
-		t.Errorf("a failed abort must RESTORE admits (not strand the pod unready), got %q", p.Labels[labelServing])
+	if p.Labels[labelServing] != "drained" {
+		t.Errorf("a possible-send failure must retain closed serving state for exact GET recovery, got %q", p.Labels[labelServing])
 	}
 	if !hr.Emitted {
 		t.Fatal("the transient Pod mutation must remain visible alongside the failure")
@@ -275,11 +275,22 @@ func TestRequestDrainUnreachableIsPending(t *testing.T) {
 	if err == nil {
 		t.Fatal("unreachable drain must not become a successful emission")
 	}
-	if !containsStr(err.Error(), "abort unconfirmed") || !hr.Emitted {
+	if !containsStr(err.Error(), "GET-only recovery") || !hr.Emitted {
 		t.Errorf("result=%+v err=%v", hr, err)
 	}
+	if got := getDrainPod(t, c).Labels[labelServing]; got != "drained" {
+		t.Fatalf("possible-send unreachable drain did not retain closed admission: serving=%q", got)
+	}
+}
+
+func TestRequestDrainDefinitelyUnsentRestoresAdmits(t *testing.T) {
+	pod, _, _, c := requestDrainFixture(t, "true")
+	hr, err := requestDrainHandler{}.Enact(context.Background(), requestDrainEC(c, &mockVLLM{drainErr: &definiteServingUnreachableError{cause: errors.New("dial refused")}}), requestDrainReq(pod))
+	if err == nil || !hr.Emitted {
+		t.Fatalf("definitely-unsent drain must report the transient mutation and refusal: result=%+v err=%v", hr, err)
+	}
 	if got := getDrainPod(t, c).Labels[labelServing]; got != "true" {
-		t.Fatalf("unreachable drain stranded capacity: serving=%q", got)
+		t.Fatalf("definitely-unsent drain did not restore exact serving state: serving=%q", got)
 	}
 }
 

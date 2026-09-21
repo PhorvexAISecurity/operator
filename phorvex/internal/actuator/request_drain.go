@@ -69,7 +69,7 @@ func secureDrainEndpointConfigDigest(pod *corev1.Pod) string {
 }
 
 func drainReceiptEndpointConfigDigest(pod *corev1.Pod, version int) string {
-	if version == requestDrainSecureReceiptVersion {
+	if version == requestDrainSecureReceiptVersion || version == operationDrainReceiptVersion {
 		return secureDrainEndpointConfigDigest(pod)
 	}
 	return drainEndpointConfigDigest(pod)
@@ -379,6 +379,123 @@ func recoverRequestDrain(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
 	if _, err := readBoundDrainService(ctx, ec.Reader, *r); err != nil {
 		return "request-drain Service authority changed; Pod left untouched and receipt retained", confirmedWrite, err
 	}
+	if r.Version == operationDrainReceiptVersion && r.Phase == "drain-dispatching-v11" {
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+		if err != nil {
+			return "request-drain operation status pending", confirmedWrite, err
+		}
+		if err := recoverDrainV11(ctx, ec, ep, r, func() error {
+			return journalAdvance(ctx, ec, cm, *r)
+		}); errors.Is(err, errDrainV11CancellationRequired) {
+			if cancelErr := recoverDrainV11Cancellation(ctx, ec, ep, r, func() error {
+				return journalAdvance(ctx, ec, cm, *r)
+			}); !errors.Is(cancelErr, errDrainV11Cancelled) {
+				return "request-drain cancellation retained for GET-only recovery", confirmedWrite, cancelErr
+			}
+		} else if err != nil {
+			return "request-drain operation status retained for GET-only recovery", confirmedWrite, err
+		}
+		if r.Phase != "drain-cancelled-v11" {
+			r.Aborted = r.DrainV11.Aborted
+			r.Phase = "drain-confirmed-v11"
+			if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+				return "request-drain operation confirmed; receipt phase unresolved", confirmedWrite, err
+			}
+		}
+	}
+	if r.Version == operationDrainReceiptVersion && r.Phase == "drain-cancel-dispatching-v11" {
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+		if err != nil {
+			return "request-drain cancellation pending", confirmedWrite, err
+		}
+		if cancelErr := recoverDrainV11Cancellation(ctx, ec, ep, r, func() error {
+			return journalAdvance(ctx, ec, cm, *r)
+		}); !errors.Is(cancelErr, errDrainV11Cancelled) {
+			return "request-drain cancellation retained for GET-only recovery", confirmedWrite, cancelErr
+		}
+	}
+	if r.Version == operationDrainReceiptVersion && r.Phase == "drain-confirmed-v11" {
+		// An engine process restart need not change the Pod/container tuple. Refresh
+		// the exact backend operation before claiming reopen so an internally stale
+		// receipt is superseded rather than trusted.
+		ep, endpointErr := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+		if endpointErr != nil {
+			return "request-drain quiesced; backend incarnation changed before reopen", confirmedWrite, endpointErr
+		}
+		if recoveryErr := recoverDrainV11(ctx, ec, ep, r, func() error {
+			return journalAdvance(ctx, ec, cm, *r)
+		}); recoveryErr != nil {
+			return "request-drain quiesced; backend incarnation changed before reopen", confirmedWrite, recoveryErr
+		}
+		r.Aborted = r.DrainV11.Aborted
+		r.Phase = "drain-confirmed-v11"
+		if journalErr := journalAdvance(ctx, ec, cm, *r); journalErr != nil {
+			return "replacement request-drain confirmed; receipt phase pending", confirmedWrite, journalErr
+		}
+		r.DrainV11.ReopenRequests = 1
+		r.Phase = "reopen-dispatching-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return "request-drain quiesced; backend reopen claim unconfirmed", confirmedWrite, err
+		}
+	}
+	if r.Version == operationDrainReceiptVersion && r.Phase == "drain-cancelled-v11" {
+		if err := drainV11Authority(ctx, ec, r.DrainV11); err != nil {
+			return "request-drain cancelled; backend reopen authority unavailable", confirmedWrite, err
+		}
+		r.DrainV11.ReopenRequests = 1
+		r.Phase = "reopen-dispatching-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return "request-drain cancelled; backend reopen claim unconfirmed", confirmedWrite, err
+		}
+	}
+	if r.Version == operationDrainReceiptVersion && r.Phase == "reopen-dispatching-v11" {
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+		if err != nil {
+			return "request-drain quiesced; backend reopen pending", confirmedWrite, err
+		}
+		cancelled := r.DrainV11.cancelled()
+		if err := drainV11Authority(ctx, ec, r.DrainV11); err != nil && cancelled {
+			return "request-drain cancelled; backend reopen authority changed", confirmedWrite, err
+		} else if err != nil {
+			if recoveryErr := recoverDrainV11(ctx, ec, ep, r, func() error {
+				return journalAdvance(ctx, ec, cm, *r)
+			}); recoveryErr != nil {
+				return "request-drain quiesced; backend incarnation changed during reopen", confirmedWrite, recoveryErr
+			}
+			r.Aborted = r.DrainV11.Aborted
+			r.Phase = "drain-confirmed-v11"
+			if journalErr := journalAdvance(ctx, ec, cm, *r); journalErr != nil {
+				return "replacement request-drain confirmed; receipt phase pending", confirmedWrite, journalErr
+			}
+			return recoverRequestDrain(ctx, ec, cm, r)
+		}
+		if err := reopenDrainV11(ctx, ec, ep, r.DrainV11); errors.Is(err, errDrainV11Stale) && cancelled {
+			return "request-drain cancelled; backend became stale before reopen", confirmedWrite, err
+		} else if errors.Is(err, errDrainV11Stale) {
+			if recoveryErr := recoverDrainV11(ctx, ec, ep, r, func() error {
+				return journalAdvance(ctx, ec, cm, *r)
+			}); recoveryErr != nil {
+				return "request-drain quiesced; backend incarnation changed during reopen", confirmedWrite, recoveryErr
+			}
+			r.Aborted = r.DrainV11.Aborted
+			r.Phase = "drain-confirmed-v11"
+			if journalErr := journalAdvance(ctx, ec, cm, *r); journalErr != nil {
+				return "replacement request-drain confirmed; receipt phase pending", confirmedWrite, journalErr
+			}
+			return recoverRequestDrain(ctx, ec, cm, r)
+		} else if err != nil {
+			return "request-drain quiesced; backend reopen unconfirmed", confirmedWrite, err
+		}
+		r.Phase = "backend-reopened-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return "request-drain backend reopened; receipt phase unresolved", confirmedWrite, err
+		}
+	}
+	if r.Version == operationDrainReceiptVersion && r.Phase != "stopped" && r.Phase != "withdrawn" &&
+		r.Phase != "claimed" && r.Phase != "drain-unsent" && r.Phase != "backend-reopened-v11" && r.Phase != "restored" {
+		return "request-drain v11 is not ready for route restoration", confirmedWrite,
+			fmt.Errorf("request-drain v11 phase %q is not restorable", r.Phase)
+	}
 	if _, err := restoreDrainPod(ctx, ec, *r); err != nil {
 		return "request-drain restoration unresolved; receipt retained", confirmedWrite, err
 	}
@@ -405,7 +522,7 @@ func requestDrainWriteConfirmed(r operationReceipt, pod *corev1.Pod) bool {
 		return true
 	}
 	switch r.Phase {
-	case "stopped", "withdrawn", "stack-confirmed", "restored":
+	case "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent", "drain-cancel-dispatching-v11", "drain-cancelled-v11", "drain-confirmed-v11", "reopen-dispatching-v11", "backend-reopened-v11", "restored":
 		return true
 	default:
 		return false
@@ -472,19 +589,28 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 		return HandlerResult{}, err
 	}
 	priorValue, priorPresent := pod.Labels[labelServing]
+	injected := ec.ServingSecurity == nil && ec.VLLM != nil
+	if !injected && (ec.ServingSecurity == nil || ec.ServingSecurity.Mode() != ServingSecuritySecureRequired) {
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("request-drain operation-bound v11 requires secure serving credentials"))
+	}
+	drainReceipt, _, err := prepareDrainV11(ctx, ec, req, pod, string(service.UID), 3*time.Minute)
+	if err != nil {
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("request-drain operation-bound capability: %w", err))
+	}
 	r := operationReceipt{
-		Version: requestDrainReceiptVersion, Kind: "request-drain", Phase: "prepared",
+		Version: operationDrainReceiptVersion, Kind: "request-drain", Phase: "prepared",
 		PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID,
 		TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels),
 		OperationToken: token, ServiceName: service.Name, ServiceUID: string(service.UID), ServiceSelector: copyLabels(service.Spec.Selector),
 		PriorServingPresent: priorPresent, PriorServingValue: priorValue, EndpointAddresses: append([]string(nil), addresses...), EndpointConfigSHA256: drainEndpointConfigDigest(pod),
+		DrainV11: drainReceipt,
 	}
-	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
-		r.Version = requestDrainSecureReceiptVersion
-		r.EndpointConfigSHA256 = secureDrainEndpointConfigDigest(pod)
+	r.EndpointConfigSHA256 = secureDrainEndpointConfigDigest(pod)
+	if !injected {
 		r.ServingBindingSHA256 = ec.ServingAttempt.digest
-		r.ServingServiceAccount = normalizeServiceAccount(pod.Spec.ServiceAccountName)
 	}
+	r.ServingServiceAccount = normalizeServiceAccount(pod.Spec.ServiceAccountName)
+	r.ServingLegacy = injected
 	if !r.valid() {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("request-drain bounded receipt preconditions are invalid"))
 	}
@@ -575,19 +701,38 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 	if err != nil {
 		return requestDrainFailure(ctx, ec, cm, &r, stopped, fmt.Errorf("request-drain pre-abort revalidation: %w", err))
 	}
-	aborted, pending, drainErr := drainInflight(ctx, ec, confirmedTarget)
-	if drainErr != nil || pending || aborted <= 0 {
-		if drainErr == nil {
-			switch {
-			case pending:
-				drainErr = fmt.Errorf("serving stack unreachable; abort unconfirmed")
-			default:
-				drainErr = fmt.Errorf("serving stack confirmed zero aborted requests; inflightRequests not invalidated")
-			}
-		}
-		return requestDrainFailure(ctx, ec, cm, &r, stopped, drainErr)
+	r.Phase = "drain-dispatching-v11"
+	r.DrainV11.CreateRequests = 1
+	if err := journalAdvance(ctx, ec, cm, r); err != nil {
+		return requestDrainFailure(ctx, ec, cm, &r, stopped,
+			fmt.Errorf("request-drain v11 dispatch claim was not acknowledged: %w", err))
 	}
-	r.Phase, r.Aborted = "stack-confirmed", aborted
+	confirmedTarget, err = revalidateDrainDispatch(ctx, ec, r)
+	if err != nil {
+		return requestDrainFailure(ctx, ec, cm, &r, stopped,
+			fmt.Errorf("request-drain authority changed after dispatch claim: %w", err))
+	}
+	ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, confirmedTarget)
+	if err != nil {
+		return requestDrainFailure(ctx, ec, cm, &r, stopped, err)
+	}
+	create := drainV11CreateFromReceipt(r.DrainV11)
+	if err := completeDrainV11(ctx, ec, ep, r.DrainV11, &create); err != nil {
+		var unreachable *definiteServingUnreachableError
+		if errors.As(err, &unreachable) {
+			r.Phase = "drain-unsent"
+			if journalErr := journalAdvance(ctx, ec, cm, r); journalErr != nil {
+				return requestDrainFailure(ctx, ec, cm, &r, stopped,
+					fmt.Errorf("request-drain definitely-unsent evidence was not acknowledged: %w", journalErr))
+			}
+			return requestDrainFailure(ctx, ec, cm, &r, stopped,
+				fmt.Errorf("request-drain v11 create was definitely unsent: %w", err))
+		}
+		return requestDrainFailure(ctx, ec, cm, &r, stopped,
+			fmt.Errorf("request-drain v11 outcome retained for GET-only recovery: %w", err))
+	}
+	r.Aborted = r.DrainV11.Aborted
+	r.Phase = "drain-confirmed-v11"
 	if err := journalAdvance(ctx, ec, cm, r); err != nil {
 		return requestDrainFailure(ctx, ec, cm, &r, stopped, fmt.Errorf("record confirmed stack effect: %w", err))
 	}
@@ -595,8 +740,12 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 	if err != nil {
 		return requestDrainResult(cm, stopped, true, "request-drain partial confirmed mutation: "+effect), fmt.Errorf("request-drain restoration after confirmed abort: %w", err)
 	}
-	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, aborted)
-	return requestDrainResult(cm, stopped, true, fmt.Sprintf("request-drain: %d in-flight aborted; exact serving state restored; does not block re-entry — pair with quarantine/route-rotate", aborted)), nil
+	if r.Aborted == 0 {
+		return requestDrainResult(cm, stopped, true, "request-drain v11 quiesced and reopened without aborting active work; exact serving state restored"),
+			fmt.Errorf("request-drain v11 confirmed zero aborted requests")
+	}
+	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, r.Aborted)
+	return requestDrainResult(cm, stopped, true, fmt.Sprintf("request-drain: %d in-flight aborted; operation-bound backend reopened; exact serving state restored; does not block re-entry — pair with quarantine/route-rotate", r.Aborted)), nil
 }
 
 func rollbackRequestDrain(ctx context.Context, ec EnactCtx, req Request, ref string) error {

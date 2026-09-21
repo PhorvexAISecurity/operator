@@ -146,7 +146,7 @@ func warmDrainRoleAllowed(r operationReceipt, uid, role string, selected map[str
 	if uid == r.OldUID {
 		allowed := role == roleLeader
 		switch r.Phase {
-		case "retiring", "drain-dispatching", "drain-unsent", "drain-confirmed":
+		case "retiring", "drain-dispatching", "drain-dispatching-v11", "drain-unsent", "drain-confirmed", "drain-confirmed-v11":
 			allowed = role == roleRetiring
 		case "prepared", "promoted", "restore-old-claimed":
 			allowed = role == roleLeader || role == roleRetiring
@@ -238,7 +238,7 @@ func warmDrainRolesCurrent(ctx context.Context, reader client.Reader, r operatio
 // stricter of its admitted floor and the current policy floor. It deliberately
 // counts only recorded serving UIDs; unrelated Ready shadows receive no credit.
 func warmDrainAvailabilityCurrent(ctx context.Context, reader client.Reader, r operationReceipt, sets ...warmServingSet) error {
-	if r.Version != warmDrainReceiptVersion || r.Pool == nil || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(r.Pool.Desired) {
+	if (r.Version != warmDrainReceiptVersion && r.Version != operationDrainReceiptVersion) || r.Pool == nil || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) || r.AdmittedFloor > int(r.Pool.Desired) {
 		return fmt.Errorf("warm availability receipt floor invalid")
 	}
 	pol, err := receiptAuthority(ctx, reader, r, model.Action(r.Kind))
@@ -289,7 +289,7 @@ func warmDrainAvailabilityCurrent(ctx context.Context, reader client.Reader, r o
 // restores pool size, but only the recorded prospective serving UIDs count
 // toward availability.
 func warmDrainRetiredAvailabilityCurrent(ctx context.Context, reader client.Reader, r operationReceipt) error {
-	if r.Version != warmDrainReceiptVersion || r.Pool == nil || r.RewarmUID == "" || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) {
+	if (r.Version != warmDrainReceiptVersion && r.Version != operationDrainReceiptVersion) || r.Pool == nil || r.RewarmUID == "" || r.AdmittedFloor <= 0 || r.AdmittedFloor > len(r.WarmSelectedUIDs) {
 		return fmt.Errorf("retired warm availability receipt invalid")
 	}
 	pol, err := receiptAuthority(ctx, reader, r, model.Action(r.Kind))
@@ -433,6 +433,51 @@ func warmDrainRestorationPair(ctx context.Context, ec EnactCtx, r operationRecei
 // executeWarmDrainAttempt grants exactly one send to the caller whose
 // retiring/drain-unsent -> drain-dispatching journal CAS was acknowledged.
 func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (warmDrainResult, error) {
+	if r.Version == operationDrainReceiptVersion {
+		if r.Phase != "retiring" || r.DrainAttempts != 0 || r.DrainV11 == nil {
+			return warmDrainRetained, fmt.Errorf("operation-bound warm drain send is not claimable")
+		}
+		old, _, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return warmDrainRetained, fmt.Errorf("warm route/authority insufficient before dispatch claim: %w", err)
+		}
+		r.DrainAttempts = 1
+		r.DrainV11.CreateRequests = 1
+		r.Phase = "drain-dispatching-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return warmDrainRetained, fmt.Errorf("warm drain v11 dispatch claim was not acknowledged: %w", err)
+		}
+		old, _, err = warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return warmDrainRetained, fmt.Errorf("warm route/authority changed after dispatch claim: %w", err)
+		}
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
+		if err != nil {
+			return warmDrainRetained, err
+		}
+		create := drainV11CreateFromReceipt(r.DrainV11)
+		if err := completeDrainV11(ctx, ec, ep, r.DrainV11, &create); errors.Is(err, errDrainV11CancellationRequired) {
+			return recoverCancelledWarmDrain(ctx, ec, cm, r)
+		} else if err != nil {
+			var unreachable *definiteServingUnreachableError
+			if errors.As(err, &unreachable) {
+				r.Phase = "drain-unsent"
+				if journalErr := journalAdvance(ctx, ec, cm, *r); journalErr != nil {
+					return warmDrainRetained, fmt.Errorf("definitely-unsent drain evidence was not acknowledged: %w", journalErr)
+				}
+				if compensateErr := compensateWarmRouting(ctx, ec, cm, r); compensateErr != nil {
+					return warmDrainRetained, compensateErr
+				}
+				return warmDrainRestored, nil
+			}
+			return warmDrainRetained, fmt.Errorf("warm drain v11 outcome retained for GET-only recovery: %w", err)
+		}
+		r.Aborted, r.Phase = r.DrainV11.Aborted, "drain-confirmed-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return warmDrainRetained, fmt.Errorf("warm drain v11 confirmation was not acknowledged: %w", err)
+		}
+		return warmDrainConfirmed, nil
+	}
 	if r.Version != warmDrainReceiptVersion || (r.Phase != "retiring" && r.Phase != "drain-unsent") || r.DrainAttempts >= warmDrainMaxAttempts {
 		return warmDrainRetained, fmt.Errorf("warm drain send is not claimable")
 	}
@@ -476,6 +521,97 @@ func executeWarmDrainAttempt(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		return warmDrainRetained, err
 	}
 	return warmDrainRestored, nil
+}
+
+func recoverCancelledWarmDrain(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
+	r *operationReceipt) (warmDrainResult, error) {
+	if r == nil || r.DrainV11 == nil {
+		return warmDrainRetained, fmt.Errorf("warm drain cancellation receipt is missing")
+	}
+	if r.Phase == "drain-dispatching-v11" || r.Phase == "drain-cancel-dispatching-v11" {
+		old, _, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return warmDrainRetained, fmt.Errorf("warm cancellation authority changed: %w", err)
+		}
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
+		if err != nil {
+			return warmDrainRetained, err
+		}
+		if err := recoverDrainV11Cancellation(ctx, ec, ep, r, func() error {
+			return journalAdvance(ctx, ec, cm, *r)
+		}); !errors.Is(err, errDrainV11Cancelled) {
+			return warmDrainRetained, err
+		}
+	}
+	if r.Phase == "drain-cancelled-v11" {
+		old, _, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return warmDrainRetained, fmt.Errorf("warm cancelled route/authority changed before reopen: %w", err)
+		}
+		if err := drainV11Authority(ctx, ec, r.DrainV11); err != nil {
+			return warmDrainRetained, err
+		}
+		r.DrainV11.ReopenRequests = 1
+		r.Phase = "reopen-dispatching-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return warmDrainRetained, fmt.Errorf("warm cancelled reopen claim was not acknowledged: %w", err)
+		}
+		_ = old
+	}
+	if r.Phase == "reopen-dispatching-v11" {
+		old, _, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return warmDrainRetained, fmt.Errorf("warm cancelled route/authority changed during reopen: %w", err)
+		}
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
+		if err != nil {
+			return warmDrainRetained, err
+		}
+		if err := reopenDrainV11(ctx, ec, ep, r.DrainV11); err != nil {
+			return warmDrainRetained, fmt.Errorf("warm cancelled backend reopen unconfirmed: %w", err)
+		}
+		r.Phase = "backend-reopened-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return warmDrainRetained, fmt.Errorf("warm cancelled backend reopen phase unresolved: %w", err)
+		}
+	}
+	if r.Phase != "backend-reopened-v11" {
+		return warmDrainRetained, fmt.Errorf("warm drain cancellation phase %q is not compensable", r.Phase)
+	}
+	r.Aborted = 0
+	r.Phase = "drain-unsent"
+	if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+		return warmDrainRetained, fmt.Errorf("warm cancellation compensation intent was not acknowledged: %w", err)
+	}
+	if err := compensateWarmRouting(ctx, ec, cm, r); err != nil {
+		return warmDrainRetained, err
+	}
+	return warmDrainRestored, errDrainV11Cancelled
+}
+
+func ensureWarmDrainV11Current(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
+	r *operationReceipt, old *corev1.Pod) error {
+	if r == nil || r.Version != operationDrainReceiptVersion || r.DrainV11 == nil {
+		return nil
+	}
+	// A vLLM engine/proxy process can restart inside an unchanged Kubernetes
+	// container, so Pod UID/container/restart binding alone cannot prove that the
+	// confirmed backend operation is still current. Always perform the exact
+	// authenticated operation lookup immediately before the old UID is retired.
+	ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
+	if err != nil {
+		return err
+	}
+	if err := recoverDrainV11(ctx, ec, ep, r, func() error {
+		return journalAdvance(ctx, ec, cm, *r)
+	}); err != nil {
+		return err
+	}
+	r.Aborted, r.Phase = r.DrainV11.Aborted, "drain-confirmed-v11"
+	if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+		return fmt.Errorf("replacement operation-bound drain confirmed; receipt phase pending: %w", err)
+	}
+	return nil
 }
 
 func waitWarmRouteMembers(ctx context.Context, ec EnactCtx, r operationReceipt, expected []string) error {
@@ -712,7 +848,13 @@ func observeWarmCompensationRoute(ctx context.Context, ec EnactCtx, r operationR
 }
 
 func compensateWarmRouting(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) error {
-	if r.Version != warmDrainReceiptVersion || r.DrainAttempts <= 0 || r.DrainAttempts > warmDrainMaxAttempts {
+	legacyUnsent := r.Version == warmDrainReceiptVersion && r.DrainAttempts > 0 && r.DrainAttempts <= warmDrainMaxAttempts
+	operationUnsent := r.Version == operationDrainReceiptVersion && r.DrainAttempts == 1 && r.DrainV11 != nil &&
+		r.DrainV11.prepared() && r.DrainV11.CreateRequests == 1 && r.DrainV11.State == "" &&
+		r.DrainV11.Revision == "" && r.DrainV11.OwnerDigest == "" && r.DrainV11.ReceiptSHA256 == ""
+	operationCancelled := r.Version == operationDrainReceiptVersion && r.DrainAttempts == 1 &&
+		r.DrainV11 != nil && r.DrainV11.reopenedAfterCancellation()
+	if !legacyUnsent && !operationUnsent && !operationCancelled {
 		return fmt.Errorf("warm routing restoration lacks definite-unsent provenance")
 	}
 	if r.Phase == "drain-unsent" {
@@ -871,10 +1013,10 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		return "unpromoted or rolled-back pair confirmed; receipt finished", nil
 	}
 	if oldErr != nil {
-		if r.Phase != "drain-confirmed" && r.Phase != "retired-awaiting-controller" && r.Phase != "pool-observed" && r.Phase != "pool-warm-ready" {
+		if r.Phase != "drain-confirmed" && r.Phase != "drain-confirmed-v11" && r.Phase != "retired-awaiting-controller" && r.Phase != "pool-observed" && r.Phase != "pool-warm-ready" {
 			return "", fmt.Errorf("old leader absent without durable drain confirmation")
 		}
-		if r.Phase == "drain-confirmed" {
+		if r.Phase == "drain-confirmed" || r.Phase == "drain-confirmed-v11" {
 			r.Phase = "retired-awaiting-controller"
 			if err := journalAdvance(ctx, ec, cm, *r); err != nil {
 				return "old leader already absent after confirmed drain", err
@@ -937,7 +1079,43 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		}
 	case "drain-dispatching":
 		return "old leader route removed", fmt.Errorf("warm drain may have been sent; receipt retained without replay")
+	case "drain-dispatching-v11":
+		old, _, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return "old leader route removed", err
+		}
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, old)
+		if err != nil {
+			return "old leader route removed", err
+		}
+		if err := recoverDrainV11(ctx, ec, ep, r, func() error {
+			return journalAdvance(ctx, ec, cm, *r)
+		}); errors.Is(err, errDrainV11CancellationRequired) {
+			result, cancelErr := recoverCancelledWarmDrain(ctx, ec, cm, r)
+			if result == warmDrainRestored && errors.Is(cancelErr, errDrainV11Cancelled) {
+				return "operation-bound drain cancelled; backend reopened and exact old-first routing restored", cancelErr
+			}
+			return "old leader route removed; drain cancellation retained", cancelErr
+		} else if err != nil {
+			return "old leader route removed; drain status retained", err
+		}
+		r.Aborted, r.Phase = r.DrainV11.Aborted, "drain-confirmed-v11"
+		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
+			return "operation-bound drain confirmed; receipt phase pending", err
+		}
+	case "drain-cancel-dispatching-v11", "drain-cancelled-v11", "reopen-dispatching-v11", "backend-reopened-v11":
+		result, cancelErr := recoverCancelledWarmDrain(ctx, ec, cm, r)
+		if result == warmDrainRestored && errors.Is(cancelErr, errDrainV11Cancelled) {
+			return "operation-bound drain cancelled; backend reopened and exact old-first routing restored", cancelErr
+		}
+		return "old leader route removed; drain cancellation retained", cancelErr
 	case "drain-unsent":
+		if r.Version == operationDrainReceiptVersion {
+			if err := compensateWarmRouting(ctx, ec, cm, r); err != nil {
+				return "operation-bound drain definitely unsent; routing restoration pending", err
+			}
+			return "operation-bound drain definitely unsent; exact old-first routing roles restored", nil
+		}
 		// A recovery that observed an unsent phase may make one final claimed
 		// attempt. The bounded second unsent result compensates immediately.
 		if r.DrainAttempts < warmDrainMaxAttempts {
@@ -959,12 +1137,21 @@ func recoverWarmDrainCutover(ctx context.Context, ec EnactCtx, cm *corev1.Config
 		}
 		return "definitely-unsent drain; exact old-first routing roles restored", nil
 	}
-	if r.Phase != "drain-confirmed" {
+	if r.Phase != "drain-confirmed" && r.Phase != "drain-confirmed-v11" {
 		return "old leader route removed", fmt.Errorf("warm drain completion is not durably confirmed")
 	}
 	old, newPod, err := warmDrainProspectiveRouteCurrent(ctx, ec, *r)
 	if err != nil {
 		return "confirmed warm drain; retirement pending", fmt.Errorf("route/authority changed before confirmed retirement: %w", err)
+	}
+	if err := ensureWarmDrainV11Current(ctx, ec, cm, r, old); err != nil {
+		return "confirmed warm drain; backend incarnation changed before retirement", err
+	}
+	if r.DrainV11.Attempt == 2 {
+		old, newPod, err = warmDrainProspectiveRouteCurrent(ctx, ec, *r)
+		if err != nil {
+			return "replacement operation-bound drain confirmed; retirement pending", err
+		}
 	}
 	if err := ec.Client.Delete(ctx, old, uidPrecondition(old)); err != nil && !apierrors.IsNotFound(err) {
 		return "confirmed warm drain; retirement pending", err
