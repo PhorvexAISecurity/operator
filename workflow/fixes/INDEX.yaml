@@ -1385,8 +1385,9 @@ fixes:
     issues:
     - M-100
     related_issues: []
-    state: TRIAGED
+    state: AGREED
     dependencies: []
-    stacked_on: []
-    branch: null
+    stacked_on:
+    - POST25-M100
+    branch: post25-m100-current-version
     head_sha: null
