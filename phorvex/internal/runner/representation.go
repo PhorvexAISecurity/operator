@@ -25,7 +25,9 @@ func withoutLimitation(in []string, remove ...string) []string {
 // trace skips facts absent from the final-weight domain (coverage.go), so it is
 // not the full inventory. ProtectedOutcome v1 is raw supplied annotation data:
 // Qualified/StateBasis/OutcomeClass are NOT M100 event-to-loss predicates.
-// No current source supplies a qualifying M100 mapping or durable loss ledger.
+// The opt-in completed-disclosure-v1 producer and durable ledger below qualify
+// only their exact admitted synthetic observations; ProtectedOutcome v1 remains
+// unbound and supplies no completed-loss mapping.
 func representationSnapshotV1(d model.Decision, p model.Policy, version string, claim model.ClaimScope, inventory *model.ExistentialInventory, history ...representationHistoryInput) model.RepresentationSnapshot {
 	scope := model.ProtectedScope{Tenant: p.Tenant, Asset: d.Namespace + "/" + d.Pod, Version: version}
 	s := model.RepresentationSnapshot{
