@@ -44,6 +44,7 @@ import (
 	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/epssfeed"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -80,82 +81,83 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr              string
-		probeAddr                string
-		enableLeader             bool
-		baseInterval             time.Duration
-		promURL                  string
-		epssCachePath            string
-		epssCacheRefresh         time.Duration
-		epssFeed                 bool
-		epssFeedApply            bool
-		epssFeedPartial          bool
-		epssFeedNS               string
-		epssFeedCM               string
-		epssFeedKey              string
-		epssFeedFIRSTURL         string
-		epssFeedTrivy            string
-		epssFeedTimeout          time.Duration
-		killSwitch               bool
-		auditJSON                string
-		operatorNS               string
-		integrationEmit          bool
-		emitNamespace            string
-		emitPod                  string
-		emitAction               string
-		emitTenant               string
-		emitMatchLabels          string
-		engineName               string
-		ablation                 bool
-		ablationNS               string
-		ablationSelector         string
-		ablationBudget           int
-		ablationSeeds            int
-		scan                     bool
-		scanNS                   string
-		kubeContext              string
-		nativeDemo               bool
-		nativeDemoNS             string
-		auditMaxBytes            int64
-		auditMaxBackups          int
-		gpuEnvelopeMax           float64
-		supportDebounce          int
-		calibrationShadow        bool
-		calibrationRefresh       time.Duration
-		calibrationSample        time.Duration
-		calibrationLookback      time.Duration
-		calibrationExportDir     string
-		admissionWebhook         bool
-		webhookPort              int
-		webhookCertDir           string
-		pcieClassTableRaw        string
-		flowClasses              string
-		trustedDetectors         string
-		trustedLossObservers     string
-		lossHistoryDir           string
-		auditSourceAddr          string
-		auditSourceCert          string
-		auditSourceKey           string
-		auditSourceCA            string
-		auditSourceClientDNS     string
-		auditSourceVClusterPath  string
-		loraCleanSourcesFile     string
-		migProfilesFile          string
-		servingSecurityFile      string
-		servingSecurityMode      string
-		migNodeExec              bool
-		migAgentNamespace        string
-		migAgentServiceAccounts  string
-		migAgentDaemonSet        string
-		migAgentGPUContainer     string
-		migAgentHelperContainer  string
-		migAllocationHelper      string
-		migAllocationSocket      string
-		migExecTimeout           time.Duration
-		migAllocationReadTimeout time.Duration
-		migReleaseTimeout        time.Duration
-		migExclusiveMaintenance  bool
-		maxRetainedQuarantines   int
+		metricsAddr                      string
+		probeAddr                        string
+		enableLeader                     bool
+		baseInterval                     time.Duration
+		promURL                          string
+		epssCachePath                    string
+		epssCacheRefresh                 time.Duration
+		epssFeed                         bool
+		epssFeedApply                    bool
+		epssFeedPartial                  bool
+		epssFeedNS                       string
+		epssFeedCM                       string
+		epssFeedKey                      string
+		epssFeedFIRSTURL                 string
+		epssFeedTrivy                    string
+		epssFeedTimeout                  time.Duration
+		killSwitch                       bool
+		auditJSON                        string
+		operatorNS                       string
+		integrationEmit                  bool
+		emitNamespace                    string
+		emitPod                          string
+		emitAction                       string
+		emitTenant                       string
+		emitMatchLabels                  string
+		engineName                       string
+		ablation                         bool
+		ablationNS                       string
+		ablationSelector                 string
+		ablationBudget                   int
+		ablationSeeds                    int
+		scan                             bool
+		scanNS                           string
+		kubeContext                      string
+		nativeDemo                       bool
+		nativeDemoNS                     string
+		auditMaxBytes                    int64
+		auditMaxBackups                  int
+		gpuEnvelopeMax                   float64
+		supportDebounce                  int
+		calibrationShadow                bool
+		calibrationRefresh               time.Duration
+		calibrationSample                time.Duration
+		calibrationLookback              time.Duration
+		calibrationExportDir             string
+		admissionWebhook                 bool
+		webhookPort                      int
+		webhookCertDir                   string
+		pcieClassTableRaw                string
+		flowClasses                      string
+		trustedDetectors                 string
+		trustedLossObservers             string
+		trustedCurrentInventoryObservers string
+		lossHistoryDir                   string
+		auditSourceAddr                  string
+		auditSourceCert                  string
+		auditSourceKey                   string
+		auditSourceCA                    string
+		auditSourceClientDNS             string
+		auditSourceVClusterPath          string
+		loraCleanSourcesFile             string
+		migProfilesFile                  string
+		servingSecurityFile              string
+		servingSecurityMode              string
+		migNodeExec                      bool
+		migAgentNamespace                string
+		migAgentServiceAccounts          string
+		migAgentDaemonSet                string
+		migAgentGPUContainer             string
+		migAgentHelperContainer          string
+		migAllocationHelper              string
+		migAllocationSocket              string
+		migExecTimeout                   time.Duration
+		migAllocationReadTimeout         time.Duration
+		migReleaseTimeout                time.Duration
+		migExclusiveMaintenance          bool
+		maxRetainedQuarantines           int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -178,6 +180,7 @@ func main() {
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
 	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
 	flag.StringVar(&trustedLossObservers, "trusted-loss-observers", os.Getenv("PHORVEX_TRUSTED_LOSS_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic completed-disclosure evidence. General detector trust does not grant this authority.")
+	flag.StringVar(&trustedCurrentInventoryObservers, "trusted-current-inventory-observers", os.Getenv("PHORVEX_TRUSTED_CURRENT_INVENTORY_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic current protected-version observations.")
 	flag.StringVar(&lossHistoryDir, "loss-history-dir", os.Getenv("PHORVEX_LOSS_HISTORY_DIR"), "Private durable directory for immutable completed-disclosure history. Empty keeps M100 history unavailable.")
 	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
 	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
@@ -249,6 +252,8 @@ func main() {
 	ingest.ConfigureEventTrust(detectors)
 	lossObservers := ingest.NewTrustedDetectors(strings.Split(trustedLossObservers, ","))
 	ingest.ConfigureCompletedDisclosureTrust(lossObservers)
+	currentObservers := ingest.NewTrustedDetectors(strings.Split(trustedCurrentInventoryObservers, ","))
+	ingest.ConfigureCurrentInventoryTrust(currentObservers)
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	if detectors.Empty() {
@@ -262,6 +267,10 @@ func main() {
 	}
 	if (lossHistoryDir == "") != lossObservers.Empty() {
 		setupLog.Error(fmt.Errorf("loss-history-dir and trusted-loss-observers must be configured together"), "invalid completed-disclosure configuration")
+		os.Exit(2)
+	}
+	if !currentObservers.Empty() && lossHistoryDir == "" {
+		setupLog.Error(fmt.Errorf("current inventory requires exact completed-loss history"), "invalid current inventory configuration")
 		os.Exit(2)
 	}
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
@@ -446,6 +455,10 @@ func main() {
 			setupLog.Error(storeErr, "loss history store unavailable; retained disclosure history disabled")
 		} else {
 			rmgr.LossHistory = lossStore
+			if !currentObservers.Empty() {
+				rmgr.CurrentInventory = currentinventory.NewStore()
+				setupLog.Info("synthetic current protected-version inventory enabled", "trustedCurrentInventoryObservers", currentObservers.List())
+			}
 			setupLog.Info("synthetic completed-disclosure history enabled", "history", lossStore.String(), "trustedLossObservers", lossObservers.List())
 		}
 	}

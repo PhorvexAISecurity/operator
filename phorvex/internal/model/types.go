@@ -473,8 +473,13 @@ type SecurityEventInfo struct {
 	CompletedDisclosureRaw               string
 	CompletedDisclosureAdmittedAt        string
 	CompletedDisclosureAdmissionContract string
-	AdapterName                          string // event-owned phorvex.ai/adapter-name, never copied from a Pod
-	AdapterTargetUID                     string // event-owned phorvex.ai/target-pod-uid
+	// Current inventory is independently admitted and never inherits generic
+	// detector or completed-disclosure authority.
+	CurrentInventoryRaw               string
+	CurrentInventoryAdmittedAt        string
+	CurrentInventoryAdmissionContract string
+	AdapterName                       string // event-owned phorvex.ai/adapter-name, never copied from a Pod
+	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).

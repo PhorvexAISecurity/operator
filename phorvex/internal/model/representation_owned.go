@@ -100,6 +100,19 @@ func representationFact(in RepresentationFact, redact bool) RepresentationFact {
 	in.ReversibleCondition = representationString(in.ReversibleCondition, redact)
 	in.Reason = representationString(in.Reason, redact)
 	in.Actionability = representationStrings(in.Actionability, redact)
+	if in.CurrentInventory != nil {
+		p := *in.CurrentInventory
+		p.SchemaVersion = representationString(p.SchemaVersion, redact)
+		p.EvidenceID = representationString(p.EvidenceID, redact)
+		p.PolicyUID = representationString(p.PolicyUID, redact)
+		p.StableOwnerUID = representationString(p.StableOwnerUID, redact)
+		p.PodUID = representationString(p.PodUID, redact)
+		p.ConfigMapUID = representationString(p.ConfigMapUID, redact)
+		p.ConfigMapResourceVersion = representationString(p.ConfigMapResourceVersion, redact)
+		p.CanonicalPayloadSHA256 = representationString(p.CanonicalPayloadSHA256, redact)
+		p.SecurityEventUID = representationString(p.SecurityEventUID, redact)
+		in.CurrentInventory = &p
+	}
 	return in
 }
 

@@ -90,6 +90,10 @@ spec:
       expression: "has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations"
     - name: oldCompleted
       expression: "request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in oldObject.metadata.annotations"
+    - name: currentInventory
+      expression: "has(object.metadata.annotations) && 'phorvex.ai/current-protected-inventory-v1' in object.metadata.annotations"
+    - name: oldCurrentInventory
+      expression: "request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/current-protected-inventory-v1' in oldObject.metadata.annotations"
   validations:
     - expression: "!variables.oldCompleted || variables.completed"
       reason: Forbidden
@@ -109,6 +113,17 @@ spec:
         authenticated requester ('" + variables.actor + "'), but this request claims '" +
         variables.claim + "'. Omit the annotation — the Phorvex admission stamp writes it, and an
         unstamped event is still accepted, it just supplies no belief evidence."
+    - expression: "!variables.oldCurrentInventory || variables.currentInventory"
+      reason: Forbidden
+      message: "securityevent/current-inventory: admitted evidence cannot be removed."
+    - expression: >-
+        !variables.oldCurrentInventory ||
+        (object.metadata.annotations['phorvex.ai/current-protected-inventory-v1'] == oldObject.metadata.annotations['phorvex.ai/current-protected-inventory-v1'] &&
+         object.metadata.annotations['phorvex.ai/current-inventory-admitted-at'] == oldObject.metadata.annotations['phorvex.ai/current-inventory-admitted-at'] &&
+         object.metadata.annotations['phorvex.ai/current-inventory-admission-contract'] == oldObject.metadata.annotations['phorvex.ai/current-inventory-admission-contract'] &&
+         variables.claim == variables.oldClaim)
+      reason: Forbidden
+      message: "securityevent/current-inventory: payload and admission authority are immutable."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

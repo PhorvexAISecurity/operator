@@ -40,6 +40,7 @@ import (
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
@@ -200,12 +201,16 @@ type Manager struct {
 	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
 	// leaves representation history honestly unavailable.
 	LossHistory losshistory.Ledger
+	// CurrentInventory is bounded, expiring evidence for explicitly configured
+	// synthetic protected versions. Nil keeps current inventory unavailable.
+	CurrentInventory currentinventory.Ledger
 	// LossHistoryReader performs optional completed-disclosure authority and
 	// replacement-owner reads under a separate bounded context. Production sets
 	// it to the uncached API reader; a stall cannot consume the actuation tick.
 	LossHistoryReader client.Reader
-	// LossHistoryReadTimeout bounds the whole optional history transaction. Zero
-	// uses the conservative default in completed_disclosure.go.
+	// LossHistoryReadTimeout bounds the whole optional representation-evidence
+	// transaction, including current-inventory revalidation. Zero uses the
+	// conservative default in completed_disclosure.go.
 	LossHistoryReadTimeout time.Duration
 	lossHistoryWorkerMu    sync.Mutex
 	lossHistoryWorker      *lossHistoryCoordinator

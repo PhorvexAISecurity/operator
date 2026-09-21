@@ -83,6 +83,36 @@ phorvex:
       expectedBytes: 0
       expectedSHA256: ""
       timeout: 10s
+    # Independent, expiring synthetic current-version inventory. Enabling it
+    # also requires this loss-history ledger so the runner can distinguish
+    # at-risk from already-lost without guessing across a history outage.
+    currentInventory:
+      enabled: false
+      trustedObservers: []
+      observer:
+        enabled: false
+        targetNamespace: ""
+        targetName: ""
+        targetUID: ""
+        policyNamespace: ""
+        policyName: ""
+        manifestURL: ""
+        serverName: ""
+        caSecretName: ""
+        clientSecretName: ""
+        configMapName: ""
+        configMapKey: ""
+        volumeName: ""
+        containerName: ""
+        mountPath: ""
+        projectedPath: ""
+        protectedAsset: ""
+        protectedVersion: ""
+        protectedProperty: confidentiality
+        evidenceID: ""
+        ruleSHA256: ""
+        ttl: 1m
+        timeout: 10s
   # M-94 server-side guard that makes the stamp above worth trusting: a
   # ValidatingAdmissionPolicy + Deny binding requiring that any phorvex.ai/creator-identity
   # annotation on a SecurityEvent CREATE/UPDATE equals the authenticated requester. It is

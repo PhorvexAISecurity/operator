@@ -13,6 +13,7 @@ import (
 	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -76,8 +78,13 @@ func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request)
 		annotations = map[string]string{}
 	}
 	raw, present := annotations[disclosure.Annotation]
+	currentRaw, currentPresent := annotations[currentinventory.Annotation]
+	if present && currentPresent {
+		return admission.Denied("SecurityEvent cannot carry both completed and current inventory evidence")
+	}
 	var oldEvent amtdv1beta1.SecurityEvent
 	oldPresent := false
+	oldCurrentPresent := false
 	if req.Operation == admissionv1.Update {
 		var err error
 		oldEvent, err = disclosureEvent(req.OldObject.Raw)
@@ -85,8 +92,12 @@ func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request)
 			return admission.Denied("completed disclosure rejected: old SecurityEvent is missing")
 		}
 		_, oldPresent = oldEvent.Annotations[disclosure.Annotation]
+		_, oldCurrentPresent = oldEvent.Annotations[currentinventory.Annotation]
 		if oldPresent && !present {
 			return admission.Denied("completed disclosure rejected: completed-disclosure evidence cannot be removed")
+		}
+		if oldCurrentPresent && !currentPresent {
+			return admission.Denied("current inventory rejected: current-inventory evidence cannot be removed")
 		}
 	}
 	if present {
@@ -97,6 +108,15 @@ func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request)
 		annotations[disclosure.Annotation] = canonical
 		annotations[disclosure.AdmissionTimeAnnotation] = admittedAt.Format(time.RFC3339Nano)
 		annotations[disclosure.AdmissionContractAnnotation] = disclosure.BoundaryContract
+		annotations[ingest.CreatorIdentityAnnotation] = creator
+	} else if currentPresent {
+		canonical, admittedAt, creator, err := s.validateCurrentInventoryAdmission(ctx, req, currentRaw, oldEvent, oldCurrentPresent)
+		if err != nil {
+			return admission.Denied("current inventory rejected: " + err.Error())
+		}
+		annotations[currentinventory.Annotation] = canonical
+		annotations[currentinventory.AdmissionTimeAnnotation] = admittedAt.Format(time.RFC3339Nano)
+		annotations[currentinventory.AdmissionContractAnnotation] = currentinventory.BoundaryContract
 		annotations[ingest.CreatorIdentityAnnotation] = creator
 	} else if user := req.UserInfo.Username; user != "" {
 		annotations[ingest.CreatorIdentityAnnotation] = user
@@ -113,6 +133,71 @@ func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request)
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	return admission.PatchResponseFromRaw(req.Object.Raw, patched)
+}
+
+func (s SecurityEventStamper) validateCurrentInventoryAdmission(ctx context.Context, req admission.Request, raw string, oldEvent amtdv1beta1.SecurityEvent, oldPresent bool) (string, time.Time, string, error) {
+	payload, canonical, _, err := currentinventory.Parse(raw)
+	if err != nil {
+		return "", time.Time{}, "", err
+	}
+	event, err := disclosureEvent(req.Object.Raw)
+	if err != nil {
+		return "", time.Time{}, "", err
+	}
+	if event.Spec.Rule.Type != model.CurrentInventoryRuleType || event.Spec.Rule.Source != model.CurrentInventorySource || event.Spec.Rule.ThreatLevel != "high" || len(event.Spec.Rule.Match) != 0 || event.Spec.Rule.ScoreThreshold != nil || event.Spec.AnomalyScore != nil || len(event.Spec.Metrics) != 0 || event.Spec.Evidence != nil || event.Spec.Description != model.CurrentInventoryDescription {
+		return "", time.Time{}, "", errors.New("unexpected current-inventory rule")
+	}
+	wantTarget := payload.DecisionAsset.Namespace + "/" + payload.DecisionAsset.Name
+	if len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != wantTarget {
+		return "", time.Time{}, "", errors.New("SecurityEvent target does not match current inventory target")
+	}
+	if oldPresent {
+		oldRaw := oldEvent.Annotations[currentinventory.Annotation]
+		if oldRaw == "" || !currentinventory.EqualPayload(oldRaw, raw) || len(oldEvent.Spec.Targets) != 1 || oldEvent.Spec.Targets[0] != event.Spec.Targets[0] || !reflect.DeepEqual(oldEvent.Spec.Rule, event.Spec.Rule) {
+			return "", time.Time{}, "", errors.New("current-inventory evidence is immutable")
+		}
+		admittedAt, err := time.Parse(time.RFC3339Nano, oldEvent.Annotations[currentinventory.AdmissionTimeAnnotation])
+		creator := oldEvent.Annotations[ingest.CreatorIdentityAnnotation]
+		if err != nil || oldEvent.Annotations[currentinventory.AdmissionContractAnnotation] != currentinventory.BoundaryContract || creator == "" || creator != payload.Classification.ObserverIdentity || !ingest.CurrentInventoryTrust().Allows(creator) || req.UserInfo.Username != creator {
+			return "", time.Time{}, "", errors.New("current-inventory admission authority is invalid")
+		}
+		return string(canonical), admittedAt, creator, nil
+	}
+	if !ingest.CurrentInventoryTrust().Allows(req.UserInfo.Username) || payload.Classification.ObserverIdentity != req.UserInfo.Username || s.Reader == nil {
+		return "", time.Time{}, "", errors.New("authenticated creator is not an allowed current inventory observer")
+	}
+	var policy v1alpha1.PhorvexPolicy
+	if err := s.Reader.Get(ctx, types.NamespacedName{Namespace: payload.PolicyEpoch.Namespace, Name: payload.PolicyEpoch.Name}, &policy); err != nil || string(policy.UID) != payload.PolicyEpoch.UID || policy.Generation != payload.PolicyEpoch.Generation {
+		return "", time.Time{}, "", errors.New("policy epoch is not current")
+	}
+	tenant := policy.Spec.Tenant
+	if tenant == "" {
+		tenant = policy.Namespace
+	}
+	if tenant != payload.ProtectedScope.Tenant {
+		return "", time.Time{}, "", errors.New("policy tenant does not match protected scope")
+	}
+	var pod corev1.Pod
+	var cm corev1.ConfigMap
+	if err := s.Reader.Get(ctx, client.ObjectKey{Namespace: payload.DecisionAsset.Namespace, Name: payload.DecisionAsset.Name}, &pod); err != nil || string(pod.UID) != payload.DecisionAsset.TargetUID {
+		return "", time.Time{}, "", errors.New("target Pod identity is not current")
+	}
+	if err := s.Reader.Get(ctx, client.ObjectKey{Namespace: payload.SourceBinding.ConfigMap.Namespace, Name: payload.SourceBinding.ConfigMap.Name}, &cm); err != nil || string(cm.UID) != payload.SourceBinding.ConfigMap.UID || cm.ResourceVersion != payload.SourceBinding.ResourceVersion {
+		return "", time.Time{}, "", errors.New("ConfigMap source identity is not current")
+	}
+	binding, err := currentinventory.BindingFor(&pod, &cm, payload.SourceBinding.Key, payload.SourceBinding.VolumeName, payload.SourceBinding.ContainerName, payload.SourceBinding.MountPath, payload.SourceBinding.ProjectedPath)
+	immediate, stable, ownerErr := ingest.ResolveStableWorkloadOwner(ctx, s.Reader, payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
+	if err != nil || ownerErr != nil || !currentinventory.SameBinding(binding, payload.SourceBinding) || immediate != payload.ImmediateController || stable != payload.StableWorkloadOwner {
+		return "", time.Time{}, "", errors.New("current inventory source binding is not current")
+	}
+	now := time.Now().UTC()
+	if s.Now != nil {
+		now = s.Now().UTC()
+	}
+	if payload.Observation.CompletedAt.After(now) || !now.Before(payload.Observation.ValidUntil) {
+		return "", time.Time{}, "", errors.New("current inventory observation is not current")
+	}
+	return string(canonical), now, req.UserInfo.Username, nil
 }
 
 func disclosureEvent(raw []byte) (amtdv1beta1.SecurityEvent, error) {

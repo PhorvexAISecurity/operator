@@ -18,6 +18,7 @@ import (
 const (
 	Version                    = "m100-representation-v1"
 	VersionCompletedDisclosure = "m100-representation-v2"
+	VersionCurrentInventory    = "m100-representation-v3"
 )
 
 // Key preserves the original recon key with unambiguous tenant qualification.
@@ -163,6 +164,11 @@ func Build(input model.RepresentationSnapshot) *model.Representation {
 			}
 		}
 	}
+	for _, f := range s.Facts {
+		if f.CurrentInventory != nil {
+			version = VersionCurrentInventory
+		}
+	}
 	r := &model.Representation{Version: version, Snapshot: s, LossHistoryStatus: status(s.HistoryStatus), LossAssessment: status(s.LossAssessment), OutOfBand: "unmeasured", EffectEvidence: "unconfirmed", Note: "Modeled reporting only; no containment authorization. Known counts describe recorded evidence, not loss magnitude or unknown attacks."}
 	if s.LossMappingVersion == "" {
 		r.LossAssessment = "unavailable"
@@ -241,7 +247,18 @@ func Build(input model.RepresentationSnapshot) *model.Representation {
 		} else {
 			population[k] = f
 		}
-		if inScope(f.Scope, s.Scope) {
+		currentCandidate := f.CurrentInventory != nil
+		currentJoin := currentCandidate && f.CurrentInventory.SchemaVersion == model.AdmittedCurrentInventorySchemaV1 &&
+			f.CurrentInventory.PolicyUID == s.HistoryPolicyUID && f.CurrentInventory.StableOwnerUID == s.HistoryStableOwnerUID &&
+			f.CurrentInventory.PolicyGeneration > 0 && f.CurrentInventory.PolicyGeneration == s.HistoryPolicyGeneration && f.Scope.Tenant == s.Scope.Tenant &&
+			f.CurrentInventory.PodUID != "" && f.CurrentInventory.ConfigMapUID != "" &&
+			f.CurrentInventory.ConfigMapResourceVersion != "" && validSHA256(f.CurrentInventory.CanonicalPayloadSHA256) && f.CurrentInventory.SecurityEventUID != "" &&
+			f.CurrentInventory.EvidenceID != "" && f.Kind == model.CurrentInventoryClass && f.RuleVersion == model.CurrentInventoryRuleVersionV1 &&
+			f.Key == "current:"+lossID(f.Scope) && f.ObservationRef == f.CurrentInventory.SecurityEventUID+"/"+f.CurrentInventory.CanonicalPayloadSHA256
+		if currentCandidate && !currentJoin {
+			f.Reason = "current-inventory-provenance-invalid"
+		}
+		if inScope(f.Scope, s.Scope) || currentCandidate {
 			if _, ok := facts[k]; !ok {
 				facts[k] = f
 			}

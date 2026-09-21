@@ -121,9 +121,10 @@ func (t TrustedDetectors) List() []string {
 }
 
 var (
-	trustMu           sync.RWMutex
-	trustedDetects    TrustedDetectors
-	trustedLossActors TrustedDetectors
+	trustMu                       sync.RWMutex
+	trustedDetects                TrustedDetectors
+	trustedLossActors             TrustedDetectors
+	trustedCurrentInventoryActors TrustedDetectors
 )
 
 // ConfigureEventTrust installs the detector allowlist process-wide (from --trusted-detectors).
@@ -153,6 +154,18 @@ func CompletedDisclosureTrust() TrustedDetectors {
 	trustMu.RLock()
 	defer trustMu.RUnlock()
 	return trustedLossActors
+}
+
+func ConfigureCurrentInventoryTrust(t TrustedDetectors) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	trustedCurrentInventoryActors = t
+}
+
+func CurrentInventoryTrust() TrustedDetectors {
+	trustMu.RLock()
+	defer trustMu.RUnlock()
+	return trustedCurrentInventoryActors
 }
 
 // classifyEvent returns the trust verdict for an event's stamped creator identity.

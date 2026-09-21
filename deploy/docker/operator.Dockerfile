@@ -69,6 +69,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -a -o /loss-observer ./cmd/loss-observer
 
+# Independently authenticated one-shot synthetic current-inventory observer.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -a -o /current-inventory-observer ./cmd/current-inventory-observer
+
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
@@ -76,5 +80,6 @@ COPY --from=builder /manager .
 COPY --from=builder /phorvex-recovery .
 COPY --from=builder /phorvex-mig-allocation-helper .
 COPY --from=builder /loss-observer .
+COPY --from=builder /current-inventory-observer .
 USER 65532:65532
 ENTRYPOINT ["/manager"]

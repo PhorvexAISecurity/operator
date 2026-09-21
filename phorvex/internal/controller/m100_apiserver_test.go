@@ -2,8 +2,18 @@ package controller
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/currentinventory"
+	"github.com/phorvex/phorvex/internal/currentobserver"
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
@@ -51,14 +63,20 @@ func m100InstalledWebhook() *admissionv1.MutatingWebhookConfiguration {
 	failure, sideEffects, scope := admissionv1.Fail, admissionv1.SideEffectClassNone, admissionv1.ClusterScope
 	path := securityEventStampPath
 	return &admissionv1.MutatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{Name: "m100-completed-disclosure", Annotations: map[string]string{disclosure.BoundaryContractAnnotation: disclosure.BoundaryContract}},
+		ObjectMeta: metav1.ObjectMeta{Name: "m100-completed-disclosure", Annotations: map[string]string{disclosure.BoundaryContractAnnotation: disclosure.BoundaryContract, currentinventory.BoundaryContractAnnotation: currentinventory.BoundaryContract}},
 		Webhooks: []admissionv1.MutatingWebhook{{
 			Name: "stamp-completed-disclosures.phorvex.ai", FailurePolicy: &failure, SideEffects: &sideEffects,
 			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: ingest.CompletedDisclosureMatch}},
 			ClientConfig: admissionv1.WebhookClientConfig{Service: &admissionv1.ServiceReference{Namespace: "system", Name: "phorvex-webhook", Path: &path}},
 			Rules: []admissionv1.RuleWithOperations{{Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update},
 				Rule: admissionv1.Rule{APIGroups: []string{"amtd.r6security.com"}, APIVersions: []string{"v1beta1"}, Resources: []string{"securityevents"}, Scope: &scope}}},
-		}},
+		}, {
+			Name: "stamp-current-protected-inventory.phorvex.ai", FailurePolicy: &failure, SideEffects: &sideEffects,
+			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "current", Expression: ingest.CurrentInventoryMatch}},
+			ClientConfig: admissionv1.WebhookClientConfig{Service: &admissionv1.ServiceReference{Namespace: "system", Name: "phorvex-webhook", Path: &path}},
+			Rules:        []admissionv1.RuleWithOperations{{Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update}, Rule: admissionv1.Rule{APIGroups: []string{"amtd.r6security.com"}, APIVersions: []string{"v1beta1"}, Resources: []string{"securityevents"}, Scope: &scope}}},
+		},
+		},
 	}
 }
 
@@ -73,13 +91,66 @@ func m100ImpersonatedClient(t *testing.T, cfg *rest.Config, scheme *runtime.Sche
 	return c
 }
 
+func m100CurrentAPICA(t *testing.T) (*x509.Certificate, *ecdsa.PrivateKey, *x509.CertPool) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "m100-current-api-ca"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign}
+	raw, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := x509.ParseCertificate(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(ca)
+	return ca, key, pool
+}
+
+func m100CurrentAPILeaf(t *testing.T, ca *x509.Certificate, caKey *ecdsa.PrivateKey, dns string, usage x509.ExtKeyUsage) tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: dns}, DNSNames: []string{dns}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{usage}}
+	raw, err := x509.CreateCertificate(rand.Reader, tmpl, ca, &key.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := tls.X509KeyPair(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: raw}), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: private}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cert
+}
+
 func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires isolated envtest API server")
 	}
 	observerIdentity := "system:serviceaccount:ns:loss-observer"
+	currentObserverIdentity := "system:serviceaccount:ns:current-observer"
 	ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors([]string{observerIdentity, "system:serviceaccount:ns:other-observer"}))
 	t.Cleanup(func() { ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors(nil)) })
+	ingest.ConfigureCurrentInventoryTrust(ingest.NewTrustedDetectors([]string{currentObserverIdentity}))
+	t.Cleanup(func() { ingest.ConfigureCurrentInventoryTrust(ingest.NewTrustedDetectors(nil)) })
+	// Deliberately overlap the generic detector allowlist. Dedicated inventory
+	// evidence must remain report-only despite this operator misconfiguration.
+	ingest.ConfigureEventTrust(ingest.NewTrustedDetectors([]string{currentObserverIdentity}))
+	t.Cleanup(func() { ingest.ConfigureEventTrust(ingest.NewTrustedDetectors(nil)) })
 
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{clientgoscheme.AddToScheme, v1alpha1.AddToScheme, amtdv1beta1.AddToScheme} {
@@ -130,24 +201,26 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	observerName := "loss-observer"
 	otherObserverName := "other-observer"
 	untrustedName := "untrusted-writer"
-	for _, name := range []string{observerName, otherObserverName, untrustedName} {
+	currentObserverName := "current-observer"
+	for _, name := range []string{observerName, otherObserverName, untrustedName, currentObserverName} {
 		if err := admin.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "m100-observer"}, Rules: []rbacv1.PolicyRule{
-		{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"pods", "configmaps"}, Verbs: []string{"get"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"replicasets", "deployments", "statefulsets", "daemonsets"}, Verbs: []string{"get"}},
+		{APIGroups: []string{"phorvex.ai"}, Resources: []string{"phorvexpolicies"}, Verbs: []string{"get"}},
 	}}
 	roleBinding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "m100-observer"},
 		RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: role.Name},
-		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}}}
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}, {Kind: "ServiceAccount", Namespace: "ns", Name: currentObserverName}}}
 	clusterRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "m100-observer"}, Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{"amtd.r6security.com"}, Resources: []string{"securityevents"}, Verbs: []string{"create", "get", "update"}},
 	}}
 	clusterBinding := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "m100-observer"},
 		RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: clusterRole.Name},
-		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}, {Kind: "ServiceAccount", Namespace: "ns", Name: untrustedName}}}
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}, {Kind: "ServiceAccount", Namespace: "ns", Name: untrustedName}, {Kind: "ServiceAccount", Namespace: "ns", Name: currentObserverName}}}
 	for _, object := range []client.Object{role, roleBinding, clusterRole, clusterBinding} {
 		if err := admin.Create(ctx, object); err != nil {
 			t.Fatal(err)
@@ -278,8 +351,11 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	// production endpoint shape for the boundary transaction; UID, RV, creation
 	// time, fail-closed policy and the event itself all came from the real API.
 	productionBoundary := *actualBoundary.DeepCopy()
-	productionBoundary.Webhooks[0].ClientConfig = m100InstalledWebhook().Webhooks[0].ClientConfig
-	productionBoundary.Webhooks[0].ClientConfig.CABundle = env.WebhookInstallOptions.LocalServingCAData
+	productionShape := m100InstalledWebhook()
+	for i := range productionBoundary.Webhooks {
+		productionBoundary.Webhooks[i].ClientConfig = productionShape.Webhooks[i].ClientConfig
+		productionBoundary.Webhooks[i].ClientConfig.CABundle = env.WebhookInstallOptions.LocalServingCAData
+	}
 	reader := m100BoundaryReader{Reader: admin, boundary: productionBoundary}
 	store, err := losshistory.New(filepath.Join(t.TempDir(), "history"))
 	if err != nil {
@@ -295,6 +371,68 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	}
 	if result.Records[0].Disclosure.PolicyEpoch.Generation != admittedGeneration || result.Records[0].Disclosure.PolicyEpoch.Generation == policyObject.Generation {
 		t.Fatalf("admitted historical epoch was not preserved across policy update: record=%d admitted=%d current=%d", result.Records[0].Disclosure.PolicyEpoch.Generation, admittedGeneration, policyObject.Generation)
+	}
+
+	// Replace the workload under the same stable Deployment and independently
+	// observe only a serving manifest for mounted data-v2 bytes.
+	currentBytes := []byte("synthetic-data-v2")
+	currentSum := sha256.Sum256(currentBytes)
+	currentCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "current-data"}, BinaryData: map[string][]byte{"payload": currentBytes}}
+	if err := admin.Create(ctx, currentCM); err != nil {
+		t.Fatal(err)
+	}
+	newRS := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "app-rs-v2", OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "Deployment", Name: dep.Name, UID: dep.UID, Controller: &yes}}}, Spec: appsv1.ReplicaSetSpec{Selector: &metav1.LabelSelector{MatchLabels: labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: labels}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "server", Image: "example.invalid/current"}}}}}}
+	if err := admin.Create(ctx, newRS); err != nil {
+		t.Fatal(err)
+	}
+	newPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "new-pod", Labels: labels, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: newRS.Name, UID: newRS.UID, Controller: &yes}}}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{Name: "data", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: currentCM.Name}}}}}, Containers: []corev1.Container{{Name: "server", Image: "example.invalid/current", VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data", ReadOnly: true}}}}}}
+	if err := admin.Create(ctx, newPod); err != nil {
+		t.Fatal(err)
+	}
+	manifestCA, manifestCAKey, manifestRoots := m100CurrentAPICA(t)
+	manifestServerCert := m100CurrentAPILeaf(t, manifestCA, manifestCAKey, "current.test", x509.ExtKeyUsageServerAuth)
+	manifestClientCert := m100CurrentAPILeaf(t, manifestCA, manifestCAKey, "current-observer.test", x509.ExtKeyUsageClientAuth)
+	manifestServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/inventory/v2" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `{"schemaVersion":%q,"version":"data-v2","bytes":%d,"sha256":%q}`, model.CurrentInventorySchemaV1, len(currentBytes), hex.EncodeToString(currentSum[:]))
+	}))
+	manifestServer.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{manifestServerCert}, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: manifestRoots, VerifyConnection: func(state tls.ConnectionState) error {
+		if len(state.PeerCertificates) != 1 {
+			return errors.New("current observer client certificate chain is not singular")
+		}
+		return state.PeerCertificates[0].VerifyHostname("current-observer.test")
+	}}
+	manifestServer.StartTLS()
+	defer manifestServer.Close()
+	manifestClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: manifestRoots, ServerName: "current.test", Certificates: []tls.Certificate{manifestClientCert}}}, Timeout: 5 * time.Second}
+	currentClient := m100ImpersonatedClient(t, cfg, scheme, currentObserverIdentity)
+	currentEvent, err := currentobserver.ObserveOnce(ctx, currentClient, manifestClient, currentobserver.Config{URL: manifestServer.URL + "/inventory/v2", PolicyEpoch: model.PolicyEpoch{Namespace: "ns", Name: "policy", UID: string(policyObject.UID), Generation: policyObject.Generation}, TargetNamespace: "ns", TargetName: newPod.Name, TargetUID: string(newPod.UID), ConfigMapName: currentCM.Name, ConfigMapKey: "payload", VolumeName: "data", ContainerName: "server", MountPath: "/data", ProjectedPath: "payload", ProtectedScope: model.ProtectedScope{Tenant: "tenant", Asset: "synthetic/customer-row", Version: "data-v2", Property: "confidentiality"}, EvidenceID: "current-v2", RuleDigest: strings.Repeat("b", 64), ObserverIdentity: currentObserverIdentity, TTL: time.Minute, Timeout: 10 * time.Second}, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if currentEvent.UID == "" || currentEvent.Annotations[currentinventory.AdmissionContractAnnotation] != currentinventory.BoundaryContract {
+		t.Fatalf("current admission missing: %#v", currentEvent.Annotations)
+	}
+	currentSnapshot, err := ingest.CollectSnapshot(ctx, admin, time.Now(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := currentSnapshot.EventByPod["ns/"+newPod.Name]; len(got) != 0 {
+		t.Fatalf("actual current inventory producer entered threat evidence: %+v", got)
+	}
+	// A malformed unrelated stored row is rejected locally. It does not turn a
+	// separately admitted, exact current observation into a global authority gap.
+	currentSnapshot.Events = append(currentSnapshot.Events, model.SecurityEventInfo{Name: "malformed-unrelated-current", CurrentInventoryRaw: "{"})
+	currentStore := currentinventory.NewStore()
+	if gaps := ingest.AdmitCurrentInventory(ctx, reader, currentStore, currentSnapshot.Events, policy, time.Now(), logr.Discard()); len(gaps) != 0 {
+		t.Fatalf("actual current inventory gaps: %v", gaps)
+	}
+	currentResult := currentStore.Query(policy.PolicyUID, string(dep.UID), time.Now())
+	if currentResult.Status != "available" || len(currentResult.Records) != 1 || currentResult.Records[0].SecurityEvent.UID != string(currentEvent.UID) {
+		t.Fatalf("actual current inventory missing: %#v", currentResult)
 	}
 
 	if got := store.Query(policy.PolicyUID, string(dep.UID)); len(got.Records) != 1 {

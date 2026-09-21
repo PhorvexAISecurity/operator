@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
@@ -92,6 +93,9 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			CompletedDisclosureRaw:               se.Annotations[disclosure.Annotation],
 			CompletedDisclosureAdmittedAt:        se.Annotations[disclosure.AdmissionTimeAnnotation],
 			CompletedDisclosureAdmissionContract: se.Annotations[disclosure.AdmissionContractAnnotation],
+			CurrentInventoryRaw:                  se.Annotations[currentinventory.Annotation],
+			CurrentInventoryAdmittedAt:           se.Annotations[currentinventory.AdmissionTimeAnnotation],
+			CurrentInventoryAdmissionContract:    se.Annotations[currentinventory.AdmissionContractAnnotation],
 			TimestampMissing:                     missing,
 			Type:                                 se.Spec.Rule.Type,
 			ThreatLevel:                          se.Spec.Rule.ThreatLevel,
@@ -123,6 +127,13 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			}
 		}
 		all = append(all, base)
+		// Dedicated current-inventory events feed only the independently admitted
+		// reporting ledger. Even if an operator accidentally also allowlists the
+		// observer as a generic detector, its required high severity must never
+		// become kill-chain evidence or change PHold, ranking, or cadence.
+		if base.CurrentInventoryRaw != "" && base.Type == model.CurrentInventoryRuleType && base.Source == model.CurrentInventorySource {
+			continue
+		}
 		if trust != TrustTrusted {
 			continue // recorded above; an unauthenticated detector supplies no belief evidence
 		}

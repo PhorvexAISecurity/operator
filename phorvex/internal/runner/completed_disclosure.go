@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
@@ -32,22 +34,26 @@ func (m *Manager) admitCompletedDisclosuresWithReader(ctx context.Context, reade
 }
 
 type representationHistoryInput struct {
-	owner  model.ObjectIdentity
-	result losshistory.Result
-	gaps   []string
+	owner          model.ObjectIdentity
+	result         losshistory.Result
+	current        currentinventory.Result
+	currentUnknown []model.RepresentationGap
+	gaps           []string
+	historyGaps    []string
 }
 
 type lossHistoryJob struct {
-	reader    client.Reader
-	store     losshistory.Ledger
-	decisions []model.Decision
-	versions  map[string]string
-	policy    model.Policy
-	events    []model.SecurityEventInfo
-	now       time.Time
-	timeout   time.Duration
-	log       logr.Logger
-	response  chan map[string]representationHistoryInput
+	reader       client.Reader
+	store        losshistory.Ledger
+	currentStore currentinventory.Ledger
+	decisions    []model.Decision
+	versions     map[string]string
+	policy       model.Policy
+	events       []model.SecurityEventInfo
+	now          time.Time
+	timeout      time.Duration
+	log          logr.Logger
+	response     chan map[string]representationHistoryInput
 }
 
 type lossHistoryCoordinator struct {
@@ -72,7 +78,18 @@ func (c *lossHistoryCoordinator) submit(job lossHistoryJob) bool {
 	go func() {
 		workCtx, cancel := context.WithTimeout(context.Background(), job.timeout)
 		gaps := ingest.AdmitCompletedDisclosures(workCtx, job.reader, job.store, job.events, job.policy, job.now, job.log)
-		histories := representationHistoryInputsWithStore(workCtx, job.reader, job.store, job.decisions, job.versions, job.policy, gaps)
+		var currentGaps []string
+		if job.currentStore != nil {
+			currentGaps = ingest.AdmitCurrentInventory(workCtx, job.reader, job.currentStore, job.events, job.policy, job.now, job.log)
+		}
+		histories := representationHistoryInputsWithStores(workCtx, job.reader, job.store, job.currentStore, job.decisions, job.versions, job.policy, gaps, job.now)
+		for key, entry := range histories {
+			entry.current.Gaps = append(entry.current.Gaps, currentGaps...)
+			if len(entry.current.Gaps) > 0 && entry.current.Status == "available" {
+				entry.current.Status = "partial"
+			}
+			histories[key] = entry
+		}
 		timedOut := workCtx.Err() != nil
 		cancel()
 		if timedOut {
@@ -100,28 +117,76 @@ func (m *Manager) representationHistoryInputs(ctx context.Context, decisions []m
 }
 
 func representationHistoryInputsWithStore(ctx context.Context, reader client.Reader, store losshistory.Ledger, decisions []model.Decision, versions map[string]string, p model.Policy, ingestGaps []string) map[string]representationHistoryInput {
+	return representationHistoryInputsWithStores(ctx, reader, store, nil, decisions, versions, p, ingestGaps, time.Now().UTC())
+}
+
+func representationHistoryInputsWithStores(ctx context.Context, reader client.Reader, store losshistory.Ledger, currentStore currentinventory.Ledger, decisions []model.Decision, versions map[string]string, p model.Policy, ingestGaps []string, now time.Time) map[string]representationHistoryInput {
 	out := make(map[string]representationHistoryInput, len(decisions))
 	for _, d := range decisions {
 		key := d.Namespace + "/" + d.Pod
-		entry := representationHistoryInput{gaps: append([]string(nil), ingestGaps...)}
+		entry := representationHistoryInput{gaps: append([]string(nil), ingestGaps...), historyGaps: append([]string(nil), ingestGaps...)}
 		_, stable, err := ingest.ResolveStableWorkloadOwner(ctx, reader, d.Namespace, d.Pod, versions[key])
 		if err != nil {
 			entry.result = losshistory.Result{Status: "unavailable", Gaps: []string{"stable-workload-owner-unavailable"}}
 			entry.gaps = append(entry.gaps, fmt.Sprintf("stable-workload-owner-unavailable:%s", key))
+			entry.historyGaps = append(entry.historyGaps, fmt.Sprintf("stable-workload-owner-unavailable:%s", key))
 			out[key] = entry
 			continue
 		}
 		entry.owner = stable
-		entry.result = store.Query(p.PolicyUID, stable.UID)
+		if store != nil {
+			entry.result = store.Query(p.PolicyUID, stable.UID)
+		} else {
+			entry.result = losshistory.Result{Status: "unavailable", Gaps: []string{"retained-loss-history-source-unavailable"}}
+		}
 		filtered := entry.result.Records[:0]
 		for _, record := range entry.result.Records {
 			if record.Disclosure.ProtectedScope.Tenant != p.Tenant {
 				entry.gaps = append(entry.gaps, "retained-loss-history-current-tenant-mismatch:"+record.Disclosure.EvidenceID)
+				entry.historyGaps = append(entry.historyGaps, "retained-loss-history-current-tenant-mismatch:"+record.Disclosure.EvidenceID)
 				continue
 			}
 			filtered = append(filtered, record)
 		}
 		entry.result.Records = filtered
+		if currentStore != nil {
+			entry.current = currentStore.Query(p.PolicyUID, stable.UID, now)
+			kept := entry.current.Records[:0]
+			for _, record := range entry.current.Records {
+				inv := record.Inventory
+				if inv.PolicyEpoch.Generation != p.PolicyGeneration || inv.ProtectedScope.Tenant != p.Tenant || inv.DecisionAsset.Namespace != d.Namespace || inv.DecisionAsset.Name != d.Pod || inv.DecisionAsset.TargetUID != versions[key] || inv.StableWorkloadOwner != stable {
+					entry.gaps = append(entry.gaps, "current-inventory-current-binding-mismatch:"+inv.EvidenceID)
+					entry.currentUnknown = append(entry.currentUnknown, model.RepresentationGap{Scope: inv.ProtectedScope, Kind: model.CurrentInventoryClass, Reason: "current-inventory-current-binding-mismatch"})
+					continue
+				}
+				var pod corev1.Pod
+				var cm corev1.ConfigMap
+				if reader.Get(ctx, client.ObjectKey{Namespace: inv.DecisionAsset.Namespace, Name: inv.DecisionAsset.Name}, &pod) != nil || string(pod.UID) != inv.DecisionAsset.TargetUID || reader.Get(ctx, client.ObjectKey{Namespace: inv.SourceBinding.ConfigMap.Namespace, Name: inv.SourceBinding.ConfigMap.Name}, &cm) != nil || string(cm.UID) != inv.SourceBinding.ConfigMap.UID || cm.ResourceVersion != inv.SourceBinding.ResourceVersion {
+					entry.gaps = append(entry.gaps, "current-inventory-source-changed:"+inv.EvidenceID)
+					entry.currentUnknown = append(entry.currentUnknown, model.RepresentationGap{Scope: inv.ProtectedScope, Kind: model.CurrentInventoryClass, Reason: "current-inventory-source-changed"})
+					continue
+				}
+				binding, bindErr := currentinventory.BindingFor(&pod, &cm, inv.SourceBinding.Key, inv.SourceBinding.VolumeName, inv.SourceBinding.ContainerName, inv.SourceBinding.MountPath, inv.SourceBinding.ProjectedPath)
+				immediate, currentStable, ownerErr := ingest.ResolveStableWorkloadOwner(ctx, reader, inv.DecisionAsset.Namespace, inv.DecisionAsset.Name, inv.DecisionAsset.TargetUID)
+				if bindErr != nil || ownerErr != nil || !currentinventory.SameBinding(binding, inv.SourceBinding) || immediate != inv.ImmediateController || currentStable != inv.StableWorkloadOwner {
+					entry.gaps = append(entry.gaps, "current-inventory-live-binding-mismatch:"+inv.EvidenceID)
+					entry.currentUnknown = append(entry.currentUnknown, model.RepresentationGap{Scope: inv.ProtectedScope, Kind: model.CurrentInventoryClass, Reason: "current-inventory-live-binding-mismatch"})
+					continue
+				}
+				kept = append(kept, record)
+			}
+			latest := make(map[model.ProtectedScope]model.AdmittedCurrentInventory, len(kept))
+			for _, record := range kept {
+				prior, ok := latest[record.Inventory.ProtectedScope]
+				if !ok || record.Inventory.Observation.CompletedAt.After(prior.Inventory.Observation.CompletedAt) {
+					latest[record.Inventory.ProtectedScope] = record
+				}
+			}
+			entry.current.Records = entry.current.Records[:0]
+			for _, record := range latest {
+				entry.current.Records = append(entry.current.Records, record)
+			}
+		}
 		out[key] = entry
 	}
 	return out
@@ -133,16 +198,16 @@ func unavailableHistoryInputs(decisions []model.Decision, gap string) map[string
 		key := d.Namespace + "/" + d.Pod
 		out[key] = representationHistoryInput{
 			result: losshistory.Result{Status: "unavailable", Gaps: []string{gap}},
-			gaps:   []string{gap + ":" + key},
+			gaps:   []string{gap + ":" + key}, historyGaps: []string{gap + ":" + key},
 		}
 	}
 	return out
 }
 
-// prepareRepresentationSnapshots gives all optional loss-history API and
-// durable-store work one singleflight worker separate from the tick. Timeout
-// degrades the retained-history assessment explicitly while leaving the
-// original context and actuation path available.
+// prepareRepresentationSnapshots gives all optional completed-history and
+// current-inventory API/store work one singleflight worker separate from the
+// tick. Timeout degrades the assessment explicitly while leaving the original
+// context and actuation path available.
 func (m *Manager) prepareRepresentationSnapshots(
 	ctx context.Context,
 	decisions []model.Decision,
@@ -153,7 +218,7 @@ func (m *Manager) prepareRepresentationSnapshots(
 	events []model.SecurityEventInfo,
 	now time.Time,
 ) ([]model.RepresentationSnapshot, map[string]representationHistoryInput, bool) {
-	if m.LossHistory == nil {
+	if m.LossHistory == nil && m.CurrentInventory == nil {
 		snapshots, complete := representationSnapshotsBeforeEffect(ctx, decisions, p, versions, claim, inventory)
 		return snapshots, nil, complete
 	}
@@ -182,7 +247,7 @@ func (m *Manager) prepareRepresentationSnapshots(
 		eventCopy[i].UnresolvedTargets = append([]string(nil), eventCopy[i].UnresolvedTargets...)
 	}
 	response := make(chan map[string]representationHistoryInput, 1)
-	job := lossHistoryJob{reader: m.lossHistoryReader(), store: m.LossHistory, decisions: decisionCopy, versions: versionCopy,
+	job := lossHistoryJob{reader: m.lossHistoryReader(), store: m.LossHistory, currentStore: m.CurrentInventory, decisions: decisionCopy, versions: versionCopy,
 		policy: p, events: eventCopy, now: now, timeout: timeout, log: m.Log, response: response}
 	if !m.getLossHistoryCoordinator().submit(job) {
 		histories := unavailableHistoryInputs(decisions, "retained-loss-history-worker-busy")

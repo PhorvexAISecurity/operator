@@ -134,6 +134,15 @@ spec:
         {{- if eq (len $lossObservers) 0 }}{{ fail "phorvex.lossHistory.trustedObservers is required when enabled" }}{{- end }}
         - --loss-history-dir={{ .Values.phorvex.lossHistory.mountPath }}
         - --trusted-loss-observers={{ join "," $lossObservers }}
+        {{- if .Values.phorvex.lossHistory.currentInventory.enabled }}
+        {{- $currentObservers := .Values.phorvex.lossHistory.currentInventory.trustedObservers | default list }}
+        {{- if .Values.phorvex.lossHistory.currentInventory.observer.enabled }}
+        {{- $currentObserverName := printf "%s-current-inventory-observer" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" }}
+        {{- $currentObservers = append $currentObservers (printf "%s/%s" .Release.Namespace $currentObserverName) }}
+        {{- end }}
+        {{- if eq (len $currentObservers) 0 }}{{ fail "phorvex.lossHistory.currentInventory.trustedObservers is required when enabled" }}{{- end }}
+        - --trusted-current-inventory-observers={{ join "," $currentObservers }}
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.audit.enabled }}
         {{- $auditMaxBytesText := toString .Values.phorvex.audit.maxBytes }}
