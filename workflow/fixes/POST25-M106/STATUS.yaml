@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 8
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,6 +15,14 @@ checks:
     source_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
     at: '2026-09-20T23:24:23+00:00'
     contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e9fc7e3f2264a97dc2bb9d8eded749ae35c544ac1cee713767a8b4971196bafd
+    source_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
+    at: '2026-09-21T00:37:50+00:00'
     approval_ref: AUTHORIZATION.md
 fix_id: POST25-M106
 issues:
@@ -45,7 +53,7 @@ blind_derivation:
 implementation:
   branch: post25-m106
   base_sha: 1fc39b7ed1d300673295be513206552e90c5e3c7
-  head_sha: 9fbcbf0d0ae16553fc1070d92fb5d597f22e9e32
+  head_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
   stacked_on: []
 pull_request:
   url: null
@@ -84,7 +92,7 @@ residuals: []
 next_action:
   owner: sol-post25-economics
   action: Implement signed contract now
-updated_at: '2026-09-21T00:04:26+00:00'
+updated_at: '2026-09-21T00:37:50+00:00'
 configuration_history:
 - at: '2026-09-20T23:23:41+00:00'
   by: codex-lead
@@ -102,6 +110,11 @@ configuration_history:
   - implementation
   approval_ref: AUTHORIZATION.md
 - at: '2026-09-21T00:04:26+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:23:55+00:00'
   by: sol-post25-economics
   fields:
   - implementation
