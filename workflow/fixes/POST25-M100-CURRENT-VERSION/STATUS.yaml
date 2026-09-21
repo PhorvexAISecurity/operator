@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 16
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -116,12 +116,19 @@ checks:
     source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
     at: '2026-09-21T05:43:13+00:00'
     incident_sha256: 42823e318dbad8b922a2c39d6dd192c847109a0816dd933ead92a0bf92d98a1f
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.md
+    sha256: fff4696e2bba0bc5734b1d0c421b23a6eb496fa8759d7863be393c21935d72b2
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:46:44+00:00'
 fix_id: POST25-M100-CURRENT-VERSION
 issues:
 - M-100
 title: Bind current protected version evidence
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -149,8 +156,8 @@ implementation:
   stacked_on:
   - POST25-M100
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/261
+  reviewed_head: 7b2f64583fca88033f1ce55a622d0158cbd851be
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -183,10 +190,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-21T05:43:17+00:00'
+  owner: codex-lead
+  action: PR261 open main; controlled current-version live lifecycle pending; M100
+    remains OPEN
+updated_at: '2026-09-21T05:46:44+00:00'
 follow_up_to: POST25-M100
 configuration_history:
 - at: '2026-09-21T04:13:09+00:00'
@@ -213,6 +220,11 @@ configuration_history:
   by: sol-post25-economics
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-21T05:46:03+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -262,6 +274,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T05:46:44+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: red
