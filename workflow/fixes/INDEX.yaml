@@ -1394,9 +1394,9 @@ fixes:
     issues:
     - M-170
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on:
     - POST25-M043
     branch: post25-session-gvk
-    head_sha: null
+    head_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
