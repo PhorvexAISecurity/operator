@@ -205,99 +205,44 @@ func TestRealThreeMemberClusterPreservesAcknowledgedMessageAcrossMemberRestart(t
 	cfg := testConfig(cluster.clientURLs())
 	cfg.Replicas = 3
 	cfg.RequestTimeout = 3 * time.Second
-	cfg.RequestTimeout = 3 * time.Second
 	cfg.FetchTimeout = 400 * time.Millisecond
 	probe, err := Open(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(probe.Close)
-	before, err := probe.WaitCurrentReplicas(t.Context(), 10*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(before.Stream.Members) != 3 || len(before.Consumer.Members) != 3 {
-		t.Fatalf("baseline replication=%+v", before)
-	}
 	idsBefore := cluster.serverIDs()
 	if len(idsBefore) != 3 || idsBefore[0] == idsBefore[1] || idsBefore[1] == idsBefore[2] {
 		t.Fatalf("server IDs are not exact and distinct: %v", idsBefore)
 	}
-
-	messageA := Message{ID: "restart-a", Payload: []byte("nonce-bound-restart-payload-a")}
-	ackA, err := probe.Publish(t.Context(), messageA, false, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := probe.ConsumeAndAck(t.Context(), messageA, ackA.Sequence); err != nil {
-		t.Fatal(err)
-	}
-	if err := probe.RequireNoSameConsumerRedelivery(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := probe.GetStored(t.Context(), messageA, ackA.Sequence); err != nil {
-		t.Fatal(err)
-	}
-
 	connectedID := probe.nc.ConnectedServerId()
 	restartIndex := -1
 	for i, member := range cluster.members {
-		if member.srv.ID() != connectedID && member.name != before.Stream.Leader {
+		if member.srv.ID() != connectedID {
 			restartIndex = i
 			break
 		}
 	}
 	if restartIndex < 0 {
-		for i, member := range cluster.members {
-			if member.srv.ID() != connectedID {
-				restartIndex = i
-				break
-			}
-		}
-	}
-	if restartIndex < 0 {
 		t.Fatal("no non-client member available for restart")
 	}
-	oldID, newID := cluster.restart(t, restartIndex)
-	if oldID == "" || newID == "" || oldID == newID {
-		t.Fatalf("restart IDs old=%q new=%q", oldID, newID)
-	}
-	after, err := probe.WaitCurrentReplicas(t.Context(), 10*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if before.Stream.Cluster != after.Stream.Cluster || before.Stream.Replicas != after.Stream.Replicas {
-		t.Fatalf("stream cluster identity changed: before=%+v after=%+v", before.Stream, after.Stream)
-	}
-	if _, err := probe.GetStored(t.Context(), messageA, ackA.Sequence); err != nil {
-		t.Fatalf("message A not stored after member restart: %v", err)
-	}
-
+	member := cluster.members[restartIndex]
+	storeHash := hash([]byte(member.storeDir))
+	messageA := Message{ID: "restart-a", Payload: []byte("nonce-bound-restart-payload-a")}
 	messageB := Message{ID: "restart-b", Payload: []byte("nonce-bound-restart-payload-b")}
-	ackB, err := probe.Publish(t.Context(), messageB, false, ackA.Sequence+1)
+	receipt, err := probe.RunRestartOracle(t.Context(), messageA, messageB, func(context.Context) (RestartBoundaryReceipt, error) {
+		oldID, newID := cluster.restart(t, restartIndex)
+		return RestartBoundaryReceipt{Member: member.name, OldProcessID: oldID, NewProcessID: newID, WorkloadUIDBefore: member.name, WorkloadUIDAfter: member.name, VolumeUIDBefore: storeHash, VolumeUIDAfter: storeHash, StorePathHashBefore: storeHash, StorePathHashAfter: storeHash}, nil
+	}, 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deliveryB, err := probe.ConsumeAndAck(t.Context(), messageB, ackB.Sequence)
-	if err != nil {
-		t.Fatal(err)
+	if len(receipt.Baseline.Stream.Members) != 3 || len(receipt.Baseline.Consumer.Members) != 3 || len(receipt.Recovered.Stream.Members) != 3 || len(receipt.Recovered.Consumer.Members) != 3 {
+		t.Fatalf("replication receipt=%+v", receipt)
 	}
-	if deliveryB.StreamSequence != ackB.Sequence || deliveryB.Deliveries != 1 {
-		t.Fatalf("message B delivery=%+v ack=%+v", deliveryB, ackB)
+	if receipt.MessageB.Sequence != receipt.MessageA.Sequence+1 || receipt.StoredBefore != receipt.StoredAfter || receipt.FinalState.Messages != 2 || receipt.FinalState.AckFloor < receipt.MessageB.Sequence {
+		t.Fatalf("restart oracle receipt=%+v", receipt)
 	}
-	if err := probe.RequireNoSameConsumerRedelivery(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(3 * time.Second)
-	var state StateReceipt
-	for time.Now().Before(deadline) {
-		state, err = probe.State(t.Context())
-		if err == nil && state.Messages == 2 && state.FirstSequence == ackA.Sequence && state.LastSequence == ackB.Sequence && state.AckFloor >= ackB.Sequence && state.AckPending == 0 && state.ConsumerRedelivered == 0 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatalf("post-restart state did not converge: state=%+v err=%v", state, err)
 }
 
 func TestWaitCurrentReplicasDoesNotTreatCancellationAsConvergence(t *testing.T) {
@@ -316,5 +261,27 @@ func TestWaitCurrentReplicasDoesNotTreatCancellationAsConvergence(t *testing.T) 
 	cancel()
 	if _, err := probe.WaitCurrentReplicas(ctx, time.Second); err == nil || !strings.Contains(err.Error(), "canceled") {
 		t.Fatalf("canceled replica gate passed: %v", err)
+	}
+}
+
+func TestRestartBoundaryRequiresChangedProcessAndStableStorageIdentity(t *testing.T) {
+	valid := RestartBoundaryReceipt{Member: "nats-2", OldProcessID: "old", NewProcessID: "new", WorkloadUIDBefore: "pod", WorkloadUIDAfter: "pod", VolumeUIDBefore: "pvc", VolumeUIDAfter: "pvc", StorePathHashBefore: "store", StorePathHashAfter: "store"}
+	if err := validateRestartBoundary(valid); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*RestartBoundaryReceipt){
+		"same process":   func(r *RestartBoundaryReceipt) { r.NewProcessID = r.OldProcessID },
+		"changed pod":    func(r *RestartBoundaryReceipt) { r.WorkloadUIDAfter = "replacement" },
+		"changed volume": func(r *RestartBoundaryReceipt) { r.VolumeUIDAfter = "foreign" },
+		"changed store":  func(r *RestartBoundaryReceipt) { r.StorePathHashAfter = "foreign" },
+		"missing member": func(r *RestartBoundaryReceipt) { r.Member = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			receipt := valid
+			mutate(&receipt)
+			if err := validateRestartBoundary(receipt); err == nil {
+				t.Fatalf("invalid restart boundary accepted: %+v", receipt)
+			}
+		})
 	}
 }

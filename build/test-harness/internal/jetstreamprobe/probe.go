@@ -101,6 +101,33 @@ type ReplicationReceipt struct {
 	Consumer ClusterReceipt `json:"consumer"`
 }
 
+type RestartBoundaryReceipt struct {
+	Member              string `json:"member"`
+	OldProcessID        string `json:"oldProcessID"`
+	NewProcessID        string `json:"newProcessID"`
+	WorkloadUIDBefore   string `json:"workloadUIDBefore"`
+	WorkloadUIDAfter    string `json:"workloadUIDAfter"`
+	VolumeUIDBefore     string `json:"volumeUIDBefore"`
+	VolumeUIDAfter      string `json:"volumeUIDAfter"`
+	StorePathHashBefore string `json:"storePathHashBefore"`
+	StorePathHashAfter  string `json:"storePathHashAfter"`
+}
+
+type RestartOracleReceipt struct {
+	Baseline     ReplicationReceipt     `json:"baseline"`
+	MessageA     PubAckReceipt          `json:"messageA"`
+	DeliveryA    DeliveryReceipt        `json:"deliveryA"`
+	StoredBefore StoredReceipt          `json:"storedBefore"`
+	Restart      RestartBoundaryReceipt `json:"restart"`
+	Recovered    ReplicationReceipt     `json:"recovered"`
+	StoredAfter  StoredReceipt          `json:"storedAfter"`
+	MessageB     PubAckReceipt          `json:"messageB"`
+	DeliveryB    DeliveryReceipt        `json:"deliveryB"`
+	FinalState   StateReceipt           `json:"finalState"`
+}
+
+type RestartMember func(context.Context) (RestartBoundaryReceipt, error)
+
 type Probe struct {
 	cfg            Config
 	nc             *nats.Conn
@@ -315,6 +342,102 @@ func (p *Probe) WaitCurrentReplicas(ctx context.Context, window time.Duration) (
 		select {
 		case <-deadline.Done():
 			return ReplicationReceipt{}, fmt.Errorf("replica convergence did not complete: %v: %w", last, deadline.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+// RunRestartOracle proves acknowledged-message storage and sequence continuity
+// across one caller-owned member restart. The callback is the only mutation
+// boundary; the probe validates that its workload, volume, and store identity
+// stayed exact while the process identity changed.
+func (p *Probe) RunRestartOracle(ctx context.Context, messageA, messageB Message, restart RestartMember, window time.Duration) (RestartOracleReceipt, error) {
+	if restart == nil || messageA.ID == "" || messageB.ID == "" || messageA.ID == messageB.ID {
+		return RestartOracleReceipt{}, errors.New("distinct messages and a restart boundary are required")
+	}
+	baseline, err := p.WaitCurrentReplicas(ctx, window)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	ackA, err := p.Publish(ctx, messageA, false, 0)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	deliveryA, err := p.ConsumeAndAck(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	storedBefore, err := p.GetStored(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	restartReceipt, err := restart(ctx)
+	if err != nil {
+		return RestartOracleReceipt{}, fmt.Errorf("restart exact fixture member: %w", err)
+	}
+	if err := validateRestartBoundary(restartReceipt); err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	recovered, err := p.WaitCurrentReplicas(ctx, window)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	if baseline.Stream.Cluster != recovered.Stream.Cluster || baseline.Stream.Replicas != recovered.Stream.Replicas || baseline.Consumer.Cluster != recovered.Consumer.Cluster || baseline.Consumer.Replicas != recovered.Consumer.Replicas {
+		return RestartOracleReceipt{}, errors.New("replication cluster identity changed across restart")
+	}
+	storedAfter, err := p.GetStored(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return RestartOracleReceipt{}, fmt.Errorf("read message A after restart: %w", err)
+	}
+	ackB, err := p.Publish(ctx, messageB, false, ackA.Sequence+1)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	deliveryB, err := p.ConsumeAndAck(ctx, messageB, ackB.Sequence)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	finalState, err := p.waitExactState(ctx, window, ackA.Sequence, ackB.Sequence)
+	if err != nil {
+		return RestartOracleReceipt{}, err
+	}
+	return RestartOracleReceipt{Baseline: baseline, MessageA: ackA, DeliveryA: deliveryA, StoredBefore: storedBefore, Restart: restartReceipt, Recovered: recovered, StoredAfter: storedAfter, MessageB: ackB, DeliveryB: deliveryB, FinalState: finalState}, nil
+}
+
+func validateRestartBoundary(receipt RestartBoundaryReceipt) error {
+	if receipt.Member == "" || receipt.OldProcessID == "" || receipt.NewProcessID == "" || receipt.WorkloadUIDBefore == "" || receipt.WorkloadUIDAfter == "" || receipt.VolumeUIDBefore == "" || receipt.VolumeUIDAfter == "" || receipt.StorePathHashBefore == "" || receipt.StorePathHashAfter == "" {
+		return errors.New("restart boundary identity is incomplete")
+	}
+	if receipt.OldProcessID == receipt.NewProcessID {
+		return errors.New("restart boundary retained the old process identity")
+	}
+	if receipt.WorkloadUIDBefore != receipt.WorkloadUIDAfter || receipt.VolumeUIDBefore != receipt.VolumeUIDAfter || receipt.StorePathHashBefore != receipt.StorePathHashAfter {
+		return errors.New("restart boundary changed workload, volume, or store identity")
+	}
+	return nil
+}
+
+func (p *Probe) waitExactState(ctx context.Context, window time.Duration, first, last uint64) (StateReceipt, error) {
+	deadline, cancel := context.WithTimeout(ctx, window)
+	defer cancel()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	var state StateReceipt
+	var lastErr error
+	for {
+		state, lastErr = p.State(deadline)
+		if lastErr == nil && state.Messages == 2 && state.FirstSequence == first && state.LastSequence == last && state.AckFloor >= last && state.AckPending == 0 && state.ConsumerPending == 0 && state.ConsumerRedelivered == 0 {
+			return state, nil
+		}
+		select {
+		case <-deadline.Done():
+			return StateReceipt{}, fmt.Errorf("post-restart state did not converge: state=%+v error=%v: %w", state, lastErr, deadline.Err())
 		case <-ticker.C:
 		}
 	}
