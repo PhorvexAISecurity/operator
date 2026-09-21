@@ -1941,7 +1941,7 @@ Severity: HIGH · Tier: parallel · Fixes: POST25-M137, POST25-M137-TRACE, T20-M
 
 ### M-103 · F6b — the per-tick move budget rate-limits the defender, not the attacker · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: POST25-M103
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
