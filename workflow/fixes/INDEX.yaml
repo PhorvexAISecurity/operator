@@ -1361,7 +1361,7 @@ fixes:
     issues:
     - M-103
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - POST25-M156
