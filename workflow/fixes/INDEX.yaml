@@ -1354,3 +1354,14 @@ fixes:
     stacked_on: []
     branch: post25-checkpoint-live-prep
     head_sha: 85475e7ba32b2bd8cbdef886529849bc3a424b1e
+  POST25-CALIB-EXPORT:
+    directory: fixes/POST25-CALIB-EXPORT
+    aliases: []
+    issues:
+    - M-182
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-calibration-export
+    head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
