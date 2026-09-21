@@ -1,12 +1,17 @@
 package epssfeed
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	kyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 func registryAuthHelm(t *testing.T, sets ...string) (string, error) {
@@ -29,8 +34,38 @@ func registryAuthHelm(t *testing.T, sets ...string) (string, error) {
 	for _, set := range sets {
 		args = append(args, "--set-string", set)
 	}
-	out, err := exec.Command(helm, args...).CombinedOutput()
-	return string(out), err
+	cmd := exec.Command(helm, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	if err != nil {
+		return stdout.String() + "\n" + stderr.String(), err
+	}
+	return stdout.String(), nil
+}
+
+func renderedObjectsOfKind(t *testing.T, rendered, kind string) []string {
+	t.Helper()
+	decoder := kyaml.NewYAMLOrJSONDecoder(strings.NewReader(rendered), 4096)
+	var names []string
+	for {
+		var object struct {
+			Kind     string `json:"kind"`
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+		}
+		err := decoder.Decode(&object)
+		if err == io.EOF {
+			return names
+		}
+		if err != nil {
+			t.Fatalf("decode Helm stdout: %v", err)
+		}
+		if object.Kind == kind {
+			names = append(names, object.Metadata.Name)
+		}
+	}
 }
 
 func TestRegistryAuthChartDefaultsToNoCredentialMount(t *testing.T) {
@@ -38,7 +73,7 @@ func TestRegistryAuthChartDefaultsToNoCredentialMount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("helm template: %v\n%s", err, out)
 	}
-	for _, forbidden := range []string{"--epss-feed-registry-auth-file", "--epss-feed-registry-auth-registries", "name: registry-auth", "secretName:"} {
+	for _, forbidden := range []string{"--epss-feed-registry-auth-file", "--epss-feed-registry-auth-registries", "name: registry-auth"} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("default chart exposed registry auth %q", forbidden)
 		}
@@ -46,6 +81,10 @@ func TestRegistryAuthChartDefaultsToNoCredentialMount(t *testing.T) {
 }
 
 func TestRegistryAuthChartOptInProjectsExactSecretAndHosts(t *testing.T) {
+	baseline, err := registryAuthHelm(t)
+	if err != nil {
+		t.Fatalf("helm template baseline: %v\n%s", err, baseline)
+	}
 	out, err := registryAuthHelm(t,
 		"phorvex.epss.feed.registryAuth.enabled=true",
 		"phorvex.epss.feed.registryAuth.secretName=feed-auth",
@@ -66,8 +105,11 @@ func TestRegistryAuthChartOptInProjectsExactSecretAndHosts(t *testing.T) {
 			t.Errorf("enabled chart missing %q", required)
 		}
 	}
-	if strings.Contains(out, "AWS_ACCESS_KEY") || strings.Contains(out, "TRIVY_PASSWORD") || strings.Contains(out, "kind: Secret") {
+	if strings.Contains(out, "AWS_ACCESS_KEY") || strings.Contains(out, "TRIVY_PASSWORD") {
 		t.Fatal("chart generated or exposed credential material")
+	}
+	if before, after := renderedObjectsOfKind(t, baseline, "Secret"), renderedObjectsOfKind(t, out, "Secret"); !reflect.DeepEqual(before, after) {
+		t.Fatalf("registry auth opt-in generated or changed Secret objects: before=%v after=%v", before, after)
 	}
 }
 

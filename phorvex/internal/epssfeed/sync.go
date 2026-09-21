@@ -675,7 +675,7 @@ func (s TrivyScanner) Scan(ctx context.Context, image string) (map[string]float6
 	stderr := boundedOutput{limit: 64 << 10}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		if authenticated {
 			return nil, fmt.Errorf("trivy scan %q: authenticated registry scan failed", image)
