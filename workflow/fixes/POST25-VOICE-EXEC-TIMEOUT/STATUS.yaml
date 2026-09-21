@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -19,11 +19,79 @@ checks:
     rationale: 'Lead amendment under standing owner delegation: unchanged plan; strengthen
       explicit required verification list to include already required live L3. No
       evidence waived.'
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 765f44cd569b42191333ab2dfea88d92cc526d5d65f6db9ac85e3e971f0504a1
+    source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+    at: '2026-09-21T18:48:43+00:00'
+  preflight:
+    result: PASS
+    by: voice-package-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 2f37549408927a15c182f2d0e526def8400bbc1b93201c514065a579afd27dac
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T18:49:12+00:00'
+  implementation:
+    result: PASS
+    by: voice-package-worker
+    artifact: 04-diff.patch
+    sha256: 01e871444c4b2b5d87dbb251fafcfb86164133e2c9fb9e098960ebf11156d4df
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T18:49:12+00:00'
+  l0:
+    result: PASS
+    by: voice-package-worker
+    artifact: evidence/worker/focused-go-test.log
+    sha256: 36eaf161db516542dea8aca60ea91d1f42f6e9c7468efb6d46853a0d038418fd
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T18:49:12+00:00'
+    inputs:
+    - build/test-harness/internal/core
+    - build/test-harness/internal/safety
+    inputs_sha256: 5428b731cb6b9f242fdc1442086a7f7c663b0d370917a35ac10002b94357d0f5
+  l1:
+    result: PASS
+    by: voice-package-worker
+    artifact: evidence/worker/focused-go-test.log
+    sha256: 36eaf161db516542dea8aca60ea91d1f42f6e9c7468efb6d46853a0d038418fd
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T18:49:12+00:00'
+    inputs:
+    - build/test-harness/cmd/harness
+    - build/test-harness/internal/core
+    - build/test-harness/scenarios/c2_voice_websocket_continuity.go
+    - build/test-harness/scenarios/c2_voice_websocket_continuity_test.go
+    inputs_sha256: 52a35e049f3a95ac0535dbef611e9a73bfbfdc70ec65b4f755294380346f72f3
+  l2:
+    result: PASS
+    by: voice-package-worker
+    artifact: evidence/worker/l2-go-test-vet.log
+    sha256: 09b98332cb0a564d17d70138470cc9dffaee7a8beb8b1beaae3142626ec6c29a
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T18:49:12+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: a0a464a8da32501e2847a63912948210823ca6619d974e49b7df4dc40cfcd7b8
+  positive_control:
+    result: PASS
+    by: voice-package-worker
+    artifact: evidence/worker/focused-go-test.log
+    sha256: 36eaf161db516542dea8aca60ea91d1f42f6e9c7468efb6d46853a0d038418fd
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T18:49:12+00:00'
+    inputs:
+    - build/test-harness/internal/core
+    - build/test-harness/internal/safety
+    - build/test-harness/scenarios/c2_voice_websocket_continuity.go
+    - build/test-harness/scenarios/c2_voice_websocket_continuity_test.go
+    inputs_sha256: 2d206266bcb7ee69e54d080ad008c8c1b7bf97754737ded4f1925b86f032cb52
 fix_id: POST25-VOICE-EXEC-TIMEOUT
 issues: []
 title: Surface in-pod exec deadlines and bound voice producer explicitly
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -69,12 +137,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -84,9 +152,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: voice-package-worker
-  action: Implement signed plan, regression/positive controls and focused preflight
-updated_at: '2026-09-21T18:35:53+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-21T18:49:15+00:00'
 configuration_history:
 - at: '2026-09-21T17:39:54+00:00'
   by: codex-lead
@@ -108,6 +177,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-21T18:49:11+00:00'
+  by: voice-package-worker
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -125,6 +199,22 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T18:49:12+00:00'
+  by: voice-package-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T18:49:13+00:00'
+  by: voice-package-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -134,3 +224,10 @@ check_history:
   source_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
   at: '2026-09-21T17:40:22+00:00'
   contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+handoff:
+  id: POST25-VOICE-EXEC-TIMEOUT:9:submit
+  from: voice-package-worker
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 9
