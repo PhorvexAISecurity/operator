@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 11
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -30,12 +30,89 @@ checks:
     source_sha: 0cedb615a5fef21e3f8fd209ac87f43f3cdebc54
     at: '2026-09-21T11:36:12+00:00'
     baseline_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
+  preflight:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: a65bd24b63811f2fa797dcae9abe43880f46d532a09f06e644a9353869402cc8
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:01+00:00'
+  implementation:
+    result: PASS
+    by: sol-post25-economics
+    artifact: 04-diff.patch
+    sha256: 5a0cd995f74079bfa0fea775a65e4ac4a00fad13f051485e93534636bb9eee0a
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:01+00:00'
+  l0:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: a65bd24b63811f2fa797dcae9abe43880f46d532a09f06e644a9353869402cc8
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:01+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 301918fa5d4eaf1e3667e88275734b73e19492ff05f493b53ec2d8fd42b17d86
+  l1:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/run-1789991080181929859/go-phorvex.log
+    sha256: d7490f0c1c12f6182aac63491da4319cf8bb44a2d79fb1f1a0993afa415c9dae
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:01+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: f70e811a0df755da4661781a59de791bd870755813f7b5e200bc810761fe37db
+  l2:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/lead/remaining-math-integrated-api-v2/m106-race.log
+    sha256: 2271a7fa99ef58ce3f739502079985e4c3277f9e2dc913da6c8c78ab299574f2
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:01+00:00'
+    inputs:
+    - phorvex/internal/decision
+    - phorvex/internal/scopedoutcome
+    inputs_sha256: 4900da6a1a6c0aba3ddf47db22f3af1576e06a031e3bac804696ac437a799523
+  positive_control:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/lead/remaining-math-integrated-api-v2/m106-api.log
+    sha256: 6ef9a66d4125215c290bdf6c652af2152af3eb6e7b4b120191425b94dc659991
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:01+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/decision
+    - phorvex/internal/model
+    - phorvex/internal/scopedoutcome
+    inputs_sha256: bca2dc6b9c73a85c6c53f8d57a9fe4497c19b0fe9bbf398dd66cef5203372ef6
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a46d7fb1ba23e7a73ba0781378ba4fe7ae8a4bce6ba0afec77e09a1328c16be7
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:31+00:00'
+    baseline_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e90c23270272c9b23e931fb939877b4c12b0f323715357711cae6a5197524b42
+    source_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
+    at: '2026-09-21T11:56:31+00:00'
+    incident_sha256: a46d7fb1ba23e7a73ba0781378ba4fe7ae8a4bce6ba0afec77e09a1328c16be7
 fix_id: POST25-M106-SCOPED-OUTCOMES
 issues:
 - M-106
 title: Separate scoped capability outcomes from attacker-state belief
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -59,7 +136,7 @@ blind_derivation:
 implementation:
   branch: post25-math-design-remaining
   base_sha: 0cedb615a5fef21e3f8fd209ac87f43f3cdebc54
-  head_sha: 0bba4c3507309d5c49c29a825da862bbdbb432d2
+  head_sha: bfc6c44bd63b0ed1fc4227af8f4a0c97da449ceb
   stacked_on: []
 pull_request:
   url: null
@@ -80,13 +157,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -96,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-post25-economics
-  action: Implement signed scoped outcomes with incident/control evidence; keep unknown
-    and censored distinct
-updated_at: '2026-09-21T11:36:12+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T11:56:35+00:00'
 follow_up_to: POST25-M106
 configuration_history:
 - at: '2026-09-21T06:58:29+00:00'
@@ -122,6 +199,16 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-21T11:55:16+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T11:56:01+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -139,3 +226,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T11:56:02+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T11:56:04+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T11:56:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T11:56:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-M106-SCOPED-OUTCOMES:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11
