@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -98,11 +98,18 @@ checks:
     source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
     at: '2026-09-21T18:47:22+00:00'
     incident_sha256: 6cf1ac28369f17675d8bad6e2a445d628fd05c895a25c9ec5eb634986b4d6d08
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: adcd55c025e398b9b0b8beeb83d9799ed4dba43287905d07813c0c1d6a72a4c1
+    source_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
+    at: '2026-09-21T18:52:51+00:00'
 fix_id: POST25-CHECKPOINT-MULTI-ROTATION
 issues: []
 title: Verify checkpoint continuity across repeated Pod replacements
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -129,8 +136,8 @@ implementation:
   head_sha: 382be71ba4085c81fb1f325dbac77effc4d05df8
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/270
+  reviewed_head: 7b453c1c75f72a9a45330d80d8efdd181960c909
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -163,10 +170,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-21T18:47:26+00:00'
+  owner: codex-lead
+  action: Merge reviewed PR270, then verify six controlled live trials
+updated_at: '2026-09-21T18:52:51+00:00'
 configuration_history:
 - at: '2026-09-21T17:44:14+00:00'
   by: codex-lead
@@ -182,6 +188,12 @@ configuration_history:
   by: checkpoint-worker
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-21T18:51:58+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -231,6 +243,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T18:52:51+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision
