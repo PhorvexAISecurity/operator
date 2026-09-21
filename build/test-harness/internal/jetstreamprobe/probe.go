@@ -381,11 +381,14 @@ func (p *Probe) RunRestartOracle(ctx context.Context, messageA, messageB Message
 	if err := validateRestartBoundary(restartReceipt); err != nil {
 		return RestartOracleReceipt{}, err
 	}
+	if !clusterHasMember(baseline.Stream, restartReceipt.Member) || !sameClusterMembers(baseline.Stream, baseline.Consumer) {
+		return RestartOracleReceipt{}, errors.New("restart member or baseline stream/consumer membership differs")
+	}
 	recovered, err := p.WaitCurrentReplicas(ctx, window)
 	if err != nil {
 		return RestartOracleReceipt{}, err
 	}
-	if baseline.Stream.Cluster != recovered.Stream.Cluster || baseline.Stream.Replicas != recovered.Stream.Replicas || baseline.Consumer.Cluster != recovered.Consumer.Cluster || baseline.Consumer.Replicas != recovered.Consumer.Replicas {
+	if baseline.Stream.Cluster != recovered.Stream.Cluster || baseline.Stream.Replicas != recovered.Stream.Replicas || baseline.Consumer.Cluster != recovered.Consumer.Cluster || baseline.Consumer.Replicas != recovered.Consumer.Replicas || !sameClusterMembers(baseline.Stream, recovered.Stream) || !sameClusterMembers(baseline.Consumer, recovered.Consumer) || !sameClusterMembers(recovered.Stream, recovered.Consumer) {
 		return RestartOracleReceipt{}, errors.New("replication cluster identity changed across restart")
 	}
 	storedAfter, err := p.GetStored(ctx, messageA, ackA.Sequence)
@@ -408,6 +411,27 @@ func (p *Probe) RunRestartOracle(ctx context.Context, messageA, messageB Message
 		return RestartOracleReceipt{}, err
 	}
 	return RestartOracleReceipt{Baseline: baseline, MessageA: ackA, DeliveryA: deliveryA, StoredBefore: storedBefore, Restart: restartReceipt, Recovered: recovered, StoredAfter: storedAfter, MessageB: ackB, DeliveryB: deliveryB, FinalState: finalState}, nil
+}
+
+func clusterHasMember(receipt ClusterReceipt, name string) bool {
+	for _, member := range receipt.Members {
+		if member.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func sameClusterMembers(left, right ClusterReceipt) bool {
+	if len(left.Members) != len(right.Members) {
+		return false
+	}
+	for i := range left.Members {
+		if left.Members[i].Name != right.Members[i].Name {
+			return false
+		}
+	}
+	return true
 }
 
 func validateRestartBoundary(receipt RestartBoundaryReceipt) error {

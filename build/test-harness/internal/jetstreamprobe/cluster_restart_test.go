@@ -285,3 +285,14 @@ func TestRestartBoundaryRequiresChangedProcessAndStableStorageIdentity(t *testin
 		})
 	}
 }
+
+func TestExactClusterMembershipDoesNotAcceptSameSizedReplacement(t *testing.T) {
+	left := ClusterReceipt{Members: []ReplicaMemberReceipt{{Name: "nats-0"}, {Name: "nats-1"}, {Name: "nats-2"}}}
+	if !sameClusterMembers(left, left) || !clusterHasMember(left, "nats-1") || clusterHasMember(left, "foreign") {
+		t.Fatal("exact member controls rejected their own baseline")
+	}
+	replaced := ClusterReceipt{Members: []ReplicaMemberReceipt{{Name: "nats-0"}, {Name: "nats-1"}, {Name: "nats-3"}}}
+	if sameClusterMembers(left, replaced) {
+		t.Fatal("same-sized replacement member set was accepted")
+	}
+}
