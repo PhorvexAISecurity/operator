@@ -183,8 +183,12 @@ func TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch(t *testing.T) {
 	}
 
 	m124SetAnnotation(t, c, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "m124", Name: "api"}}, actuationbrake.PodOptOutAnnotation, "false")
-	phoenixManager := &Manager{Actuator: actuator.NewPhoenixActuator(c), BoundaryReader: c, Intents: exposure.NewIntents(), Log: logr.Discard()}
-	phoenixPolicy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
+	quarantineCapacity, err := actuator.NewQuarantineCapacity(c, c, "m124-operator", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	phoenixManager := &Manager{Actuator: actuator.NewPhoenixActuator(c), BoundaryReader: c, QuarantineCapacity: quarantineCapacity, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	phoenixPolicy := model.Policy{Tenant: "tenant", PolicyName: policy.Name, PolicyUID: string(policy.UID), EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
 	phoenixDecision := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionQuarantine, Trace: &model.DecisionTraceV2{}}}
 	if got := phoenixManager.actuate(ctx, entry, phoenixPolicy, phoenixDecision, view); got != 1 || !phoenixDecision[0].Actuated {
 		t.Fatalf("Phoenix positive control got=%d decision=%+v trace=%+v", got, phoenixDecision[0], phoenixDecision[0].Trace)
@@ -196,7 +200,7 @@ func TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch(t *testing.T) {
 
 	// Pure Phoenix must visibly refuse bounded rotate before a SecurityEvent. This
 	// is the migration boundary: deployments needing rotate select native or hybrid.
-	unsupportedRotatePolicy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	unsupportedRotatePolicy := model.Policy{Tenant: "tenant", PolicyName: policy.Name, PolicyUID: string(policy.UID), EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	unsupportedRotate := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionRotate, Trace: &model.DecisionTraceV2{}}}
 	if got := phoenixManager.actuate(ctx, entry, unsupportedRotatePolicy, unsupportedRotate, view); got != 0 || unsupportedRotate[0].Actuated || unsupportedRotate[0].DispatchOutcome != model.DispatchRefused || unsupportedRotate[0].Phoenix != nil {
 		t.Fatalf("pure Phoenix bounded rotate was not explicitly refused: got=%d decision=%+v", got, unsupportedRotate[0])
