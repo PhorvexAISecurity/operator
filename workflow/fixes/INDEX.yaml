@@ -1361,7 +1361,7 @@ fixes:
     issues:
     - M-108
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on:
     - POST25-M106

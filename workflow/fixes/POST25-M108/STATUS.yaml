@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -29,7 +29,7 @@ checks:
     artifact: evidence/incident.md
     sha256: 55e90fe84c23ccb7cc85170534a04ddb08dba60d6a3fd421485381eac28a14e9
     source_sha: e540933cd924e39bedc622b401f27482e6205d96
-    at: '2026-09-21T01:53:09+00:00'
+    at: '2026-09-21T02:01:09+00:00'
     baseline_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
   preflight:
     result: PASS
@@ -88,12 +88,20 @@ checks:
     - phorvex
     - workflow/fixes/POST25-M108/verify.sh
     inputs_sha256: ffa1c17b3001b82e58ef41b53f52aad6f9547972c0ca0f9dd6c4b6d1d4f162da
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 4f39fce4dd965e7b78340affca0037bf6dd100a9b0c205968af51bb5e8e7b82e
+    source_sha: e540933cd924e39bedc622b401f27482e6205d96
+    at: '2026-09-21T02:01:09+00:00'
+    incident_sha256: 55e90fe84c23ccb7cc85170534a04ddb08dba60d6a3fd421485381eac28a14e9
 fix_id: POST25-M108
 issues:
 - M-108
 title: Version decision parameters and shadow sensitivity
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -139,7 +147,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -155,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T01:59:32+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T02:01:12+00:00'
 configuration_history:
 - at: '2026-09-21T00:01:32+00:00'
   by: codex-lead
@@ -223,6 +231,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T02:01:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T02:01:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -233,10 +257,18 @@ check_history:
   at: '2026-09-21T00:01:35+00:00'
   contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
   approval_ref: AUTHORIZATION.md
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 55e90fe84c23ccb7cc85170534a04ddb08dba60d6a3fd421485381eac28a14e9
+  source_sha: e540933cd924e39bedc622b401f27482e6205d96
+  at: '2026-09-21T01:53:09+00:00'
+  baseline_sha: 831a4a7e4fa8ccf3ca7f393ee5bb57a07e5793a6
 handoff:
-  id: POST25-M108:11:submit
-  from: sol-post25-economics
+  id: POST25-M108:12:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 11
+  role: coordinator
+  kind: review
+  revision: 12
