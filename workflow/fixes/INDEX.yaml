@@ -1546,8 +1546,8 @@ fixes:
     issues:
     - M-104
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: post25-math-design
-    head_sha: null
+    head_sha: 724ac1b81c33197c057c760d3255f63905b2c9e7
