@@ -2,7 +2,9 @@ package audittransport
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +12,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/audit"
 )
 
 type ClientConfig struct{ URL, ServerDNSName, CertFile, KeyFile, CAFile string }
@@ -111,6 +116,46 @@ func (c *Client) Chunk(ctx context.Context, s Segment, off int64) ([]byte, error
 		return nil, errors.New("audit segment size changed during read")
 	}
 	return b, nil
+}
+
+// ParameterMaterial retrieves one immutable source manifest or effective-policy
+// document through the same authenticated, bounded audit transport. The body is
+// checked against the decision-row digest before it is returned.
+func (c *Client) ParameterMaterial(ctx context.Context, kind, hash string) ([]byte, error) {
+	if kind != audit.ParameterMaterialManifest && kind != audit.ParameterMaterialPolicyOverrides {
+		return nil, errors.New("invalid parameter material kind")
+	}
+	const prefix = "sha256:"
+	if len(hash) != len(prefix)+sha256.Size*2 || hash[:len(prefix)] != prefix {
+		return nil, errors.New("invalid parameter material hash")
+	}
+	digest := hash[len(prefix):]
+	if digest != strings.ToLower(digest) {
+		return nil, errors.New("invalid parameter material hash")
+	}
+	if decoded, err := hex.DecodeString(digest); err != nil || len(decoded) != sha256.Size {
+		return nil, errors.New("invalid parameter material hash")
+	}
+	resp, err := c.get(ctx, "/v1/parameter-material/"+url.PathEscape(kind)+"/"+digest)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("parameter material unavailable: HTTP %d", resp.StatusCode)
+	}
+	if resp.Header.Get("X-Parameter-Material-Hash") != hash {
+		return nil, errors.New("parameter material response hash mismatch")
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, audit.MaxParameterMaterialBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > audit.MaxParameterMaterialBytes {
+		return nil, errors.New("parameter material response exceeds its bound")
+	}
+	sum := sha256.Sum256(raw)
+	if hex.EncodeToString(sum[:]) != digest {
+		return nil, errors.New("parameter material body hash mismatch")
+	}
+	return raw, nil
 }
 
 func (c *Client) Probe() error {

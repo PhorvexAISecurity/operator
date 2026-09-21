@@ -2,7 +2,9 @@
  * Phorvex — P-VCLUSTER O1: the single-tenant byte-identity gate (the gate-preserving obligation).
  * Captures the full single-tenant Decision stream on a fixed fleet over several ticks; after the
  * per-tenant refactor it MUST reproduce the golden bit-for-bit (default-to-old-scalar). Regenerate the
- * golden only intentionally with O1_UPDATE=1.
+ * golden only intentionally with O1_UPDATE=1. POST25-M106 intentionally changed the
+ * post-tick belief trajectory: a selection is no longer treated as a held-foothold
+ * label, so repeated unlabeled ticks remain at the prior instead of self-reinforcing.
  */
 
 package decision

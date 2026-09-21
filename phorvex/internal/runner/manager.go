@@ -2037,6 +2037,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			}
 		}
 	}
+	// Retain exact source and effective policy material once per content hash in
+	// the production audit sibling store. Persistence failure follows the audit
+	// degradation contract and never changes defensive selection or actuation;
+	// Logger.Record marks every affected row unavailable/failed explicitly.
+	if m.Audit != nil && m.Optimizer.Name() == "p1-coverage" {
+		ref, manifest, overrides, provenanceErr := decision.ParameterSetForPolicy(pol)
+		if provenanceErr == nil {
+			_ = m.Audit.RetainParameterSet(pol.Tenant, ref, manifest, overrides)
+		}
+	}
 
 	decisions, err := decideTick(m.Optimizer, views, pol)
 	if ctx.Err() != nil {

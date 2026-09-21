@@ -55,6 +55,11 @@ func EvaluateSensitivity(engine *CoverageEngine, views []*model.WorkloadView, po
 	if len(views) == 0 {
 		return SensitivityResult{}, fmt.Errorf("sensitivity requires a non-empty frozen snapshot")
 	}
+	for i, view := range views {
+		if view == nil {
+			return SensitivityResult{}, fmt.Errorf("sensitivity snapshot entry %d is nil", i)
+		}
+	}
 	if math.IsNaN(req.Value) || math.IsInf(req.Value, 0) {
 		return SensitivityResult{}, fmt.Errorf("sensitivity value must be finite")
 	}
@@ -65,11 +70,17 @@ func EvaluateSensitivity(engine *CoverageEngine, views []*model.WorkloadView, po
 	if err != nil {
 		return SensitivityResult{}, err
 	}
-	baseline, err := engine.DecideShadowChecked(baseViews, cloneSensitivityPolicy(pol))
+	// Read the engine clock exactly once. Both counterfactuals must evaluate the
+	// same frozen instant even when the production clock advances between calls.
+	frozenNow := engine.now()
+	baselineEngine, variantEngine := *engine, *engine
+	baselineEngine.Now = func() time.Time { return frozenNow }
+	variantEngine.Now = func() time.Time { return frozenNow }
+	baseline, err := baselineEngine.DecideShadowChecked(baseViews, cloneSensitivityPolicy(pol))
 	if err != nil {
 		return SensitivityResult{}, fmt.Errorf("baseline shadow: %w", err)
 	}
-	variant, err := engine.DecideShadowChecked(variantViews, variantPolicy)
+	variant, err := variantEngine.DecideShadowChecked(variantViews, variantPolicy)
 	if err != nil {
 		return SensitivityResult{}, fmt.Errorf("variant shadow: %w", err)
 	}
@@ -167,6 +178,7 @@ func defaultSojournStages() map[string]struct{} {
 
 func cloneSensitivityPolicy(in model.Policy) model.Policy {
 	out := in
+	out.DecisionAssets = cloneStringMap(in.DecisionAssets)
 	if in.EnabledActions != nil {
 		out.EnabledActions = make(map[model.Action]bool, len(in.EnabledActions))
 		for key, value := range in.EnabledActions {
@@ -191,12 +203,52 @@ func cloneSensitivityViews(in []*model.WorkloadView) []*model.WorkloadView {
 		copy := *view
 		copy.Pod = view.Pod
 		copy.Pod.Labels = cloneStringMap(view.Pod.Labels)
+		copy.Pod.MountedSecrets = cloneStringSlice(view.Pod.MountedSecrets)
+		if view.Pod.AdapterObservation != nil {
+			observation := *view.Pod.AdapterObservation
+			copy.Pod.AdapterObservation = &observation
+		}
 		copy.ExposureByVariable = cloneDurationMap(view.ExposureByVariable)
 		copy.IntentByVariable = cloneDurationMap(view.IntentByVariable)
-		copy.Events = append([]model.SecurityEventInfo(nil), view.Events...)
-		copy.Neighbors = append([]model.NeighborRef(nil), view.Neighbors...)
+		copy.OutcomeEvents = cloneSensitivityEvents(view.OutcomeEvents)
+		copy.Events = cloneSensitivityEvents(view.Events)
+		if view.Neighbors != nil {
+			copy.Neighbors = make([]model.NeighborRef, len(view.Neighbors))
+			for j := range view.Neighbors {
+				copy.Neighbors[j] = view.Neighbors[j]
+			}
+		}
 		out[i] = &copy
 	}
+	return out
+}
+
+func cloneSensitivityEvents(in []model.SecurityEventInfo) []model.SecurityEventInfo {
+	if in == nil {
+		return nil
+	}
+	out := make([]model.SecurityEventInfo, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].ResolvedTargets = cloneStringSlice(in[i].ResolvedTargets)
+		out[i].UnresolvedTargets = cloneStringSlice(in[i].UnresolvedTargets)
+		if in[i].Outcomes != nil {
+			out[i].Outcomes = make([]model.ProtectedOutcome, len(in[i].Outcomes))
+			for j := range in[i].Outcomes {
+				out[i].Outcomes[j] = in[i].Outcomes[j]
+				out[i].Outcomes[j].RequiredKeys = cloneStringSlice(in[i].Outcomes[j].RequiredKeys)
+			}
+		}
+	}
+	return out
+}
+
+func cloneStringSlice(in []string) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	copy(out, in)
 	return out
 }
 

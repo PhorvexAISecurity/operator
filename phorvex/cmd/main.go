@@ -524,7 +524,14 @@ func main() {
 					setupLog.Error(err, "audit close failed")
 				}
 			}()
-			rmgr.Audit = audit.New(ctrl.Log, f)
+			logger := audit.New(ctrl.Log, f)
+			parameterStore, parameterErr := audit.NewParameterMaterialStore(auditJSON)
+			if parameterErr != nil {
+				setupLog.Error(parameterErr, "parameter material store unavailable; decision rows will mark provenance retention unavailable")
+			} else {
+				logger.SetParameterMaterialStore(parameterStore)
+			}
+			rmgr.Audit = logger
 			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
 		}
 	}

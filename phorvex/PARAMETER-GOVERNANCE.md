@@ -15,6 +15,18 @@ values. Retain one full manifest and effective-policy document with the audit
 set. A record without the compact reference is legacy data whose parameter
 provenance is unavailable.
 
+Production decision rows do not repeat the full registry. Canonical manifests
+and effective-policy documents are written once per content hash to the private
+content-addressed sibling directory `<audit-json>.parameters/`; each row says
+whether those bytes were `retained`, `unavailable`, or `failed`, so a digest
+alone never implies durable retention. The existing mTLS audit source exposes a
+bounded read-only `/v1/parameter-material/{manifest|policy-overrides}/{sha256}`
+endpoint, and readers verify the response against the requested digest. Store
+capacity is fixed at 4,096 documents of at most 1 MiB each (4 GiB canonical
+material total), and existing documents are never evicted or overwritten.
+Capacity exhaustion and write failures remain visible audit degradation and do
+not become calibration or actuation signals.
+
 The registry describes what the source uses. `expert-prior` means a selected
 engineering value, `configuration-bound` means an admission or deployment
 limit, `derived` means an algebraic consequence, and

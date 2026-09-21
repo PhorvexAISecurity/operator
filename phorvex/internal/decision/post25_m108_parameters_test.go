@@ -272,3 +272,50 @@ func TestPost25M108SensitivityLeavesNextProductionDecisionIdentical(t *testing.T
 		t.Fatal("sensitivity seeded observed-label or dedup state")
 	}
 }
+
+func TestPost25M108SensitivityFreezesClockAndOwnsNestedInputs(t *testing.T) {
+	view := covView("nested-snapshot", true, 2*time.Hour, false)
+	view.Pod.MountedSecrets = []string{"secret-a"}
+	view.Pod.AdapterObservation = &model.AdapterObservation{EventName: "event-a"}
+	view.OutcomeEvents = []model.SecurityEventInfo{{
+		Name: "outcome-event", ResolvedTargets: []string{"ns/pod"}, UnresolvedTargets: []string{"pod"},
+		Outcomes: []model.ProtectedOutcome{{ID: "outcome-a", RequiredKeys: []string{"key-a"}}},
+	}}
+	view.Events = []model.SecurityEventInfo{{Name: "belief-event", ResolvedTargets: []string{"ns/pod"}}}
+	pol := decisionTracePolicy(1, false)
+	pol.DecisionAssets = map[string]string{"asset": "uid-a"}
+
+	clonedViews := cloneSensitivityViews([]*model.WorkloadView{view})
+	clonedPolicy := cloneSensitivityPolicy(pol)
+	clonedViews[0].Pod.MountedSecrets[0] = "changed"
+	clonedViews[0].Pod.AdapterObservation.EventName = "changed"
+	clonedViews[0].OutcomeEvents[0].ResolvedTargets[0] = "changed"
+	clonedViews[0].OutcomeEvents[0].UnresolvedTargets[0] = "changed"
+	clonedViews[0].OutcomeEvents[0].Outcomes[0].RequiredKeys[0] = "changed"
+	clonedViews[0].Events[0].ResolvedTargets[0] = "changed"
+	clonedPolicy.DecisionAssets["asset"] = "changed"
+	if view.Pod.MountedSecrets[0] != "secret-a" || view.Pod.AdapterObservation.EventName != "event-a" ||
+		view.OutcomeEvents[0].ResolvedTargets[0] != "ns/pod" || view.OutcomeEvents[0].UnresolvedTargets[0] != "pod" ||
+		view.OutcomeEvents[0].Outcomes[0].RequiredKeys[0] != "key-a" || view.Events[0].ResolvedTargets[0] != "ns/pod" ||
+		pol.DecisionAssets["asset"] != "uid-a" {
+		t.Fatal("sensitivity snapshot clone retained caller-owned nested references")
+	}
+
+	engine := fixedTraceEngine()
+	clockReads := 0
+	engine.Now = func() time.Time {
+		clockReads++
+		return time.Unix(int64(clockReads), 0)
+	}
+	if _, err := EvaluateSensitivity(engine, []*model.WorkloadView{view}, pol,
+		SensitivityRequest{Parameter: "economics.fixed-beta", Value: 1, Unit: "dimensionless"}); err != nil {
+		t.Fatal(err)
+	}
+	if clockReads != 1 {
+		t.Fatalf("sensitivity read a moving production clock %d times", clockReads)
+	}
+	if _, err := EvaluateSensitivity(engine, []*model.WorkloadView{nil}, pol,
+		SensitivityRequest{Parameter: "economics.fixed-beta", Value: 1, Unit: "dimensionless"}); err == nil {
+		t.Fatal("nil snapshot entry accepted")
+	}
+}
