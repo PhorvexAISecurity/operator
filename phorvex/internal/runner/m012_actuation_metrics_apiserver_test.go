@@ -44,7 +44,11 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 		t.Skip("requires isolated envtest API server")
 	}
 	useExistingCluster := false
-	env := &envtest.Environment{UseExistingCluster: &useExistingCluster}
+	env := &envtest.Environment{
+		UseExistingCluster:    &useExistingCluster,
+		CRDDirectoryPaths:     []string{"../../config/crd/bases"},
+		ErrorIfCRDPathMissing: true,
+	}
 	env.ControlPlane.GetAPIServer().Configure().Set("authorization-mode", "RBAC")
 	cfg, err := env.Start()
 	if err != nil {
@@ -71,10 +75,11 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	}
 
 	const (
-		namespace = "m012-authz"
-		ownerName = "owner"
-		podName   = "target"
-		saName    = "read-only-runner"
+		namespace  = "m012-authz"
+		ownerName  = "owner"
+		podName    = "target"
+		policyName = "policy"
+		saName     = "read-only-runner"
 	)
 	create(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
 	create(&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: saName}})
@@ -109,6 +114,18 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "fixture"}}},
 	}
 	create(target)
+	cap := int64(30)
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: policyName}, Spec: v1alpha1.PhorvexPolicySpec{
+		Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
+		Budget: v1alpha1.BudgetSpec{
+			MaxGracePeriodSeconds:  &cap,
+			TickInterval:           metav1.Duration{Duration: 20 * time.Second},
+			AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute},
+			ProactiveFloor:         metav1.Duration{Duration: time.Hour},
+		},
+		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
+	}}
+	create(policy)
 
 	roleName := "m012-read-exact-dispatch-inputs"
 	create(&rbacv1.ClusterRole{
@@ -117,6 +134,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 			{APIGroups: []string{""}, Resources: []string{"namespaces"}, ResourceNames: []string{namespace}, Verbs: []string{"get"}},
 			{APIGroups: []string{""}, Resources: []string{"pods"}, ResourceNames: []string{podName}, Verbs: []string{"get"}},
 			{APIGroups: []string{""}, Resources: []string{"replicationcontrollers"}, ResourceNames: []string{ownerName}, Verbs: []string{"get"}},
+			{APIGroups: []string{v1alpha1.GroupVersion.Group}, Resources: []string{"phorvexpolicies"}, ResourceNames: []string{policyName}, Verbs: []string{"get"}},
 		},
 	})
 	create(&rbacv1.ClusterRoleBinding{
@@ -141,6 +159,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}},
 			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: podName}},
 			&corev1.ReplicationController{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: ownerName}},
+			&v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: policyName}},
 		}
 		for _, obj := range objects {
 			if err := restricted.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
@@ -153,9 +172,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 		return true, nil
 	})
 
-	entry := &policyEntry{namespace: namespace, spec: v1alpha1.PhorvexPolicySpec{
-		Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
-	}}
+	entry := &policyEntry{key: client.ObjectKeyFromObject(policy), uid: string(policy.UID), generation: policy.Generation, namespace: namespace, spec: policy.Spec}
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: namespace, Name: podName, UID: string(target.UID), Ready: true,
 		DesiredReplicas: 1, ReadyReplicas: 1,
@@ -166,7 +183,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	}
 
 	deniedTenant := "m012-real-api-denied"
-	deniedPolicy := model.Policy{Tenant: deniedTenant, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	deniedPolicy := model.Policy{Tenant: deniedTenant, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: cap, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	observedRestricted := &m012AuthorizationClient{Client: restricted}
 	deniedNative := actuator.NewNativeActuator(observedRestricted)
 	deniedNative.SetBoundaryReader(restricted)
@@ -198,7 +215,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	}
 
 	allowedTenant := "m012-real-api-allowed"
-	allowedPolicy := model.Policy{Tenant: allowedTenant, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	allowedPolicy := model.Policy{Tenant: allowedTenant, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: cap, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	allowedNative := actuator.NewNativeActuator(admin)
 	allowedNative.SetBoundaryReader(admin)
 	allowedManager := &Manager{Actuator: allowedNative, BoundaryReader: admin, Intents: exposure.NewIntents(), Log: logr.Discard()}
