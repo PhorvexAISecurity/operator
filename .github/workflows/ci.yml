@@ -413,7 +413,7 @@ jobs:
           PORT:    "18090"
         run: |
           set -euo pipefail
-          SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
+          SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
           # Kill by pid file, never by pkill -f: a pattern that names the port-forward also
           # appears in the remote shell's own command line, so pkill would kill that shell
           # (ssh exit 255). \$ defers expansion to the jump host.
@@ -471,7 +471,7 @@ jobs:
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS" -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
             "PF=\$HOME/.phorvex-e2e-tunnel.pid; if [ -f \$PF ]; then kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; fi; true"
 
       - name: Publish report to ci-report.phorvex.ai
@@ -840,7 +840,7 @@ jobs:
           PORT:    "18090"
         run: |
           set -euo pipefail
-          SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
+          SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
           # Kill by pid file, never by pkill -f: a pattern that names the port-forward also
           # appears in the remote shell's own command line, so pkill would kill that shell
           # (ssh exit 255). \$ defers expansion to the jump host.
@@ -892,7 +892,7 @@ jobs:
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS" -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
             "PF=\$HOME/.phorvex-e2e-tunnel.pid; if [ -f \$PF ]; then kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; fi; true"
 
       - name: Publish report to ci-report.phorvex.ai
