@@ -1366,3 +1366,14 @@ fixes:
     - POST25-CHECKPOINT-LOCAL-FIXTURE
     branch: post25-session-observation
     head_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
+  POST25-CALIB-EXPORT:
+    directory: fixes/POST25-CALIB-EXPORT
+    aliases: []
+    issues:
+    - M-182
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-calibration-export
+    head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
