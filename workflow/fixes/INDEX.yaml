@@ -1385,7 +1385,7 @@ fixes:
     issues:
     - M-100
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on:
     - POST25-M100

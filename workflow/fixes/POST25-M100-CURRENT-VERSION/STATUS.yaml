@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -41,10 +41,8 @@ checks:
     artifact: evidence/incident.md
     sha256: 42823e318dbad8b922a2c39d6dd192c847109a0816dd933ead92a0bf92d98a1f
     source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
-    at: '2026-09-21T05:37:27+00:00'
+    at: '2026-09-21T05:43:13+00:00'
     baseline_sha: 0bc68fc983b8b504433e484020288103975b3f56
-    rationale: Same independently exercised runtime; two generated artifacts refreshed;
-      baselineRED/positive unchanged; live not claimed
   preflight:
     result: PASS
     by: sol-post25-economics
@@ -110,12 +108,20 @@ checks:
     - phorvex/internal/lossobserver
     - phorvex/internal/runner
     inputs_sha256: d313b86d0afa2db2df18ddcf647f1ea263945f989141132bb0cd6915aa1952ee
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: bc19c83608b70c49b26f12483aa51c0fdd15fa1d3e27d5f9a4ba61f38e436500
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:43:13+00:00'
+    incident_sha256: 42823e318dbad8b922a2c39d6dd192c847109a0816dd933ead92a0bf92d98a1f
 fix_id: POST25-M100-CURRENT-VERSION
 issues:
 - M-100
 title: Bind current protected version evidence
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -161,7 +167,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -177,10 +183,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T05:42:03+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T05:43:17+00:00'
 follow_up_to: POST25-M100
 configuration_history:
 - at: '2026-09-21T04:13:09+00:00'
@@ -241,6 +247,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T05:43:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T05:43:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: red
   result: PASS
@@ -261,10 +283,20 @@ check_history:
   baseline_sha: 0bc68fc983b8b504433e484020288103975b3f56
   rationale: Independent actual producer-to-runner baseline RED and positive; actual
     API separately PASS; live debt explicit
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 42823e318dbad8b922a2c39d6dd192c847109a0816dd933ead92a0bf92d98a1f
+  source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+  at: '2026-09-21T05:37:27+00:00'
+  baseline_sha: 0bc68fc983b8b504433e484020288103975b3f56
+  rationale: Same independently exercised runtime; two generated artifacts refreshed;
+    baselineRED/positive unchanged; live not claimed
 handoff:
-  id: POST25-M100-CURRENT-VERSION:12:submit
-  from: sol-post25-economics
+  id: POST25-M100-CURRENT-VERSION:13:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 12
+  role: coordinator
+  kind: review
+  revision: 13
