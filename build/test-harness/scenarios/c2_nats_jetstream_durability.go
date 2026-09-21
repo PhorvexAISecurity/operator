@@ -256,29 +256,13 @@ func (s *c2NATSJetStreamDurability) createWorkload(ctx context.Context, env *cor
 }
 
 func (s *c2NATSJetStreamDurability) waitAndBindPods(ctx context.Context, env *core.Env, fixture *config.NATSJetStreamFixtureConfig) error {
+	seenIDs := map[string]bool{}
 	for ordinal := range 3 {
 		name := fmt.Sprintf("%s-%d", natsFixtureName, ordinal)
 		if err := env.WaitForPodRunning(ctx, name, 120*time.Second); err != nil {
 			return err
 		}
-		pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil || pod.UID == "" || pod.Spec.NodeName != fixture.NodeName {
-			return fmt.Errorf("bind NATS Pod %s identity: %w", name, err)
-		}
-		s.pods[name] = pod.UID
-		pvc, err := env.Kube.CoreV1().PersistentVolumeClaims(env.Config.Namespace).Get(ctx, s.storage[ordinal].PVCName, metav1.GetOptions{})
-		if err != nil || pvc.UID != s.storage[ordinal].PVCUID || pvc.Status.Phase != corev1.ClaimBound || pvc.Spec.VolumeName != s.storage[ordinal].PVName {
-			return fmt.Errorf("NATS PVC %s binding differs: %w", pvc.Name, err)
-		}
-		pv, err := env.Kube.CoreV1().PersistentVolumes().Get(ctx, s.storage[ordinal].PVName, metav1.GetOptions{})
-		if err != nil || pv.UID != s.storage[ordinal].PVUID || pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.UID != pvc.UID {
-			return fmt.Errorf("NATS PV %s binding differs: %w", s.storage[ordinal].PVName, err)
-		}
-	}
-	seenIDs := map[string]bool{}
-	for ordinal := range 3 {
-		name := fmt.Sprintf("%s-%d", natsFixtureName, ordinal)
-		value, err := natsPodVarz(ctx, env, name)
+		pod, value, _, err := s.validateCurrentMember(ctx, env, fixture, ordinal, "", "")
 		if err != nil {
 			return err
 		}
@@ -286,9 +270,78 @@ func (s *c2NATSJetStreamDurability) waitAndBindPods(ctx context.Context, env *co
 			return errors.New("NATS fixture server ID is duplicated")
 		}
 		seenIDs[value.ServerID] = true
+		s.pods[name] = pod.UID
 		s.serverIDs[name] = value.ServerID
 	}
 	return s.openProbe(ctx, env)
+}
+
+func natsControllerOwner(pod *corev1.Pod, statefulSetUID types.UID) bool {
+	if pod == nil || statefulSetUID == "" {
+		return false
+	}
+	for _, owner := range pod.OwnerReferences {
+		if owner.Controller != nil && *owner.Controller && owner.APIVersion == "apps/v1" && owner.Kind == "StatefulSet" && owner.Name == natsFixtureName && owner.UID == statefulSetUID {
+			return true
+		}
+	}
+	return false
+}
+
+func validateNATSMemberPod(pod *corev1.Pod, fixture *config.NATSJetStreamFixtureConfig, statefulSetUID, expectedUID types.UID, ordinal int, storage natsStorageIdentity) error {
+	name := fmt.Sprintf("%s-%d", natsFixtureName, ordinal)
+	if pod == nil || pod.Name != name || pod.Namespace == "" || pod.UID == "" || expectedUID != "" && pod.UID != expectedUID || pod.DeletionTimestamp != nil || pod.Spec.NodeName != fixture.NodeName || !podReady(pod) || !natsControllerOwner(pod, statefulSetUID) {
+		return fmt.Errorf("NATS member %s Pod identity, readiness, node or StatefulSet owner differs", name)
+	}
+	if pod.Labels["app"] != natsFixtureName || pod.Labels["fixture.phorvex.ai/nonce"] != fixture.Nonce {
+		return fmt.Errorf("NATS member %s labels/nonce differ", name)
+	}
+	if len(pod.Spec.Containers) != 1 {
+		return fmt.Errorf("NATS member %s must have exactly one container", name)
+	}
+	c := pod.Spec.Containers[0]
+	if c.Name != "nats" || c.Image != natsImage || len(c.Command) != 3 || c.Command[0] != "/bin/sh" || c.Command[1] != "-ec" || c.Command[2] != natsSupervisorScript {
+		return fmt.Errorf("NATS member %s pinned container/process contract differs", name)
+	}
+	mounts := map[string]string{}
+	for _, mount := range c.VolumeMounts {
+		mounts[mount.Name] = mount.MountPath
+	}
+	if len(mounts) != 2 || mounts["store"] != "/data" || mounts["control"] != "/control" {
+		return fmt.Errorf("NATS member %s exact volume mounts differ", name)
+	}
+	volumes := map[string]corev1.VolumeSource{}
+	for _, volume := range pod.Spec.Volumes {
+		volumes[volume.Name] = volume.VolumeSource
+	}
+	if len(volumes) != 2 || volumes["store"].PersistentVolumeClaim == nil || volumes["store"].PersistentVolumeClaim.ClaimName != storage.PVCName || volumes["control"].EmptyDir == nil {
+		return fmt.Errorf("NATS member %s exact PVC/control volumes differ", name)
+	}
+	return nil
+}
+
+func (s *c2NATSJetStreamDurability) validateCurrentMember(ctx context.Context, env *core.Env, fixture *config.NATSJetStreamFixtureConfig, ordinal int, expectedUID types.UID, expectedServerID string) (*corev1.Pod, natsVarz, string, error) {
+	name := fmt.Sprintf("%s-%d", natsFixtureName, ordinal)
+	pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, natsVarz{}, "", fmt.Errorf("read NATS member %s: %w", name, err)
+	}
+	storage := s.storage[ordinal]
+	if err := validateNATSMemberPod(pod, fixture, s.statefulSetUID, expectedUID, ordinal, storage); err != nil {
+		return nil, natsVarz{}, "", err
+	}
+	volume, err := s.requireStorageBinding(ctx, env, fixture, storage)
+	if err != nil {
+		return nil, natsVarz{}, "", err
+	}
+	value, err := natsPodVarz(ctx, env, name)
+	if err != nil {
+		return nil, natsVarz{}, "", err
+	}
+	if expectedServerID != "" && value.ServerID != expectedServerID {
+		return nil, value, volume, fmt.Errorf("NATS member %s server identity drifted from %s to %s before action", name, expectedServerID, value.ServerID)
+	}
+	return pod, value, volume, nil
 }
 
 func (s *c2NATSJetStreamDurability) openProbe(ctx context.Context, env *core.Env) error {
@@ -381,7 +434,11 @@ func (s *c2NATSJetStreamDurability) restartMember(ctx context.Context, env *core
 	if uid == "" {
 		return jetstreamprobe.RestartBoundaryReceipt{}, errors.New("restart Pod UID missing")
 	}
-	before, err := natsPodVarz(ctx, env, podName)
+	fixture := env.Config.NATSJetStreamFixture
+	if fixture == nil {
+		return jetstreamprobe.RestartBoundaryReceipt{}, errors.New("restart fixture authority missing")
+	}
+	_, before, volume, err := s.validateCurrentMember(ctx, env, fixture, ordinal, uid, s.serverIDs[podName])
 	if err != nil {
 		return jetstreamprobe.RestartBoundaryReceipt{}, err
 	}
@@ -391,11 +448,12 @@ func (s *c2NATSJetStreamDurability) restartMember(ctx context.Context, env *core
 	}
 	oldGeneration := strings.TrimSpace(gen.Stdout)
 	storage := s.storage[ordinal]
-	volume, err := s.requireStorageBinding(ctx, env, storage)
-	boundary := jetstreamprobe.RestartBoundaryReceipt{Member: podName, OldProcessID: before.ServerID, WorkloadUIDBefore: string(uid), VolumeUIDBefore: volume, StorePathHashBefore: storage.PathHash}
+	_, beforeAction, volume, err := s.validateCurrentMember(ctx, env, fixture, ordinal, uid, before.ServerID)
 	if err != nil {
-		return boundary, err
+		return jetstreamprobe.RestartBoundaryReceipt{}, err
 	}
+	before = beforeAction
+	boundary := jetstreamprobe.RestartBoundaryReceipt{Member: podName, OldProcessID: before.ServerID, WorkloadUIDBefore: string(uid), VolumeUIDBefore: volume, StorePathHashBefore: storage.PathHash}
 	boundary.ActionAttempted = true
 	started := time.Now()
 	action := env.Exec(ctx, podName, "nats", []string{"/bin/sh", "-ec", "touch /control/restart && kill -TERM \"$(cat /control/pid)\""})
@@ -408,14 +466,10 @@ func (s *c2NATSJetStreamDurability) restartMember(ctx context.Context, env *core
 	deadline := time.Now().Add(30 * time.Second)
 	var after natsVarz
 	for time.Now().Before(deadline) {
-		pod, readErr := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, podName, metav1.GetOptions{})
-		if readErr != nil || pod.UID != uid {
-			boundary.ElapsedNanos = time.Since(started).Nanoseconds()
-			return boundary, fmt.Errorf("restart changed Pod identity: %v", readErr)
-		}
 		newGen := env.Exec(ctx, podName, "nats", []string{"/bin/sh", "-ec", "cat /control/generation"})
-		after, readErr = natsPodVarz(ctx, env, podName)
-		if newGen.Err == nil && newGen.ExitCode == 0 && strings.TrimSpace(newGen.Stdout) != oldGeneration && readErr == nil && after.ServerID != before.ServerID {
+		_, candidate, _, readErr := s.validateCurrentMember(ctx, env, fixture, ordinal, uid, "")
+		if newGen.Err == nil && newGen.ExitCode == 0 && strings.TrimSpace(newGen.Stdout) != oldGeneration && readErr == nil && candidate.ServerID != before.ServerID {
+			after = candidate
 			break
 		}
 		select {
@@ -429,7 +483,7 @@ func (s *c2NATSJetStreamDurability) restartMember(ctx context.Context, env *core
 		boundary.ElapsedNanos = time.Since(started).Nanoseconds()
 		return boundary, errors.New("NATS child process identity did not change")
 	}
-	afterVolume, err := s.requireStorageBinding(ctx, env, storage)
+	_, confirmed, afterVolume, err := s.validateCurrentMember(ctx, env, fixture, ordinal, uid, after.ServerID)
 	boundary.ElapsedNanos = time.Since(started).Nanoseconds()
 	boundary.NewProcessID = after.ServerID
 	boundary.WorkloadUIDAfter = string(uid)
@@ -438,18 +492,31 @@ func (s *c2NATSJetStreamDurability) restartMember(ctx context.Context, env *core
 	if err != nil {
 		return boundary, err
 	}
-	s.serverIDs[podName] = after.ServerID
+	s.serverIDs[podName] = confirmed.ServerID
 	return boundary, nil
 }
 
-func (s *c2NATSJetStreamDurability) requireStorageBinding(ctx context.Context, env *core.Env, storage natsStorageIdentity) (string, error) {
+func (s *c2NATSJetStreamDurability) requireStorageBinding(ctx context.Context, env *core.Env, fixture *config.NATSJetStreamFixtureConfig, storage natsStorageIdentity) (string, error) {
 	pvc, err := env.Kube.CoreV1().PersistentVolumeClaims(env.Config.Namespace).Get(ctx, storage.PVCName, metav1.GetOptions{})
-	if err != nil || pvc.UID != storage.PVCUID || pvc.Spec.VolumeName != storage.PVName || pvc.Status.Phase != corev1.ClaimBound {
+	if err != nil || pvc.UID != storage.PVCUID || pvc.DeletionTimestamp != nil || pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != fixture.StorageClass || pvc.Spec.VolumeName != storage.PVName || pvc.Status.Phase != corev1.ClaimBound || pvc.Labels["fixture.phorvex.ai/nonce"] != fixture.Nonce {
 		return "", fmt.Errorf("NATS PVC %s binding differs: %v", storage.PVCName, err)
 	}
 	pv, err := env.Kube.CoreV1().PersistentVolumes().Get(ctx, storage.PVName, metav1.GetOptions{})
 	if err != nil || pv.UID != storage.PVUID || pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.UID != storage.PVCUID || pv.Status.Phase != corev1.VolumeBound {
 		return "", fmt.Errorf("NATS PV %s binding differs: %v", storage.PVName, err)
+	}
+	var authority *config.NATSJetStreamLocalPV
+	for i := range fixture.PVs {
+		if fixture.PVs[i].Name == storage.PVName && fixture.PVs[i].UID == string(storage.PVUID) && fixture.PVs[i].Slot == storage.Slot && fixture.PVs[i].PathSHA256 == storage.PathHash {
+			authority = &fixture.PVs[i]
+			break
+		}
+	}
+	if authority == nil {
+		return "", fmt.Errorf("NATS PV %s is outside configured storage authority", storage.PVName)
+	}
+	if err := validateNATSLocalPV(pv, *authority, fixture, false); err != nil {
+		return "", fmt.Errorf("NATS PV %s current authority differs: %w", storage.PVName, err)
 	}
 	return string(storage.PVCUID) + "/" + string(storage.PVUID), nil
 }
@@ -646,6 +713,37 @@ func (s *c2NATSJetStreamDurability) SuccessOracle(context.Context, *core.Env) (c
 	return core.OracleResult{Achieved: true, ObservedState: state, Evidence: s.baseline}, nil
 }
 
+func natsFixturePodName(name string) bool {
+	for ordinal := range 3 {
+		if name == fmt.Sprintf("%s-%d", natsFixtureName, ordinal) {
+			return true
+		}
+	}
+	return false
+}
+
+func natsOwnedDescendants(pods []corev1.Pod, statefulSetUID types.UID, bound map[string]types.UID) (int, error) {
+	remaining := 0
+	for i := range pods {
+		pod := &pods[i]
+		owned := natsControllerOwner(pod, statefulSetUID)
+		if natsFixturePodName(pod.Name) && !owned {
+			return remaining, fmt.Errorf("NATS Pod %s is a foreign same-name object UID=%s; PVC cleanup withheld", pod.Name, pod.UID)
+		}
+		if !owned {
+			continue
+		}
+		if expected := bound[pod.Name]; expected != "" && pod.UID != expected {
+			return remaining, fmt.Errorf("NATS Pod %s changed from bound UID %s to %s; PVC cleanup withheld", pod.Name, expected, pod.UID)
+		}
+		if !natsFixturePodName(pod.Name) {
+			return remaining, fmt.Errorf("StatefulSet UID %s has unexpected descendant Pod %s; PVC cleanup withheld", statefulSetUID, pod.Name)
+		}
+		remaining++
+	}
+	return remaining, nil
+}
+
 func (s *c2NATSJetStreamDurability) Teardown(ctx context.Context, env *core.Env) error {
 	if s.probe != nil {
 		s.probe.Close()
@@ -680,20 +778,15 @@ func (s *c2NATSJetStreamDurability) Teardown(ctx context.Context, env *core.Env)
 		deadline := time.Now().Add(60 * time.Second)
 		podsGone := false
 		for time.Now().Before(deadline) {
-			remaining := 0
-			for name, uid := range s.pods {
-				pod, err := env.Kube.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
-				switch {
-				case apierrors.IsNotFound(err):
-				case err != nil:
-					errs = append(errs, fmt.Errorf("read NATS Pod %s during cleanup: %w", name, err))
-					return errors.Join(errs...)
-				case pod.UID != uid:
-					errs = append(errs, fmt.Errorf("NATS Pod %s was replaced by foreign UID %s; PVC cleanup withheld", name, pod.UID))
-					return errors.Join(errs...)
-				default:
-					remaining++
-				}
+			pods, err := env.Kube.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				errs = append(errs, fmt.Errorf("list NATS Pods during cleanup: %w", err))
+				return errors.Join(errs...)
+			}
+			remaining, err := natsOwnedDescendants(pods.Items, s.statefulSetUID, s.pods)
+			if err != nil {
+				errs = append(errs, err)
+				return errors.Join(errs...)
 			}
 			if remaining == 0 {
 				podsGone = true

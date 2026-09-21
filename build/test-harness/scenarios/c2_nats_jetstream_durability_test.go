@@ -11,6 +11,7 @@ import (
 	"time"
 
 	server "github.com/nats-io/nats-server/v2/server"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -23,6 +24,11 @@ import (
 	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
 )
+
+func natsMemberPodFixture(namespace string, ordinal int, uid, statefulSetUID types.UID, fixture *config.NATSJetStreamFixtureConfig, storage natsStorageIdentity) *corev1.Pod {
+	controller := true
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%d", natsFixtureName, ordinal), Namespace: namespace, UID: uid, Labels: map[string]string{"app": natsFixtureName, "fixture.phorvex.ai/nonce": fixture.Nonce}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "StatefulSet", Name: natsFixtureName, UID: statefulSetUID, Controller: &controller}}}, Spec: corev1.PodSpec{NodeName: fixture.NodeName, Containers: []corev1.Container{{Name: "nats", Image: natsImage, Command: []string{"/bin/sh", "-ec", natsSupervisorScript}, VolumeMounts: []corev1.VolumeMount{{Name: "store", MountPath: "/data"}, {Name: "control", MountPath: "/control"}}}}, Volumes: []corev1.Volume{{Name: "store", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: storage.PVCName}}}, {Name: "control", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
+}
 
 func TestNATSDurabilityMetadataKeepsFunctionalAndSecurityOutcomesSeparate(t *testing.T) {
 	meta := (&c2NATSJetStreamDurability{}).Metadata()
@@ -183,6 +189,72 @@ func TestNATSWorkloadBuilderCreatesOnlyPinnedThreeMemberFixture(t *testing.T) {
 	for _, name := range []string{natsHeadlessService, natsClientService} {
 		if _, err := client.CoreV1().Services("sandbox").Get(context.Background(), name, metav1.GetOptions{}); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestNATSMemberContractBindsOwnerImageProcessAndMountedClaim(t *testing.T) {
+	fixture := &config.NATSJetStreamFixtureConfig{NodeName: "reviewed-node", Nonce: "nonce"}
+	storage := natsStorageIdentity{PVCName: "store-c2-nats-js-2"}
+	pod := natsMemberPodFixture("sandbox", 2, "pod-uid", "statefulset-uid", fixture, storage)
+	if err := validateNATSMemberPod(pod, fixture, "statefulset-uid", "pod-uid", 2, storage); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*corev1.Pod){
+		"replacement uid": func(p *corev1.Pod) { p.UID = "replacement" },
+		"foreign owner":   func(p *corev1.Pod) { p.OwnerReferences[0].UID = "foreign" },
+		"unpinned image":  func(p *corev1.Pod) { p.Spec.Containers[0].Image = "nats:latest" },
+		"changed process": func(p *corev1.Pod) { p.Spec.Containers[0].Command[2] = "nats-server" },
+		"changed claim":   func(p *corev1.Pod) { p.Spec.Volumes[0].PersistentVolumeClaim.ClaimName = "foreign" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := pod.DeepCopy()
+			mutate(candidate)
+			if err := validateNATSMemberPod(candidate, fixture, "statefulset-uid", "pod-uid", 2, storage); err == nil {
+				t.Fatal("changed member contract accepted")
+			}
+		})
+	}
+}
+
+func TestNATSRestartRefusesReplacementBeforeAnyExecAction(t *testing.T) {
+	fixture := &config.NATSJetStreamFixtureConfig{NodeName: "reviewed-node", Nonce: "nonce"}
+	storage := natsStorageIdentity{PVCName: "store-c2-nats-js-2"}
+	replacement := natsMemberPodFixture("sandbox", 2, "replacement", "statefulset-uid", fixture, storage)
+	client := k8sfake.NewSimpleClientset(replacement)
+	env := &core.Env{Kube: client, Config: config.TargetConfig{Namespace: "sandbox", NATSJetStreamFixture: fixture}}
+	scenario := &c2NATSJetStreamDurability{statefulSetUID: "statefulset-uid", pods: map[string]types.UID{natsFixtureName + "-2": "original"}, serverIDs: map[string]string{natsFixtureName + "-2": "server-old"}, storage: [3]natsStorageIdentity{{}, {}, storage}}
+	receipt, err := scenario.restartMember(context.Background(), env, 2)
+	if err == nil || receipt.ActionAttempted || receipt.ActionSent || receipt.ActionCompleted {
+		t.Fatalf("replacement reached restart action: receipt=%+v err=%v", receipt, err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() != "get" || action.GetResource().Resource != "pods" {
+			t.Fatalf("replacement refusal crossed pre-action read boundary: %s %s", action.GetVerb(), action.GetResource().Resource)
+		}
+	}
+}
+
+func TestNATSTeardownPartialSetupOwnedPodWithholdsPVCDelete(t *testing.T) {
+	statefulSetUID := types.UID("statefulset-uid")
+	fixture := &config.NATSJetStreamFixtureConfig{NodeName: "reviewed-node", Nonce: "nonce"}
+	storage := natsStorageIdentity{PVCName: "store-c2-nats-js-0", PVCUID: "pvc-uid"}
+	pod := natsMemberPodFixture("sandbox", 0, "pod-uid", statefulSetUID, fixture, storage)
+	client := k8sfake.NewSimpleClientset(
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: natsFixtureName, Namespace: "sandbox", UID: statefulSetUID}},
+		pod,
+		&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: storage.PVCName, Namespace: "sandbox", UID: storage.PVCUID}},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	env := &core.Env{Kube: client, Guard: dpGuard{}, Config: config.TargetConfig{Namespace: "sandbox"}}
+	scenario := &c2NATSJetStreamDurability{statefulSetUID: statefulSetUID, pods: map[string]types.UID{}, storage: [3]natsStorageIdentity{storage, {}, {}}}
+	if err := scenario.Teardown(ctx, env); err == nil {
+		t.Fatal("partial-setup owned Pod did not block cleanup")
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "delete" && action.GetResource().Resource == "persistentvolumeclaims" {
+			t.Fatal("PVC deletion occurred while an unbound owned descendant Pod remained")
 		}
 	}
 }
