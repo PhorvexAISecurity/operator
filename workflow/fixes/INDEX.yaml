@@ -1361,9 +1361,9 @@ fixes:
     issues:
     - M-103
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on:
     - POST25-M156
     branch: post25-m103
-    head_sha: c496f21b8e9ae54bcd9f5f0c4a5381bf818540b6
+    head_sha: fd66a147146681b8bb67170711dc6bab4a32e42e
