@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -78,6 +79,26 @@ type StateReceipt struct {
 	AckPending          int           `json:"ackPending"`
 	ConsumerPending     uint64        `json:"consumerPending"`
 	ConsumerRedelivered int           `json:"consumerRedelivered"`
+}
+
+type ReplicaMemberReceipt struct {
+	Name    string `json:"name"`
+	Leader  bool   `json:"leader"`
+	Current bool   `json:"current"`
+	Offline bool   `json:"offline"`
+	Lag     uint64 `json:"lag"`
+}
+
+type ClusterReceipt struct {
+	Cluster  string                 `json:"cluster"`
+	Leader   string                 `json:"leader"`
+	Members  []ReplicaMemberReceipt `json:"members"`
+	Replicas int                    `json:"replicas"`
+}
+
+type ReplicationReceipt struct {
+	Stream   ClusterReceipt `json:"stream"`
+	Consumer ClusterReceipt `json:"consumer"`
 }
 
 type Probe struct {
@@ -270,6 +291,82 @@ func (p *Probe) State(ctx context.Context) (StateReceipt, error) {
 		ConsumerPending:     consumerInfo.NumPending,
 		ConsumerRedelivered: consumerInfo.NumRedelivered,
 	}, nil
+}
+
+// WaitCurrentReplicas waits until the exact stream and durable consumer each
+// report the configured number of distinct current, online, zero-lag members.
+// A canceled caller or an expired window is an error and cannot satisfy the
+// recovery gate.
+func (p *Probe) WaitCurrentReplicas(ctx context.Context, window time.Duration) (ReplicationReceipt, error) {
+	if window <= 0 {
+		return ReplicationReceipt{}, errors.New("positive replica convergence window is required")
+	}
+	deadline, cancel := context.WithTimeout(ctx, window)
+	defer cancel()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	var last error
+	for {
+		receipt, err := p.replicationState(deadline)
+		if err == nil {
+			return receipt, nil
+		}
+		last = err
+		select {
+		case <-deadline.Done():
+			return ReplicationReceipt{}, fmt.Errorf("replica convergence did not complete: %v: %w", last, deadline.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func (p *Probe) replicationState(ctx context.Context) (ReplicationReceipt, error) {
+	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
+	streamInfo, err := p.stream.Info(reqCtx)
+	cancel()
+	if err != nil {
+		return ReplicationReceipt{}, fmt.Errorf("read stream replica state: %w", err)
+	}
+	reqCtx, cancel = bounded(ctx, p.cfg.RequestTimeout)
+	consumerInfo, err := p.consumer.Info(reqCtx)
+	cancel()
+	if err != nil {
+		return ReplicationReceipt{}, fmt.Errorf("read consumer replica state: %w", err)
+	}
+	stream, err := exactClusterReceipt(streamInfo.Cluster, p.cfg.Replicas)
+	if err != nil {
+		return ReplicationReceipt{}, fmt.Errorf("stream replica state: %w", err)
+	}
+	consumer, err := exactClusterReceipt(consumerInfo.Cluster, p.cfg.Replicas)
+	if err != nil {
+		return ReplicationReceipt{}, fmt.Errorf("consumer replica state: %w", err)
+	}
+	return ReplicationReceipt{Stream: stream, Consumer: consumer}, nil
+}
+
+func exactClusterReceipt(info *jetstream.ClusterInfo, replicas int) (ClusterReceipt, error) {
+	if info == nil || info.Name == "" || info.Leader == "" {
+		return ClusterReceipt{}, errors.New("cluster or leader identity is absent")
+	}
+	members := []ReplicaMemberReceipt{{Name: info.Leader, Leader: true, Current: true}}
+	seen := map[string]bool{info.Leader: true}
+	for _, peer := range info.Replicas {
+		if peer == nil || peer.Name == "" || seen[peer.Name] {
+			return ClusterReceipt{}, errors.New("replica member identity is absent or duplicated")
+		}
+		seen[peer.Name] = true
+		members = append(members, ReplicaMemberReceipt{Name: peer.Name, Current: peer.Current, Offline: peer.Offline, Lag: peer.Lag})
+	}
+	if len(members) != replicas {
+		return ClusterReceipt{}, fmt.Errorf("member count %d differs from exact replicas %d", len(members), replicas)
+	}
+	for _, member := range members {
+		if !member.Current || member.Offline || member.Lag != 0 {
+			return ClusterReceipt{}, fmt.Errorf("member %q is not current online zero-lag", member.Name)
+		}
+	}
+	sort.Slice(members, func(i, j int) bool { return members[i].Name < members[j].Name })
+	return ClusterReceipt{Cluster: info.Name, Leader: info.Leader, Members: members, Replicas: replicas}, nil
 }
 
 func (p *Probe) Publish(ctx context.Context, message Message, wantDuplicate bool, wantSequence uint64) (PubAckReceipt, error) {
