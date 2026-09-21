@@ -754,17 +754,29 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
           V:       ${{ steps.version.outputs.version }}
         run: |
+          # Validate before interpolating this tag into any shell command.
+          [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+            echo "::error::Invalid release image tag"
+            exit 1
+          }
+          # Read the rollout directly from the cluster with the job's own OIDC role
+          # (github-actions-phorvex, mapped to the read-only group phorvex-ci-readonly in
+          # aws-auth by the cluster owner). Same script, same verdicts; only WHERE kubectl
+          # runs changes. The jump host remains the fallback when that access is absent.
+          if command -v kubectl >/dev/null \
+             && aws eks update-kubeconfig --region "$AWS_REGION" --name phorvex-dev-eks --kubeconfig "$RUNNER_TEMP/kubeconfig" >/dev/null 2>&1 \
+             && KUBECONFIG="$RUNNER_TEMP/kubeconfig" kubectl auth can-i get applications.argoproj.io -n argocd --request-timeout=15s 2>/dev/null | grep -qx yes; then
+            echo "rollout waiter: direct read-only cluster access"
+            KUBECONFIG="$RUNNER_TEMP/kubeconfig" V="$V" bash deploy/argocd/wait-for-rollout.sh
+            exit $?
+          fi
+          echo "::notice::rollout waiter: no direct cluster access for the CI role; using the SSH jump host"
           command -v sshpass >/dev/null || {
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
           [ -s "${PHORVEX_SSH_KNOWN_HOSTS:-}" ] || {
             echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; the rollout waiter will not log in to an unverified host."
-            exit 1
-          }
-          # Validate before interpolating this tag into the remote shell command.
-          [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
-            echo "::error::Invalid release image tag"
             exit 1
           }
           # The real read-only waiter diagnoses disabled auto-sync immediately and
