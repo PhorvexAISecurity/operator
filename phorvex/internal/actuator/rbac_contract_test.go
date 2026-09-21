@@ -34,6 +34,7 @@ func TestNativeRBACMarkersAreLeastPrivilege(t *testing.T) {
 	want := []string{
 		`namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update;patch`,
 		`namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update`,
+		`namespace=phorvex-tenant,groups="",resources=pods/eviction,verbs=create`,
 		`namespace=phorvex-tenant,groups="",resources=services,verbs=get;list;update`,
 		`namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get`,
 		`namespace=phorvex-tenant,groups=apps,resources=replicasets;statefulsets;daemonsets;deployments,verbs=get`,
