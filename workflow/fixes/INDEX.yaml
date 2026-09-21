@@ -1377,3 +1377,14 @@ fixes:
     stacked_on: []
     branch: post25-m044-route-claims
     head_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+  POST25-M043:
+    directory: fixes/POST25-M043
+    aliases: []
+    issues:
+    - M-43
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-m043-model-shard-claims
+    head_sha: null
