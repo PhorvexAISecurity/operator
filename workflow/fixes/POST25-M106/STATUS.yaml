@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 13
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -119,7 +119,7 @@ issues:
 - M-106
 title: Learn persistence only from qualified observed outcomes
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -146,8 +146,8 @@ implementation:
   head_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/252
+  reviewed_head: 483a73ef5b23469262d1aaf200a1084c1a6363c6
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -180,10 +180,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-21T00:51:11+00:00'
+  owner: human_owner
+  action: Review PR252; after merge/deployment independently verify no self-training;
+    qualified live-label producer remains separate acceptance debt
+updated_at: '2026-09-21T00:53:36+00:00'
 configuration_history:
 - at: '2026-09-20T23:23:41+00:00'
   by: codex-lead
@@ -215,6 +215,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-21T00:52:28+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -263,6 +268,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T00:53:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: POST25-M106:11:review
