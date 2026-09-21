@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -87,11 +87,27 @@ checks:
     - build/test-harness/scenarios/c2_voice_websocket_continuity.go
     - build/test-harness/scenarios/c2_voice_websocket_continuity_test.go
     inputs_sha256: 2d206266bcb7ee69e54d080ad008c8c1b7bf97754737ded4f1925b86f032cb52
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 765f44cd569b42191333ab2dfea88d92cc526d5d65f6db9ac85e3e971f0504a1
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T19:00:40+00:00'
+    baseline_sha: 5902b061ab2b83bde358e1048da60267cca8e24a
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 663793dc81240af15796ec08e981aef623d4ea60aee6ca62fc409d0668528633
+    source_sha: c62637d6b6deb9646a3e3868200582fbb91a1e4f
+    at: '2026-09-21T19:00:40+00:00'
+    incident_sha256: 765f44cd569b42191333ab2dfea88d92cc526d5d65f6db9ac85e3e971f0504a1
 fix_id: POST25-VOICE-EXEC-TIMEOUT
 issues: []
 title: Surface in-pod exec deadlines and bound voice producer explicitly
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +152,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +168,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T18:49:15+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T19:00:44+00:00'
 configuration_history:
 - at: '2026-09-21T17:39:54+00:00'
   by: codex-lead
@@ -215,6 +231,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T19:00:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T19:00:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -225,9 +257,9 @@ check_history:
   at: '2026-09-21T17:40:22+00:00'
   contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
 handoff:
-  id: POST25-VOICE-EXEC-TIMEOUT:9:submit
-  from: voice-package-worker
+  id: POST25-VOICE-EXEC-TIMEOUT:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 10
