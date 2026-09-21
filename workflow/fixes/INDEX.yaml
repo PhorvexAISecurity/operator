@@ -1366,3 +1366,14 @@ fixes:
     - POST25-CHECKPOINT-LOCAL-FIXTURE
     branch: post25-session-observation
     head_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
+  POST25-M044:
+    directory: fixes/POST25-M044
+    aliases: []
+    issues:
+    - M-44
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-m044-route-claims
+    head_sha: 405efc1fe1f11c39397e60eb146f60ac31668a70

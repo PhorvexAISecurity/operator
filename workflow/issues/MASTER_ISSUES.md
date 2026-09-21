@@ -1590,7 +1590,7 @@ Severity: MINOR · Tier: parallel · Fixes: T11-M045
 
 ### M-44 · rotate is uncredited for networkIdentity · **OPEN** · `KNOWLEDGE`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: POST25-M044
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
