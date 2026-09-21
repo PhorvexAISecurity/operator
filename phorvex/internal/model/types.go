@@ -38,7 +38,8 @@ type Action string
 const (
 	// ActionNoop leaves the pod untouched.
 	ActionNoop Action = "noop"
-	// ActionRotate maps to Phoenix's Delete (kill + clean respawn).
+	// ActionRotate requests a native, policy-bounded graceful Pod deletion. Pure
+	// Phoenix backends refuse it because their Delete strategy cannot carry the cap.
 	ActionRotate Action = "rotate"
 	// ActionQuarantine maps to Phoenix's Quarantine (deny-all + detach).
 	ActionQuarantine Action = "quarantine"
@@ -308,6 +309,69 @@ type RotationOwnership struct {
 	OwnerResourceVersion string
 }
 
+// ResourceScope is the stable identity of one hard selection resource. A
+// service-availability scope is deliberately bound to both the Service UID and
+// the single controller UID proven to own every endpoint in that scope. Names
+// remain descriptive only; recreated objects cannot inherit capacity.
+type ResourceScope struct {
+	Kind          string `json:"kind"`
+	Namespace     string `json:"namespace,omitempty"`
+	ServiceName   string `json:"serviceName,omitempty"`
+	ServiceUID    string `json:"serviceUID,omitempty"`
+	ControllerUID string `json:"controllerUID,omitempty"`
+}
+
+const (
+	ResourceMoveCount               = "move-count"
+	ResourceUnavailableReadyReplica = "unavailable-ready-replica"
+)
+
+// Key is an unambiguous in-memory identity. The NUL separator cannot appear in
+// Kubernetes names or UIDs and avoids the aliasing possible with joined paths.
+func (r ResourceScope) Key() string {
+	return r.Kind + "\x00" + r.Namespace + "\x00" + r.ServiceUID + "\x00" + r.ControllerUID
+}
+
+// Valid rejects name-only or partially bound resources. Move budgets are scoped
+// to one policy identity in one namespace; availability budgets additionally
+// require the immutable Service and controller UIDs.
+func (r ResourceScope) Valid() bool {
+	switch r.Kind {
+	case ResourceMoveCount:
+		return r.Namespace != "" && r.ControllerUID != "" && r.ServiceName == "" && r.ServiceUID == ""
+	case ResourceUnavailableReadyReplica:
+		return r.Namespace != "" && r.ServiceName != "" && r.ServiceUID != "" && r.ControllerUID != ""
+	default:
+		return false
+	}
+}
+
+// ResourceCapacity and ResourceConsumption use integer units. Objective cost is
+// intentionally absent: disruption preference and physical capacity are
+// different contracts.
+type ResourceCapacity struct {
+	Scope       ResourceScope `json:"scope"`
+	Limit       int           `json:"limit"`
+	Outstanding int           `json:"outstanding"`
+}
+
+type ResourceConsumption struct {
+	Scope ResourceScope `json:"scope"`
+	Units int           `json:"units"`
+}
+
+// ServiceAvailabilityObservation is the snapshot-time proof used to construct
+// unavailable-replica capacity. Complete is true only when the Service,
+// EndpointSlice inventory, target membership and a single exact controller UID
+// were all established. Dispatch re-reads the same objects before mutation.
+type ServiceAvailabilityObservation struct {
+	Scope        ResourceScope `json:"scope"`
+	ReadyMembers int           `json:"readyMembers"`
+	TargetReady  bool          `json:"targetReady"`
+	Complete     bool          `json:"complete"`
+	Reason       string        `json:"reason,omitempty"`
+}
+
 // OwnedValue preserves the distinction between a missing Kubernetes metadata
 // key and a present key whose value is empty. Protected serving operations use
 // these observations for optimistic selection freshness; concatenated legacy
@@ -319,6 +383,12 @@ type OwnedValue struct {
 
 type Pod struct {
 	RotationOwnership RotationOwnership
+	// ServiceAvailability contains one row for every Service whose selector
+	// matches this Pod. Empty or incomplete rows cannot authorize a
+	// replica-removing action against a positive availability floor.
+	ServiceAvailability       []ServiceAvailabilityObservation
+	ServiceAvailabilityKnown  bool
+	ServiceAvailabilityReason string
 
 	Namespace string
 	Name      string
@@ -337,6 +407,10 @@ type Pod struct {
 	ServiceAccount string
 	OwnerKind      string
 	OwnerName      string
+	// ControllerUID is the immutable UID from this Pod's single Kubernetes
+	// controller reference. It is independent of the human-readable owner name
+	// and is the identity used by shared availability scopes.
+	ControllerUID string
 	// WarmPoolConfigured is a conservative read-only snapshot witness for the
 	// scalar ReplicaSet warm-pool contract. Final dispatch rechecks live objects.
 	WarmPoolConfigured bool
@@ -467,9 +541,21 @@ type SecurityEventInfo struct {
 	Trust string
 	// CreatorIdentity is the authenticated identity the admission stamp recorded, e.g.
 	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
-	CreatorIdentity  string
-	AdapterName      string // event-owned phorvex.ai/adapter-name, never copied from a Pod
-	AdapterTargetUID string // event-owned phorvex.ai/target-pod-uid
+	CreatorIdentity string
+	// CompletedDisclosureRaw is an admission-validated producer payload candidate.
+	// It still requires current boundary, API UID, policy epoch and exact admission
+	// authority before durable retention. The owner chain was frozen by the
+	// fail-closed admission transaction. Generic event trust never consumes it.
+	CompletedDisclosureRaw               string
+	CompletedDisclosureAdmittedAt        string
+	CompletedDisclosureAdmissionContract string
+	// Current inventory is independently admitted and never inherits generic
+	// detector or completed-disclosure authority.
+	CurrentInventoryRaw               string
+	CurrentInventoryAdmittedAt        string
+	CurrentInventoryAdmissionContract string
+	AdapterName                       string // event-owned phorvex.ai/adapter-name, never copied from a Pod
+	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -560,9 +646,13 @@ type PhysicsWitness struct {
 	// EPSSBasis says HOW the cache answered (M-141): "exact" (running digest scored),
 	// "repo-fallback" (latest scan of the same repository, flagged), "miss" (nothing —
 	// multiplier neutral, EPSSPresent=false), "" when the pod has no image identity.
-	EPSSBasis        string
-	EPSSCachedDigest string // the cache key that supplied the value (differs from ImageID on repo-fallback)
-	EPSSScanTS       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
+	EPSSBasis                                                        string
+	EPSSCachedDigest                                                 string // the cache key that supplied the value (differs from ImageID on repo-fallback)
+	EPSSScanTS                                                       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
+	EPSSFeedMode, EPSSFeedStatus                                     string
+	EPSSFeedScopeSHA256, EPSSFeedCacheSHA256, EPSSFeedMetadataSHA256 string
+	EPSSFeedConfigMapUID, EPSSFeedConfigMapResourceVersion           string
+	EPSSFeedProducerSource, EPSSFeedObservedAt, EPSSFeedExpiresAt    string
 	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
 	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
 	// learned cap accidentally.
@@ -667,6 +757,13 @@ type Policy struct {
 	QuarantineCapacityUsed       int
 	QuarantineCapacityLimit      int
 	QuarantineCapacityReason     string
+	// SharedResourceReservations is the durable outstanding consumption keyed by
+	// ResourceScope.Key(). Production fills it from the protected CAS ledger;
+	// offline callers may leave it nil to model no prior outstanding work.
+	SharedResourceReservations       map[string]int
+	SharedResourceCapacityConfigured bool
+	SharedResourceReservationsKnown  bool
+	SharedResourceReservationsReason string
 
 	TrustBoundarySince           time.Time
 	DecisionAssets               map[string]string
@@ -678,12 +775,18 @@ type Policy struct {
 	Mode                         string
 	DryRun                       bool
 	Lambda                       float64
+	DisruptionAversion           float64
+	DisruptionAversionConfigured bool
 	NormSparsity                 float64
 	FlowDisruption               float64
 	CostCeiling                  float64
 	WeightSecrets                float64
 	BlastRadiusFromGraph         bool
 	MaxMovesPerTick              int
+	// MaxGracePeriodSeconds is the resolved selecting-policy cap for native
+	// graceful rotation. Zero denotes invalid/unavailable policy input and must be
+	// refused at the mutation boundary; it never means force deletion.
+	MaxGracePeriodSeconds        int64
 	TickInterval                 time.Duration
 	AntiOverRotationWindow       time.Duration
 	ProactiveFloor               time.Duration
@@ -706,14 +809,34 @@ type Policy struct {
 	EnabledActions        map[Action]bool
 	AssetWeightFromLabels func(labels map[string]string) float64
 
-	// Decision-trace-only identity. The optimizer never reads these fields while
-	// scoring; they let the post-selection trace name the exact policy/build/tick.
-	PolicyName   string
-	PolicyUID    string
-	TickID       string
-	BrainImage   string
-	GitSHA       string
-	TraceEnabled bool
+	// Policy identity binds both post-selection native dispatch and observed-outcome
+	// admission to the exact current policy epoch; optimizer scoring ignores it.
+	// The remaining fields identify the decision build and tick in its trace.
+	PolicyName       string
+	PolicyUID        string
+	PolicyGeneration int64
+	TickID           string
+	BrainImage       string
+	GitSHA           string
+	TraceEnabled     bool
+}
+
+// GracefulTerminationReceipt binds an accepted native Pod DELETE to the exact
+// policy epoch, Pod identity and explicit graceful request sent to Kubernetes.
+// It is request evidence only: TerminationStatus remains "unconfirmed" until a
+// separate lifecycle observer proves the old process/UID absent.
+type GracefulTerminationReceipt struct {
+	PolicyNamespace             string `json:"policyNamespace"`
+	PolicyName                  string `json:"policyName"`
+	PolicyUID                   string `json:"policyUID"`
+	PolicyGeneration            int64  `json:"policyGeneration"`
+	PolicyGraceCapSeconds       int64  `json:"policyGraceCapSeconds"`
+	WorkloadGraceSeconds        int64  `json:"workloadGraceSeconds"`
+	WorkloadGraceExplicit       bool   `json:"workloadGraceExplicit"`
+	EffectiveGracePeriodSeconds int64  `json:"effectiveGracePeriodSeconds"`
+	PodUID                      string `json:"podUID"`
+	PodResourceVersion          string `json:"podResourceVersion"`
+	TerminationStatus           string `json:"terminationStatus"`
 }
 
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
@@ -735,7 +858,7 @@ type Decision struct {
 	// It is zero under P1 and is serialized separately so one field never has two meanings.
 	ThreatRisk    float64
 	Cost          float64
-	Net           float64 // engine-specific value - Lambda*Cost
+	Net           float64 // engine-specific value - frozen effective cost coefficient*Cost
 	AssetValue    float64
 	Residual      float64 // observational under the default P1 coverage engine
 	ThreatPosture float64 // observational under the default P1 coverage engine
@@ -792,16 +915,22 @@ type Decision struct {
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
-	Engine        string            // "p0-greedy" | "p1-coverage"
-	CoveredWeight float64           // modeled recon-fact selection opportunity; not measured mitigation
-	CoveredFacts  int               // count of modeled recon facts associated with the selected action
-	PerDollar     float64           // legacy full-value / ECost reporting ratio; not the selector
-	Stage         string            // most-likely kill-chain stage (semi-Markov)
-	StageHazard   float64           // stage-exit hazard h_s(t) (predictive horizon signal)
-	NextStage     string            // forward-projected next stage
-	Lambda        float64           // legacy mixed runtime lambda frozen for this decision
-	ProactiveRate float64           // legacy reporting score derived from PerDollar; not the selector
-	Attribution   []AttributionTerm // SHAP-style decomposition of the move's value
+	Engine              string                     // "p0-greedy" | "p1-coverage"
+	CoveredWeight       float64                    // modeled recon-fact selection opportunity; not measured mitigation
+	CoveredFacts        int                        // count of modeled recon facts associated with the selected action
+	PerDollar           float64                    // legacy full-value / ECost reporting ratio; not the selector
+	Stage               string                     // most-likely kill-chain stage (semi-Markov)
+	StageHazard         float64                    // stage-exit hazard h_s(t) (predictive horizon signal)
+	NextStage           string                     // forward-projected next stage
+	Lambda              float64                    // legacy mixed runtime lambda frozen for this decision
+	Economics           *EconomicsMetadata         // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
+	ParameterSet        *ParameterSetReference     // compact source/default and exact effective-policy identity; present for new P1 decisions
+	PersistenceLearning *PersistenceLearningStatus // observed-label source/disposition; never inferred from this decision's PHold
+	ProactiveRate       float64                    // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
+	Attribution         []AttributionTerm          // SHAP-style decomposition of the move's value
+	// Resources is the selected candidate's exact hard-capacity consumption.
+	// It is empty for noop and legacy engines.
+	Resources []ResourceConsumption
 
 	// --- P-CONTEXT predictive horizon (additive, audit-visible). ---
 	PreemptMargin         float64 // P(stage not yet transitioned by move-landing) [0,1]
@@ -815,6 +944,10 @@ type Decision struct {
 	ObjectsTouched []string // cluster objects created/mutated/deleted
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
+	// GracefulTermination is present only after Kubernetes acknowledged the
+	// exact native rotate DELETE. It records the requested bound while leaving
+	// physical termination explicitly unconfirmed.
+	GracefulTermination *GracefulTerminationReceipt
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately

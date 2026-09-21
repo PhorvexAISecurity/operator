@@ -23,7 +23,9 @@ These are four DIFFERENT properties and the table keeps them apart on purpose:
   enforced by their own layers and are not implied by any row here.
 
 A historical live result (for example the 2026-08-21 Phoenix rotate observation under
-M-9) is evidence about ONE build, target and configuration. It is not a standing
+M-9) is evidence about ONE build, target and configuration. Current pure Phoenix
+refuses bounded rotate because its Delete strategy cannot carry the policy cap;
+select `native` or `hybrid` for bounded rotate. Historical evidence is not a standing
 guarantee for any other deployment and is deliberately absent from this table.
 `identity-rotate` is retained as stored policy vocabulary and for cleanup of historical
 epoch-label snapshots. It is declared-only for new dispatch: it cannot rotate UID, IP
@@ -36,22 +38,22 @@ route-key with the target Ready and at least two Ready backends.
 | Action | Route | Adapter acceptance | Reason / qualification | Prerequisite | Unverified |
 |---|---|---|---|---|---|
 | `noop` | phoenix | no | backend-unsupported: phoenix cannot enact "noop" (control sentinel, not an emitted move) | — | — |
-| `disable` | phoenix | no | backend-unsupported: phoenix cannot enact "disable" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `rotate` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
+| `disable` | phoenix | no | backend-unsupported: phoenix cannot enact "disable" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "rotate" (Phoenix Delete cannot enforce the selecting policy maxGracePeriodSeconds contract) | — | — |
 | `quarantine` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
-| `debugger` | phoenix | no | backend-unsupported: phoenix cannot enact "debugger" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `custom-inject` | phoenix | no | backend-unsupported: phoenix cannot enact "custom-inject" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `identity-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "identity-rotate" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `route-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "route-rotate" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `warm-swap` | phoenix | no | backend-unsupported: phoenix cannot enact "warm-swap" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `mig-rebind` | phoenix | no | backend-unsupported: phoenix cannot enact "mig-rebind" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `kv-reset` | phoenix | no | backend-unsupported: phoenix cannot enact "kv-reset" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `endpoint-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "endpoint-rotate" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `model-shard-replace` | phoenix | no | backend-unsupported: phoenix cannot enact "model-shard-replace" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `adapter-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "adapter-rotate" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `request-drain` | phoenix | no | backend-unsupported: phoenix cannot enact "request-drain" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `guardrail-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "guardrail-rotate" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
-| `kv-migrate-invalidate` | phoenix | no | backend-unsupported: phoenix cannot enact "kv-migrate-invalidate" (no Phoenix AMTD rule mapping; this route enacts only rotate and quarantine) | — | — |
+| `debugger` | phoenix | no | backend-unsupported: phoenix cannot enact "debugger" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `custom-inject` | phoenix | no | backend-unsupported: phoenix cannot enact "custom-inject" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `identity-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "identity-rotate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `route-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "route-rotate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `warm-swap` | phoenix | no | backend-unsupported: phoenix cannot enact "warm-swap" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `mig-rebind` | phoenix | no | backend-unsupported: phoenix cannot enact "mig-rebind" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `kv-reset` | phoenix | no | backend-unsupported: phoenix cannot enact "kv-reset" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `endpoint-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "endpoint-rotate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `model-shard-replace` | phoenix | no | backend-unsupported: phoenix cannot enact "model-shard-replace" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `adapter-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "adapter-rotate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `request-drain` | phoenix | no | backend-unsupported: phoenix cannot enact "request-drain" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `guardrail-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "guardrail-rotate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `kv-migrate-invalidate` | phoenix | no | backend-unsupported: phoenix cannot enact "kv-migrate-invalidate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -81,7 +83,7 @@ route-key with the target Ready and at least two Ready backends.
 |---|---|---|---|---|---|
 | `noop` | native | no | backend-unsupported: native cannot enact "noop" (control sentinel, not an emitted move) | — | — |
 | `disable` | native | no | backend-unsupported: native cannot enact "disable" (declared-not-implemented capability) | — | — |
-| `rotate` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
+| `rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `quarantine` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |

@@ -91,6 +91,10 @@ func covView(name string, secrets bool, exposure time.Duration, stateful bool) *
 		// podIdentity default. Clock every live variable at `exposure` so a fixture pod is gated
 		// identically whatever action a test enables (pre-M-23 all read podIdentity=exposure).
 		ExposureByVariable: allVarsAt(exposure),
+		// Generic decision fixtures represent a measured idle request stream. M156
+		// tests missing load explicitly; leaving this absent would intentionally take
+		// the unsupported-regime upper bound and obscure the gate under test.
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "fixture")},
 	}
 	if secrets {
 		v.Pod.MountedSecrets = []string{"creds"}
@@ -210,7 +214,7 @@ func TestLegacyMixedGainMonotonicityProperties(t *testing.T) {
 	}
 }
 
-func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
+func TestShadowAndUnlabelledProductionDoNotAdvancePersistenceLearning(t *testing.T) {
 	e := NewCoverageEngine()
 	views := []*model.WorkloadView{covView("a", true, 2*time.Hour, false)}
 	pol := covPolicy(1)
@@ -229,8 +233,8 @@ func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
 	}
 
 	e.Decide(views, pol)
-	if got := e.Killchain.Memory.PriorMean(pol.Owner()); got == beforePrior {
-		t.Fatal("control production decision did not advance learning; isolation test is vacuous")
+	if got := e.Killchain.Memory.PriorMean(pol.Owner()); got != beforePrior {
+		t.Fatalf("unlabelled production selection self-trained persistence: %v -> %v", beforePrior, got)
 	}
 }
 

@@ -14,6 +14,8 @@ import envtest_gate as gate  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 ACTUATOR = 'github.com/phorvex/phorvex/internal/actuator'
 RUNNER = 'github.com/phorvex/phorvex/internal/runner'
+CONTROLLER = 'github.com/phorvex/phorvex/internal/controller'
+PLATFORM = 'github.com/phorvex/phorvex/internal/platform'
 AUTHZ = 'github.com/phorvex/phorvex/internal/authz'
 STARTUPAUTHZ = 'github.com/phorvex/phorvex/internal/startupauthz'
 CONSOLE = 'github.com/phorvex/phorvex/internal/console'
@@ -63,7 +65,7 @@ class EvaluateTests(unittest.TestCase):
         self.assertTrue(required <= set(verdicts))
         self.assertEqual(len(verdicts), 3 * len(required))  # parents + two subtests each
         self.assertEqual(packages, {
-            API: 'pass', ACTUATOR: 'pass', RUNNER: 'pass', AUTHZ: 'pass',
+            API: 'pass', ACTUATOR: 'pass', RUNNER: 'pass', CONTROLLER: 'pass', PLATFORM: 'pass', AUTHZ: 'pass',
             STARTUPAUTHZ: 'pass', CONSOLE: 'pass', CMD: 'pass',
         })
 
@@ -240,20 +242,22 @@ class SourceBindingTests(unittest.TestCase):
         self.assertIn('-mod=readonly', command)
         self.assertNotIn('-run', command)
         self.assertTrue(all(not arg.startswith('-run') for arg in command))
-        self.assertEqual(command[-7:], ['./api/v1alpha1', './internal/actuator', './internal/runner',
-                                        './internal/authz', './internal/startupauthz', './internal/console',
-                                        './cmd'])
+        self.assertEqual(command[-len(gate.PACKAGES):], list(gate.PACKAGES))
         self.assertEqual(set(gate.REQUIRED), {'github.com/phorvex/phorvex/' + p[2:] for p in gate.PACKAGES})
 
     def test_required_tests_exist_in_their_packages(self):
         for package, tests in gate.REQUIRED.items():
             directory = ROOT / 'phorvex' / package.removeprefix('github.com/phorvex/phorvex/')
-            declared = set()
+            declared = {}
             for path in directory.glob('*_test.go'):
-                declared.update(re.findall(r'^func (Test\w+)\(t \*testing\.T\)', path.read_text(), re.M))
+                for test in re.findall(r'^func\s+(Test\w+)\s*\(\s*t\s+\*testing\.T\s*\)',
+                                       path.read_text(), re.M):
+                    declared.setdefault(test, []).append(path.name)
             for test in tests:
                 self.assertIn(test, declared, f'{test} is no longer declared in {package}')
-        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 33)
+                self.assertEqual(len(declared[test]), 1,
+                                 f'{test} has multiple Go Test declarations in {package}: {declared[test]}')
+        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 36)
 
     def test_envtest_importing_test_files_are_all_inside_the_selected_packages(self):
         # Textual import scan only: it flags an envtest-bearing test file the full-package

@@ -20,6 +20,7 @@ package platform
 
 import (
 	"math"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -46,7 +47,7 @@ var Registry = registry.New[PlatformPhysics]()
 // CoResidencyCap is the compatibility denominator for the namespace-dispersion multiplier: a
 // node with CoResidencyCap+1 distinct running namespaces saturates at the max +1.0 surcharge.
 // CoResidency is the historical field name; this count does not identify tenants or GPU sharing.
-const CoResidencyCap = 4.0
+const CoResidencyCap = model.PlatformCoResidencyCap
 
 // CoResidencyBasisNamespaceCount is recorded with the historical CoResidency field so consumers
 // can distinguish its actual input from authenticated tenancy or target/device-bound evidence.
@@ -161,6 +162,19 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		w.EPSSMultiplier, w.EPSSPresent, w.EPSSReason = recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
 		w.EPSSScore, w.CVSS = lk.EPSS, lk.CVSS
 		w.EPSSBasis, w.EPSSCachedDigest, w.EPSSScanTS = lk.Basis, lk.CachedDigest, lk.ScanTS
+		w.EPSSFeedMode, w.EPSSFeedStatus = lk.Source.Mode, lk.Source.Status
+		w.EPSSFeedScopeSHA256, w.EPSSFeedCacheSHA256, w.EPSSFeedMetadataSHA256 = lk.Source.ScopeSHA256, lk.Source.CacheSHA256, lk.Source.MetadataSHA256
+		w.EPSSFeedConfigMapUID, w.EPSSFeedConfigMapResourceVersion = lk.Source.ConfigMapUID, lk.Source.ConfigMapResourceVersion
+		w.EPSSFeedProducerSource = lk.Source.ProducerSource
+		if !lk.Source.ObservedAt.IsZero() {
+			w.EPSSFeedObservedAt = lk.Source.ObservedAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !lk.Source.ExpiresAt.IsZero() {
+			w.EPSSFeedExpiresAt = lk.Source.ExpiresAt.UTC().Format(time.RFC3339Nano)
+		}
+		if lk.Source.Mode == "authoritative" && lk.Source.Status != "available" {
+			w.EPSSReason = "authoritative-feed-unavailable"
+		}
 		// model-rarity (AI fact dispersion). rarity() is population-relative, so ModelRarity is 1.0 in
 		// TWO cases, not one: when the fleet has no model servers at all, and — the more common one —
 		// when every model-serving pod runs the SAME model, because that model then occupies 100% of

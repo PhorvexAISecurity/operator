@@ -2,7 +2,6 @@ package runner
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -45,15 +44,18 @@ func m009Receipt(p pendingRotation, processed time.Time) model.PhoenixExecutionR
 	}
 }
 
-func TestM009IndependentReplacementWithoutReceiptDoesNotTrain(t *testing.T) {
+func TestM009LegacyAcceptedEventWithoutReceiptDoesNotTrain(t *testing.T) {
 	var out bytes.Buffer
 	opt := &observingOptimizer{}
 	m := &Manager{Optimizer: opt, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
 	started := time.Unix(1_800_000_000, 0).UTC()
-	producer := actuator.NewPhoenixActuator(m018PhoenixClient(t, &m018RecordingAPI{}))
-	result, err := producer.Actuate(context.Background(), actuator.Request{Namespace: "ns", Tenant: "tenant", Pod: "old", TargetUID: "old-uid", Action: model.ActionRotate})
-	if err != nil || !result.Emitted || result.EventUID == "" {
-		t.Fatalf("actual producer did not emit accepted event: result=%+v err=%v", result, err)
+	// Current pure-Phoenix rotate dispatch is refused because its Delete strategy
+	// cannot carry the policy grace cap. This fixture retains a historical accepted
+	// event to prove that an uncorrelated replacement still cannot train the model.
+	result := actuator.Result{
+		Actuator: "phoenix", EventName: "phorvex-rotate-a", EventUID: "event-uid-a",
+		RuleType: actuator.RuleTypeRotate, RuleThreatLevel: actuator.RuleThreatLevel,
+		RuleSource: actuator.RuleSource, Emitted: true,
 	}
 	p := m009PendingResult(t, m, started, result)
 	m.observeReadyRotations(&ingest.Snapshot{

@@ -5,7 +5,9 @@
 package v1alpha1
 
 import (
+	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -19,20 +21,23 @@ var defaultSojournScaleSeconds = map[string]float64{
 	"gpu-side-channel": 300, "model-theft": 180, "llm-jacking": 900, "prompt-inject-persist": 3600,
 }
 
+var nonnegativeDecimal = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
+
 // Code defaults for the decimal-string / Duration knobs. These are FLAGGED design
 // proposals that trace the PRD PART 7 example values; they are NEVER inherited from
 // R6's self-reported numbers. nil/empty == this default == the documented baseline.
 const (
-	defaultLambda               = 0.6
-	defaultNormSparsity         = 0.4
-	defaultFlowDisruption       = 0.6
-	defaultWeightSecrets        = 0.8
-	defaultMaxMovesPerTick      = 3
-	defaultMinAvailableReplicas = 1
-	defaultTickInterval         = 20 * time.Second
-	defaultAntiOverRotation     = 5 * time.Minute
-	defaultProactiveFloor       = time.Hour
-	defaultEventAgeHorizon      = time.Hour
+	defaultLambda                      = 0.6
+	defaultNormSparsity                = 0.4
+	defaultFlowDisruption              = 0.6
+	defaultWeightSecrets               = 0.8
+	defaultMaxMovesPerTick             = 3
+	defaultMaxGracePeriodSeconds int64 = 30
+	defaultMinAvailableReplicas        = 1
+	defaultTickInterval                = 20 * time.Second
+	defaultAntiOverRotation            = 5 * time.Minute
+	defaultProactiveFloor              = time.Hour
+	defaultEventAgeHorizon             = time.Hour
 )
 
 // ParseDecimal parses a decimal string, returning def on empty/invalid input. It is
@@ -48,6 +53,21 @@ func ParseDecimal(s string, def float64) float64 {
 	return v
 }
 
+// EffectiveMaxGracePeriodSeconds resolves the native graceful-rotation cap.
+// Admission accepts only 1..300. The error return preserves that contract for
+// direct Go objects and rolling-upgrade inputs that bypass schema validation;
+// invalid explicit values never silently become the default.
+func (s *PhorvexPolicySpec) EffectiveMaxGracePeriodSeconds() (int64, error) {
+	if s.Budget.MaxGracePeriodSeconds == nil {
+		return defaultMaxGracePeriodSeconds, nil
+	}
+	v := *s.Budget.MaxGracePeriodSeconds
+	if v < 1 || v > 300 {
+		return 0, fmt.Errorf("maxGracePeriodSeconds %d must be between 1 and 300", v)
+	}
+	return v, nil
+}
+
 // EffectiveTenant returns the tenant identity: Spec.Tenant if set, else the
 // policy's namespace.
 func (p *PhorvexPolicy) EffectiveTenant() string {
@@ -61,6 +81,24 @@ func (p *PhorvexPolicy) EffectiveTenant() string {
 // runtime lambda controller (default 0.6).
 func (s *PhorvexPolicySpec) EffectiveLambda() float64 {
 	return ParseDecimal(s.Objective.Lambda, defaultLambda)
+}
+
+// EffectiveDisruptionAversion resolves the optional fixed objective
+// coefficient. Presence is returned separately so an explicit zero cannot be
+// confused with legacy absence. Invalid values never fall back silently.
+func (s *PhorvexPolicySpec) EffectiveDisruptionAversion() (value float64, configured bool, err error) {
+	raw := s.Objective.DisruptionAversion
+	if raw == "" {
+		return 0, false, nil
+	}
+	if !nonnegativeDecimal.MatchString(raw) {
+		return 0, true, fmt.Errorf("disruptionAversion %q must be a decimal between 0 and 10", raw)
+	}
+	value, parseErr := strconv.ParseFloat(raw, 64)
+	if parseErr != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > model.MaxDisruptionAversion {
+		return 0, true, fmt.Errorf("disruptionAversion %q must be a finite decimal between 0 and 10", raw)
+	}
+	return value, true, nil
 }
 
 // EffectiveNormSparsity is the C_norm weight (default 0.4).

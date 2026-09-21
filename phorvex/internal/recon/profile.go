@@ -29,6 +29,14 @@ var Registry = registry.New[ReconProfile]()
 // two primitives onto recon-fact invalidation.
 type standardRecon struct{}
 
+const (
+	minimumHeldAssetWeight = 0.001
+	stageUrgencyBase       = 0.5
+	stageUrgencySpan       = 0.5
+	sessionWeight          = 0.6
+	networkIdentityWeight  = 0.8
+)
+
 func (standardRecon) Name() string { return "standard-recon" }
 
 func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFacts {
@@ -39,10 +47,10 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	pHold, _ := clamp01(fctx.PHold) // finite: checked above
 	base := fctx.AssetValue * pHold
 	if base <= 0 {
-		base = 0.001 * pHold // a still-held asset always has minimal recon value
+		base = minimumHeldAssetWeight * pHold // a still-held asset always has minimal recon value
 	}
 	stageUrg, _ := clamp01(fctx.StageUrgency)
-	urg := 0.5 + 0.5*stageUrg // [0.5,1] — never zero out a held foothold
+	urg := stageUrgencyBase + stageUrgencySpan*stageUrg // [0.5,1] — never zero out a held foothold
 
 	var facts []Fact
 	cover := map[model.Action][]string{}
@@ -73,7 +81,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// invalidate the fact may claim it.
 	memFact := addRotate(FactInMemory, base*urg)
 	// Session/KV-cache fact is always modeled; GPU/stateful only affects exposure weight.
-	sessionW := base * urg * 0.6
+	sessionW := base * urg * sessionWeight
 	if fctx.HasGPU || fctx.Stateful {
 		sessionW = base * urg
 	}
@@ -109,7 +117,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	}
 
 	// Network facts — invalidated by QUARANTINE (deny-all + detach).
-	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
+	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * networkIdentityWeight}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
 	// route-rotate deliberately receives no cover. Its successful path changes endpoint
@@ -117,7 +125,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// while retaining the old Pod UID/IP and the stable Service UID/ClusterIP/DNS locator.
 	// A client that already knows either locator has not had that knowledge invalidated.
 	maxUrg, _ := clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
-	latUrg := 0.5 + 0.5*maxUrg
+	latUrg := stageUrgencyBase + stageUrgencySpan*maxUrg
 	for _, nb := range fctx.Neighbors {
 		// A learned directed edge is owned by its origin pod. Quarantining the target may also cut
 		// the physical edge, but origin-keying deliberately gives no credit for that effect: this is

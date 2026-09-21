@@ -55,16 +55,22 @@ type tenantState struct {
 	beta  float64
 }
 
+const (
+	DefaultPersistenceAlpha = 1.0
+	DefaultPersistenceBeta  = 4.0
+	PersistenceMassCap      = 200.0
+)
+
 // NewConjugateMemory returns a memory with a low-ish prior mean (alpha=1,beta=4 ->
 // mean 0.2: absent evidence, assume a foothold is probably NOT still held).
 func NewConjugateMemory() *ConjugateMemory {
 	return &ConjugateMemory{
 		tenants:  map[string]*tenantState{},
-		defAlpha: 1,
-		defBeta:  4,
-		maxMass:  200,
-		gAlpha:   1, // fleet prior seeded TO the defaults => cold = old constant exactly
-		gBeta:    4,
+		defAlpha: DefaultPersistenceAlpha,
+		defBeta:  DefaultPersistenceBeta,
+		maxMass:  PersistenceMassCap,
+		gAlpha:   DefaultPersistenceAlpha, // fleet prior seeded TO the defaults => cold = old constant exactly
+		gBeta:    DefaultPersistenceBeta,
 	}
 }
 
@@ -142,9 +148,9 @@ func (m *ConjugateMemory) Tracked(tenant string) bool {
 	return ok
 }
 
-// Observe accumulates evidence: heldEvidence > 0 adds to alpha (foothold tended to
-// persist), < 0 adds |.| to beta (it did not). Pseudo-counts are capped at maxMass so
-// the prior keeps adapting.
+// Observe is the low-level pseudo-count primitive retained for deterministic model
+// fixtures. Production outcome learning enters through the decision package's typed
+// observed-persistence boundary and calls ObserveBernoulli exactly once.
 func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -176,6 +182,17 @@ func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 			m.gBeta *= scale
 		}
 	}
+}
+
+// ObserveBernoulli submits one unit of qualified categorical evidence: held to
+// alpha and revoked to beta. Observe then applies the existing maxMass rescaling,
+// so effective alpha/beta mass is bounded and is not the raw qualified-label count.
+func (m *ConjugateMemory) ObserveBernoulli(tenant string, held bool) {
+	if held {
+		m.Observe(tenant, 1)
+		return
+	}
+	m.Observe(tenant, -1)
 }
 
 // PriorMean is the tenant's prior P(hold) before per-asset evidence.

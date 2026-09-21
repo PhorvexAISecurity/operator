@@ -1,0 +1,286 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 13
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 4b60d3745a19f3a05fa5060a70525960dc332eaa345064839b0f313a3f2e7e36
+    source_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
+    at: '2026-09-20T23:24:23+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e9fc7e3f2264a97dc2bb9d8eded749ae35c544ac1cee713767a8b4971196bafd
+    source_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
+    at: '2026-09-21T00:37:50+00:00'
+    approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: a01372f3f51a9b0a4d4a45257a044954c5d758fd0cd8a10266c460d199233d52
+    source_sha: 1fc39b7ed1d300673295be513206552e90c5e3c7
+    at: '2026-09-21T00:39:33+00:00'
+    baseline_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
+    approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: dacf9f558c33b92939b1df04ac56d003b46f20ccccb3ea43f63e73153a8a2e06
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:39:38+00:00'
+  implementation:
+    result: PASS
+    by: sol-post25-economics
+    artifact: 04-diff.patch
+    sha256: 0397fbcad71087bc9d533d7b1129c5f34110cad89cec68dd0e3db5174fd64d28
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:39:38+00:00'
+  l0:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: dacf9f558c33b92939b1df04ac56d003b46f20ccccb3ea43f63e73153a8a2e06
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:39:38+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 27dc99eff337ba0aa6c7f0bbc0c5e48087fcb33395a02bea8642b77a0cfa5a0f
+  l1:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/worker/focused-483a73ef.log
+    sha256: bc9a5342d64cf30b329fd59c4288ab4ebc99f2e4f2c636d39d1891f8d0b9a519
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:39:39+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/runner
+    - workflow/fixes/POST25-M106/verify.sh
+    inputs_sha256: 0a024baa12d3f21590c2de923ecf090aa67f4529e04f758e753c02b1207590d9
+  l2:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/run-1789950663827066956/go-phorvex.log
+    sha256: a8d9adea34bbb2ce2010a733d9f2eac939239dd6627fced983a524b3d8ba5ff3
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:39:39+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: d63de75c142c658c118e8001724a2976d71a5c2e92d1c8ffb8df6fac48e176a4
+  positive_control:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/worker/final-summary.md
+    sha256: 708e075665457e60406c7a0c935d132ba3e172e1ac3bb770f753258cb0e76400
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:39:39+00:00'
+    inputs:
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    inputs_sha256: b7cd6d5ca6320f74a248a177c4a5a20a32e84da1d55c6768705f5d12617595e3
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e9fc7e3f2264a97dc2bb9d8eded749ae35c544ac1cee713767a8b4971196bafd
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:51:08+00:00'
+    baseline_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 296539e3fe168c2c220e238dbd3d5c4994b9d1c4a8963d11281af46052580f7c
+    source_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+    at: '2026-09-21T00:51:08+00:00'
+    incident_sha256: e9fc7e3f2264a97dc2bb9d8eded749ae35c544ac1cee713767a8b4971196bafd
+fix_id: POST25-M106
+issues:
+- M-106
+title: Learn persistence only from qualified observed outcomes
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-post25-economics
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-m106
+  code_sha: 8251789c006483f40cca5f44c74878bd9b0db7ac
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-m106
+  base_sha: 1fc39b7ed1d300673295be513206552e90c5e3c7
+  head_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/252
+  reviewed_head: 483a73ef5b23469262d1aaf200a1084c1a6363c6
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: human_owner
+  action: Review PR252; after merge/deployment independently verify no self-training;
+    qualified live-label producer remains separate acceptance debt
+updated_at: '2026-09-21T00:53:36+00:00'
+configuration_history:
+- at: '2026-09-20T23:23:41+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-20T23:58:59+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:04:26+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:23:55+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:39:38+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T00:52:28+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T23:24:21+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T23:24:23+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T00:39:39+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T00:39:41+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T00:51:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T00:51:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T00:53:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+handoff:
+  id: POST25-M106:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

@@ -50,9 +50,9 @@ const (
 	NoEffectDeclared   NoEffectDisposition = "declared-only"
 )
 
-// Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH the SecurityEvent
-// and the AMTD strategy that matches it, it bypasses Phoenix's brittle exact-match
-// problem entirely and drives any action deterministically (PRD §4.3). These rule
+// Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH a controlled
+// SecurityEvent and the AMTD strategy that matches it, the retained quarantine route
+// avoids Phoenix's brittle external-rule matching. These rule
 // fields are Phorvex-private (Source=PhorvexController) so they never collide with a
 // real integrator's events.
 const (
@@ -78,6 +78,46 @@ type TenantTarget struct {
 	// internal callers; when Selector is supplied it is authoritative.
 	Selector       *metav1.LabelSelector
 	EnabledActions map[model.Action]bool
+	// PolicyOwnerCount is the number of current policy owners for this exact
+	// namespace/tenant tuple. More than one makes a shared Phoenix strategy
+	// ambiguous and must refuse Phoenix maintenance. Zero is reserved for legacy
+	// direct callers without a runner ownership registry.
+	PolicyOwnerCount int
+}
+
+// PolicyMaintenanceState describes a read-only observation or a completed
+// standing-policy reconcile. It never claims that a defense action executed.
+type PolicyMaintenanceState string
+
+const (
+	PolicyMaintenanceNotRequired      PolicyMaintenanceState = "not-required"
+	PolicyMaintenanceInSync           PolicyMaintenanceState = "in-sync"
+	PolicyMaintenanceMissing          PolicyMaintenanceState = "missing"
+	PolicyMaintenanceDrifted          PolicyMaintenanceState = "drifted"
+	PolicyMaintenanceRepaired         PolicyMaintenanceState = "repaired"
+	PolicyMaintenanceUnknown          PolicyMaintenanceState = "unknown"
+	PolicyMaintenanceOwnershipRefused PolicyMaintenanceState = "ownership-refused"
+)
+
+type PolicyRouteMaintenance struct {
+	State  PolicyMaintenanceState
+	Detail string
+}
+
+// PolicyMaintenanceResult is one tick's Phoenix/native standing-policy result.
+// Preparation is reusable by selected dispatch in the same tick.
+type PolicyMaintenanceResult struct {
+	Preparation RoutePreparation
+	Phoenix     PolicyRouteMaintenance
+	Native      PolicyRouteMaintenance
+}
+
+// StandingPolicyMaintainer separates read-only drift observation from
+// mutation-capable reconciliation. The runner uses observation whenever a
+// brake or owner guard is unavailable or engaged.
+type StandingPolicyMaintainer interface {
+	ObserveStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult
+	ReconcileStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult
 }
 
 // Request is one actuation: perform Action on Namespace/Pod for Tenant.
@@ -90,6 +130,11 @@ type Request struct {
 	ServingObservation *ServingSelectionObservation
 	PolicyName         string // Selecting PhorvexPolicy identity for recoverable native operations.
 	PolicyUID          string
+	PolicyGeneration   int64
+	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
+	// cap. The native handler re-reads and matches it at the mutation boundary.
+	// Zero is invalid and never means force deletion.
+	MaxGracePeriodSeconds int64
 
 	Tenant    string
 	Namespace string
@@ -147,6 +192,9 @@ type Result struct {
 	RollbackRef string
 	// MutationKind is "reversible" | "irreversible" | "forward-only" | "swap" | "declared" | "partial".
 	MutationKind string
+	// GracefulTermination is the exact acknowledged native rotate request. It
+	// never claims the old process exited or a replacement became ready.
+	GracefulTermination *model.GracefulTerminationReceipt
 }
 
 // Target is the per-asset context the capability gate (T1-E) passes to SupportsAction.

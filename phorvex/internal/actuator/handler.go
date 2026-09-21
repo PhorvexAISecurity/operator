@@ -80,7 +80,8 @@ type HandlerResult struct {
 	// MutationKind: "reversible" | "irreversible" | "forward-only" | "swap" | "declared" | "partial".
 	// A partial kind with Emitted=false records an attempted external mutation whose
 	// effect is unknown; it is not a confirmed or credited emission.
-	MutationKind string
+	MutationKind        string
+	GracefulTermination *model.GracefulTerminationReceipt
 	// Emitted is true only for a confirmed mutation or confirmed partial
 	// mutation. It stays false for refusal, definite no-effect, and an attempted
 	// external mutation whose result is unknown.
@@ -119,14 +120,15 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	}
 	hr, err := h.Enact(ctx, ec, req)
 	return Result{
-		Actuator:       "native",
-		Note:           hr.Note,
-		NoEffect:       hr.NoEffect,
-		Emitted:        hr.Emitted,
-		Handler:        string(req.Action),
-		ObjectsTouched: hr.ObjectsTouched,
-		RollbackRef:    hr.RollbackRef,
-		MutationKind:   hr.MutationKind,
+		Actuator:            "native",
+		Note:                hr.Note,
+		NoEffect:            hr.NoEffect,
+		Emitted:             hr.Emitted,
+		Handler:             string(req.Action),
+		ObjectsTouched:      hr.ObjectsTouched,
+		RollbackRef:         hr.RollbackRef,
+		MutationKind:        hr.MutationKind,
+		GracefulTermination: hr.GracefulTermination,
 	}, err
 }
 

@@ -16,8 +16,12 @@ import (
 func fptr(f float64) *float64 { return &f }
 func iptr(i int) *int         { return &i }
 
-func safeBase(string) model.Policy {
-	return model.Policy{NormSparsity: 1, FlowDisruption: 1, MaxMovesPerTick: 2, ProactiveFloor: 2 * time.Hour}
+func safeBase(tenant string) model.Policy {
+	if tenant == "" {
+		tenant = "canonical-safety"
+	}
+	return model.Policy{Tenant: tenant, Namespace: "gate", PolicyUID: "console-safety-" + tenant,
+		NormSparsity: 1, FlowDisruption: 1, MaxMovesPerTick: 2, ProactiveFloor: 2 * time.Hour}
 }
 
 // (gate-logic) the REAL gate rejects a starve policy (nothing fires) and passes a safe one.

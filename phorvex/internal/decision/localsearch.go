@@ -38,11 +38,18 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 	sel := map[int]bool{}
 	selAsset := map[string]bool{}
 	covered := map[string]bool{}
+	resources := newResourceState(set)
+	if !resources.baseFeasible() {
+		return nil
+	}
 	for round := 0; round < B; round++ {
 		best, bestGain := -1, 0.0
 		for i := 0; i < n; i++ {
 			c := set.Candidates[i]
 			if selAsset[c.Key] {
+				continue
+			}
+			if ok, _ := resources.canAdd(c); !ok {
 				continue
 			}
 			marg := 0.0
@@ -59,6 +66,9 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 			break
 		}
 		sel[best] = true
+		if !resources.add(set.Candidates[best]) {
+			break
+		}
 		selAsset[set.Candidates[best].Key] = true
 		for _, k := range set.Candidates[best].CoverKeys {
 			covered[k] = true
@@ -71,6 +81,13 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 			picks = append(picks, set.Candidates[i])
 		}
 		return setObjective(picks, set.FactWeights, prov, lambda)
+	}
+	feasible := func(s map[int]bool) bool {
+		picks := make([]actionset.Candidate, 0, len(s))
+		for i := range s {
+			picks = append(picks, set.Candidates[i])
+		}
+		return resourceFeasible(set, picks)
 	}
 	assetsOf := func(s map[int]bool) map[string]bool {
 		a := map[string]bool{}
@@ -106,6 +123,9 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 				}
 				trial := clone(sel)
 				trial[j] = true
+				if !feasible(trial) {
+					continue
+				}
 				if v := objOf(trial); v > bestObj+1e-12 {
 					bestObj = v
 					jj := j
@@ -117,6 +137,9 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 		for _, i := range selIdx {
 			trial := clone(sel)
 			delete(trial, i)
+			if !feasible(trial) {
+				continue
+			}
 			if v := objOf(trial); v > bestObj+1e-12 {
 				bestObj = v
 				ii := i
@@ -137,6 +160,9 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 				trial := clone(sel)
 				delete(trial, i)
 				trial[j] = true
+				if !feasible(trial) {
+					continue
+				}
 				if v := objOf(trial); v > bestObj+1e-12 {
 					bestObj = v
 					ii, jj := i, j

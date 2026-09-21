@@ -54,6 +54,65 @@ phorvex:
     - vllm/detector-kv-canary
     - vllm/detector-adapter-inv
     - phorvex-system/operator-controller-manager
+  # Opt-in M100 synthetic completed-disclosure history. This authority is
+  # independent of trustedDetectors. Durable history requires an operator-owned
+  # existing PVC whose mount root is writable by UID/GID 65532 and inaccessible
+  # to other users; the chart does not silently use ephemeral storage.
+  lossHistory:
+    enabled: false
+    mountPath: /var/lib/phorvex-loss-history
+    existingClaim: ""
+    trustedObservers: []
+    observer:
+      enabled: false
+      targetNamespace: ""
+      targetName: ""
+      targetUID: ""
+      policyNamespace: ""
+      policyName: ""
+      canaryURL: ""
+      serverName: ""
+      caSecretName: ""
+      clientSecretName: ""
+      protectedAsset: ""
+      protectedVersion: ""
+      protectedProperty: confidentiality
+      evidenceID: ""
+      ruleVersion: ""
+      ruleSHA256: ""
+      expectedBytes: 0
+      expectedSHA256: ""
+      timeout: 10s
+    # Independent, expiring synthetic current-version inventory. Enabling it
+    # also requires this loss-history ledger so the runner can distinguish
+    # at-risk from already-lost without guessing across a history outage.
+    currentInventory:
+      enabled: false
+      trustedObservers: []
+      observer:
+        enabled: false
+        targetNamespace: ""
+        targetName: ""
+        targetUID: ""
+        policyNamespace: ""
+        policyName: ""
+        manifestURL: ""
+        serverName: ""
+        caSecretName: ""
+        clientSecretName: ""
+        configMapName: ""
+        configMapKey: ""
+        volumeName: ""
+        containerName: ""
+        mountPath: ""
+        projectedPath: ""
+        protectedAsset: ""
+        protectedVersion: ""
+        protectedProperty: confidentiality
+        evidenceID: ""
+        ruleSHA256: ""
+        ttl: 1m
+        timeout: 10s
   # M-94 server-side guard that makes the stamp above worth trusting: a
   # ValidatingAdmissionPolicy + Deny binding requiring that any phorvex.ai/creator-identity
   # annotation on a SecurityEvent CREATE/UPDATE equals the authenticated requester. It is
@@ -110,7 +169,10 @@ phorvex:
   # Actuator backend. Accepted values are exactly: phoenix, native, hybrid.
   #   phoenix - drives UNMODIFIED Phoenix through SecurityEvent/AMTD CRs
   #   native  - Phorvex's own client-go hands (no Phoenix CRDs)
-  #   hybrid  - Phoenix for rotate/quarantine, native for the AI-native moves
+  #   hybrid  - native for policy-bounded rotate and AI-native moves; Phoenix for quarantine
+  # The default/unset phoenix backend refuses rotate because Phoenix Delete cannot carry
+  # budget.maxGracePeriodSeconds. Select native or hybrid and grant actuatorNamespaces
+  # to migrate policies that require bounded rotation.
   # EMPTY (the default here) renders NO PHORVEX_ACTUATOR env var at all, so the operator
   # binary applies its own documented default, phoenix. That is the only way to get the
   # default: any NON-empty value is matched EXACTLY by the binary — no trimming, no case
@@ -205,6 +267,11 @@ phorvex:
     configMapName: phorvex-epss
     mountPath: /etc/phorvex
     fileName: epss-cache.json
+    # When enabled, cache bytes are neutral-unavailable until the mounted metadata
+    # and current ConfigMap API object match exactly.
+    authoritative: false
+    metadataFileName: epss-metadata.json
+    authoritativeTimeout: 5s
     # Projected ConfigMaps update asynchronously. Every operator replica re-reads
     # the mounted file and retains its last-known-good cache on a bad update.
     refreshInterval: 30s
@@ -224,6 +291,11 @@ phorvex:
       suspend: false
       apply: false
       allowPartial: false
+      # Both lists must be configured together. Digests must be exact lowercase
+      # repository@sha256 references; scoped apply preserves all other cache keys.
+      scopeNamespaces: []
+      scopeDigests: []
+      metadataTTL: 26h
       firstURL: https://api.first.org/data/v1/epss
       trivyPath: /tools/trivy
       trivy:

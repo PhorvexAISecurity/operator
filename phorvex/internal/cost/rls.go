@@ -19,7 +19,13 @@ import (
 // PodReady, keeping action emission latency out of the learned disruption label.
 
 // featureDim is the engineered C_flow feature dimension.
-const featureDim = 6
+const (
+	featureDim               = 6
+	RLSForgettingFactor      = 0.99
+	RLSInitialCovariance     = 100.0
+	RLSRequestRateNormalizer = 200.0
+	RLSPredictionMaximum     = 2.0
+)
 
 // Features maps a workload view to the C_flow feature vector. The coefficients learned
 // over these reproduce, at the prior, today's phase-based flow cost and refine it as
@@ -37,7 +43,7 @@ func Features(view *model.WorkloadView) [featureDim]float64 {
 		f[4] = 1
 	}
 	if view.Telemetry.ReqRate.Usable() {
-		f[5] = satRLS(view.Telemetry.ReqRate.Value / 200.0)
+		f[5] = satRLS(view.Telemetry.ReqRate.Value / RLSRequestRateNormalizer)
 	}
 	return f
 }
@@ -103,7 +109,7 @@ func (r *RLS) SetFrozen(frozen bool) {
 			for j := 0; j < featureDim; j++ {
 				r.p[i][j] = 0
 			}
-			r.p[i][i] = 100 // restore the diffuse prior covariance
+			r.p[i][i] = RLSInitialCovariance // restore the diffuse prior covariance
 		}
 	}
 	r.frozen = frozen
@@ -114,10 +120,10 @@ func (r *RLS) Frozen() bool { return r.frozen }
 
 // NewRLS returns an RLS seeded at the flow-cost prior with a diffuse covariance.
 func NewRLS() *RLS {
-	r := &RLS{ff: 0.99}
+	r := &RLS{ff: RLSForgettingFactor}
 	r.theta = priorTheta()
 	for i := 0; i < featureDim; i++ {
-		r.p[i][i] = 100 // diffuse prior covariance
+		r.p[i][i] = RLSInitialCovariance // diffuse prior covariance
 	}
 	return r
 }
@@ -139,8 +145,8 @@ func (r *RLS) Predict(f [featureDim]float64) float64 {
 	if s < 0 {
 		return 0
 	}
-	if s > 2 {
-		return 2
+	if s > RLSPredictionMaximum {
+		return RLSPredictionMaximum
 	}
 	return s
 }

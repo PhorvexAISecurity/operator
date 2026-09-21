@@ -46,6 +46,25 @@ trap cleanup EXIT
 
 kubectl create namespace "$NS" >/dev/null
 kubectl label namespace "$NS" phorvex.ai/benchmark=cost-validation --overwrite >/dev/null
+cat <<YAML | kubectl apply -f - >/dev/null
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: cost-validation
+  namespace: ${NS}
+spec:
+  mode: active
+  tenant: cost-validation
+  selector:
+    matchLabels:
+      app: costbench
+  budget:
+    tickInterval: 20s
+    antiOverRotationWindow: 5m
+    proactiveFloor: 1h
+  actions:
+    enabled: [rotate]
+YAML
 
 python3 - "$ENVIRONMENT" "$CLUSTER" "$NS" "$REVISION" "$PROBE_SHA256" <<'PY'
 import json, platform, subprocess, sys
@@ -274,7 +293,7 @@ run_probe() {
   local pod
   pod=$(kubectl -n "$NS" get pod -l app=costbench,phorvex.ai/role=leader -o jsonpath='{.items[0].metadata.name}')
   "$PROBE" \
-    --namespace "$NS" --pod "$pod" --selector app=costbench --action "$action" \
+    --namespace "$NS" --pod "$pod" --policy cost-validation --selector app=costbench --action "$action" \
     --scenario-id "$scenario" --seed "$seed" --tick-id "${scenario}-${seed}" \
     --workload-id costbench --workload-type "$workload_type" --load-profile "$load_profile" \
     --cluster "$CLUSTER" --revision "$REVISION" --metrics-url "${PROXY_BASE}/snapshot" \

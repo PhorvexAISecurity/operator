@@ -16,7 +16,7 @@ func TestM032RawCoverageWireAndExactMatcher(t *testing.T) {
 	for _, value := range []float64{0, 0.125, 1, 2.25, 9.87654321012345, math.NaN(), math.Inf(1), -1} {
 		t.Run(strconv.FormatFloat(value, 'g', -1, 64), func(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
-			_, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate, Score: 0.9, CoverageValue: &value})
+			_, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", TargetNamespaceUID: "namespace-uid", OperationID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Action: model.ActionQuarantine, Score: 0.9, CoverageValue: &value})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -50,12 +50,12 @@ func TestM032RawCoverageWireAndExactMatcher(t *testing.T) {
 				}
 			}
 			for _, strategy := range buildStrategies(nil) {
-				if strategy.Rule.Type == RuleTypeRotate && !amtd.MatchStrategy(strategy.Rule, ev.Spec) {
+				if strategy.Rule.Type == RuleTypeQuarantine && !amtd.MatchStrategy(strategy.Rule, ev.Spec) {
 					t.Fatal("generated strategy no longer matches")
 				}
 			}
 			// The generated exact-match rule remains identical without an anomaly score.
-			if ev.Spec.Rule.Type != RuleTypeRotate || ev.Spec.Rule.Source != RuleSource || ev.Spec.Rule.ThreatLevel != RuleThreatLevel {
+			if ev.Spec.Rule.Type != RuleTypeQuarantine || ev.Spec.Rule.Source != RuleSource || ev.Spec.Rule.ThreatLevel != RuleThreatLevel {
 				t.Fatal("action contract changed")
 			}
 		})

@@ -4,16 +4,22 @@ package representation
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-const Version = "m100-representation-v1"
+const (
+	Version                    = "m100-representation-v1"
+	VersionCompletedDisclosure = "m100-representation-v2"
+	VersionCurrentInventory    = "m100-representation-v3"
+)
 
 // Key preserves the original recon key with unambiguous tenant qualification.
 func Key(tenant, fact string) string         { b, _ := json.Marshal([]string{tenant, fact}); return string(b) }
@@ -21,6 +27,9 @@ func scopeKey(s model.ProtectedScope) string { b, _ := json.Marshal(s); return s
 func lossID(s model.ProtectedScope) string {
 	return fmt.Sprintf("m100-loss-%x", sha256.Sum256([]byte(scopeKey(s))))
 }
+
+// LossID is the stable retained-loss identity shared with the trusted runner adapter.
+func LossID(s model.ProtectedScope) string { return lossID(s) }
 func complete(s model.ProtectedScope) bool {
 	return s.Tenant != "" && s.Asset != "" && s.Version != "" && s.Property != ""
 }
@@ -64,12 +73,51 @@ func Freeze(in model.RepresentationSnapshot) model.RepresentationSnapshot {
 }
 
 func validWitness(w model.LossWitness) bool {
+	if w.SchemaVersion != "" {
+		return validTypedWitness(w)
+	}
 	if !complete(w.Scope) || w.EventRef == "" || w.AuthenticatedIdentity == "" || w.TrustAtIngestionRef == "" || w.RuleVersion == "" || w.PayloadPredicateRef == "" || w.CompletedUnauthorizedOutcomeRef == "" || w.IrreversibilitySemantics == "" || w.ClassificationRef == "" {
 		return false
 	}
 	event, e := time.Parse(time.RFC3339Nano, w.EventTime)
 	ingest, i := time.Parse(time.RFC3339Nano, w.IngestionTime)
 	return e == nil && i == nil && !ingest.Before(event)
+}
+
+func validSHA256(value string) bool {
+	if len(value) != sha256.Size*2 || strings.ToLower(value) != value {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
+}
+
+func validTypedWitness(w model.LossWitness) bool {
+	if w.SchemaVersion != model.AdmittedLossSchemaV1 || !complete(w.Scope) || w.EvidenceID == "" ||
+		w.PolicyEpoch == nil || w.PolicyEpoch.Namespace == "" || w.PolicyEpoch.Name == "" || w.PolicyEpoch.UID == "" || w.PolicyEpoch.Generation <= 0 ||
+		w.DecisionAsset == nil || w.DecisionAsset.Namespace == "" || w.DecisionAsset.Name == "" || w.DecisionAsset.TargetUID == "" ||
+		w.ImmediateController == nil || w.ImmediateController.UID == "" || w.StableWorkloadOwner == nil || w.StableWorkloadOwner.UID == "" ||
+		w.Classification == nil || w.Classification.ObserverClass != model.CompletedDisclosureClass ||
+		w.Classification.ObserverIdentity == "" || w.Classification.ObserverIdentity != w.AuthenticatedIdentity ||
+		w.Classification.RuleVersion == "" || w.Classification.RuleVersion != w.RuleVersion ||
+		!validSHA256(w.Classification.RuleDigest) || w.Classification.RuleDigest != w.ClassificationRef ||
+		!validSHA256(w.CanonicalPayloadSHA256) || w.CanonicalPayloadSHA256 != w.PayloadPredicateRef ||
+		w.SecurityEventUID == "" || w.EventRef == "" || w.AuthenticatedIdentity == "" || w.TrustAtIngestionRef == "" ||
+		w.IrreversibilitySemantics != "completed-external-copy-cannot-be-revoked-by-source-rotation" || w.Observation == nil {
+		return false
+	}
+	o := w.Observation
+	if o.StatusCode != 200 || o.ExpectedBytes <= 0 || o.ObservedBytes != o.ExpectedBytes || !o.ReachedEOF ||
+		!validSHA256(o.ExpectedSHA256) || o.ExpectedSHA256 != o.ObservedSHA256 || o.ObservedSHA256 != w.CompletedUnauthorizedOutcomeRef ||
+		o.StartedAt.IsZero() || o.CompletedAt.Before(o.StartedAt) {
+		return false
+	}
+	eventTime, eventErr := time.Parse(time.RFC3339Nano, w.EventTime)
+	admissionTime, admissionErr := time.Parse(time.RFC3339Nano, w.AdmissionTime)
+	ingestTime, ingestErr := time.Parse(time.RFC3339Nano, w.IngestionTime)
+	return eventErr == nil && admissionErr == nil && ingestErr == nil &&
+		!admissionTime.Before(o.CompletedAt) && !admissionTime.Before(eventTime) && admissionTime.Before(eventTime.Add(time.Second)) &&
+		!ingestTime.Before(admissionTime)
 }
 
 // Build consumes a trusted source adapter's frozen bindings, NOT detector payloads.
@@ -108,7 +156,20 @@ func Build(input model.RepresentationSnapshot) *model.Representation {
 		c.DetectorSet = canonical(c.DetectorSet)
 		s.Claim = &c
 	}
-	r := &model.Representation{Version: Version, Snapshot: s, LossHistoryStatus: status(s.HistoryStatus), LossAssessment: status(s.LossAssessment), OutOfBand: "unmeasured", EffectEvidence: "unconfirmed", Note: "Modeled reporting only; no containment authorization. Known counts describe recorded evidence, not loss magnitude or unknown attacks."}
+	version := Version
+	for _, h := range s.History {
+		for _, w := range h.Witnesses {
+			if w.SchemaVersion == model.AdmittedLossSchemaV1 {
+				version = VersionCompletedDisclosure
+			}
+		}
+	}
+	for _, f := range s.Facts {
+		if f.CurrentInventory != nil {
+			version = VersionCurrentInventory
+		}
+	}
+	r := &model.Representation{Version: version, Snapshot: s, LossHistoryStatus: status(s.HistoryStatus), LossAssessment: status(s.LossAssessment), OutOfBand: "unmeasured", EffectEvidence: "unconfirmed", Note: "Modeled reporting only; no containment authorization. Known counts describe recorded evidence, not loss magnitude or unknown attacks."}
 	if s.LossMappingVersion == "" {
 		r.LossAssessment = "unavailable"
 	}
@@ -119,7 +180,10 @@ func Build(input model.RepresentationSnapshot) *model.Representation {
 	r.UnknownKinds = append([]model.RepresentationGap{}, s.UnknownKinds...)
 	losses := map[string]model.RetainedLoss{}
 	addWitness := func(w model.LossWitness) {
-		if !inScope(w.Scope, s.Scope) {
+		typedHistoryJoin := w.SchemaVersion == model.AdmittedLossSchemaV1 && w.PolicyEpoch != nil && w.StableWorkloadOwner != nil && s.HistoryPolicyUID != "" &&
+			w.PolicyEpoch.UID == s.HistoryPolicyUID && s.HistoryStableOwnerUID != "" &&
+			w.StableWorkloadOwner.UID == s.HistoryStableOwnerUID
+		if !typedHistoryJoin && !inScope(w.Scope, s.Scope) {
 			return
 		}
 		if !validWitness(w) {
@@ -183,7 +247,18 @@ func Build(input model.RepresentationSnapshot) *model.Representation {
 		} else {
 			population[k] = f
 		}
-		if inScope(f.Scope, s.Scope) {
+		currentCandidate := f.CurrentInventory != nil
+		currentJoin := currentCandidate && f.CurrentInventory.SchemaVersion == model.AdmittedCurrentInventorySchemaV1 &&
+			f.CurrentInventory.PolicyUID == s.HistoryPolicyUID && f.CurrentInventory.StableOwnerUID == s.HistoryStableOwnerUID &&
+			f.CurrentInventory.PolicyGeneration > 0 && f.CurrentInventory.PolicyGeneration == s.HistoryPolicyGeneration && f.Scope.Tenant == s.Scope.Tenant &&
+			f.CurrentInventory.PodUID != "" && f.CurrentInventory.ConfigMapUID != "" &&
+			f.CurrentInventory.ConfigMapResourceVersion != "" && validSHA256(f.CurrentInventory.CanonicalPayloadSHA256) && f.CurrentInventory.SecurityEventUID != "" &&
+			f.CurrentInventory.EvidenceID != "" && f.Kind == model.CurrentInventoryClass && f.RuleVersion == model.CurrentInventoryRuleVersionV1 &&
+			f.Key == "current:"+lossID(f.Scope) && f.ObservationRef == f.CurrentInventory.SecurityEventUID+"/"+f.CurrentInventory.CanonicalPayloadSHA256
+		if currentCandidate && !currentJoin {
+			f.Reason = "current-inventory-provenance-invalid"
+		}
+		if inScope(f.Scope, s.Scope) || currentCandidate {
 			if _, ok := facts[k]; !ok {
 				facts[k] = f
 			}

@@ -29,8 +29,13 @@ func fullyLoadedRecord() audit.Record {
 		// --- IP-SENSITIVE (must NEVER reach the owner payload) ---
 		CoverageValue: 0.731, ThreatRisk: 0.888, Cost: 0.422, Net: 0.309, Residual: 0.555, ThreatPosture: 0.666, Exposure: 0.777,
 		AssetValue: 0.999, BlastRadius: 0.444, SLOHeadroom: 0.222,
-		PerDollar: 2.381, CoveredWeight: 1.234, CoveredFacts: 7, Lambda: 0.400, ProactiveRate: 0.123,
-		Stage: "exploit", NextStage: "lateral", StageHazard: 0.654, PHold: 0.842,
+		PerDollar: 2.381, CoveredWeight: 1.234, CoveredFacts: 7, Lambda: 0.400,
+		Economics: &model.EconomicsMetadata{Version: model.EconomicsFixedDisruptionAversionV1,
+			DisruptionAversion: model.OptionalFloat{Present: true, Value: 1.25}, EffectiveCostCoefficient: 1.25,
+			LambdaRuntimeLegacy: model.OptionalFloat{Present: true, Value: 0.4},
+			CoefficientSource:   model.CostCoefficientSourceBeta},
+		ProactiveRate: 0.123,
+		Stage:         "exploit", NextStage: "lateral", StageHazard: 0.654, PHold: 0.842,
 		// the raw Reason inlines the EMR/per-$/lambda/hazard math verbatim — the worst leak vector:
 		Reason:             "cov=1.23/$0.42=2.93 per-$ > lambda=0.40 scarcity=image-rarity*EPSS*co-residency hazard=0.65 pHold=0.84",
 		R6Counterfactual:   "blind would Delete",
@@ -57,6 +62,7 @@ func TestOwnerViewLeaksZeroIP(t *testing.T) {
 		"0.731", "0.422", "0.309", "0.555", "0.666", "0.777", "0.888", "0.999", "0.444",
 		"2.381", "1.234", "0.400", "0.123", "0.654", "0.842", "0.91", "2763",
 		"image-rarity", "EPSS", "co-residency", "scarcity", "submodular", "cov=", "per-$", "lambda",
+		"economics", "disruptionAversion", "effectiveCostCoefficient",
 		"cover:pod-identity", "0.51",
 	}
 	for _, s := range sentinels {

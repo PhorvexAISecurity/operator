@@ -125,8 +125,9 @@ func TestCHiPrunesUncalibratedGPURotate(t *testing.T) {
 	pol := model.Policy{NormSparsity: 0.4, FlowDisruption: 0.6}
 	ceiling := EffectiveCostCeiling(pol)
 
-	gpu := &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm}
-	cpu := &model.WorkloadView{Pod: model.Pod{}, Phase: model.PhaseWarm}
+	telemetry := model.Telemetry{ReqRate: model.PresentSignal(0, "fixture")}
+	gpu := &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm, Telemetry: telemetry}
+	cpu := &model.WorkloadView{Pod: model.Pod{}, Phase: model.PhaseWarm, Telemetry: telemetry}
 	rot := model.Move{Action: model.ActionRotate}
 
 	if chi := c.CHi(gpu, rot, pol); chi <= ceiling {
@@ -163,7 +164,8 @@ func TestMeasuredT4GPUEnvelopeConfiguresCHi(t *testing.T) {
 	}
 	c := NewP1Cost()
 	pol := model.Policy{FlowDisruption: 1}
-	view := &model.WorkloadView{Pod: model.Pod{HasGPU: true}}
+	view := &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm,
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "fixture")}}
 	move := model.Move{Action: model.ActionRotate}
 	if delta := c.CHi(view, move, pol) - c.ECost(view, move, pol); math.Abs(delta-MeasuredT4GPUEnvelopeMax) > 1e-12 {
 		t.Errorf("GPU CHi slack = %.12f, want measured envelope %.12f", delta, MeasuredT4GPUEnvelopeMax)

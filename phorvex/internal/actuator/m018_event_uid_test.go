@@ -22,11 +22,12 @@ import (
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
-// m018Request is one rotate attempt against a pod.
+// m018Request is one controlled Phoenix quarantine attempt against a pod.
 func m018Request() Request {
 	return Request{
 		Tenant: "team-a", Namespace: "ns", Pod: "p1", TargetUID: "pod-uid",
-		Action: model.ActionRotate, Reason: "test", Score: 0.5,
+		TargetNamespaceUID: "namespace-uid", OperationID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Action: model.ActionQuarantine, Reason: "test", Score: 0.5,
 	}
 }
 
@@ -67,7 +68,7 @@ func TestM018ActuateCarriesServerAssignedEventUID(t *testing.T) {
 		t.Fatalf("M-18 must not add SecurityEvent reads; saw %d", reads)
 	}
 	// The five original fields are unchanged by the companion addition.
-	if res.AMTDName != "phorvex-ns-team-a" || res.RuleType != RuleTypeRotate ||
+	if res.AMTDName != "phorvex-ns-team-a" || res.RuleType != RuleTypeQuarantine ||
 		res.RuleThreatLevel != RuleThreatLevel || res.RuleSource != RuleSource || !res.Emitted {
 		t.Fatalf("existing Result fields changed: %+v", res)
 	}
@@ -120,7 +121,7 @@ func TestM018EventIsClusterScopedAndAMTDIsSeparatePolicySetup(t *testing.T) {
 	if err := pa.EnsurePolicy(ctx, TenantTarget{
 		Tenant: "team-a", Namespace: "ns",
 		MatchLabels:    map[string]string{"app": "demo"},
-		EnabledActions: map[model.Action]bool{model.ActionRotate: true},
+		EnabledActions: map[model.Action]bool{model.ActionQuarantine: true},
 	}); err != nil {
 		t.Fatalf("EnsurePolicy: %v", err)
 	}

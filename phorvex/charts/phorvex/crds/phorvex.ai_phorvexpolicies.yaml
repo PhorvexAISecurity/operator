@@ -82,20 +82,20 @@ spec:
             properties:
               actions:
                 description: |-
-                  Actions is the enabled mutation vocabulary (a subset of {rotate,quarantine}).
-                  In P0 these map to Phoenix's Delete (rotate) and Quarantine actions. (PRD:
+                  Actions is the enabled mutation vocabulary. Bounded rotate is native;
+                  quarantine retains its Phoenix route; advanced actions are opt-in. (PRD:
                   actions{enabled}.)
                 properties:
                   enabled:
                     description: |-
-                      Enabled is the subset of allowed actions. P0 supports rotate (Phoenix Delete)
-                      and quarantine (Phoenix Quarantine); noop is always implicitly available.
+                      Enabled is the subset of allowed actions. The default set is bounded native
+                      rotate plus Phoenix quarantine; noop is always implicitly available.
                     items:
                       description: |-
                         ActionType is stored policy vocabulary. Runtime support is separate: identity-rotate
                         remains admitted for existing objects but is declared-only for a security effect and
-                        refused for new native/hybrid dispatch. rotate/quarantine also map to Phoenix
-                        Delete/Quarantine; advanced/AI moves are opt-in. A nil/empty Enabled set defaults
+                        refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
+                        maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
                         to rotate+quarantine.
                       enum:
                       - rotate
@@ -252,6 +252,15 @@ spec:
                       direct Go constructors must supply an *int when overriding the default.
                     minimum: 0
                     type: integer
+                  maxGracePeriodSeconds:
+                    default: 30
+                    description: |-
+                      MaxGracePeriodSeconds bounds the graceful termination requested by the
+                      native rotate handler. Nil defaults to 30 seconds. A shorter workload
+                      grace remains shorter; this cap does not establish physical termination.
+                    maximum: 300
+                    minimum: 1
+                    type: integer
                   proactiveFloor:
                     description: |-
                       ProactiveFloor (a.k.a. the hygiene floor) is the detection-independent
@@ -304,8 +313,8 @@ spec:
                 type: string
               objective:
                 description: |-
-                  Objective is the cost-weighted optimization objective: maximize
-                  E[security] - lambda * E[switching-cost]. (PRD: objective{lambda,costWeights}.)
+                  ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
+                  runtime lambda; an explicit disruptionAversion opts into a fixed coefficient.
                 properties:
                   costWeights:
                     description: |-
@@ -325,6 +334,18 @@ spec:
                           possible). Decimal string; empty defaults to "0.4".
                         type: string
                     type: object
+                  disruptionAversion:
+                    description: |-
+                      DisruptionAversion is an optional fixed preference beta in utility per
+                      normalized ECost unit. When present it replaces runtime lambda only in the
+                      scoring objective; the legacy count-pressure controller continues to learn
+                      independently. Explicit "0" is configured. Remove the field to restore
+                      legacy scoring. Empty is equivalent to absence. Decimal string in [0,10].
+                    pattern: ^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$
+                    type: string
+                    x-kubernetes-validations:
+                    - message: disruptionAversion must be between 0 and 10
+                      rule: self == '' || double(self) <= 10.0
                   lambda:
                     description: |-
                       Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,

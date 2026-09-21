@@ -12,6 +12,7 @@ package audit
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -85,23 +86,36 @@ type Record struct {
 	BlindCost          float64               `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
 
 	// P1 (coverage engine) fields — present only under the p1-coverage brain.
-	Engine        string                  `json:"engine,omitempty"`
-	PerDollar     float64                 `json:"perDollar,omitempty"`
-	CoveredWeight float64                 `json:"coveredWeight,omitempty"`
-	CoveredFacts  int                     `json:"coveredFacts,omitempty"`
-	Stage         string                  `json:"stage,omitempty"`
-	NextStage     string                  `json:"nextStage,omitempty"`
-	StageHazard   float64                 `json:"stageHazard,omitempty"`
-	Lambda        float64                 `json:"lambda,omitempty"`
-	ProactiveRate float64                 `json:"proactiveRate,omitempty"`
-	Attribution   []model.AttributionTerm `json:"attribution,omitempty"`
+	Engine        string                   `json:"engine,omitempty"`
+	PerDollar     float64                  `json:"perDollar,omitempty"`
+	CoveredWeight float64                  `json:"coveredWeight,omitempty"`
+	CoveredFacts  int                      `json:"coveredFacts,omitempty"`
+	Stage         string                   `json:"stage,omitempty"`
+	NextStage     string                   `json:"nextStage,omitempty"`
+	StageHazard   float64                  `json:"stageHazard,omitempty"`
+	Lambda        float64                  `json:"lambda,omitempty"`
+	Economics     *model.EconomicsMetadata `json:"economics,omitempty"`
+	// ParameterSet is compact provenance for the values used by this decision.
+	// The full manifest and effective override document are retained separately.
+	ParameterSet *model.ParameterSetReference `json:"parameterSet,omitempty"`
+	// ParameterMaterialStatus says whether the exact manifest and effective
+	// override documents referenced above reached the durable sibling store.
+	// A reference alone never implies that its material was retained.
+	ParameterMaterialStatus string `json:"parameterMaterialStatus,omitempty"`
+	ParameterMaterialReason string `json:"parameterMaterialReason,omitempty"`
+	// PersistenceLearning reports the source and disposition of independent
+	// categorical labels. It is provenance, not an efficacy claim.
+	PersistenceLearning *model.PersistenceLearningStatus `json:"persistenceLearning,omitempty"`
+	ProactiveRate       float64                          `json:"proactiveRate,omitempty"`
+	Attribution         []model.AttributionTerm          `json:"attribution,omitempty"`
 
 	// P-ACTUATOR native-actuator forensic fields — what the hands actually did, so a
 	// kv-reset is distinguishable from a kill. Present only when the native actuator emitted.
-	Handler        string   `json:"handler,omitempty"`
-	ObjectsTouched []string `json:"objectsTouched,omitempty"`
-	RollbackRef    string   `json:"rollbackRef,omitempty"`
-	MutationKind   string   `json:"mutationKind,omitempty"`
+	Handler             string                            `json:"handler,omitempty"`
+	ObjectsTouched      []string                          `json:"objectsTouched,omitempty"`
+	RollbackRef         string                            `json:"rollbackRef,omitempty"`
+	MutationKind        string                            `json:"mutationKind,omitempty"`
+	GracefulTermination *model.GracefulTerminationReceipt `json:"gracefulTermination,omitempty"`
 
 	// M-18 Phoenix forensic identity of the emission attempt: the AMTD context, the
 	// created SecurityEvent's name and server-assigned UID, and the logical rule tuple.
@@ -267,6 +281,23 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	if err := measurementsMatch(r); err != nil {
 		return nil, err
 	}
+	if err := model.ValidateEconomicsMetadata(r.Economics); err != nil {
+		return nil, err
+	}
+	if r.ParameterSet != nil {
+		if err := r.ParameterSet.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateParameterMaterialStatus(r.ParameterSet, r.ParameterMaterialStatus, r.ParameterMaterialReason); err != nil {
+		return nil, err
+	}
+	if err := model.ValidatePersistenceLearningStatus(r.PersistenceLearning); err != nil {
+		return nil, err
+	}
+	if !EconomicsMatchesRoundedLambda(r.Economics, r.Lambda) {
+		return nil, fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
+	}
 	prepared := r.preparedRepresentation
 	if len(prepared) != 0 {
 		r.Representation = nil
@@ -378,6 +409,27 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	if err := measurementsMatch(Record(decoded)); err != nil {
 		return err
 	}
+	if err := model.ValidateEconomicsMetadata(decoded.Economics); err != nil {
+		return err
+	}
+	if decoded.ParameterSet != nil {
+		if err := decoded.ParameterSet.Validate(); err != nil {
+			return err
+		}
+		if decoded.ParameterMaterialStatus == "" {
+			decoded.ParameterMaterialStatus = parameterMaterialUnavailable
+			decoded.ParameterMaterialReason = "legacy-unreported"
+		}
+	}
+	if err := validateParameterMaterialStatus(decoded.ParameterSet, decoded.ParameterMaterialStatus, decoded.ParameterMaterialReason); err != nil {
+		return err
+	}
+	if err := model.ValidatePersistenceLearningStatus(decoded.PersistenceLearning); err != nil {
+		return err
+	}
+	if !EconomicsMatchesRoundedLambda(decoded.Economics, decoded.Lambda) {
+		return fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
+	}
 	*r = Record(decoded)
 	return nil
 }
@@ -390,8 +442,13 @@ type Logger struct {
 	// [P-VCLUSTER O10] sinkFor, when set, routes each record to a PER-TENANT sink (by rec.Tenant) so a
 	// noisy tenant's rotation cannot evict another tenant's audit history. nil => the single jsonOut
 	// (byte-identical single-tenant path).
-	sinkFor  func(tenant string) io.Writer
-	degraded map[string]bool // sink routes awaiting a subsequent successful persistence attempt
+	sinkFor            func(tenant string) io.Writer
+	degraded           map[string]bool // sink routes awaiting a subsequent successful persistence attempt
+	parameterStore     *ParameterMaterialStore
+	parameterRetention map[string]parameterMaterialRetention
+	parameterOrder     []string
+	parameterNext      int
+	parameterMu        sync.Mutex
 	// OnlySelected, when true, logs only Selected (non-noop) decisions to the logger
 	// to keep operator logs quiet; the JSON sink (if set) always gets every record.
 	OnlySelected bool
@@ -409,6 +466,115 @@ func (l *Logger) SetTenantSink(router func(tenant string) io.Writer) {
 // New constructs a Logger. jsonOut may be nil.
 func New(log logr.Logger, jsonOut io.Writer) *Logger {
 	return &Logger{log: log.WithName("audit"), jsonOut: jsonOut, OnlySelected: true}
+}
+
+const (
+	parameterMaterialRetained    = "retained"
+	parameterMaterialUnavailable = "unavailable"
+	parameterMaterialFailed      = "failed"
+	maxParameterRetentionEntries = MaxParameterMaterialDocuments
+)
+
+type parameterMaterialRetention struct{ status, reason string }
+
+// setParameterRetentionLocked bounds transient per-reference outcomes separately
+// from the immutable sibling store. Eviction loses only the ability to assert a
+// retention result on a later row; a miss is reported as unavailable and never
+// deletes or contradicts durable material.
+func (l *Logger) setParameterRetentionLocked(key string, retention parameterMaterialRetention) {
+	if l.parameterRetention == nil {
+		l.parameterRetention = make(map[string]parameterMaterialRetention)
+	}
+	if _, exists := l.parameterRetention[key]; exists {
+		l.parameterRetention[key] = retention
+		return
+	}
+	if len(l.parameterOrder) < maxParameterRetentionEntries {
+		l.parameterOrder = append(l.parameterOrder, key)
+	} else {
+		delete(l.parameterRetention, l.parameterOrder[l.parameterNext])
+		l.parameterOrder[l.parameterNext] = key
+		l.parameterNext = (l.parameterNext + 1) % maxParameterRetentionEntries
+	}
+	l.parameterRetention[key] = retention
+}
+
+func parameterMaterialKey(ref *model.ParameterSetReference) string {
+	if ref == nil {
+		return ""
+	}
+	return ref.ManifestHash + "\x00" + ref.PolicyOverridesHash
+}
+
+func validateParameterMaterialStatus(ref *model.ParameterSetReference, status, reason string) error {
+	if ref == nil {
+		if status != "" || reason != "" {
+			return errors.New("parameter material status has no parameter-set reference")
+		}
+		return nil
+	}
+	switch status {
+	case parameterMaterialRetained:
+		if reason != "" {
+			return errors.New("retained parameter material has a failure reason")
+		}
+	case parameterMaterialUnavailable, parameterMaterialFailed:
+		if reason == "" {
+			return errors.New("unretained parameter material requires a bounded reason")
+		}
+	default:
+		return errors.New("parameter-set reference has no valid material retention status")
+	}
+	return nil
+}
+
+// SetParameterMaterialStore installs the durable content-addressed sibling
+// store used by production audit. nil preserves an explicit unavailable state.
+func (l *Logger) SetParameterMaterialStore(store *ParameterMaterialStore) {
+	l.parameterMu.Lock()
+	defer l.parameterMu.Unlock()
+	l.parameterStore = store
+}
+
+// RetainParameterSet verifies and persists exact source/effective inputs before
+// decision rows are written. Failure is audit degradation, not actuation input.
+func (l *Logger) RetainParameterSet(tenant string, ref *model.ParameterSetReference, manifest model.DecisionParameterManifest, overrides model.EffectivePolicyOverrides) error {
+	key := parameterMaterialKey(ref)
+	l.parameterMu.Lock()
+	defer l.parameterMu.Unlock()
+	if err := model.VerifyParameterSet(ref, &manifest, &overrides); err != nil {
+		l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialFailed, "material-invalid"})
+		parameterMaterialErrors.WithLabelValues(parameterMaterialFailed).Inc()
+		l.log.Error(err, "parameter material verification failed", "tenant", tenant)
+		return err
+	}
+	if l.parameterStore == nil {
+		err := errors.New("parameter material store is not configured")
+		l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialUnavailable, "store-unconfigured"})
+		parameterMaterialErrors.WithLabelValues(parameterMaterialUnavailable).Inc()
+		l.log.Error(err, "parameter material retention unavailable", "tenant", tenant)
+		return err
+	}
+	if err := l.parameterStore.Store(ref, manifest, overrides); err != nil {
+		l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialFailed, "store-write-failed"})
+		parameterMaterialErrors.WithLabelValues(parameterMaterialFailed).Inc()
+		l.log.Error(err, "parameter material retention failed", "tenant", tenant)
+		return err
+	}
+	l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialRetained, ""})
+	return nil
+}
+
+func (l *Logger) parameterMaterialStatus(ref *model.ParameterSetReference) parameterMaterialRetention {
+	if ref == nil {
+		return parameterMaterialRetention{}
+	}
+	l.parameterMu.Lock()
+	defer l.parameterMu.Unlock()
+	if retained, ok := l.parameterRetention[parameterMaterialKey(ref)]; ok {
+		return retained
+	}
+	return parameterMaterialRetention{parameterMaterialUnavailable, "material-not-retained"}
 }
 
 // ToRecord converts a Decision to a Record.
@@ -434,13 +600,32 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		dispatchReason = model.SafeDispatchReason(d.DispatchReason)
 	}
 	var representation *model.Representation
+	var economics *model.EconomicsMetadata
+	if d.Economics != nil {
+		copy := *d.Economics
+		economics = &copy
+	}
+	var parameterSet *model.ParameterSetReference
+	if d.ParameterSet != nil {
+		copy := *d.ParameterSet
+		parameterSet = &copy
+	}
+	var persistenceLearning *model.PersistenceLearningStatus
+	if d.PersistenceLearning != nil {
+		copy := *d.PersistenceLearning
+		if copy.Policy != nil {
+			epoch := *copy.Policy
+			copy.Policy = &epoch
+		}
+		persistenceLearning = &copy
+	}
 	var preparedRepresentation json.RawMessage
 	if prepareWire && d.Measurements != nil {
 		representation, preparedRepresentation = prepareRepresentation(d.Representation)
 	} else {
 		representation = cloneRepresentation(d.Representation)
 	}
-	return Record{
+	record := Record{
 		AdapterObservation:     d.AdapterObservation,
 		Representation:         representation,
 		Existential:            d.Existential,
@@ -497,12 +682,16 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		EventEvidence:          round4(d.EventEvidence),
 		Events:                 roundEvents(d.Events),
 		Lambda:                 round4(d.Lambda),
+		Economics:              economics,
+		ParameterSet:           parameterSet,
+		PersistenceLearning:    persistenceLearning,
 		ProactiveRate:          round4(d.ProactiveRate),
 		Attribution:            canonicalizeAttribution(d.Attribution),
 		Handler:                d.Handler,
 		ObjectsTouched:         d.ObjectsTouched,
 		RollbackRef:            d.RollbackRef,
 		MutationKind:           d.MutationKind,
+		GracefulTermination:    gracefulTerminationRecord(d.GracefulTermination),
 		Phoenix:                phoenixRecord(d.Phoenix),
 		PreemptMargin:          round4(d.PreemptMargin),
 		ProjectedNextStageSec:  round4(d.ProjectedNextStageSec),
@@ -511,6 +700,19 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		Measurements:           recordMeasurements(d.Measurements),
 		preparedRepresentation: preparedRepresentation,
 	}
+	if parameterSet != nil {
+		record.ParameterMaterialStatus = parameterMaterialUnavailable
+		record.ParameterMaterialReason = "material-not-retained"
+	}
+	return record
+}
+
+func gracefulTerminationRecord(in *model.GracefulTerminationReceipt) *model.GracefulTerminationReceipt {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func recordMeasurements(in *model.DecisionMeasurementsV1) *model.DecisionMeasurementsV1 {
@@ -657,6 +859,9 @@ func phoenixRecord(p *model.PhoenixForensics) *model.PhoenixForensics {
 // Record logs one decision.
 func (l *Logger) Record(d model.Decision) error {
 	rec := toRecord(d, true)
+	retention := l.parameterMaterialStatus(rec.ParameterSet)
+	rec.ParameterMaterialStatus = retention.status
+	rec.ParameterMaterialReason = retention.reason
 	err := l.writeRecord(rec.Tenant, rec)
 	if l.OnlySelected && !d.Selected && (d.Existential == nil || (len(d.Existential.Evidence) == 0 && len(d.Existential.Reasons) == 0)) {
 		return err
@@ -678,6 +883,8 @@ func (l *Logger) Record(d model.Decision) error {
 		"perDollar", rec.PerDollar, "coveredWeight", rec.CoveredWeight, "coveredFacts", rec.CoveredFacts,
 		"stage", rec.Stage, "nextStage", rec.NextStage, "hazard", rec.StageHazard,
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,
+		"economics", rec.Economics,
+		"persistenceLearning", rec.PersistenceLearning,
 		"cost", rec.Cost, "net", rec.Net, "asset", rec.AssetValue, "blast", rec.BlastRadius,
 		"attribution", rec.Attribution,
 		"r6Would", rec.R6Counterfactual, "r6Note", rec.CounterfactualNote,
@@ -722,6 +929,13 @@ func (l *Logger) tickSummary(tenant, namespace, policy, uid string, total, selec
 
 func round4(x float64) float64 {
 	return float64(int64(x*10000+sign(x)*0.5)) / 10000
+}
+
+// EconomicsMatchesRoundedLambda verifies the legacy display alias without
+// discarding the descriptor's authoritative full-precision runtime value.
+// Records written before economics metadata remain readable.
+func EconomicsMatchesRoundedLambda(metadata *model.EconomicsMetadata, roundedLambda float64) bool {
+	return metadata == nil || (metadata.LambdaRuntimeLegacy.Present && round4(metadata.LambdaRuntimeLegacy.Value) == roundedLambda)
 }
 
 func sign(x float64) float64 {

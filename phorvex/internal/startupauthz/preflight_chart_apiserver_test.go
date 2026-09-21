@@ -232,9 +232,10 @@ func TestRenderedManagerIdentityDrivesBootAdmission(t *testing.T) {
 	waitBoot(managerReader, managerReviews, Config{Backend: actuator.BackendHybrid, OperatorNamespace: "operator"}, true, "")
 	deletePolicy(configured)
 
-	// Native rotate reads only the target Pod and the three owner kinds supported by
-	// ownership.Check. A real manager identity with exactly that reduced owner scope must
-	// pass; this prevents startup admission from demanding quarantine-only owner reads.
+	// Native rotate reads the target Pod and owner chain, establishes shared
+	// availability capacity through Services and EndpointSlices, and persists its
+	// reservation in the operator-owned ledger. A real manager identity with exactly
+	// that route's scope must pass without acquiring quarantine mutation authority.
 	for _, namespace := range []string{"control-minimal", "operator-minimal", "tenant-minimal"} {
 		createNamespace(namespace)
 	}
@@ -242,18 +243,20 @@ func TestRenderedManagerIdentityDrivesBootAdmission(t *testing.T) {
 	minimalObjects := []client.Object{
 		&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: minimalSubject.Name, Namespace: minimalSubject.Namespace}},
 		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-boot"}, Rules: []rbacv1.PolicyRule{
-			{APIGroups: []string{"phorvex.ai"}, Resources: []string{"phorvexpolicies"}, Verbs: []string{"list"}},
+			{APIGroups: []string{"phorvex.ai"}, Resources: []string{"phorvexpolicies"}, Verbs: []string{"get", "list"}},
 			{APIGroups: []string{"authorization.k8s.io"}, Resources: []string{"selfsubjectaccessreviews"}, Verbs: []string{"create"}},
 			{APIGroups: []string{""}, Resources: []string{"namespaces"}, ResourceNames: []string{"tenant-minimal"}, Verbs: []string{"get"}},
 		}},
 		&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-boot"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "minimal-rotate-boot"}, Subjects: []rbacv1.Subject{minimalSubject}},
 		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate", Namespace: "tenant-minimal"}, Rules: []rbacv1.PolicyRule{
-			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"services"}, Verbs: []string{"get", "list"}},
+			{APIGroups: []string{"discovery.k8s.io"}, Resources: []string{"endpointslices"}, Verbs: []string{"list"}},
 			{APIGroups: []string{""}, Resources: []string{"replicationcontrollers"}, Verbs: []string{"get"}},
 			{APIGroups: []string{"apps"}, Resources: []string{"replicasets", "deployments"}, Verbs: []string{"get"}},
 		}},
 		&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate", Namespace: "tenant-minimal"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "minimal-rotate"}, Subjects: []rbacv1.Subject{minimalSubject}},
-		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-journal", Namespace: "operator-minimal"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"list"}}}},
+		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-journal", Namespace: "operator-minimal"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"get", "list", "create", "update"}}}},
 		&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-journal", Namespace: "operator-minimal"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "minimal-rotate-journal"}, Subjects: []rbacv1.Subject{minimalSubject}},
 	}
 	for _, object := range minimalObjects {

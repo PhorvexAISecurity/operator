@@ -67,7 +67,7 @@ func m019Scenario(t *testing.T) (*decision.CoverageEngine, model.Policy, []*mode
 	for _, variable := range model.LiveExposureVariables {
 		exp[variable] = 2 * time.Hour
 	}
-	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, MountedSecrets: []string{"creds"}}, Phase: model.PhaseWarm, BlastRadius: .6, ExposureByVariable: exp}
+	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, MountedSecrets: []string{"creds"}}, Phase: model.PhaseWarm, Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "fixture-measured")}, BlastRadius: .6, ExposureByVariable: exp}
 	pol := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", TraceEnabled: true, BrainImage: "fixture", GitSHA: "fixture", Lambda: .4, NormSparsity: .4, FlowDisruption: .6, WeightSecrets: .8, MaxMovesPerTick: 1, ProactiveFloor: time.Hour, AntiOverRotationWindow: 5 * time.Minute, MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true, model.ActionQuarantine: true}}
 	ds, err := ce.DecideChecked([]*model.WorkloadView{v}, pol)
 	if err != nil || len(ds) != 1 || !ds[0].Selected {

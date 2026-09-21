@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/exposure"
 	metricspkg "github.com/phorvex/phorvex/internal/metrics"
@@ -246,12 +247,10 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 	// proof of no effect and therefore cannot license the reserved alternative. The
 	// isolated API-server authorization control lives in m012_actuation_metrics_apiserver_test.go.
 	forbidden := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "pod", errors.New("denied"))
-	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := m034Scheme(t)
 	controller := true
 	replicas := int32(1)
+	cap := int64(30)
 	rc := &corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "rc", UID: types.UID("rc-uid"), ResourceVersion: "1"},
 		Spec:       corev1.ReplicationControllerSpec{Replicas: &replicas, Selector: map[string]string{"app": "demo"}},
@@ -264,8 +263,15 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 			APIVersion: "v1", Kind: "ReplicationController", Name: rc.Name, UID: rc.UID, Controller: &controller,
 		}},
 	}}
+	apiPolicyObject := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{
+		Namespace: "ns", Name: "policy", UID: types.UID("policy-uid"), ResourceVersion: "1",
+	}, Spec: v1alpha1.PhorvexPolicySpec{
+		Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
+		Budget:  v1alpha1.BudgetSpec{MaxGracePeriodSeconds: &cap},
+		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
+	}}
 	deleteCalls := 0
-	apiClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rc, apiPod).WithInterceptorFuncs(interceptor.Funcs{
+	apiClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rc, apiPod, apiPolicyObject).WithInterceptorFuncs(interceptor.Funcs{
 		Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
 			deleteCalls++
 			return forbidden
@@ -274,7 +280,7 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 	apiNative := actuator.NewNativeActuator(apiClient)
 	apiNative.SetBoundaryReader(apiClient)
 	apiManager := &Manager{Actuator: apiNative, Intents: exposure.NewIntents(), Log: logr.Discard()}
-	apiPolicy := model.Policy{Tenant: "m012-api-forbidden", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	apiPolicy := model.Policy{Tenant: "m012-api-forbidden", PolicyName: "policy", PolicyUID: "policy-uid", MaxGracePeriodSeconds: cap, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	apiView := m010KVView(string(apiPod.UID))
 	apiView.Pod.Name = apiPod.Name
 	apiDecision := []model.Decision{{Namespace: "ns", Pod: apiPod.Name, Action: model.ActionRotate, Selected: true, Feasible: true}}

@@ -47,7 +47,7 @@ Severity: MAJOR · Tier: 0 · Fixes: none
 
 ### M-144 · λ decays to its floor and is structurally trapped there — after a brief seed-decay, the cost stack becomes inert · **OPEN** · `ECONOMICS`
 
-Severity: MAJOR · Tier: 0 · Fixes: none
+Severity: MAJOR · Tier: 0 · Fixes: POST25-ECONOMICS
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -280,7 +280,7 @@ Severity: HIGH · Tier: 1 · Fixes: none
 
 ### M-104 · F7/C4 — EPSS: a gameable external anchor, applied at the wrong layer · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: 1 · Fixes: none
+Severity: MEDIUM · Tier: 1 · Fixes: POST25-M104-SCOPED-FEED
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.first_epss
@@ -607,7 +607,7 @@ Severity: MAJOR · Tier: 3 · Fixes: T17-M109
 
 ### M-98 · C1 — the mathematical spine: value and cost are incommensurable, and λ can't fix it · **OPEN** · `ECONOMICS`
 
-Severity: HIGH · Tier: 3 · Fixes: none
+Severity: HIGH · Tier: 3 · Fixes: POST25-ECONOMICS
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -640,7 +640,7 @@ Severity: HIGH (claim validation) · Tier: 3 · Fixes: none
 
 ### M-156 · RLS prices `Unknown`/`Draining` phases at the idle floor — the learned path's cheapest rotation is the least-known pod · **OPEN** · `MATH-GATE`
 
-Severity: HIGH once active · Tier: 3 · Fixes: none
+Severity: HIGH once active · Tier: 3 · Fixes: POST25-M156
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · slo.contract
@@ -670,7 +670,7 @@ Severity: HIGH/MEDIUM · Tier: 3 · Fixes: none
 
 ### M-106 · C3 — the belief calibrator and the cost calibrator are epistemically incoherent · **OPEN** · `ECONOMICS`
 
-Severity: MEDIUM · Tier: 3 · Fixes: none
+Severity: MEDIUM · Tier: 3 · Fixes: POST25-M106
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · belief
@@ -683,7 +683,7 @@ Severity: MEDIUM · Tier: 3 · Fixes: none
 
 ### M-108 · Constants debt: 61 inventoried — 3 derived, 8 calibrated, 39 heuristic, 6 arbitrary · **OPEN** · `ECONOMICS`
 
-Severity: CALIBRATION PROGRAM · Tier: 3 · Fixes: none
+Severity: CALIBRATION PROGRAM · Tier: 3 · Fixes: POST25-M108
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
@@ -951,7 +951,7 @@ Severity: HIGH · Tier: parallel · Fixes: T6-M052
 
 ### M-54 · rotate honors the pod's own grace period · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M054
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -1909,7 +1909,7 @@ Severity: HIGH · Tier: parallel · Fixes: T8-M124
 
 ### M-135 · `EnsurePolicy` only runs on the actuation path — no self-heal while a tenant is idle or braked · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M135
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.router
@@ -1941,7 +1941,7 @@ Severity: HIGH · Tier: parallel · Fixes: POST25-M137, POST25-M137-TRACE, T20-M
 
 ### M-103 · F6b — the per-tick move budget rate-limits the defender, not the attacker · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: POST25-M103
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -2162,7 +2162,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T4-M019
 
 ### M-100 · F2/F8 — the objective sees only the reversible, detector-visible projection of attacker ground · **OPEN** · `CHOICE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M100, POST25-M100-CURRENT-VERSION
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · decision.coverage

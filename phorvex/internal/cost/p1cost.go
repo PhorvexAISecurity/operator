@@ -71,11 +71,20 @@ type P1Components struct {
 // precise input that made the action unactionable.
 type P1Evaluation struct {
 	P1Components
-	CHi                  float64 `json:"chi"`
-	GPUEnvelopeApplied   bool    `json:"gpu_envelope_applied"`
-	GPUEnvelopeSlack     float64 `json:"gpu_envelope_slack"`
-	UnactionableCategory string  `json:"unactionable_category,omitempty"`
-	NaNFeature           string  `json:"nan_feature,omitempty"`
+	CHi                       float64           `json:"chi"`
+	FlowPredictedMean         float64           `json:"flow_predicted_mean"`
+	FlowRegime                RespawnFlowRegime `json:"flow_regime,omitempty"`
+	FlowConservativeFloor     float64           `json:"flow_conservative_floor"`
+	FlowFloorApplied          bool              `json:"flow_floor_applied"`
+	FlowUncertaintyBound      float64           `json:"flow_uncertainty_bound"`
+	FlowUncertaintyApplied    bool              `json:"flow_uncertainty_applied"`
+	FlowUncertaintySlack      float64           `json:"flow_uncertainty_slack"`
+	ConformalWindowReady      bool              `json:"conformal_window_ready"`
+	ConformalRegimeApplicable bool              `json:"conformal_regime_applicable"`
+	GPUEnvelopeApplied        bool              `json:"gpu_envelope_applied"`
+	GPUEnvelopeSlack          float64           `json:"gpu_envelope_slack"`
+	UnactionableCategory      string            `json:"unactionable_category,omitempty"`
+	NaNFeature                string            `json:"nan_feature,omitempty"`
 }
 
 // NewP1Cost constructs the P1 cost model seeded at the P0-equivalent prior.
@@ -94,6 +103,16 @@ func NewP1CostWithLambda(lambdaSeed float64) *P1Cost {
 // Node-placement exposure is declared-only; this fixed rubric does not read its
 // clock. Keep the three-element denominator unchanged by clock cleanup.
 const structuralNetworkIsolation = "network-isolation"
+
+const (
+	NormCostMetadataMutation     = 0.10
+	NormCostPartialIdentity      = 0.15
+	NormCostStateReset           = 0.20
+	NormCostServingConfiguration = 0.25
+	NormCostServiceRekey         = 0.35
+	NormCostWorkloadReplacement  = 1.00
+	NormCostSharedDeviceMutation = 1.25
+)
 
 var structuralComponents = []string{
 	model.VarPodIdentity,
@@ -119,11 +138,11 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 	case model.ActionRotate, model.ActionWarmSwap:
 		// Both retire one logical serving workload. Warm-swap's lower disruption
 		// belongs to C_flow, not C_norm.
-		return 1.0
+		return NormCostWorkloadReplacement
 	case model.ActionQuarantine:
-		return 1.0 / float64(len(structuralComponents))
+		return NormCostWorkloadReplacement / float64(len(structuralComponents))
 	case model.ActionMIGRebind:
-		return 1.25
+		return NormCostSharedDeviceMutation
 	case model.ActionModelShardReplace:
 		parallelSize := 1
 		if view != nil && view.Pod.ParallelSize > parallelSize {
@@ -132,33 +151,45 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		return float64(parallelSize)
 	case model.ActionEndpointRotate:
 		if view != nil && view.Pod.RouteServiceReady {
-			return 0.35
+			return NormCostServiceRekey
 		}
-		return 0.10
+		return NormCostMetadataMutation
 	case model.ActionAdapterRotate:
-		return 0.25
+		return NormCostServingConfiguration
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate:
-		return 0.20
+		return NormCostStateReset
 	case model.ActionIdentityRotate:
-		return 0.15
+		return NormCostPartialIdentity
 	case model.ActionRouteRotate, model.ActionDebugger, model.ActionCustomInject, model.ActionRequestDrain:
-		return 0.10
+		return NormCostMetadataMutation
 	default:
 		return 0
 	}
 }
 
 func (c *P1Cost) components(view *model.WorkloadView, move model.Move, pol model.Policy) P1Components {
+	components, _ := c.componentsWithRespawn(view, move, pol)
+	return components
+}
+
+func (c *P1Cost) componentsWithRespawn(view *model.WorkloadView, move model.Move, pol model.Policy) (P1Components, respawnFlowEstimate) {
 	if move.Action == model.ActionNoop {
-		return P1Components{}
+		return P1Components{}, respawnFlowEstimate{}
 	}
 	cNorm := normCostP1(view, move)
-	cFlow := c.actionFlow(view, move.Action)
+	var respawn respawnFlowEstimate
+	cFlow := 0.0
+	if flowFamilyForAction(move.Action) == flowRespawn {
+		respawn = c.respawnFlow(view, move.Action)
+		cFlow = respawn.Effective
+	} else {
+		cFlow = c.actionFlow(view, move.Action)
+	}
 	return P1Components{
 		Norm:  cNorm,
 		Flow:  cFlow,
 		Total: pol.NormSparsity*cNorm + pol.FlowDisruption*cFlow,
-	}
+	}, respawn
 }
 
 // Evaluation computes the cost once and carries any NaN classification to the
@@ -176,10 +207,13 @@ func (c *P1Cost) Evaluation(view *model.WorkloadView, move model.Move, pol model
 			NaNFeature:           feature,
 		}
 	}
-	components := c.components(view, move, pol)
+	components, respawn := c.componentsWithRespawn(view, move, pol)
 	chi := components.Total
+	windowReady := c.Conformal != nil && c.Conformal.Calibrated()
+	conformalApplicable := move.Action == model.ActionRotate && respawn.Regime == RespawnFlowMeasuredLoad
 	envelopeApplied := false
 	envelopeSlack := 0.0
+	regimeSlack := 0.0
 	if move.Action == model.ActionRotate {
 		slack := c.Conformal.Quantile()
 		if slack < 0 {
@@ -192,6 +226,10 @@ func (c *P1Cost) Evaluation(view *model.WorkloadView, move model.Move, pol model
 		}
 		chi += slack
 	}
+	if respawn.UncertaintyApplied {
+		regimeSlack = pol.FlowDisruption * maxf(0, respawn.UncertaintyBound-components.Flow)
+		chi = maxf(chi, components.Total+regimeSlack)
+	}
 	if math.IsNaN(components.Norm) || math.IsNaN(components.Flow) ||
 		math.IsNaN(components.Total) || math.IsNaN(chi) {
 		return P1Evaluation{
@@ -202,10 +240,19 @@ func (c *P1Cost) Evaluation(view *model.WorkloadView, move model.Move, pol model
 		}
 	}
 	return P1Evaluation{
-		P1Components:       components,
-		CHi:                chi,
-		GPUEnvelopeApplied: envelopeApplied,
-		GPUEnvelopeSlack:   envelopeSlack,
+		P1Components:              components,
+		CHi:                       chi,
+		FlowPredictedMean:         respawn.PredictedMean,
+		FlowRegime:                respawn.Regime,
+		FlowConservativeFloor:     respawn.ConservativeFloor,
+		FlowFloorApplied:          respawn.FloorApplied,
+		FlowUncertaintyBound:      respawn.UncertaintyBound,
+		FlowUncertaintyApplied:    respawn.UncertaintyApplied,
+		FlowUncertaintySlack:      regimeSlack,
+		ConformalWindowReady:      windowReady,
+		ConformalRegimeApplicable: conformalApplicable,
+		GPUEnvelopeApplied:        envelopeApplied,
+		GPUEnvelopeSlack:          envelopeSlack,
 	}
 }
 
@@ -262,13 +309,13 @@ func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy
 // nanFeature returns the precise action-relevant NaN input. It intentionally does
 // not reject an unrelated telemetry field for an action that never reads it.
 func (c *P1Cost) nanFeature(view *model.WorkloadView, move model.Move, pol model.Policy) string {
-	if math.IsNaN(pol.NormSparsity) {
+	if math.IsNaN(pol.NormSparsity) || math.IsInf(pol.NormSparsity, 0) || pol.NormSparsity < 0 {
 		return "policy.normSparsity"
 	}
-	if math.IsNaN(pol.FlowDisruption) {
+	if math.IsNaN(pol.FlowDisruption) || math.IsInf(pol.FlowDisruption, 0) || pol.FlowDisruption < 0 {
 		return "policy.flowDisruption"
 	}
-	if math.IsNaN(pol.CostCeiling) {
+	if math.IsNaN(pol.CostCeiling) || math.IsInf(pol.CostCeiling, 0) || pol.CostCeiling < 0 {
 		return "policy.costCeiling"
 	}
 	if c.RLS != nil && c.RLS.hasNaNParameter() && flowFamilyForAction(move.Action) == flowRespawn {

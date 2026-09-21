@@ -17,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/audit"
 )
 
 const ChunkBytes = 1 << 20
@@ -240,6 +242,35 @@ func (c ServerConfig) Handler() http.Handler {
 				return
 			}
 		}
+	})
+	mux.HandleFunc("GET /v1/parameter-material/{kind}/{digest}", func(w http.ResponseWriter, r *http.Request) {
+		kind, digest := r.PathValue("kind"), r.PathValue("digest")
+		if kind != audit.ParameterMaterialManifest && kind != audit.ParameterMaterialPolicyOverrides {
+			http.NotFound(w, r)
+			return
+		}
+		if len(digest) != sha256.Size*2 || strings.ToLower(digest) != digest {
+			http.Error(w, "invalid parameter material digest", http.StatusBadRequest)
+			return
+		}
+		if _, err := hex.DecodeString(digest); err != nil {
+			http.Error(w, "invalid parameter material digest", http.StatusBadRequest)
+			return
+		}
+		hash := "sha256:" + digest
+		raw, err := audit.ReadParameterMaterial(c.AuditPath, kind, hash)
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, "parameter material unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Parameter-Material-Hash", hash)
+		w.Header().Set("Content-Length", strconv.Itoa(len(raw)))
+		_, _ = w.Write(raw)
 	})
 	limited := make(chan struct{}, 4)
 	bounded := http.TimeoutHandler(mux, 8*time.Second, "audit read timeout")

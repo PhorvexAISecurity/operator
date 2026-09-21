@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,11 +11,77 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/killchain"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
+
+func TestM100CurrentInventoryCannotBecomeThreatEvidence(t *testing.T) {
+	observer := "system:serviceaccount:ns:current-observer"
+	trustEvents(t, observer)
+	now := time.Date(2026, 9, 21, 4, 0, 0, 0, time.UTC)
+	payload := model.CurrentInventoryV1{
+		SchemaVersion: model.CurrentInventorySchemaV1, EvidenceID: "current-v2", Synthetic: true,
+		PolicyEpoch:         model.PolicyEpoch{Namespace: "ns", Name: "policy", UID: "policy-uid", Generation: 1},
+		DecisionAsset:       model.DecisionAssetIdentity{Namespace: "ns", Name: "pod", TargetUID: "pod-uid"},
+		ImmediateController: model.ObjectIdentity{APIVersion: "apps/v1", Kind: "ReplicaSet", Namespace: "ns", Name: "rs", UID: "rs-uid"},
+		StableWorkloadOwner: model.ObjectIdentity{APIVersion: "apps/v1", Kind: "Deployment", Namespace: "ns", Name: "app", UID: "dep-uid"},
+		ProtectedScope:      model.ProtectedScope{Tenant: "tenant", Asset: "synthetic/data", Version: "v2", Property: "confidentiality"},
+		SourceBinding:       model.CurrentInventorySourceBinding{ConfigMap: model.ObjectIdentity{APIVersion: "v1", Kind: "ConfigMap", Namespace: "ns", Name: "data", UID: "cm-uid"}, ResourceVersion: "7", Key: "payload", VolumeName: "data", ContainerName: "server", MountPath: "/data", ProjectedPath: "payload", Bytes: 2, SHA256: strings.Repeat("a", 64)},
+		Classification:      model.CurrentInventoryClassification{RuleVersion: model.CurrentInventoryRuleVersionV1, RuleDigest: strings.Repeat("b", 64), InventoryClass: model.CurrentInventoryClass, PossibleOutcome: "unauthorized-disclosure", ObserverIdentity: observer},
+		Observation:         model.CurrentInventoryObservation{StartedAt: now.Add(-2 * time.Second), CompletedAt: now.Add(-time.Second), ValidUntil: now.Add(time.Minute), StatusCode: 200, ManifestEOF: true},
+	}
+	raw, _, err := currentinventory.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := seEvent("current", observer, model.CurrentInventorySource, "ns/pod")
+	current.CreationTimestamp = metav1.NewTime(now.Add(-time.Second))
+	current.Annotations[currentinventory.Annotation] = raw
+	current.Spec.Rule.Type = model.CurrentInventoryRuleType
+	current.Spec.Rule.ThreatLevel = "high"
+	current.Spec.Description = model.CurrentInventoryDescription
+	attack := seEvent("attack", observer, "qualified-detector", "ns/pod")
+	attack.CreationTimestamp = metav1.NewTime(now.Add(-time.Second))
+	attack.Spec.Rule.Type = "Panic"
+	attack.Spec.Rule.ThreatLevel = "high"
+
+	evaluate := func(events ...*amtdv1beta1.SecurityEvent) (killchain.Assessment, []model.Decision, []model.SecurityEventInfo) {
+		scheme := runtime.NewScheme()
+		if err := amtdv1beta1.AddToScheme(scheme); err != nil {
+			t.Fatal(err)
+		}
+		builder := fake.NewClientBuilder().WithScheme(scheme)
+		for _, event := range events {
+			builder = builder.WithObjects(event.DeepCopy())
+		}
+		all, byPod, err := collectEvents(context.Background(), builder.Build(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		view := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 2, ReadyReplicas: 2, MountedSecrets: []string{"secret"}}, Phase: model.PhaseWarm, Events: byPod["ns/pod"], ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: time.Minute, model.VarNodePlacement: time.Minute, model.VarSession: time.Minute}}
+		policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1, DryRun: true, Lambda: 0.05, MaxMovesPerTick: 1, ProactiveFloor: 15 * time.Minute, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionRotate: true}, AssetWeightFromLabels: func(map[string]string) float64 { return 1 }}
+		assessment := killchain.NewModel().Assess(view, policy, 60, policy.ProactiveFloor.Seconds())
+		decisions := decision.NewCoverageEngine().Decide([]*model.WorkloadView{view}, policy)
+		return assessment, decisions, all
+	}
+	cleanAssessment, cleanDecisions, _ := evaluate()
+	currentAssessment, currentDecisions, all := evaluate(current)
+	if len(all) != 1 || len(currentAssessment.Events) != 0 || currentAssessment.PHold != cleanAssessment.PHold || currentAssessment.StageName != cleanAssessment.StageName || len(currentDecisions) != len(cleanDecisions) {
+		t.Fatalf("current inventory changed threat assessment: clean=%+v current=%+v all=%+v", cleanAssessment, currentAssessment, all)
+	}
+	for i := range cleanDecisions {
+		if currentDecisions[i].PHold != cleanDecisions[i].PHold || currentDecisions[i].Stage != cleanDecisions[i].Stage || currentDecisions[i].Selected != cleanDecisions[i].Selected || currentDecisions[i].Action != cleanDecisions[i].Action || currentDecisions[i].Net != cleanDecisions[i].Net {
+			t.Fatalf("current inventory changed ranking/selection: clean=%+v current=%+v", cleanDecisions[i], currentDecisions[i])
+		}
+	}
+	attackAssessment, _, _ := evaluate(attack)
+	if attackAssessment.EventEvidence <= 0 || attackAssessment.PHold == cleanAssessment.PHold || attackAssessment.StageName == cleanAssessment.StageName {
+		t.Fatalf("normal trusted attack positive did not affect assessment: clean=%+v attack=%+v", cleanAssessment, attackAssessment)
+	}
+}
 
 // The event stream is projected by the real ingestion gate, then the same views
 // pass through production AssembleSet and Decide. Namespace/GPU topology supplies

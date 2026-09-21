@@ -5,13 +5,19 @@
 package platform
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/recon"
 )
@@ -31,15 +37,38 @@ import (
 // (honest-absent) — the exploitability prior never fabricates a score and never blocks
 // the <1s tick.
 
+type epssSnapshot struct {
+	cache map[string]epssEntry
+	// repoLatest is the M-141 repo-level fallback index, rebuilt with the cache:
+	// repository -> the cache key of that repository's latest unambiguous scan.
+	repoLatest map[string]string
+	source     EPSSProvenance
+}
+
 var (
-	epssMu    sync.RWMutex
-	epssCache = map[string]epssEntry{}
-	// epssRepoLatest is the M-141 repo-level fallback index, rebuilt with the cache: repository
-	// (the image reference before "@sha256:" / the tag) -> the cache key of that repository's
-	// LATEST scan. Only unambiguous entries are indexed: latest by scanTS, or the single entry
-	// when the cache predates scanTS. Two undated entries for one repository are NOT guessed.
-	epssRepoLatest = map[string]string{}
+	epssPublishMu sync.Mutex
+	epssState     atomic.Pointer[epssSnapshot]
 )
+
+func init() {
+	epssState.Store(&epssSnapshot{cache: map[string]epssEntry{}, repoLatest: map[string]string{}, source: EPSSProvenance{Mode: "legacy", Status: "provenance-unavailable"}})
+}
+
+// EPSSProvenance is compact source identity shared by every lookup from one
+// atomically-published cache snapshot. It never contains the per-image registry.
+type EPSSProvenance struct {
+	Mode, Status, ScopeSHA256, CacheSHA256, MetadataSHA256 string
+	ConfigMapUID, ConfigMapResourceVersion                 string
+	ProducerSource                                         string
+	ObservedAt, ExpiresAt                                  time.Time
+}
+
+// ConfigureAuthoritativeEPSSUnavailable prevents an explicitly authoritative
+// process from ever falling back to legacy trust while its first verified
+// snapshot is still pending or unavailable.
+func ConfigureAuthoritativeEPSSUnavailable() {
+	replaceEPSSWithProvenance(map[string]epssEntry{}, EPSSProvenance{Mode: "authoritative", Status: "unavailable"})
+}
 
 type epssEntry struct {
 	EPSS   float64 // exploit-prediction score [0,1]
@@ -64,6 +93,7 @@ type EPSSLookup struct {
 	CachedDigest  string  // the cache key that answered (== RunningDigest on exact)
 	RunningDigest string  // the pod's ImageID as looked up
 	ScanTS        string  // audit only — never a branch condition
+	Source        EPSSProvenance
 }
 
 // SeedEPSS replaces the offline exploitability cache (from a scanner export or a config
@@ -116,41 +146,95 @@ func loadEPSSFromFile(path string, missingOK bool) (entries int, changed bool, e
 	if path == "" {
 		return EPSSLoaded(), false, nil
 	}
-	b, err := os.ReadFile(path)
+	b, err := readBoundedFile(path, epssmeta.MaxCacheBytes)
 	if err != nil {
 		if missingOK && os.IsNotExist(err) {
 			return EPSSLoaded(), false, nil // startup honest-absence: no feed wired
 		}
 		return EPSSLoaded(), false, err
 	}
+	next, err := parseEPSSBytes(b)
+	if err != nil {
+		return EPSSLoaded(), false, err
+	}
+	changed = replaceEPSSWithProvenance(next, EPSSProvenance{Mode: "legacy", Status: "provenance-unavailable"})
+	return len(next), changed, nil
+}
+
+func parseEPSSBytes(b []byte) (map[string]epssEntry, error) {
+	if len(b) > epssmeta.MaxCacheBytes {
+		return nil, fmt.Errorf("EPSS cache exceeds %d bytes", epssmeta.MaxCacheBytes)
+	}
+	if err := epssmeta.RejectDuplicateJSON(b); err != nil {
+		return nil, err
+	}
 	var raw map[string]struct {
 		EPSS   float64 `json:"epss"`
 		CVSS   float64 `json:"cvss"`
 		ScanTS string  `json:"scanTS"`
 	}
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return EPSSLoaded(), false, err
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if err := dec.Decode(&raw); err != nil {
+		return nil, err
+	}
+	if len(raw) > epssmeta.MaxCacheEntries {
+		return nil, fmt.Errorf("EPSS cache exceeds %d entries", epssmeta.MaxCacheEntries)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("trailing EPSS cache JSON")
+		}
+		return nil, err
 	}
 	next := make(map[string]epssEntry, len(raw))
 	for k, v := range raw {
-		if k == "" || v.EPSS < 0 || v.EPSS > 1 || v.CVSS < 0 || v.CVSS > 10 {
-			return EPSSLoaded(), false, fmt.Errorf("invalid EPSS cache entry %q: epss=%v cvss=%v", k, v.EPSS, v.CVSS)
+		if k == "" || math.IsNaN(v.EPSS) || math.IsInf(v.EPSS, 0) || math.IsNaN(v.CVSS) || math.IsInf(v.CVSS, 0) || v.EPSS < 0 || v.EPSS > 1 || v.CVSS < 0 || v.CVSS > 10 {
+			return nil, fmt.Errorf("invalid EPSS cache entry %q: epss=%v cvss=%v", k, v.EPSS, v.CVSS)
 		}
 		next[k] = epssEntry{EPSS: v.EPSS, CVSS: v.CVSS, ScanTS: v.ScanTS}
 	}
-	changed = replaceEPSS(next)
-	return len(next), changed, nil
+	return next, nil
+}
+
+func readBoundedFile(path string, max int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, int64(max)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > max {
+		return nil, fmt.Errorf("file %q exceeds %d bytes", path, max)
+	}
+	return b, nil
 }
 
 func replaceEPSS(next map[string]epssEntry) bool {
-	epssMu.Lock()
-	defer epssMu.Unlock()
-	changed := !reflect.DeepEqual(epssCache, next)
+	return replaceEPSSWithProvenance(next, EPSSProvenance{Mode: "legacy", Status: "provenance-unavailable"})
+}
+
+func replaceEPSSWithProvenance(next map[string]epssEntry, source EPSSProvenance) bool {
+	prepared := prepareEPSSSnapshot(next, source, buildRepoIndex)
+	epssPublishMu.Lock()
+	defer epssPublishMu.Unlock()
+	current := epssState.Load()
+	changed := !reflect.DeepEqual(current.cache, prepared.cache) || !reflect.DeepEqual(current.source, prepared.source)
 	if changed {
-		epssCache = next
-		epssRepoLatest = buildRepoIndex(next)
+		epssState.Store(prepared)
 	}
 	return changed
+}
+
+func prepareEPSSSnapshot(next map[string]epssEntry, source EPSSProvenance, index func(map[string]epssEntry) map[string]string) *epssSnapshot {
+	immutable := make(map[string]epssEntry, len(next))
+	for key, entry := range next {
+		immutable[key] = entry
+	}
+	return &epssSnapshot{cache: immutable, repoLatest: index(immutable), source: source}
 }
 
 // epssRepoOf returns the repository part of an image reference: everything before
@@ -202,9 +286,7 @@ func buildRepoIndex(cache map[string]epssEntry) map[string]string {
 
 // EPSSLoaded reports how many image entries are currently seeded (for scan/audit visibility).
 func EPSSLoaded() int {
-	epssMu.RLock()
-	defer epssMu.RUnlock()
-	return len(epssCache)
+	return len(epssState.Load().cache)
 }
 
 // epssMultiplier returns the M-104 value multiplier for a running image digest — computed by
@@ -232,30 +314,57 @@ func epssInputs(imageID string) (multiplier, epss, cvss float64, present bool) {
 // and no network: the decision path never resolves a registry — re-resolution is the feed's job.
 // Every outcome is counted in phorvex_epss_lookup_total so a stale cache is a metric.
 func lookupEPSS(imageID string) EPSSLookup {
+	snapshot := epssState.Load()
+	source := snapshot.source
 	if imageID == "" {
-		return EPSSLookup{}
+		if source.Mode == "authoritative" && source.Status == "available" && (source.ExpiresAt.IsZero() || !time.Now().Before(source.ExpiresAt)) {
+			source.Status = "expired"
+		}
+		return EPSSLookup{Source: source}
 	}
-	epssMu.RLock()
-	e, ok := epssCache[imageID]
+	if source.Mode == "authoritative" && (source.Status != "available" || source.ExpiresAt.IsZero() || !time.Now().Before(source.ExpiresAt)) {
+		if source.Status == "available" {
+			source.Status = "expired"
+		}
+		metrics.RecordEPSSLookup("miss")
+		return EPSSLookup{Basis: EPSSBasisMiss, RunningDigest: imageID, Source: source}
+	}
+	lookupID := imageID
+	if source.Mode == "authoritative" {
+		lookupID = canonicalRuntimeImageID(imageID)
+	}
+	e, ok := snapshot.cache[lookupID]
 	fallbackKey, hasFallback := "", false
-	if !ok {
-		fallbackKey, hasFallback = epssRepoLatest[epssRepoOf(imageID)]
+	if !ok && source.Mode != "authoritative" {
+		fallbackKey, hasFallback = snapshot.repoLatest[epssRepoOf(lookupID)]
 		if hasFallback {
-			e, ok = epssCache[fallbackKey]
+			e, ok = snapshot.cache[fallbackKey]
 		}
 	}
-	epssMu.RUnlock()
 	switch {
 	case ok && !hasFallback:
 		metrics.RecordEPSSLookup("hit")
 		return EPSSLookup{EPSS: e.EPSS, CVSS: e.CVSS,
-			Present: true, Basis: EPSSBasisExact, CachedDigest: imageID, RunningDigest: imageID, ScanTS: e.ScanTS}
+			Present: true, Basis: EPSSBasisExact, CachedDigest: lookupID, RunningDigest: imageID, ScanTS: e.ScanTS, Source: source}
 	case ok && hasFallback:
 		metrics.RecordEPSSLookup("repo-fallback")
 		return EPSSLookup{EPSS: e.EPSS, CVSS: e.CVSS,
-			Present: true, Basis: EPSSBasisRepoFallback, CachedDigest: fallbackKey, RunningDigest: imageID, ScanTS: e.ScanTS}
+			Present: true, Basis: EPSSBasisRepoFallback, CachedDigest: fallbackKey, RunningDigest: imageID, ScanTS: e.ScanTS, Source: source}
 	default:
 		metrics.RecordEPSSLookup("miss")
-		return EPSSLookup{Basis: EPSSBasisMiss, RunningDigest: imageID}
+		return EPSSLookup{Basis: EPSSBasisMiss, RunningDigest: imageID, Source: source}
 	}
 }
+
+func canonicalRuntimeImageID(imageID string) string {
+	imageID = strings.TrimSpace(imageID)
+	for _, prefix := range []string{"docker-pullable://", "docker://", "containerd://"} {
+		imageID = strings.TrimPrefix(imageID, prefix)
+	}
+	return imageID
+}
+
+// EPSSLookupForVerification exposes the production lookup to the bounded
+// source-bound verification command. It performs the same atomic read as a
+// decision tick and never loads files or contacts an API.
+func EPSSLookupForVerification(imageID string) EPSSLookup { return lookupEPSS(imageID) }

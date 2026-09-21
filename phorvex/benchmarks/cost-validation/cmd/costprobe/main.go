@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/cost"
@@ -166,6 +167,7 @@ type observation struct {
 type options struct {
 	Namespace       string
 	Pod             string
+	Policy          string
 	Selector        string
 	Action          string
 	ScenarioID      string
@@ -199,6 +201,7 @@ func main() {
 	var o options
 	flag.StringVar(&o.Namespace, "namespace", "", "disposable namespace (must begin phorvex-cost-validate-)")
 	flag.StringVar(&o.Pod, "pod", "", "target pod name")
+	flag.StringVar(&o.Policy, "policy", "", "current selecting PhorvexPolicy name")
 	flag.StringVar(&o.Selector, "selector", "", "label selector for workload replicas")
 	flag.StringVar(&o.Action, "action", "", "action under test, including noop")
 	flag.StringVar(&o.ScenarioID, "scenario-id", "", "scenario identifier")
@@ -259,6 +262,9 @@ func run(parent context.Context, o options) error {
 	}
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return err
+	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		return err
 	}
 	kube, err := client.New(cfg, client.Options{Scheme: scheme})
@@ -451,7 +457,40 @@ func actuateNativeCostProbe(ctx context.Context, kube client.Client, o options, 
 	native := actuator.NewNativeActuator(kube)
 	native.SetBoundaryReader(kube)
 	native.StrictTenantNamespace = true
-	if err := native.EnsurePolicy(ctx, actuator.TenantTarget{Tenant: "cost-validation", Namespace: o.Namespace}); err != nil {
+	tenant := "cost-validation"
+	targetBinding := actuator.TenantTarget{Tenant: tenant, Namespace: o.Namespace}
+	request := actuator.Request{
+		Tenant: tenant, Namespace: o.Namespace, Pod: o.Pod, TargetUID: string(target.UID), Action: action,
+		Reason: "PHORVEXSEC-35 isolated cost validation", Score: 1,
+	}
+	if action == model.ActionRotate {
+		if o.Policy == "" {
+			return actuator.Result{}, errors.New("current selecting policy name is required for rotate")
+		}
+		policy := &v1alpha1.PhorvexPolicy{}
+		if err := kube.Get(ctx, client.ObjectKey{Namespace: o.Namespace, Name: o.Policy}, policy); err != nil {
+			return actuator.Result{}, fmt.Errorf("current selecting policy: %w", err)
+		}
+		if policy.UID == "" || policy.DeletionTimestamp != nil || policy.Spec.EffectiveMode() != v1alpha1.ModeActive || !policy.Spec.ActionEnabled(v1alpha1.ActionRotate) {
+			return actuator.Result{}, errors.New("current selecting policy is not active for rotate")
+		}
+		maxGracePeriodSeconds, err := policy.Spec.EffectiveMaxGracePeriodSeconds()
+		if err != nil {
+			return actuator.Result{}, fmt.Errorf("current selecting policy grace cap: %w", err)
+		}
+		tenant = policy.EffectiveTenant()
+		targetBinding = actuator.TenantTarget{
+			Tenant: tenant, Namespace: o.Namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID),
+			Generation: policy.Generation, Selector: policy.Spec.Selector.DeepCopy(),
+			EnabledActions: map[model.Action]bool{model.ActionRotate: true},
+		}
+		request.Tenant = tenant
+		request.PolicyName = policy.Name
+		request.PolicyUID = string(policy.UID)
+		request.PolicyGeneration = policy.Generation
+		request.MaxGracePeriodSeconds = maxGracePeriodSeconds
+	}
+	if err := native.EnsurePolicy(ctx, targetBinding); err != nil {
 		return actuator.Result{}, err
 	}
 	if observation := actuationbrake.ObserveNamespace(ctx, kube, actuationbrake.DefaultReadTimeout, o.Namespace); observation.Engaged {
@@ -460,10 +499,7 @@ func actuateNativeCostProbe(ctx context.Context, kube client.Client, o options, 
 	if observation := actuationbrake.ObservePod(ctx, kube, actuationbrake.DefaultReadTimeout, o.Namespace, o.Pod, string(target.UID)); observation.Engaged {
 		return actuator.Result{}, fmt.Errorf("Pod actuation brake before dispatch: %s", observation.Cause)
 	}
-	return native.Actuate(ctx, actuator.Request{
-		Tenant: "cost-validation", Namespace: o.Namespace, Pod: o.Pod, TargetUID: string(target.UID), Action: action,
-		Reason: "PHORVEXSEC-35 isolated cost validation", Score: 1,
-	})
+	return native.Actuate(ctx, request)
 }
 
 func workloadView(pod corev1.Pod, o options, metrics metricSnapshot, ready, desired int) *model.WorkloadView {

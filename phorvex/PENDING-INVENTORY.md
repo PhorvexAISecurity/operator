@@ -39,7 +39,7 @@ Total markers: **130**.
 | `P-CONTEXT-DECISION.md` | false | PHORVEXSEC-87 | `SP-0-PENDING` | 2. **All AI magnitudes `[SP-0-PENDING]`** — uncalibrated knob proposals; no AI beat falsifiable until a real GPU fleet. |
 | `P-CONTEXT-DECISION.md` | false | PHORVEXSEC-87 | `SP-0-PENDING` | reported as such), claiming only what is measured; **AI values honestly `[SP-0-PENDING]`.** |
 | `P-CONTEXT-DECISION.md` | false | PHORVEXSEC-115 | `SP-0-PENDING` | half is first-class in definition, honestly `[SP-0-PENDING]` in value. |
-| `P-CONTEXT-REPORT.md` | false | PHORVEXSEC-115 | `SP-0-PENDING` | honestly `[SP-0-PENDING]`. |
+| `P-CONTEXT-REPORT.md` | false | PHORVEXSEC-115 | `SP-0-PENDING` | are honestly `[SP-0-PENDING]`, and no qualified live persistence-label producer is connected. |
 | `P-CONTEXT-REPORT.md` | false | PHORVEXSEC-115 | `SP-0-PENDING` | rates, AIRecoverScale) are `[SP-0-PENDING]`** uncalibrated knobs; the belief upgrades only diverge |
 | `P-CONTEXT-REPORT.md` | false | PHORVEXSEC-87 | `SP-0-PENDING` | the 1.62× + P3 by construction, with the AI half first-class in definition and honestly SP-0-PENDING |
 | `P-DASHBOARD-DECISION.md` | false | PHORVEXSEC-87 | `SP-0-PENDING` | · 12. **AI / Inference Product** (attack surface REAL-NOW; **AI defense `[SP-0-PENDING-P4]`**). |

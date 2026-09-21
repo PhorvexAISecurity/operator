@@ -101,8 +101,8 @@ type PhorvexPolicySpec struct {
 	// +kubebuilder:validation:Required
 	Triggers TriggersSpec `json:"triggers"`
 
-	// Actions is the enabled mutation vocabulary (a subset of {rotate,quarantine}).
-	// In P0 these map to Phoenix's Delete (rotate) and Quarantine actions. (PRD:
+	// Actions is the enabled mutation vocabulary. Bounded rotate is native;
+	// quarantine retains its Phoenix route; advanced actions are opt-in. (PRD:
 	// actions{enabled}.)
 	// +kubebuilder:validation:Required
 	Actions ActionsSpec `json:"actions"`
@@ -190,7 +190,8 @@ type SojournScaleSpec struct {
 	PromptInjectPersist int64 `json:"promptInjectPersist,omitempty"`
 }
 
-// ObjectiveSpec is the cost-weighted objective (PRD objective{lambda,costWeights}).
+// ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
+// runtime lambda; an explicit disruptionAversion opts into a fixed coefficient.
 type ObjectiveSpec struct {
 	// Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,
 	// which multiplies the dimensionless ECost score. Runtime state then adapts from
@@ -201,6 +202,16 @@ type ObjectiveSpec struct {
 	// +kubebuilder:validation:Pattern=`^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$`
 	// +kubebuilder:validation:XValidation:rule="self == '' || double(self) <= 10.0",message="lambda must be between 0 and 10"
 	Lambda string `json:"lambda,omitempty"`
+
+	// DisruptionAversion is an optional fixed preference beta in utility per
+	// normalized ECost unit. When present it replaces runtime lambda only in the
+	// scoring objective; the legacy count-pressure controller continues to learn
+	// independently. Explicit "0" is configured. Remove the field to restore
+	// legacy scoring. Empty is equivalent to absence. Decimal string in [0,10].
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$`
+	// +kubebuilder:validation:XValidation:rule="self == '' || double(self) <= 10.0",message="disruptionAversion must be between 0 and 10"
+	DisruptionAversion string `json:"disruptionAversion,omitempty"`
 
 	// CostWeights splits the switching cost K = normSparsity*C_norm +
 	// flowDisruption*C_flow (PRD §5.1B). Decimal strings; empty defaults to
@@ -233,6 +244,19 @@ type BudgetSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=3
 	MaxMovesPerTick *int `json:"maxMovesPerTick,omitempty"`
+
+	// MaxGracePeriodSeconds bounds the graceful termination requested by the
+	// native rotate handler. Nil defaults to 30 seconds. The handler still honors
+	// a shorter workload grace period; this cap never authorizes a zero-grace
+	// deletion or bypasses availability safeguards.
+	//
+	// This is intentionally a pointer so omission remains distinguishable from an
+	// invalid explicit zero in direct/internal objects as well as at admission.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=300
+	// +kubebuilder:default=30
+	MaxGracePeriodSeconds *int64 `json:"maxGracePeriodSeconds,omitempty"`
 
 	// TickInterval is the decision cadence. Empty defaults to 20s in code.
 	// +kubebuilder:validation:Optional
@@ -399,8 +423,8 @@ type TriggersSpec struct {
 
 // ActionsSpec is the enabled mutation vocabulary (PRD actions{enabled}).
 type ActionsSpec struct {
-	// Enabled is the subset of allowed actions. P0 supports rotate (Phoenix Delete)
-	// and quarantine (Phoenix Quarantine); noop is always implicitly available.
+	// Enabled is the subset of allowed actions. The default set is bounded native
+	// rotate plus Phoenix quarantine; noop is always implicitly available.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MinItems=1
 	// +listType=set
@@ -409,14 +433,16 @@ type ActionsSpec struct {
 
 // ActionType is stored policy vocabulary. Runtime support is separate: identity-rotate
 // remains admitted for existing objects but is declared-only for a security effect and
-// refused for new native/hybrid dispatch. rotate/quarantine also map to Phoenix
-// Delete/Quarantine; advanced/AI moves are opt-in. A nil/empty Enabled set defaults
+// refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
+// maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
 // +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;disable
 type ActionType string
 
 const (
-	// ActionRotate maps to Phoenix's Delete action (kill+clean respawn).
+	// ActionRotate requests a native, policy-bounded graceful Pod deletion.
+	// A pure Phoenix backend refuses this action because its Delete strategy cannot
+	// carry maxGracePeriodSeconds.
 	ActionRotate ActionType = "rotate"
 	// ActionQuarantine maps to Phoenix's Quarantine action (deny-all + detach).
 	ActionQuarantine ActionType = "quarantine"

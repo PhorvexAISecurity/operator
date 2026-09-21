@@ -13,6 +13,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -67,6 +68,9 @@ type Snapshot struct {
 	// Services are projected read-only so capability status can verify that request-drain's
 	// target Service actually selects on phorvex.ai/serving.
 	Services []ServiceInfo
+	// ServiceAvailabilityComplete is true only when both the Service and
+	// EndpointSlice inventories succeeded for this snapshot.
+	ServiceAvailabilityComplete bool
 
 	// GPUWitness is the live DCGM-via-Prometheus GPU half ("ns/pod" -> witness GPU fields:
 	// GPUPresent + VRAMFraction/SMOccupancy/LinkBandwidth). Populated by PopulateGPUWitness when
@@ -92,6 +96,7 @@ type NodeInfo struct {
 type ServiceInfo struct {
 	Namespace string
 	Name      string
+	UID       string
 	Selector  map[string]string
 }
 
@@ -269,7 +274,11 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	// (read-only, least-privilege); absence degrades the witness to honest-neutral.
 	snap.Nodes = collectNodes(ctx, c)
 	snap.PDBs = collectPDBs(ctx, c)
-	snap.Services = collectServices(ctx, c)
+	services, servicesComplete := collectServicesInventory(ctx, c)
+	slices, slicesComplete := collectEndpointSlices(ctx, c)
+	snap.Services = services
+	snap.ServiceAvailabilityComplete = servicesComplete && slicesComplete
+	bindServiceAvailability(snap.Pods, services, slices, snap.ServiceAvailabilityComplete)
 	warmConfig := newWarmPoolSnapshotCache(ownerReader, snap.Services)
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
@@ -438,9 +447,14 @@ func collectNodes(ctx context.Context, c client.Client) []NodeInfo {
 // collectServices projects selectors best-effort. Missing Service read permission must
 // degrade ActionsSupported status, never stop decision ingest or reject a policy.
 func collectServices(ctx context.Context, c client.Client) []ServiceInfo {
+	out, _ := collectServicesInventory(ctx, c)
+	return out
+}
+
+func collectServicesInventory(ctx context.Context, c client.Client) ([]ServiceInfo, bool) {
 	var serviceList corev1.ServiceList
 	if err := c.List(ctx, &serviceList); err != nil {
-		return nil
+		return nil, false
 	}
 	out := make([]ServiceInfo, 0, len(serviceList.Items))
 	for i := range serviceList.Items {
@@ -449,9 +463,117 @@ func collectServices(ctx context.Context, c client.Client) []ServiceInfo {
 		for key, value := range svc.Spec.Selector {
 			selector[key] = value
 		}
-		out = append(out, ServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Selector: selector})
+		out = append(out, ServiceInfo{Namespace: svc.Namespace, Name: svc.Name, UID: string(svc.UID), Selector: selector})
 	}
-	return out
+	return out, true
+}
+
+func collectEndpointSlices(ctx context.Context, c client.Client) ([]discoveryv1.EndpointSlice, bool) {
+	var list discoveryv1.EndpointSliceList
+	if err := c.List(ctx, &list); err != nil {
+		return nil, false
+	}
+	return list.Items, true
+}
+
+// bindServiceAvailability projects only scopes whose target membership and
+// service-wide Ready endpoint population are attributable to one immutable
+// controller UID. Multi-controller Services remain explicitly unsupported: a
+// per-controller resource key would otherwise let two owners spend the same
+// Service headroom independently.
+func bindServiceAvailability(pods []model.Pod, services []ServiceInfo, slices []discoveryv1.EndpointSlice, inventoryComplete bool) {
+	podByUID := make(map[string]*model.Pod, len(pods))
+	for i := range pods {
+		pod := &pods[i]
+		pod.ServiceAvailabilityKnown = inventoryComplete
+		if !inventoryComplete {
+			pod.ServiceAvailabilityReason = "service-or-endpointslice-inventory-unavailable"
+		}
+		if pod.UID != "" {
+			podByUID[pod.UID] = pod
+		}
+	}
+	if !inventoryComplete {
+		return
+	}
+
+	for _, service := range services {
+		selector := labels.SelectorFromSet(service.Selector)
+		if service.Namespace == "" || service.Name == "" || service.UID == "" || selector.Empty() {
+			continue
+		}
+		matchingTargets := make([]*model.Pod, 0)
+		for i := range pods {
+			pod := &pods[i]
+			if pod.Namespace == service.Namespace && selector.Matches(labels.Set(pod.Labels)) {
+				matchingTargets = append(matchingTargets, pod)
+			}
+		}
+		if len(matchingTargets) == 0 {
+			continue
+		}
+
+		readyUIDs := map[string]struct{}{}
+		controllerUIDs := map[string]struct{}{}
+		complete, reason := true, ""
+		for i := range slices {
+			slice := &slices[i]
+			if slice.Namespace != service.Namespace || slice.Labels[discoveryv1.LabelServiceName] != service.Name {
+				continue
+			}
+			owner := metav1.GetControllerOf(slice)
+			if slice.UID == "" || slice.DeletionTimestamp != nil || owner == nil || owner.APIVersion != "v1" || owner.Kind != "Service" || owner.Name != service.Name || string(owner.UID) != service.UID {
+				complete, reason = false, "endpointslice-service-identity-mismatch"
+				break
+			}
+			for _, endpoint := range slice.Endpoints {
+				if endpoint.Conditions.Ready == nil || !*endpoint.Conditions.Ready {
+					continue
+				}
+				ref := endpoint.TargetRef
+				if ref == nil || ref.Kind != "Pod" || ref.Namespace != service.Namespace || ref.UID == "" {
+					complete, reason = false, "ready-endpoint-pod-identity-unavailable"
+					break
+				}
+				pod := podByUID[string(ref.UID)]
+				if pod == nil || pod.Name != ref.Name || !pod.Ready || !selector.Matches(labels.Set(pod.Labels)) || pod.ControllerUID == "" {
+					complete, reason = false, "ready-endpoint-pod-or-controller-mismatch"
+					break
+				}
+				readyUIDs[pod.UID] = struct{}{}
+				controllerUIDs[pod.ControllerUID] = struct{}{}
+			}
+			if !complete {
+				break
+			}
+		}
+		if complete && len(controllerUIDs) != 1 {
+			complete, reason = false, "service-ready-members-do-not-have-one-controller-uid"
+		}
+		controllerUID := ""
+		if complete {
+			for uid := range controllerUIDs {
+				controllerUID = uid
+			}
+		}
+		for _, target := range matchingTargets {
+			_, targetReady := readyUIDs[target.UID]
+			// A selector match alone is not routed membership. When the Service
+			// inventory is complete, only the exact Ready EndpointSlice target
+			// consumes this Service's unavailable-replica capacity.
+			if complete && !targetReady {
+				continue
+			}
+			targetComplete, targetReason := complete && targetReady && target.ControllerUID == controllerUID, reason
+			if complete && target.ControllerUID != controllerUID {
+				targetReason = "target-controller-does-not-own-service-ready-set"
+			}
+			target.ServiceAvailability = append(target.ServiceAvailability, model.ServiceAvailabilityObservation{
+				Scope:        model.ResourceScope{Kind: model.ResourceUnavailableReadyReplica, Namespace: service.Namespace, ServiceName: service.Name, ServiceUID: service.UID, ControllerUID: controllerUID},
+				ReadyMembers: len(readyUIDs), TargetReady: targetReady, Complete: targetComplete, Reason: targetReason,
+			})
+		}
+	}
 }
 
 // collectPDBs projects live PodDisruptionBudgets (Layer-A availability law).
@@ -510,6 +632,9 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	}
 	out.MountedSecrets = mountedSecrets(p)
 	out.OwnerKind, out.OwnerName = topOwner(p)
+	if controller := metav1.GetControllerOf(p); controller != nil {
+		out.ControllerUID = string(controller.UID)
+	}
 	out.HasGPU, out.MIGDevice = gpuInfo(p)
 	out.Stateful = isStateful(p)
 	out.ImageID = primaryImageID(p)

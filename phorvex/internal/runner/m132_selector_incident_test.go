@@ -10,9 +10,11 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -37,11 +39,24 @@ func TestM132RunnerPhoenixSelectorPreservesNarrowingExpression(t *testing.T) {
 	if err := amtdv1beta1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).Build()
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), Log: logr.Discard()}
-	e := &policyEntry{namespace: "ns", tenant: "team", spec: p.Spec}
-	pol := model.Policy{Tenant: "team", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	base := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns", UID: "namespace-uid"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator", UID: "operator-uid"}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "demo-0", UID: "selected-uid", Labels: map[string]string{"app": "demo", "tier": "prod"}}},
+	).Build()
+	c := &m012CapacityClient{Client: base}
+	capacity, err := actuator.NewQuarantineCapacity(c, c, "operator", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: capacity, Log: logr.Discard()}
+	e := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", namespace: "ns", tenant: "team", spec: p.Spec}
+	pol := model.Policy{Tenant: "team", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
 	d := m018SelectedDecision("ns", "demo-0")
+	d[0].Action = model.ActionQuarantine
 	view := m018TickView("ns", "demo-0")
 	view["ns/demo-0"].Pod.UID = "selected-uid"
 	if n := actuateWithBoundary(t, m, ctx, e, pol, d, view); n != 1 || !d[0].Actuated {

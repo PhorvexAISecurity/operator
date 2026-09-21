@@ -100,6 +100,19 @@ func representationFact(in RepresentationFact, redact bool) RepresentationFact {
 	in.ReversibleCondition = representationString(in.ReversibleCondition, redact)
 	in.Reason = representationString(in.Reason, redact)
 	in.Actionability = representationStrings(in.Actionability, redact)
+	if in.CurrentInventory != nil {
+		p := *in.CurrentInventory
+		p.SchemaVersion = representationString(p.SchemaVersion, redact)
+		p.EvidenceID = representationString(p.EvidenceID, redact)
+		p.PolicyUID = representationString(p.PolicyUID, redact)
+		p.StableOwnerUID = representationString(p.StableOwnerUID, redact)
+		p.PodUID = representationString(p.PodUID, redact)
+		p.ConfigMapUID = representationString(p.ConfigMapUID, redact)
+		p.ConfigMapResourceVersion = representationString(p.ConfigMapResourceVersion, redact)
+		p.CanonicalPayloadSHA256 = representationString(p.CanonicalPayloadSHA256, redact)
+		p.SecurityEventUID = representationString(p.SecurityEventUID, redact)
+		in.CurrentInventory = &p
+	}
 	return in
 }
 
@@ -115,9 +128,50 @@ func representationFacts(in []RepresentationFact, redact bool) []RepresentationF
 }
 
 func representationWitness(in LossWitness, redact bool) LossWitness {
+	in.SchemaVersion = representationString(in.SchemaVersion, redact)
+	in.EvidenceID = representationString(in.EvidenceID, redact)
+	if in.PolicyEpoch != nil {
+		copy := *in.PolicyEpoch
+		copy.Namespace = representationString(copy.Namespace, redact)
+		copy.Name = representationString(copy.Name, redact)
+		copy.UID = representationString(copy.UID, redact)
+		in.PolicyEpoch = &copy
+	}
+	if in.DecisionAsset != nil {
+		copy := *in.DecisionAsset
+		copy.Namespace = representationString(copy.Namespace, redact)
+		copy.Name = representationString(copy.Name, redact)
+		copy.TargetUID = representationString(copy.TargetUID, redact)
+		in.DecisionAsset = &copy
+	}
+	if in.ImmediateController != nil {
+		copy := representationObjectIdentity(*in.ImmediateController, redact)
+		in.ImmediateController = &copy
+	}
+	if in.StableWorkloadOwner != nil {
+		copy := representationObjectIdentity(*in.StableWorkloadOwner, redact)
+		in.StableWorkloadOwner = &copy
+	}
+	if in.Classification != nil {
+		copy := *in.Classification
+		copy.RuleVersion = representationString(copy.RuleVersion, redact)
+		copy.RuleDigest = representationString(copy.RuleDigest, redact)
+		copy.ObserverClass = representationString(copy.ObserverClass, redact)
+		copy.ObserverIdentity = representationString(copy.ObserverIdentity, redact)
+		in.Classification = &copy
+	}
+	if in.Observation != nil {
+		copy := *in.Observation
+		copy.ExpectedSHA256 = representationString(copy.ExpectedSHA256, redact)
+		copy.ObservedSHA256 = representationString(copy.ObservedSHA256, redact)
+		in.Observation = &copy
+	}
+	in.CanonicalPayloadSHA256 = representationString(in.CanonicalPayloadSHA256, redact)
+	in.SecurityEventUID = representationString(in.SecurityEventUID, redact)
 	in.Scope = representationScope(in.Scope, redact)
 	in.EventRef = representationString(in.EventRef, redact)
 	in.EventTime = representationString(in.EventTime, redact)
+	in.AdmissionTime = representationString(in.AdmissionTime, redact)
 	in.IngestionTime = representationString(in.IngestionTime, redact)
 	in.AuthenticatedIdentity = representationString(in.AuthenticatedIdentity, redact)
 	in.TrustAtIngestionRef = representationString(in.TrustAtIngestionRef, redact)
@@ -126,6 +180,15 @@ func representationWitness(in LossWitness, redact bool) LossWitness {
 	in.CompletedUnauthorizedOutcomeRef = representationString(in.CompletedUnauthorizedOutcomeRef, redact)
 	in.IrreversibilitySemantics = representationString(in.IrreversibilitySemantics, redact)
 	in.ClassificationRef = representationString(in.ClassificationRef, redact)
+	return in
+}
+
+func representationObjectIdentity(in ObjectIdentity, redact bool) ObjectIdentity {
+	in.APIVersion = representationString(in.APIVersion, redact)
+	in.Kind = representationString(in.Kind, redact)
+	in.Namespace = representationString(in.Namespace, redact)
+	in.Name = representationString(in.Name, redact)
+	in.UID = representationString(in.UID, redact)
 	return in
 }
 
@@ -247,6 +310,8 @@ func cloneRepresentationSnapshot(in RepresentationSnapshot, redact bool) Represe
 	out.Candidates.SnapshotRef = representationString(in.Candidates.SnapshotRef, redact)
 	out.Candidates.Sets = representationSets(in.Candidates.Sets, redact)
 	out.HistoryStatus = representationString(in.HistoryStatus, redact)
+	out.HistoryPolicyUID = representationString(in.HistoryPolicyUID, redact)
+	out.HistoryStableOwnerUID = representationString(in.HistoryStableOwnerUID, redact)
 	out.LossMappingVersion = representationString(in.LossMappingVersion, redact)
 	out.DispatchEvidence = representationString(in.DispatchEvidence, redact)
 	out.LossAssessment = representationString(in.LossAssessment, redact)

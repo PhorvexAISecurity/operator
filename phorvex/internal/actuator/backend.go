@@ -189,9 +189,12 @@ const (
 	detailSentinel = "control sentinel, not an emitted move"
 	// detailDeclaredOnly: a handler exists but declares itself not implemented.
 	detailDeclaredOnly = "declared-not-implemented capability"
-	// detailNoRuleMapping: Phoenix has no AMTD rule for this action.
-	detailNoRuleMapping = "no Phoenix AMTD rule mapping; this route enacts only " +
-		string(model.ActionRotate) + " and " + string(model.ActionQuarantine)
+	// detailNoRuleMapping: Phoenix has no accepted controlled route for this action.
+	detailNoRuleMapping = "no accepted Phoenix controlled route; this backend enacts only " +
+		string(model.ActionQuarantine)
+	// Phoenix's Delete strategy has no typed policy grace-cap input. Accepting a
+	// bounded rotate there would silently discard the contract.
+	detailGraceCapUnsupported = "Phoenix Delete cannot enforce the selecting policy maxGracePeriodSeconds contract"
 	// detailNoHandler: the native dispatcher has no registered handler.
 	detailNoHandler = "no registered native handler"
 	// detailUnknownAction: the value is not in the Phorvex action vocabulary at all.
@@ -224,10 +227,14 @@ func KnownAction(a model.Action) bool {
 	return false
 }
 
-// phoenixAccepts is the Phoenix adapter's ACCEPTED set, derived from RuleTypeFor — the
-// exact predicate PhoenixActuator.Actuate uses to decide whether to emit. Support and
-// dispatch therefore cannot drift: they read one function.
+// phoenixAccepts is the Phoenix adapter's ACCEPTED set. It deliberately narrows the
+// historical RuleTypeFor mapping because Phoenix Delete cannot carry the current
+// policy's bounded graceful-termination contract. Support and dispatch read this same
+// function so the explicit refusal cannot drift.
 func phoenixAccepts(a model.Action) (bool, string) {
+	if a == model.ActionRotate {
+		return false, detailGraceCapUnsupported
+	}
 	if RuleTypeFor(a) != "" {
 		return true, ""
 	}
@@ -269,7 +276,9 @@ func RouteFor(b Backend, a model.Action) Backend {
 	if b != BackendHybrid {
 		return b
 	}
-	if RuleTypeFor(a) != "" {
+	// Hybrid owns a native client-go path that can enforce the current-policy
+	// grace contract. Pure Phoenix cannot, so bounded rotate is routed native.
+	if a != model.ActionRotate && RuleTypeFor(a) != "" {
 		return BackendPhoenix
 	}
 	return BackendNative

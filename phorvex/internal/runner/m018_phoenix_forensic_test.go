@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -90,28 +91,62 @@ func (r *m018RecordingAPI) securityEvents() []m018CreatedObject {
 
 // m018PhoenixClient builds a fake client whose Create assigns a server UID, exactly as a
 // real API server does when it decodes its response back into the passed object.
-func m018PhoenixClient(t *testing.T, api *m018RecordingAPI) client.WithWatch {
+func m018PhoenixClient(t *testing.T, api *m018RecordingAPI, objects ...client.Object) client.Client {
 	t.Helper()
 	s := runtime.NewScheme()
 	if err := amtdv1beta1.AddToScheme(s); err != nil {
 		t.Fatalf("add phoenix scheme: %v", err)
 	}
-	return fake.NewClientBuilder().WithScheme(s).WithInterceptorFuncs(interceptor.Funcs{
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
+	base := fake.NewClientBuilder().WithScheme(s).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if err := c.Create(ctx, obj, opts...); err != nil {
 				return err
 			}
 			obj.SetUID(api.record(obj)) // server-assigned identity, written back into the caller's object
-			return nil
+			// Persist the acknowledged UID so later protected-capacity inventory sees
+			// the same exact event identity returned to the producer.
+			return c.Update(ctx, obj)
 		},
 	}).Build()
+	return &m012CapacityClient{Client: base}
+}
+
+func m018PhoenixObjects(targets ...types.NamespacedName) []client.Object {
+	objects := []client.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "m018-operator", UID: "m018-operator-uid"}}}
+	seenNamespace := map[string]bool{}
+	for _, target := range targets {
+		if !seenNamespace[target.Namespace] {
+			objects = append(objects, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: target.Namespace, UID: types.UID("namespace-uid-" + target.Namespace)}})
+			seenNamespace[target.Namespace] = true
+		}
+		objects = append(objects, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: target.Namespace, Name: target.Name, UID: types.UID("test-uid-" + target.Namespace + "-" + target.Name)}})
+	}
+	return objects
+}
+
+func m018PhoenixCapacity(t *testing.T, c client.Client) *actuator.QuarantineCapacity {
+	t.Helper()
+	capacity, err := actuator.NewQuarantineCapacity(c, c, "m018-operator", 128)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return capacity
+}
+
+func m018PhoenixManager(t *testing.T, api *m018RecordingAPI, targets ...types.NamespacedName) *Manager {
+	t.Helper()
+	c := m018PhoenixClient(t, api, m018PhoenixObjects(targets...)...)
+	return &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c), Log: logr.Discard()}
 }
 
 // m018PolicyEntry is a minimal entry whose selector satisfies EnsurePolicy's
 // matchLabels precondition (P0 active mode requires an expressible guest list).
 func m018PolicyEntry(namespace string) *policyEntry {
 	return &policyEntry{
-		namespace: namespace,
+		key: types.NamespacedName{Namespace: namespace, Name: "policy"}, uid: "policy-uid", tenant: "team-a", namespace: namespace,
 		spec: v1alpha1.PhorvexPolicySpec{
 			Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
 		},
@@ -131,7 +166,8 @@ func m018SelectedDecision(namespace, pod string) []model.Decision {
 func m018TickView(namespace, pod string) map[string]*model.WorkloadView {
 	return map[string]*model.WorkloadView{
 		namespace + "/" + pod: {Pod: model.Pod{
-			Namespace: namespace, Name: pod, DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
+			Namespace: namespace, Name: pod, UID: "test-uid-" + namespace + "-" + pod,
+			DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
 		}},
 	}
 }
@@ -167,15 +203,11 @@ func m018RecordJSON(t *testing.T, m *Manager, buf *bytes.Buffer, d model.Decisio
 // BASELINE f0348b3: FAILS — the record carries none of them.
 func TestM018PhoenixForensicIdentifiersReachTheAuditRecord(t *testing.T) {
 	api := &m018RecordingAPI{}
-	pa := actuator.NewPhoenixActuator(m018PhoenixClient(t, api))
-
 	var buf bytes.Buffer
-	m := &Manager{Actuator: pa, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &buf)}
-	pol := model.Policy{
-		Tenant: "team-a", MinAvailableReplicas: 1,
-		EnabledActions: map[model.Action]bool{model.ActionRotate: true},
-	}
-	ds := m018SelectedDecision("ns", "p1")
+	m := m018PhoenixManager(t, api, types.NamespacedName{Namespace: "ns", Name: "p1"})
+	m.Audit = audit.New(logr.Discard(), &buf)
+	pol := m018PhoenixPolicy("team-a")
+	ds := m018SelectedPhoenixDecision("ns", "p1")
 
 	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), pol, ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("actuated %d moves, want 1", n)
@@ -209,7 +241,7 @@ func TestM018PhoenixForensicIdentifiersReachTheAuditRecord(t *testing.T) {
 		"amtdNamespace":   "ns",                // the AMTD is namespaced; the event is cluster-scoped
 		"eventName":       created.Name,        // server-assigned via GenerateName
 		"eventUID":        created.UID,         // server-assigned; the only same-name-safe identity
-		"ruleType":        actuator.RuleTypeRotate,
+		"ruleType":        actuator.RuleTypeQuarantine,
 		"ruleThreatLevel": actuator.RuleThreatLevel,
 		"ruleSource":      actuator.RuleSource,
 	}
@@ -257,8 +289,19 @@ func (f *m018PartialActuator) SupportsAction(context.Context, model.Action, actu
 }
 
 func m018Policy() model.Policy {
-	return model.Policy{Tenant: "team-a", MinAvailableReplicas: 1,
+	return model.Policy{Tenant: "team-a", PolicyName: "policy", PolicyUID: "policy-uid", MinAvailableReplicas: 1,
 		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+}
+
+func m018PhoenixPolicy(tenant string) model.Policy {
+	return model.Policy{Tenant: tenant, PolicyName: "policy", PolicyUID: "policy-uid", MinAvailableReplicas: 1,
+		EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
+}
+
+func m018SelectedPhoenixDecision(namespace, pod string) []model.Decision {
+	d := m018SelectedDecision(namespace, pod)
+	d[0].Action = model.ActionQuarantine
+	return d
 }
 
 func TestM018PartialResultWithErrorKeepsFactsAndFailureOutcome(t *testing.T) {
@@ -305,23 +348,27 @@ func TestM018RejectedCreateFabricatesNoIdentity(t *testing.T) {
 	if err := amtdv1beta1.AddToScheme(s); err != nil {
 		t.Fatalf("add phoenix scheme: %v", err)
 	}
-	c := fake.NewClientBuilder().WithScheme(s).WithInterceptorFuncs(interceptor.Funcs{
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
+	base := fake.NewClientBuilder().WithScheme(s).WithObjects(m018PhoenixObjects(types.NamespacedName{Namespace: "ns", Name: "p1"})...).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if _, isEvent := obj.(*amtdv1beta1.SecurityEvent); isEvent {
 				return apierrors.NewForbidden(
 					schema.GroupResource{Group: "amtd.r6security.com", Resource: "securityevents"},
 					"", errors.New("denied by admission"))
 			}
-			return c.Create(ctx, obj, opts...) // the AMTD (policy setup) still succeeds
+			return c.Create(ctx, obj, opts...) // AMTD and protected capacity still use the real fake API
 		},
 	}).Build()
+	c := &m012CapacityClient{Client: base}
 
 	var buf bytes.Buffer
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), Log: logr.Discard(),
+	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c), Log: logr.Discard(),
 		Audit: audit.New(logr.Discard(), &buf)}
-	ds := m018SelectedDecision("ns", "p1")
+	ds := m018SelectedPhoenixDecision("ns", "p1")
 
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, m018TickView("ns", "p1")); n != 0 {
 		t.Fatalf("actuated %d moves on a rejected create, want 0", n)
 	}
 	if ds[0].Phoenix != nil {
@@ -337,11 +384,11 @@ func TestM018RejectedCreateFabricatesNoIdentity(t *testing.T) {
 // payload even when the decision struct is reused from an earlier successful attempt.
 func TestM018NotAttemptedMoveCarriesNoStalePayload(t *testing.T) {
 	api := &m018RecordingAPI{}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
-	ds := m018SelectedDecision("ns", "p1")
+	m := m018PhoenixManager(t, api, types.NamespacedName{Namespace: "ns", Name: "p1"})
+	ds := m018SelectedPhoenixDecision("ns", "p1")
 
 	// Attempt 1 succeeds and stamps a real payload onto the decision.
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("first attempt actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil {
@@ -350,7 +397,7 @@ func TestM018NotAttemptedMoveCarriesNoStalePayload(t *testing.T) {
 	firstUID := ds[0].Phoenix.EventUID
 
 	// Attempt 2 reuses the SAME decision but is vetoed before Actuate (empty tick view).
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, map[string]*model.WorkloadView{}); n != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, map[string]*model.WorkloadView{}); n != 0 {
 		t.Fatalf("map-miss attempt actuated %d, want 0", n)
 	}
 	if ds[0].Phoenix != nil {
@@ -378,18 +425,22 @@ func TestM018NotAttemptedMoveCarriesNoStalePayload(t *testing.T) {
 // shared or last-write-wins payload would make every record point at one event.
 func TestM018EachDecisionOwnsItsOwnEventIdentity(t *testing.T) {
 	api := &m018RecordingAPI{}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
-
 	pods := []string{"p1", "p2", "p3"}
+	targets := make([]types.NamespacedName, 0, len(pods))
+	for _, pod := range pods {
+		targets = append(targets, types.NamespacedName{Namespace: "ns", Name: pod})
+	}
+	m := m018PhoenixManager(t, api, targets...)
+
 	ds := make([]model.Decision, 0, len(pods))
 	view := map[string]*model.WorkloadView{}
 	for _, pod := range pods {
-		ds = append(ds, m018SelectedDecision("ns", pod)[0])
+		ds = append(ds, m018SelectedPhoenixDecision("ns", pod)[0])
 		for k, v := range m018TickView("ns", pod) {
 			view[k] = v
 		}
 	}
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, view); n != len(pods) {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, view); n != len(pods) {
 		t.Fatalf("actuated %d, want %d", n, len(pods))
 	}
 
@@ -423,27 +474,35 @@ func TestM018SameNameDifferentUIDStayDistinct(t *testing.T) {
 	if err := amtdv1beta1.AddToScheme(s); err != nil {
 		t.Fatalf("add phoenix scheme: %v", err)
 	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
 	uids := []string{"uid-original", "uid-recreated"}
 	var creates int
-	c := fake.NewClientBuilder().WithScheme(s).WithInterceptorFuncs(interceptor.Funcs{
+	base := fake.NewClientBuilder().WithScheme(s).WithObjects(m018PhoenixObjects(
+		types.NamespacedName{Namespace: "ns", Name: "p1"}, types.NamespacedName{Namespace: "ns", Name: "p2"},
+	)...).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if err := c.Create(ctx, obj, opts...); err != nil {
 				return err
 			}
 			if _, isEvent := obj.(*amtdv1beta1.SecurityEvent); isEvent {
-				obj.SetName("phorvex-rotate-collide") // same name both times
 				obj.SetUID(types.UID(uids[creates%len(uids)]))
 				creates++
+				if err := c.Update(ctx, obj); err != nil { // persist UID for protected-capacity inventory
+					return err
+				}
+				obj.SetName("phorvex-quarantine-collide") // same acknowledged name both times
 			}
 			return nil
 		},
 	}).Build()
-
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), Log: logr.Discard()}
+	c := &m012CapacityClient{Client: base}
+	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c), Log: logr.Discard()}
 	got := make([]model.PhoenixForensics, 0, 2)
 	for _, pod := range []string{"p1", "p2"} {
-		ds := m018SelectedDecision("ns", pod)
-		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", pod)); n != 1 {
+		ds := m018SelectedPhoenixDecision("ns", pod)
+		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, m018TickView("ns", pod)); n != 1 {
 			t.Fatalf("pod %s actuated %d, want 1", pod, n)
 		}
 		if ds[0].Phoenix == nil {
@@ -463,16 +522,18 @@ func TestM018SameNameDifferentUIDStayDistinct(t *testing.T) {
 // Interleaved tenants/namespaces must not leak a reference across the boundary.
 func TestM018NoCarryoverAcrossTenantsAndNamespaces(t *testing.T) {
 	api := &m018RecordingAPI{}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
-
-	type run struct{ ns, tenant string }
-	runs := []run{{"ns-a", "team-a"}, {"ns-b", "team-b"}, {"ns-a", "team-a"}}
+	type run struct{ ns, tenant, pod string }
+	runs := []run{{"ns-a", "team-a", "p1"}, {"ns-b", "team-b", "p1"}, {"ns-a", "team-a", "p2"}}
+	targets := make([]types.NamespacedName, 0, len(runs))
+	for _, r := range runs {
+		targets = append(targets, types.NamespacedName{Namespace: r.ns, Name: r.pod})
+	}
+	m := m018PhoenixManager(t, api, targets...)
 	payloads := make([]model.PhoenixForensics, 0, len(runs))
 	for _, r := range runs {
-		pol := model.Policy{Tenant: r.tenant, MinAvailableReplicas: 1,
-			EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
-		ds := m018SelectedDecision(r.ns, "p1")
-		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry(r.ns), pol, ds, m018TickView(r.ns, "p1")); n != 1 {
+		pol := m018PhoenixPolicy(r.tenant)
+		ds := m018SelectedPhoenixDecision(r.ns, r.pod)
+		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry(r.ns), pol, ds, m018TickView(r.ns, r.pod)); n != 1 {
 			t.Fatalf("%s/%s actuated %d, want 1", r.ns, r.tenant, n)
 		}
 		if ds[0].Phoenix == nil {
@@ -545,11 +606,11 @@ func (f *m018EnsureFailActuator) SupportsAction(context.Context, model.Action, a
 func m018SeedRealPayload(t *testing.T) []model.Decision {
 	t.Helper()
 	api := &m018RecordingAPI{}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
-	ds := m018SelectedDecision("ns", "p1")
+	m := m018PhoenixManager(t, api, types.NamespacedName{Namespace: "ns", Name: "p1"})
+	ds := m018SelectedPhoenixDecision("ns", "p1")
 	ds[0].Existential = &model.ExistentialDecision{Present: true, EffectStatus: "not-attempted"}
 	ds[0].Trace.Existential = ds[0].Existential
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("seeding emission actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil || ds[0].Phoenix.EventUID == "" {
@@ -613,9 +674,9 @@ func TestM018UnselectedDecisionClearsStalePhoenixEvidence(t *testing.T) {
 
 	api := &m018RecordingAPI{}
 	var buf bytes.Buffer
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard(),
-		Audit: audit.New(logr.Discard(), &buf)}
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+	m := m018PhoenixManager(t, api, types.NamespacedName{Namespace: "ns", Name: "p1"})
+	m.Audit = audit.New(logr.Discard(), &buf)
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, m018TickView("ns", "p1")); n != 0 {
 		t.Fatalf("actuated %d for an unselected decision, want 0", n)
 	}
 	if ds[0].Phoenix != nil {
@@ -648,8 +709,8 @@ func TestM018ClearDoesNotSuppressGenuineEvidence(t *testing.T) {
 	ds := m018SeedRealPayload(t)
 	first := *ds[0].Phoenix
 	api := &m018RecordingAPI{}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
-	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	m := m018PhoenixManager(t, api, types.NamespacedName{Namespace: "ns", Name: "p1"})
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018PhoenixPolicy("team-a"), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("re-actuation actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil {

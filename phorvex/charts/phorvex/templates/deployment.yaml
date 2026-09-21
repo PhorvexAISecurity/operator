@@ -7,7 +7,7 @@ metadata:
     {{- include "phorvex.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  {{- if and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled }}
+  {{- if or (and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled) .Values.phorvex.lossHistory.enabled }}
   # A ReadWriteOnce volume can only be attached to one node at a time, so a RollingUpdate
   # would deadlock: the new pod cannot mount the PVC until the old pod releases it, and the
   # old pod is not terminated until the new one is Ready.
@@ -27,9 +27,9 @@ spec:
       serviceAccountName: {{ include "phorvex.serviceAccountName" . }}
       securityContext:
         runAsNonRoot: true
-        {{- if or .Values.phorvex.audit.enabled .Values.phorvex.admissionWebhook.enabled }}
-        # Both containers run as non-root with different images; fsGroup makes the mounted
-        # audit volume group-writable and lets the manager read its 0440 webhook key.
+        {{- if or .Values.phorvex.audit.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.lossHistory.enabled }}
+        # Containers run as non-root; fsGroup makes configured durable volumes
+        # group-writable and lets the manager read its 0440 webhook key.
         fsGroup: 65532
         {{- end }}
       containers:
@@ -60,6 +60,24 @@ spec:
         {{- if .Values.phorvex.epss.enabled }}
         - --epss-cache={{ printf "%s/%s" (.Values.phorvex.epss.mountPath | trimSuffix "/") .Values.phorvex.epss.fileName }}
         - --epss-cache-refresh={{ .Values.phorvex.epss.refreshInterval }}
+        {{- if .Values.phorvex.epss.authoritative }}
+        {{- if or (empty .Values.phorvex.epss.feed.scopeNamespaces) (empty .Values.phorvex.epss.feed.scopeDigests) }}
+        {{- fail "authoritative EPSS requires non-empty feed.scopeNamespaces and feed.scopeDigests" }}
+        {{- end }}
+        - --epss-authoritative=true
+        - --epss-metadata={{ printf "%s/%s" (.Values.phorvex.epss.mountPath | trimSuffix "/") .Values.phorvex.epss.metadataFileName }}
+        - --epss-cache-key={{ .Values.phorvex.epss.fileName }}
+        - --epss-configmap-namespace={{ .Release.Namespace }}
+        - --epss-configmap-name={{ .Values.phorvex.epss.configMapName }}
+        - --epss-metadata-key={{ .Values.phorvex.epss.metadataFileName }}
+        - --epss-authoritative-timeout={{ .Values.phorvex.epss.authoritativeTimeout }}
+        {{- if .Values.phorvex.epss.feed.scopeNamespaces }}
+        - --epss-authoritative-scope-namespaces={{ join "," .Values.phorvex.epss.feed.scopeNamespaces }}
+        {{- end }}
+        {{- if .Values.phorvex.epss.feed.scopeDigests }}
+        - --epss-authoritative-scope-digests={{ join "," .Values.phorvex.epss.feed.scopeDigests }}
+        {{- end }}
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
@@ -122,6 +140,28 @@ spec:
         {{- end }}
         {{- with $detectors }}
         - --trusted-detectors={{ join "," . }}
+        {{- end }}
+        {{- if and .Values.phorvex.lossHistory.currentInventory.enabled (not .Values.phorvex.lossHistory.enabled) }}{{ fail "phorvex.lossHistory.currentInventory.enabled requires phorvex.lossHistory.enabled" }}{{- end }}
+        {{- if .Values.phorvex.lossHistory.enabled }}
+        {{- if not .Values.phorvex.admissionWebhook.enabled }}{{ fail "phorvex.lossHistory.enabled requires admissionWebhook.enabled" }}{{- end }}
+        {{- $lossClaim := required "phorvex.lossHistory.existingClaim is required when enabled" .Values.phorvex.lossHistory.existingClaim }}
+        {{- $lossObservers := .Values.phorvex.lossHistory.trustedObservers | default list }}
+        {{- if .Values.phorvex.lossHistory.observer.enabled }}
+        {{- $lossObserverName := printf "%s-loss-observer" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" }}
+        {{- $lossObservers = append $lossObservers (printf "%s/%s" .Release.Namespace $lossObserverName) }}
+        {{- end }}
+        {{- if eq (len $lossObservers) 0 }}{{ fail "phorvex.lossHistory.trustedObservers is required when enabled" }}{{- end }}
+        - --loss-history-dir={{ .Values.phorvex.lossHistory.mountPath }}
+        - --trusted-loss-observers={{ join "," $lossObservers }}
+        {{- if .Values.phorvex.lossHistory.currentInventory.enabled }}
+        {{- $currentObservers := .Values.phorvex.lossHistory.currentInventory.trustedObservers | default list }}
+        {{- if .Values.phorvex.lossHistory.currentInventory.observer.enabled }}
+        {{- $currentObserverName := printf "%s-current-inventory-observer" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" }}
+        {{- $currentObservers = append $currentObservers (printf "%s/%s" .Release.Namespace $currentObserverName) }}
+        {{- end }}
+        {{- if eq (len $currentObservers) 0 }}{{ fail "phorvex.lossHistory.currentInventory.trustedObservers is required when enabled" }}{{- end }}
+        - --trusted-current-inventory-observers={{ join "," $currentObservers }}
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.audit.enabled }}
         {{- $auditMaxBytesText := toString .Values.phorvex.audit.maxBytes }}
@@ -222,7 +262,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -265,8 +305,12 @@ spec:
           subPath: security.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.lossHistory.enabled }}
+        - name: loss-history
+          mountPath: {{ .Values.phorvex.lossHistory.mountPath }}
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings }}
+        {{- end }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -310,6 +354,11 @@ spec:
           items:
           - key: security.json
             path: security.json
+      {{- end }}
+      {{- if .Values.phorvex.lossHistory.enabled }}
+      - name: loss-history
+        persistentVolumeClaim:
+          claimName: {{ .Values.phorvex.lossHistory.existingClaim }}
       {{- end }}
       {{- if .Values.phorvex.calibration.enabled }}
       - name: calibration-evidence

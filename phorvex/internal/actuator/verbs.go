@@ -53,7 +53,7 @@ var actionVerbs = map[model.Action][]authz.Verb{
 var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "create", ClusterScoped: true}}
 
 // RequiredVerbs returns the RBAC verbs the capability gate must confirm before action a is
-// offered — ROUTING-AWARE (M-160). A Phoenix-routed action (RuleTypeFor != "") is gated on
+// offered — ROUTING-AWARE (M-160). A Phoenix-routed action is gated on
 // the SecurityEvent-create verb the operator actually uses, NOT the native handler's pod
 // verbs it never touches on that path — the fix for the no-rbac false-exclusion of
 // rotate/quarantine outside the native-bound namespaces. Native-routed actions keep their
@@ -63,8 +63,11 @@ var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "se
 // checks use the same RouteFor decision as dispatch. RequiredVerbs below preserves the
 // established hybrid behavior for compatibility callers.
 func RequiredVerbsForBackend(backend Backend, a model.Action) []authz.Verb {
-	if RouteFor(backend, a) == BackendPhoenix && RuleTypeFor(a) != "" {
-		return phoenixRuleVerbs
+	if RouteFor(backend, a) == BackendPhoenix {
+		if accepted, _ := phoenixAccepts(a); accepted {
+			return phoenixRuleVerbs
+		}
+		return nil
 	}
 	if RouteFor(backend, a) != BackendNative {
 		return nil

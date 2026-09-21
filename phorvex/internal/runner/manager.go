@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -38,11 +39,14 @@ import (
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
+	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -195,6 +199,22 @@ type Manager struct {
 	// BoundaryReader bypasses informer staleness for admission enforcement and
 	// actuation-brake authority reads.
 	BoundaryReader client.Reader
+	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
+	// leaves representation history honestly unavailable.
+	LossHistory losshistory.Ledger
+	// CurrentInventory is bounded, expiring evidence for explicitly configured
+	// synthetic protected versions. Nil keeps current inventory unavailable.
+	CurrentInventory currentinventory.Ledger
+	// LossHistoryReader performs optional completed-disclosure authority and
+	// replacement-owner reads under a separate bounded context. Production sets
+	// it to the uncached API reader; a stall cannot consume the actuation tick.
+	LossHistoryReader client.Reader
+	// LossHistoryReadTimeout bounds the whole optional representation-evidence
+	// transaction, including current-inventory revalidation. Zero uses the
+	// conservative default in completed_disclosure.go.
+	LossHistoryReadTimeout time.Duration
+	lossHistoryWorkerMu    sync.Mutex
+	lossHistoryWorker      *lossHistoryCoordinator
 	// ActuationBrakeReadTimeout bounds each uncached Namespace/Pod authority read.
 	// Zero uses actuationbrake.DefaultReadTimeout.
 	ActuationBrakeReadTimeout time.Duration
@@ -214,6 +234,9 @@ type Manager struct {
 	// QuarantineCapacity is the production hard bound shared by native, hybrid and
 	// pure-Phoenix routes. It uses the uncached reader and protected operator ledger.
 	QuarantineCapacity *actuator.QuarantineCapacity
+	// SharedCapacity is the durable cross-policy CAS ledger for hard resources
+	// whose effects can outlive a tick or this process.
+	SharedCapacity *sharedcapacity.Store
 	// Authz is the T1-E SSAR capability checker (cached). nil disables the RBAC leg of the
 	// gate (installability + cover + runtime-capability still apply); the boot layer wires
 	// it from the cluster clientset so no-rbac exclusions become live.
@@ -334,8 +357,17 @@ func clearDispatchResult(d *model.Decision) {
 	d.ObjectsTouched = nil
 	d.RollbackRef = ""
 	d.MutationKind = ""
+	d.GracefulTermination = nil
 	d.Phoenix = nil
 	d.DispatchOutcome, d.DispatchReason = "", ""
+}
+
+func cloneGracefulTermination(in *model.GracefulTerminationReceipt) *model.GracefulTerminationReceipt {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 // resetDispatchAttempt removes every result and runtime-boundary field from a
@@ -540,7 +572,7 @@ func backendPurpose(b actuator.Backend) string {
 	case actuator.BackendNative:
 		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
 	case actuator.BackendHybrid:
-		return "Phoenix for rotate/quarantine, native for the AI-native moves"
+		return "native for policy-bounded rotate and AI-native moves; Phoenix for quarantine"
 	default:
 		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
 	}
@@ -570,6 +602,9 @@ func buildActuator(c client.Client, log logr.Logger, res actuator.BackendResolut
 
 // Upsert adds or updates a tenant policy in the registry.
 func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
+	if _, _, err := p.Spec.EffectiveDisruptionAversion(); err != nil {
+		return fmt.Errorf("policy %s/%s: %w", p.Namespace, p.Name, err)
+	}
 	sel, err := metav1LabelSelector(p)
 	if err != nil {
 		return err
@@ -813,15 +848,27 @@ func (m *Manager) syncOwnerLiveness() {
 		return
 	}
 	m.mu.RLock()
-	owners := make([]string, 0, len(m.policies))
+	epochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	for _, e := range m.policies {
 		if e != nil {
-			owners = append(owners, e.ownerKey())
+			epochs = append(epochs, model.PolicyEpoch{Namespace: e.namespace, Name: e.key.Name, UID: e.uid, Generation: e.generation})
 		}
 	}
 	m.mu.RUnlock()
-	for _, owner := range owners {
-		ce.SetOwnerLive(owner, true)
+	registerCoverageOwnerEpochs(ce, epochs)
+}
+
+// registerCoverageOwnerEpochs is shared by the controller sync seam and the
+// actual tick snapshot. A future observed-outcome adapter therefore cannot see
+// a different policy identity depending on which manager path established it.
+func registerCoverageOwnerEpochs(ce *decision.CoverageEngine, epochs []model.PolicyEpoch) {
+	for _, epoch := range epochs {
+		// Preserve the established lifecycle guard even for directly constructed
+		// offline fixtures with incomplete epochs. Stored API objects have complete
+		// identity and positive generation, so production also registers the exact
+		// observed-outcome epoch.
+		ce.SetOwnerLive(epoch.Owner(), true)
+		_ = ce.SetOwnerEpoch(epoch, true)
 	}
 }
 
@@ -1133,12 +1180,12 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	// then be rejected as retired. They must describe the same instant.
 	m.mu.Lock()
 	due := make([]duePolicy, 0, len(m.policies))
-	liveOwners := make([]string, 0, len(m.policies))
+	liveEpochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := m.managerClock().Now()
 	for _, e := range m.policies {
 		owner := e.ownerKey()
-		liveOwners = append(liveOwners, owner)
+		liveEpochs = append(liveEpochs, model.PolicyEpoch{Namespace: e.namespace, Name: e.key.Name, UID: e.uid, Generation: e.generation})
 		row := duePolicy{
 			entry: e, namespace: e.namespace, name: e.key.Name, uid: e.uid,
 			owner: owner, epoch: m.epochs[owner], neverRun: e.lastTick.IsZero(),
@@ -1154,9 +1201,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	m.mu.Unlock()
 	sortDuePolicies(due)
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		for _, owner := range liveOwners {
-			ce.SetOwnerLive(owner, true)
-		}
+		registerCoverageOwnerEpochs(ce, liveEpochs)
 	}
 	// The epochs captured with `due` travel with this tick: a producer that writes back
 	// later compares against them, so a replacement that happened mid-tick cannot be
@@ -1826,6 +1871,16 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	m.processTenantWithPhysicsObserved(ctx, snap, e, &observation, physicsByKey)
 }
 
+// actuatorUsesNativeRotate reports whether rotate reaches the native delete
+// handler for the configured actuator. Hybrid routes rotate to native so it
+// must apply the same owner-identity feasibility law as the native backend.
+func actuatorUsesNativeRotate(a actuator.Actuator) bool {
+	if a == nil {
+		return false
+	}
+	return actuator.RouteFor(actuator.Backend(a.Name()), model.ActionRotate) == actuator.BackendNative
+}
+
 func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killObservation *KillSwitchObservation, physicsByKey map[string]model.PhysicsWitness) {
 	if ctx.Err() != nil {
 		return
@@ -1857,7 +1912,21 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 	}
-	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
+	if m.SharedCapacity != nil {
+		pol.SharedResourceCapacityConfigured = true
+		inventory, inventoryErr := m.SharedCapacity.Inventory(ctx)
+		if inventoryErr != nil {
+			pol.SharedResourceReservationsKnown = false
+			pol.SharedResourceReservationsReason = inventoryErr.Error()
+		} else {
+			pol.SharedResourceReservationsKnown = true
+			pol.SharedResourceReservations = inventory
+		}
+		if ctx.Err() != nil {
+			return
+		}
+	}
+	pol.NativeRotate = actuatorUsesNativeRotate(m.Actuator)
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
 	pol.GitSHA = m.GitSHA
@@ -2009,6 +2078,22 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 	}
 
+	// Standing route state belongs to the policy tick, not to a selected move.
+	// Observe it before selection so zero-Pod, zero-selection and rejected ticks
+	// all retain the same owned configuration evidence.
+	namespaceObservation := snap.NamespaceDryRun[e.namespace]
+	if namespaceObservation.Cause == "" {
+		namespaceObservation = actuationbrake.Namespace(nil)
+	}
+	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
+	standingPolicy, ownerCurrent := m.maintainStandingPolicy(ctx, e, pol, admittedOwnerEpoch, killState, brakeState)
+	if !ownerCurrent || ctx.Err() != nil {
+		return
+	}
+	actionsSupport.standingPolicy = &standingPolicy
+	killEngaged = killState.observation.Engaged
+	namespaceObservation = brakeState.namespace
+
 	var shadowDecisions []model.Decision
 	shadowAvailable := false
 	if m.Calibration != nil {
@@ -2021,6 +2106,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 					m.Log.Error(shadowErr, "shadow scale optimizer comparison unavailable", "tenant", pol.Tenant)
 				}
 			}
+		}
+	}
+	// Retain exact source and effective policy material once per content hash in
+	// the production audit sibling store. Persistence failure follows the audit
+	// degradation contract and never changes defensive selection or actuation;
+	// Logger.Record marks every affected row unavailable/failed explicitly.
+	if m.Audit != nil && m.Optimizer.Name() == "p1-coverage" {
+		ref, manifest, overrides, provenanceErr := decision.ParameterSetForPolicy(pol)
+		if provenanceErr == nil {
+			_ = m.Audit.RetainParameterSet(pol.Tenant, ref, manifest, overrides)
 		}
 	}
 
@@ -2046,7 +2141,11 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name(), "reason", string(reason))
 		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
 			killState.observation.Engaged, string(killState.observation.Cause))
-		rejected := decision.ExistentialRejectedDecisions(views, pol, string(reason), snap.Now)
+		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), snap.Now)
+		if provenanceErr != nil {
+			m.Log.Error(provenanceErr, "rejected decision parameter provenance unavailable", "tenant", pol.Tenant)
+			return
+		}
 		for _, d := range rejected {
 			m.Audit.Record(d)
 		}
@@ -2056,10 +2155,6 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 		if len(rejected) > 0 || inventory != nil {
 			m.updateExistentialStatus(ctx, e, rejected, inventory)
-		}
-		namespaceObservation := snap.NamespaceDryRun[e.namespace]
-		if namespaceObservation.Cause == "" {
-			namespaceObservation = actuationbrake.Namespace(nil)
 		}
 		actionsSupport.namespaceDryRun = namespaceObservation
 		m.updateRejectedStatusObserved(ctx, e, len(views), killState.observation, time.Now(), reason, actionsSupport)
@@ -2083,13 +2178,6 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}, availabilityViolations, sloViolations)
 	}
 
-	// The snapshot observation excludes opted-out targets before allocation. A fresh,
-	// uncached observation is still required at route and dispatch boundaries below.
-	namespaceObservation := snap.NamespaceDryRun[e.namespace]
-	if namespaceObservation.Cause == "" {
-		namespaceObservation = actuationbrake.Namespace(nil)
-	}
-	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
 	effectiveDryRun := pol.DryRun || namespaceObservation.Engaged
 	for i := range decisions {
 		if decisions[i].Measurements == nil {
@@ -2115,11 +2203,19 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			stampKillSwitchRefusal(&decisions[i], killState.observation)
 		}
 	}
+	if !standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && standingPolicy.blockedCause != "" {
+		for i := range decisions {
+			if decisions[i].Selected {
+				stampDispatchEvidence(&decisions[i], model.DispatchNotAttempted, "standing-policy-guard-unavailable")
+			}
+		}
+	}
 	if ctx.Err() != nil {
 		return
 	}
 
-	// M100: freeze the reporting source BEFORE actuation; no later resnapshot or
+	// M100: admit the dedicated evidence stream and freeze the reporting source
+	// BEFORE actuation; no later resnapshot or
 	// shared map/slice can rewrite the evidence used for this claim.
 	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	representationInventory := outcomeInventory(snap.Events, pol)
@@ -2130,7 +2226,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// No effect has been attempted yet. Stop promptly while preparing the
 	// immutable reporting inputs rather than carrying an expired tick into
 	// actuation. After an attempt, the audit loop below must drain completely.
-	representationInputs, complete := representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory)
+	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, snap.Events, snap.Now)
 	if !complete {
 		return
 	}
@@ -2139,7 +2235,10 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// (actuate marks decisions[i].Actuated on a successful emit).
 	m.fallbackDecisions = nil
 	var currentPreparation *actuator.RoutePreparation
-	if !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
+	if standingPolicy.observed {
+		currentPreparation = &standingPolicy.result.Preparation
+	}
+	if standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
@@ -2148,7 +2247,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 		var attempted bool
-		_, currentPreparation, attempted = m.actuatePreparedWithKillSwitchObserved(ctx, e, pol, decisions, viewByKey, killState, brakeState)
+		_, currentPreparation, attempted = m.actuatePreparedMode(ctx, e, pol, decisions, viewByKey, true, killState, brakeState, currentPreparation)
 		if ctx.Err() != nil && !attempted {
 			return
 		}
@@ -2180,8 +2279,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		if m.fallbackDecisions[i].Trace != nil {
 			m.fallbackDecisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
 		}
-		appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
-			versions[m.fallbackDecisions[i].Namespace+"/"+m.fallbackDecisions[i].Pod], reportClaim, representationInventory))
+		fallbackKey := m.fallbackDecisions[i].Namespace + "/" + m.fallbackDecisions[i].Pod
+		if historyInputs == nil {
+			appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+				versions[fallbackKey], reportClaim, representationInventory))
+		} else {
+			appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+				versions[fallbackKey], reportClaim, representationInventory, historyInputs[fallbackKey]))
+		}
 		m.Audit.Record(m.fallbackDecisions[i])
 		m.recordColocation(assessmentInput, m.fallbackDecisions[i], pol)
 	}
@@ -2392,6 +2497,10 @@ func cloneExistential(in *model.ExistentialDecision) *model.ExistentialDecision 
 
 func fallbackDecision(original model.Decision, a decision.Alternative) model.Decision {
 	d := original
+	if original.Economics != nil {
+		economics := *original.Economics
+		d.Economics = &economics
+	}
 	if original.Measurements != nil {
 		measurements := *original.Measurements
 		d.Measurements = &measurements
@@ -2412,7 +2521,12 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		}
 	}
 	d.Action, d.CoverageValue, d.CoveredWeight, d.Cost = a.Action, a.Coverage, a.Marginal, a.Cost
-	d.Net = a.Coverage - original.Lambda*a.Cost
+	d.Resources = append([]model.ResourceConsumption(nil), a.Resources...)
+	costCoefficient := original.Lambda
+	if original.Economics != nil {
+		costCoefficient = original.Economics.EffectiveCostCoefficient
+	}
+	d.Net = a.Coverage - costCoefficient*a.Cost
 	d.Attribution = append([]model.AttributionTerm(nil), a.Attribution...)
 	if a.CounterfactualNote != "" {
 		d.CounterfactualNote = a.CounterfactualNote
@@ -2422,8 +2536,8 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		d.PerDollar = a.Coverage / a.Cost
 	}
 	d.ProactiveRate = 0
-	if d.PerDollar > d.Lambda {
-		d.ProactiveRate = d.PerDollar - d.Lambda
+	if d.PerDollar > costCoefficient {
+		d.ProactiveRate = d.PerDollar - costCoefficient
 	}
 	d.CoveredFacts = len(a.CoverKeys)
 	if d.Measurements != nil {
@@ -2437,6 +2551,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 	d.DispatchOutcome, d.DispatchReason = "", ""
 	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
 	d.ObjectsTouched = nil
+	d.GracefulTermination = nil
 	if original.Trace != nil {
 		tr := *original.Trace
 		tr.Existential = d.Existential
@@ -2447,10 +2562,21 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		tr.Candidates = append([]model.DecisionCandidateV2(nil), original.Trace.Candidates...)
 		tr.Facts = append([]model.DecisionFactV2(nil), original.Trace.Facts...)
 		tr.ActionStatus = append([]model.DecisionActionStatusV3(nil), original.Trace.ActionStatus...)
+		tr.Resources = append([]model.DecisionResourceCapacityV6(nil), original.Trace.Resources...)
 		tr.SelectedAction = string(a.Action)
 		tr.SelectedCandidateKey = d.Namespace + "/" + d.Pod + "|" + string(a.Action)
 		tr.DispatchOutcome, tr.DispatchReason = "", ""
 		tr.DualUpdate.Applied = false // this exchange makes no second learning step
+		resourceDelta := map[string]int{}
+		for _, demand := range original.Resources {
+			resourceDelta[demand.Scope.Key()] -= demand.Units
+		}
+		for _, demand := range a.Resources {
+			resourceDelta[demand.Scope.Key()] += demand.Units
+		}
+		for i := range tr.Resources {
+			tr.Resources[i].Selected += resourceDelta[tr.Resources[i].Scope.Key()]
+		}
 		fallbackCover := make(map[string]struct{}, len(a.CoverKeys))
 		for _, key := range a.CoverKeys {
 			fallbackCover[key] = struct{}{}
@@ -2518,7 +2644,7 @@ func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEn
 }
 
 func (m *Manager) actuatePreparedWithKillSwitchObserved(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
-	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState)
+	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState, nil)
 }
 
 func actuationAttemptOutcome(res actuator.Result, err error, disposition actuator.NoEffectDisposition, contradictory bool) metrics.ActuationAttemptOutcome {
@@ -2549,8 +2675,69 @@ func actuationAttemptOutcome(res actuator.Result, err error, disposition actuato
 	}
 }
 
-func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
+func sharedCapacityRequest(pol model.Policy, d model.Decision, v *model.WorkloadView) sharedcapacity.Request {
+	operationID := ""
+	if d.Trace != nil {
+		operationID = d.Trace.DecisionID
+	}
+	if operationID == "" {
+		operationID = deterministicTraceID("shared-capacity", pol.TickID, pol.PolicyUID, d.Namespace, v.Pod.UID, string(d.Action))
+	}
+	return sharedcapacity.Request{
+		PolicyUID: pol.PolicyUID, TargetNamespace: d.Namespace,
+		TargetName: d.Pod, TargetUID: v.Pod.UID, Action: d.Action,
+		OperationID: operationID, MinAvailableReplica: pol.MinAvailableReplicas,
+		Resources: append([]model.ResourceConsumption(nil), d.Resources...),
+	}
+}
+
+func appendDispatchReason(d *model.Decision, suffix string) {
+	if d == nil || suffix == "" {
+		return
+	}
+	if d.DispatchReason == "" {
+		d.DispatchReason = suffix
+	} else {
+		d.DispatchReason += "; " + suffix
+	}
+	if d.Trace != nil {
+		d.Trace.DispatchReason = d.DispatchReason
+	}
+}
+
+func releaseSharedCapacityNoEffect(ctx context.Context, store *sharedcapacity.Store, reservation *sharedcapacity.Reservation) error {
+	if store == nil || reservation == nil {
+		return nil
+	}
+	releaseCtx := ctx
+	cancel := func() {}
+	if ctx.Err() != nil {
+		// The backend is proven unsent/no-effect at each call site. Complete this
+		// bounded synchronous ledger cleanup even when the action context has just
+		// expired; no goroutine or detached compensation survives the caller.
+		releaseCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	}
+	defer cancel()
+	return store.ReleaseNoEffect(releaseCtx, reservation)
+}
+
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
+	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil, prepared)
+}
+
+func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
 	attempted := false
+	inheritedHandled := inheritedReservation == nil
+	defer func() {
+		// A fallback inherits the original reservation while it repeats all
+		// current-authority guards. If it exits before atomic exchange/backend
+		// invocation, the original attempt was definitely unsent and can release.
+		if !inheritedHandled && m.SharedCapacity != nil {
+			if err := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, inheritedReservation); err != nil {
+				m.Log.Error(err, "shared capacity reservation retained after pre-dispatch fallback refusal")
+			}
+		}
+	}()
 	// Clear prior result and boundary metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -2607,7 +2794,9 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 	}
 	var preparation actuator.RoutePreparation
 	var err error
-	if routed, ok := m.Actuator.(interface {
+	if prepared != nil {
+		preparation = *prepared
+	} else if routed, ok := m.Actuator.(interface {
 		PrepareRoutes(context.Context, actuator.TenantTarget) actuator.RoutePreparation
 	}); ok {
 		preparation = routed.PrepareRoutes(ctx, target)
@@ -2786,21 +2975,76 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
+		var capacityReservation *sharedcapacity.Reservation
+		if m.SharedCapacity != nil {
+			capacityRequest := sharedCapacityRequest(pol, decisions[i], v)
+			var capacityErr error
+			if inheritedReservation != nil {
+				// From this point an exchange may have committed even when its API
+				// acknowledgement is lost. Never separately release the old key.
+				inheritedHandled = true
+				capacityReservation, capacityErr = m.SharedCapacity.Exchange(ctx, inheritedReservation, capacityRequest)
+			} else {
+				capacityReservation, capacityErr = m.SharedCapacity.Acquire(ctx, capacityRequest)
+			}
+			if capacityErr != nil {
+				stampDispatch(model.DispatchNotAttempted, "shared-capacity-refused")
+				recordExistentialEffect(&decisions[i], false)
+				m.Log.Error(capacityErr, "shared capacity refused dispatch before actuator invocation",
+					"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+					"pod", decisions[i].Pod, "action", decisions[i].Action)
+				continue
+			}
+			if capacityReservation != nil && !capacityReservation.Created {
+				// The exact durable identity was observed after a restart or lost
+				// response. Reconcile it through inventory; never replay mutation.
+				stampDispatch(model.DispatchNotAttempted, "shared-capacity-operation-already-recorded")
+				recordExistentialEffect(&decisions[i], false)
+				continue
+			}
+		}
+		if ctx.Err() != nil {
+			if capacityReservation != nil && m.SharedCapacity != nil {
+				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+					m.Log.Error(releaseErr, "shared capacity reservation retained after cancelled pre-dispatch")
+				}
+			}
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
+		}
+		if capacityReservation != nil && m.SharedCapacity != nil {
+			// Only an acknowledged reserved -> dispatching CAS licenses the
+			// backend call. A failed acknowledgement is ambiguous: the write may
+			// have committed, so neither dispatch nor release is safe here. The
+			// next inventory pass clears a still-reserved record or retains a
+			// dispatching record for effect reconciliation.
+			if claimErr := m.SharedCapacity.Claim(ctx, capacityReservation); claimErr != nil {
+				stampDispatch(model.DispatchNotAttempted, "shared-capacity-claim-unconfirmed")
+				recordExistentialEffect(&decisions[i], false)
+				m.Log.Error(claimErr, "shared capacity dispatch claim was not acknowledged; backend invocation refused",
+					"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+					"pod", decisions[i].Pod, "action", decisions[i].Action)
+				continue
+			}
+		}
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
-			AdapterObservation: v.Pod.AdapterObservation,
-			PolicyName:         pol.PolicyName,
-			PolicyUID:          pol.PolicyUID,
-			Tenant:             pol.Tenant,
-			Namespace:          decisions[i].Namespace,
-			Pod:                decisions[i].Pod,
-			Action:             decisions[i].Action,
-			Reason:             decisions[i].Reason,
-			Score:              score,
-			CoverageValue:      coverageValue,
-			TargetUID:          v.Pod.UID,
-			TickID:             pol.TickID,
+			AdapterObservation:    v.Pod.AdapterObservation,
+			PolicyName:            pol.PolicyName,
+			PolicyUID:             pol.PolicyUID,
+			PolicyGeneration:      pol.PolicyGeneration,
+			MaxGracePeriodSeconds: pol.MaxGracePeriodSeconds,
+			Tenant:                pol.Tenant,
+			Namespace:             decisions[i].Namespace,
+			Pod:                   decisions[i].Pod,
+			Action:                decisions[i].Action,
+			Reason:                decisions[i].Reason,
+			Score:                 score,
+			CoverageValue:         coverageValue,
+			TargetUID:             v.Pod.UID,
+			TickID:                pol.TickID,
 			ServingObservation: &actuator.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
@@ -2815,6 +3059,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		var err error
 		backendInvoked := true
 		if ctx.Err() != nil {
+			if capacityReservation != nil && m.SharedCapacity != nil {
+				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+					m.Log.Error(releaseErr, "shared capacity reservation retained after acknowledged claim but before backend invocation")
+				}
+			}
 			recordExistentialEffect(&decisions[i], false)
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
@@ -2829,6 +3078,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			res, err = m.Actuator.Actuate(ctx, request)
 		}
 		if !backendInvoked {
+			if capacityReservation != nil && m.SharedCapacity != nil {
+				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+					m.Log.Error(releaseErr, "shared capacity reservation retained after backend pre-invocation refusal")
+				}
+			}
 			if ctx.Err() != nil {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "context-cancelled")
@@ -2854,6 +3108,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
 		disposition := noEffectDisposition(res, err)
 		contradictoryDisposition := contradictoryNoEffectResult(res, err)
+		definiteNoEffect := !contradictoryDisposition && (disposition == actuator.NoEffectRefused || disposition == actuator.NoEffectSatisfied || disposition == actuator.NoEffectReconciled || disposition == actuator.NoEffectDeclared)
 		metrics.RecordActuationAttempt(pol.Tenant, string(decisions[i].Action), actuationAttemptOutcome(res, err, disposition, contradictoryDisposition))
 		// M-11 emission-window bookkeeping remains conservative about any producer that
 		// reports an attempted emission. Success, intent and learning accounting below
@@ -2913,6 +3168,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
@@ -2943,6 +3199,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			} else {
 				m.Log.Error(nil, "actuator returned contradictory result evidence", "pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			}
+			reservationTransferred := false
 			if !fallbackBlocked && allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
 				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
 				disposition == actuator.NoEffectRefused {
@@ -2958,7 +3215,8 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 						}
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
-						more, _, fallbackAttempted := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState)
+						reservationTransferred = capacityReservation != nil
+						more, _, fallbackAttempted := m.actuatePreparedModeWithCapacity(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState, capacityReservation, &preparation)
 						attempted = attempted || fallbackAttempted
 						actuated += more
 						// The recursive call modifies its local slice's owned trace;
@@ -2972,7 +3230,28 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 					}
 				}
 			}
+			if capacityReservation != nil && !reservationTransferred && m.SharedCapacity != nil {
+				if definiteNoEffect {
+					if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+						appendDispatchReason(&decisions[i], "shared-capacity-release-pending")
+						m.Log.Error(releaseErr, "shared capacity no-effect release was not acknowledged")
+					}
+				} else if retainErr := m.SharedCapacity.RetainUnknown(ctx, capacityReservation); retainErr != nil {
+					appendDispatchReason(&decisions[i], "shared-capacity-unknown-retention-unconfirmed")
+					m.Log.Error(retainErr, "shared capacity unknown outcome retention was not acknowledged")
+				}
+			}
 			continue
+		}
+		var capacityFinalizeErr error
+		if capacityReservation != nil && m.SharedCapacity != nil && !res.Emitted {
+			if definiteNoEffect {
+				if capacityFinalizeErr = releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); capacityFinalizeErr != nil {
+					m.Log.Error(capacityFinalizeErr, "shared capacity no-effect release was not acknowledged")
+				}
+			} else if capacityFinalizeErr = m.SharedCapacity.RetainUnknown(ctx, capacityReservation); capacityFinalizeErr != nil {
+				m.Log.Error(capacityFinalizeErr, "shared capacity unknown outcome retention was not acknowledged")
+			}
 		}
 		if res.Emitted {
 			m.Failures.reset(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, decisions[i].Action})
@@ -2996,6 +3275,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
@@ -3021,6 +3301,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			switch disposition {
 			case actuator.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")
@@ -3030,6 +3311,13 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				stampDispatch(model.DispatchDeclared, "declared-without-implementation")
 			default:
 				stampDispatch(model.DispatchEmittedFalse, "outcome-unknown")
+			}
+			if capacityFinalizeErr != nil {
+				if definiteNoEffect {
+					appendDispatchReason(&decisions[i], "shared-capacity-release-pending")
+				} else {
+					appendDispatchReason(&decisions[i], "shared-capacity-unknown-retention-unconfirmed")
+				}
 			}
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
@@ -3066,6 +3354,17 @@ func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForen
 
 func buildPolicy(e *policyEntry) model.Policy {
 	s := &e.spec
+	maxGracePeriodSeconds, maxGraceErr := s.EffectiveMaxGracePeriodSeconds()
+	if maxGraceErr != nil {
+		// Runtime inputs that bypass CRD validation remain invalid. Zero is a
+		// refusal sentinel at the rotate boundary, never a force-delete value.
+		maxGracePeriodSeconds = 0
+	}
+	disruptionAversion, disruptionAversionConfigured, disruptionAversionErr := s.EffectiveDisruptionAversion()
+	if disruptionAversionErr != nil {
+		disruptionAversion = math.NaN()
+		disruptionAversionConfigured = true
+	}
 	enabled := map[model.Action]bool{}
 	for _, a := range s.Actions.Enabled {
 		enabled[model.Action(a)] = true
@@ -3079,15 +3378,19 @@ func buildPolicy(e *policyEntry) model.Policy {
 		Namespace:                    e.namespace,
 		PolicyName:                   e.key.Name,
 		PolicyUID:                    e.uid,
+		PolicyGeneration:             e.generation,
 		Mode:                         s.EffectiveMode(),
 		DryRun:                       s.IsDryRun(),
 		Lambda:                       s.EffectiveLambda(),
+		DisruptionAversion:           disruptionAversion,
+		DisruptionAversionConfigured: disruptionAversionConfigured,
 		NormSparsity:                 s.EffectiveNormSparsity(),
 		FlowDisruption:               s.EffectiveFlowDisruption(),
 		CostCeiling:                  s.EffectiveCostCeiling(),
 		WeightSecrets:                s.EffectiveWeightSecrets(),
 		BlastRadiusFromGraph:         s.AssetValue.BlastRadiusFromGraph,
 		MaxMovesPerTick:              s.EffectiveMaxMovesPerTick(),
+		MaxGracePeriodSeconds:        maxGracePeriodSeconds,
 		TickInterval:                 s.EffectiveTickInterval(),
 		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
 		ProactiveFloor:               s.EffectiveProactiveFloor(),
