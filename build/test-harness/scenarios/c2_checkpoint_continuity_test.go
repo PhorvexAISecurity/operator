@@ -73,6 +73,30 @@ func TestCheckpointServerActualRestartContinuity(t *testing.T) {
 	}
 }
 
+func TestCheckpointServerActualTwoRestartChain(t *testing.T) {
+	dir := t.TempDir()
+	port := freePort(t)
+	previousUID := "pod-0"
+	previousInc := ""
+	var acknowledged int64
+	for generation := 0; generation < 3; generation++ {
+		uid := fmt.Sprintf("pod-%d", generation)
+		cmd := startCheckpointServer(t, dir, port, uid, "pvc-owned", "")
+		body := waitCheckpointHTTP(t, port, func(b checkpointBody) bool { return b.PodUID == uid && b.Sequence > b.BootSequence })
+		if generation == 0 {
+			if body.InitializedFresh == nil || !*body.InitializedFresh || body.BootSequence != 0 {
+				t.Fatalf("fresh provenance=%+v", body)
+			}
+		} else {
+			if body.InitializedFresh == nil || *body.InitializedFresh || body.PodUID == previousUID || body.Incarnation == previousInc || body.BootSequence < acknowledged {
+				t.Fatalf("restart %d lost predecessor: ack=%d body=%+v", generation, acknowledged, body)
+			}
+		}
+		acknowledged, previousUID, previousInc = body.Sequence, body.PodUID, body.Incarnation
+		stopCheckpointServer(t, cmd)
+	}
+}
+
 func TestCheckpointServerRejectsInvalidAndFaultedStorage(t *testing.T) {
 	for _, tc := range []struct{ name, contents, fault string }{{"truncated", "{", ""}, {"unsupported-version", `{"checksum":"bad","payload":"synthetic-sequence-00000000000000000001","sequence":1,"version":2}`, ""}, {"bool-version", `{"checksum":"bad","payload":"synthetic-sequence-00000000000000000001","sequence":1,"version":true}`, ""}, {"checksum", `{"checksum":"bad","payload":"synthetic-sequence-00000000000000000001","sequence":1,"version":1}`, ""}, {"duplicate-field", `{"version":1,"version":1,"sequence":0,"payload":"synthetic-sequence-00000000000000000000","checksum":"unused"}`, ""}, {"oversized", strings.Repeat("x", 8193), ""}, {"file-fsync-fault", "", "before-file-fsync"}, {"replace-fault", "", "before-replace"}} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -344,6 +368,137 @@ func TestCheckpointExecuteRetainsSampledHighWaterAcrossReplacement(t *testing.T)
 				}
 			}
 		})
+	}
+}
+
+func replaceCheckpointTestPod(t *testing.T, env *core.Env, oldName string, uid types.UID) *corev1.Pod {
+	t.Helper()
+	if err := env.Kube.CoreV1().Pods("sandbox").Delete(context.Background(), oldName, metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	pod := sessionFixturePod(checkpointApp, checkpointApp, uid, false, true)
+	pod.Name = "target-" + string(uid)
+	bindCheckpointFixturePod(pod)
+	createSessionFixturePod(t, env, pod)
+	setCheckpointFixtureEndpoint(t, env, pod)
+	return pod
+}
+
+func TestCheckpointSuccessiveIncarnationChainAcceptsTwoRestarts(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	s := observedCheckpointScenario()
+	if err := s.observeCheckpointSample(context.Background(), env, checkpointFixture("old", "pvc", "old-inc", 6, 0)); err != nil {
+		t.Fatal(err)
+	}
+	mid := replaceCheckpointTestPod(t, env, "target", "mid")
+	if err := s.observeCheckpointSample(context.Background(), env, checkpointFixture("mid", "pvc", "mid-inc", 8, 6)); err != nil {
+		t.Fatal(err)
+	}
+	last := replaceCheckpointTestPod(t, env, mid.Name, "last")
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, checkpointFixture("last", "pvc", "last-inc", 10, 8), 200)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	got, err := s.SuccessOracle(context.Background(), env)
+	if err != nil || !got.Achieved || got.Evidence["observedPodUID"] != string(last.UID) || !strings.Contains(got.Evidence["incarnationChain"], `"podUID":"mid"`) {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+	if len(s.incarnationChain) != 3 || !s.incarnationChain[1].PreviousUIDAbsent || !s.incarnationChain[2].PreviousUIDAbsent || !s.incarnationChain[2].PostBootAdvance {
+		t.Fatalf("chain=%+v", s.incarnationChain)
+	}
+}
+
+func TestCheckpointSuccessiveIncarnationChainRejectsRollbackOrphanAndPVCSubstitution(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		prepare func(*testing.T, *core.Env, *c2CheckpointContinuity) checkpointBody
+	}{
+		{"rollback", func(t *testing.T, env *core.Env, s *c2CheckpointContinuity) checkpointBody {
+			mid := replaceCheckpointTestPod(t, env, "target", "mid")
+			if err := s.observeCheckpointSample(context.Background(), env, checkpointFixture("mid", "pvc", "mid-inc", 8, 5)); err != nil {
+				t.Fatal(err)
+			}
+			replaceCheckpointTestPod(t, env, mid.Name, "last")
+			return checkpointFixture("last", "pvc", "last-inc", 9, 7)
+		}},
+		{"orphan-predecessor", func(t *testing.T, env *core.Env, _ *c2CheckpointContinuity) checkpointBody {
+			pod := sessionFixturePod(checkpointApp, checkpointApp, "foreign", false, true)
+			pod.Name = "foreign"
+			bindCheckpointFixturePod(pod)
+			createSessionFixturePod(t, env, pod)
+			return checkpointFixture("foreign", "pvc", "foreign-inc", 8, 5)
+		}},
+		{"pvc-substitution", func(t *testing.T, env *core.Env, _ *c2CheckpointContinuity) checkpointBody {
+			replaceCheckpointTestPod(t, env, "target", "new")
+			return checkpointFixture("new", "foreign-pvc", "new-inc", 8, 5)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := checkpointRequestEnv(t, "old")
+			s := observedCheckpointScenario()
+			reply := tc.prepare(t, env, s)
+			if err := s.observeCheckpointSample(context.Background(), env, reply); err == nil {
+				t.Fatal("invalid successive transition accepted")
+			}
+		})
+	}
+}
+
+func TestCheckpointActualRound40MultiRotationValuesAreAcceptedAsCompleteChain(t *testing.T) {
+	const originalUID = "23a7d52d-d7b4-41d7-9e14-f94c7219f517"
+	const firstUID = "11823ef5-06e6-40d0-acfd-cc5ee11fadd0"
+	const finalUID = "917ecc02-efc6-4350-9f85-ed548641560a"
+	const pvcUID = "f7b41f00-bbe1-4d29-8179-0fd6ae54ca91"
+	env := checkpointRequestEnv(t, originalUID)
+	pvc, err := env.Kube.CoreV1().PersistentVolumeClaims("sandbox").Get(context.Background(), checkpointPVC, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pvc.UID = pvcUID
+	if _, err = env.Kube.CoreV1().PersistentVolumeClaims("sandbox").Update(context.Background(), pvc, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	pv, err := env.Kube.CoreV1().PersistentVolumes().Get(context.Background(), "pv-owned", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pv.Spec.ClaimRef.UID = pvcUID
+	if _, err = env.Kube.CoreV1().PersistentVolumes().Update(context.Background(), pv, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	s := observedCheckpointScenario()
+	s.targetUID = originalUID
+	s.pvcUID = pvcUID
+	s.lastOriginal = checkpointFixture(originalUID, pvcUID, "18755271-267a-4ca3-a93c-8d2dd63ab1ee", 37, 0)
+	s.originalIncarnation = s.lastOriginal.Incarnation
+	first := replaceCheckpointTestPod(t, env, "target", firstUID)
+	if err := s.observeCheckpointSample(context.Background(), env, checkpointFixture(firstUID, pvcUID, "f7ba866f-a8d1-48a6-9969-42554f3dd4c2", 66, 48)); err != nil {
+		t.Fatal(err)
+	}
+	replaceCheckpointTestPod(t, env, first.Name, finalUID)
+	if _, _, err := s.observeCheckpointReply(context.Background(), env, checkpointFixture(finalUID, pvcUID, "bf433261-d6ad-4b08-822b-a2339e54a5cd", 90, 79), true); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.incarnationChain) != 3 || s.incarnationChain[0].AcknowledgedSequence != 37 || s.incarnationChain[1].BootSequence != 48 || s.incarnationChain[1].AcknowledgedSequence != 66 || s.incarnationChain[2].BootSequence != 79 || s.incarnationChain[2].AcknowledgedSequence != 90 {
+		t.Fatalf("chain=%+v", s.incarnationChain)
+	}
+}
+
+func TestCheckpointIncarnationChainCapRefusesFurtherReplacement(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	s := observedCheckpointScenario()
+	s.incarnationChain = make([]checkpointIncarnationObservation, checkpointMaxIncarnations)
+	for i := range s.incarnationChain {
+		name, uid := fmt.Sprintf("pod-%d", i), types.UID(fmt.Sprintf("uid-%d", i))
+		if i == len(s.incarnationChain)-1 {
+			name, uid = "target", "old"
+		}
+		s.incarnationChain[i] = checkpointIncarnationFrom(name, uid, checkpointFixture(string(uid), "pvc", fmt.Sprintf("inc-%d", i), int64(i+5), int64(i+4)), i > 0)
+	}
+	current := &s.incarnationChain[len(s.incarnationChain)-1]
+	replaceCheckpointTestPod(t, env, current.PodName, "overflow")
+	if err := s.observeCheckpointSample(context.Background(), env, checkpointFixture("overflow", "pvc", "overflow-inc", 30, current.AcknowledgedSequence)); err == nil || !strings.Contains(err.Error(), "bounded capacity") {
+		t.Fatalf("cap error=%v", err)
 	}
 }
 

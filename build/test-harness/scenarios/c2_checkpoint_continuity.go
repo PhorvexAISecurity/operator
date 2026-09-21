@@ -44,6 +44,7 @@ const (
 	checkpointLocalOwnerValue   = "checkpoint-local-holder"
 	checkpointLocalMarker       = ".phorvex-holder.json"
 	checkpointLocalCapacity     = "64Mi"
+	checkpointMaxIncarnations   = 16
 )
 
 var checkpointObservationWait = waitCheckpointObservation
@@ -172,20 +173,30 @@ type c2CheckpointContinuity struct {
 	unavailableReason                              string
 	pvName, storageClassName, storageProvisioner   string
 	pvUID, storageClassUID                         types.UID
-	observedReplacementUID                         types.UID
-	observedReplacementIncarnation                 string
-	observedReplacementSequence                    int64
+	incarnationChain                               []checkpointIncarnationObservation
 	localFixture                                   bool
 	localSlot                                      int
 	localHolderUID, localNodeUID                   types.UID
 	localNodeName, localNonce, localPath           string
 }
 
+type checkpointIncarnationObservation struct {
+	PodName              string `json:"podName"`
+	PodUID               string `json:"podUID"`
+	Incarnation          string `json:"incarnation"`
+	BootSequence         int64  `json:"bootSequence"`
+	BootChecksum         string `json:"bootChecksum"`
+	AcknowledgedSequence int64  `json:"acknowledgedSequence"`
+	AcknowledgedChecksum string `json:"acknowledgedChecksum"`
+	PreviousUIDAbsent    bool   `json:"previousUIDAbsent"`
+	PostBootAdvance      bool   `json:"postBootAdvance"`
+}
+
 func (s *c2CheckpointContinuity) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{Name: "c2-checkpoint-continuity", Category: core.CategoryR6Claimed, Source: "Post25 benign stateful checkpoint continuity control", R6ResponseTag: core.R6Partial, BenignControl: true, Realism: core.RealismExecutable,
 		Mechanism:          fmt.Sprintf("PVC-mounted Python CPU counter with atomic fsync+replace+directory-fsync checkpoints and ordinary HTTP observation; image=%s sourceSHA256=%s", checkpointImage, checkpointSourceSHA256()),
 		ClaimLimits:        "benign functional control only; zero ATT&CK techniques; no attack, detection, containment, network-isolation, continuous-availability, GPU-training, mitigation, security-coverage, or ROI claim",
-		OracleDescription:  "same identity must continue acknowledged progress; replacement must prove original UID absent, same PVC UID, new incarnation, boot-loaded durable sequence at or above the last original acknowledgement, and a post-boot increase",
+		OracleDescription:  "same identity must continue acknowledged progress; every bounded successive replacement must prove its predecessor UID absent, retain the same owner/storage/service authority, use a new Pod UID and process incarnation, boot at or above its predecessor's latest acknowledgement, and preserve monotonic progress through the final incarnation",
 		CleanupDescription: "UID-preconditioned deletion of only the successfully created Deployment, ReplicaSet/target Pod identities, Service, producer Pod, and PVC",
 		R6Justification:    "Measures only acknowledged synthetic checkpoint continuity across Pod replacement through a real application protocol."}
 }
@@ -633,9 +644,7 @@ func (s *c2CheckpointContinuity) Execute(ctx context.Context, env *core.Env) (co
 	s.lastOriginal = checkpointBody{}
 	s.windowStarted = time.Time{}
 	s.windowEnded = time.Time{}
-	s.observedReplacementUID = ""
-	s.observedReplacementIncarnation = ""
-	s.observedReplacementSequence = -1
+	s.incarnationChain = nil
 	original, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, s.targetName, metav1.GetOptions{})
 	if err != nil || original.UID != s.targetUID || !podReady(original) || original.DeletionTimestamp != nil {
 		return core.AttackResult{}, fmt.Errorf("checkpoint original identity/readiness unavailable: pod=%v err=%v", original, err)
@@ -682,6 +691,7 @@ func (s *c2CheckpointContinuity) Execute(ctx context.Context, env *core.Env) (co
 	}
 	s.originalIncarnation = second.Incarnation
 	s.lastOriginal = second
+	s.incarnationChain = []checkpointIncarnationObservation{checkpointIncarnationFrom(s.targetName, s.targetUID, second, false)}
 	var integrityErr error
 	start, end, samples, sampleFailures, err := checkpointObservationWait(ctx, checkpointObservationWindow, checkpointSampleInterval, func() (checkpointBody, error) {
 		body, requestErr := s.request(ctx, env)
@@ -697,7 +707,7 @@ func (s *c2CheckpointContinuity) Execute(ctx context.Context, env *core.Env) (co
 		return body, nil
 	})
 	s.windowStarted, s.windowEnded = start, end
-	notes := map[string]string{"classification": "benign functional-effect control", "originalPodUID": string(s.targetUID), "pvcUID": string(s.pvcUID), "originalIncarnation": s.originalIncarnation, "lastOriginalSequence": strconv.FormatInt(s.lastOriginal.Sequence, 10), "lastOriginalChecksum": s.lastOriginal.Checksum, "fixtureImage": checkpointImage, "serverSourceSHA256": checkpointSourceSHA256(), "storageClass": s.storageClassName, "storageProvisioner": s.storageProvisioner, "boundPV": s.pvName, "boundPVUID": string(s.pvUID), "observationSamples": strconv.Itoa(samples), "observationFailures": strconv.Itoa(sampleFailures), "observationWindowStartedAtUTC": start.UTC().Format(time.RFC3339Nano), "observationWindowEndedAtUTC": end.UTC().Format(time.RFC3339Nano)}
+	notes := map[string]string{"classification": "benign functional-effect control", "originalPodUID": string(s.targetUID), "pvcUID": string(s.pvcUID), "originalIncarnation": s.originalIncarnation, "lastOriginalSequence": strconv.FormatInt(s.lastOriginal.Sequence, 10), "lastOriginalChecksum": s.lastOriginal.Checksum, "fixtureImage": checkpointImage, "serverSourceSHA256": checkpointSourceSHA256(), "storageClass": s.storageClassName, "storageProvisioner": s.storageProvisioner, "boundPV": s.pvName, "boundPVUID": string(s.pvUID), "observationSamples": strconv.Itoa(samples), "observationFailures": strconv.Itoa(sampleFailures), "observationWindowStartedAtUTC": start.UTC().Format(time.RFC3339Nano), "observationWindowEndedAtUTC": end.UTC().Format(time.RFC3339Nano), "incarnationChain": s.checkpointIncarnationChainJSON()}
 	s.addCheckpointLocalEvidence(notes)
 	if err != nil {
 		return core.AttackResult{Stages: []string{"establish two durable original acknowledgements", "sample checkpoint Service during bounded observation window"}, Notes: notes}, err
@@ -718,86 +728,102 @@ func (s *c2CheckpointContinuity) SuccessOracle(ctx context.Context, env *core.En
 	if err := s.verifyStorageIdentity(ctx, env); err != nil {
 		return core.OracleResult{}, err
 	}
-	pod, absent, err := c2DwellObservationTarget(ctx, env, checkpointApp, s.targetName, s.targetUID)
-	if err != nil {
-		return core.OracleResult{}, err
-	}
-	if !podReady(pod) || pod.DeletionTimestamp != nil {
-		return core.OracleResult{}, errors.New("checkpoint observation target is unavailable")
-	}
-	if err := s.validateObservedCheckpointWorkload(ctx, env, pod); err != nil {
-		return core.OracleResult{}, err
-	}
 	reply, err := s.request(ctx, env)
 	if err != nil {
 		return core.OracleResult{}, err
 	}
-	if err = validateCheckpointIdentity(reply, pod.UID, s.pvcUID); err != nil {
+	pod, transitioned, err := s.observeCheckpointReply(ctx, env, reply, true)
+	if err != nil {
 		return core.OracleResult{}, err
 	}
-	ev := map[string]string{"originalPodUID": string(s.targetUID), "observedPodUID": string(pod.UID), "pvcUID": string(s.pvcUID), "pvName": s.pvName, "pvUID": string(s.pvUID), "storageClass": s.storageClassName, "originalUIDAbsent": strconv.FormatBool(absent), "bootSequence": strconv.FormatInt(reply.BootSequence, 10), "sequence": strconv.FormatInt(reply.Sequence, 10), "bootChecksum": reply.BootChecksum, "checksum": reply.Checksum, "incarnation": reply.Incarnation, "classification": "benign functional-effect control"}
+	ev := map[string]string{"originalPodUID": string(s.targetUID), "observedPodUID": string(pod.UID), "pvcUID": string(s.pvcUID), "pvName": s.pvName, "pvUID": string(s.pvUID), "storageClass": s.storageClassName, "originalUIDAbsent": strconv.FormatBool(len(s.incarnationChain) > 1), "previousUIDAbsent": strconv.FormatBool(transitioned), "bootSequence": strconv.FormatInt(reply.BootSequence, 10), "sequence": strconv.FormatInt(reply.Sequence, 10), "bootChecksum": reply.BootChecksum, "checksum": reply.Checksum, "incarnation": reply.Incarnation, "incarnationChain": s.checkpointIncarnationChainJSON(), "classification": "benign functional-effect control"}
 	s.addCheckpointLocalEvidence(ev)
-	if !absent {
-		if pod.UID != s.targetUID || reply.Incarnation != s.originalIncarnation {
-			return core.OracleResult{}, errors.New("same-identity continuity reply changed source incarnation")
-		}
-		if reply.Sequence <= s.lastOriginal.Sequence {
-			return core.OracleResult{}, errors.New("same-Pod checkpoint progress stalled")
-		}
+	if len(s.incarnationChain) == 1 {
 		return core.OracleResult{Achieved: true, ObservedState: "benign checkpoint control: exact original Pod and process continued acknowledged durable progress", Evidence: ev}, nil
 	}
-	if err := validateCheckpointReplacement(reply, s.lastOriginal, s.originalIncarnation, true); err != nil {
-		return core.OracleResult{}, err
-	}
-	if s.observedReplacementUID != "" && (pod.UID != s.observedReplacementUID || reply.Incarnation != s.observedReplacementIncarnation || reply.Sequence < s.observedReplacementSequence) {
-		return core.OracleResult{}, errors.New("final replacement differs from observed replacement or moved backwards")
-	}
-	return core.OracleResult{Achieved: true, ObservedState: "benign checkpoint control: exact replacement loaded retained checkpoint and produced a later durable acknowledgement", Evidence: ev}, nil
+	return core.OracleResult{Achieved: true, ObservedState: "benign checkpoint control: exact successive Pod incarnations loaded retained checkpoints and produced a later durable acknowledgement", Evidence: ev}, nil
 }
 
 func (s *c2CheckpointContinuity) observeCheckpointSample(ctx context.Context, env *core.Env, reply checkpointBody) error {
-	pod, absent, err := c2DwellObservationTarget(ctx, env, checkpointApp, s.targetName, s.targetUID)
+	_, _, err := s.observeCheckpointReply(ctx, env, reply, false)
+	return err
+}
+
+func checkpointIncarnationFrom(name string, uid types.UID, body checkpointBody, previousAbsent bool) checkpointIncarnationObservation {
+	return checkpointIncarnationObservation{PodName: name, PodUID: string(uid), Incarnation: body.Incarnation, BootSequence: body.BootSequence, BootChecksum: body.BootChecksum, AcknowledgedSequence: body.Sequence, AcknowledgedChecksum: body.Checksum, PreviousUIDAbsent: previousAbsent, PostBootAdvance: body.Sequence > body.BootSequence}
+}
+
+func (s *c2CheckpointContinuity) ensureCheckpointIncarnationChain() error {
+	if len(s.incarnationChain) > 0 {
+		return nil
+	}
+	if s.targetName == "" || s.targetUID == "" || s.originalIncarnation == "" || s.lastOriginal.Sequence < 0 {
+		return errors.New("checkpoint incarnation chain provenance missing")
+	}
+	s.incarnationChain = []checkpointIncarnationObservation{checkpointIncarnationFrom(s.targetName, s.targetUID, s.lastOriginal, false)}
+	return nil
+}
+
+func (s *c2CheckpointContinuity) observeCheckpointReply(ctx context.Context, env *core.Env, reply checkpointBody, final bool) (*corev1.Pod, bool, error) {
+	if err := s.ensureCheckpointIncarnationChain(); err != nil {
+		return nil, false, err
+	}
+	current := &s.incarnationChain[len(s.incarnationChain)-1]
+	pod, absent, err := c2DwellObservationTarget(ctx, env, checkpointApp, current.PodName, types.UID(current.PodUID))
 	if err != nil {
-		return err
+		return nil, false, err
 	}
 	if !podReady(pod) || pod.DeletionTimestamp != nil {
-		return errors.New("checkpoint sample target is unavailable")
+		return nil, false, errors.New("checkpoint observation target is unavailable")
 	}
-	if err := s.validateObservedCheckpointWorkload(ctx, env, pod); err != nil {
-		return err
+	if err = s.validateObservedCheckpointWorkload(ctx, env, pod); err != nil {
+		return nil, false, err
 	}
-	if err := validateCheckpointIdentity(reply, pod.UID, s.pvcUID); err != nil {
-		return err
+	if err = validateCheckpointIdentity(reply, pod.UID, s.pvcUID); err != nil {
+		return nil, false, err
 	}
 	if !absent {
-		if reply.Incarnation != s.originalIncarnation {
-			return errors.New("original checkpoint sample changed process incarnation")
+		if string(pod.UID) != current.PodUID || reply.Incarnation != current.Incarnation {
+			return nil, false, errors.New("checkpoint reply changed current Pod/process identity")
 		}
-		if reply.Sequence < s.lastOriginal.Sequence {
-			return errors.New("original checkpoint sequence moved backwards")
+		if reply.BootSequence != current.BootSequence || reply.BootChecksum != current.BootChecksum || reply.InitializedFresh == nil || (*reply.InitializedFresh) != (len(s.incarnationChain) == 1) {
+			return nil, false, errors.New("checkpoint boot provenance changed within incarnation")
 		}
-		if reply.Sequence > s.lastOriginal.Sequence {
+		if reply.Sequence < current.AcknowledgedSequence {
+			return nil, false, errors.New("checkpoint sequence moved backwards within incarnation")
+		}
+		if final && len(s.incarnationChain) == 1 && reply.Sequence == current.AcknowledgedSequence {
+			return nil, false, errors.New("same-Pod checkpoint progress stalled")
+		}
+		current.AcknowledgedSequence, current.AcknowledgedChecksum = reply.Sequence, reply.Checksum
+		current.PostBootAdvance = current.PostBootAdvance || reply.Sequence > reply.BootSequence
+		if len(s.incarnationChain) == 1 {
 			s.lastOriginal = reply
 		}
-		return nil
+		if final && !current.PostBootAdvance {
+			return nil, false, errors.New("final checkpoint incarnation did not advance beyond boot")
+		}
+		return pod, false, nil
 	}
-	if err := validateCheckpointReplacement(reply, s.lastOriginal, s.originalIncarnation, false); err != nil {
-		return err
+	for _, seen := range s.incarnationChain {
+		if string(pod.UID) == seen.PodUID || reply.Incarnation == seen.Incarnation {
+			return nil, false, errors.New("checkpoint replacement reused a prior Pod UID or process incarnation")
+		}
 	}
-	if s.observedReplacementUID == "" {
-		s.observedReplacementUID = pod.UID
-		s.observedReplacementIncarnation = reply.Incarnation
-		s.observedReplacementSequence = reply.Sequence
-		return nil
+	if len(s.incarnationChain) >= checkpointMaxIncarnations {
+		return nil, false, errors.New("checkpoint incarnation chain exceeds bounded capacity")
 	}
-	if pod.UID != s.observedReplacementUID || reply.Incarnation != s.observedReplacementIncarnation {
-		return errors.New("checkpoint replacement identity changed during observation")
+	high := checkpointBody{Sequence: current.AcknowledgedSequence, Checksum: current.AcknowledgedChecksum}
+	if err = validateCheckpointReplacement(reply, high, current.Incarnation, final); err != nil {
+		return nil, false, err
 	}
-	if reply.Sequence < s.observedReplacementSequence {
-		return errors.New("replacement checkpoint sequence moved backwards")
-	}
-	s.observedReplacementSequence = reply.Sequence
-	return nil
+	s.incarnationChain = append(s.incarnationChain, checkpointIncarnationFrom(pod.Name, pod.UID, reply, true))
+	return pod, true, nil
+}
+
+func (s *c2CheckpointContinuity) checkpointIncarnationChainJSON() string {
+	raw, _ := json.Marshal(s.incarnationChain)
+	return string(raw)
 }
 
 func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.Context, env *core.Env, pod *corev1.Pod) error {
