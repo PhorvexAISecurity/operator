@@ -1361,8 +1361,9 @@ fixes:
     issues:
     - M-108
     related_issues: []
-    state: TRIAGED
+    state: AGREED
     dependencies: []
-    stacked_on: []
-    branch: null
+    stacked_on:
+    - POST25-M106
+    branch: post25-m108
     head_sha: null

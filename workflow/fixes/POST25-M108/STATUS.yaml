@@ -2,42 +2,52 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 0
-change_class: null
+revision: 4
+change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6d2a8d1bc84d852b0285ca876d6583bb76a0a7be2b265928aa3daed973d036e3
+    source_sha: ac4de8f385224e4038238b28cbd8cdd473155b3d
+    at: '2026-09-21T00:01:35+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
 fix_id: POST25-M108
 issues:
 - M-108
 title: Version decision parameters and shadow sensitivity
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
-  human_owner: unassigned
-  proposer: unassigned
-  implementer: unassigned
-  skeptic: unassigned
-  live_verifier: unassigned
-  coordinator: unassigned
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-post25-economics
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
 capabilities_required:
   go_toolchain: true
   cluster_access: false
   deployment_authority: false
 baseline:
-  code_branch: main
-  code_sha: null
+  code_branch: post25-m106
+  code_sha: ac4de8f385224e4038238b28cbd8cdd473155b3d
   deployed_image: null
-  deployed_git_sha: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
 blind_derivation:
   status: pending
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
+  branch: post25-m108
+  base_sha: ac4de8f385224e4038238b28cbd8cdd473155b3d
   head_sha: null
-  stacked_on: []
+  stacked_on:
+  - POST25-M106
 pull_request:
   url: null
   reviewed_head: null
@@ -54,8 +64,9 @@ verification:
   - L0
   - L1
   - L2
-  live_required: null
-  soak_required: null
+  - L3
+  live_required: true
+  soak_required: false
   p3: pending
   l0: pending
   l1: pending
@@ -72,7 +83,35 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Assign participants and pins; deliver independently reviewed PR under standing
-    scope.
-updated_at: '2026-09-20T23:59:51+00:00'
+  owner: sol-post25-economics
+  action: Implement signed contract; preserve source parity and isolated actual shadow
+    sensitivity controls
+updated_at: '2026-09-21T00:01:35+00:00'
+configuration_history:
+- at: '2026-09-21T00:01:32+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T00:01:33+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T00:01:35+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
