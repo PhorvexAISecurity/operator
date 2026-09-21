@@ -102,7 +102,7 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.142" # ci:console-tag
+        tag: "0.4.143" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
       # ── console identity and authorization (M-136) ────────────────────────
