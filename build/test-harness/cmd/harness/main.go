@@ -120,6 +120,10 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		r := safety.ExecInPod(c, restCfg, kc, ns, pod, container, command)
 		return core.ExecResult{Stdout: r.Stdout, Stderr: r.Stderr, ExitCode: r.ExitCode, Err: r.Err}
 	})
+	core.SetTimedExecer(func(c context.Context, restCfg *rest.Config, kc kubernetes.Interface, ns, pod, container string, timeout time.Duration, command []string) core.ExecResult {
+		r := safety.ExecInPodWithTimeout(c, restCfg, kc, ns, pod, container, timeout, command)
+		return core.ExecResult{Stdout: r.Stdout, Stderr: r.Stderr, ExitCode: r.ExitCode, Err: r.Err}
+	})
 
 	if dryRun {
 		fmt.Println("\n--- DRY RUN: no cluster mutation. Plugin matrix ---")

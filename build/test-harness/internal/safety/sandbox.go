@@ -19,9 +19,14 @@ import (
 // process that keeps the stream open (a backgrounded sleeper / nohup'd backdoor)
 // would otherwise block the call forever. Bounding the exec models real tradecraft
 // (the attacker's interactive exec returns while the detached process persists)
-// and guarantees the harness never hangs. The detached process keeps running in
-// the pod; the persistence oracle observes it independently via the marker file.
-const ExecTimeout = 20 * time.Second
+// and guarantees the harness never hangs. A caller that reaches this deadline
+// receives an error and nonzero disposition; partial bytes remain available for
+// diagnosis. Properly detached fixtures redirect inherited streams and return
+// before this bound, then prove persistence independently via their marker.
+const (
+	ExecTimeout    = 20 * time.Second
+	MaxExecTimeout = 30 * time.Second
+)
 
 // ExecResult is the captured output of an in-pod command exec.
 type ExecResult struct {
@@ -40,6 +45,17 @@ type ExecResult struct {
 // restCfg is the live rest.Config; kube is the clientset; ns/pod/container name
 // the target; command is the argv.
 func ExecInPod(ctx context.Context, restCfg *rest.Config, kube kubernetes.Interface, ns, pod, container string, command []string) ExecResult {
+	return ExecInPodWithTimeout(ctx, restCfg, kube, ns, pod, container, ExecTimeout, command)
+}
+
+// ExecInPodWithTimeout runs an in-pod command with an explicit bounded timeout.
+// It exists for foreground producers whose valid runtime is longer than the
+// default detached-process bound. Callers cannot disable the bound or extend it
+// past MaxExecTimeout.
+func ExecInPodWithTimeout(ctx context.Context, restCfg *rest.Config, kube kubernetes.Interface, ns, pod, container string, timeout time.Duration, command []string) ExecResult {
+	if timeout <= 0 || timeout > MaxExecTimeout {
+		return ExecResult{ExitCode: -1, Err: fmt.Errorf("exec timeout %s outside (0,%s]", timeout, MaxExecTimeout)}
+	}
 	req := kube.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(pod).
@@ -56,26 +72,35 @@ func ExecInPod(ctx context.Context, restCfg *rest.Config, kube kubernetes.Interf
 
 	exec, err := remotecommand.NewSPDYExecutor(restCfg, "POST", req.URL())
 	if err != nil {
-		return ExecResult{Err: fmt.Errorf("new exec: %w", err)}
+		return ExecResult{ExitCode: -1, Err: fmt.Errorf("new exec: %w", err)}
 	}
+	return streamWithTimeout(ctx, exec, timeout)
+}
+
+type streamExecutor interface {
+	StreamWithContext(context.Context, remotecommand.StreamOptions) error
+}
+
+func streamWithTimeout(ctx context.Context, exec streamExecutor, timeout time.Duration) ExecResult {
 	// Bound the exec: a faithfully-detached attacker process can hold the stream
 	// open, and StreamWithContext only returns once every stream closes. The
-	// timeout guarantees the call returns (the detached process persists in the
-	// pod regardless; the oracle observes it independently).
-	execCtx, cancel := context.WithTimeout(ctx, ExecTimeout)
+	// timeout guarantees the call returns. Properly detached fixtures close the
+	// inherited streams first and prove the background process independently.
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
-	err = exec.StreamWithContext(execCtx, remotecommand.StreamOptions{
+	err := exec.StreamWithContext(execCtx, remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
 	res := ExecResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	if err != nil {
-		// A deadline/cancel here is EXPECTED when a detached process keeps the
-		// stream open — it is not a failure: the command's foreground output was
-		// already captured. Treat it as a clean (timeout) completion.
-		if execCtx.Err() == context.DeadlineExceeded {
-			res.ExitCode = 0
+		// Preserve partial output, but never report a cancelled or expired stream
+		// as successful. Callers that intentionally detach a process still inspect
+		// their marker separately; they do not receive a fabricated exit status 0.
+		if ctxErr := execCtx.Err(); ctxErr != nil {
+			res.ExitCode = -1
+			res.Err = fmt.Errorf("exec stream: %w", ctxErr)
 			return res
 		}
 		// A non-zero exit surfaces as a CodeExitError.
