@@ -95,6 +95,16 @@ func NewP1CostWithLambda(lambdaSeed float64) *P1Cost {
 // clock. Keep the three-element denominator unchanged by clock cleanup.
 const structuralNetworkIsolation = "network-isolation"
 
+const (
+	NormCostMetadataMutation     = 0.10
+	NormCostPartialIdentity      = 0.15
+	NormCostStateReset           = 0.20
+	NormCostServingConfiguration = 0.25
+	NormCostServiceRekey         = 0.35
+	NormCostWorkloadReplacement  = 1.00
+	NormCostSharedDeviceMutation = 1.25
+)
+
 var structuralComponents = []string{
 	model.VarPodIdentity,
 	model.VarNodePlacement,
@@ -119,11 +129,11 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 	case model.ActionRotate, model.ActionWarmSwap:
 		// Both retire one logical serving workload. Warm-swap's lower disruption
 		// belongs to C_flow, not C_norm.
-		return 1.0
+		return NormCostWorkloadReplacement
 	case model.ActionQuarantine:
-		return 1.0 / float64(len(structuralComponents))
+		return NormCostWorkloadReplacement / float64(len(structuralComponents))
 	case model.ActionMIGRebind:
-		return 1.25
+		return NormCostSharedDeviceMutation
 	case model.ActionModelShardReplace:
 		parallelSize := 1
 		if view != nil && view.Pod.ParallelSize > parallelSize {
@@ -132,17 +142,17 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		return float64(parallelSize)
 	case model.ActionEndpointRotate:
 		if view != nil && view.Pod.RouteServiceReady {
-			return 0.35
+			return NormCostServiceRekey
 		}
-		return 0.10
+		return NormCostMetadataMutation
 	case model.ActionAdapterRotate:
-		return 0.25
+		return NormCostServingConfiguration
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate:
-		return 0.20
+		return NormCostStateReset
 	case model.ActionIdentityRotate:
-		return 0.15
+		return NormCostPartialIdentity
 	case model.ActionRouteRotate, model.ActionDebugger, model.ActionCustomInject, model.ActionRequestDrain:
-		return 0.10
+		return NormCostMetadataMutation
 	default:
 		return 0
 	}

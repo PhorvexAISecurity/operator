@@ -7,6 +7,8 @@ package platform
 import (
 	"math"
 	"sort"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // epss_aggregate.go collapses an image's vulnerability list into the ONE (epss, cvss) pair the
@@ -44,7 +46,7 @@ import (
 // and max are literally the same value. n=100 is the first size at which P99 steps off the
 // maximum. They only diverge once the list is long — which is exactly where max stops measuring
 // exploitability and starts measuring image size.
-const epssAggregatePercentile = 0.99
+const epssAggregatePercentile = model.PlatformEPSSAggregatePercentile
 
 // Vuln is one scored vulnerability found in an image.
 type Vuln struct {

@@ -23,6 +23,9 @@ const (
 	EPSSReasonAbsent        = "absent"         // no usable cache entry for the running image
 	EPSSReasonNonFinite     = "non-finite"     // NaN/±Inf in the pair
 	EPSSReasonInvalidDomain = "invalid-domain" // e outside [0,1] or c outside [0,10]
+	EPSSMaximum             = 1.0
+	CVSSMaximum             = 10.0
+	EPSSMultiplierMaximum   = 2.0
 )
 
 // EPSSMultiplier returns the ruled multiplier, whether the pair was usable, and the reason
@@ -34,15 +37,15 @@ func EPSSMultiplier(e, c float64, present bool) (m float64, ok bool, reason stri
 	if math.IsNaN(e) || math.IsInf(e, 0) || math.IsNaN(c) || math.IsInf(c, 0) {
 		return 1, false, EPSSReasonNonFinite
 	}
-	if e < 0 || e > 1 || c < 0 || c > 10 {
+	if e < 0 || e > EPSSMaximum || c < 0 || c > CVSSMaximum {
 		return 1, false, EPSSReasonInvalidDomain
 	}
-	m = 1 + e*(c/10)
+	m = 1 + e*(c/CVSSMaximum)
 	if m < 1 {
 		m = 1
 	}
-	if m > 2 {
-		m = 2
+	if m > EPSSMultiplierMaximum {
+		m = EPSSMultiplierMaximum
 	}
 	return m, true, ""
 }

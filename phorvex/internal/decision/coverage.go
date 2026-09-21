@@ -743,6 +743,10 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	if err != nil {
 		return nil, err
 	}
+	parameterSet, _, _, err := ParameterSetForPolicy(pol)
+	if err != nil {
+		return nil, fmt.Errorf("decision parameter provenance: %w", err)
+	}
 	costCoefficient := economics.EffectiveCostCoefficient
 
 	set, ctxByKey, err := e.assembleSet(views, pol, tcost, mode)
@@ -1041,6 +1045,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Events:                ac.assess.Events,
 			Lambda:                lambda,
 			Economics:             cloneEconomicsMetadata(economics),
+			ParameterSet:          cloneParameterSetReference(parameterSet),
 			PersistenceLearning:   e.persistenceStatus(pol.Owner()),
 			ProactiveRate:         rate,
 			Attribution:           attribution,
@@ -1129,6 +1134,14 @@ func traceOptionalPtr(present bool, value float64) *model.OptionalFloat {
 
 func cloneEconomicsMetadata(in model.EconomicsMetadata) *model.EconomicsMetadata {
 	out := in
+	return &out
+}
+
+func cloneParameterSetReference(in *model.ParameterSetReference) *model.ParameterSetReference {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 

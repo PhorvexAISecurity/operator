@@ -55,16 +55,22 @@ type tenantState struct {
 	beta  float64
 }
 
+const (
+	DefaultPersistenceAlpha = 1.0
+	DefaultPersistenceBeta  = 4.0
+	PersistenceMassCap      = 200.0
+)
+
 // NewConjugateMemory returns a memory with a low-ish prior mean (alpha=1,beta=4 ->
 // mean 0.2: absent evidence, assume a foothold is probably NOT still held).
 func NewConjugateMemory() *ConjugateMemory {
 	return &ConjugateMemory{
 		tenants:  map[string]*tenantState{},
-		defAlpha: 1,
-		defBeta:  4,
-		maxMass:  200,
-		gAlpha:   1, // fleet prior seeded TO the defaults => cold = old constant exactly
-		gBeta:    4,
+		defAlpha: DefaultPersistenceAlpha,
+		defBeta:  DefaultPersistenceBeta,
+		maxMass:  PersistenceMassCap,
+		gAlpha:   DefaultPersistenceAlpha, // fleet prior seeded TO the defaults => cold = old constant exactly
+		gBeta:    DefaultPersistenceBeta,
 	}
 }
 

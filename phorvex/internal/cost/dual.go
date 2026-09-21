@@ -49,7 +49,13 @@ const (
 
 // DefaultLambdaSeed preserves the shipped runtime-controller seed when
 // policy.lambda is omitted.
-const DefaultLambdaSeed = 0.6
+const (
+	DefaultLambdaSeed = 0.6
+	LambdaStep        = 0.05
+	LambdaMinimum     = 0.0
+	LambdaMaximum     = 10.0
+	LambdaMaxExcess   = 1
+)
 
 // NewDualSolver returns a solver seeded at the P0 default lambda (0.6) — so untuned
 // behavior matches P0 — that then adapts to the realized budget pressure.
@@ -64,10 +70,10 @@ func NewDualSolverWithSeed(seed float64) *DualSolver {
 	if math.IsNaN(seed) || math.IsInf(seed, 0) || seed < 0 {
 		seed = DefaultLambdaSeed
 	}
-	if seed > 10 {
-		seed = 10
+	if seed > LambdaMaximum {
+		seed = LambdaMaximum
 	}
-	return &DualSolver{runtimeLegacy: seed, step: 0.05, min: 0, max: 10}
+	return &DualSolver{runtimeLegacy: seed, step: LambdaStep, min: LambdaMinimum, max: LambdaMaximum}
 }
 
 // Lambda returns the legacy mixed runtime value. The method name is retained for
@@ -106,7 +112,7 @@ func (d *DualSolver) transition(demand, spent, budget int) DualUpdate {
 		update.UpdateReason = DualReasonBudgetNonpositive
 		return update
 	}
-	const maxExcess = 1 // cap the manufacturable rise to one step/tick (== the slack-decay rate)
+	const maxExcess = LambdaMaxExcess // cap the manufacturable rise to one step/tick (== the slack-decay rate)
 	excess := update.RawExcess
 	switch {
 	case excess > 0 && spent < budget:

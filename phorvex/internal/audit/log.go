@@ -94,6 +94,9 @@ type Record struct {
 	StageHazard   float64                  `json:"stageHazard,omitempty"`
 	Lambda        float64                  `json:"lambda,omitempty"`
 	Economics     *model.EconomicsMetadata `json:"economics,omitempty"`
+	// ParameterSet is compact provenance for the values used by this decision.
+	// The full manifest and effective override document are retained separately.
+	ParameterSet *model.ParameterSetReference `json:"parameterSet,omitempty"`
 	// PersistenceLearning reports the source and disposition of independent
 	// categorical labels. It is provenance, not an efficacy claim.
 	PersistenceLearning *model.PersistenceLearningStatus `json:"persistenceLearning,omitempty"`
@@ -274,6 +277,11 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	if err := model.ValidateEconomicsMetadata(r.Economics); err != nil {
 		return nil, err
 	}
+	if r.ParameterSet != nil {
+		if err := r.ParameterSet.Validate(); err != nil {
+			return nil, err
+		}
+	}
 	if err := model.ValidatePersistenceLearningStatus(r.PersistenceLearning); err != nil {
 		return nil, err
 	}
@@ -394,6 +402,11 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	if err := model.ValidateEconomicsMetadata(decoded.Economics); err != nil {
 		return err
 	}
+	if decoded.ParameterSet != nil {
+		if err := decoded.ParameterSet.Validate(); err != nil {
+			return err
+		}
+	}
 	if err := model.ValidatePersistenceLearningStatus(decoded.PersistenceLearning); err != nil {
 		return err
 	}
@@ -460,6 +473,11 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 	if d.Economics != nil {
 		copy := *d.Economics
 		economics = &copy
+	}
+	var parameterSet *model.ParameterSetReference
+	if d.ParameterSet != nil {
+		copy := *d.ParameterSet
+		parameterSet = &copy
 	}
 	var persistenceLearning *model.PersistenceLearningStatus
 	if d.PersistenceLearning != nil {
@@ -534,6 +552,7 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		Events:                 roundEvents(d.Events),
 		Lambda:                 round4(d.Lambda),
 		Economics:              economics,
+		ParameterSet:           parameterSet,
 		PersistenceLearning:    persistenceLearning,
 		ProactiveRate:          round4(d.ProactiveRate),
 		Attribution:            canonicalizeAttribution(d.Attribution),

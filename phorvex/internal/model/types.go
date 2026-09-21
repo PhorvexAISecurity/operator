@@ -803,6 +803,7 @@ type Decision struct {
 	NextStage           string                     // forward-projected next stage
 	Lambda              float64                    // legacy mixed runtime lambda frozen for this decision
 	Economics           *EconomicsMetadata         // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
+	ParameterSet        *ParameterSetReference     // compact source/default and exact effective-policy identity; present for new P1 decisions
 	PersistenceLearning *PersistenceLearningStatus // observed-label source/disposition; never inferred from this decision's PHold
 	ProactiveRate       float64                    // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
 	Attribution         []AttributionTerm          // SHAP-style decomposition of the move's value

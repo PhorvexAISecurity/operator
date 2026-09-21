@@ -269,6 +269,19 @@ func decorateExistentialTrace(t *model.DecisionTraceV2, d *model.ExistentialDeci
 // ExistentialRejectedDecisions records qualified obligations when structural
 // validation rejects the entire action set. It never selects or learns a move.
 func ExistentialRejectedDecisions(views []*model.WorkloadView, p model.Policy, reason string, now time.Time) []model.Decision {
+	out, _ := ExistentialRejectedDecisionsChecked(views, p, reason, now)
+	return out
+}
+
+// ExistentialRejectedDecisionsChecked is the production form. The ordinary
+// decision path validates the same policy before candidate generation; keeping
+// the error here prevents a direct caller from emitting a new record with
+// unavailable provenance for malformed configuration.
+func ExistentialRejectedDecisionsChecked(views []*model.WorkloadView, p model.Policy, reason string, now time.Time) ([]model.Decision, error) {
+	parameterSet, _, _, err := ParameterSetForPolicy(p)
+	if err != nil {
+		return nil, err
+	}
 	var out []model.Decision
 	for _, v := range views {
 		x := assessOutcomes(v, p)
@@ -278,9 +291,9 @@ func ExistentialRejectedDecisions(views []*model.WorkloadView, p model.Policy, r
 		x.Result = "uncontainable"
 		x.RemainingBudget = p.MaxMovesPerTick
 		x.Reasons = append(x.Reasons, "candidate-generation-unavailable:"+reason)
-		out = append(out, model.Decision{Tenant: p.Tenant, Namespace: v.Pod.Namespace, Pod: v.Pod.Name, Node: v.Pod.Node, Action: model.ActionNoop, Engine: "p1-coverage", DryRun: p.DryRun, DecidedAt: now, Reason: "PHORVEXSEC-208 interim: uncontainable", InfeasibleWhy: reason, Existential: x})
+		out = append(out, model.Decision{Tenant: p.Tenant, Namespace: v.Pod.Namespace, Pod: v.Pod.Name, Node: v.Pod.Node, Action: model.ActionNoop, Engine: "p1-coverage", DryRun: p.DryRun, DecidedAt: now, Reason: "PHORVEXSEC-208 interim: uncontainable", InfeasibleWhy: reason, Existential: x, ParameterSet: cloneParameterSetReference(parameterSet)})
 	}
-	return out
+	return out, nil
 }
 
 // HasQualifiedOutcome lets the runner retain an unavailable capability checker

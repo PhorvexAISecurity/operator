@@ -2060,7 +2060,11 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name(), "reason", string(reason))
 		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
 			killState.observation.Engaged, string(killState.observation.Cause))
-		rejected := decision.ExistentialRejectedDecisions(views, pol, string(reason), snap.Now)
+		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), snap.Now)
+		if provenanceErr != nil {
+			m.Log.Error(provenanceErr, "rejected decision parameter provenance unavailable", "tenant", pol.Tenant)
+			return
+		}
 		for _, d := range rejected {
 			m.Audit.Record(d)
 		}

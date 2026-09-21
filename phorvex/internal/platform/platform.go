@@ -46,7 +46,7 @@ var Registry = registry.New[PlatformPhysics]()
 // CoResidencyCap is the compatibility denominator for the namespace-dispersion multiplier: a
 // node with CoResidencyCap+1 distinct running namespaces saturates at the max +1.0 surcharge.
 // CoResidency is the historical field name; this count does not identify tenants or GPU sharing.
-const CoResidencyCap = 4.0
+const CoResidencyCap = model.PlatformCoResidencyCap
 
 // CoResidencyBasisNamespaceCount is recorded with the historical CoResidency field so consumers
 // can distinguish its actual input from authenticated tenancy or target/device-bound evidence.
