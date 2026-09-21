@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 15
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -122,12 +122,19 @@ checks:
     source_sha: c240fb917b58198ec207b24d89ea707956f47550
     at: '2026-09-21T04:08:51+00:00'
     incident_sha256: 14a67c50a3feba7525e881ed9242eeb9eeeda897d943ea6e2d918f38c0192116
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/publication-equivalence.json
+    sha256: 0fb156b693ed5b20e6ade56d2400fa86c86c4df308d462b4761d5070fb1633f0
+    source_sha: c240fb917b58198ec207b24d89ea707956f47550
+    at: '2026-09-21T04:10:56+00:00'
 fix_id: POST25-M100
 issues:
 - M-100
 title: Observe and retain qualified completed disclosure history
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -193,10 +200,10 @@ residuals:
 - Controlled synthetic live lifecycle for completed loss and distinct current version
   remains mandatory before M100 closure.
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-21T04:10:13+00:00'
+  owner: codex-lead
+  action: PR259 awaits merge/deploy; immediately implement POST25-M100-CURRENT-VERSION;
+    retain full M100 live acceptance
+updated_at: '2026-09-21T04:10:57+00:00'
 configuration_history:
 - at: '2026-09-21T02:02:47+00:00'
   by: codex-lead
@@ -280,6 +287,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T04:10:57+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
