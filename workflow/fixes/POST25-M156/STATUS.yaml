@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -89,12 +89,28 @@ checks:
     - phorvex/internal/decision
     - phorvex/internal/model
     inputs_sha256: 8c74044d26a5eb608cdd8f32343461f96fecba77c4f9a9b47fdd46e090283924
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 01792db78ae6bf3a7edb310b7d1c979985161baef4cd2a3b8e2e3de4b4632fae
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:36:06+00:00'
+    baseline_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 245ffa05296b332f70e0ed2ab6941fb8f45f161750de07c45694c83a70d65998
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:36:06+00:00'
+    incident_sha256: 01792db78ae6bf3a7edb310b7d1c979985161baef4cd2a3b8e2e3de4b4632fae
 fix_id: POST25-M156
 issues:
 - M-156
 title: Conservatively bound unsupported flow-cost regimes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -139,7 +155,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -155,10 +171,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T00:33:42+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T00:36:10+00:00'
 configuration_history:
 - at: '2026-09-20T23:36:56+00:00'
   by: codex-lead
@@ -213,10 +229,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T00:36:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T00:36:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-M156:7:submit
-  from: post14-live-reviewer
+  id: POST25-M156:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
