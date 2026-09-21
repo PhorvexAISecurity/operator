@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 10
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -110,7 +110,7 @@ issues:
 - M-156
 title: Conservatively bound unsupported flow-cost regimes
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -137,8 +137,8 @@ implementation:
   head_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/251
+  reviewed_head: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -171,10 +171,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-21T00:36:10+00:00'
+  owner: mehrdad
+  action: Review/merge PR251 then DevOps deployment and source-matched V5 cost regime
+    live verification
+updated_at: '2026-09-21T00:38:16+00:00'
 configuration_history:
 - at: '2026-09-20T23:36:56+00:00'
   by: codex-lead
@@ -195,6 +195,11 @@ configuration_history:
   by: post14-live-reviewer
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-21T00:38:14+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -244,6 +249,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T00:38:16+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: POST25-M156:8:review
