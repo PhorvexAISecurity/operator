@@ -1,0 +1,200 @@
+schema_version: 1
+intake_id: RPT-20260920-181636-bound-memory-during-calibration-evidence-export
+kind: BUG
+title: Bound memory during calibration evidence export
+state: FILED
+reporter: codex-lead
+approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+created_at: '2026-09-20T18:16:36+00:00'
+updated_at: '2026-09-20T18:18:25+00:00'
+pins:
+  source_main_sha: 92f961bd43fa0ba0b34c21095c4a24f446675a26
+  source_release: 0.4.138
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+  environment: local source-bound actual Runtime/Export; separate observed dev OOM
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 33
+    overlap:
+    - after
+    - assets
+    - before
+    - bound
+    - but
+    - can
+    - claim
+    - disabled
+    - does
+    - each
+    - entire
+    - evidence
+    - full
+    - identical
+    - live
+    - not
+    - only
+    - plus
+    - policy
+    - ran
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-155
+    score: 26
+    overlap:
+    - '112'
+    - after
+    - before
+    - can
+    - construction
+    - does
+    - evidence
+    - json
+    - lifetime
+    - live
+    - not
+    - only
+    - same
+    - source
+    - stream
+    - that
+    - this
+    - while
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-140
+    score: 25
+    overlap:
+    - after
+    - bound
+    - but
+    - can
+    - does
+    - during
+    - evidence
+    - fresh
+    - identical
+    - into
+    - lifetime
+    - live
+    - manager
+    - memory
+    - not
+    - only
+    - plus
+    - policy
+    - same
+    - test
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-179
+    score: 25
+    overlap:
+    - actual
+    - after
+    - but
+    - calibration
+    - comparison
+    - comparisons
+    - counterexample
+    - evidence
+    - history
+    - identical
+    - live
+    - not
+    - oom
+    - preserving
+    - retained
+    - retention
+    - runtime
+    - score
+    - shorten
+    - source
+    title: Calibration sample compaction retains expired comparison references
+  - issue_id: M-154
+    score: 22
+    overlap:
+    - assets
+    - byte
+    - bytes
+    - claim
+    - comparisons
+    - entire
+    - evidence
+    - export
+    - files
+    - history
+    - live
+    - not
+    - only
+    - retained
+    - retention
+    - same
+    title: Audit retention is size-capped, not time-capped — decision-trace.v3's larger
+      records halved the observable history depth, and the pre-v3 corpus rotated out
+      unremarked
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-182
+  fix_id: POST25-CALIB-EXPORT
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-182.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-20T18:17:26+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-20T18:17:26+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-20T18:18:10+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-20T18:18:10+00:00'
+  by: codex-lead
+  artifact: DEDUP.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-20T18:18:25+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-182.md
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

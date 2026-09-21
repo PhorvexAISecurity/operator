@@ -1400,3 +1400,14 @@ fixes:
     - POST25-M043
     branch: post25-session-gvk
     head_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+  POST25-CALIB-EXPORT:
+    directory: fixes/POST25-CALIB-EXPORT
+    aliases: []
+    issues:
+    - M-182
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-calibration-export
+    head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
