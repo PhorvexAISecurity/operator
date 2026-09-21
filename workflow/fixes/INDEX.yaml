@@ -1344,3 +1344,14 @@ fixes:
     stacked_on: []
     branch: post25-economics
     head_sha: null
+  POST25-M156:
+    directory: fixes/POST25-M156
+    aliases: []
+    issues:
+    - M-156
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-m156
+    head_sha: null

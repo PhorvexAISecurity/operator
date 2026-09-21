@@ -151,7 +151,8 @@ func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Ac
 	if economics.Version == "" {
 		economics = model.EconomicsMetadata{Version: model.EconomicsLegacyRuntimeLambdaV1,
 			LambdaRuntimeLegacy:      model.OptionalFloat{Present: true, Value: c.lambda},
-			EffectiveCostCoefficient: c.lambda, CoefficientSource: model.CostCoefficientSourceLambda}
+			EffectiveCostCoefficient: c.lambda, CoefficientSource: model.CostCoefficientSourceLambda,
+			FlowCostSemanticsVersion: model.FlowCostSemanticsConservativeRegimeV1}
 	}
 	idx, marginal, _ := chooseRound(filtered, c.states, covered, selected, c.attack, economics.EffectiveCostCoefficient, prov, map[string]float64{})
 	if idx < 0 {
@@ -1121,6 +1122,16 @@ func traceOptionalPtr(present bool, value float64) *model.OptionalFloat {
 	return &out
 }
 
+func traceOptionalBoolPtr(value bool) *model.OptionalBool {
+	out := model.OptionalBool{Present: true, Value: value}
+	return &out
+}
+
+func traceOptionalFloatPtr(present bool, value float64) *model.OptionalFloat {
+	out := model.OptionalFloat{Present: present, Value: value}
+	return &out
+}
+
 func cloneEconomicsMetadata(in model.EconomicsMetadata) *model.EconomicsMetadata {
 	out := in
 	return &out
@@ -1277,7 +1288,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 	}
 	trace := &model.DecisionTraceV2{
-		SchemaVersion:             model.DecisionTraceSchemaV4,
+		SchemaVersion:             model.DecisionTraceSchemaV5,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
@@ -1315,6 +1326,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		FlowWeight:                pol.FlowDisruption,
 		CFlowUnitStatus:           model.CFlowUnitDimensionlessDisruptionLoss,
 		CostRepresentationVersion: model.CostRepresentationWeightedDimensionlessV1,
+		FlowCostSemanticsVersion:  model.FlowCostSemanticsConservativeRegimeV1,
 		DualUpdate:                traceDualUpdate(dualUpdate),
 		CostCeiling:               set.CostCeiling,
 		CostModelVersion:          tcost.Name(),
@@ -1490,9 +1502,18 @@ func (e *CoverageEngine) buildDecisionTrace(
 			SLOGateResult:      model.OptionalBool{Present: true, Value: true},
 			GPUEnvelopeApplied: model.OptionalBool{Present: true, Value: evaluation.GPUEnvelopeApplied},
 		}
+		if candidate.Action == model.ActionRotate || candidate.Action == model.ActionMIGRebind {
+			row.FlowPredictedMean = traceOptionalFloatPtr(true, evaluation.FlowPredictedMean)
+			row.FlowConservativeFloor = traceOptionalFloatPtr(evaluation.FlowFloorApplied, evaluation.FlowConservativeFloor)
+			row.FlowRegime = string(evaluation.FlowRegime)
+			row.FlowUncertaintyBound = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintyBound)
+			row.FlowUncertaintySlack = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintySlack)
+			row.ConformalWindowReady = traceOptionalBoolPtr(evaluation.ConformalWindowReady)
+			row.ConformalRegimeApplicable = traceOptionalBoolPtr(evaluation.ConformalRegimeApplicable)
+		}
 		if candidate.Action == model.ActionRotate {
 			row.ConformalQuantile = traceOptional(quantileOK, conformalQuantile)
-			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated}
+			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated && evaluation.ConformalRegimeApplicable}
 			row.GPUEnvelopeSlack = traceOptional(evaluation.GPUEnvelopeApplied, evaluation.GPUEnvelopeSlack)
 		}
 		if candidateSelected {
@@ -1537,11 +1558,20 @@ func (e *CoverageEngine) buildDecisionTrace(
 			// rotate rows carry the same CHi reconstruction terms as candidates.
 			candidate.SLOGateResult = model.OptionalBool{Present: true, Value: false}
 			candidate.GPUEnvelopeApplied = model.OptionalBool{Present: true, Value: evaluation.GPUEnvelopeApplied}
+			if exclusion.Action == model.ActionRotate || exclusion.Action == model.ActionMIGRebind {
+				candidate.FlowPredictedMean = traceOptionalFloatPtr(true, evaluation.FlowPredictedMean)
+				candidate.FlowConservativeFloor = traceOptionalFloatPtr(evaluation.FlowFloorApplied, evaluation.FlowConservativeFloor)
+				candidate.FlowRegime = string(evaluation.FlowRegime)
+				candidate.FlowUncertaintyBound = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintyBound)
+				candidate.FlowUncertaintySlack = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintySlack)
+				candidate.ConformalWindowReady = traceOptionalBoolPtr(evaluation.ConformalWindowReady)
+				candidate.ConformalRegimeApplicable = traceOptionalBoolPtr(evaluation.ConformalRegimeApplicable)
+			}
 			if exclusion.Action == model.ActionRotate {
 				q, qOK := tcost.ConformalQuantile()
 				cal, calOK := tcost.ConformalCalibrated()
 				candidate.ConformalQuantile = traceOptional(qOK, q)
-				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal}
+				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal && evaluation.ConformalRegimeApplicable}
 				candidate.GPUEnvelopeSlack = traceOptional(evaluation.GPUEnvelopeApplied, evaluation.GPUEnvelopeSlack)
 			}
 		}

@@ -24,6 +24,9 @@ const (
 	// DecisionTraceSchemaV4 makes the scoring coefficient independent of the
 	// separately learned legacy runtime lambda and records both demand views.
 	DecisionTraceSchemaV4 = "phorvex.decision-trace.v4"
+	// DecisionTraceSchemaV5 adds exact M156 flow-regime provenance and validates
+	// it against the candidate action and the recorded phase/load inputs.
+	DecisionTraceSchemaV5 = "phorvex.decision-trace.v5"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -32,6 +35,9 @@ const (
 	CostRepresentationWeightedDimensionlessV1 = "weighted_dimensionless_v1"
 	// CFlowUnitDimensionlessDisruptionLoss is the formal current CFlow unit.
 	CFlowUnitDimensionlessDisruptionLoss = "confirmed_dimensionless_disruption_loss"
+	// CFlowMaximum is the shared upper end of the learned disruption-loss domain.
+	// Cost evaluation and V5 reconstruction both derive unsupported bounds here.
+	CFlowMaximum = 2.0
 	// SelectorStrictPositiveGain is the exact P1 production comparator.
 	SelectorStrictPositiveGain = "strict_gain_positive"
 	SelectorM99Containment     = "m99_bounded_full_containment"
@@ -365,6 +371,16 @@ type DecisionCandidateV2 struct {
 	ConformalCalibrated OptionalBool  `json:"conformalCalibrated"`
 	GPUEnvelopeApplied  OptionalBool  `json:"gpuEnvelopeApplied"`
 	GPUEnvelopeSlack    OptionalFloat `json:"gpuEnvelopeSlack"`
+
+	// V5 learned-flow provenance. Costed Rotate/MIGRebind rows carry the complete
+	// set; other actions and historical schemas retain their prior wire contract.
+	FlowPredictedMean         *OptionalFloat `json:"flowPredictedMean,omitempty"`
+	FlowConservativeFloor     *OptionalFloat `json:"flowConservativeFloor,omitempty"`
+	FlowRegime                string         `json:"flowRegime,omitempty"`
+	FlowUncertaintyBound      *OptionalFloat `json:"flowUncertaintyBound,omitempty"`
+	FlowUncertaintySlack      *OptionalFloat `json:"flowUncertaintySlack,omitempty"`
+	ConformalWindowReady      *OptionalBool  `json:"conformalWindowReady,omitempty"`
+	ConformalRegimeApplicable *OptionalBool  `json:"conformalRegimeApplicable,omitempty"`
 	// SLOGateResult is present/true for generated candidates (they passed the
 	// conformal SLO gate), present/false for conformal-slo exclusions, absent
 	// for rows excluded upstream of the gate. SelectionRound is per-candidate,
@@ -455,6 +471,7 @@ type DecisionTraceV2 struct {
 	FlowWeight                float64              `json:"flowWeight"`
 	CFlowUnitStatus           string               `json:"cFlowUnitStatus"`
 	CostRepresentationVersion string               `json:"costRepresentationVersion"`
+	FlowCostSemanticsVersion  string               `json:"flowCostSemanticsVersion,omitempty"`
 	DualUpdate                DecisionDualUpdateV2 `json:"dualUpdate"`
 	// T0-C: CostCeiling is the EFFECTIVE conformal SLO ceiling the generator
 	// enforced (post-defaulting, not the raw policy field); CostModelVersion is
@@ -669,6 +686,23 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.NetGain = cleanOptional(c.NetGain)
 		c.ConformalQuantile = cleanOptional(c.ConformalQuantile)
 		c.GPUEnvelopeSlack = cleanOptional(c.GPUEnvelopeSlack)
+		if c.FlowPredictedMean != nil {
+			cleaned := cleanOptional(*c.FlowPredictedMean)
+			c.FlowPredictedMean = &cleaned
+		}
+		if c.FlowConservativeFloor != nil {
+			cleaned := cleanOptional(*c.FlowConservativeFloor)
+			c.FlowConservativeFloor = &cleaned
+		}
+		c.FlowRegime = redactTraceString(c.FlowRegime)
+		if c.FlowUncertaintyBound != nil {
+			cleaned := cleanOptional(*c.FlowUncertaintyBound)
+			c.FlowUncertaintyBound = &cleaned
+		}
+		if c.FlowUncertaintySlack != nil {
+			cleaned := cleanOptional(*c.FlowUncertaintySlack)
+			c.FlowUncertaintySlack = &cleaned
+		}
 	}
 
 	out.ActionStatus = append([]DecisionActionStatusV3(nil), t.ActionStatus...)
@@ -720,7 +754,7 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 	type alias DecisionTraceV2
 	canonical := t.Canonical()
 	raw, err := json.Marshal(alias(canonical))
-	if err != nil || canonical.SchemaVersion != DecisionTraceSchemaV4 {
+	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5) {
 		return raw, err
 	}
 	var object map[string]json.RawMessage
@@ -746,11 +780,12 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 // non-test caller — it is a test-time contract, not a runtime guard; the
 // production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
 	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
 	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
+	isV5 := t.SchemaVersion == DecisionTraceSchemaV5
 	finite := func(values ...float64) bool {
 		for _, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -762,9 +797,12 @@ func (t DecisionTraceV2) Validate() error {
 	if !finite(t.LambdaConfiguredSeed, t.LambdaRuntime, t.LambdaConfiguredPolicy,
 		t.LambdaRuntimeLegacy, t.NormWeight, t.FlowWeight,
 		t.DualUpdate.LambdaBefore, t.DualUpdate.LambdaAfter) ||
-		(isV4 && !finite(t.EffectiveCostCoefficient)) ||
+		((isV4 || isV5) && !finite(t.EffectiveCostCoefficient)) ||
 		(t.DisruptionAversion != nil && t.DisruptionAversion.Present && !finite(t.DisruptionAversion.Value)) {
 		return errors.New("trace contains non-finite controller or cost values")
+	}
+	if t.NormWeight < 0 || t.FlowWeight < 0 {
+		return errors.New("trace cost weights must be non-negative")
 	}
 	for name, value := range map[string]float64{
 		"lambdaConfiguredSeed":    t.LambdaConfiguredSeed,
@@ -782,6 +820,14 @@ func (t DecisionTraceV2) Validate() error {
 		values := []OptionalFloat{candidate.GrossFullValue, candidate.MarginalCoverage,
 			candidate.Provenance, candidate.CNorm, candidate.CFlow, candidate.ExpectedCost,
 			candidate.CostHigh, candidate.LambdaContribution, candidate.NetGain}
+		if isV5 {
+			for _, value := range []*OptionalFloat{candidate.FlowPredictedMean, candidate.FlowConservativeFloor,
+				candidate.FlowUncertaintyBound, candidate.FlowUncertaintySlack} {
+				if value != nil {
+					values = append(values, *value)
+				}
+			}
+		}
 		if candidate.ObjectiveCostContribution != nil {
 			values = append(values, *candidate.ObjectiveCostContribution)
 		}
@@ -806,6 +852,18 @@ func (t DecisionTraceV2) Validate() error {
 		}
 	}
 	t = t.Canonical()
+	if !isV5 {
+		if t.FlowCostSemanticsVersion != "" {
+			return errors.New("historical trace carries V5 flow-cost semantics")
+		}
+		for _, candidate := range t.Candidates {
+			if candidate.FlowPredictedMean != nil || candidate.FlowConservativeFloor != nil || candidate.FlowRegime != "" ||
+				candidate.FlowUncertaintyBound != nil || candidate.FlowUncertaintySlack != nil ||
+				candidate.ConformalWindowReady != nil || candidate.ConformalRegimeApplicable != nil {
+				return fmt.Errorf("historical candidate %q carries V5 flow provenance", candidate.CandidateKey)
+			}
+		}
+	}
 	if t.BrainImage == "" || t.GitSHA == "" {
 		return errors.New("brainImage and gitSHA are mandatory")
 	}
@@ -832,7 +890,7 @@ func (t DecisionTraceV2) Validate() error {
 			selectedKey = c.CandidateKey
 		}
 		contribution := c.LambdaContribution
-		if isV4 && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
+		if (isV4 || isV5) && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
 			if c.ObjectiveCostContribution != nil {
 				contribution = *c.ObjectiveCostContribution
 			} else {
@@ -868,15 +926,20 @@ func (t DecisionTraceV2) Validate() error {
 			t.DualUpdate.LambdaBefore != t.LambdaRuntimeLegacy || t.DualUpdate.UpdateReason == "" {
 			return errors.New("dual update is not reconstructable from trace inputs")
 		}
-	} else if isV3 || isV4 {
-		return errors.New("v3/v4 trace must carry the cost representation semantics")
+	} else if isV3 || isV4 || isV5 {
+		return errors.New("v3/v4/v5 trace must carry the cost representation semantics")
 	}
-	if isV4 {
+	if isV4 || isV5 {
 		if err := t.validateV4(); err != nil {
 			return err
 		}
 	}
-	if isV3 || isV4 {
+	if isV5 {
+		if err := t.validateV5(); err != nil {
+			return err
+		}
+	}
+	if isV3 || isV4 || isV5 {
 		if err := t.validateV3(); err != nil {
 			return err
 		}
@@ -927,6 +990,124 @@ func (t DecisionTraceV2) validateV4() error {
 		} else if candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution == nil || !candidate.ObjectiveCostContribution.Present ||
 			math.Abs(candidate.ObjectiveCostContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
 			return fmt.Errorf("candidate %q has contradictory fixed cost contribution", candidate.CandidateKey)
+		}
+	}
+	return nil
+}
+
+const (
+	flowRegimeMeasuredLoad  = "measured-load"
+	flowRegimeMissingLoad   = "missing-load"
+	flowRegimeDrainingPhase = "draining-phase"
+	flowRegimeUnknownPhase  = "unknown-phase"
+	flowRegimeMIGProxy      = "mig-proxy"
+)
+
+// validateV5 binds learned-flow provenance to the recorded action and current
+// phase/load inputs. Algebraically self-consistent labels are insufficient: an
+// absent request-rate input can never claim the measured-load regime.
+func (t DecisionTraceV2) validateV5() error {
+	if t.FlowCostSemanticsVersion != FlowCostSemanticsConservativeRegimeV1 {
+		return fmt.Errorf("v5 flowCostSemanticsVersion %q", t.FlowCostSemanticsVersion)
+	}
+	phase := WorkloadPhase(t.Inputs.Phase)
+	knownPhase := false
+	for _, candidate := range AllWorkloadPhases {
+		if phase == candidate {
+			knownPhase = true
+			break
+		}
+	}
+	for _, candidate := range t.Candidates {
+		costed := candidate.ExpectedCost.Present
+		respawn := candidate.Action == string(ActionRotate) || candidate.Action == string(ActionMIGRebind)
+		provenancePresent := candidate.FlowPredictedMean != nil || candidate.FlowConservativeFloor != nil ||
+			candidate.FlowRegime != "" || candidate.FlowUncertaintyBound != nil || candidate.FlowUncertaintySlack != nil ||
+			candidate.ConformalWindowReady != nil || candidate.ConformalRegimeApplicable != nil
+		if !costed || !respawn {
+			if provenancePresent {
+				return fmt.Errorf("candidate %q carries v5 flow provenance without a costed respawn", candidate.CandidateKey)
+			}
+			continue
+		}
+		if candidate.FlowPredictedMean == nil || candidate.FlowConservativeFloor == nil ||
+			candidate.FlowUncertaintyBound == nil || candidate.FlowUncertaintySlack == nil ||
+			candidate.ConformalWindowReady == nil || candidate.ConformalRegimeApplicable == nil || candidate.FlowRegime == "" {
+			return fmt.Errorf("candidate %q lacks complete v5 flow provenance", candidate.CandidateKey)
+		}
+		if !candidate.FlowPredictedMean.Present || !candidate.CFlow.Present {
+			return fmt.Errorf("candidate %q lacks the predicted mean or effective flow", candidate.CandidateKey)
+		}
+
+		expectedRegime := flowRegimeMeasuredLoad
+		switch {
+		case candidate.Action == string(ActionMIGRebind):
+			expectedRegime = flowRegimeMIGProxy
+		case !knownPhase || phase == PhaseUnknown:
+			expectedRegime = flowRegimeUnknownPhase
+		case phase == PhaseDraining:
+			expectedRegime = flowRegimeDrainingPhase
+		case !t.Inputs.RequestRate.Present:
+			expectedRegime = flowRegimeMissingLoad
+		}
+		if candidate.FlowRegime != expectedRegime {
+			return fmt.Errorf("candidate %q flow regime %q disagrees with action/phase/load inputs (want %q)", candidate.CandidateKey, candidate.FlowRegime, expectedRegime)
+		}
+
+		floorPresent := false
+		floor := 0.0
+		switch {
+		case !knownPhase || phase == PhaseUnknown:
+			floorPresent, floor = true, 0.5
+		case phase == PhaseDraining:
+			floorPresent, floor = true, 0.2
+		case !t.Inputs.RequestRate.Present:
+			floorPresent = true
+			switch phase {
+			case PhaseColdStarting:
+				floor = 1.0
+			case PhaseWarm:
+				floor = 0.7
+			case PhaseIdle:
+				floor = 0.15
+			default:
+				return fmt.Errorf("candidate %q has no known missing-load floor for phase %q", candidate.CandidateKey, phase)
+			}
+		}
+		if candidate.FlowConservativeFloor.Present != floorPresent ||
+			(floorPresent && math.Abs(candidate.FlowConservativeFloor.Value-floor) > 1e-9) {
+			return fmt.Errorf("candidate %q carries the wrong conservative floor", candidate.CandidateKey)
+		}
+		wantFlow := candidate.FlowPredictedMean.Value
+		if floorPresent && floor > wantFlow {
+			wantFlow = floor
+		}
+		if math.Abs(candidate.CFlow.Value-wantFlow) > 1e-9 {
+			return fmt.Errorf("candidate %q effective flow is not reconstructable", candidate.CandidateKey)
+		}
+
+		unsupported := expectedRegime != flowRegimeMeasuredLoad
+		if candidate.FlowUncertaintyBound.Present != unsupported || candidate.FlowUncertaintySlack.Present != unsupported {
+			return fmt.Errorf("candidate %q uncertainty presence disagrees with its regime", candidate.CandidateKey)
+		}
+		if unsupported {
+			if candidate.FlowUncertaintyBound.Value != CFlowMaximum {
+				return fmt.Errorf("candidate %q carries flow upper bound %g", candidate.CandidateKey, candidate.FlowUncertaintyBound.Value)
+			}
+			wantSlack := t.FlowWeight * math.Max(0, CFlowMaximum-candidate.CFlow.Value)
+			if math.Abs(candidate.FlowUncertaintySlack.Value-wantSlack) > 1e-9 {
+				return fmt.Errorf("candidate %q uncertainty slack is not reconstructable", candidate.CandidateKey)
+			}
+		}
+
+		applicable := candidate.Action == string(ActionRotate) && !unsupported
+		if !candidate.ConformalWindowReady.Present || !candidate.ConformalRegimeApplicable.Present ||
+			candidate.ConformalRegimeApplicable.Value != applicable {
+			return fmt.Errorf("candidate %q carries contradictory conformal applicability", candidate.CandidateKey)
+		}
+		if candidate.Action == string(ActionRotate) && (!candidate.ConformalCalibrated.Present ||
+			candidate.ConformalCalibrated.Value != (candidate.ConformalWindowReady.Value && applicable)) {
+			return fmt.Errorf("candidate %q carries a false row-level calibration claim", candidate.CandidateKey)
 		}
 	}
 	return nil
@@ -1033,11 +1214,12 @@ func (t DecisionTraceV2) validateV3() error {
 			continue
 		}
 		want := c.ExpectedCost.Value
+		slack := 0.0
 		if c.Action == string(ActionRotate) {
 			if !c.ConformalQuantile.Present {
 				return fmt.Errorf("candidate %q is a costed rotate without the conformal quantile", c.CandidateKey)
 			}
-			slack := c.ConformalQuantile.Value
+			slack = c.ConformalQuantile.Value
 			if c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value {
 				if !c.GPUEnvelopeSlack.Present {
 					return fmt.Errorf("candidate %q applied the GPU envelope without recording its value", c.CandidateKey)
@@ -1046,10 +1228,13 @@ func (t DecisionTraceV2) validateV3() error {
 					slack = c.GPUEnvelopeSlack.Value
 				}
 			}
-			want += slack
 		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
 			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
 		}
+		if t.SchemaVersion == DecisionTraceSchemaV5 && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
+			slack = c.FlowUncertaintySlack.Value
+		}
+		want += slack
 		if math.Abs(want-c.CostHigh.Value) > 1e-9 {
 			return fmt.Errorf("candidate %q cost high is not reconstructable (want %g, got %g)",
 				c.CandidateKey, want, c.CostHigh.Value)

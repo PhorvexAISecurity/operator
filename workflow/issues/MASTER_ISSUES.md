@@ -640,7 +640,7 @@ Severity: HIGH (claim validation) · Tier: 3 · Fixes: none
 
 ### M-156 · RLS prices `Unknown`/`Draining` phases at the idle floor — the learned path's cheapest rotation is the least-known pod · **OPEN** · `MATH-GATE`
 
-Severity: HIGH once active · Tier: 3 · Fixes: none
+Severity: HIGH once active · Tier: 3 · Fixes: POST25-M156
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · slo.contract

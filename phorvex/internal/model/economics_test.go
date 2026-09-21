@@ -37,13 +37,15 @@ func TestEconomicsDescriptorModesAndDirectValidation(t *testing.T) {
 	legacy, err := (Policy{Lambda: 0.6}).Economics(0.25)
 	if err != nil || legacy.Version != EconomicsLegacyRuntimeLambdaV1 || legacy.DisruptionAversion.Present ||
 		!legacy.LambdaRuntimeLegacy.Present || legacy.LambdaRuntimeLegacy.Value != 0.25 ||
-		legacy.EffectiveCostCoefficient != 0.25 || legacy.CoefficientSource != CostCoefficientSourceLambda {
+		legacy.EffectiveCostCoefficient != 0.25 || legacy.CoefficientSource != CostCoefficientSourceLambda ||
+		legacy.FlowCostSemanticsVersion != FlowCostSemanticsConservativeRegimeV1 {
 		t.Fatalf("legacy descriptor = %+v err=%v", legacy, err)
 	}
 	fixed, err := (Policy{Lambda: 0.6, DisruptionAversionConfigured: true, DisruptionAversion: 0}).Economics(0.25)
 	if err != nil || fixed.Version != EconomicsFixedDisruptionAversionV1 || !fixed.DisruptionAversion.Present ||
 		!fixed.LambdaRuntimeLegacy.Present || fixed.LambdaRuntimeLegacy.Value != 0.25 ||
-		fixed.EffectiveCostCoefficient != 0 || fixed.CoefficientSource != CostCoefficientSourceBeta {
+		fixed.EffectiveCostCoefficient != 0 || fixed.CoefficientSource != CostCoefficientSourceBeta ||
+		fixed.FlowCostSemanticsVersion != FlowCostSemanticsConservativeRegimeV1 {
 		t.Fatalf("fixed descriptor = %+v err=%v", fixed, err)
 	}
 	for _, policy := range []Policy{
@@ -72,6 +74,7 @@ func TestValidateEconomicsMetadataRejectsUnknownAndContradictoryRecords(t *testi
 		{Version: EconomicsLegacyRuntimeLambdaV1, DisruptionAversion: OptionalFloat{Present: true}, LambdaRuntimeLegacy: OptionalFloat{Present: true, Value: 7}, EffectiveCostCoefficient: 7, CoefficientSource: CostCoefficientSourceLambda},
 		{Version: EconomicsLegacyRuntimeLambdaV1, LambdaRuntimeLegacy: OptionalFloat{Present: true, Value: -1}, EffectiveCostCoefficient: -1, CoefficientSource: CostCoefficientSourceLambda},
 		{Version: EconomicsLegacyRuntimeLambdaV1, LambdaRuntimeLegacy: OptionalFloat{Present: true, Value: 10.01}, EffectiveCostCoefficient: 10.01, CoefficientSource: CostCoefficientSourceLambda},
+		{Version: EconomicsLegacyRuntimeLambdaV1, LambdaRuntimeLegacy: OptionalFloat{Present: true, Value: 7}, EffectiveCostCoefficient: 7, CoefficientSource: CostCoefficientSourceLambda, FlowCostSemanticsVersion: "future"},
 	} {
 		if err := ValidateEconomicsMetadata(bad); err == nil {
 			t.Fatalf("contradictory metadata validated: %+v", bad)
