@@ -1,0 +1,117 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f6d3e92a7beb154d2516d43ebf2d59c08f0a6e5c30051ab2ea6c8390912e69d6
+    source_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
+    at: '2026-09-21T06:58:32+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+fix_id: POST25-M106-SCOPED-OUTCOMES
+issues:
+- M-106
+title: Separate scoped capability outcomes from attacker-state belief
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-post25-economics
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-m104-scoped-feed
+  code_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.141
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-m106-scoped-outcomes
+  base_sha: 35d47d6ae7ebb07c37cad1cc4d20a27b431fa4b2
+  head_sha: null
+  stacked_on:
+  - POST25-M104-SCOPED-FEED
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: sol-post25-economics
+  action: Implement signed scoped outcomes with incident/control evidence; keep unknown
+    and censored distinct
+updated_at: '2026-09-21T06:58:33+00:00'
+follow_up_to: POST25-M106
+configuration_history:
+- at: '2026-09-21T06:58:29+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T06:58:31+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T06:58:33+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false

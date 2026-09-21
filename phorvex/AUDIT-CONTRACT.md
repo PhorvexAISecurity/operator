@@ -19,12 +19,15 @@ wire meaning changes.
 - `threatRisk` is the deprecated P0 engine's distinct threat-weighted value and is
   omitted under P1. The two meanings no longer share `risk`.
 - `pHold` is authoritative. `belief` is not emitted.
-- `persistenceLearning` is optional typed provenance for independently observed
-  categorical persistence labels. It names the trusted source, disposition and
-  bounded per-owner raw outcome counts; those counts are distinct from the
-  conjugate store's capped effective pseudo-count mass. `no-qualified-live-label-producer` is the initial
-  production state. Selection, `pHold`, dispatch acknowledgement and health do
-  not populate a held or revoked label.
+- `persistenceLearning` is retained only for decoding records written by the
+  earlier owner-wide learning contract. New writers never relabel scoped
+  observations into that field.
+- `scopedOutcomes` is optional typed, reporting-only provenance for the exact
+  `synthetic-process-session/native-rotate/v1` contract. Its cohort key includes
+  policy UID and generation, stable workload digest, capability, action and
+  contract version. Held/revoked define its descriptive `n`; unknown/censored do
+  not. The Beta(1,1) mean and Wilson 95% raw-proportion interval are explicitly
+  uncalibrated and never feed `pHold`, cost, ranking, cadence or dispatch.
 - `threatPosture` and `residual` are observational under the default P1 coverage
   engine: they are recorded for diagnosis but do not affect P1 selection.
 

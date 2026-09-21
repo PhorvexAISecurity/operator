@@ -1,364 +1,370 @@
 package decision
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
 type m106Authority struct {
-	source   string
 	bindings map[string]model.PersistenceOperationBinding
 	allowed  map[string]model.PersistenceObservation
 }
 
-func (a *m106Authority) Source() string { return a.source }
-
+func (*m106Authority) Source() string { return model.ScopedSessionCapability }
 func (a *m106Authority) AuthorizeObservation(observation model.PersistenceObservation) (model.PersistenceOperationBinding, bool) {
-	authorized, ok := a.allowed[observation.EvidenceID]
-	if !ok || authorized != observation {
+	allowed, ok := a.allowed[observation.EvidenceID]
+	if !ok || !reflect.DeepEqual(allowed, observation) {
 		return model.PersistenceOperationBinding{}, false
 	}
 	binding, ok := a.bindings[observation.OperationID]
 	return binding, ok
 }
 
-func m106Fixture(t *testing.T, limit int) (*CoverageEngine, model.Policy, *m106Authority, model.PersistenceObservation) {
+func m106Fixture(t *testing.T) (*CoverageEngine, model.Policy, *m106Authority, model.PersistenceObservation) {
 	t.Helper()
-	now := traceTestNow
-	pol := decisionTracePolicy(1, false)
-	pol.PolicyGeneration = 7
+	now := time.Date(2026, 9, 21, 4, 0, 0, 0, time.UTC)
+	e := NewCoverageEngine()
+	e.Now = func() time.Time { return now }
+	pol := covPolicy(1)
+	pol.Tenant = "tenant"
+	pol.Namespace, pol.PolicyName, pol.PolicyUID, pol.PolicyGeneration = "ns", "policy", "policy-uid", 1
 	epoch := model.PolicyEpoch{Namespace: pol.Namespace, Name: pol.PolicyName, UID: pol.PolicyUID, Generation: pol.PolicyGeneration}
-	binding := model.PersistenceOperationBinding{
-		Policy: epoch, OperationID: "operation-1", TargetUID: "old-pod-uid",
-		Capability: "credential-persistence", Scope: "pod/process",
-		ObservationNotBefore: now.Add(-time.Hour), ObservationDeadline: now.Add(time.Hour),
-	}
-	authority := &m106Authority{source: "fixture-effect-observer", bindings: map[string]model.PersistenceOperationBinding{"operation-1": binding}, allowed: map[string]model.PersistenceObservation{}}
-	e := fixedTraceEngine()
-	e.PersistenceAuthority = authority
-	e.PersistenceDedupLimit = limit
-	e.SetOwnerLive(pol.Owner(), true)
 	if err := e.SetOwnerEpoch(epoch, true); err != nil {
 		t.Fatal(err)
 	}
+	dispatched := now.Add(-62 * time.Second)
+	workload := model.PersistenceWorkloadScope{Namespace: "ns", OwnerKind: "Deployment", OwnerName: "app", OwnerUID: "deployment-uid"}
+	binding := model.PersistenceOperationBinding{
+		Policy: epoch, ProcessEpochID: e.ScopedOutcomeProcessEpochID(), ContractVersion: model.ScopedSessionNativeRotateV1,
+		Workload: workload, OperationID: "operation-1", TargetUID: "old-pod-uid", Capability: model.ScopedSessionCapability,
+		Action: model.ActionRotate, DispatchAcknowledgedAt: dispatched, ObservationNotBefore: dispatched.Add(60 * time.Second),
+		ObservationDeadline: dispatched.Add(65 * time.Second), TargetTerminationGraceSeconds: 30,
+	}
+	authority := &m106Authority{bindings: map[string]model.PersistenceOperationBinding{binding.OperationID: binding}, allowed: map[string]model.PersistenceObservation{}}
+	e.PersistenceAuthority = authority
 	observation := model.PersistenceObservation{
-		SchemaVersion: model.PersistenceObservationSchemaV1, Source: authority.source,
-		EvidenceID: "evidence-1", Policy: epoch, OperationID: binding.OperationID,
-		TargetUID: binding.TargetUID, Capability: binding.Capability, Scope: binding.Scope,
-		ObservationStart: now.Add(-30 * time.Minute), ObservationEnd: now.Add(-time.Minute),
-		Outcome: model.PersistenceHeld,
+		SchemaVersion: model.ScopedOutcomeObservationSchemaV1, Source: model.ScopedSessionCapability,
+		ProcessEpochID: binding.ProcessEpochID, ContractVersion: binding.ContractVersion, EvidenceID: "evidence-1",
+		Policy: epoch, Workload: workload, OperationID: binding.OperationID, TargetUID: binding.TargetUID,
+		Capability: binding.Capability, Action: binding.Action, BeforeSHA256: strings.Repeat("a", 64),
+		ActionSHA256: strings.Repeat("b", 64), AfterSHA256: strings.Repeat("c", 64),
+		ObservationStart: dispatched.Add(60 * time.Second), ObservationEnd: dispatched.Add(61 * time.Second), Outcome: model.PersistenceHeld,
 	}
 	authority.allowed[observation.EvidenceID] = observation
 	return e, pol, authority, observation
 }
 
-func TestPost25M106RepeatedActualSelectionsDoNotSelfTrain(t *testing.T) {
-	e := fixedTraceEngine()
-	pol := decisionTracePolicy(1, false)
-	view := covView("m106-repeated", true, 2*time.Hour, false)
+func m106Bind(authority *m106Authority, template model.PersistenceObservation, evidenceID, operationID, outcome string) model.PersistenceObservation {
+	observation := template
+	observation.EvidenceID, observation.OperationID, observation.Outcome = evidenceID, operationID, outcome
+	binding := authority.bindings[template.OperationID]
+	binding.OperationID = operationID
+	authority.bindings[operationID] = binding
+	authority.allowed[evidenceID] = observation
+	return observation
+}
 
-	first := e.Decide([]*model.WorkloadView{view}, pol)[0]
-	if !first.Selected || first.PHold == 0.5 {
-		t.Fatalf("fixture needs a selected decision whose old prediction-as-label delta is nonzero: %+v", first)
+func TestPost25M106ScopedOutcomeDoesNotTrainPHold(t *testing.T) {
+	e, pol, _, observation := m106Fixture(t)
+	alphaBefore, betaBefore := e.Killchain.Memory.Prior(pol.Owner())
+	unrelated := covView("unrelated-capability", true, 2*time.Hour, false)
+	beforeRows, err := e.DecideShadowChecked([]*model.WorkloadView{unrelated}, pol)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if oldDelta := 0.5 * (first.PHold - 0.5); oldDelta == 0 {
-		t.Fatal("pre-fix self-training rule would be inert in this fixture")
+	before := beforeRows[0]
+	result := e.AdmitPersistenceObservation(observation)
+	afterRows, err := e.DecideShadowChecked([]*model.WorkloadView{unrelated}, pol)
+	if err != nil {
+		t.Fatal(err)
 	}
-	wantAlpha, wantBeta := e.Killchain.Memory.Prior(pol.Owner())
-	for i := 0; i < 12; i++ {
-		decision := e.Decide([]*model.WorkloadView{view}, pol)[0]
-		if !decision.Selected {
-			t.Fatalf("tick %d stopped exercising the actual selected producer: %+v", i, decision)
-		}
+	after := afterRows[0]
+	alphaAfter, betaAfter := e.Killchain.Memory.Prior(pol.Owner())
+	if !result.Applied || len(result.Status.Cohorts) != 1 || result.Status.Cohorts[0].Held != 1 || result.Status.Cohorts[0].N != 1 {
+		t.Fatalf("held result was not retained in its exact cohort: %+v", result)
 	}
-	gotAlpha, gotBeta := e.Killchain.Memory.Prior(pol.Owner())
-	if gotAlpha != wantAlpha || gotBeta != wantBeta {
-		t.Fatalf("optimizer predictions trained persistence memory: before=(%g,%g) after=(%g,%g)", wantAlpha, wantBeta, gotAlpha, gotBeta)
+	if alphaAfter != alphaBefore || betaAfter != betaBefore || before.PHold != after.PHold || before.Action != after.Action || before.Selected != after.Selected {
+		t.Fatalf("reporting-only outcome contaminated attacker belief or selection: prior (%g,%g)->(%g,%g), before=%+v after=%+v", alphaBefore, betaBefore, alphaAfter, betaAfter, before, after)
 	}
-	if first.PersistenceLearning == nil || first.PersistenceLearning.Disposition != model.PersistenceDispositionNoProducer ||
-		first.PersistenceLearning.QualifiedLabels != 0 {
-		t.Fatalf("decision did not disclose the absent qualified producer: %+v", first.PersistenceLearning)
+	if after.PersistenceLearning != nil || after.ScopedOutcomes == nil || after.ScopedOutcomes.Cohorts[0].Held != 1 {
+		t.Fatalf("decision used the legacy learning field or omitted scoped report: learning=%+v scoped=%+v", after.PersistenceLearning, after.ScopedOutcomes)
 	}
 }
 
-func TestPost25M106QualifiedHeldAndRevokedApplyOneBernoulliCount(t *testing.T) {
-	e, pol, authority, held := m106Fixture(t, 8)
-	a0, b0 := e.Killchain.Memory.Prior(pol.Owner())
-	result := e.AdmitPersistenceObservation(held)
-	if !result.Applied || result.Disposition != model.PersistenceDispositionApplied {
-		t.Fatalf("held observation was not applied: %+v", result)
+func TestPost25M106ScopedCountsAndWilsonReporting(t *testing.T) {
+	e, pol, authority, first := m106Fixture(t)
+	observations := []model.PersistenceObservation{
+		first,
+		m106Bind(authority, first, "evidence-2", "operation-2", model.PersistenceRevoked),
+		m106Bind(authority, first, "evidence-3", "operation-3", model.PersistenceUnknown),
+		m106Bind(authority, first, "evidence-4", "operation-4", model.PersistenceCensored),
 	}
-	a1, b1 := e.Killchain.Memory.Prior(pol.Owner())
-	if a1 != a0+1 || b1 != b0 {
-		t.Fatalf("held observation changed wrong pseudo-counts: before=(%g,%g) after=(%g,%g)", a0, b0, a1, b1)
-	}
-
-	revoked := held
-	revoked.EvidenceID = "evidence-2"
-	revoked.Outcome = model.PersistenceRevoked
-	authority.allowed[revoked.EvidenceID] = revoked
-	result = e.AdmitPersistenceObservation(revoked)
-	a2, b2 := e.Killchain.Memory.Prior(pol.Owner())
-	if !result.Applied || a2 != a1 || b2 != b1+1 || result.Status.QualifiedLabels != 2 ||
-		result.Status.HeldLabels != 1 || result.Status.RevokedLabels != 1 {
-		t.Fatalf("revoked observation changed wrong pseudo-counts: result=%+v before=(%g,%g) after=(%g,%g)", result, a1, b1, a2, b2)
-	}
-	decision := e.Decide([]*model.WorkloadView{covView("m106-labelled", true, 2*time.Hour, false)}, pol)[0]
-	if decision.PersistenceLearning == nil || decision.PersistenceLearning.Disposition != model.PersistenceDispositionApplied ||
-		decision.PersistenceLearning.Source != "fixture-effect-observer" || decision.PersistenceLearning.QualifiedLabels != 2 {
-		t.Fatalf("real decision omitted observed-label provenance: %+v", decision.PersistenceLearning)
-	}
-	if a3, b3 := e.Killchain.Memory.Prior(pol.Owner()); a3 != a2 || b3 != b2 {
-		t.Fatalf("selection added another count after qualified labels: before=(%g,%g) after=(%g,%g)", a2, b2, a3, b3)
-	}
-}
-
-func TestPost25M106QualifiedCountIsRawWhileBeliefMassRemainsCapped(t *testing.T) {
-	const observations = 210
-	e, pol, authority, template := m106Fixture(t, observations+1)
-	initialAlpha, initialBeta := e.Killchain.Memory.Prior(pol.Owner())
-	for i := 0; i < observations; i++ {
-		observation := template
-		observation.EvidenceID = fmt.Sprintf("evidence-%03d", i)
-		observation.OperationID = fmt.Sprintf("operation-%03d", i)
-		binding := authority.bindings[template.OperationID]
-		binding.OperationID = observation.OperationID
-		authority.bindings[observation.OperationID] = binding
-		authority.allowed[observation.EvidenceID] = observation
+	for _, observation := range observations {
 		if result := e.AdmitPersistenceObservation(observation); !result.Applied {
-			t.Fatalf("qualified outcome %d was not applied: %+v", i, result)
+			t.Fatalf("authenticated categorical result was not retained: %+v", result)
 		}
 	}
-	status, ok := e.PersistenceLearningStatusFor(pol.Owner())
-	if !ok || status.QualifiedLabels != observations || status.HeldLabels != observations || status.DedupEntries != observations {
-		t.Fatalf("raw qualified outcome accounting changed: %+v ok=%t", status, ok)
+	report, ok := e.ScopedOutcomeReportFor(pol.Owner())
+	if !ok || len(report.Cohorts) != 1 {
+		t.Fatalf("missing exact cohort: %+v ok=%t", report, ok)
 	}
-	alpha, beta := e.Killchain.Memory.Prior(pol.Owner())
-	if alpha+beta >= initialAlpha+initialBeta+float64(status.QualifiedLabels) {
-		t.Fatalf("effective pseudo-count mass was not capped: initial=%g final=%g raw=%d", initialAlpha+initialBeta, alpha+beta, status.QualifiedLabels)
-	}
-	if alpha+beta > 200.000000001 {
-		t.Fatalf("effective pseudo-count mass exceeded the existing cap: alpha=%g beta=%g", alpha, beta)
+	cohort := report.Cohorts[0]
+	lower, upper := model.Wilson95(1, 2)
+	if cohort.Held != 1 || cohort.Revoked != 1 || cohort.Unknown != 1 || cohort.Censored != 1 || cohort.N != 2 ||
+		cohort.PosteriorMean != .5 || cohort.Calibrated || cohort.RawHeldInterval == nil ||
+		cohort.RawHeldInterval.Lower != lower || cohort.RawHeldInterval.Upper != upper {
+		t.Fatalf("scoped descriptive report is incorrect: %+v", cohort)
 	}
 }
 
-func TestPost25M106BindingDedupAndUnresolvedOutcomesCannotTrain(t *testing.T) {
-	e, pol, authority, observation := m106Fixture(t, 4)
-	a0, b0 := e.Killchain.Memory.Prior(pol.Owner())
-	forged := observation
-	forged.Outcome = model.PersistenceRevoked
-	if result := e.AdmitPersistenceObservation(forged); result.Applied || result.Disposition != model.PersistenceDispositionRejected {
-		t.Fatalf("source name and valid operation binding authorized a forged outcome: %+v", result)
+func TestPost25M106UnknownOnlyCohortHasNoWilsonInterval(t *testing.T) {
+	e, _, authority, template := m106Fixture(t)
+	unknown := m106Bind(authority, template, "unknown-only", "unknown-operation", model.PersistenceUnknown)
+	result := e.AdmitPersistenceObservation(unknown)
+	if !result.Applied || len(result.Status.Cohorts) != 1 {
+		t.Fatalf("unknown result was not retained descriptively: %+v", result)
+	}
+	cohort := result.Status.Cohorts[0]
+	if cohort.Unknown != 1 || cohort.N != 0 || cohort.PosteriorMean != .5 || cohort.RawHeldInterval != nil || cohort.Calibrated {
+		t.Fatalf("n=0 report made a statistical claim: %+v", cohort)
+	}
+}
+
+func TestPost25M106LateCensoredIsDescriptiveButLateCategoricalIsRejected(t *testing.T) {
+	e, _, authority, template := m106Fixture(t)
+	binding := authority.bindings[template.OperationID]
+	e.Now = func() time.Time { return binding.ObservationDeadline.Add(3 * time.Second) }
+	censored := m106Bind(authority, template, "late-censored", "late-censored-operation", model.PersistenceCensored)
+	censored.ObservationStart = binding.ObservationDeadline.Add(time.Second)
+	censored.ObservationEnd = binding.ObservationDeadline.Add(2 * time.Second)
+	authority.allowed[censored.EvidenceID] = censored
+	result := e.AdmitPersistenceObservation(censored)
+	if !result.Applied || len(result.Status.Cohorts) != 1 || result.Status.Cohorts[0].Censored != 1 || result.Status.Cohorts[0].N != 0 {
+		t.Fatalf("authenticated deadline miss was not retained descriptively: %+v", result)
 	}
 
-	for name, tc := range map[string]struct {
-		mutate func(*model.PersistenceObservation)
-		want   string
-	}{
-		"replacement UID is not the revoked old target": {func(o *model.PersistenceObservation) { o.TargetUID = "replacement-uid" }, model.PersistenceDispositionRejected},
-		"wrong owner generation":                        {func(o *model.PersistenceObservation) { o.Policy.Generation++ }, model.PersistenceDispositionRejected},
-		"unknown outcome":                               {func(o *model.PersistenceObservation) { o.Outcome = model.PersistenceUnknown }, model.PersistenceDispositionUnresolved},
-		"censored outcome":                              {func(o *model.PersistenceObservation) { o.Outcome = model.PersistenceCensored }, model.PersistenceDispositionUnresolved},
-		"future observation":                            {func(o *model.PersistenceObservation) { o.ObservationEnd = traceTestNow.Add(time.Minute) }, model.PersistenceDispositionExpired},
-		"reversed timestamps":                           {func(o *model.PersistenceObservation) { o.ObservationStart = o.ObservationEnd.Add(time.Minute) }, model.PersistenceDispositionRejected},
-		"oversized scope":                               {func(o *model.PersistenceObservation) { o.Scope = string(make([]byte, 1025)) }, model.PersistenceDispositionRejected},
-		"invalid UTF-8 evidence ID":                     {func(o *model.PersistenceObservation) { o.EvidenceID = string([]byte{'x', 0xff}) }, model.PersistenceDispositionRejected},
+	held := m106Bind(authority, template, "late-held", "late-held-operation", model.PersistenceHeld)
+	held.ObservationStart = binding.ObservationDeadline.Add(time.Second)
+	held.ObservationEnd = binding.ObservationDeadline.Add(2 * time.Second)
+	authority.allowed[held.EvidenceID] = held
+	result = e.AdmitPersistenceObservation(held)
+	if result.Applied || result.Disposition != model.PersistenceDispositionExpired {
+		t.Fatalf("late categorical result crossed the strict window: %+v", result)
+	}
+}
+
+func TestPost25M106DecodeRejectsInvalidUTF8BeforeJSONNormalization(t *testing.T) {
+	_, _, _, observation := m106Fixture(t)
+	raw, err := json.Marshal(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"evidence-1"`), []byte{'"', 'e', 0xff, '"'}, 1)
+	if _, err := DecodeScopedOutcomeObservation(raw); err == nil || err.Error() != "scoped outcome payload is not valid UTF-8" {
+		t.Fatalf("invalid UTF-8 was normalized before refusal: %v", err)
+	}
+}
+
+func TestPost25M106GenerationTransitionRetainsPriorCohortInNoLabelAudit(t *testing.T) {
+	e, _, _, observation := m106Fixture(t)
+	if result := e.AdmitPersistenceObservation(observation); !result.Applied {
+		t.Fatalf("initial exact cohort was not admitted: %+v", result)
+	}
+	next := observation.Policy
+	next.Generation++
+	if err := e.SetOwnerEpoch(next, true); err != nil {
+		t.Fatal(err)
+	}
+	report, ok := e.ScopedOutcomeReportFor(next.Owner())
+	if !ok || report.Disposition != model.PersistenceDispositionNoLabel || report.ReplayEntries != 1 || len(report.Cohorts) != 1 || report.Cohorts[0].Key.PolicyGeneration != observation.Policy.Generation {
+		t.Fatalf("generation transition lost or mislabeled prior reporting history: %+v ok=%t", report, ok)
+	}
+	if _, err := json.Marshal(audit.Record{ScopedOutcomes: &report}); err != nil {
+		t.Fatalf("retained prior-generation no-label report failed audit wire validation: %v", err)
+	}
+}
+
+func TestPost25M106ExactAuthorityWindowReplayAndConflict(t *testing.T) {
+	e, _, authority, observation := m106Fixture(t)
+	for name, mutate := range map[string]func(*model.PersistenceObservation){
+		"wrong process epoch": func(o *model.PersistenceObservation) { o.ProcessEpochID = "prior-process" },
+		"wrong scope":         func(o *model.PersistenceObservation) { o.Workload.OwnerUID = "other-deployment" },
+		"wrong action":        func(o *model.PersistenceObservation) { o.Action = model.ActionQuarantine },
+		"wrong old target":    func(o *model.PersistenceObservation) { o.TargetUID = "replacement-pod" },
+		"forged result":       func(o *model.PersistenceObservation) { o.Outcome = model.PersistenceRevoked },
+		"bad evidence hash":   func(o *model.PersistenceObservation) { o.AfterSHA256 = strings.Repeat("A", 64) },
+		"early sample": func(o *model.PersistenceObservation) {
+			o.ObservationStart = authority.bindings[o.OperationID].DispatchAcknowledgedAt.Add(59 * time.Second)
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := observation
-			tc.mutate(&candidate)
-			authority.allowed[candidate.EvidenceID] = candidate
+			mutate(&candidate)
+			// Only non-forged structural variants are placed in the complete-payload
+			// authority. Exact binding and window validation must still reject them.
+			if name != "forged result" {
+				authority.allowed[candidate.EvidenceID] = candidate
+			}
 			result := e.AdmitPersistenceObservation(candidate)
-			if result.Applied || result.Disposition != tc.want {
-				t.Fatalf("unexpected result: %+v", result)
+			if result.Applied {
+				t.Fatalf("invalid observation was retained: %+v", result)
 			}
 		})
 	}
-	if _, allocated := e.persistenceLearning[pol.Owner()]; allocated {
-		t.Fatal("rejected/unresolved observations allocated dedup learning state")
-	}
-	a1, b1 := e.Killchain.Memory.Prior(pol.Owner())
-	if a1 != a0 || b1 != b0 {
-		t.Fatalf("rejected/unresolved observations trained memory: before=(%g,%g) after=(%g,%g)", a0, b0, a1, b1)
-	}
-
 	authority.allowed[observation.EvidenceID] = observation
 	first := e.AdmitPersistenceObservation(observation)
 	duplicate := e.AdmitPersistenceObservation(observation)
 	conflict := observation
-	conflict.Outcome = model.PersistenceRevoked
+	conflict.AfterSHA256 = strings.Repeat("d", 64)
 	authority.allowed[conflict.EvidenceID] = conflict
 	contradiction := e.AdmitPersistenceObservation(conflict)
-	if !first.Applied || duplicate.Disposition != model.PersistenceDispositionDuplicate || duplicate.Applied ||
-		contradiction.Disposition != model.PersistenceDispositionConflict || contradiction.Applied {
-		t.Fatalf("dedup/conflict contract failed: first=%+v duplicate=%+v conflict=%+v", first, duplicate, contradiction)
-	}
-	a2, b2 := e.Killchain.Memory.Prior(pol.Owner())
-	if a2 != a0+1 || b2 != b0 {
-		t.Fatalf("duplicate/conflict replay changed counts: before=(%g,%g) after=(%g,%g)", a0, b0, a2, b2)
+	if !first.Applied || duplicate.Disposition != model.PersistenceDispositionDuplicate || contradiction.Disposition != model.PersistenceDispositionConflict {
+		t.Fatalf("replay barrier failed: first=%+v duplicate=%+v conflict=%+v", first, duplicate, contradiction)
 	}
 }
 
-func TestPost25M106SameTenantOwnersRemainIsolated(t *testing.T) {
-	e, firstPolicy, authority, first := m106Fixture(t, 8)
-	secondPolicy := firstPolicy
-	secondPolicy.PolicyUID = "second-policy-uid"
-	secondEpoch := model.PolicyEpoch{Namespace: secondPolicy.Namespace, Name: "second-policy", UID: secondPolicy.PolicyUID, Generation: 1}
-	secondPolicy.PolicyName = secondEpoch.Name
-	e.SetOwnerLive(secondPolicy.Owner(), true)
-	if err := e.SetOwnerEpoch(secondEpoch, true); err != nil {
-		t.Fatal(err)
-	}
-	secondBinding := authority.bindings[first.OperationID]
-	secondBinding.Policy = secondEpoch
-	secondBinding.OperationID = "second-operation"
-	authority.bindings[secondBinding.OperationID] = secondBinding
-
-	secondAlphaBefore, secondBetaBefore := e.Killchain.Memory.Prior(secondPolicy.Owner())
+func TestPost25M106GenerationCohortRetirementAndRestartBoundaries(t *testing.T) {
+	e, pol, authority, first := m106Fixture(t)
 	if !e.AdmitPersistenceObservation(first).Applied {
-		t.Fatal("first owner label did not apply")
+		t.Fatal("first result was not retained")
 	}
-	secondAlphaAfter, secondBetaAfter := e.Killchain.Memory.Prior(secondPolicy.Owner())
-	if secondAlphaAfter != secondAlphaBefore || secondBetaAfter != secondBetaBefore {
-		t.Fatalf("same-display-tenant owner inherited another UID's label: before=(%g,%g) after=(%g,%g)", secondAlphaBefore, secondBetaBefore, secondAlphaAfter, secondBetaAfter)
-	}
-	if _, allocated := e.PersistenceLearningStatusFor(secondPolicy.Owner()); allocated {
-		t.Fatal("same-display-tenant owner inherited another UID's dedup history")
-	}
-}
-
-func TestPost25M106DedupSaturationRefusesWithoutEviction(t *testing.T) {
-	e, pol, authority, first := m106Fixture(t, 2)
-	if !e.AdmitPersistenceObservation(first).Applied {
-		t.Fatal("first label did not apply")
-	}
-	second := first
-	second.EvidenceID, second.OperationID = "evidence-2", "operation-2"
-	authority.bindings[second.OperationID] = authority.bindings[first.OperationID]
-	b := authority.bindings[second.OperationID]
-	b.OperationID = second.OperationID
-	authority.bindings[second.OperationID] = b
-	authority.allowed[second.EvidenceID] = second
-	if !e.AdmitPersistenceObservation(second).Applied {
-		t.Fatal("second label did not apply")
-	}
-	third := first
-	third.EvidenceID, third.OperationID = "evidence-3", "operation-3"
-	b.OperationID = third.OperationID
-	authority.bindings[third.OperationID] = b
-	authority.allowed[third.EvidenceID] = third
-	if result := e.AdmitPersistenceObservation(third); result.Disposition != model.PersistenceDispositionSaturated || result.Applied {
-		t.Fatalf("third label did not fail closed at capacity: %+v", result)
-	}
-	if result := e.AdmitPersistenceObservation(first); result.Disposition != model.PersistenceDispositionDuplicate || result.Status.DedupEntries != 2 {
-		t.Fatalf("saturation evicted an old ID and permitted replay: %+v", result)
-	}
-	status, ok := e.PersistenceLearningStatusFor(pol.Owner())
-	if !ok || status.DedupEntries != 2 || status.DedupCapacity != 2 || status.QualifiedLabels != 2 {
-		t.Fatalf("bounded status is not truthful: %+v ok=%t", status, ok)
-	}
-}
-
-func TestPost25M106GenerationAdvancePreservesReplayBarrierWithCurrentProvenance(t *testing.T) {
-	e, pol, authority, oldObservation := m106Fixture(t, 8)
-	if result := e.AdmitPersistenceObservation(oldObservation); !result.Applied {
-		t.Fatalf("old-generation label did not apply: %+v", result)
-	}
-
-	newEpoch := oldObservation.Policy
+	newEpoch := first.Policy
 	newEpoch.Generation++
 	if err := e.SetOwnerEpoch(newEpoch, true); err != nil {
 		t.Fatal(err)
 	}
-	transition, allocated := e.PersistenceLearningStatusFor(pol.Owner())
-	if !allocated || transition.Policy == nil || *transition.Policy != newEpoch ||
-		transition.Disposition != model.PersistenceDispositionNoLabel || transition.EvidenceID != "" || transition.Outcome != "" ||
-		transition.QualifiedLabels != 1 || transition.DedupEntries != 1 {
-		t.Fatalf("generation transition lost lifecycle state or misattributed old evidence: %+v allocated=%t", transition, allocated)
+	stale := e.AdmitPersistenceObservation(first)
+	if stale.Applied {
+		t.Fatalf("old generation crossed epoch: %+v", stale)
 	}
-	transition.Policy.Generation = 99
-	unchanged, _ := e.PersistenceLearningStatusFor(pol.Owner())
-	if unchanged.Policy == nil || *unchanged.Policy != newEpoch {
-		t.Fatalf("status reader exposed mutable internal policy provenance: %+v", unchanged)
+	second := m106Bind(authority, first, "evidence-2", "operation-2", model.PersistenceRevoked)
+	second.Policy = newEpoch
+	binding := authority.bindings[second.OperationID]
+	binding.Policy = newEpoch
+	authority.bindings[second.OperationID] = binding
+	authority.allowed[second.EvidenceID] = second
+	if result := e.AdmitPersistenceObservation(second); !result.Applied || len(result.Status.Cohorts) != 2 {
+		t.Fatalf("new generation did not get a separate cohort: %+v", result)
 	}
-	if stale := e.AdmitPersistenceObservation(oldObservation); stale.Applied || stale.Disposition != model.PersistenceDispositionRejected {
-		t.Fatalf("old-generation label crossed the active epoch: %+v", stale)
+	if err := e.SetOwnerEpoch(first.Policy, true); err == nil {
+		t.Fatal("stale policy generation replaced the current scoped lifecycle")
 	}
-
-	newObservation := oldObservation
-	newObservation.Policy = newEpoch
-	newObservation.EvidenceID = "new-generation-evidence"
-	newObservation.OperationID = "new-generation-operation"
-	newObservation.Outcome = model.PersistenceRevoked
-	newBinding := authority.bindings[oldObservation.OperationID]
-	newBinding.Policy = newEpoch
-	newBinding.OperationID = newObservation.OperationID
-	authority.bindings[newObservation.OperationID] = newBinding
-	authority.allowed[newObservation.EvidenceID] = newObservation
-	result := e.AdmitPersistenceObservation(newObservation)
-	if !result.Applied || result.Status.Policy == nil || *result.Status.Policy != newEpoch ||
-		result.Status.QualifiedLabels != 2 || result.Status.HeldLabels != 1 || result.Status.RevokedLabels != 1 {
-		t.Fatalf("new-generation label has stale provenance or counts: %+v", result)
+	e.SetOwnerLive(pol.Owner(), false)
+	e.ForgetOwner(pol.Owner())
+	if result := e.AdmitPersistenceObservation(second); result.Applied {
+		t.Fatalf("retired owner resurrected: %+v", result)
 	}
-	result.Status.Policy.Generation = 100
-	current, _ := e.PersistenceLearningStatusFor(pol.Owner())
-	if current.Policy == nil || *current.Policy != newEpoch {
-		t.Fatalf("admission result exposed mutable internal policy provenance: %+v", current)
+	if err := e.SetOwnerEpoch(newEpoch, true); err == nil {
+		t.Fatal("retired UID was reactivated")
 	}
 
-	reusedID := newObservation
-	reusedID.EvidenceID = oldObservation.EvidenceID
-	authority.allowed[reusedID.EvidenceID] = reusedID
-	if replay := e.AdmitPersistenceObservation(reusedID); replay.Applied || replay.Disposition != model.PersistenceDispositionConflict {
-		t.Fatalf("generation advance evicted prior lifecycle replay barrier: %+v", replay)
+	restarted := NewCoverageEngine()
+	restarted.Now = e.Now
+	restarted.PersistenceAuthority = authority
+	restarted.SetOwnerEpoch(newEpoch, true)
+	if result := restarted.AdmitPersistenceObservation(second); result.Applied || result.Reason != "observation does not match the current process epoch" {
+		t.Fatalf("prior-process evidence crossed restart boundary: %+v", result)
 	}
 }
 
-func TestPost25M106ShadowAndOwnerRecreationIsolation(t *testing.T) {
-	e, oldPolicy, authority, oldObservation := m106Fixture(t, 8)
-	shadow, err := e.DecideShadowChecked([]*model.WorkloadView{covView("m106-shadow", true, 2*time.Hour, false)}, oldPolicy)
-	if err != nil || len(shadow) != 1 {
-		t.Fatalf("shadow failed: decisions=%+v err=%v", shadow, err)
+func TestPost25M106CohortAndReplayBoundsDoNotEvict(t *testing.T) {
+	e, _, authority, template := m106Fixture(t)
+	for i := 0; i < model.ScopedOutcomeCohortCapacity; i++ {
+		o := m106Bind(authority, template, fmt.Sprintf("cohort-evidence-%d", i), fmt.Sprintf("cohort-operation-%d", i), model.PersistenceHeld)
+		o.Workload.OwnerUID = fmt.Sprintf("deployment-%d", i)
+		binding := authority.bindings[o.OperationID]
+		binding.Workload = o.Workload
+		authority.bindings[o.OperationID] = binding
+		authority.allowed[o.EvidenceID] = o
+		if result := e.AdmitPersistenceObservation(o); !result.Applied {
+			t.Fatalf("cohort %d refused early: %+v", i, result)
+		}
 	}
-	if e.Killchain.Memory.Tracked(oldPolicy.Owner()) || e.persistenceLearning[oldPolicy.Owner()] != nil {
-		t.Fatal("shadow seeded belief or observed-label state")
+	extra := m106Bind(authority, template, "cohort-extra", "cohort-extra-operation", model.PersistenceHeld)
+	extra.Workload.OwnerUID = "deployment-extra"
+	binding := authority.bindings[extra.OperationID]
+	binding.Workload = extra.Workload
+	authority.bindings[extra.OperationID] = binding
+	authority.allowed[extra.EvidenceID] = extra
+	if result := e.AdmitPersistenceObservation(extra); result.Applied || result.Disposition != model.PersistenceDispositionSaturated {
+		t.Fatalf("cohort capacity did not refuse without eviction: %+v", result)
 	}
-	if status := shadow[0].PersistenceLearning; status == nil || status.Source != authority.source ||
-		status.Disposition != model.PersistenceDispositionNoLabel || status.QualifiedLabels != 0 {
-		t.Fatalf("shadow did not report the read-only no-label state: %+v", status)
+	if result := e.AdmitPersistenceObservation(authority.allowed["cohort-evidence-0"]); result.Disposition != model.PersistenceDispositionDuplicate {
+		t.Fatalf("saturation evicted replay identity: %+v", result)
 	}
-	if !e.AdmitPersistenceObservation(oldObservation).Applied {
-		t.Fatal("old owner label did not apply")
-	}
-	e.SetOwnerLive(oldPolicy.Owner(), false)
-	e.ForgetOwner(oldPolicy.Owner())
-	if e.Killchain.Memory.Tracked(oldPolicy.Owner()) || e.persistenceLearning[oldPolicy.Owner()] != nil || e.persistenceEpochs[oldPolicy.Owner()] != (model.PolicyEpoch{}) {
-		t.Fatal("retirement retained owner learning state")
-	}
-	if stale := e.AdmitPersistenceObservation(oldObservation); stale.Applied || stale.Disposition != model.PersistenceDispositionRejected {
-		t.Fatalf("stale observation recreated retired owner: %+v", stale)
-	}
+}
 
-	newPolicy := oldPolicy
-	newPolicy.PolicyUID = "replacement-policy-uid"
-	newPolicy.PolicyGeneration = 1
-	newEpoch := model.PolicyEpoch{Namespace: newPolicy.Namespace, Name: newPolicy.PolicyName, UID: newPolicy.PolicyUID, Generation: newPolicy.PolicyGeneration}
-	e.SetOwnerLive(newPolicy.Owner(), true)
-	if err := e.SetOwnerEpoch(newEpoch, true); err != nil {
+func TestPost25M106ReplayCapacityDoesNotEvict(t *testing.T) {
+	e, _, authority, template := m106Fixture(t)
+	for i := 0; i < model.ScopedOutcomeEvidenceCapacity; i++ {
+		o := m106Bind(authority, template, fmt.Sprintf("evidence-%d", i), fmt.Sprintf("operation-%d", i), model.PersistenceUnknown)
+		if result := e.AdmitPersistenceObservation(o); !result.Applied {
+			t.Fatalf("evidence %d refused before the bound: %+v", i, result)
+		}
+	}
+	extra := m106Bind(authority, template, "evidence-extra", "operation-extra", model.PersistenceUnknown)
+	if result := e.AdmitPersistenceObservation(extra); result.Applied || result.Disposition != model.PersistenceDispositionSaturated {
+		t.Fatalf("replay capacity did not refuse without eviction: %+v", result)
+	}
+	if result := e.AdmitPersistenceObservation(authority.allowed["evidence-0"]); result.Disposition != model.PersistenceDispositionDuplicate {
+		t.Fatalf("replay saturation evicted an old identity: %+v", result)
+	}
+}
+
+func TestPost25M106StrictWireAndShadowReadDoNotAllocate(t *testing.T) {
+	e, pol, _, observation := m106Fixture(t)
+	raw, err := json.Marshal(observation)
+	if err != nil {
 		t.Fatal(err)
 	}
-	newObservation := oldObservation
-	newObservation.Policy = newEpoch
-	newObservation.EvidenceID = "replacement-evidence"
-	newObservation.OperationID = "replacement-operation"
-	binding := authority.bindings[oldObservation.OperationID]
-	binding.Policy, binding.OperationID = newEpoch, newObservation.OperationID
-	authority.bindings[newObservation.OperationID] = binding
-	authority.allowed[newObservation.EvidenceID] = newObservation
-	if result := e.AdmitPersistenceObservation(newObservation); !result.Applied || result.Status.QualifiedLabels != 1 {
-		t.Fatalf("replacement owner did not start a fresh lifecycle: %+v", result)
+	if _, err := DecodeScopedOutcomeObservation(append(raw, []byte(` {}`)...)); err == nil {
+		t.Fatal("accepted trailing JSON")
+	}
+	withUnknown := append(raw[:len(raw)-1], []byte(`,"prediction":true}`)...)
+	if _, err := DecodeScopedOutcomeObservation(withUnknown); err == nil {
+		t.Fatal("accepted unknown prediction field")
+	}
+	duplicate := append(raw[:len(raw)-1], []byte(`,"outcome":"revoked"}`)...)
+	if _, err := DecodeScopedOutcomeObservation(duplicate); err == nil {
+		t.Fatal("accepted duplicate categorical outcome")
+	}
+
+	newPolicy := pol
+	newPolicy.PolicyUID = "unregistered-policy"
+	report, allocated := e.ScopedOutcomeReportFor(newPolicy.Owner())
+	if allocated || len(report.Cohorts) != 0 || report.ReplayEntries != 0 {
+		t.Fatalf("shadow report allocated state: %+v allocated=%t", report, allocated)
+	}
+}
+
+func TestPost25M106LifetimeOwnerCapacityIncludesRetiredUIDs(t *testing.T) {
+	e := NewCoverageEngine()
+	for i := 0; i < model.ScopedOutcomeOwnerCapacity; i++ {
+		epoch := model.PolicyEpoch{Namespace: "ns", Name: fmt.Sprintf("policy-%d", i), UID: fmt.Sprintf("uid-%d", i), Generation: 1}
+		if err := e.SetOwnerEpoch(epoch, true); err != nil {
+			t.Fatalf("owner %d refused early: %v", i, err)
+		}
+	}
+	first := model.PolicyEpoch{Namespace: "ns", Name: "policy-0", UID: "uid-0", Generation: 1}
+	e.SetOwnerLive(first.Owner(), false)
+	e.ForgetOwner(first.Owner())
+	extra := model.PolicyEpoch{Namespace: "ns", Name: "extra", UID: "extra-uid", Generation: 1}
+	if err := e.SetOwnerEpoch(extra, true); err == nil {
+		t.Fatal("retirement evicted a lifetime UID and reopened capacity")
+	}
+	if _, allocated := e.ScopedOutcomeReportFor(extra.Owner()); allocated {
+		t.Fatal("capacity refusal allocated an unbounded owner")
+	}
+	report, allocated := e.ScopedOutcomeReportFor(first.Owner())
+	if !allocated || report.LifetimeOwners != model.ScopedOutcomeOwnerCapacity {
+		t.Fatalf("retired replay tombstone was lost: %+v", report)
 	}
 }

@@ -205,6 +205,14 @@ type Manager struct {
 	// CurrentInventory is bounded, expiring evidence for explicitly configured
 	// synthetic protected versions. Nil keeps current inventory unavailable.
 	CurrentInventory currentinventory.Ledger
+	// ScopedOutcomeProducer is an optional reporting-only synthetic session
+	// observer. Its operation hook and Drain are nonblocking; unavailable or full
+	// reporting never delays or suppresses defensive dispatch.
+	ScopedOutcomeProducer interface {
+		decision.PersistenceObservationAuthority
+		RecordNativeRotate(model.Policy, *model.WorkloadView, actuator.Request, actuator.Result, time.Time) bool
+		Drain(int) []model.ScopedOutcomeDelivery
+	}
 	// LossHistoryReader performs optional completed-disclosure authority and
 	// replacement-owner reads under a separate bounded context. Production sets
 	// it to the uncached API reader; a stall cannot consume the actuation tick.
@@ -858,6 +866,13 @@ func (m *Manager) syncOwnerLiveness() {
 	registerCoverageOwnerEpochs(ce, epochs)
 }
 
+func (m *Manager) drainScopedOutcomes(limit int) []model.ScopedOutcomeDelivery {
+	if m.ScopedOutcomeProducer == nil || limit <= 0 {
+		return nil
+	}
+	return m.ScopedOutcomeProducer.Drain(limit)
+}
+
 // registerCoverageOwnerEpochs is shared by the controller sync seam and the
 // actual tick snapshot. A future observed-outcome adapter therefore cannot see
 // a different policy identity depending on which manager path established it.
@@ -1202,6 +1217,16 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	sortDuePolicies(due)
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		registerCoverageOwnerEpochs(ce, liveEpochs)
+		if m.ScopedOutcomeProducer != nil {
+			ce.PersistenceAuthority = m.ScopedOutcomeProducer
+		}
+		for _, delivery := range m.drainScopedOutcomes(32) {
+			if delivery.Observation != nil {
+				ce.AdmitPersistenceObservation(*delivery.Observation)
+			} else {
+				ce.RecordScopedOutcomeUnavailable(delivery.Policy, delivery.Reason)
+			}
+		}
 	}
 	// The epochs captured with `due` travel with this tick: a producer that writes back
 	// later compares against them, so a replacement that happened mid-tick cannot be
@@ -3115,6 +3140,14 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		// additionally require a coherent result.
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
+		}
+		if err == nil && res.Emitted && !contradictoryDisposition && disposition == actuator.NoEffectUnknown &&
+			res.MutationKind == "forward-only" && res.RollbackRef == "" && len(res.ObjectsTouched) == 1 &&
+			res.ObjectsTouched[0] == "Pod/"+request.Namespace+"/"+request.Pod && decisions[i].Action == model.ActionRotate &&
+			m.Actuator.Name() == "native" && m.ScopedOutcomeProducer != nil {
+			// The producer hook only binds a previously authenticated synthetic
+			// session. It queues work without network or durable I/O on this tick.
+			m.ScopedOutcomeProducer.RecordNativeRotate(pol, v, request, res, time.Now())
 		}
 		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil || disposition == actuator.NoEffectRefused || contradictoryDisposition {

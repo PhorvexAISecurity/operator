@@ -27,7 +27,9 @@ func ProductionParameterManifest() model.DecisionParameterManifest {
 		"economics.fixed-beta.maximum":              model.MaxDisruptionAversion,
 		"decision.exact-search.work-budget":         exactWorkBudget,
 		"decision.local-search.maximum-iterations":  localSearchMaxIter,
-		"decision.persistence.dedup-capacity":       defaultPersistenceDedupLimit,
+		"decision.scoped-outcome.evidence-capacity": float64(model.ScopedOutcomeEvidenceCapacity),
+		"decision.scoped-outcome.cohort-capacity":   float64(model.ScopedOutcomeCohortCapacity),
+		"decision.scoped-outcome.owner-capacity":    float64(model.ScopedOutcomeOwnerCapacity),
 		"platform.co-residency.namespace-count-cap": model.PlatformCoResidencyCap,
 		"platform.epss.aggregate-percentile":        model.PlatformEPSSAggregatePercentile,
 		"platform.rarity.minimum":                   model.PlatformRarityMinimum,
@@ -79,9 +81,9 @@ func describeParameter(name string) parameterDescriptor {
 	case strings.HasPrefix(name, "decision.exact-search.") || strings.HasPrefix(name, "decision.local-search."):
 		d = parameterDescriptor{"selection-computation", "operations", "positive integer", "internal/decision/optimality.go and localsearch.go", model.ParameterConfigurationBound,
 			"Deterministic computation bound; it is not a quality or optimality calibration.", "selection-algorithm"}
-	case name == "decision.persistence.dedup-capacity":
-		d = parameterDescriptor{"observed-outcome-learning", "evidence IDs", "positive integer", "internal/decision/persistence_observation.go", model.ParameterConfigurationBound,
-			"Non-evicting replay barrier capacity; saturation refuses new learning rather than changing decision evidence.", "persistence-learning"}
+	case strings.HasPrefix(name, "decision.scoped-outcome."):
+		d = parameterDescriptor{"scoped-outcome-reporting", "entries", "positive integer", "internal/model/scoped_outcome.go", model.ParameterConfigurationBound,
+			"Non-evicting reporting bound; saturation refuses new evidence, cohorts, or owner lifecycles and never changes decision evidence.", "scoped-outcome-reporting"}
 	case name == "platform.co-residency.namespace-count-cap":
 		d = parameterDescriptor{"dispersion", "running namespaces", "(0,+Inf)", "internal/model/parameters.go:PlatformCoResidencyCap", model.ParameterExpertPrior,
 			"Historical namespace-count proxy; does not prove tenancy or device sharing.", "dispersion"}
