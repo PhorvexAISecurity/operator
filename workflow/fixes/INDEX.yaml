@@ -1372,7 +1372,7 @@ fixes:
     issues:
     - M-44
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: post25-m044-route-claims
