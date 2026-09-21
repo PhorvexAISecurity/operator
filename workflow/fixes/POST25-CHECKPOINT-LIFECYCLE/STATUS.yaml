@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -89,12 +89,28 @@ checks:
     - build/test-harness/cmd/harness
     - build/test-harness/internal/core
     inputs_sha256: 9073fa2c6b4e7b7b638d871fc36e717cc9542a86a8e1e17961e26e933484d1c0
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1787a414e42fe94081da216b40fbff1c3ccf0ab7ca87cc704e00d58df76ff4a7
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:03:13+00:00'
+    baseline_sha: c6f1b9ca78e2bcbbf693dbfbb13d6fcbeebabf2a
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 3970e729743a28fc4bf5bbe2475f06816f4337065877cf3e897478db8b3861a2
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:03:13+00:00'
+    incident_sha256: 1787a414e42fe94081da216b40fbff1c3ccf0ab7ca87cc704e00d58df76ff4a7
 fix_id: POST25-CHECKPOINT-LIFECYCLE
 issues:
 - M-170
 title: Preserve the external checkpoint fixture across harness cleanup
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -139,7 +155,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -159,10 +175,10 @@ residuals:
 - External exact-UID collector remains responsible for archive, cluster-scoped PV
   and StorageClass cleanup, holder deletion, path-absence proof and namespace deletion.
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T14:02:24+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T14:03:17+00:00'
 follow_up_to: POST25-CHECKPOINT-LOCAL-FIXTURE
 configuration_history:
 - at: '2026-09-21T06:21:46+00:00'
@@ -239,13 +255,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T14:03:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T14:03:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-CHECKPOINT-LIFECYCLE:12:submit
-  from: post25-catalogue
+  id: POST25-CHECKPOINT-LIFECYCLE:13:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 12
+  role: coordinator
+  kind: review
+  revision: 13
 check_history:
 - check: preflight
   result: PASS
