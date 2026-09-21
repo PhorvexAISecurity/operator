@@ -1471,3 +1471,15 @@ fixes:
     stacked_on: []
     branch: fix/t9-m071
     head_sha: b74bc120430d1562e4b1e18a59f5d769b1820622
+  POST25-CHECKPOINT-LIFECYCLE:
+    directory: fixes/POST25-CHECKPOINT-LIFECYCLE
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on:
+    - POST25-M054
+    branch: post25-checkpoint-lifecycle
+    head_sha: 8550078fba949ff19d33f4af791bb9204b99d92b
