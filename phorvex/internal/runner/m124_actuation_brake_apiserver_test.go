@@ -184,8 +184,8 @@ func TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch(t *testing.T) {
 
 	m124SetAnnotation(t, c, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "m124", Name: "api"}}, actuationbrake.PodOptOutAnnotation, "false")
 	phoenixManager := &Manager{Actuator: actuator.NewPhoenixActuator(c), BoundaryReader: c, Intents: exposure.NewIntents(), Log: logr.Discard()}
-	phoenixPolicy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
-	phoenixDecision := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionRotate, Trace: &model.DecisionTraceV2{}}}
+	phoenixPolicy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
+	phoenixDecision := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionQuarantine, Trace: &model.DecisionTraceV2{}}}
 	if got := phoenixManager.actuate(ctx, entry, phoenixPolicy, phoenixDecision, view); got != 1 || !phoenixDecision[0].Actuated {
 		t.Fatalf("Phoenix positive control got=%d decision=%+v trace=%+v", got, phoenixDecision[0], phoenixDecision[0].Trace)
 	}
@@ -194,8 +194,20 @@ func TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch(t *testing.T) {
 		t.Fatalf("actual Phoenix event count=%d err=%v", len(events.Items), err)
 	}
 
+	// Pure Phoenix must visibly refuse bounded rotate before a SecurityEvent. This
+	// is the migration boundary: deployments needing rotate select native or hybrid.
+	unsupportedRotatePolicy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	unsupportedRotate := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionRotate, Trace: &model.DecisionTraceV2{}}}
+	if got := phoenixManager.actuate(ctx, entry, unsupportedRotatePolicy, unsupportedRotate, view); got != 0 || unsupportedRotate[0].Actuated || unsupportedRotate[0].DispatchOutcome != model.DispatchRefused || unsupportedRotate[0].Phoenix != nil {
+		t.Fatalf("pure Phoenix bounded rotate was not explicitly refused: got=%d decision=%+v", got, unsupportedRotate[0])
+	}
+	events = amtdv1beta1.SecurityEventList{}
+	if err := c.List(ctx, &events, client.InNamespace("m124")); err != nil || len(events.Items) != 1 {
+		t.Fatalf("unsupported Phoenix rotate emitted an event: count=%d err=%v", len(events.Items), err)
+	}
+
 	m124SetAnnotation(t, c, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "m124"}}, actuationbrake.NamespaceDryRunAnnotation, " yes ")
-	blockedPhoenix := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionRotate, Trace: &model.DecisionTraceV2{}}}
+	blockedPhoenix := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionQuarantine, Trace: &model.DecisionTraceV2{}}}
 	if got := phoenixManager.actuate(ctx, entry, phoenixPolicy, blockedPhoenix, view); got != 0 || blockedPhoenix[0].DryRunCause != actuationbrake.NamespaceDryRunEngaged {
 		t.Fatalf("namespace dry-run Phoenix refusal got=%d decision=%+v", got, blockedPhoenix[0])
 	}

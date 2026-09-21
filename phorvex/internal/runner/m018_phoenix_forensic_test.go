@@ -120,7 +120,7 @@ func m018PolicyEntry(namespace string) *policyEntry {
 
 func m018SelectedDecision(namespace, pod string) []model.Decision {
 	return []model.Decision{{
-		Selected: true, Feasible: true, Action: model.ActionRotate,
+		Selected: true, Feasible: true, Action: model.ActionQuarantine,
 		Namespace: namespace, Pod: pod,
 		Trace: &model.DecisionTraceV2{
 			DispatchOutcome: model.DispatchNotAttempted, DispatchReason: "pending-dispatch",
@@ -173,7 +173,7 @@ func TestM018PhoenixForensicIdentifiersReachTheAuditRecord(t *testing.T) {
 	m := &Manager{Actuator: pa, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &buf)}
 	pol := model.Policy{
 		Tenant: "team-a", MinAvailableReplicas: 1,
-		EnabledActions: map[model.Action]bool{model.ActionRotate: true},
+		EnabledActions: map[model.Action]bool{model.ActionQuarantine: true},
 	}
 	ds := m018SelectedDecision("ns", "p1")
 
@@ -209,7 +209,7 @@ func TestM018PhoenixForensicIdentifiersReachTheAuditRecord(t *testing.T) {
 		"amtdNamespace":   "ns",                // the AMTD is namespaced; the event is cluster-scoped
 		"eventName":       created.Name,        // server-assigned via GenerateName
 		"eventUID":        created.UID,         // server-assigned; the only same-name-safe identity
-		"ruleType":        actuator.RuleTypeRotate,
+		"ruleType":        actuator.RuleTypeQuarantine,
 		"ruleThreatLevel": actuator.RuleThreatLevel,
 		"ruleSource":      actuator.RuleSource,
 	}
@@ -258,15 +258,15 @@ func (f *m018PartialActuator) SupportsAction(context.Context, model.Action, actu
 
 func m018Policy() model.Policy {
 	return model.Policy{Tenant: "team-a", MinAvailableReplicas: 1,
-		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+		EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
 }
 
 func TestM018PartialResultWithErrorKeepsFactsAndFailureOutcome(t *testing.T) {
 	fa := &m018PartialActuator{
 		res: actuator.Result{
 			Actuator: "phoenix", AMTDName: "phorvex-ns-team-a",
-			EventName: "phorvex-rotate-abc12", EventUID: "uid-partial-1",
-			RuleType: actuator.RuleTypeRotate, RuleThreatLevel: actuator.RuleThreatLevel,
+			EventName: "phorvex-quarantine-abc12", EventUID: "uid-partial-1",
+			RuleType: actuator.RuleTypeQuarantine, RuleThreatLevel: actuator.RuleThreatLevel,
 			RuleSource: actuator.RuleSource,
 			Emitted:    false,
 		},
@@ -431,7 +431,7 @@ func TestM018SameNameDifferentUIDStayDistinct(t *testing.T) {
 				return err
 			}
 			if _, isEvent := obj.(*amtdv1beta1.SecurityEvent); isEvent {
-				obj.SetName("phorvex-rotate-collide") // same name both times
+				obj.SetName("phorvex-quarantine-collide") // same name both times
 				obj.SetUID(types.UID(uids[creates%len(uids)]))
 				creates++
 			}
@@ -470,7 +470,7 @@ func TestM018NoCarryoverAcrossTenantsAndNamespaces(t *testing.T) {
 	payloads := make([]model.PhoenixForensics, 0, len(runs))
 	for _, r := range runs {
 		pol := model.Policy{Tenant: r.tenant, MinAvailableReplicas: 1,
-			EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+			EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
 		ds := m018SelectedDecision(r.ns, "p1")
 		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry(r.ns), pol, ds, m018TickView(r.ns, "p1")); n != 1 {
 			t.Fatalf("%s/%s actuated %d, want 1", r.ns, r.tenant, n)
@@ -498,8 +498,8 @@ func TestM018NoCarryoverAcrossTenantsAndNamespaces(t *testing.T) {
 func TestM018AMTDNamespaceIsNotGuessedWithoutAnAMTD(t *testing.T) {
 	fa := &m018PartialActuator{
 		res: actuator.Result{
-			Actuator: "phoenix", EventName: "phorvex-rotate-noamtd", EventUID: "uid-no-amtd",
-			RuleType: actuator.RuleTypeRotate, Emitted: true,
+			Actuator: "phoenix", EventName: "phorvex-quarantine-noamtd", EventUID: "uid-no-amtd",
+			RuleType: actuator.RuleTypeQuarantine, Emitted: true,
 		},
 	}
 	m := &Manager{Actuator: fa, Log: logr.Discard()}
