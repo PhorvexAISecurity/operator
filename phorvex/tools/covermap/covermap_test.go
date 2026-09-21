@@ -16,6 +16,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -268,8 +269,11 @@ func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {
 		if got := coverOf(r, model.ActionIdentityRotate); len(got) != 0 {
 			t.Errorf("%s: identity-rotate must be coverless, got %v", id, got)
 		}
-		if got := coverOf(r, model.ActionRouteRotate); strings.Join(got, ",") != recon.FactNetworkIdentity {
-			t.Errorf("%s: route-rotate cover must be exactly {networkIdentity}, got %v", id, got)
+		if got := coverOf(r, model.ActionRouteRotate); len(got) != 0 {
+			t.Errorf("%s: route-rotate must be coverless because selector changes retain locators, got %v", id, got)
+		}
+		if got := coverOf(r, model.ActionQuarantine); !slices.Contains(got, recon.FactNetworkIdentity) {
+			t.Errorf("%s: qualified quarantine must retain networkIdentity cover, got %v", id, got)
 		}
 		if got := coverOf(r, model.ActionWarmSwap); len(got) > 0 && strings.Join(got, ",") != "inMemory,podIdentity,session" {
 			t.Errorf("%s: warm-swap may cover only the old-process facts, got %v", id, got)

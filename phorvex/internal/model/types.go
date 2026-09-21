@@ -70,7 +70,9 @@ const (
 	IdentityRotateUnsupportedReason        = "identity-rotate declared-only: epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
 	// ActionRouteRotate re-keys `phorvex.ai/route-key` on the pod and restitches the
 	// selector of its explicitly declared `phorvex.ai/route-service` (advanced K8s;
-	// native-only). It returns Emitted=false when that deployment contract is absent.
+	// native-only). This changes endpoint membership while retaining the Pod UID/IP and
+	// stable Service UID/ClusterIP/DNS locator. It returns Emitted=false when that
+	// deployment contract is absent.
 	ActionRouteRotate Action = "route-rotate"
 	// ActionWarmSwap rotates WITHOUT the cold-load: provision a Ready warm replacement
 	// then retire (provision-before-retire). ColdLoadSec validation: PHORVEXSEC-87.

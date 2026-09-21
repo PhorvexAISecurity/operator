@@ -103,11 +103,10 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
-	// route-rotate earns this cover only because its successful path re-keys the pod's route label
-	// and restitches the explicitly declared Service selector, compensating if the second write
-	// fails. Missing deployment
-	// contract returns Emitted=false and receives no actuation credit.
-	cover[model.ActionRouteRotate] = append(cover[model.ActionRouteRotate], nid.Key())
+	// route-rotate deliberately receives no cover. Its successful path changes endpoint
+	// selection membership by re-keying a Pod label and restitching a Service selector,
+	// while retaining the old Pod UID/IP and the stable Service UID/ClusterIP/DNS locator.
+	// A client that already knows either locator has not had that knowledge invalidated.
 	maxUrg, _ := clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	latUrg := 0.5 + 0.5*maxUrg
 	for _, nb := range fctx.Neighbors {

@@ -188,7 +188,7 @@ func Fixtures() []Fixture {
 			Events: []EventSpec{{Type: typ, TargetsPod: targetsPod, Trust: "trusted", AgeSeconds: age}}}
 	}
 	return []Fixture{
-		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts and the rotate/quarantine/route-rotate grants only.",
+		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts, rotate process-state grants and the quarantine network grant; route selector changes are coverless.",
 			Pod: PodSpec{Namespace: ns, Name: "plain", Node: "node-a"}, Ctx: unit},
 		{Name: "stateful", Why: "Stateful CPU pod without a serving endpoint: the session fact reaches full weight but neither endpoint-dependent eraser earns cover.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},

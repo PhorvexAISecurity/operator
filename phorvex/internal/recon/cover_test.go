@@ -23,12 +23,11 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	fctx := FactContext{AssetValue: 1, PHold: 1, StageUrgency: 1, LateralUrgency: 1, HasGPU: true,
 		Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}
 
-	// (1) generic pod — rotate, quarantine and a successfully restitched route really do
-	// invalidate recon, so they must have cover.
+	// (1) generic pod — rotate and quarantine have supported invalidation effects.
 	generic := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "web"}}
 	genericFacts := prof.AssetFacts(generic, fctx)
 	gc := genericFacts.CoverByAction
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine, model.ActionRouteRotate} {
+	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
 		if len(gc[a]) == 0 {
 			t.Errorf("generic pod: %q has EMPTY cover set — optimizer can never select it", a)
 		}
@@ -38,14 +37,22 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 		genericByKey[fact.Key()] = fact.Kind
 	}
 	routeCover := gc[model.ActionRouteRotate]
-	if len(routeCover) != 1 || genericByKey[routeCover[0]] != FactNetworkIdentity {
-		t.Errorf("route-rotate cover = %v, want exactly {%s}", routeCover, FactNetworkIdentity)
+	if len(routeCover) != 0 {
+		t.Errorf("route-rotate cover = %v, want empty because selector membership retains Pod and Service locators", routeCover)
+	}
+	quarantineCover := gc[model.ActionQuarantine]
+	networkCovered := false
+	for _, key := range quarantineCover {
+		networkCovered = networkCovered || genericByKey[key] == FactNetworkIdentity
+	}
+	if !networkCovered {
+		t.Errorf("quarantine cover = %v, missing %s positive control", quarantineCover, FactNetworkIdentity)
 	}
 
 	// (1b) identity-rotate remains coverless. It writes an inert identity-epoch label and
 	// changes neither the projected ServiceAccount token nor the pod UID/IP. route-rotate
-	// moved back to the positive assertion above in the same change that implemented its
-	// real Service-selector restitch.
+	// is likewise coverless because its real Service-selector restitch retains both Pod
+	// and stable Service locators.
 	if got := gc[model.ActionIdentityRotate]; len(got) != 0 {
 		t.Errorf("identity-rotate claims cover %v, but it changes no identity or credential fact", got)
 	}
@@ -160,7 +167,7 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 
 // TestActionDocCommentsDoNotClaimUnearnedEffects binds the model/types.go doc comments to what the
 // handlers actually do. identity-rotate must never claim token/UID/IP invalidation, while
-// route-rotate may claim a Service-selector restitch only because that mechanism now exists.
+// route-rotate may claim only its implemented Service-selector membership restitch.
 func TestActionDocCommentsDoNotClaimUnearnedEffects(t *testing.T) {
 	src, err := os.ReadFile("../model/types.go")
 	if err != nil {
