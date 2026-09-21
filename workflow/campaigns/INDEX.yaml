@@ -18,5 +18,5 @@ campaigns:
     profile: workflow-v2
   2026-09-20-post25-live:
     directory: campaigns/2026-09-20-post25-live
-    state: ANALYZING
+    state: RUNNING
     profile: workflow-v2
