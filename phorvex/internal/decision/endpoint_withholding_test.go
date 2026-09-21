@@ -22,7 +22,14 @@ func TestEndpointPathWithheldThroughSelection(t *testing.T) {
 				}
 				v.Pod.RouteService = route
 				p := covPolicy(1)
-				p.EnabledActions = map[model.Action]bool{model.ActionEndpointRotate: true, model.ActionRouteRotate: control}
+				// Keep both locator-retaining selector actions enabled in every arm. The
+				// control independently enables quarantine, whose network reachability
+				// effect remains legitimately covered and selectable.
+				p.EnabledActions = map[model.Action]bool{
+					model.ActionEndpointRotate: true,
+					model.ActionRouteRotate:    true,
+					model.ActionQuarantine:     control,
+				}
 				e := NewCoverageEngine()
 				var ok bool
 				e.Recon, ok = recon.Registry.Get("ucw-recon")
@@ -43,14 +50,14 @@ func TestEndpointPathWithheldThroughSelection(t *testing.T) {
 				if !found {
 					t.Fatal("real producer did not retain weighted endpoint audit fact")
 				}
-				excluded := false
+				excluded := map[model.Action]bool{}
 				for _, ex := range set.Excluded {
-					if ex.Action == model.ActionEndpointRotate && ex.Reason == "recon-cover: action invalidates no facts for this asset" {
-						excluded = true
+					if ex.Reason == "recon-cover: action invalidates no facts for this asset" {
+						excluded[ex.Action] = true
 					}
 				}
-				if !excluded {
-					t.Errorf("missing structural no-cover exclusion: %+v", set.Excluded)
+				if !excluded[model.ActionEndpointRotate] || !excluded[model.ActionRouteRotate] {
+					t.Errorf("missing structural locator-retaining no-cover exclusions: %+v", set.Excluded)
 				}
 				for _, c := range set.Candidates {
 					for _, k := range c.CoverKeys {
@@ -64,8 +71,8 @@ func TestEndpointPathWithheldThroughSelection(t *testing.T) {
 				for _, d := range ds {
 					if d.Selected {
 						selected++
-						if d.Action != model.ActionRouteRotate {
-							t.Errorf("selected unsupported action %s", d.Action)
+						if d.Action != model.ActionQuarantine {
+							t.Errorf("selected locator-retaining action %s instead of quarantine control", d.Action)
 						}
 					}
 				}

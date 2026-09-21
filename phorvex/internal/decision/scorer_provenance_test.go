@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/recon"
 )
 
 // scorer_provenance_test.go — PHORVEXSEC-196 / M-110, the three call-site corrections.
@@ -118,22 +119,25 @@ func TestFallbackActionUsesTheSameProvenancedScore(t *testing.T) {
 	pol := covPolicy(0)
 	pol.ProactiveFloor = 15 * time.Minute
 	pol.AntiOverRotationWindow = 90 * time.Second
-	// Non-AI, epoch-clocked actions (networkIdentity / routeKey / identity): on a fresh UNACTUATED
-	// pod their epoch markers are absent, so the M-28 cadence cap fail-OPENs and each is a feasible,
-	// provenance-discounted candidate with its own cover/cost — the ≥2-differing-cost shape this
-	// site needs. (Pre-M-28 rotate carried the large cover here, but rotate reads podIdentity, which
-	// a fresh pod HAS, so the cap now vetoes it — the provenance floor governs the first move of the
-	// epoch-clocked actions instead.)
+	// Two legitimately covered, epoch-clocked actions from the real UCW producer provide the
+	// differing-cover/differing-cost shape this scorer test needs. Their per-action epoch markers
+	// are absent on this fresh UNACTUATED serving pod, so M-28 fail-opens and the provenance floor
+	// governs the first move. Route-rotate is deliberately absent: selector membership no longer
+	// claims locator invalidation under M44.
 	pol.EnabledActions = map[model.Action]bool{
-		model.ActionQuarantine:     true,
-		model.ActionRouteRotate:    true,
-		model.ActionIdentityRotate: true,
+		model.ActionQuarantine:      true,
+		model.ActionGuardrailRotate: true,
 	}
 	asset := covView("attacked", true, 90*time.Second, false) // fresh → prov < 1
 	asset.ExposureByVariable = realisticClocks(90 * time.Second)
-	// Keep the default neighbor so quarantine carries the LARGER cover (networkIdentity + lateral
-	// edge) AND the larger cost, while route-rotate carries a single-fact cover at a smaller cost —
-	// the shape where a per-asset provenance discount flips the standalone argmax.
+	asset.Pod.ModelID = "served-model"
+	var ok bool
+	probe.Recon, ok = recon.Registry.Get("ucw-recon")
+	if !ok {
+		t.Fatal("missing real UCW producer")
+	}
+	// Keep the default neighbor so quarantine carries the larger network+edge cover while the
+	// serving producer supplies guardrail-bypass cover to guardrail-rotate.
 	set, ctx := probe.AssembleSet([]*model.WorkloadView{asset}, pol)
 	prov := provFn(ctx, pol.ProactiveFloor.Seconds())("ns/attacked")
 	type cand struct {
@@ -176,6 +180,7 @@ func TestFallbackActionUsesTheSameProvenancedScore(t *testing.T) {
 	}
 	e := NewCoverageEngine()
 	e.Now = probe.Now
+	e.Recon = probe.Recon
 	pol.Lambda = lambda
 	d := e.Decide([]*model.WorkloadView{asset}, pol)[0]
 	if d.Selected {
