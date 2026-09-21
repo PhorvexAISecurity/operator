@@ -73,7 +73,7 @@ python3 workflow/tools/workflow.py brief T1-M160 --agent k3
 | Readable anatomy | generated `anatomy/ANATOMY.md` |
 | Current deployed release | `releases/CURRENT.yaml` |
 | Main/release reconciliation | `releases/<sync-id>/STATUS.yaml` |
-| Per-fix current state | `fixes/*/STATUS.yaml` |
+| Per-fix current state | `fixes/*/STATUS.yaml` (discovered through the static `fixes/INDEX.yaml` marker) |
 | Campaign state | `campaigns/*/STATUS.yaml` |
 | Evidence provenance | each record's `evidence/manifest.yaml` |
 | Notifications | `coordination/`; never authoritative |
