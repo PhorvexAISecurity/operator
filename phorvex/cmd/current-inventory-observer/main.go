@@ -72,7 +72,7 @@ func main() {
 	if err != nil {
 		fatalf("load client identity: %v", err)
 	}
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, Certificates: []tls.Certificate{certificate}, ServerName: serverName}}, Timeout: timeout}
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, Certificates: []tls.Certificate{certificate}, ServerName: serverName}}, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{clientgoscheme.AddToScheme, v1alpha1.AddToScheme, amtdv1beta1.AddToScheme} {
 		if err := add(scheme); err != nil {
@@ -87,7 +87,8 @@ func main() {
 	if err != nil {
 		fatalf("create Kubernetes client: %v", err)
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	var policy v1alpha1.PhorvexPolicy
 	if err := kube.Get(ctx, client.ObjectKey{Namespace: policyNS, Name: policyName}, &policy); err != nil {
 		fatalf("read policy: %v", err)

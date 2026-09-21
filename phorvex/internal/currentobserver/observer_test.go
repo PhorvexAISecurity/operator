@@ -97,11 +97,19 @@ func TestM100CurrentObserverBindsAuthoritativeBytesAndRejectsManifestMismatch(t 
 	sum := sha256.Sum256([]byte("v2"))
 	digest := hex.EncodeToString(sum[:])
 	var responseMode atomic.Int32
+	var redirectedRequests atomic.Int32
 	ca, caKey, roots := m100CurrentCertificateAuthority(t)
 	serverCert := m100CurrentLeafCertificate(t, ca, caKey, "current.test", x509.ExtKeyUsageServerAuth)
 	observerCert := m100CurrentLeafCertificate(t, ca, caKey, "observer.test", x509.ExtKeyUsageClientAuth)
 	wrongCert := m100CurrentLeafCertificate(t, ca, caKey, "other.test", x509.ExtKeyUsageClientAuth)
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect" {
+			http.Redirect(w, r, "/redirect-target", http.StatusFound)
+			return
+		}
+		if r.URL.Path == "/redirect-target" {
+			redirectedRequests.Add(1)
+		}
 		d := digest
 		if responseMode.Load() == 1 {
 			d = strings.Repeat("0", 64)
@@ -142,5 +150,14 @@ func TestM100CurrentObserverBindsAuthoritativeBytesAndRejectsManifestMismatch(t 
 	cfg.EvidenceID = "duplicate"
 	if _, err := ObserveOnce(ctx, kube, verifiedClient, cfg, func() time.Time { return now }); err == nil {
 		t.Fatal("duplicate manifest field accepted")
+	}
+	responseMode.Store(0)
+	cfg.EvidenceID = "redirect"
+	cfg.URL = server.URL + "/redirect"
+	if _, err := ObserveOnce(ctx, kube, verifiedClient, cfg, func() time.Time { return now }); err == nil {
+		t.Fatal("redirecting manifest endpoint accepted")
+	}
+	if redirectedRequests.Load() != 0 {
+		t.Fatalf("manifest client followed redirect before rejecting final URL: requests=%d", redirectedRequests.Load())
 	}
 }

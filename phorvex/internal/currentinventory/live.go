@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"path"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -67,6 +68,7 @@ func BindingFor(pod *corev1.Pod, cm *corev1.ConfigMap, key, volumeName, containe
 		return model.CurrentInventorySourceBinding{}, errors.New("ConfigMap key projection mismatch")
 	}
 	mounted := false
+	projectedFile := path.Join(mountPath, projectedPath)
 	for i := range pod.Spec.Containers {
 		c := &pod.Spec.Containers[i]
 		if c.Name != containerName {
@@ -74,7 +76,18 @@ func BindingFor(pod *corev1.Pod, cm *corev1.ConfigMap, key, volumeName, containe
 		}
 		for _, m := range c.VolumeMounts {
 			if m.Name == volumeName && m.MountPath == mountPath && m.ReadOnly && m.SubPath == "" && m.SubPathExpr == "" {
+				if mounted {
+					return model.CurrentInventorySourceBinding{}, errors.New("target container has ambiguous exact ConfigMap mounts")
+				}
 				mounted = true
+				continue
+			}
+			// A second mount at the projected file or any of its parent directories
+			// shadows the bytes from the asserted ConfigMap mount. A sibling or a
+			// descendant below the file cannot replace that exact file.
+			other := path.Clean(m.MountPath)
+			if other == "/" || other == projectedFile || strings.HasPrefix(projectedFile, other+"/") {
+				return model.CurrentInventorySourceBinding{}, errors.New("another volume mount shadows projected ConfigMap file")
 			}
 		}
 	}

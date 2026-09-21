@@ -82,7 +82,11 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := httpClient.Do(req)
+	requestClient := *httpClient
+	requestClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := requestClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

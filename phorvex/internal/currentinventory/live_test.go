@@ -40,4 +40,25 @@ func TestM100CurrentInventoryRequiresExactReadOnlyMountedSource(t *testing.T) {
 	if _, err := BindingFor(duplicatePath, cm, "payload", "data", "server", "/data", "payload"); err == nil {
 		t.Fatal("duplicate ConfigMap destination projection accepted")
 	}
+	duplicateMount := pod.DeepCopy()
+	duplicateMount.Spec.Containers[0].VolumeMounts = append(duplicateMount.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "data", MountPath: "/data", ReadOnly: true})
+	if _, err := BindingFor(duplicateMount, cm, "payload", "data", "server", "/data", "payload"); err == nil {
+		t.Fatal("ambiguous duplicate source mount accepted")
+	}
+	shadowFile := pod.DeepCopy()
+	shadowFile.Spec.Containers[0].VolumeMounts = append(shadowFile.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "scratch", MountPath: "/data/payload", ReadOnly: true})
+	if _, err := BindingFor(shadowFile, cm, "payload", "data", "server", "/data", "payload"); err == nil {
+		t.Fatal("mount shadowing exact projected file accepted")
+	}
+	nested := pod.DeepCopy()
+	nested.Spec.Volumes[0].ConfigMap.Items = []corev1.KeyToPath{{Key: "payload", Path: "nested/payload"}}
+	nested.Spec.Containers[0].VolumeMounts = append(nested.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "scratch", MountPath: "/data/nested", ReadOnly: true})
+	if _, err := BindingFor(nested, cm, "payload", "data", "server", "/data", "nested/payload"); err == nil {
+		t.Fatal("mount shadowing parent of projected file accepted")
+	}
+	sibling := pod.DeepCopy()
+	sibling.Spec.Containers[0].VolumeMounts = append(sibling.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "scratch", MountPath: "/data/other", ReadOnly: true})
+	if _, err := BindingFor(sibling, cm, "payload", "data", "server", "/data", "payload"); err != nil {
+		t.Fatalf("valid sibling mount rejected: %v", err)
+	}
 }

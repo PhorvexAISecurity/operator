@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -154,7 +155,15 @@ func representationHistoryInputsWithStores(ctx context.Context, reader client.Re
 			kept := entry.current.Records[:0]
 			for _, record := range entry.current.Records {
 				inv := record.Inventory
-				if inv.PolicyEpoch.Generation != p.PolicyGeneration || inv.ProtectedScope.Tenant != p.Tenant || inv.DecisionAsset.Namespace != d.Namespace || inv.DecisionAsset.Name != d.Pod || inv.DecisionAsset.TargetUID != versions[key] || inv.StableWorkloadOwner != stable {
+				// Query is stable-owner scoped and can return records for sibling
+				// replicas. A sibling is not evidence about this decision and must
+				// neither qualify nor poison it. A record for this exact logical Pod
+				// name remains relevant: a UID or other binding change is a stale
+				// current claim and is surfaced as unresolved below.
+				if inv.DecisionAsset.Namespace != d.Namespace || inv.DecisionAsset.Name != d.Pod {
+					continue
+				}
+				if inv.PolicyEpoch.Generation != p.PolicyGeneration || inv.ProtectedScope.Tenant != p.Tenant || inv.DecisionAsset.TargetUID != versions[key] || inv.StableWorkloadOwner != stable {
 					entry.gaps = append(entry.gaps, "current-inventory-current-binding-mismatch:"+inv.EvidenceID)
 					entry.currentUnknown = append(entry.currentUnknown, model.RepresentationGap{Scope: inv.ProtectedScope, Kind: model.CurrentInventoryClass, Reason: "current-inventory-current-binding-mismatch"})
 					continue
@@ -186,6 +195,22 @@ func representationHistoryInputsWithStores(ctx context.Context, reader client.Re
 			for _, record := range latest {
 				entry.current.Records = append(entry.current.Records, record)
 			}
+			sort.Slice(entry.current.Records, func(i, j int) bool {
+				a, b := entry.current.Records[i].Inventory, entry.current.Records[j].Inventory
+				if a.ProtectedScope.Tenant != b.ProtectedScope.Tenant {
+					return a.ProtectedScope.Tenant < b.ProtectedScope.Tenant
+				}
+				if a.ProtectedScope.Asset != b.ProtectedScope.Asset {
+					return a.ProtectedScope.Asset < b.ProtectedScope.Asset
+				}
+				if a.ProtectedScope.Version != b.ProtectedScope.Version {
+					return a.ProtectedScope.Version < b.ProtectedScope.Version
+				}
+				if a.ProtectedScope.Property != b.ProtectedScope.Property {
+					return a.ProtectedScope.Property < b.ProtectedScope.Property
+				}
+				return a.EvidenceID < b.EvidenceID
+			})
 		}
 		out[key] = entry
 	}
