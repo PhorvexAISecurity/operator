@@ -1,34 +1,34 @@
 schema_version: 2
 campaign_id: 2026-09-20-post25-live
 profile: workflow-v2
-question: Verify available post-Tier25 live behaviors with actual effects, refusal,
-  fault and recovery controls; fix validated residuals; retain MIG hardware unavailable
-  and unresolved source limits.
-state: ANALYZING
+question: Verify available post-Tier25 live behaviors with actual effects, refusal, fault
+  and recovery controls; fix validated residuals; retain MIG hardware unavailable and unresolved
+  source limits.
+state: RUNNING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 created_at: '2026-09-20T13:01:38+00:00'
-updated_at: '2026-09-20T18:09:40+00:00'
+updated_at: '2026-09-21T04:46:29+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: 0.4.138
   included_fixes: []
-  duration_ceiling: 6h per bounded round, cleanup included; resume subsequent rounds
-    with fresh pins
-  cost_ceiling: existing cluster only; no new GPU, nodes, paid services or external
-    spend; bounded fixture quotas
+  duration_ceiling: 6h per bounded round, cleanup included; resume subsequent rounds with
+    fresh pins
+  cost_ceiling: existing cluster only; no new GPU, nodes, paid services or external spend;
+    bounded fixture quotas
   permission: attack
 pins:
-  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
-  digest: sha256:5f2707f639111bfb558435f68db6608d5c2dc36fe52b07f9e239362155ce42fe
-  embedded_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.141
+  digest: sha256:ebb1c4a2a7060de74efaffcaf3678205173e85b04bd22eeb80b8107b2b97707c
+  embedded_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
 safety:
   stop_conditions:
-  - 'Unexpected source change, missing identity/cleanup authority, unmanaged service
-    impact: stop affected case and restore'
-  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  - 'Unexpected source change, missing identity/cleanup authority, unmanaged service impact:
+    stop affected case and restore'
+  phase_approval_ref: AUTHORIZATION.md
   unresolved: []
-  cleanup: FAIL
+  cleanup: pending
 positive_control: PASS
 rounds:
 - id: round-1
@@ -45,6 +45,36 @@ rounds:
   state: ABORTED
 - id: round-7
   state: ABORTED
+- id: round-8
+  state: ABORTED
+- id: round-9
+  state: ABORTED
+- id: round-10
+  state: ABORTED
+- id: round-11
+  state: ABORTED
+- id: round-12
+  state: ABORTED
+- id: round-13
+  state: ABORTED
+- id: round-14
+  state: ABORTED
+- id: round-15
+  state: ABORTED
+- id: round-16
+  state: ABORTED
+- id: round-17
+  state: ABORTED
+- id: round-18
+  state: ABORTED
+- id: round-19
+  state: ABORTED
+- id: round-20
+  state: ABORTED
+- id: round-21
+  state: COMPLETE
+- id: round-22
+  state: RUNNING
 findings: []
 verdict:
   result: pending
@@ -56,8 +86,7 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Retain recurring OOM and review exact current-incarnation baseline for independent
-    bounded controls
+  action: Execute M102 v3 round22 and verify recovery/cleanup
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -129,9 +158,9 @@ transitions:
   artifact: rounds/round-3/analysis.md
   approval_ref: null
   phase_approval_ref: null
-  note: Enabled effect and configuration restoration retained; third post-restore
-    attempt aborted on node inventory change. Owned cleanup separately confirmed;
-    strict health FAIL preserved.
+  note: Enabled effect and configuration restoration retained; third post-restore attempt
+    aborted on node inventory change. Owned cleanup separately confirmed; strict health FAIL
+    preserved.
   forced: false
 - from: ANALYZING
   to: RUNNING
@@ -140,8 +169,8 @@ transitions:
   artifact: rounds/round-4/spec.md
   approval_ref: null
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
-  note: New bounded same-node packet control with approved current topology; earlier
-    invalid attempts unchanged
+  note: New bounded same-node packet control with approved current topology; earlier invalid
+    attempts unchanged
   forced: false
 - from: RUNNING
   to: ANALYZING
@@ -160,8 +189,8 @@ transitions:
   artifact: rounds/round-5/spec.md
   approval_ref: null
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
-  note: CPU round4 cleanupPASS; reviewed two-mode shared T4 logical-reset fixture,
-    no MIG or manager-action claim
+  note: CPU round4 cleanupPASS; reviewed two-mode shared T4 logical-reset fixture, no MIG
+    or manager-action claim
   forced: false
 - from: RUNNING
   to: ANALYZING
@@ -170,8 +199,8 @@ transitions:
   artifact: rounds/round-5/analysis.md
   approval_ref: null
   phase_approval_ref: null
-  note: First model startup failed before reset; exact fixture cleanup and installed
-    recovery PASS; required failure evidence unavailable
+  note: First model startup failed before reset; exact fixture cleanup and installed recovery
+    PASS; required failure evidence unavailable
   forced: false
 - from: ANALYZING
   to: RUNNING
@@ -180,8 +209,8 @@ transitions:
   artifact: rounds/round-6/spec.md
   approval_ref: null
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
-  note: Independent 31 controls and exact package hashes PASS; first-mode failure
-    stops second; prior attempts retained
+  note: Independent 31 controls and exact package hashes PASS; first-mode failure stops second;
+    prior attempts retained
   forced: false
 - from: RUNNING
   to: ANALYZING
@@ -191,8 +220,7 @@ transitions:
   approval_ref: null
   phase_approval_ref: null
   note: v5 startup failed before reset; model evidence identifies loader pattern mismatch;
-    exact namespace removed but required monitor terminal missing, original cleanup
-    FAIL retained
+    exact namespace removed but required monitor terminal missing, original cleanup FAIL retained
   forced: false
 - from: ANALYZING
   to: RUNNING
@@ -212,3 +240,298 @@ transitions:
   phase_approval_ref: null
   note: null
   forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T18:23:53+00:00'
+  by: codex-lead
+  artifact: rounds/round-8/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T18:28:27+00:00'
+  by: codex-lead
+  artifact: rounds/round-8/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: PAUSED
+  at: '2026-09-20T18:48:38+00:00'
+  by: codex-lead
+  artifact: deployment-0.4.139/REPORT.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Old exact incarnation replaced externally; round8 refused before mutation and remains
+    ABORTED
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-09-20T18:48:38+00:00'
+  by: codex-lead
+  artifact: deployment-0.4.139/REPORT.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Both components independently pinned; historical OOM, Dex missing and behavior debt
+    remain open
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-20T18:51:52+00:00'
+  by: codex-lead
+  artifact: rounds/round-9/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: Exact reviewed0.4.139manager+console,32localcontrolsPASS; historicalresults retained
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T19:02:58+00:00'
+  by: codex-lead
+  artifact: rounds/round-9/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Original supervisor cleanup PASS retained; physical cleanup independently confirmed,
+    failed producer archive missing
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T19:16:44+00:00'
+  by: codex-lead
+  artifact: rounds/round-10/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T19:37:27+00:00'
+  by: codex-lead
+  artifact: rounds/round-10/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Original archive-transfer failure retained; both bounded backend controls and physical
+    cleanup independently accepted
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T19:37:27+00:00'
+  by: codex-lead
+  artifact: rounds/round-11/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T19:50:15+00:00'
+  by: codex-lead
+  artifact: rounds/round-11/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T19:55:07+00:00'
+  by: codex-lead
+  artifact: rounds/round-12/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T20:05:09+00:00'
+  by: codex-lead
+  artifact: rounds/round-12/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T20:16:15+00:00'
+  by: codex-lead
+  artifact: rounds/round-13/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T20:22:37+00:00'
+  by: codex-lead
+  artifact: rounds/round-13/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T02:35:50+00:00'
+  by: codex-lead
+  artifact: rounds/round-14/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T02:45:15+00:00'
+  by: codex-lead
+  artifact: rounds/round-14/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T02:47:36+00:00'
+  by: codex-lead
+  artifact: rounds/round-15/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T02:54:34+00:00'
+  by: codex-lead
+  artifact: rounds/round-15/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T02:54:34+00:00'
+  by: codex-lead
+  artifact: rounds/round-16/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T03:10:00+00:00'
+  by: codex-lead
+  artifact: rounds/round-16/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T03:10:00+00:00'
+  by: codex-lead
+  artifact: rounds/round-17/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T03:23:42+00:00'
+  by: codex-lead
+  artifact: rounds/round-17/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T03:23:42+00:00'
+  by: codex-lead
+  artifact: rounds/round-18/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T03:34:44+00:00'
+  by: codex-lead
+  artifact: rounds/round-18/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T03:48:30+00:00'
+  by: codex-lead
+  artifact: rounds/round-19/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T03:55:22+00:00'
+  by: codex-lead
+  artifact: rounds/round-19/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T04:08:24+00:00'
+  by: codex-lead
+  artifact: rounds/round-20/review.md
+  approval_ref: AUTHORIZATION.md
+  phase_approval_ref: AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T04:16:37+00:00'
+  by: codex-lead
+  artifact: rounds/round-20/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T04:19:30+00:00'
+  by: codex-lead
+  artifact: rounds/round-21/review.md
+  approval_ref: AUTHORIZATION.md
+  phase_approval_ref: AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-21T04:39:40+00:00'
+  by: codex-lead
+  artifact: rounds/round-21/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-21T04:46:29+00:00'
+  by: codex-lead
+  artifact: rounds/round-22/review.md
+  approval_ref: AUTHORIZATION.md
+  phase_approval_ref: AUTHORIZATION.md
+  note: null
+  forced: false
+pins_scope: Installed source0.4.141 for bounded campaign rounds; each round retains its own
+  immutable package and evidence. The rounds list records current and completed execution
+  state; prior results remain unchanged.
+current_evidence:
+  observed_at: '2026-09-21T01:47:00+00:00'
+  release: 0.4.141
+  embedded_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+  manager_digest: sha256:ebb1c4a2a7060de74efaffcaf3678205173e85b04bd22eeb80b8107b2b97707c
+  console_digest: sha256:e573ca03b6b16698dcb8ae2ce8ac8003915e1e610202b2fd0d3fccc77c79a145
+  artifact: math-design/evidence/M125-LIVE-TRANSPORT.json
+  limits: Current evidence does not replace historical baseline failures or establish campaign-wide
+    live acceptance. Two missing Dex controls and unverified effects remain.
