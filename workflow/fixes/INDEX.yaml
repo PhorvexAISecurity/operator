@@ -1350,7 +1350,7 @@ fixes:
     issues:
     - M-156
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: post25-m156
