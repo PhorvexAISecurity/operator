@@ -28,7 +28,10 @@ import (
 func TestCheckpointLocalSixSlotsRunSetupTeardownAndLocalDurableServer(t *testing.T) {
 	env, client, slotZero := checkpointLocalSetupEnv(t)
 	ctx := context.Background()
-	if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace}}, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace, UID: "sandbox-uid"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.EnsureNamespace(ctx); err != nil {
 		t.Fatal(err)
 	}
 	// The single-slot helper includes a pre-existing controller fixture for its

@@ -116,6 +116,9 @@ func TestCleanupOwnedActualAPIPreservesExternalFixture(t *testing.T) {
 	}
 
 	env := &Env{Kube: kube, Rest: restCfg, Config: config.TargetConfig{Namespace: ns, Context: "envtest", OwnedAck: true}, Log: &nopLogger{}, Guard: refusingGuard{allow: ns}}
+	if err := env.EnsureNamespace(ctx); err != nil {
+		t.Fatalf("bind namespace identity: %v", err)
+	}
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cleanupCancel()
 	if err := env.CleanupOwned(cleanupCtx, false); err != nil {

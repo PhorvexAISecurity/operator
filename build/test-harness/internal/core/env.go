@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,6 +119,10 @@ type Env struct {
 	EffectAttemptID string
 	// RestConfigHost is the live apiserver host (provenance/debug).
 	RestConfigHost string
+
+	// namespaceUID is the exact sandbox instance observed or created by
+	// EnsureNamespace. Cleanup never adopts a same-name replacement.
+	namespaceUID types.UID
 }
 
 // OwnedLabels returns the standard owner labels for a created object, including
@@ -164,25 +169,66 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	if err := e.Guard.AssertMutationAllowed(e.Config.Namespace); err != nil {
 		return err
 	}
-	_, err := e.Kube.CoreV1().Namespaces().Get(ctx, e.Config.Namespace, metav1.GetOptions{})
+	ns, err := e.Kube.CoreV1().Namespaces().Get(ctx, e.Config.Namespace, metav1.GetOptions{})
 	if err == nil {
-		return nil
+		return e.bindNamespaceUID(ns)
 	}
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
-	ns := &corev1.Namespace{
+	if e.namespaceUID != "" {
+		return fmt.Errorf("sandbox namespace %q original UID %q disappeared; refusing to create or adopt a replacement",
+			e.Config.Namespace, e.namespaceUID)
+	}
+	newNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   e.Config.Namespace,
 			Labels: map[string]string{OwnedLabelKey: OwnedLabelValue},
 		},
 	}
 	e.Log.Command(fmt.Sprintf("kubectl create namespace %s", e.Config.Namespace))
-	_, err = e.Kube.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
+	created, err := e.Kube.CoreV1().Namespaces().Create(ctx, newNamespace, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("refusing to adopt namespace %q created concurrently after absence", e.Config.Namespace)
+	}
+	if err != nil {
 		return err
 	}
+	return e.bindNamespaceUID(created)
+}
+
+func (e *Env) bindNamespaceUID(ns *corev1.Namespace) error {
+	if ns == nil || ns.Name != e.Config.Namespace || ns.UID == "" {
+		return fmt.Errorf("sandbox namespace %q has no authoritative UID", e.Config.Namespace)
+	}
+	if e.namespaceUID != "" && e.namespaceUID != ns.UID {
+		return fmt.Errorf("sandbox namespace %q was replaced: captured UID %q, current UID %q",
+			e.Config.Namespace, e.namespaceUID, ns.UID)
+	}
+	e.namespaceUID = ns.UID
 	return nil
+}
+
+// namespaceCurrent verifies that the configured namespace is still the exact
+// instance captured by EnsureNamespace. A missing original is reported as
+// current=false with no error so cleanup can finish without any destructive
+// request. A same-name replacement is an identity failure.
+func (e *Env) namespaceCurrent(ctx context.Context) (bool, error) {
+	if e.namespaceUID == "" {
+		return false, fmt.Errorf("sandbox namespace %q has no captured UID; EnsureNamespace must succeed before cleanup", e.Config.Namespace)
+	}
+	ns, err := e.Kube.CoreV1().Namespaces().Get(ctx, e.Config.Namespace, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if ns.UID != e.namespaceUID {
+		return false, fmt.Errorf("sandbox namespace %q was replaced: captured UID %q, current UID %q",
+			e.Config.Namespace, e.namespaceUID, ns.UID)
+	}
+	return true, nil
 }
 
 // CleanupResidue names owned objects still present after the deletes were
@@ -220,6 +266,14 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 		return err
 	}
 	ns := e.Config.Namespace
+	current, err := e.namespaceCurrent(ctx)
+	if err != nil {
+		return fmt.Errorf("refusing cleanup without exact namespace identity: %w", err)
+	}
+	if !current {
+		e.Log.Logf("cleanup: original namespace %s UID %s is absent; no destructive requests issued", ns, e.namespaceUID)
+		return nil
+	}
 	sel := OwnedSelector()
 	lo := metav1.ListOptions{LabelSelector: sel}
 	var problems []string
@@ -228,58 +282,174 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 		e.Log.Logf("cleanup: %s", msg)
 		problems = append(problems, msg)
 	}
-	delColl := func(kind string, fn func() error) {
-		e.Log.Command(fmt.Sprintf("kubectl delete %s -n %s -l %s", kind, ns, sel))
-		if err := fn(); err != nil && !apierrors.IsNotFound(err) {
-			record("delete %s: %v", kind, err)
-		}
-	}
 	dp := metav1.DeletePropagationBackground
-	dopts := metav1.DeleteOptions{PropagationPolicy: &dp}
-
-	delColl("pods", func() error {
-		return e.Kube.CoreV1().Pods(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	delColl("deployments", func() error {
-		return e.Kube.AppsV1().Deployments(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	delColl("replicasets", func() error {
-		return e.Kube.AppsV1().ReplicaSets(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	delColl("persistentvolumeclaims", func() error {
-		return e.Kube.CoreV1().PersistentVolumeClaims(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	// Services do not support DeleteCollection; list+delete. BOTH the list and
-	// each delete are failures worth reporting: a list error means we do not even
-	// know what is left.
-	if svcs, err := e.Kube.CoreV1().Services(ns).List(ctx, lo); err != nil {
-		if !apierrors.IsNotFound(err) {
-			record("list services: %v", err)
+	type ownedObject struct {
+		name string
+		uid  types.UID
+	}
+	// Identity checks bracket every enumeration. Each object is then deleted by
+	// its exact listed UID, so namespace replacement after the second check
+	// cannot turn cleanup into adoption of a replacement object's name.
+	deleteOwned := func(kind string, list func() ([]ownedObject, error), del func(string, metav1.DeleteOptions) error) error {
+		current, err := e.namespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace UID %q disappeared before listing %s", e.namespaceUID, kind)
+			}
+			return err
 		}
-	} else {
-		for i := range svcs.Items {
-			e.Log.Command(fmt.Sprintf("kubectl delete service %s -n %s", svcs.Items[i].Name, ns))
-			if err := e.Kube.CoreV1().Services(ns).Delete(ctx, svcs.Items[i].Name, dopts); err != nil && !apierrors.IsNotFound(err) {
-				record("delete service %s: %v", svcs.Items[i].Name, err)
+		objects, listErr := list()
+		current, err = e.namespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace UID %q disappeared after listing %s", e.namespaceUID, kind)
+			}
+			return err
+		}
+		if listErr != nil {
+			if !apierrors.IsNotFound(listErr) {
+				record("list %s: %v", kind, listErr)
+			}
+			return nil
+		}
+		for _, object := range objects {
+			if object.uid == "" {
+				record("refuse delete %s %s: object has no authoritative UID", kind, object.name)
+				continue
+			}
+			current, err = e.namespaceCurrent(ctx)
+			if err != nil || !current {
+				if err == nil {
+					err = fmt.Errorf("original namespace UID %q disappeared before deleting %s %s", e.namespaceUID, kind, object.name)
+				}
+				return err
+			}
+			uid := object.uid
+			opts := metav1.DeleteOptions{PropagationPolicy: &dp, Preconditions: &metav1.Preconditions{UID: &uid}}
+			e.Log.Command(fmt.Sprintf("kubectl delete %s %s -n %s --precondition-uid=%s", kind, object.name, ns, uid))
+			if err := del(object.name, opts); err != nil && !apierrors.IsNotFound(err) {
+				record("delete %s %s UID %s: %v", kind, object.name, uid, err)
 			}
 		}
+		return nil
 	}
-	delColl("configmaps", func() error {
-		return e.Kube.CoreV1().ConfigMaps(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	delColl("secrets", func() error {
-		return e.Kube.CoreV1().Secrets(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	delColl("serviceaccounts", func() error {
-		return e.Kube.CoreV1().ServiceAccounts(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	// RBAC (namespaced) — Roles/RoleBindings.
-	delColl("rolebindings", func() error {
-		return e.Kube.RbacV1().RoleBindings(ns).DeleteCollection(ctx, dopts, lo)
-	})
-	delColl("roles", func() error {
-		return e.Kube.RbacV1().Roles(ns).DeleteCollection(ctx, dopts, lo)
-	})
+	objects := func(items int, at func(int) (string, types.UID)) []ownedObject {
+		out := make([]ownedObject, items)
+		for i := range out {
+			out[i].name, out[i].uid = at(i)
+		}
+		return out
+	}
+	if err := deleteOwned("pods", func() ([]ownedObject, error) {
+		l, err := e.Kube.CoreV1().Pods(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.CoreV1().Pods(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("deployments", func() ([]ownedObject, error) {
+		l, err := e.Kube.AppsV1().Deployments(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.AppsV1().Deployments(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("replicasets", func() ([]ownedObject, error) {
+		l, err := e.Kube.AppsV1().ReplicaSets(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.AppsV1().ReplicaSets(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("persistentvolumeclaims", func() ([]ownedObject, error) {
+		l, err := e.Kube.CoreV1().PersistentVolumeClaims(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.CoreV1().PersistentVolumeClaims(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("services", func() ([]ownedObject, error) {
+		l, err := e.Kube.CoreV1().Services(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.CoreV1().Services(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("configmaps", func() ([]ownedObject, error) {
+		l, err := e.Kube.CoreV1().ConfigMaps(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.CoreV1().ConfigMaps(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("secrets", func() ([]ownedObject, error) {
+		l, err := e.Kube.CoreV1().Secrets(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.CoreV1().Secrets(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("serviceaccounts", func() ([]ownedObject, error) {
+		l, err := e.Kube.CoreV1().ServiceAccounts(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.CoreV1().ServiceAccounts(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("rolebindings", func() ([]ownedObject, error) {
+		l, err := e.Kube.RbacV1().RoleBindings(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.RbacV1().RoleBindings(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
+	if err := deleteOwned("roles", func() ([]ownedObject, error) {
+		l, err := e.Kube.RbacV1().Roles(ns).List(ctx, lo)
+		if err != nil {
+			return nil, err
+		}
+		return objects(len(l.Items), func(i int) (string, types.UID) { return l.Items[i].Name, l.Items[i].UID }), nil
+	}, func(name string, opts metav1.DeleteOptions) error {
+		return e.Kube.RbacV1().Roles(ns).Delete(ctx, name, opts)
+	}); err != nil {
+		return fmt.Errorf("refusing cleanup after namespace identity changed: %w", err)
+	}
 
 	// Verify absence rather than trusting the accepted deletes — but WAIT for it.
 	// Kubernetes deletion is asynchronous by design: a Pod that the API accepted
@@ -295,10 +465,19 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	}
 
 	if deleteNamespace {
-		e.Log.Command(fmt.Sprintf("kubectl delete namespace %s", ns))
+		current, err := e.namespaceCurrent(ctx)
+		if err != nil {
+			return fmt.Errorf("refusing namespace delete after identity changed: %w", err)
+		}
+		if !current {
+			return nil
+		}
+		uid := e.namespaceUID
+		dopts := metav1.DeleteOptions{PropagationPolicy: &dp, Preconditions: &metav1.Preconditions{UID: &uid}}
+		e.Log.Command(fmt.Sprintf("kubectl delete namespace %s --precondition-uid=%s", ns, uid))
 		if err := e.Kube.CoreV1().Namespaces().Delete(ctx, ns, dopts); err != nil && !apierrors.IsNotFound(err) {
 			record("delete namespace %s: %v", ns, err)
-		} else if gone, state, err := e.awaitNamespaceGone(ctx, ns); err != nil {
+		} else if gone, state, err := e.awaitNamespaceGone(ctx, ns, uid); err != nil {
 			// Absence that cannot be observed must not be claimed.
 			record("verify namespace %s: %v", ns, err)
 		} else if !gone {
@@ -366,7 +545,7 @@ func (e *Env) awaitOwnedResidueGone(ctx context.Context, lo metav1.ListOptions) 
 // budget expires or the context ends. An accepted namespace delete is not
 // absence: a namespace routinely sits in Terminating while its contents drain,
 // and a finalizer can hold it indefinitely.
-func (e *Env) awaitNamespaceGone(ctx context.Context, ns string) (bool, string, error) {
+func (e *Env) awaitNamespaceGone(ctx context.Context, ns string, originalUID types.UID) (bool, string, error) {
 	deadline := residueDeadline(ctx)
 	for {
 		got, err := e.Kube.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
@@ -375,6 +554,11 @@ func (e *Env) awaitNamespaceGone(ctx context.Context, ns string) (bool, string, 
 			return true, "", nil
 		case err != nil:
 			return false, "", err
+		}
+		if got.UID != originalUID {
+			// A same-name replacement is unrelated. The UID-preconditioned delete
+			// could only have targeted originalUID, which is therefore gone.
+			return true, fmt.Sprintf("replacement namespace UID %s left untouched", got.UID), nil
 		}
 		state := "present"
 		if got.DeletionTimestamp != nil {
@@ -397,6 +581,13 @@ func (e *Env) awaitNamespaceGone(ctx context.Context, ns string) (bool, string, 
 // cannot be observed must not be claimed.
 func (e *Env) ownedResidue(ctx context.Context, lo metav1.ListOptions) ([]CleanupResidue, []string) {
 	ns := e.Config.Namespace
+	current, err := e.namespaceCurrent(ctx)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("verify namespace identity: %v", err)}
+	}
+	if !current {
+		return nil, nil
+	}
 	var out []CleanupResidue
 	var errs []string
 	add := func(kind, name string, deletionTS *metav1.Time) {
@@ -507,6 +698,13 @@ func (e *Env) ownedResidue(ctx context.Context, lo metav1.ListOptions) ([]Cleanu
 		}
 		return nil
 	})
+	current, err = e.namespaceCurrent(ctx)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("verify namespace identity after residue enumeration: %v", err))
+	} else if !current {
+		// The original namespace and all of its namespaced contents are absent.
+		return nil, errs
+	}
 	return out, errs
 }
 

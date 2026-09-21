@@ -202,7 +202,7 @@ func TestM171RunnerEmitterDeliveryCannotRepairFixture(t *testing.T) {
 				return core.ExecResult{}
 			})
 			factory := func(_, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
-				kube := fake.NewSimpleClientset()
+				kube := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "sandbox-uid"}})
 				kube.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 					obj := action.(k8stesting.CreateAction).GetObject().(*corev1.Pod).DeepCopy()
 					if obj.UID == "" {
@@ -220,6 +220,16 @@ func TestM171RunnerEmitterDeliveryCannotRepairFixture(t *testing.T) {
 						obj.UID = types.UID("fixture-" + defender + "-" + obj.Name)
 					}
 					if err := kube.Tracker().Create(corev1.SchemeGroupVersion.WithResource("configmaps"), obj, obj.Namespace); err != nil {
+						return true, nil, err
+					}
+					return true, obj, nil
+				})
+				kube.PrependReactor("create", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					obj := action.(k8stesting.CreateAction).GetObject().(*corev1.Service).DeepCopy()
+					if obj.UID == "" {
+						obj.UID = types.UID("fixture-" + defender + "-" + obj.Name)
+					}
+					if err := kube.Tracker().Create(corev1.SchemeGroupVersion.WithResource("services"), obj, obj.Namespace); err != nil {
 						return true, nil, err
 					}
 					return true, obj, nil
@@ -245,6 +255,9 @@ func TestM171RunnerEmitterDeliveryCannotRepairFixture(t *testing.T) {
 				states[host] = &m171FixtureState{digest: mocks.GoldenModelDigest, failPost: failPost}
 				statesMu.Unlock()
 				env := &core.Env{Kube: kube, Rest: &rest.Config{Host: host}, Config: config.TargetConfig{Namespace: "sandbox"}, Log: &dpLogger{}, Guard: dpGuard{}, Trial: trial, ScenarioName: name, DefenderName: defender}
+				if err := env.EnsureNamespace(context.Background()); err != nil {
+					return nil, nil, err
+				}
 				return env, func() error {
 					// Explicit unscored fixture cleanup runs after the oracle. The
 					// recorded emitter result must retain its pre-cleanup poison.

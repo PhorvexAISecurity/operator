@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -787,22 +786,17 @@ func TestCheckpointLocalHolderRequiresExternalOwnershipAndRejectsGenericOwnershi
 
 func TestCheckpointLocalHolderSurvivesOwnedPodCleanup(t *testing.T) {
 	env, client, _ := checkpointLocalSetupEnv(t)
-	if _, err := client.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace}}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	if _, err := client.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace, UID: "sandbox-uid"}}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatal(err)
+	}
+	if err := env.EnsureNamespace(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	wantUID := types.UID(env.Config.BenignCheckpointLocalHolderUID)
-	owned := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "scenario-owned", Namespace: env.Config.Namespace, Labels: env.OwnedLabels(nil)}}
+	owned := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "scenario-owned", Namespace: env.Config.Namespace, UID: "scenario-owned-uid", Labels: env.OwnedLabels(nil)}}
 	if _, err := client.CoreV1().Pods(env.Config.Namespace).Create(context.Background(), owned, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	client.PrependReactor("delete-collection", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		selection := action.(k8stesting.DeleteCollectionAction).GetListRestrictions().Labels
-		if selection == nil || selection.String() != core.OwnedSelector() {
-			return true, nil, fmt.Errorf("cleanup selector differs: %v", selection)
-		}
-		err := client.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, env.Config.Namespace, owned.Name)
-		return true, nil, err
-	})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	err := env.CleanupOwned(ctx, false)
 	cancel()

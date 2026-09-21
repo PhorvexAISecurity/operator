@@ -25,7 +25,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 	ktest "k8s.io/client-go/testing"
 
@@ -73,34 +72,15 @@ type countingFactory struct {
 
 func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 	f.built++
-	objects := []runtime.Object{}
+	objects := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "sandbox-uid"}}}
 	if f.localFixture {
 		objects = append(objects,
-			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox"}},
 			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-local-holder", Namespace: "sandbox", UID: "external-holder", Labels: map[string]string{"fixture.phorvex.ai/external-owner": "checkpoint-local-holder"}}},
 			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generic-residue", Namespace: "sandbox", UID: "generic-owned", Labels: map[string]string{core.OwnedLabelKey: core.OwnedLabelValue}}},
 		)
 	}
 	kube := fake.NewSimpleClientset(objects...)
 	f.kube = kube
-	if f.localFixture {
-		kube.PrependReactor("delete-collection", "pods", func(action ktest.Action) (bool, runtime.Object, error) {
-			selection := action.(ktest.DeleteCollectionAction).GetListRestrictions().Labels
-			if selection == nil || selection.String() != core.OwnedSelector() {
-				return true, nil, fmt.Errorf("cleanup selector differs: %v", selection)
-			}
-			err := kube.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, "sandbox", "generic-residue")
-			if apierrors.IsNotFound(err) {
-				err = nil
-			}
-			return true, nil, err
-		})
-	}
-	if f.deleteErr {
-		kube.PrependReactor("*", "*", func(ktest.Action) (bool, runtime.Object, error) {
-			return true, nil, errors.New("final teardown API unavailable")
-		})
-	}
 	logger := &quietLogger{}
 	f.logger = logger
 	cfg := config.WithDollarDefaults(config.TargetConfig{Namespace: "sandbox", Context: "kind-test", OwnedAck: true})
@@ -111,6 +91,14 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 		Log:    logger,
 		Guard:  allowSandbox{},
 		Trial:  trial, ScenarioName: scenario, DefenderName: defender,
+	}
+	if err := env.EnsureNamespace(context.Background()); err != nil {
+		return nil, nil, err
+	}
+	if f.deleteErr {
+		kube.PrependReactor("*", "*", func(ktest.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("final teardown API unavailable")
+		})
 	}
 	closer := func() error {
 		f.closed++

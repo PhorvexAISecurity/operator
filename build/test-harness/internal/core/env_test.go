@@ -5,7 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/r6security/phoenix-test-harness/internal/config"
@@ -24,28 +26,35 @@ func (g refusingGuard) AssertMutationAllowed(ns string) error {
 
 type nopLogger struct{ cmds []string }
 
-func (l *nopLogger) Logf(string, ...any)   {}
-func (l *nopLogger) Command(c string)      { l.cmds = append(l.cmds, c) }
-func (l *nopLogger) Commands() []string    { return l.cmds }
-func (l *nopLogger) RawLogPath() string    { return "" }
+func (l *nopLogger) Logf(string, ...any) {}
+func (l *nopLogger) Command(c string)    { l.cmds = append(l.cmds, c) }
+func (l *nopLogger) Commands() []string  { return l.cmds }
+func (l *nopLogger) RawLogPath() string  { return "" }
 
 func newTestEnv(ns string, guardNS string) *Env {
+	nsUID := types.UID("namespace-" + ns)
 	return &Env{
-		Kube:   fake.NewSimpleClientset(),
-		Config: config.TargetConfig{Namespace: ns, Context: "kind-amtd-test", OwnedAck: true},
-		Log:    &nopLogger{},
-		Guard:  refusingGuard{allow: guardNS},
+		Kube: fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+			Name: ns, UID: nsUID,
+		}}),
+		Config:       config.TargetConfig{Namespace: ns, Context: "kind-amtd-test", OwnedAck: true},
+		Log:          &nopLogger{},
+		Guard:        refusingGuard{allow: guardNS},
+		namespaceUID: nsUID,
 	}
 }
 
-func TestEnsureNamespaceCreatesSandbox(t *testing.T) {
+func TestEnsureNamespaceBindsExistingSandbox(t *testing.T) {
 	env := newTestEnv("sandbox", "sandbox")
 	if err := env.EnsureNamespace(context.Background()); err != nil {
 		t.Fatalf("EnsureNamespace failed: %v", err)
 	}
 	_, err := env.Kube.CoreV1().Namespaces().Get(context.Background(), "sandbox", metav1.GetOptions{})
 	if err != nil {
-		t.Fatalf("sandbox namespace not created: %v", err)
+		t.Fatalf("sandbox namespace not found: %v", err)
+	}
+	if env.namespaceUID != types.UID("namespace-sandbox") {
+		t.Fatalf("captured namespace UID = %q", env.namespaceUID)
 	}
 }
 

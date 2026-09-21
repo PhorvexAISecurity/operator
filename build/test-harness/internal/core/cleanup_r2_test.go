@@ -44,14 +44,14 @@ func TestR2CleanupWaitsForAcceptedDeletionWithinItsBudget(t *testing.T) {
 			env := newTestEnv("sandbox", "sandbox")
 			k := env.Kube.(*fake.Clientset)
 			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
-				Name: "owned-pod", Namespace: "sandbox",
+				Name: "owned-pod", Namespace: "sandbox", UID: "owned-pod-uid",
 				Labels: map[string]string{OwnedLabelKey: OwnedLabelValue}}}
 			if err := k.Tracker().Add(pod); err != nil {
 				t.Fatal(err)
 			}
 			done := make(chan struct{})
 			defer func() { <-done }() // drain: never leave the deleter running
-			k.PrependReactor("delete-collection", "pods", func(ktest.Action) (bool, runtime.Object, error) {
+			k.PrependReactor("delete", "pods", func(ktest.Action) (bool, runtime.Object, error) {
 				remove := func() {
 					_ = k.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, "sandbox", "owned-pod")
 					close(done)
@@ -77,7 +77,7 @@ func TestR2CleanupWaitsForAcceptedDeletionWithinItsBudget(t *testing.T) {
 func TestR2CleanupReportsResidueThatOutlivesTheBudget(t *testing.T) {
 	env := newTestEnv("sandbox", "sandbox")
 	held := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
-		Name: "held-pod", Namespace: "sandbox",
+		Name: "held-pod", Namespace: "sandbox", UID: "held-pod-uid",
 		Labels:            map[string]string{OwnedLabelKey: OwnedLabelValue},
 		DeletionTimestamp: ptrNow(), Finalizers: []string{"example.com/holds-this-pod"}}}
 	env.Kube.(*fake.Clientset).PrependReactor("list", "pods", func(ktest.Action) (bool, runtime.Object, error) {
@@ -102,7 +102,7 @@ func TestR2CleanupReportsResidueThatOutlivesTheBudget(t *testing.T) {
 func TestR2CleanupReportsPersistentVolumeClaimResidue(t *testing.T) {
 	env := newTestEnv("sandbox", "sandbox")
 	held := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{
-		Name: "held-pvc", Namespace: "sandbox",
+		Name: "held-pvc", Namespace: "sandbox", UID: "held-pvc-uid",
 		Labels:            map[string]string{OwnedLabelKey: OwnedLabelValue},
 		DeletionTimestamp: ptrNow(), Finalizers: []string{"kubernetes.io/pvc-protection"}}}
 	env.Kube.(*fake.Clientset).PrependReactor("list", "persistentvolumeclaims", func(ktest.Action) (bool, runtime.Object, error) {
@@ -145,7 +145,7 @@ func TestR2CleanupVerifiesNamespaceDisappearance(t *testing.T) {
 		// case where "the API said yes" is not proof of absence.
 		k.PrependReactor("get", "namespaces", func(ktest.Action) (bool, runtime.Object, error) {
 			return true, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
-				Name: "sandbox", DeletionTimestamp: ptrNow(),
+				Name: "sandbox", UID: "namespace-sandbox", DeletionTimestamp: ptrNow(),
 				Finalizers: []string{"kubernetes"}}}, nil
 		})
 		k.PrependReactor("delete", "namespaces", func(ktest.Action) (bool, runtime.Object, error) {

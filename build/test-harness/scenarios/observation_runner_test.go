@@ -54,7 +54,7 @@ func TestObservationRunnerExcludesUnattributedNegative(t *testing.T) {
 		return core.ExecResult{Stdout: "stimulus-ok", ExitCode: 0}
 	})
 	factory := func(_, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
-		kube := fake.NewSimpleClientset()
+		kube := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "sandbox-uid"}})
 		kube.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			obj := action.(k8stesting.CreateAction).GetObject().(*corev1.Pod).DeepCopy()
 			obj.UID = types.UID("fixture-" + defender + "-" + obj.Name)
@@ -65,6 +65,9 @@ func TestObservationRunnerExcludesUnattributedNegative(t *testing.T) {
 			return true, obj, nil
 		})
 		env := &core.Env{Kube: kube, Rest: &rest.Config{Host: "https://" + defender + ".invalid"}, Config: config.TargetConfig{Namespace: "sandbox"}, Log: &dpLogger{}, Guard: dpGuard{}, Trial: trial, ScenarioName: "c1-lateral", DefenderName: defender}
+		if err := env.EnsureNamespace(context.Background()); err != nil {
+			return nil, nil, err
+		}
 		return env, func() error {
 			// Fake DeleteCollection may accept without removing tracker entries;
 			// remove those local entries before exercising real residue verification.

@@ -378,7 +378,13 @@ func TestR1ActualCleanupOwnedPropagatesEveryAPIFailure(t *testing.T) {
 	t.Run("failed-api-cleanup", func(t *testing.T) {
 		env := newTestEnv("sandbox", "sandbox")
 		calls := 0
-		env.Kube.(*fake.Clientset).PrependReactor("*", "*", func(ktest.Action) (bool, runtime.Object, error) {
+		env.Kube.(*fake.Clientset).PrependReactor("*", "*", func(action ktest.Action) (bool, runtime.Object, error) {
+			// Namespace identity reads are the prerequisite for attempting child
+			// cleanup. Let those exact reads succeed so this fixture still proves
+			// that independent failures across every child kind are aggregated.
+			if action.GetVerb() == "get" && action.GetResource().Resource == "namespaces" {
+				return false, nil, nil
+			}
 			calls++
 			return true, nil, errors.New("cleanup API unavailable")
 		})
@@ -500,6 +506,7 @@ func stuckPodList() *corev1.PodList {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "stuck-pod",
 			Namespace:         "sandbox",
+			UID:               "stuck-pod-uid",
 			Labels:            map[string]string{OwnedLabelKey: OwnedLabelValue},
 			DeletionTimestamp: &now,
 			Finalizers:        []string{"example.com/holds-this-pod"},
