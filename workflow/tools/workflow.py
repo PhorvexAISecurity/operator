@@ -445,7 +445,7 @@ def render_master() -> str:
 
 
 def resolve_fix(identifier: str) -> list[str]:
-    index = load_yaml(FIXES / "INDEX.yaml") or {}
+    index = load_fix_index()
     fixes = index.get("fixes", {})
     if identifier in fixes:
         return [identifier]
@@ -475,6 +475,127 @@ def synchronized_index(index: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+FIX_INDEX_V2_KEYS = {"schema_version", "discovery"}
+FIX_INDEX_DISCOVERY_V2 = {
+    "status_glob": "*/STATUS.yaml",
+    "aliases_file": "ALIASES.yaml",
+    "exclude": ["_template"],
+}
+
+
+def _project_fix(fix_id: str, status: dict[str, Any], aliases: list[str]) -> dict[str, Any]:
+    return {
+        "directory": f"fixes/{fix_id}",
+        "aliases": aliases,
+        "issues": status.get("issues", []),
+        "related_issues": status.get("related_issues", []),
+        "state": status.get("state"),
+        "dependencies": status.get("dependencies", []),
+        "stacked_on": status.get("implementation", {}).get("stacked_on", []),
+        "branch": status.get("implementation", {}).get("branch"),
+        "head_sha": status.get("implementation", {}).get("head_sha"),
+    }
+
+
+def _load_aliases(fix_id: str, required: set[str]) -> list[str]:
+    path = FIXES / fix_id / "ALIASES.yaml"
+    if not path.is_file():
+        if fix_id in required:
+            raise ValueError(f"{fix_id}: missing required ALIASES.yaml")
+        return []
+    document = load_yaml(path)
+    if not isinstance(document, dict) or set(document) != {"schema_version", "fix_id", "aliases"}:
+        raise ValueError(f"{fix_id}: invalid ALIASES.yaml shape")
+    if document.get("schema_version") != 1 or document.get("fix_id") != fix_id:
+        raise ValueError(f"{fix_id}: ALIASES.yaml identity/schema mismatch")
+    aliases = document.get("aliases")
+    if not isinstance(aliases, list) or not aliases or any(
+        not isinstance(alias, str) or not alias or alias.strip() != alias
+        for alias in aliases
+    ):
+        raise ValueError(f"{fix_id}: ALIASES.yaml aliases must be non-empty strings")
+    if len(aliases) != len(set(aliases)):
+        raise ValueError(f"{fix_id}: duplicate aliases")
+    return aliases
+
+
+def load_fix_index(path: Path | None = None) -> dict[str, Any]:
+    """Return the schema-1-compatible fix projection from either index format."""
+    path = path or FIXES / "INDEX.yaml"
+    marker = load_yaml(path) or {}
+    if not isinstance(marker, dict):
+        raise ValueError("fixes/INDEX.yaml must be a mapping")
+    version = marker.get("schema_version")
+    if version == 1:
+        return synchronized_index(marker)
+    if version != 2 or set(marker) != FIX_INDEX_V2_KEYS:
+        raise ValueError("fixes/INDEX.yaml must be a schema 1 projection or schema 2 discovery marker")
+    discovery = marker.get("discovery")
+    if not isinstance(discovery, dict) or set(discovery) != {
+        *FIX_INDEX_DISCOVERY_V2,
+        "required_alias_metadata",
+    }:
+        raise ValueError("fixes/INDEX.yaml has invalid schema 2 discovery keys")
+    for key, expected in FIX_INDEX_DISCOVERY_V2.items():
+        if discovery.get(key) != expected:
+            raise ValueError(f"fixes/INDEX.yaml has unsupported discovery.{key}")
+    required_list = discovery.get("required_alias_metadata")
+    if (
+        not isinstance(required_list, list)
+        or any(not isinstance(value, str) for value in required_list)
+        or required_list != sorted(set(required_list))
+    ):
+        raise ValueError("fixes/INDEX.yaml required_alias_metadata must be sorted and unique")
+    required = set(required_list)
+    statuses: dict[str, Path] = {}
+    for status_path in sorted(FIXES.glob("*/STATUS.yaml")):
+        fix_id = status_path.parent.name
+        if fix_id == "_template":
+            continue
+        validate_fix_id(fix_id)
+        statuses[fix_id] = status_path
+    alias_paths = {
+        alias_path.parent.name: alias_path
+        for alias_path in sorted(FIXES.glob("*/ALIASES.yaml"))
+        if alias_path.parent.name != "_template"
+    }
+    orphaned = sorted(set(alias_paths) - set(statuses))
+    if orphaned:
+        raise ValueError(f"orphan ALIASES.yaml metadata: {orphaned}")
+    unknown_required = sorted(required - set(statuses))
+    if unknown_required:
+        raise ValueError(f"required alias metadata references unknown fixes: {unknown_required}")
+    fixes: dict[str, Any] = {}
+    alias_owners: dict[str, str] = {}
+    canonical = set(statuses)
+    for fix_id, status_path in sorted(statuses.items()):
+        status = load_yaml(status_path) or {}
+        if not isinstance(status, dict):
+            raise ValueError(f"{fix_id}: discovered STATUS.yaml must be a mapping")
+        if status.get("fix_id") != fix_id:
+            raise ValueError(f"{fix_id}: discovered STATUS.yaml fix_id mismatch")
+        aliases = _load_aliases(fix_id, required)
+        for alias in aliases:
+            if alias in canonical:
+                raise ValueError(f"{fix_id}: alias collides with canonical fix id {alias}")
+            owner = alias_owners.setdefault(alias, fix_id)
+            if owner != fix_id:
+                raise ValueError(f"alias {alias!r} is shared by {owner} and {fix_id}")
+        fixes[fix_id] = _project_fix(fix_id, status, aliases)
+    return {"schema_version": 1, "fixes": fixes}
+
+
+def refresh_fix_index() -> dict[str, Any]:
+    """Refresh legacy fixtures; schema 2 is derived and its marker is never rewritten."""
+    path = FIXES / "INDEX.yaml"
+    marker = load_yaml(path) or {}
+    if marker.get("schema_version") == 1:
+        projected = synchronized_index(marker)
+        write_yaml(path, projected)
+        return projected
+    return load_fix_index(path)
+
+
 def sync_issue_fix_links(index: dict[str, Any], check: bool) -> list[str]:
     expected: dict[str, list[str]] = {}
     for fix_id, record in index.get("fixes", {}).items():
@@ -497,8 +618,9 @@ def sync_issue_fix_links(index: dict[str, Any], check: bool) -> list[str]:
 @serialized
 def cmd_sync_index(args: argparse.Namespace) -> int:
     path = FIXES / "INDEX.yaml"
-    current = load_yaml(path)
-    expected = synchronized_index(current)
+    current = load_yaml(path) or {}
+    derived = current.get("schema_version") == 2
+    expected = load_fix_index(path)
     intake_path = INTAKE / "INDEX.yaml"
     intake_current = load_yaml(intake_path) or {}
     intake_expected = synchronized_intake_index(intake_current)
@@ -508,12 +630,12 @@ def cmd_sync_index(args: argparse.Namespace) -> int:
     stale_links = sync_issue_fix_links(expected, check=True)
     if args.check:
         if (
-            current != expected
+            (not derived and current != expected)
             or intake_current != intake_expected
             or campaign_current != campaign_expected
             or stale_links
         ):
-            if current != expected:
+            if not derived and current != expected:
                 print("FAIL: fixes/INDEX.yaml is stale", file=sys.stderr)
             if intake_current != intake_expected:
                 print("FAIL: intake/INDEX.yaml is stale", file=sys.stderr)
@@ -531,7 +653,8 @@ def cmd_sync_index(args: argparse.Namespace) -> int:
         with workflow_lock(), workflow_transaction(
             [path, intake_path, campaign_path, ISSUES / "MASTER_ISSUES.md"]
         ):
-            write_yaml(path, expected)
+            if not derived:
+                write_yaml(path, expected)
             write_yaml(intake_path, intake_expected)
             write_yaml(campaign_path, campaign_expected)
             sync_issue_fix_links(expected, check=False)
@@ -539,7 +662,7 @@ def cmd_sync_index(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
-    print(f"wrote {path}")
+    print("validated derived fix index" if derived else f"wrote {path}")
     return 0
 
 
@@ -1328,7 +1451,7 @@ def cmd_configure(args: argparse.Namespace) -> int:
         index_path = FIXES / 'INDEX.yaml'
         with workflow_transaction([path, index_path]):
             write_yaml(path, status)
-            write_yaml(index_path, synchronized_index(load_yaml(index_path)))
+            refresh_fix_index()
         print(f"{args.fix_id}: configured; revision={status['revision']}")
         return 0
     except (OSError, ValueError, yaml.YAMLError) as exc:
@@ -1789,7 +1912,7 @@ def create_fix_record(
         if not issue_path.is_file():
             raise ValueError(f"unknown issue {issue_id}")
     index_path = FIXES / "INDEX.yaml"
-    index = load_yaml(index_path)
+    index = load_fix_index(index_path)
     owners: dict[str, list[str]] = {}
     for owner_fix_id, record in index["fixes"].items():
         for issue_id in record.get("issues", []):
@@ -1833,8 +1956,9 @@ def create_fix_record(
         "branch": None,
         "head_sha": None,
     }
-    write_yaml(index_path, index)
-    sync_issue_fix_links(index, check=False)
+    if (load_yaml(index_path) or {}).get("schema_version") == 1:
+        write_yaml(index_path, index)
+    sync_issue_fix_links(load_fix_index(index_path), check=False)
     write_text(ISSUES / "MASTER_ISSUES.md", render_master())
     return target
 
@@ -1963,8 +2087,7 @@ def cmd_transition(args: argparse.Namespace) -> int:
             [status_path, index_path, ISSUES / "MASTER_ISSUES.md", *issue_paths]
         ):
             write_yaml(status_path, status)
-            index = synchronized_index(load_yaml(index_path))
-            write_yaml(index_path, index)
+            index = refresh_fix_index()
             sync_issue_fix_links(index, check=False)
             write_text(ISSUES / "MASTER_ISSUES.md", render_master())
     except (OSError, ValueError) as exc:
@@ -2621,7 +2744,7 @@ def cmd_release_sync(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-    fix_index = (load_yaml(FIXES / "INDEX.yaml") or {}).get("fixes", {})
+    fix_index = load_fix_index().get("fixes", {})
     unknown_fixes = sorted(set(observation["fixes"]) - set(fix_index))
     if unknown_fixes:
         print(f"FAIL: unknown fixes {unknown_fixes}", file=sys.stderr)
@@ -2729,10 +2852,7 @@ def cmd_release_sync(args: argparse.Namespace) -> int:
                     by=args.by,
                     approval_ref=args.approval_ref,
                 )
-            write_yaml(
-                FIXES / "INDEX.yaml",
-                synchronized_index(load_yaml(FIXES / "INDEX.yaml")),
-            )
+            refresh_fix_index()
             current = load_yaml(RELEASES / "CURRENT.yaml")
             current["recorded_at"] = now
             current["status"] = "deployment-observed-verification-pending"
@@ -2916,10 +3036,7 @@ def finalize_release_sync(args: argparse.Namespace) -> int:
                     by=args.by,
                     approval_ref=args.approval_ref,
                 )
-            write_yaml(
-                FIXES / "INDEX.yaml",
-                synchronized_index(load_yaml(FIXES / "INDEX.yaml")),
-            )
+            refresh_fix_index()
             result_rows = [
                 *[
                     {"issue_id": issue_id, "result": "PASS", "artifact": artifact}
@@ -3937,9 +4054,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         errors.append(f"issue render: {exc}")
 
     try:
-        index = load_yaml(FIXES / "INDEX.yaml") or {}
+        marker = load_yaml(FIXES / "INDEX.yaml") or {}
+        index = load_fix_index()
         fixes = index.get("fixes", {})
-        if index != synchronized_index(index):
+        if marker.get("schema_version") == 1 and marker != index:
             errors.append("fixes/INDEX.yaml projections are stale")
         stale_issue_links = sync_issue_fix_links(index, check=True)
         if stale_issue_links:
@@ -4079,7 +4197,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     try:
         _, issue_metadata, _ = render_base()
-        fix_index = (load_yaml(FIXES / "INDEX.yaml") or {}).get("fixes", {})
+        fix_index = load_fix_index().get("fixes", {})
         for issue_id, entry in issue_metadata.items():
             linked = [fix_index[fix_id] for fix_id in entry.get("fixes", []) if fix_id in fix_index]
             linked_states = {record.get("state") for record in linked}

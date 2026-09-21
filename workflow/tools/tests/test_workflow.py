@@ -45,13 +45,20 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertIn("T1-M020", workflow.resolve_fix("M-20"))
 
     def test_all_indexed_statuses_have_next_action(self) -> None:
-        index = workflow.load_yaml(workflow.FIXES / "INDEX.yaml")
-        self.assertEqual(index, workflow.synchronized_index(index))
+        marker = workflow.load_yaml(workflow.FIXES / "INDEX.yaml")
+        self.assertEqual(marker["schema_version"], 2)
+        index = workflow.load_fix_index()
         for fix_id in index["fixes"]:
             status = workflow.load_yaml(workflow.FIXES / fix_id / "STATUS.yaml")
             self.assertEqual(status["fix_id"], fix_id)
             self.assertIn(status["state"], workflow.ALLOWED_STATES)
             self.assertTrue(status["next_action"]["action"])
+
+    def test_legacy_aliases_are_discovered_without_projection_entries(self) -> None:
+        index = workflow.load_fix_index()
+        self.assertEqual(index["schema_version"], 1)
+        self.assertEqual(index["fixes"]["T1-M160"]["aliases"], ["M-160"])
+        self.assertEqual(workflow.resolve_fix("R-8"), ["T1-A"])
 
     def test_fix_ids_cannot_escape_fix_root(self) -> None:
         for unsafe in ("../escape", "/tmp/escape", "_template", "bad id"):
