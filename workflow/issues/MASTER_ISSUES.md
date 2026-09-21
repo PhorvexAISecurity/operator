@@ -2611,7 +2611,7 @@ Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
 
 ### M-170 · APT catalogue labels technique-specific attacks that execute the same generic marker routine · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: T5-M170
+Severity: HIGH · Tier: unassigned · Fixes: POST25-CATALOGUE-CLAIMS, T5-M170
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

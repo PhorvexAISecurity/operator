@@ -84,10 +84,11 @@ func ReadMetricsJSONL(path string) ([]core.Metric, error) {
 // section with the Phorvex column left TO-BE-FILLED. ZERO core change, ZERO
 // re-execution.
 //
-// Validity rule (identical to the main report): invalid, skipped, unanchored and
-// legacy/unverified rows never enter a denominator, and an arm with an observed
-// cost of "unobserved" yields no ROI or efficiency figure at all — an unmeasured
-// arm is rendered `n/a`, never $0 or 0%.
+// Eligibility and validity rules are identical to the main report: the scenario
+// must explicitly be an executable, non-benign attack, and invalid, skipped,
+// unanchored and legacy/unverified rows never enter a denominator. An arm with
+// an observed cost of "unobserved" yields no ROI or efficiency figure at all —
+// an unmeasured arm is rendered `n/a`, never $0 or 0%.
 
 // DollarInputs carries the swappable ROI knobs + the per-arm rotation intervals so
 // the renderer recomputes economics for rows that did not have them stamped (e.g.
@@ -132,6 +133,7 @@ type dollarRow struct {
 	SplitOracle        string
 	TriggerAttribution string
 	CapabilityPending  bool
+	CapabilityNote     string
 	DetectorAbsent     bool
 	// Economics is true only when the arm has at least one scored, cost-observed
 	// trial; otherwise every dollar/Schwartau figure below is NOT MEASURED.
@@ -170,6 +172,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		tta        []float64
 		detAbsent  bool
 		capPending bool
+		capNote    string
 		mtd        string
 		split      string
 		trigger    string
@@ -188,7 +191,8 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 	baselineSeen := map[string]int{}
 	for i := range metrics {
 		m := metrics[i]
-		if m.AnchorOnly || effectiveMetricRealism(m) == core.RealismMarkerSimulation || m.ScenarioBenignControl || m.Kind() != core.TrialOrdinary || !m.IsScored() {
+		val := m.Validated()
+		if m.AnchorOnly || !isAssessedAttackMetric(m) || m.Kind() != core.TrialOrdinary || !val.Scorable || !val.CostUsable {
 			continue
 		}
 		if m.Defender == in.BaselineDefender && m.Reuse != nil {
@@ -249,29 +253,34 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			continue
 		}
 		a.validity.Emitted++
-		if realism == core.RealismMarkerSimulation {
-			a.validity.RealismExcluded++
-			a.validity.addReason("marker simulation excluded from real attack-defense economics")
-			continue
-		}
-		if m.ScenarioBenignControl {
-			a.validity.BenignControlExcluded++
-			a.validity.addReason("benign functional-effect control excluded from attack-defense economics")
-			continue
+		claimEligible := isAssessedAttackMetric(m)
+		if !claimEligible {
+			recordClaimExclusion(&a.validity, m)
 		}
 
 		// Attribution notes are raw stamps and survive an unscored row; numbers
 		// do not.
 		a.capPending = a.capPending || m.CapabilityPending
+		if m.CapabilityNote != "" {
+			a.capNote = m.CapabilityNote
+		}
 		if m.TriggerAttribution != "" {
 			a.trigger = m.TriggerAttribution
 		}
 
-		switch {
-		case val.Legacy:
+		if val.Legacy {
 			a.validity.Legacy++
 			a.validity.addReason("legacy/unverified row: excluded from every $ and Schwartau denominator")
 			continue
+		}
+		if !v.Cleanup.Complete {
+			a.validity.CleanupFailed++
+		}
+		if !val.CostUsable {
+			a.validity.CostUnobserved++
+			a.validity.addReason("defensive cost UNOBSERVED: excluded from ROI/Schwartau (unknown cost must not produce a favorable ratio)")
+		}
+		switch {
 		case val.Unverified:
 			a.validity.Unverified++
 			a.validity.addReason(val.Rejections...)
@@ -290,14 +299,10 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			a.validity.addReason(val.Rejections...)
 			continue
 		}
-		if !v.Cleanup.Complete {
-			a.validity.CleanupFailed++
-		}
 		if !val.CostUsable {
-			// A scored disruption with an UNOBSERVED cost cannot produce an ROI or
-			// efficiency number; the row is retained as a counted exclusion.
-			a.validity.CostUnobserved++
-			a.validity.addReason("defensive cost UNOBSERVED: excluded from ROI/Schwartau (unknown cost must not produce a favorable ratio)")
+			continue
+		}
+		if !claimEligible {
 			continue
 		}
 		a.validity.Scored++
@@ -336,6 +341,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			SplitOracle:        a.split,
 			TriggerAttribution: a.trigger,
 			CapabilityPending:  a.capPending,
+			CapabilityNote:     a.capNote,
 			DetectorAbsent:     a.detAbsent,
 			Economics:          len(a.disruption) > 0,
 			Validity:           a.validity,
@@ -391,7 +397,7 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	var b strings.Builder
 	b.WriteString("# Phoenix / Phorvex -- Dollars, Schwartau & Attack-Reusability View\n\n")
 	b.WriteString("Pure post-processing over the SAME extended Metric schema (ZERO re-execution). ROI($) is recomputed from the swappable knobs; Schwartau P = the arm's rotation interval, D/R = measured time-to-action; attack-reusability anchors replay-success to the static baseline.\n\n")
-	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only SCORED attack trials with an OBSERVED defensive cost enter these figures. Marker simulations, benign functional-effect controls, invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
+	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only explicitly classified executable, non-benign attack trials that are SCORED with an OBSERVED defensive cost enter these figures. Unassessed or unsupported mechanisms, marker simulations, benign functional-effect controls, invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
 
 	b.WriteString("## Swappable $ inputs (clearly-labeled defaults)\n\n")
 	b.WriteString(fmt.Sprintf("- **gpuCount** = %d (a single DGX-class node)\n", in.ROI.GpuCount))
@@ -407,8 +413,8 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rows {
 		if !r.Economics {
-			b.WriteString(fmt.Sprintf("| %s | %s | %s | 0 | n/a | %s | %s | n/a | n/a | n/a | n/a | n/a | n/a | %v |\n",
-				r.Scenario, r.Defender, r.Realism, dash(r.MTDEffect), dash(r.TriggerAttribution), r.CapabilityPending))
+			b.WriteString(fmt.Sprintf("| %s | %s | %s | 0 | n/a | %s | %s | n/a | n/a | n/a | n/a | n/a | n/a | %s |\n",
+				r.Scenario, r.Defender, r.Realism, dash(r.MTDEffect), markdownCell(dash(r.TriggerAttribution)), capabilityCell(r)))
 			continue
 		}
 		sch := ""
@@ -417,12 +423,12 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 		} else {
 			sch = fmt.Sprintf("%.0f/%.1f/%.1f", r.Schwartau.ProtectionTimeSeconds, r.Schwartau.DetectionTimeSeconds, r.Schwartau.ReactionTimeSeconds)
 		}
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %.0f%% | %s | %s | $%.0f | $%.0f | %s | %v | %d | %.0f%% | %v |\n",
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %.0f%% | %s | %s | $%.0f | $%.0f | %s | %v | %d | %.0f%% | %s |\n",
 			r.Scenario, r.Defender, r.Realism, r.Trials, r.MeanDisruption*100,
-			dash(r.MTDEffect), dash(r.TriggerAttribution),
+			dash(r.MTDEffect), markdownCell(dash(r.TriggerAttribution)),
 			r.ROI.SecurityPerCostDollars, r.ROI.AnnualDefenseCostDollars,
 			sch, r.Schwartau.SchwartauPositive,
-			r.Reuse.ReplaySuccessCount, r.Reuse.ReuseReductionVsStatic*100, r.CapabilityPending))
+			r.Reuse.ReplaySuccessCount, r.Reuse.ReuseReductionVsStatic*100, capabilityCell(r)))
 	}
 	b.WriteString("\n")
 
@@ -430,8 +436,8 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString("| Scenario | Defender | Accounting | Reasons |\n|---|---|---|---|\n")
 	for _, r := range rows {
 		v := r.Validity
-		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d benignControlExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
-			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.BenignControlExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d benignControlExcluded=%d mechanismExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.BenignControlExcluded, v.MechanismExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
 			r.NegControlState, r.NegControlUsable, r.NegControlTotal)
 		if !v.Complete() {
 			acct = "INCOMPLETE " + acct
@@ -445,6 +451,14 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	return b.String()
 }
 
+func capabilityCell(r dollarRow) string {
+	cell := fmt.Sprintf("%v", r.CapabilityPending)
+	if r.CapabilityNote != "" {
+		cell += ": " + r.CapabilityNote
+	}
+	return markdownCell(truncate(cell, 120))
+}
+
 // renderHypotheses evaluates H1/H2/H3 (defined transparently from the rotation-vs-
 // static thesis; no pre-registered Part 9 doc exists in the repo) and leaves the
 // Phorvex (d-phorvex-slot) column TO-BE-FILLED. A hypothesis with no measured
@@ -452,7 +466,7 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string {
 	var b strings.Builder
 	b.WriteString("## Hypotheses H1 / H2 / H3 (PHORVEX Part 9 -- defined transparently from the rotation-vs-static thesis; no pre-registered doc exists in the repo)\n\n")
-	b.WriteString("Each verdict is evaluated over SCORED, cost-observed arms only. UNSCORED means no valid measurement existed — it is neither a pass nor a measured failure.\n\n")
+	b.WriteString("Each verdict is evaluated over explicitly executable, non-benign, SCORED, cost-observed attack arms only. UNSCORED means no eligible valid measurement existed — it is neither a pass nor a measured failure.\n\n")
 	b.WriteString(renderNegControlCaveat(rows))
 
 	rotating := map[string]bool{"d-r6blindtimer": true, "d-randomequal": true, "d-fullphoenix": true}

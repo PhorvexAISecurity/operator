@@ -1332,6 +1332,17 @@ fixes:
     - POST25-M137
     branch: post25-catalogue
     head_sha: c5afad4d32db8ac9215203a602cc7356ec47eab6
+  POST25-CATALOGUE-CLAIMS:
+    directory: fixes/POST25-CATALOGUE-CLAIMS
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-catalogue-claims
+    head_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad
   POST25-CALIB-EXPORT:
     directory: fixes/POST25-CALIB-EXPORT
     aliases: []
