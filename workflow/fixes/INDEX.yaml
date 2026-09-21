@@ -1344,3 +1344,14 @@ fixes:
     - T25-M067
     branch: post25-drain-v11
     head_sha: d919752d531830357af00a8390d6dc9505b35013
+  POST25-CALIB-EXPORT:
+    directory: fixes/POST25-CALIB-EXPORT
+    aliases: []
+    issues:
+    - M-182
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-calibration-export
+    head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
