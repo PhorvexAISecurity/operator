@@ -1406,14 +1406,14 @@ fixes:
     issues:
     - M-54
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on:
     - POST25-M043
     - POST25-M103
     - POST25-SESSION-GVK
     branch: post25-m054
-    head_sha: f3a59f9f385add56d186f1af2999a73ed78d3f2d
+    head_sha: e260345cc78178e2a813611f6787a597fae0ac0e
   POST25-M103:
     directory: fixes/POST25-M103
     aliases: []
