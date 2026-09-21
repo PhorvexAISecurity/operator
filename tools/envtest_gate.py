@@ -78,7 +78,7 @@ REQUIRED = {
         'TestM012RealAPIAuthorizationDenialCountsOneAttempt',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
         'TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers',
-        'TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController',
+        'TestM009ActualNativeReceiptSnapshotRunnerAndReplicaSetController',
         'TestM064RealAPIRunnerNativeAccounting',
         'TestM178RealAPINativeReceiptAndIngest',
     ),
