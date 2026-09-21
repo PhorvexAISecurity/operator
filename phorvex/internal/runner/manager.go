@@ -2068,6 +2068,22 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 	}
 
+	// Standing route state belongs to the policy tick, not to a selected move.
+	// Observe it before selection so zero-Pod, zero-selection and rejected ticks
+	// all retain the same owned configuration evidence.
+	namespaceObservation := snap.NamespaceDryRun[e.namespace]
+	if namespaceObservation.Cause == "" {
+		namespaceObservation = actuationbrake.Namespace(nil)
+	}
+	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
+	standingPolicy, ownerCurrent := m.maintainStandingPolicy(ctx, e, pol, admittedOwnerEpoch, killState, brakeState)
+	if !ownerCurrent || ctx.Err() != nil {
+		return
+	}
+	actionsSupport.standingPolicy = &standingPolicy
+	killEngaged = killState.observation.Engaged
+	namespaceObservation = brakeState.namespace
+
 	var shadowDecisions []model.Decision
 	shadowAvailable := false
 	if m.Calibration != nil {
@@ -2130,10 +2146,6 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		if len(rejected) > 0 || inventory != nil {
 			m.updateExistentialStatus(ctx, e, rejected, inventory)
 		}
-		namespaceObservation := snap.NamespaceDryRun[e.namespace]
-		if namespaceObservation.Cause == "" {
-			namespaceObservation = actuationbrake.Namespace(nil)
-		}
 		actionsSupport.namespaceDryRun = namespaceObservation
 		m.updateRejectedStatusObserved(ctx, e, len(views), killState.observation, time.Now(), reason, actionsSupport)
 		m.Clock.RetainOwner(pol.Owner(), keep)
@@ -2156,13 +2168,6 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}, availabilityViolations, sloViolations)
 	}
 
-	// The snapshot observation excludes opted-out targets before allocation. A fresh,
-	// uncached observation is still required at route and dispatch boundaries below.
-	namespaceObservation := snap.NamespaceDryRun[e.namespace]
-	if namespaceObservation.Cause == "" {
-		namespaceObservation = actuationbrake.Namespace(nil)
-	}
-	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
 	effectiveDryRun := pol.DryRun || namespaceObservation.Engaged
 	for i := range decisions {
 		if decisions[i].Measurements == nil {
@@ -2186,6 +2191,13 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			// run with --global-kill-switch to feed a dashboard) distinguishable from an
 			// operator whose actuator is failing. Both otherwise emit the identical record.
 			stampKillSwitchRefusal(&decisions[i], killState.observation)
+		}
+	}
+	if !standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && standingPolicy.blockedCause != "" {
+		for i := range decisions {
+			if decisions[i].Selected {
+				stampDispatchEvidence(&decisions[i], model.DispatchNotAttempted, "standing-policy-guard-unavailable")
+			}
 		}
 	}
 	if ctx.Err() != nil {
@@ -2213,7 +2225,10 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// (actuate marks decisions[i].Actuated on a successful emit).
 	m.fallbackDecisions = nil
 	var currentPreparation *actuator.RoutePreparation
-	if !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
+	if standingPolicy.observed {
+		currentPreparation = &standingPolicy.result.Preparation
+	}
+	if standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
@@ -2222,7 +2237,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 		var attempted bool
-		_, currentPreparation, attempted = m.actuatePreparedWithKillSwitchObserved(ctx, e, pol, decisions, viewByKey, killState, brakeState)
+		_, currentPreparation, attempted = m.actuatePreparedMode(ctx, e, pol, decisions, viewByKey, true, killState, brakeState, currentPreparation)
 		if ctx.Err() != nil && !attempted {
 			return
 		}
@@ -2619,7 +2634,7 @@ func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEn
 }
 
 func (m *Manager) actuatePreparedWithKillSwitchObserved(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
-	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState)
+	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState, nil)
 }
 
 func actuationAttemptOutcome(res actuator.Result, err error, disposition actuator.NoEffectDisposition, contradictory bool) metrics.ActuationAttemptOutcome {
@@ -2696,11 +2711,11 @@ func releaseSharedCapacityNoEffect(ctx context.Context, store *sharedcapacity.St
 	return store.ReleaseNoEffect(releaseCtx, reservation)
 }
 
-func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
-	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil)
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
+	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil, prepared)
 }
 
-func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation) (int, *actuator.RoutePreparation, bool) {
+func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
 	attempted := false
 	inheritedHandled := inheritedReservation == nil
 	defer func() {
@@ -2769,7 +2784,9 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 	}
 	var preparation actuator.RoutePreparation
 	var err error
-	if routed, ok := m.Actuator.(interface {
+	if prepared != nil {
+		preparation = *prepared
+	} else if routed, ok := m.Actuator.(interface {
 		PrepareRoutes(context.Context, actuator.TenantTarget) actuator.RoutePreparation
 	}); ok {
 		preparation = routed.PrepareRoutes(ctx, target)
@@ -3189,7 +3206,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
 						reservationTransferred = capacityReservation != nil
-						more, _, fallbackAttempted := m.actuatePreparedModeWithCapacity(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState, capacityReservation)
+						more, _, fallbackAttempted := m.actuatePreparedModeWithCapacity(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState, capacityReservation, &preparation)
 						attempted = attempted || fallbackAttempted
 						actuated += more
 						// The recursive call modifies its local slice's owned trace;

@@ -168,6 +168,54 @@ func (n *NativeActuator) EnsurePolicy(_ context.Context, target TenantTarget) er
 	return nil
 }
 
+func nativeMaintenanceResult(state PolicyMaintenanceState, detail string, err error) PolicyMaintenanceResult {
+	return PolicyMaintenanceResult{
+		Preparation: RoutePreparation{PhoenixSkipped: true, NativeErr: err},
+		Phoenix:     PolicyRouteMaintenance{State: PolicyMaintenanceNotRequired, Detail: "Phoenix route not required"},
+		Native:      PolicyRouteMaintenance{State: state, Detail: detail},
+	}
+}
+
+// ObserveStandingPolicy reads only the in-process policy binding. It performs no
+// Kubernetes write and does not install or replace an authorization binding.
+func (n *NativeActuator) ObserveStandingPolicy(_ context.Context, target TenantTarget) PolicyMaintenanceResult {
+	n.bindingMu.RLock()
+	defer n.bindingMu.RUnlock()
+	if target.PolicyUID != "" {
+		binding, ok := n.bindingsByUID[target.PolicyUID]
+		if !ok {
+			return nativeMaintenanceResult(PolicyMaintenanceMissing, "native policy binding is absent", nil)
+		}
+		if binding.tenant != target.Tenant || binding.namespace != target.Namespace {
+			return nativeMaintenanceResult(PolicyMaintenanceDrifted, "native policy binding differs from current owner", nil)
+		}
+		return nativeMaintenanceResult(PolicyMaintenanceInSync, "native policy binding matches current owner", nil)
+	}
+	if n.bindingsTracked {
+		err := fmt.Errorf("native actuator: policy UID is required after owner tracking activates")
+		return nativeMaintenanceResult(PolicyMaintenanceOwnershipRefused, err.Error(), err)
+	}
+	if target.Tenant == "" || target.Namespace == "" || (n.tenantNS[target.Tenant] != nil && n.tenantNS[target.Tenant][target.Namespace]) {
+		return nativeMaintenanceResult(PolicyMaintenanceInSync, "legacy native policy binding is in sync", nil)
+	}
+	return nativeMaintenanceResult(PolicyMaintenanceMissing, "legacy native policy binding is absent", nil)
+}
+
+// ReconcileStandingPolicy repairs only the native policy binding. It dispatches
+// no handler and creates no Phoenix object.
+func (n *NativeActuator) ReconcileStandingPolicy(ctx context.Context, target TenantTarget) PolicyMaintenanceResult {
+	observed := n.ObserveStandingPolicy(ctx, target)
+	if observed.Native.State == PolicyMaintenanceInSync || observed.Preparation.NativeErr != nil {
+		return observed
+	}
+	if err := n.EnsurePolicy(ctx, target); err != nil {
+		return nativeMaintenanceResult(PolicyMaintenanceUnknown, err.Error(), err)
+	}
+	return nativeMaintenanceResult(PolicyMaintenanceRepaired, "repaired native policy binding", nil)
+}
+
+var _ StandingPolicyMaintainer = (*NativeActuator)(nil)
+
 // assertTenantNamespace is the O7 fail-fast: a Request may only act in a namespace bound to its tenant.
 func (n *NativeActuator) assertTenantNamespace(req Request) error {
 	n.bindingMu.RLock()
