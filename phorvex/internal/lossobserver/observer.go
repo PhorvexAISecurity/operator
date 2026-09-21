@@ -52,13 +52,13 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 		!disclosure.ValidDigest(cfg.ExpectedSHA256) {
 		return nil, errors.New("observer expected response is invalid")
 	}
-	immediate, stable, err := ingest.ResolveStableWorkloadOwner(ctx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
+	operationCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	defer cancel()
+	immediate, stable, err := ingest.ResolveStableWorkloadOwner(operationCtx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
 	if err != nil {
 		return nil, err
 	}
-	requestCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, cfg.URL, nil)
+	req, err := http.NewRequestWithContext(operationCtx, http.MethodGet, cfg.URL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 	// Prevent a copy completed across target/owner replacement from being bound
 	// to either generation. This second authoritative read creates no new GET to
 	// the canary endpoint.
-	afterImmediate, afterStable, err := ingest.ResolveStableWorkloadOwner(ctx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
+	afterImmediate, afterStable, err := ingest.ResolveStableWorkloadOwner(operationCtx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
 	if err != nil || afterImmediate != immediate || afterStable != stable {
 		return nil, errors.New("target ownership changed during observation")
 	}
@@ -117,7 +117,7 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 			Description: model.CompletedDisclosureDescription,
 		},
 	}
-	if err := c.Create(ctx, event); err != nil {
+	if err := c.Create(operationCtx, event); err != nil {
 		return nil, fmt.Errorf("create completed-disclosure SecurityEvent: %w", err)
 	}
 	return event, nil

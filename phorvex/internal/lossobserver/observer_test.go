@@ -24,12 +24,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
+
+type m100BlockingGetClient struct{ client.Client }
+
+func (c m100BlockingGetClient) Get(ctx context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
 
 func m100CertificateAuthority(t *testing.T) (*x509.Certificate, *ecdsa.PrivateKey, *x509.CertPool) {
 	t.Helper()
@@ -272,5 +280,20 @@ func TestM100ObserverRequiresMTLSIdentityAndPropagatesCancellation(t *testing.T)
 	var events amtdv1beta1.SecurityEventList
 	if err := c.List(context.Background(), &events); err != nil || len(events.Items) != 0 {
 		t.Fatalf("timed-out observation events=%d err=%v", len(events.Items), err)
+	}
+
+	// The same configured deadline bounds authoritative Kubernetes identity
+	// reads, not only the canary HTTP exchange.
+	scheme, objects = observerObjects()
+	baseClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objects...).Build()
+	cfg = m100ObserverConfig(body)
+	cfg.URL = blocked.URL
+	cfg.Timeout = 20 * time.Millisecond
+	started := time.Now()
+	if _, err := ObserveOnce(context.Background(), m100BlockingGetClient{Client: baseClient}, blocked.Client(), cfg, time.Now); err == nil {
+		t.Fatal("blocked identity read escaped observation deadline")
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("blocked identity read did not stop promptly")
 	}
 }
