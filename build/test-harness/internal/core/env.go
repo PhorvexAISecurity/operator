@@ -243,6 +243,12 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	delColl("deployments", func() error {
 		return e.Kube.AppsV1().Deployments(ns).DeleteCollection(ctx, dopts, lo)
 	})
+	delColl("replicasets", func() error {
+		return e.Kube.AppsV1().ReplicaSets(ns).DeleteCollection(ctx, dopts, lo)
+	})
+	delColl("persistentvolumeclaims", func() error {
+		return e.Kube.CoreV1().PersistentVolumeClaims(ns).DeleteCollection(ctx, dopts, lo)
+	})
 	// Services do not support DeleteCollection; list+delete. BOTH the list and
 	// each delete are failures worth reporting: a list error means we do not even
 	// know what is left.
@@ -421,6 +427,16 @@ func (e *Env) ownedResidue(ctx context.Context, lo metav1.ListOptions) ([]Cleanu
 		}
 		return nil
 	})
+	check("replicasets", func() error {
+		l, err := e.Kube.AppsV1().ReplicaSets(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("replicaset", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
 	check("services", func() error {
 		l, err := e.Kube.CoreV1().Services(ns).List(ctx, lo)
 		if err != nil {
@@ -428,6 +444,66 @@ func (e *Env) ownedResidue(ctx context.Context, lo metav1.ListOptions) ([]Cleanu
 		}
 		for i := range l.Items {
 			add("service", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("persistentvolumeclaims", func() error {
+		l, err := e.Kube.CoreV1().PersistentVolumeClaims(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("persistentvolumeclaim", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("configmaps", func() error {
+		l, err := e.Kube.CoreV1().ConfigMaps(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("configmap", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("secrets", func() error {
+		l, err := e.Kube.CoreV1().Secrets(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("secret", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("serviceaccounts", func() error {
+		l, err := e.Kube.CoreV1().ServiceAccounts(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("serviceaccount", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("rolebindings", func() error {
+		l, err := e.Kube.RbacV1().RoleBindings(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("rolebinding", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("roles", func() error {
+		l, err := e.Kube.RbacV1().Roles(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("role", l.Items[i].Name, l.Items[i].DeletionTimestamp)
 		}
 		return nil
 	})

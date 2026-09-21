@@ -96,6 +96,31 @@ func TestR2CleanupReportsResidueThatOutlivesTheBudget(t *testing.T) {
 	}
 }
 
+// PVCs carry the checkpoint state and are part of the same generic ownership
+// boundary. An accepted collection delete cannot make a still-observed PVC
+// disappear from the cleanup result.
+func TestR2CleanupReportsPersistentVolumeClaimResidue(t *testing.T) {
+	env := newTestEnv("sandbox", "sandbox")
+	held := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{
+		Name: "held-pvc", Namespace: "sandbox",
+		Labels:            map[string]string{OwnedLabelKey: OwnedLabelValue},
+		DeletionTimestamp: ptrNow(), Finalizers: []string{"kubernetes.io/pvc-protection"}}}
+	env.Kube.(*fake.Clientset).PrependReactor("list", "persistentvolumeclaims", func(ktest.Action) (bool, runtime.Object, error) {
+		return true, &corev1.PersistentVolumeClaimList{Items: []corev1.PersistentVolumeClaim{*held}}, nil
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	err := env.CleanupOwned(ctx, false)
+	if err == nil {
+		t.Fatal("cleanup declared reusable state while an owned PVC was still present")
+	}
+	for _, want := range []string{"persistentvolumeclaim/held-pvc", "terminating", "budget expired"} {
+		if !containsSubstring(err.Error(), want) {
+			t.Errorf("PVC residue error does not disclose %q: %v", want, err)
+		}
+	}
+}
+
 func ptrNow() *metav1.Time { n := metav1.Now(); return &n }
 
 // deleteNamespace=true must VERIFY the namespace actually disappeared. An

@@ -1,0 +1,340 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 13
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 41c8235cf161db0af8302d63c75681dcafa07299c51a10815dfa6be2f12b8469
+    source_sha: c6f1b9ca78e2bcbbf693dbfbb13d6fcbeebabf2a
+    at: '2026-09-21T06:24:11+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1787a414e42fe94081da216b40fbff1c3ccf0ab7ca87cc704e00d58df76ff4a7
+    source_sha: c6f1b9ca78e2bcbbf693dbfbb13d6fcbeebabf2a
+    at: '2026-09-21T13:55:34+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: bc41c6c0628ee95d4b06ebd2010d5e220c312df1efefef4c0ed7ac0d7eccb0e4
+    source_sha: 47c22857aa4f9c8972abf36c9c06a792c2ae866a
+    at: '2026-09-21T13:55:35+00:00'
+    baseline_sha: c6f1b9ca78e2bcbbf693dbfbb13d6fcbeebabf2a
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: d72b253f3fd5a61f93322d5f8fad8cff78d9c163a7bc5c20b3da47a7f1b42abc
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:02:24+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: f30927bd9f39a35d83c21cc74a95c8bb1752b5f428aa1e6adb678da7837061d2
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:02:24+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/lead/independent/FULL-HARNESS.json
+    sha256: 2c94680b66c8b5eb2ee3a767b5cbeae8305208cb14a5a49f9fa3b1fe02512292
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:02:24+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: 6e9e71074afca0a823e9cadcf780c7ef5bef27ca65199acca5e5cf4603fd7680
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/lead/independent/RESULTS.json
+    sha256: 679dd8bd9cefad40956ce660ab1f2eb0bea6b9379ff058be6bdc5bd0128b7dae
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:02:24+00:00'
+    inputs:
+    - build/test-harness/cmd/harness
+    - build/test-harness/internal/core
+    inputs_sha256: 9073fa2c6b4e7b7b638d871fc36e717cc9542a86a8e1e17961e26e933484d1c0
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/FOCUSED-TESTS-LIFECYCLE-FINAL.txt
+    sha256: 60d41cb69020eed9fe825cf5994449da250e3006ceaa2afc585e9ec3017c409b
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:02:24+00:00'
+    inputs:
+    - build/test-harness/cmd/harness
+    - build/test-harness/internal/config
+    - build/test-harness/internal/core
+    - build/test-harness/scenarios
+    inputs_sha256: 61780a408cb9350f870c8037e0ebaf8974404588590488aac4b90268d3b5ab84
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/lead/independent/RESULTS.json
+    sha256: 679dd8bd9cefad40956ce660ab1f2eb0bea6b9379ff058be6bdc5bd0128b7dae
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:02:24+00:00'
+    inputs:
+    - build/test-harness/cmd/harness
+    - build/test-harness/internal/core
+    inputs_sha256: 9073fa2c6b4e7b7b638d871fc36e717cc9542a86a8e1e17961e26e933484d1c0
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1787a414e42fe94081da216b40fbff1c3ccf0ab7ca87cc704e00d58df76ff4a7
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:03:13+00:00'
+    baseline_sha: c6f1b9ca78e2bcbbf693dbfbb13d6fcbeebabf2a
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 3970e729743a28fc4bf5bbe2475f06816f4337065877cf3e897478db8b3861a2
+    source_sha: 8690791bdfa3fac422cac342914802faa1507777
+    at: '2026-09-21T14:03:13+00:00'
+    incident_sha256: 1787a414e42fe94081da216b40fbff1c3ccf0ab7ca87cc704e00d58df76ff4a7
+fix_id: POST25-CHECKPOINT-LIFECYCLE
+issues:
+- M-170
+title: Preserve the external checkpoint fixture across harness cleanup
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-m054
+  code_sha: c6f1b9ca78e2bcbbf693dbfbb13d6fcbeebabf2a
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-checkpoint-lifecycle
+  base_sha: 47c22857aa4f9c8972abf36c9c06a792c2ae866a
+  head_sha: 8690791bdfa3fac422cac342914802faa1507777
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Same-node benign checkpoint process and Pod restart control only; no node or disk
+  failure tolerance, HA, MIG, security efficacy, ATT&CK or economics claim.
+- External exact-UID collector remains responsible for archive, cluster-scoped PV
+  and StorageClass cleanup, holder deletion, path-absence proof and namespace deletion.
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T14:03:17+00:00'
+follow_up_to: POST25-CHECKPOINT-LOCAL-FIXTURE
+configuration_history:
+- at: '2026-09-21T06:21:46+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-21T09:17:16+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T12:16:10+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T13:52:01+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T13:55:04+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T14:01:07+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T14:02:24+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T06:24:00+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T06:24:12+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T14:01:08+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T14:01:10+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T14:03:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T14:03:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-CHECKPOINT-LIFECYCLE:13:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 13
+check_history:
+- check: preflight
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/preflight/receipt.json
+  sha256: d72b253f3fd5a61f93322d5f8fad8cff78d9c163a7bc5c20b3da47a7f1b42abc
+  source_sha: 8690791bdfa3fac422cac342914802faa1507777
+  at: '2026-09-21T14:01:08+00:00'
+- check: implementation
+  result: PASS
+  by: post25-catalogue
+  artifact: 04-diff.patch
+  sha256: f30927bd9f39a35d83c21cc74a95c8bb1752b5f428aa1e6adb678da7837061d2
+  source_sha: 8690791bdfa3fac422cac342914802faa1507777
+  at: '2026-09-21T14:01:08+00:00'
+- check: l0
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/lead/independent/FULL-HARNESS.json
+  sha256: 2c94680b66c8b5eb2ee3a767b5cbeae8305208cb14a5a49f9fa3b1fe02512292
+  source_sha: 8690791bdfa3fac422cac342914802faa1507777
+  at: '2026-09-21T14:01:08+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 6e9e71074afca0a823e9cadcf780c7ef5bef27ca65199acca5e5cf4603fd7680
+- check: l1
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/lead/independent/RESULTS.json
+  sha256: 679dd8bd9cefad40956ce660ab1f2eb0bea6b9379ff058be6bdc5bd0128b7dae
+  source_sha: 8690791bdfa3fac422cac342914802faa1507777
+  at: '2026-09-21T14:01:08+00:00'
+  inputs:
+  - build/test-harness/cmd/harness
+  - build/test-harness/internal/core
+  inputs_sha256: 9073fa2c6b4e7b7b638d871fc36e717cc9542a86a8e1e17961e26e933484d1c0
+- check: l2
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/worker/FOCUSED-TESTS-LIFECYCLE-FINAL.txt
+  sha256: 60d41cb69020eed9fe825cf5994449da250e3006ceaa2afc585e9ec3017c409b
+  source_sha: 8690791bdfa3fac422cac342914802faa1507777
+  at: '2026-09-21T14:01:08+00:00'
+  inputs:
+  - build/test-harness/cmd/harness
+  - build/test-harness/internal/config
+  - build/test-harness/internal/core
+  - build/test-harness/scenarios
+  inputs_sha256: 61780a408cb9350f870c8037e0ebaf8974404588590488aac4b90268d3b5ab84
+- check: positive_control
+  result: PASS
+  by: post25-catalogue
+  artifact: evidence/lead/independent/RESULTS.json
+  sha256: 679dd8bd9cefad40956ce660ab1f2eb0bea6b9379ff058be6bdc5bd0128b7dae
+  source_sha: 8690791bdfa3fac422cac342914802faa1507777
+  at: '2026-09-21T14:01:08+00:00'
+  inputs:
+  - build/test-harness/cmd/harness
+  - build/test-harness/internal/core
+  inputs_sha256: 9073fa2c6b4e7b7b638d871fc36e717cc9542a86a8e1e17961e26e933484d1c0
