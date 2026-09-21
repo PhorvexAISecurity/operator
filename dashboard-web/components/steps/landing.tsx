@@ -6,24 +6,19 @@ import { STEPS, StepId, JourneySignals, stepState } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { ArrowRight, PlayCircle, Plug, Radar, Network, Radio, Swords, FileText, Check, Lock, FlaskConical } from "lucide-react";
+import { useApiRead } from "@/lib/query";
 
 const ICON: Record<StepId, React.ElementType> = { landing: Plug, connect: Plug, scan: Radar, discovered: Network, attacklab: Swords, protect: Radio, prove: Swords, report: FileText, bench: FlaskConical };
 
 export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: JourneySignals; go: (s: StepId) => void; onDemo: () => void }) {
-  const [stats, setStats] = React.useState<Stat[]>([]);
-  const [posture, setPosture] = React.useState<Posture | null>(null);
-  const [rollup, setRollup] = React.useState<OwnerRollup | null>(null);
   const { tenant } = useOwnerTenant(lens);
-  React.useEffect(() => {
-    if (lens === "owner") {
-      if (tenant) api.ownerEvents(lens, tenant).then((d) => setRollup(d.rollup)).catch(() => {});
-      return;
-    }
-    api.effectiveness(lens).then((d) => setStats(d.stats ?? [])).catch(() => {});
-    api.posture(lens).then(setPosture).catch(() => {});
-  }, [lens, tenant]);
-
-  const hero = stats.filter((s) => ["disruption", "work-preserved", "prevention", "explainability"].includes(s.key));
+  const effectiveness = useApiRead({ lens, resource: "effectiveness", fetcher: (signal) => api.effectiveness(lens, signal), staleTime: 60_000, enabled: lens !== "owner" });
+  const postureRead = useApiRead({ lens, resource: "posture", fetcher: (signal) => api.posture(lens, signal), staleTime: 60_000, enabled: lens !== "owner" });
+  const ownerRead = useApiRead({ lens, resource: "owner-events", parameters: { tenant }, fetcher: (signal) => api.ownerEvents(lens, tenant, signal), staleTime: 15_000, enabled: lens === "owner" && !!tenant });
+  const posture = postureRead.data ?? null;
+  const rollup = ownerRead.data?.rollup ?? null;
+  const scoped = lens === "owner" ? !!ownerRead.data : !!(effectiveness.data || postureRead.data);
+  const hero = (effectiveness.data?.stats ?? []).filter((s) => ["disruption", "work-preserved", "prevention", "explainability"].includes(s.key));
 
   return (
     <div className="animate-fade-up space-y-8">
@@ -48,7 +43,7 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
       {/* journey map */}
       <section>
         <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">The journey · click any step</div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {STEPS.map((s) => {
             const st = stepState(s.id, signals, "landing");
             const Icon = ICON[s.id];
@@ -60,7 +55,7 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
                   st === "locked" && "opacity-50")}>
                 <div className="flex items-center justify-between">
                   <Icon className={cn("h-4 w-4", center ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                  {st === "done" ? <Badge variant="real"><Check className="h-2.5 w-2.5" /> ready</Badge> : st === "locked" ? <Badge variant="neutral"><Lock className="h-2.5 w-2.5" /></Badge> : <span className="text-[10px] tabular text-muted-foreground/60">{s.n}/6</span>}
+                  {st === "done" ? <Badge variant="real"><Check className="h-2.5 w-2.5" /> ready</Badge> : st === "locked" ? <Badge variant="neutral"><Lock className="h-2.5 w-2.5" /></Badge> : <span className="text-[10px] tabular text-muted-foreground/60">{s.n}/{STEPS.length}</span>}
                 </div>
                 <div className="text-[13px] font-semibold">{s.label}</div>
                 <div className="text-[11px] leading-snug text-muted-foreground">{s.tagline}</div>
@@ -75,11 +70,11 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
       <section>
         <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Recorded activity {lens === "owner" ? "· your activity" : "· live from the evidence"}</div>
         {lens === "owner" ? (
-          <OwnerLandingSummary rollup={rollup} />
+          <OwnerLandingSummary rollup={scoped ? rollup : null} />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             {hero.map((s) => <ProofTile key={s.key} label={s.label} value={`${s.value}${s.unit === "%" ? "%" : s.unit === "" ? "" : " " + s.unit}`} tone="primary" />)}
-            {posture && <ProofTile label="Posture grade (K8s)" value={posture.grade} tone="success" />}
+            {scoped && posture && <ProofTile label="Posture grade (K8s)" value={posture.grade} tone="success" />}
           </div>
         )}
       </section>

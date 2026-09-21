@@ -1,5 +1,27 @@
 # Console authentication and authorization (M-136)
 
+## Durable audit history
+
+When `-state-dir` is configured, the console incrementally indexes verified, newline-complete local
+or mTLS audit JSONL batches in `audit-history.db` (bbolt) inside that directory. Records, source
+progress, and durable gap notices commit atomically; JSONL rotation does not prune indexed decisions.
+The index is bound to the configured source path or remote endpoint identity. Back up and recover it
+with the rest of console state while the console is stopped. History begins at the first generation
+that this state directory observed: records deleted before observation cannot be reconstructed, and
+the console does not claim their causes. Initial import is bounded and remains partial until each
+source has caught up; generations are completed oldest-first so durable newest/older pagination does
+not interleave later batches of an old backup above live records. Host and optional vcluster import
+health are tracked independently: an absent vcluster audit does not make host history partial, while
+a request for that vcluster reports its source unavailable. Transient source-listing failures pause
+that configured source without recording a deletion gap. Responses stay partial when the requested
+source is unavailable or catching up, or when a durably indexed malformed, oversized, rewritten,
+truncated, or prematurely deleted generation left a coverage gap. Gap count/latest metadata and the
+active-incomplete generation index keep request and rotation bookkeeping bounded. By default `noop`
+decisions are excluded; `includeNoop=true` restores them, while `action=noop` always requests them
+explicitly. Owner free-text search is limited to the same public namespace, pod, and tenant fields as
+the retained-file compatibility reader; operator and investor projections may also search action and
+reason.
+
 The Phorvex console serves cluster **controls**, not just dashboards: `/api/policy/edit` patches a
 PhorvexPolicy, `/api/vllm/attack` and `/api/workload/attack` exec into pods and apply
 SecurityEvents, `/api/live/clear` truncates the decision audit. It runs as a sidecar in the

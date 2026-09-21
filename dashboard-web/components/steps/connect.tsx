@@ -1,30 +1,34 @@
 "use client";
 import * as React from "react";
 import { api, Lens, ClusterTarget } from "@/lib/api";
-import { setSelectedTarget } from "@/lib/provider-store";
+import { getSelectedTarget, setSelectedTarget } from "@/lib/provider-store";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Loading, ErrorBox } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { cn } from "@/lib/utils";
 import { Server, ArrowRight, Check, Lock } from "lucide-react";
+import { useTargets } from "@/lib/query";
 
 export function ConnectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
-  const [targets, setTargets] = React.useState<ClusterTarget[] | null>(null);
   const [sel, setSel] = React.useState("");
-  const [err, setErr] = React.useState("");
+  const targetQuery = useTargets(lens);
+  const targets = targetQuery.data?.targets;
   React.useEffect(() => {
-    api.targets(lens).then((d) => {
-      const ts = d.targets ?? [];
-      setTargets(ts);
+    setSel("");
+    if (targets) {
+      const ts = targets;
       // default to the runnable AWS EKS cluster, else the first runnable target — NOT just
       // targets[0] (which may be an unreachable cloud context). Persist its kubeconfig context so
       // the Scan step execs `phorvex --scan --context <that>`.
-      const def = ts.find((t) => t.runnable && /eks|arn:aws/i.test(t.context || t.id)) ?? ts.find((t) => t.runnable) ?? ts[0];
+      const current = getSelectedTarget();
+      const def = ts.find((t) => t.runnable && !!current.context && t.context === current.context)
+        ?? ts.find((t) => t.runnable && /eks|arn:aws/i.test(t.context || t.id))
+        ?? ts.find((t) => t.runnable) ?? ts[0];
       if (def) { setSel(def.id); setSelectedTarget({ context: def.context || "", provider: def.provider, label: def.label }); }
-    }).catch((e) => setErr(String(e.message || e)));
-  }, [lens]); // eslint-disable-line
-  if (err) return <ErrorBox msg={err} />;
+    }
+  }, [lens, targets]);
+  if (targetQuery.error) return <ErrorBox msg={String((targetQuery.error as Error).message || targetQuery.error)} />;
   if (!targets) return <Loading label="Reading available environments…" rows={3} />;
   const selT = targets.find((t) => t.id === sel);
   const pick = (t: ClusterTarget) => { if (!t.runnable) return; setSel(t.id); setSelectedTarget({ context: t.context || "", provider: t.provider, label: t.label }); };

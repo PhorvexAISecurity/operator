@@ -12,6 +12,7 @@ require (
 	github.com/phorvex/metricvalidity v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.22.0
 	github.com/r6security/phoenix v0.0.0-00010101000000-000000000000
+	go.etcd.io/bbolt v1.3.11
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
 	k8s.io/client-go v0.34.0

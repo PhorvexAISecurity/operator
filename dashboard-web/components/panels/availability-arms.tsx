@@ -1,29 +1,63 @@
 "use client";
 import * as React from "react";
-import { api, Lens, AvailabilityArms, ArmResult, ArmRun } from "@/lib/api";
+import { api, Lens, ArmResult, ArmRun, ArmsJob } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { Empty } from "@/components/ui/more";
+import { Empty, Input } from "@/components/ui/more";
+import { DataFreshness, PaginationBar } from "@/components/ui/pagination";
+import { useServerPage } from "@/lib/use-server-page";
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Activity, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // AvailabilityArmsPanel — for every three-arm experiment that has been run, what the SAME attack
 // did to the SAME app under three defenders. Listed newest-first with the time it ran.
 export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
-  const [d, setD] = React.useState<AvailabilityArms | null>(null);
-  const [err, setErr] = React.useState("");
+  const [q, setQ] = React.useState("");
+  const [liveMeta, setLiveMeta] = React.useState<{ lens: Lens; running: ArmsJob[]; available: boolean; note: string; howItRan: string; whyNoDrop: string } | null>(null);
+  const [jobError, setJobError] = React.useState<{ lens: Lens; message: string } | null>(null);
+  const normalizedQ = q.trim().toLowerCase();
+  const pager = useServerPage<ArmRun, { running: ArmsJob[]; available: boolean; note: string; howItRan: string; whyNoDrop: string }>({
+    resource: "availability-arms", lens,
+    key: `${lens}\u0000${normalizedQ}`,
+    network: { q: normalizedQ || undefined },
+    pageSize: 10,
+    pollMs: 10000,
+    fetchPage: (cursor, signal) => api.availabilityArmsPage(lens, 10, { q: normalizedQ || undefined }, cursor, signal).then((d) => ({
+      items: d.runs || [], page: d.page,
+      meta: { running: d.running || [], available: d.available, note: d.note, howItRan: d.howItRan, whyNoDrop: d.whyNoDrop },
+    })),
+    legacyFilter: (r) => !normalizedQ || `${r.namespace} ${r.deploy} ${r.attack}`.toLowerCase().includes(normalizedQ),
+  });
+
   React.useEffect(() => {
-    let alive = true;
-    const load = () => api.availabilityArms("", lens).then((r) => { if (alive) setD(r); }).catch((e) => { if (alive) setErr(String(e.message || e)); });
+    if (pager.meta) {
+      setLiveMeta({ lens, ...pager.meta });
+      setJobError(null);
+    }
+  }, [lens, pager.meta]);
+
+  const pollJobsIndependently = pager.hasSnapshot || pager.page > 0 || !!pager.error;
+  React.useEffect(() => {
+    if (!pollJobsIndependently) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => api.availabilityArmsPage(lens, 1, {}, undefined, controller.signal).then((d) => {
+      if (controller.signal.aborted) return;
+      setLiveMeta({ lens, running: d.running || [], available: d.available, note: d.note, howItRan: d.howItRan, whyNoDrop: d.whyNoDrop });
+      setJobError(null);
+      timer = setTimeout(load, 10000);
+    }).catch((e) => {
+      if (!controller.signal.aborted) {
+        setJobError({ lens, message: String(e?.message || e) });
+        timer = setTimeout(load, 10000);
+      }
+    });
     load();
-    const t = setInterval(load, 10000);
-    return () => { alive = false; clearInterval(t); };
-  }, [lens]);
+    return () => { controller.abort(); if (timer) clearTimeout(timer); };
+  }, [lens, pollJobsIndependently]);
 
-  if (err) return <div className="text-[12px] text-danger">error: {err}</div>;
-  if (!d) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading…</div>;
-  const running = (d.running || []).filter((j) => j.phase !== "done");
-  if (!d.available && running.length === 0) return <Empty msg={d.note} />;
-
+  const d = pollJobsIndependently || !pager.meta ? (liveMeta?.lens === lens ? liveMeta : pager.meta) : pager.meta;
+  const scopedJobError = jobError?.lens === lens ? jobError.message : "";
+  const running = (d?.running || []).filter((j) => j.phase !== "done");
   return (
     <div className="space-y-4">
       <div>
@@ -32,9 +66,15 @@ export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
           Availability under attack — no defense vs blind rotator vs Phorvex
         </div>
         <p className="mt-1 max-w-[74ch] text-[12px] leading-relaxed text-muted-foreground">
-          {d.howItRan} One entry per experiment, newest first.
+          {d?.howItRan} One entry per experiment, newest first.
         </p>
       </div>
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all experiments by namespace, deployment, or attack…" aria-label="Search availability experiments" />
+      {pager.legacy && <div className="text-[11px] text-warning">Legacy/preview response: paging and search cover the full history returned by this fixture.</div>}
+      {pager.error && <div className="text-[11px] text-danger">Page refresh failed: {pager.error} <button className="text-primary" onClick={pager.retry}>Retry</button></div>}
+      <DataFreshness updatedAt={pager.updatedAt} refreshing={pager.refreshing} failed={!!pager.error} />
+      {scopedJobError && <div className="text-[11px] text-danger">Showing last known job state; background refresh failed: {scopedJobError}. Retry is scheduled.</div>}
+      {pager.loading && !pager.pageMeta && <div className="flex items-center gap-2 py-8 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading…</div>}
 
       {/* the honest explanation, given prominence rather than buried in a footnote */}
       <Card className="border-l-2 border-l-warning">
@@ -42,18 +82,19 @@ export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="space-y-1.5 text-[12px] leading-relaxed">
             <div className="font-medium text-foreground">Why does &quot;no defense&quot; show full availability?</div>
-            <p className="text-muted-foreground">{d.whyNoDrop}</p>
+            <p className="text-muted-foreground">{d?.whyNoDrop}</p>
           </div>
         </CardContent>
       </Card>
 
       {/* live progress for any experiment currently running */}
       {running.map((j) => (
-        <Card key={j.namespace} className={cn("border-l-2", j.phase === "failed" ? "border-l-danger" : "border-l-primary")}>
+        <Card key={`${j.namespace}:${j.deploy}:${j.attack}:${j.startedAt}`} className={cn("border-l-2", j.phase === "failed" ? "border-l-danger" : "border-l-primary")}>
           <CardContent className="space-y-2 p-4">
             <div className="flex flex-wrap items-center gap-2">
               {j.phase === "failed"
                 ? <ShieldAlert className="h-4 w-4 text-danger" />
+                : scopedJobError ? <ShieldAlert className="h-4 w-4 text-warning" />
                 : <Loader2 className="h-4 w-4 animate-spin text-primary" />}
               <span className="font-mono text-[12px] font-medium text-foreground">{j.namespace}/{j.deploy}</span>
               <span className="text-[11px] text-muted-foreground">· {j.attack}</span>
@@ -64,13 +105,16 @@ export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
                    style={{ width: `${Math.max(2, j.progress)}%` }} />
             </div>
             <div className="text-[11px] text-muted-foreground">{j.error || j.detail}</div>
+            {scopedJobError && j.phase !== "failed" && <div className="text-[11px] text-warning">last known state — live refresh unavailable</div>}
           </CardContent>
         </Card>
       ))}
 
-      {(d.runs || []).map((run) => <RunBlock key={run.runAt + run.namespace} run={run} />)}
+      {pager.items.map((run, index) => <RunBlock key={run.operation || `${pager.page}:${index}:${run.runAt}:${run.namespace}:${run.deploy}:${run.attack}`} run={run} />)}
+      {pager.items.length === 0 && running.length === 0 && !pager.loading && !pager.error && <Empty msg={q ? "No availability experiments match this search." : d?.note || "No availability experiments recorded."} />}
 
-      <div className="text-[11px] text-muted-foreground/70">{d.note}</div>
+      <PaginationBar page={pager.page} pageSize={10} total={pager.pageMeta?.total} hasNext={pager.hasNext} onPrevious={pager.previous} onNext={pager.next} onLatest={pager.latest} showLatest={pager.hasSnapshot || pager.page > 0} loading={pager.loading} />
+      <div className="text-[11px] text-muted-foreground/70">{d?.note}</div>
     </div>
   );
 }

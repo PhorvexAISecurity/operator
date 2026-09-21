@@ -170,7 +170,7 @@ func TestHistoryCursorStableAcrossAppendAndRotation(t *testing.T) {
 		writeHistory(t, path, historyRecord(i, false))
 	}
 	s := NewServer(Config{AuditPath: path})
-	q := url.Values{"lens": {"operator"}, "limit": {"3"}}
+	q := url.Values{"lens": {"operator"}, "limit": {"3"}, "includeNoop": {"true"}}
 	first, _ := getHistory(t, s, q, 200)
 	if len(first.Events) != 3 {
 		t.Fatal(first)
@@ -203,7 +203,7 @@ func TestHistoryCursorStableAcrossAppendAndRotation(t *testing.T) {
 	if len(pods) != 9 || pods[0] != "pod-0008" || pods[8] != "pod-0000" {
 		t.Fatalf("moved older pages: %v", pods)
 	}
-	latest, _ := getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"3"}}, 200)
+	latest, _ := getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"3"}, "includeNoop": {"true"}}, 200)
 	if eventPod(t, latest.Events[0]) != "pod-0013" || eventPod(t, latest.Events[1]) != "pod-0012" {
 		t.Fatalf("latest lost rotation records: %#v", latest)
 	}
@@ -237,11 +237,11 @@ func TestHistoryScopesPredicatesAndInvalidCursors(t *testing.T) {
 	// unrecognised lens can neither escalate nor accidentally widen the tenant filter.
 	owner := testOwnerPrincipal("acme")
 	for _, lens := range []string{"owner", "", "unknown"} {
-		p, _ := getHistoryAs(t, s, owner, url.Values{"lens": {lens}}, 200)
+		p, _ := getHistoryAs(t, s, owner, url.Values{"lens": {lens}, "includeNoop": {"true"}}, 200)
 		if len(p.Events) != 0 {
 			t.Fatal("unscoped owner leak")
 		}
-		p, body := getHistoryAs(t, s, owner, url.Values{"lens": {lens}, "tenant": {"acme"}}, 200)
+		p, body := getHistoryAs(t, s, owner, url.Values{"lens": {lens}, "tenant": {"acme"}, "includeNoop": {"true"}}, 200)
 		if len(p.Events) != 3 {
 			t.Fatalf("owner eligibility: %s", body)
 		}
@@ -257,13 +257,13 @@ func TestHistoryScopesPredicatesAndInvalidCursors(t *testing.T) {
 	if len(p.Events) != 1 {
 		t.Fatal("action/text/inclusive time filter")
 	}
-	p, _ = getHistory(t, s, url.Values{"lens": {"operator"}, "context": {"vc-test"}}, 200)
+	p, _ = getHistory(t, s, url.Values{"lens": {"operator"}, "context": {"vc-test"}, "includeNoop": {"true"}}, 200)
 	if len(p.Events) != 1 || eventPod(t, p.Events[0]) != "pod-0090" {
 		t.Fatal("provider scope")
 	}
-	first, _ := getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"1"}}, 200)
+	first, _ := getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"1"}, "includeNoop": {"true"}}, 200)
 	for k, v := range map[string]string{"lens": "owner", "tenant": "acme", "context": "vc-test", "q": "other", "action": "rotate", "actuated": "true"} {
-		q := url.Values{"lens": {"operator"}, "cursor": {first.NextCursor}}
+		q := url.Values{"lens": {"operator"}, "cursor": {first.NextCursor}, "includeNoop": {"true"}}
 		q.Set(k, v)
 		getHistory(t, s, q, 400)
 	}
@@ -275,7 +275,7 @@ func TestHistoryScopesPredicatesAndInvalidCursors(t *testing.T) {
 	if e := os.Truncate(path, 0); e != nil {
 		t.Fatal(e)
 	}
-	getHistory(t, s, url.Values{"lens": {"operator"}, "cursor": {first.NextCursor}}, 409)
+	getHistory(t, s, url.Values{"lens": {"operator"}, "cursor": {first.NextCursor}, "includeNoop": {"true"}}, 409)
 }
 
 func TestHistoryMalformedOversizedAndPartialLines(t *testing.T) {
@@ -296,7 +296,7 @@ func TestHistoryMalformedOversizedAndPartialLines(t *testing.T) {
 	f.Write(b[:len(b)/2])
 	f.Close()
 	s := NewServer(Config{AuditPath: path})
-	q := url.Values{"lens": {"operator"}}
+	q := url.Values{"lens": {"operator"}, "includeNoop": {"true"}}
 	p, _ := getHistory(t, s, q, 200)
 	if len(p.Events) != 1 || eventPod(t, p.Events[0]) != "pod-0001" || !p.Partial || p.NextCursor == "" {
 		t.Fatalf("bad first bounded page: %#v", p)
@@ -309,7 +309,7 @@ func TestHistoryMalformedOversizedAndPartialLines(t *testing.T) {
 	f, _ = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
 	f.Write(append(b[len(b)/2:], '\n'))
 	f.Close()
-	p, _ = getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"1"}}, 200)
+	p, _ = getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"1"}, "includeNoop": {"true"}}, 200)
 	if eventPod(t, p.Events[0]) != "pod-0002" {
 		t.Fatal("completed record lost")
 	}
@@ -420,7 +420,7 @@ func TestHistoryRejectsSpecialFilesAndExpiredRetention(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := NewServer(Config{AuditPath: path})
-	q := url.Values{"lens": {"operator"}, "limit": {"1"}}
+	q := url.Values{"lens": {"operator"}, "limit": {"1"}, "includeNoop": {"true"}}
 	p, _ := getHistory(t, s, q, 200)
 	if len(p.Events) != 1 {
 		t.Fatal("regular audit not readable")
@@ -433,19 +433,19 @@ func TestHistoryRejectsSpecialFilesAndExpiredRetention(t *testing.T) {
 		f.Close()
 		t.Fatal("symlink accepted")
 	}
-	getHistory(t, s, url.Values{"lens": {"operator"}, "cursor": {strings.Repeat("x", 3000)}}, 400)
+	getHistory(t, s, url.Values{"lens": {"operator"}, "cursor": {strings.Repeat("x", 3000)}, "includeNoop": {"true"}}, 400)
 	if e := os.Rename(path, path+".old"); e != nil {
 		t.Fatal(e)
 	}
 	writeHistory(t, path, historyRecord(3, false))
 	q.Set("cursor", p.NextCursor)
 	getHistory(t, s, q, 409)
-	p, _ = getHistory(t, s, url.Values{"lens": {"operator"}, "actuated": {"false"}}, 200)
+	p, _ = getHistory(t, s, url.Values{"lens": {"operator"}, "actuated": {"false"}, "includeNoop": {"true"}}, 200)
 	if len(p.Events) != 1 {
 		t.Fatal("explicit false predicate")
 	}
 	missing := NewServer(Config{AuditPath: filepath.Join(t.TempDir(), "missing.jsonl")})
-	p, _ = getHistory(t, missing, url.Values{"lens": {"operator"}}, 200)
+	p, _ = getHistory(t, missing, url.Values{"lens": {"operator"}, "includeNoop": {"true"}}, 503)
 	if len(p.Events) != 0 || p.NextCursor != "" {
 		t.Fatal("missing file fabricated history")
 	}
@@ -463,7 +463,7 @@ func TestHistoryBlankLinesRespectScanBudget(t *testing.T) {
 	}
 	f.Close()
 	s := NewServer(Config{AuditPath: path})
-	q := url.Values{"lens": {"operator"}}
+	q := url.Values{"lens": {"operator"}, "includeNoop": {"true"}}
 	for i := 0; i < 2; i++ {
 		p, _ := getHistory(t, s, q, 200)
 		if p.ScannedBytes > historyScanBytes || !p.Partial || p.NextCursor == "" || len(p.Events) != 0 {
@@ -510,11 +510,11 @@ func TestHistoryConcurrentRotationRejectsMixedManifest(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	s := NewServer(Config{AuditPath: path})
-	s.liveHistoryWithOpener(w, withTestPrincipal(httptest.NewRequest("GET", "/api/live/history?lens=operator", nil), testOperatorPrincipal()), openFile)
+	s.liveHistoryWithOpener(w, withTestPrincipal(httptest.NewRequest("GET", "/api/live/history?lens=operator&includeNoop=true", nil), testOperatorPrincipal()), openFile)
 	if !rotated || w.Code != 409 {
 		t.Fatalf("mixed manifest accepted: rotated=%v status=%d %s", rotated, w.Code, w.Body.String())
 	}
-	p, _ := getHistory(t, s, url.Values{"lens": {"operator"}}, 200)
+	p, _ := getHistory(t, s, url.Values{"lens": {"operator"}, "includeNoop": {"true"}}, 200)
 	if len(p.Events) != 3 {
 		t.Fatalf("stable retry lost retained records: %#v", p)
 	}

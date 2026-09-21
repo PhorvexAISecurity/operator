@@ -306,6 +306,22 @@ func TestOwnerSurfacesAreTenantConfined(t *testing.T) {
 func TestHistoryIsTenantConfinedForEveryLens(t *testing.T) {
 	path := writeDecisionAudit(t, decisionRec("acme", "acme-pod"), decisionRec("globex", "globex-pod"))
 	f := newAuthFixture(t, Config{AuditPath: path}, operatorGrant("scoped-op", []string{"acme"}, []string{defaultTargetID}))
+	t.Cleanup(func() {
+		if err := f.srv.Close(); err != nil {
+			t.Errorf("close history server: %v", err)
+		}
+	})
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		status := f.srv.history.statusFor("default")
+		if status.ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("initial history import not ready after 5s: ready=%v error=%q", status.ready, status.err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	w := f.do(f.albReqAs(t, http.MethodGet, "/api/live/history", "", "scoped-op"))
 	if w.Code != 200 {

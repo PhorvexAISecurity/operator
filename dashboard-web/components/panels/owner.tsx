@@ -4,23 +4,26 @@ import { ClaimScopeNote } from "@/components/claim-scope";
 import { ownerNarrative } from "@/lib/owner-narrative";
 import { api, Lens, OwnerEvent } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { PageHead, SectionLabel, Skeleton, ErrorState } from "./effectiveness";
+import { PageHead, SectionLabel, Skeleton } from "./effectiveness";
 import { ShieldCheck, CheckCircle2, RotateCcw, Lock, Building2, Boxes } from "lucide-react";
+import { useOwnerTenant } from "@/lib/owner";
+import { useApiRead } from "@/lib/query";
+import { ReadStatus } from "@/components/ui/more";
 
 export function OwnerPanel({ lens }: { lens: Lens }) {
-  const [data, setData] = React.useState<{ events: OwnerEvent[]; empty: boolean; note: string; partial: boolean; coveredFrom?: string; coveredTo?: string } | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => {
-    api.ownerEvents(lens).then(setData).catch((e) => setErr(String(e.message || e)));
-  }, [lens]);
-  if (err) return <ErrorState msg={err} />;
-  if (!data) return <Skeleton rows={3} />;
+  const { tenant } = useOwnerTenant(lens);
+  const read = useApiRead({ lens, resource: "owner-events", parameters: { tenant }, fetcher: (signal) => api.ownerEvents(lens, tenant, signal), staleTime: 15_000, enabled: !!tenant });
+  if (read.error && !read.data) return <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} />;
+  if (!tenant) return <div className="text-[12px] text-muted-foreground">Select a platform tenant to view owner activity.</div>;
+  if (!read.data) return <Skeleton rows={3} />;
 
-  const ev = data.events ?? [];
+  const current = read.data;
+  const ev = current.events ?? [];
 
 
   return (
     <div className="animate-fade-up space-y-7">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <PageHead
         title="My Platform"
         sub="Recorded actions on your platform; security effects require independent confirmation. The outcome only: no internal scoring, no algorithms, no proprietary math."
@@ -30,21 +33,21 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
         <span><span className="font-medium text-foreground">IP-protected view.</span> Served by a server-side whitelist — Phorvex's decision internals are never sent to this view (enforced by a redaction test that is the eligibility gate).</span>
       </div>
 
-      {data.partial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">Actions and totals cover only the latest audit window{data.coveredFrom ? ` (${new Date(data.coveredFrom).toLocaleString()} to ${new Date(data.coveredTo || data.coveredFrom).toLocaleString()})` : ""}. Older actions remain in paged Live Ops history.</div>}
+      {current.partial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">Actions and totals cover only the latest audit window{current.coveredFrom ? ` (${new Date(current.coveredFrom).toLocaleString()} to ${new Date(current.coveredTo || current.coveredFrom).toLocaleString()})` : ""}. Older actions remain in paged Live Ops history.</div>}
 
       <OwnerSummary events={ev} />
 
       <section>
         <SectionLabel>Activity — requests and recorded outcomes</SectionLabel>
-        {data.empty ? (
+        {current.empty ? (
           <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">
             No protective actions recorded yet for your platform. Run an attack scenario (Operator lens) or point the backend at a decision audit trail.
-            <div className="mt-2 text-[11px] text-muted-foreground/70">{data.note}</div>
+            <div className="mt-2 text-[11px] text-muted-foreground/70">{current.note}</div>
           </CardContent></Card>
         ) : (
           <div className="space-y-2.5">
             {ev.map((e, i) => <EventRow key={i} e={e} />)}
-            <div className="px-1 pt-1 text-[11px] text-muted-foreground/70">{data.note}</div>
+            <div className="px-1 pt-1 text-[11px] text-muted-foreground/70">{current.note}</div>
           </div>
         )}
       </section>

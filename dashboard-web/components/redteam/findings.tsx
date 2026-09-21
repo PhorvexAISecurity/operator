@@ -3,15 +3,14 @@ import * as React from "react";
 import { api, Lens, RTFinding } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Bug } from "lucide-react";
+import { useApiRead } from "@/lib/query";
 
 // RedTeamFindings renders the RL co-evolution findings (reasoning + fix + review status) from the now-
 // wired /api/redteam/findings endpoint. Read-only display of real harness output; honest empty state.
 export function RedTeamFindings({ lens }: { lens: Lens }) {
-  const [findings, setFindings] = React.useState<RTFinding[]>([]);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => {
-    api.redteamFindings(lens).then((d) => setFindings(d.findings || [])).catch((e) => setErr(String(e.message || e)));
-  }, [lens]);
+  const read = useApiRead({ lens, resource: "redteam-findings", fetcher: (signal) => api.redteamFindings(lens, signal), staleTime: 60_000 });
+  const findings = read.data?.findings || [];
+  const err = read.error && !read.data ? String((read.error as Error).message || read.error) : "";
 
   return (
     <Card>

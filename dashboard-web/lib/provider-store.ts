@@ -22,11 +22,13 @@ let cache: SelectedTarget = readLS();
 
 function readLS(): SelectedTarget {
   if (typeof window === "undefined") return EMPTY;
-  return {
-    context: localStorage.getItem(KEY_CTX) || "",
-    provider: localStorage.getItem(KEY_PROV) || "",
-    label: localStorage.getItem(KEY_LABEL) || "",
-  };
+  try {
+    return {
+      context: localStorage.getItem(KEY_CTX) || "",
+      provider: localStorage.getItem(KEY_PROV) || "",
+      label: localStorage.getItem(KEY_LABEL) || "",
+    };
+  } catch { return EMPTY; }
 }
 
 export function getSelectedTarget(): SelectedTarget {
@@ -35,9 +37,11 @@ export function getSelectedTarget(): SelectedTarget {
 
 export function setSelectedTarget(t: SelectedTarget) {
   if (typeof window !== "undefined") {
-    localStorage.setItem(KEY_CTX, t.context || "");
-    localStorage.setItem(KEY_PROV, t.provider || "");
-    localStorage.setItem(KEY_LABEL, t.label || "");
+    try {
+      localStorage.setItem(KEY_CTX, t.context || "");
+      localStorage.setItem(KEY_PROV, t.provider || "");
+      localStorage.setItem(KEY_LABEL, t.label || "");
+    } catch {}
   }
   cache = { context: t.context || "", provider: t.provider || "", label: t.label || "" };
   listeners.forEach((l) => l());

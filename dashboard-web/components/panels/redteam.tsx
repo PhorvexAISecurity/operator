@@ -1,24 +1,26 @@
 "use client";
-import * as React from "react";
 import { api, Lens, RTCampaign } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead } from "./effectiveness";
 import { RedTeamFindings } from "@/components/redteam/findings";
 import { RedTeamGates } from "@/components/redteam/gates";
 import { Swords } from "lucide-react";
+import { useApiRead } from "@/lib/query";
+import { Loading, ReadStatus } from "@/components/ui/more";
 
 // RedTeamPanel wires the BUILDABLE red-team read endpoints (findings / gates / campaigns) into the React
 // dashboard — previously these were backend-only (the UI-wiring audit gap). The RL run / continuous
 // co-training / live-actuation endpoints trigger compute or need a real cluster, so they are surfaced as
 // labeled [PENDING-CLUSTER-VALIDATION] actions (run out-of-band), not auto-run from the browser.
 export function RedTeamPanel({ lens }: { lens: Lens }) {
-  const [campaigns, setCampaigns] = React.useState<RTCampaign[]>([]);
-  React.useEffect(() => {
-    api.redteamCampaigns(lens).then((d) => setCampaigns(d.campaigns || [])).catch(() => {});
-  }, [lens]);
+  const read = useApiRead({ lens, resource: "redteam-campaigns", fetcher: (signal) => api.redteamCampaigns(lens, signal), staleTime: 60_000 });
+  const campaigns = read.data?.campaigns || [];
+  if (read.error && !read.data) return <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} />;
+  if (!read.data) return <Loading label="Reading red-team campaigns…" rows={2} />;
 
   return (
     <div className="animate-fade-up space-y-6">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <PageHead
         title="RL Red-Team"
         sub="The reinforcement-learning pentester's co-evolution findings, the live regression gates, and the campaign results (Phorvex vs reactive/blind/random). Phorvex stays deterministic; the attacker side is the RL agent."

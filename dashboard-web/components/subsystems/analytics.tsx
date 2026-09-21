@@ -1,23 +1,24 @@
 "use client";
 import * as React from "react";
-import { api, Lens, MatrixResult, AISurface, MetricsResult, CoverageTechnique, liveStream, PodRisk } from "@/lib/api";
+import { api, Lens, MatrixResult, AISurface, MetricsResult, CoverageTechnique, PodRisk } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { Loading, ErrorBox, Empty } from "@/components/ui/more";
+import { Loading, Empty, ReadStatus } from "@/components/ui/more";
 import { SectionLabel } from "@/components/panels/effectiveness";
 import { cn } from "@/lib/utils";
 import { ShieldAlert, Brain, Grid3x3, Flame, TrendingUp, Check, X } from "lucide-react";
+import { useApiRead, useAuditSnapshot } from "@/lib/query";
+import { useSelectedTarget } from "@/lib/provider-store";
 
 /* ---------- (1) UNCOVERED ATT&CK CELLS — the honest gap ---------- */
 export function UncoveredFrontier({ lens }: { lens: Lens }) {
-  const [tech, setTech] = React.useState<CoverageTechnique[] | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.threatMatrix(lens).then((d) => setTech(d.techniques ?? [])).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!tech) return <Loading label="Reading the threat-coverage map…" rows={3} />;
+  const read = useApiRead({ lens, resource: "threat-matrix", fetcher: (signal) => api.threatMatrix(lens, signal), staleTime: 60_000 });
+  const tech = read.data ? (read.data.techniques ?? []) : undefined;
+  if (!tech) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Reading the threat-coverage map…" rows={3} />;
   const uncovered = tech.filter((t) => !t.covered);
   const covered = tech.filter((t) => t.covered);
   return (
     <div className="space-y-4">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-baseline gap-1.5"><span className="text-3xl font-semibold tabular text-success">{covered.length}</span><span className="text-sm text-muted-foreground">disrupted</span></div>
         <div className="flex items-baseline gap-1.5"><span className="text-3xl font-semibold tabular text-warning">{uncovered.length}</span><span className="text-sm text-muted-foreground">not yet disrupted (the honest gap)</span></div>
@@ -42,16 +43,15 @@ export function UncoveredFrontier({ lens }: { lens: Lens }) {
 
 /* ---------- (2) AI HONEST BOUNDARY + (5) split-oracle/Schwartau/reuse decode ---------- */
 export function AIBoundary({ lens }: { lens: Lens }) {
-  const [a, setA] = React.useState<AISurface | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.aiSurface(lens).then(setA).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!a) return <Loading label="Decoding the AI attack-surface…" rows={3} />;
+  const read = useApiRead({ lens, resource: "ai-surface", fetcher: (signal) => api.aiSurface(lens, signal), staleTime: 60_000 });
+  const a = read.data;
+  if (!a) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Decoding the AI attack-surface…" rows={3} />;
   // [P4-dash null-guard] Go marshals a nil map/slice as null; normalize before Object.entries/.length.
   const mtdEffect = a.mtdEffect ?? {}, splitOracle = a.splitOracle ?? {}, atlasIds = a.atlasIds ?? [], owaspIds = a.owaspIds ?? [];
   const mtdTotal = Object.values(mtdEffect).reduce((x, y) => x + y, 0) || 1;
   return (
     <div className="space-y-4">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <Card><CardContent className="p-5">
         <div className="flex items-center gap-2 text-[13px] font-semibold"><ShieldAlert className="h-4 w-4 text-warning" /> The honest boundary</div>
         <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -101,11 +101,9 @@ export function AIBoundary({ lens }: { lens: Lens }) {
 
 /* ---------- (3) 52×N MATRIX + LEARNABILITY + FALSE-POSITIVE ---------- */
 export function MatrixPanel({ lens }: { lens: Lens }) {
-  const [m, setM] = React.useState<MatrixResult | null>(null);
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.matrix(lens).then(setM).catch((e) => setErr(String(e.message || e))); }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
-  if (!m) return <Loading label="Computing the scenario×arm matrix…" rows={4} />;
+  const read = useApiRead({ lens, resource: "matrix", fetcher: (signal) => api.matrix(lens, signal), staleTime: 60_000 });
+  const m = read.data;
+  if (!m) return read.error ? <ReadStatus error={read.error} hasData={false} onRetry={() => void read.refetch()} /> : <Loading label="Computing the scenario×arm matrix…" rows={4} />;
   // [P4-dash null-guard] normalize every wire array before .length/.map/.find.
   const cells = m.cells ?? [], scenarios = m.scenarios ?? [], arms = m.arms ?? [], learnability = m.learnability ?? [];
   if (scenarios.length === 0 || arms.length === 0) return <Empty msg="No scenario×arm matrix yet — run the benchmark suite (Prove) to populate it." />;
@@ -113,6 +111,7 @@ export function MatrixPanel({ lens }: { lens: Lens }) {
   const hue = (d: number) => d >= 0.8 ? "bg-success/70" : d >= 0.4 ? "bg-warning/60" : d > 0 ? "bg-warning/30" : "bg-muted/30";
   return (
     <div className="space-y-5">
+      <ReadStatus error={read.error} hasData updatedAt={read.dataUpdatedAt} refreshing={read.isFetching} onRetry={() => void read.refetch()} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Mini2 label="False-positive rate (no-attack)" value={`${(m.fpRate * 100).toFixed(0)}%`} tone={m.fpRate === 0 ? "success" : "warning"} sub={`${m.fpViolations}/${m.fpRows} negative-control rows`} />
         <Mini2 label="Scenarios × arms" value={`${scenarios.length}×${arms.length}`} sub={m.source} />
@@ -154,30 +153,21 @@ export function MatrixPanel({ lens }: { lens: Lens }) {
 
 /* ---------- (4) RISK HEATMAP (live /metrics scrape, falls back to the live audit) ---------- */
 export function RiskHeatmap({ lens }: { lens: Lens }) {
-  const [pods, setPods] = React.useState<PodRisk[] | null>(null);
-  const [source, setSource] = React.useState("");
-  const [err, setErr] = React.useState("");
-  React.useEffect(() => {
-    let done = false;
-    api.metrics(lens).then((m: MetricsResult) => {
-      if (m.available && (m.pods ?? []).length) { setSource(`operator /metrics (${m.source})`); setPods(m.pods ?? []); done = true; }
-    }).catch(() => {}).finally(() => {
-      if (done) return;
-      // fallback: build the heatmap from the LIVE decision audit (real per-pod risk/blast).
-      const map = new Map<string, PodRisk>();
-      const stop = liveStream(lens, (e) => {
-        if (!e.pod) return;
-        map.set(`${e.namespace}/${e.pod}`, { namespace: e.namespace, pod: e.pod, risk: e.risk ?? 0, blast: e.blastRadius ?? 0, perDollar: e.perDollar ?? 0 });
-      });
-      setTimeout(() => { stop(); setSource("live decision audit (operator /metrics [PENDING-wire])"); setPods(Array.from(map.values()).sort((a, b) => b.risk - a.risk)); }, 2500);
-    });
-  }, [lens]);
-  if (err) return <ErrorBox msg={err} />;
+  const selected = useSelectedTarget();
+  const metricsRead = useApiRead({ lens, resource: "metrics", fetcher: (signal) => api.metrics(lens, signal), staleTime: 15_000 });
+  const useFallback = metricsRead.data !== undefined && !metricsRead.error && !metricsRead.data.available;
+  const auditRead = useAuditSnapshot(lens, selected.context, "", 2500, useFallback);
+  if (metricsRead.error && !metricsRead.data) return <ReadStatus error={metricsRead.error} hasData={false} onRetry={() => void metricsRead.refetch()} />;
+  const metricPods = metricsRead.data?.available ? metricsRead.data.pods ?? [] : null;
+  const pods: PodRisk[] | null = metricPods ?? (useFallback && auditRead.data ? auditRead.data.filter((e) => e.pod).map((e) => ({ namespace: e.namespace, pod: e.pod, risk: e.risk ?? 0, blast: e.blastRadius ?? 0, perDollar: e.perDollar ?? 0 })).sort((a, b) => b.risk - a.risk) : null);
+  const source = metricPods ? `operator /metrics (${metricsRead.data?.source || "scoped"})` : "scoped live decision audit (operator /metrics unavailable)";
+  if (auditRead.error && !pods) return <ReadStatus error={auditRead.error} hasData={false} onRetry={() => void auditRead.refetch()} />;
   if (!pods) return <Loading label="Reading per-pod risk (operator /metrics, then the live audit)…" rows={2} />;
   if (pods.length === 0) return <Empty msg="No per-pod risk yet — start Phorvex (Protect) or run a scenario. The production source is an operator /metrics scrape [PENDING-wire]; the live audit is the fallback." />;
   const max = Math.max(0.01, ...pods.map((p) => p.risk));
   return (
     <div className="space-y-3">
+      <ReadStatus error={metricsRead.error || auditRead.error} hasData updatedAt={metricsRead.dataUpdatedAt || auditRead.dataUpdatedAt} refreshing={metricsRead.isFetching || auditRead.isFetching} onRetry={() => { void metricsRead.refetch(); if (useFallback) void auditRead.refetch(); }} />
       <div className="flex items-center gap-2 text-[12px]"><Badge variant="real"><Flame className="h-2.5 w-2.5" /> live</Badge><span className="text-muted-foreground">{pods.length} pods from <span className="font-mono">{source}</span></span></div>
       <Card><CardContent className="p-4">
         <SectionLabel>Per-pod risk (risk score · halo = blast radius)</SectionLabel>

@@ -245,11 +245,11 @@ spec:
 		actuator = "quarantine"
 	}
 	// capture the REAL outcome (landed vs defended) + reasoning + uptime + cost for the Report tab.
-	s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful, base)
+	attackID := s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful, base)
 	msg := "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before). See the Report tab for the measured outcome."
 	if warning != "" {
 		msg = "Real foothold signal fired at " + pod + ", but " + warning
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": pod, "expect": expect,
+	writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": pod, "expect": expect, "attackId": attackID,
 		"warning": warning, "message": msg})
 }
