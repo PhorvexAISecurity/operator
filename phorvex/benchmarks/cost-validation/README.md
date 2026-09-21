@@ -11,6 +11,12 @@ collector creates one disposable namespace, mutates only workloads it creates th
 and deletes the namespace at completion. The production operator and production
 workloads are read-only during collection.
 
+Bounded-rotate samples name the collector-owned `cost-validation` PhorvexPolicy.
+The probe re-reads that exact policy UID/generation, selector, enabled action and
+resolved grace cap before rotate dispatch; it does not synthesize rotate authority
+from flags or Pod annotations. The collector omits `maxGracePeriodSeconds`,
+exercising the API default of 30 seconds without requiring a nondefault schema field.
+
 ## Models
 
 - C0: exact current `P1Cost.Components()` total.

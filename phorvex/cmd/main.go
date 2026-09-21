@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -227,7 +229,7 @@ func main() {
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
 	flag.StringVar(&emitPod, "emit-pod", "", "[integration-emit] target pod name.")
-	flag.StringVar(&emitAction, "emit-action", "rotate", "[integration-emit] rotate|quarantine.")
+	flag.StringVar(&emitAction, "emit-action", "quarantine", "[integration-emit] quarantine; rotate is retained only for an explicit unsupported-Phoenix refusal.")
 	flag.StringVar(&emitTenant, "emit-tenant", "", "[integration-emit] tenant id (defaults to emit-namespace).")
 	flag.StringVar(&emitMatchLabels, "emit-matchlabels", "", "[integration-emit] AMTD guest-list matchLabels, e.g. app=demo,tier=web.")
 
@@ -671,8 +673,24 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 	ph := actuator.NewPhoenixActuator(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if observation := actuationbrake.ObserveNamespace(ctx, c, actuationbrake.DefaultReadTimeout, namespace); observation.Engaged {
-		return fmt.Errorf("namespace actuation brake: %s", observation.Cause)
+	readNamespaceUID := func(expected string) (string, error) {
+		readCtx, readCancel := context.WithTimeout(ctx, actuationbrake.DefaultReadTimeout)
+		defer readCancel()
+		current := &corev1.Namespace{}
+		if err := c.Get(readCtx, client.ObjectKey{Name: namespace}, current); err != nil {
+			return "", fmt.Errorf("namespace actuation authority: %w", err)
+		}
+		if observation := actuationbrake.NamespaceObject(current); observation.Engaged {
+			return "", fmt.Errorf("namespace actuation brake: %s", observation.Cause)
+		}
+		if current.UID == "" || (expected != "" && string(current.UID) != expected) {
+			return "", fmt.Errorf("namespace identity changed or is unavailable")
+		}
+		return string(current.UID), nil
+	}
+	namespaceUID, err := readNamespaceUID("")
+	if err != nil {
+		return err
 	}
 	podObservation, targetUID := actuationbrake.ObservePodIdentity(ctx, c, actuationbrake.DefaultReadTimeout, namespace, pod, "")
 	if podObservation.Engaged {
@@ -690,20 +708,23 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 	}); err != nil {
 		return fmt.Errorf("ensure AMTD: %w", err)
 	}
-	if observation := actuationbrake.ObserveNamespace(ctx, c, actuationbrake.DefaultReadTimeout, namespace); observation.Engaged {
-		return fmt.Errorf("namespace actuation brake before dispatch: %s", observation.Cause)
+	if _, err := readNamespaceUID(namespaceUID); err != nil {
+		return fmt.Errorf("namespace before dispatch: %w", err)
 	}
 	if observation := actuationbrake.ObservePod(ctx, c, actuationbrake.DefaultReadTimeout, namespace, pod, targetUID); observation.Engaged {
 		return fmt.Errorf("Pod actuation brake before dispatch: %s", observation.Cause)
 	}
+	operationDigest := sha256.Sum256([]byte(strings.Join([]string{tenant, namespace, namespaceUID, pod, targetUID, string(act)}, "\x00")))
 	res, err := ph.Actuate(ctx, actuator.Request{
-		Tenant:    tenant,
-		Namespace: namespace,
-		Pod:       pod,
-		TargetUID: targetUID,
-		Action:    act,
-		Reason:    "phorvex P0 Seam-1 integration proof",
-		Score:     0.99,
+		Tenant:             tenant,
+		Namespace:          namespace,
+		Pod:                pod,
+		TargetUID:          targetUID,
+		TargetNamespaceUID: namespaceUID,
+		OperationID:        fmt.Sprintf("%x", operationDigest[:20]),
+		Action:             act,
+		Reason:             "phorvex P0 Seam-1 integration proof",
+		Score:              0.99,
 	})
 	if err != nil {
 		return fmt.Errorf("emit SecurityEvent: %w", err)

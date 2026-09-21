@@ -86,7 +86,7 @@ func TestCheckFollowsNativeAndHybridRoutingAndClusterScope(t *testing.T) {
 		forbidResource string
 	}{
 		{name: "native", backend: actuator.BackendNative, wantResource: "pods", wantNamespace: "tenant", forbidResource: "securityevents"},
-		{name: "hybrid", backend: actuator.BackendHybrid, wantResource: "securityevents", wantNamespace: "", forbidResource: "pods"},
+		{name: "hybrid", backend: actuator.BackendHybrid, wantResource: "pods", wantNamespace: "tenant", forbidResource: "securityevents"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			reviews := &recordingSSAR{}
@@ -95,7 +95,7 @@ func TestCheckFollowsNativeAndHybridRoutingAndClusterScope(t *testing.T) {
 			}
 			var found bool
 			for _, attributes := range reviews.attributes {
-				if attributes.Resource == test.forbidResource && (test.backend != actuator.BackendHybrid || attributes.Verb == "delete") {
+				if attributes.Resource == test.forbidResource {
 					t.Fatalf("%s acquired wrong-route permission: %+v", test.backend, attributes)
 				}
 				if attributes.Resource == test.wantResource && attributes.Namespace == test.wantNamespace {

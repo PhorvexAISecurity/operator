@@ -794,8 +794,9 @@ type Policy struct {
 	AssetWeightFromLabels func(labels map[string]string) float64
 
 	// Policy identity does not affect optimizer scoring. PolicyName/UID/Generation
-	// bind post-selection native dispatch to the exact current policy epoch, while
-	// the remaining fields name the decision build and tick in its trace.
+	// bind post-selection native dispatch to the exact current policy epoch and are
+	// rechecked at the mutation boundary, while the remaining fields name the
+	// decision build and tick in its trace.
 	PolicyName       string
 	PolicyUID        string
 	PolicyGeneration int64

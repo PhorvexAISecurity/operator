@@ -87,8 +87,13 @@ go run ./cmd/main.go --base-interval=5s --metrics-bind-address=:8080
 
 # Seam-1 integration proof (emit ONE SecurityEvent + ensure the AMTD, then exit):
 go run ./cmd/main.go --integration-emit \
-  --emit-namespace=default --emit-pod=<pod> --emit-matchlabels=app=demo --emit-action=rotate
+  --emit-namespace=default --emit-pod=<pod> --emit-matchlabels=app=demo --emit-action=quarantine
 ```
+
+The Phoenix integration proof defaults to `quarantine`. Policy-bounded `rotate`
+uses the native handler (including when the configured backend is hybrid); a pure
+Phoenix backend refuses rotate because its Delete strategy cannot enforce the
+selecting policy's grace cap.
 
 ## Safety (P0 is dry-run by construction)
 

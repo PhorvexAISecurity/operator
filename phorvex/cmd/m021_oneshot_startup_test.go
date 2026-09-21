@@ -220,7 +220,8 @@ func TestOneShotEntrypointsRejectInvalidSelectorBeforeAnyMutation(t *testing.T) 
 
 // TestIntegrationEmitStillEmitsOnValidConfiguration is the positive control that makes the
 // test above meaningful: the same fixture, the same binary, a VALID selector — the
-// documented Seam-1 behavior is preserved and both resources really are created.
+// documented Phoenix quarantine Seam-1 behavior is preserved and both resources
+// really are created. Bounded rotate is native-only and is covered separately.
 func TestIntegrationEmitStillEmitsOnValidConfiguration(t *testing.T) {
 	api := &recordingAPI{}
 	server := httptest.NewServer(api)
