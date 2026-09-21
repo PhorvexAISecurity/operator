@@ -129,6 +129,11 @@ type AttackResult struct {
 	Commands []string
 	// Notes is free-form attacker telemetry (e.g. observed rotation gaps).
 	Notes map[string]string
+	// BenchmarkEvidence is bounded, non-sensitive, machine-readable producer evidence.
+	// It is preserved on the metric even when Execute returns an error, without
+	// changing the trial verdict. Producers must not place credentials, secret
+	// values, or unbounded payloads here.
+	BenchmarkEvidence map[string]string
 	// Skipped is true when the scenario could not run (capability unmet) and
 	// SkipReason explains why.
 	Skipped    bool

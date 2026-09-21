@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,7 +44,9 @@ type vScenario struct {
 	oracleFalseOn    string
 	oracleFalseTrial int
 	// evidence is stamped into every successful OracleResult.
-	evidence map[string]string
+	evidence          map[string]string
+	benchmarkEvidence map[string]string
+	attackNotes       map[string]string
 
 	mu        sync.Mutex
 	setups    int
@@ -74,14 +77,14 @@ func (s *vScenario) Execute(_ context.Context, env *Env) (AttackResult, error) {
 	s.mu.Unlock()
 	if s.hits(env) {
 		if s.execErr {
-			return AttackResult{}, errors.New("attack stimulus transport failed")
+			return AttackResult{BenchmarkEvidence: s.benchmarkEvidence, Notes: s.attackNotes}, errors.New("attack stimulus transport failed")
 		}
 		if s.execSkip {
 			return AttackResult{Skipped: true, SkipReason: "scenario reports this workload is unavailable here"}, nil
 		}
 	}
 	env.Log.Command("v-attack-stage-1")
-	return AttackResult{Stages: []string{"staged"}, Commands: []string{"v-attack-stage-1"}}, nil
+	return AttackResult{Stages: []string{"staged"}, Commands: []string{"v-attack-stage-1"}, BenchmarkEvidence: s.benchmarkEvidence, Notes: s.attackNotes}, nil
 }
 
 func (s *vScenario) SuccessOracle(_ context.Context, env *Env) (OracleResult, error) {
@@ -417,6 +420,44 @@ func TestValidityExecuteErrorSkipsTheOracleEntirely(t *testing.T) {
 	}
 	if oracles != 0 {
 		t.Errorf("SuccessOracle ran %d time(s) after a failed stimulus; want 0", oracles)
+	}
+}
+
+func TestBenchmarkEvidenceSurvivesInvalidExecuteThroughJSONLWithoutChangingVerdict(t *testing.T) {
+	h := newHarness(t, RunnerOptions{TrialsPerArm: 1, DefenderFilter: map[string]bool{"d-broken": true}})
+	sc := &vScenario{name: "evidence-scn", failOn: "d-broken", execErr: true, oracleFalseTrial: -1, benchmarkEvidence: map[string]string{"oracleStatus": "incomplete", "messageASequence": "1"}, attackNotes: map[string]string{"legacySensitiveValue": "discarded-secret-prefix"}}
+	register(&vDefender{name: "d-base", baseline: true})
+	register(&vDefender{name: "d-broken"})
+	RegisterScenario(sc)
+
+	if _, err := h.runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	raw, err := os.ReadFile(h.writer.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "discarded-secret-prefix") {
+		t.Fatal("legacy AttackResult.Notes leaked into benchmark evidence JSONL")
+	}
+	var found *Metric
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		var metric Metric
+		if err := json.Unmarshal([]byte(line), &metric); err != nil {
+			t.Fatalf("decode metric JSONL: %v", err)
+		}
+		if metric.Defender == "d-broken" {
+			found = &metric
+		}
+	}
+	if found == nil {
+		t.Fatal("invalid defended trial was not persisted")
+	}
+	if found.BenchmarkEvidence["oracleStatus"] != "incomplete" || found.BenchmarkEvidence["messageASequence"] != "1" {
+		t.Fatalf("partial benchmark evidence was not retained: %+v", found.BenchmarkEvidence)
+	}
+	if found.OracleAchieved || found.Validity.OracleObserved || found.Validity.Status != MeasurementInvalid || found.Validity.Phase != PhaseAttackExecute || found.Validity.Scored {
+		t.Fatalf("raw evidence changed invalid verdict semantics: metric=%+v validity=%+v", *found, *found.Validity)
 	}
 }
 

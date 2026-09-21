@@ -94,6 +94,12 @@ func listPlugins() {
 }
 
 func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adaptive, resume bool) error {
+	// The exact local PV authority is one-use: the registered scenario owns one
+	// ordinary trial and cannot be expanded into runner-generated negative or
+	// adaptive arms over the same external volumes.
+	if cfg.NATSJetStreamFixture != nil && (negControl || adaptive) {
+		return errors.New("natsJetStreamFixture requires -negative-control=false and -adaptive=false before Kubernetes clients are built")
+	}
 	// 1) Build clients PINNED to the configured context.
 	clients, err := kube.Build(cfg.Kubeconfig, cfg.Context)
 	if err != nil {

@@ -938,6 +938,7 @@ func (t *trialRun) finalize() Metric {
 	v, m := t.v, &t.m
 
 	// ---- raw observations are preserved regardless of validity ----
+	m.BenchmarkEvidence = cloneStringMap(t.ar.BenchmarkEvidence)
 	if t.env != nil {
 		m.Commands = mergeCommands(t.env.Log.Commands(), t.ar.Commands)
 	}
@@ -1019,6 +1020,17 @@ func (t *trialRun) finalize() Metric {
 		m.Commands = mergeCommands(m.Commands, t.env.Log.Commands())
 	}
 	return t.m
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	clone := make(map[string]string, len(values))
+	for key, value := range values {
+		clone[key] = value
+	}
+	return clone
 }
 
 func requiresAttributedNegativeObservation(name string) bool {

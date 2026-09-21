@@ -1,5 +1,12 @@
 # Attack Catalogue — Old vs. New: Realism Audit & Full Mapping
 
+> **Historical/design-only status.** This comparison records an earlier mapping
+> exercise. “New,” “realistic,” “verified,” “covers,” and live-result language
+> below is not current catalogue evidence. Treat entries as unimplemented design
+> proposals unless a current source entry and retained receipt prove the stated
+> mechanism and outcome. Current CVE decisions require package version,
+> configuration, reachability and preconditions under the campaign contract.
+
 **Audience:** the boss + the team.
 **Purpose:** a complete, honest accounting of (1) why every attack in the *old* catalogue was non-realistic and which *new* attack replaces it, and (2) every attack in the new catalogue — what it does and why it counts as realistic.
 
@@ -14,7 +21,7 @@ An attack is **realistic** only if it clears all five. The old set failed 1–4 
 
 1. **Real target** — the actually-deployed workload and its real dependencies (litellm, Chroma, Mongo, vLLM, NATS, the voice bot), *not* a `MockXServer` busybox stand-in.
 2. **Real starting point** — the assume-breach threat model: attacker is past the firewall, on the cluster network, recon done — reaching the target from *outside* it (phone / public `/ws` / network). *Not* "attacker is already inside the pod writing to `/tmp`."
-3. **Real mechanism** — anchored to a **published CVE** (verified against NVD) or a concrete misconfiguration of our stack. *Not* an abstract "imagine the model obeys."
+3. **Real mechanism** — anchored to a vendor-qualified CVE with matching version/configuration/preconditions, or a concrete observed misconfiguration. A CVE identifier alone does not qualify a mechanism.
 4. **Real success** — the oracle is actual harm: keys exfiltrated and valid off-cluster, a DB dumped, the bot's real voice speaking attacker text, a poisoned doc retrieved into a live answer. *Not* "a marker file exists."
 5. **Reproducible & observable** — a concrete, re-runnable outcome.
 
@@ -49,7 +56,7 @@ Because Phorvex is a *general-purpose* defense but the *voice app* is our concre
 Grouped by family. Each family shares a mock mechanism (stated once); the table gives the per-scenario specifics and the **new attack ID** that realistically replaces it.
 
 ## 1.1 `c1-*` — classic kill-chain (8)
-**Shared defect:** busybox target + "attacker already in-pod" + a `/tmp` sleeper/marker oracle; the "initial access" stage is assumed, not performed. **Realistic successor:** §A replaces the assumed entry with a *verified CVE / exposed service* against a real workload. (Also surfaced as the GP wins.)
+**Shared defect:** busybox target + "attacker already in-pod" + a `/tmp` sleeper/marker oracle; the "initial access" stage is assumed, not performed. **Historical successor design:** §A proposes a version/configuration-qualified CVE or observed exposed-service entry against a real workload.
 
 | Old scenario | What it claimed | Why non-realistic (beyond the shared defect) | New ID |
 |---|---|---|---|
@@ -97,8 +104,8 @@ Grouped by family. Each family shares a mock mechanism (stated once); the table 
 | `ai1-prompt-injection` | prompt injection + persistence | `echo marker > /tmp/inject`, no real LLM | **V8** (spoken prompt injection) |
 | `ai1-inference-manipulation` | completion rewrite in-path | mock server, marker | **§B** `ai1-inference-manipulation` (CVE-2026-42271) |
 | `ai1-llm-jacking` | steal/abuse the model plane | mock, no real `sk-noauth` abuse | **§B** `ai1-llm-jacking` (LLM10) + **V11** |
-| `ai1-model-theft` | model weight exfiltration | mock, no real weights | **§B** `ai1-model-theft` (vLLM, CVE-2025-32444) |
-| `ai1-pillar03-panic-mutation` | panic → rotate | mock + marker | **§B** `ai1-pillar03-panic-mutation` ✅ **Covers** (vLLM drain, CVE-2025-32444) |
+| `ai1-model-theft` | model weight exfiltration | mock, no real weights | **§B design** `ai1-model-theft`; no qualified CVE binding |
+| `ai1-pillar03-panic-mutation` | panic → rotate | mock + marker | **§B design** `ai1-pillar03-panic-mutation`; defense outcome unassessed |
 
 ## 1.5 `ai2-*` — application/agent/data attacks (23)
 **Shared defect:** mock RAG/agent/MCP servers with `*Marker` oracles (`ToolPoisonMarker`, `ConfusedDeputyMarker`, `EmbeddingTamperMarker`, `MemoryContaminationMarker`, …) — success = "marker present in the mock." **Realistic successor:** the retrieval/injection/leak ones → **voice catalogue**; the model/registry/GPU ones → **§B**; three are **dropped as redundant**.
@@ -124,7 +131,7 @@ Grouped by family. Each family shares a mock mechanism (stated once); the table 
 | `ai2-malicious-model-artifact` | pickle/LoRA deserialization RCE | mock loader, marker | **§B.1** (vLLM, CVE-2025-24357) |
 | `ai2-poisoned-model-registry` | poisoned model registry | mock registry, marker | **§B.1** (→ `c3-supplychain`/`data-model-poisoning`) |
 | `ai2-tampered-inference-base-image` | tampered base image | mock, marker | **§B** `c3-supplychain` (tampered image) |
-| `ai2-kvcache-poisoning` | cross-session KV-cache leak | mock, marker | **§B.1** (vLLM, CVE-2025-32444) |
+| `ai2-kvcache-poisoning` | cross-session KV-cache leak | mock, marker | historical mapping was wrong: [CVE-2025-32444](https://github.com/vllm-project/vllm/security/advisories/GHSA-hj4w-hm2g-p6w5) is Mooncake unsafe-deserialization RCE and requires the Mooncake integration; applicability unassessed |
 | `ai2-co-location-cross-tenant` | co-resident cross-tenant read | mock, marker | **§B.2** (needs GPU co-residency) |
 | `ai2-gpu-side-channel` | GPU timing / LeftoverLocals | mock, marker | **§B.2** (needs GPU co-residency) |
 | `ai2-unbounded-consumption` | resource exhaustion | mock, marker | **V11** / **V21** (denial-of-wallet) |
@@ -144,7 +151,9 @@ Grouped by family. Each family shares a mock mechanism (stated once); the table 
 
 # SECTION 2 — The new catalogue: every attack, what it does, and why it's realistic
 
-Each entry meets the 5-point bar (§0.1). "Why realistic" cites the specific real target + real entry + real vuln + real success that the old mock lacked.
+Each entry below was intended to meet the five-point bar. The table is a design
+inventory; it does not prove implementation, current applicability, a live
+producer, or a defense result.
 
 ## 2.1 Voice catalogue (V1–V26, V28–V32)
 
@@ -186,7 +195,10 @@ Each entry meets the 5-point bar (§0.1). "Why realistic" cites the specific rea
 | **V31** | Caller-ID / ANI spoofing | spoof the phone number to beat "known caller" trust | T9 · ASI03 | CannotRespond |
 | **V32** | Human manipulation of callers | weaponize the *trusted* bot to socially-engineer its own callers | T15 · ASI09 · LLM07:2026 | CannotRespond |
 
-**Why these are realistic (vs. the ai1/ai2 mocks they replace):** every V-entry hits a **real deployed service** (the bot's `/ws`, the real litellm/Chroma/Mongo/vLLM), starts **from outside** (phone / public `/ws` / network — never in-pod), is anchored to a **verified CVE or a concrete misconfig** (0 fabricated of 19 checked; 3 mislabels corrected), and **succeeds only on real harm** (keys valid off-cluster, transcripts dumped, the *real voice* speaking attacker text). Contrast the mock they replace: fake server, in-pod start, marker-string "success."
+These rows describe intended improvements over the ai1/ai2 mocks. Their target,
+entry path, CVE applicability, stimulus and harm oracle must each be re-proven;
+the former “0 fabricated of 19 checked” statement is not a current acceptance
+receipt.
 
 *Excluded as genuinely N/A (so no one wastes a sprint):* DolphinAttack/NUIT ultrasonic (no mic; codec strips >20 kHz), DTMF injection (bot gathers no tones).
 
@@ -211,7 +223,10 @@ Each entry meets the 5-point bar (§0.1). "Why realistic" cites the specific rea
 
 ## 2.3 Generic realism §A (A1–A16) — the old c1/c2 families, rebuilt
 
-Replace busybox+marker with a **real initial-access** (verified CVE / exposed service) against a real workload; the persist/lateral/exfil stage then follows a *real* prior stage. **This set holds the two `R6Covers` wins.**
+The historical design replaces busybox+marker with a qualified initial-access
+path against a real workload, then makes persist/lateral/exfil follow that
+proven prior stage. The proposed defense verdicts remain unassessed until the
+matched executable arms and receipts exist.
 
 | ID | Rebuilt from | Realistic attack | Phorvex |
 |---|---|---|---|
@@ -236,7 +251,9 @@ Replace busybox+marker with a **real initial-access** (verified CVE / exposed se
 
 ## 2.4 Generic realism §B — the other 7 families (21 net-new)
 
-**CVE pass: 14/14 real-and-match, 0 fabricated** (several are CISA-KEV, actively exploited). Readiness: **15 realistic-now · 6 needs-infra · 3 dropped-redundant**.
+The former “14/14 real-and-match” statement is withdrawn because it lacked
+retained version/configuration/precondition evidence. The readiness counts are
+historical design triage, not executable coverage.
 
 **§B.1 — realistic-now (15, real workloads today):**
 
@@ -251,12 +268,12 @@ Replace busybox+marker with a **real initial-access** (verified CVE / exposed se
 | `ai1-inference-manipulation` | litellm callback-hook in-path completion rewrite | Partial | CVE-2026-42271 |
 | `ai1-llm-jacking` | `sk-noauth` LLM-jacking of the shared vLLM GPU plane | Partial | LLM10 |
 | `ai2-agent-injection-to-persistence` | injection → Chroma `trust_remote_code` RCE | Partial | CVE-2026-45833 |
-| `ai2-kvcache-poisoning` | cross-tenant prefix-cache timing side channel | Partial | CVE-2025-32444 |
+| `ai2-kvcache-poisoning` | Mooncake unsafe-deserialization RCE candidate, conditional on Mooncake and reachable ZeroMQ | Unassessed | [CVE-2025-32444 / GHSA-hj4w-hm2g-p6w5](https://github.com/vllm-project/vllm/security/advisories/GHSA-hj4w-hm2g-p6w5) |
 | `ai2-data-model-poisoning` | vLLM load-time RCE via poisoned weights/`prompt_embeds` | CannotRespond | CVE-2025-24357 |
 | `ai2-malicious-model-artifact` | pickle/LoRA deserialization RCE in the vLLM loader | Partial | CVE-2025-24357 |
 | `c3-cryptomining` | GPU/CPU cryptojacking of the inference nodegroup | Partial | — |
-| `ai1-pillar03-panic-mutation` | ✅ **vLLM foothold eviction via drain-to-clean-node** | **Covers** | CVE-2025-32444 |
-| `ai1-model-theft` | vLLM in-pod weight/adapter exfiltration | CannotRespond | CVE-2025-32444 |
+| `ai1-pillar03-panic-mutation` | proposed vLLM foothold eviction via drain-to-clean-node | Unassessed | no qualified CVE binding |
+| `ai1-model-theft` | vLLM in-pod weight/adapter exfiltration | Unassessed | no qualified CVE binding |
 
 **§B.2 — needs-infra (6, target not deployed yet):** `ai2-mcp-rogue-server`, `ai2-mcp-tool-poisoning`, `ai2-agent-excessive-agency` (need a real MCP server + agent); `ai2-gpu-side-channel`, `ai2-co-location-cross-tenant` (need GPU co-residency); `ai2-embedding-vector-weakness` (needs multi-tenant Chroma); `c3-cicd` (needs a real pipeline). *Two cheap unlocks — an MCP server+agent, and a shared multi-tenant Chroma — cover most of these.*
 
@@ -267,8 +284,10 @@ Replace busybox+marker with a **real initial-access** (verified CVE / exposed se
 ## 3. The bottom line for the boss
 
 - **Nothing was lost, and nothing was inflated.** All 54 old scenarios map to a realistic successor, a documented drop (3 redundant), or an honestly-parked needs-infra item (6). The number went *down* because rigor went *up*: fake targets removed, real ones added.
-- **The new catalogue tells the whole truth**, including where Phorvex *can't* help (every voice `CannotRespond`). That honesty is what makes the wins (`R6Covers`: A10, A11, `ai1-pillar03`; the live-verified GP1/GP4/GP10) credible.
-- **Live-verified so far:** 7 runs, 4 defended / 3 not (`ATTACKS_OUTCOMES.md`) — the wins are the ephemeral-in-pod-foothold class the law predicts; the gaps are static-cred and data-at-rest, also as predicted.
+- The mapping is useful as historical design context, but its defense verdicts
+  and earlier live-run counts are not current acceptance evidence. Current
+  claims require the versioned executable catalogue, matched arms, independent
+  oracles and retained per-trial receipts.
 
 ---
-*Sources: `VOICE_AGENT_ATTACK_CATALOGUE.md`, `GENERAL_PURPOSE_ATTACKS.md`, `GENERIC_CATALOGUE_REALISM.md`, `BUILD_PLAN.md`, `ATTACKS_OUTCOMES.md`, and the `scenarios/*.go` files themselves. All CVEs verified against nvd.nist.gov.*
+*Historical sources: `VOICE_AGENT_ATTACK_CATALOGUE.md`, `GENERAL_PURPOSE_ATTACKS.md`, `GENERIC_CATALOGUE_REALISM.md`, `BUILD_PLAN.md`, `ATTACKS_OUTCOMES.md`, and the `scenarios/*.go` files. CVE references still require current vendor/version/configuration qualification.*

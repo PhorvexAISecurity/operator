@@ -97,6 +97,11 @@ type Metric struct {
 	// Commands is the exact command list issued during the trial (provenance).
 	Commands []string `json:"commands"`
 
+	// BenchmarkEvidence is the bounded machine-readable evidence emitted by the
+	// scenario producer. It is raw evidence, retained even on invalid trials;
+	// it does not affect OracleAchieved or scoring.
+	BenchmarkEvidence map[string]string `json:"benchmarkEvidence,omitempty"`
+
 	// R6Tag mirrors the scenario's honest R6 verdict (carried for reporting).
 	R6Tag R6Tag `json:"r6Tag"`
 	// Category mirrors the scenario category (carried for reporting).

@@ -119,6 +119,30 @@ type TargetConfig struct {
 	BenignCheckpointLocalHolderUID string `json:"benignCheckpointLocalHolderUID"`
 	BenignCheckpointLocalNodeUID   string `json:"benignCheckpointLocalNodeUID"`
 	BenignCheckpointLocalNonce     string `json:"benignCheckpointLocalNonce"`
+
+	// NATSJetStreamFixture is an optional, explicitly pinned three-volume
+	// authority for the isolated c2-nats-jetstream-durability scenario. Nil
+	// keeps the scenario unavailable and creates no NATS or storage objects.
+	NATSJetStreamFixture *NATSJetStreamFixtureConfig `json:"natsJetStreamFixture,omitempty"`
+}
+
+type NATSJetStreamLocalPV struct {
+	Name       string `json:"name"`
+	UID        string `json:"uid"`
+	Slot       int    `json:"slot"`
+	PathSHA256 string `json:"pathSHA256"`
+}
+
+type NATSJetStreamFixtureConfig struct {
+	Mode            string                 `json:"mode"`
+	StorageClass    string                 `json:"storageClass"`
+	StorageClassUID string                 `json:"storageClassUID"`
+	NodeName        string                 `json:"nodeName"`
+	NodeUID         string                 `json:"nodeUID"`
+	HolderName      string                 `json:"holderName"`
+	HolderUID       string                 `json:"holderUID"`
+	Nonce           string                 `json:"nonce"`
+	PVs             []NATSJetStreamLocalPV `json:"pvs"`
 }
 
 // DefaultCredentialObservationWindowSeconds is the observation interval applied
@@ -264,7 +288,7 @@ func (c TargetConfig) Validate() error {
 				return errors.New("config: benign checkpoint local identity fields require benignCheckpointLocalFixture=true")
 			}
 		}
-		return nil
+		return validateNATSJetStreamFixture(c)
 	}
 	if strings.TrimSpace(c.BenignCheckpointStorageClass) == "" {
 		return errors.New("config: benignCheckpointStorageClass is required for benign checkpoint local fixture")
@@ -283,6 +307,42 @@ func (c TargetConfig) Validate() error {
 	}
 	if value := c.BenignCheckpointLocalNonce; strings.TrimSpace(value) != value || value == "" || len(value) > 63 || len(validation.IsValidLabelValue(value)) != 0 {
 		return errors.New("config: benignCheckpointLocalNonce must be a nonempty label-safe value of at most 63 bytes")
+	}
+	return validateNATSJetStreamFixture(c)
+}
+
+func validateNATSJetStreamFixture(c TargetConfig) error {
+	fixture := c.NATSJetStreamFixture
+	if fixture == nil {
+		return nil
+	}
+	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-nats-jetstream-durability" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" {
+		return errors.New("config: natsJetStreamFixture requires one c2-nats-jetstream-durability trial with defenderFilter=[d-nomtd]")
+	}
+	if fixture.Mode != "no-action" && fixture.Mode != "member-restart" {
+		return errors.New("config: natsJetStreamFixture mode must be no-action or member-restart; direct-native and installed-dispatch use separately reviewed entries")
+	}
+	for label, value := range map[string]string{"storageClass": fixture.StorageClass, "nodeName": fixture.NodeName, "holderName": fixture.HolderName} {
+		if value == "" || len(validation.IsDNS1123Subdomain(value)) != 0 {
+			return fmt.Errorf("config: natsJetStreamFixture %s must be an exact DNS subdomain", label)
+		}
+	}
+	if !kubernetesUIDPattern.MatchString(fixture.StorageClassUID) || !kubernetesUIDPattern.MatchString(fixture.NodeUID) || !kubernetesUIDPattern.MatchString(fixture.HolderUID) {
+		return errors.New("config: natsJetStreamFixture storageClassUID, nodeUID and holderUID must be exact lowercase Kubernetes UUIDs")
+	}
+	if fixture.Nonce == "" || len(fixture.Nonce) > 63 || len(validation.IsValidLabelValue(fixture.Nonce)) != 0 {
+		return errors.New("config: natsJetStreamFixture nonce must be a nonempty label-safe value")
+	}
+	if len(fixture.PVs) != 3 {
+		return fmt.Errorf("config: natsJetStreamFixture requires exactly three PV authorities, got %d", len(fixture.PVs))
+	}
+	names, uids, slots := map[string]bool{}, map[string]bool{}, map[int]bool{}
+	hex64 := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	for _, pv := range fixture.PVs {
+		if pv.Name == "" || len(validation.IsDNS1123Subdomain(pv.Name)) != 0 || !kubernetesUIDPattern.MatchString(pv.UID) || pv.Slot < 0 || pv.Slot > 255 || !hex64.MatchString(pv.PathSHA256) || names[pv.Name] || uids[pv.UID] || slots[pv.Slot] {
+			return errors.New("config: natsJetStreamFixture PV name/UID/slot/path hash authority is invalid or duplicated")
+		}
+		names[pv.Name], uids[pv.UID], slots[pv.Slot] = true, true, true
 	}
 	return nil
 }

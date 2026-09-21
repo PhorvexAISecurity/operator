@@ -1,18 +1,29 @@
 # Generic-Catalogue Realism Upgrade — companion to the voice catalogue
 
+> **Historical design record.** This document preserves proposals from an
+> earlier catalogue review. It is not an executable coverage manifest, current
+> deployment inventory, CVE-applicability decision, or defense result. Every
+> proposal remains unimplemented/unverified unless a current source entry and
+> retained trial receipt say otherwise. Use the campaign workload benchmark
+> contract and CVE applicability ledger for current acceptance decisions.
+
 Turns the ~49 generic toy scenarios (mock servers / `/tmp` markers) into realistic attacks anchored to **real cluster workloads**, each judged against **Phorvex = protection/prevention (proactive motion), not detection.**
 
 **This file, §A, covers the two families a sub-agent safeguard blocked** (`c1-*` classic kill-chain, `c2-*` dwell/rotation) — redesigned by hand from the existing repo files. **§B (the other 7 families → 24 redesigns from the workflow) folds in after CVE verification.**
 
 > **Why §A matters:** the voice catalogue produced **zero `R6Covers`** — nothing Phorvex fully prevents. The `c2` family is the *opposite* end: it's where proactive rotation genuinely **works** (dwell-capping, detected eviction), plus the **feasibility** lesson (rotating a stateful pod is destructive → quarantine). A balanced catalogue needs both ends, or the boss only sees gaps.
 
-CVE anchors below use only **already-verified** CVEs (from the voice round): `CVE-2026-45833` (Chroma RCE), `CVE-2026-42208`/`42203` (litellm SQLi→SSTI), `CVE-2024-6587` (litellm SSRF), `CVE-2025-14847` (MongoBleed).
+CVE references below are historical candidates. They require fresh vendor,
+package-version, runtime-configuration, reachability and precondition evidence
+before they can anchor an executable case or defense claim.
 
 ---
 
 ## §A.1 — `c1-*` classic kill-chain (initial-access → persist / lateral / exfil)
 
-Realism upgrade = replace busybox+marker with a **real initial-access** (a verified CVE / exposed service) against a real workload, then the persistence/lateral/exfil stage follows a *real* prior stage.
+Historical design goal: replace busybox+marker with a real initial-access path
+whose CVE or exposed-service preconditions are qualified against the current
+workload, then make persistence/lateral/exfil follow that proven prior stage.
 
 | # | Scenario | Real anchor + entry | Phorvex | Why |
 |--:|---|---|---|---|
@@ -67,9 +78,12 @@ Net: **the wins are narrow and real; the gaps are broad and realistic.** That's 
 
 ---
 
-## §B — the other 7 families (24 redesigns, CVEs verified)
+## §B — the other 7 families (24 historical redesign candidates)
 
-**CVE pass: 14 of 14 real-and-match, 0 fabricated, 0 misattributed** (cleaner than the voice round). All IDs below are genuine NVD entries against our exact stack; several (`CVE-2026-42271`/`-42208`, `CVE-2025-1974`) are CISA-KEV, actively exploited. `CVE-2026-48710` resolved to **Starlette** (BadHost auth bypass) — in-stack, correct match.
+The earlier “14 of 14 real-and-match” statement was not supported by retained
+version/configuration evidence and is withdrawn. The identifiers below are
+research leads, not proof that the current stack is affected or that Phorvex
+defends them.
 
 **Shape of the 24:** readiness **15 realistic-now · 6 needs-infra · 3 redundant-with-voice** (drop those 3 → **21 net-new**); Phorvex **13 CannotRespond · 10 Partial · 1 Covers**; priority **13 high · 10 medium · 1 low**.
 
@@ -86,12 +100,12 @@ Net: **the wins are narrow and real; the gaps are broad and realistic.** That's 
 | `ai1-inference-manipulation` | litellm callback-hook in-path completion rewrite | Partial | CVE-2026-42271 | High |
 | `ai1-llm-jacking` | `sk-noauth` LLM-jacking of the shared vLLM GPU plane | Partial | LLM10 | High |
 | `ai2-agent-injection-to-persistence` | injection → Chroma `trust_remote_code` RCE | Partial | CVE-2026-45833 | High |
-| `ai2-kvcache-poisoning` | cross-tenant prefix-cache timing side channel | Partial | CVE-2025-32444 | High |
+| `ai2-kvcache-poisoning` | Mooncake unsafe-deserialization RCE candidate; only applicable when the vLLM Mooncake integration and reachable ZeroMQ path are present | Unassessed | [CVE-2025-32444 / GHSA-hj4w-hm2g-p6w5](https://github.com/vllm-project/vllm/security/advisories/GHSA-hj4w-hm2g-p6w5) | High |
 | `ai2-data-model-poisoning` | vLLM load-time RCE via poisoned weights/`prompt_embeds` | CannotRespond | CVE-2025-24357 | High |
 | `ai2-malicious-model-artifact` | pickle/LoRA deserialization RCE in the vLLM loader | Partial | CVE-2025-24357 | High |
 | `c3-cryptomining` | GPU/CPU cryptojacking of the inference nodegroup | Partial | — | Med |
-| `ai1-pillar03-panic-mutation` | ✅ **vLLM foothold eviction via drain-to-clean-node** | **Covers** | CVE-2025-32444 | Med |
-| `ai1-model-theft` | vLLM in-pod weight/adapter exfiltration | CannotRespond | CVE-2025-32444 | Med |
+| `ai1-pillar03-panic-mutation` | proposed vLLM foothold eviction via drain-to-clean-node | Unassessed | no qualified CVE binding | Med |
+| `ai1-model-theft` | vLLM in-pod weight/adapter exfiltration | Unassessed | no qualified CVE binding | Med |
 
 ### B.2 — needs-infra (6, require deploying a target first)
 
@@ -114,4 +128,8 @@ Net: **the wins are narrow and real; the gaps are broad and realistic.** That's 
 
 ## Combined picture (§A + §B)
 
-The full generic-catalogue upgrade is **design-complete**: ~39 scenarios reviewed → **16 (§A) + 21 net-new (§B) realistic designs**, 6 flagged needs-infra, 3 dropped as redundant. Two more `R6Covers` wins surfaced here (`c2-dwell-rotation`, `ai1-pillar03-panic-mutation`) — the ephemeral-in-pod-foothold cases where rotation genuinely protects. Everything else remains the honest gap map: motion can't touch what leaves the pod (creds, node escape, data-at-rest, cloud sessions) or what completes in one shot. Still **designs, not code** — building is the next phase.
+The historical review produced 16 §A and 21 net-new §B design proposals, with
+six marked as needing infrastructure and three dropped as redundant. Those
+counts describe proposals, not executable or current defense coverage. The
+entries remain designs until source, applicability, independent oracles,
+matched controls and retained trial evidence satisfy the current contract.

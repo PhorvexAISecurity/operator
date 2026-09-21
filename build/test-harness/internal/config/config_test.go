@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -260,6 +261,36 @@ func TestBenignCheckpointLocalFieldsRefusedWhenDisabled(t *testing.T) {
 			mutate(&candidate)
 			if err := candidate.Validate(); err == nil {
 				t.Fatal("disabled local checkpoint accepted partial local identity")
+			}
+		})
+	}
+}
+
+func TestNATSJetStreamFixtureRequiresExactIsolatedAuthority(t *testing.T) {
+	valid := TargetConfig{Context: "kind-amtd-test", Namespace: "sandbox", OwnedAck: true, TrialsPerArm: 1, CredentialObservationWindowSeconds: 90, ScenarioFilter: []string{"c2-nats-jetstream-durability"}, DefenderFilter: []string{"d-nomtd"}, NATSJetStreamFixture: &NATSJetStreamFixtureConfig{Mode: "member-restart", StorageClass: "nats-local", StorageClassUID: "99999999-9999-4999-8999-999999999999", NodeName: "reviewed-node", NodeUID: "11111111-2222-4333-8444-555555555555", HolderName: "nats-local-holder", HolderUID: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", Nonce: "post25-nats-local-r1", PVs: []NATSJetStreamLocalPV{{Name: "nats-pv-0", UID: "00000000-0000-4000-8000-000000000001", Slot: 0, PathSHA256: strings.Repeat("a", 64)}, {Name: "nats-pv-1", UID: "00000000-0000-4000-8000-000000000002", Slot: 1, PathSHA256: strings.Repeat("b", 64)}, {Name: "nats-pv-2", UID: "00000000-0000-4000-8000-000000000003", Slot: 2, PathSHA256: strings.Repeat("c", 64)}}}}
+	if err := valid.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*TargetConfig){
+		"multiple trials": func(c *TargetConfig) { c.TrialsPerArm = 2 },
+		"installed mode":  func(c *TargetConfig) { c.NATSJetStreamFixture.Mode = "installed-dispatch" },
+		"wrong scenario":  func(c *TargetConfig) { c.ScenarioFilter[0] = "c2-stateful-training" },
+		"wrong defender":  func(c *TargetConfig) { c.DefenderFilter[0] = "d-phorvex" },
+		"bad sc uid":      func(c *TargetConfig) { c.NATSJetStreamFixture.StorageClassUID = "storage-class" },
+		"bad node uid":    func(c *TargetConfig) { c.NATSJetStreamFixture.NodeUID = "node" },
+		"duplicate slot":  func(c *TargetConfig) { c.NATSJetStreamFixture.PVs[2].Slot = 1 },
+		"bad path hash":   func(c *TargetConfig) { c.NATSJetStreamFixture.PVs[0].PathSHA256 = "abc" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			fixture := *valid.NATSJetStreamFixture
+			fixture.PVs = append([]NATSJetStreamLocalPV(nil), valid.NATSJetStreamFixture.PVs...)
+			candidate.NATSJetStreamFixture = &fixture
+			candidate.ScenarioFilter = append([]string(nil), valid.ScenarioFilter...)
+			candidate.DefenderFilter = append([]string(nil), valid.DefenderFilter...)
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid NATS fixture authority accepted")
 			}
 		})
 	}
