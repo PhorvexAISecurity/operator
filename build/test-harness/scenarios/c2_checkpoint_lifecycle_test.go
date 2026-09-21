@@ -17,13 +17,15 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-// TestCheckpointLocalSixSlotsRunFullLifecycleAndDurableServer is the six-slot
-// discriminator from the signed lifecycle decision. Each arm/trial executes the
-// real scenario Setup and Teardown, then the real generic closer. Separately,
-// the exact embedded checkpoint server writes and reloads each distinct slot's
-// durable bytes so checksum, acknowledged high-water and post-boot progress are
-// exercised rather than inferred from object construction.
-func TestCheckpointLocalSixSlotsRunFullLifecycleAndDurableServer(t *testing.T) {
+// TestCheckpointLocalSixSlotsRunSetupTeardownAndLocalDurableServer is a
+// source-level six-slot discriminator. It invokes the production scenario
+// Setup, Teardown and generic cleanup methods against client-go's fake
+// Kubernetes object store for all six no-MTD/blind-timer labels. Independently,
+// it runs the exact embedded checkpoint process locally for each slot and
+// reloads six distinct state directories, exercising checksum, acknowledged
+// high-water and post-boot progress. It does not execute either defender's
+// decision loop, a kubelet/PV mount, an installed manager or a live experiment.
+func TestCheckpointLocalSixSlotsRunSetupTeardownAndLocalDurableServer(t *testing.T) {
 	env, client, slotZero := checkpointLocalSetupEnv(t)
 	ctx := context.Background()
 	if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace}}, metav1.CreateOptions{}); err != nil {
