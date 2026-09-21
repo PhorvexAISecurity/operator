@@ -321,6 +321,31 @@ func TestM069WarmCutoverRejectedDeleteIsHonestNonSuccess(t *testing.T) {
 	}
 }
 
+func TestM043ModelShardRejectedDeleteCannotConfirmOldProcessRetirement(t *testing.T) {
+	leader := aiPod("ns", "leader", map[string]string{labelModelShard: "main", labelRole: roleLeader})
+	shadow := aiPod("ns", "shadow", map[string]string{labelModelShard: "main", labelRole: roleShadow, labelModelLoaded: "true"})
+	d := &m069Delete{conflictOn: map[string]bool{"leader": true}}
+	base := m069Client(d, interceptor.Funcs{}, leader, shadow)
+	c := m067ModeledRouteClient(base, leader)
+	ec, _ := m069Stack()
+	ec.Client = c
+	ec.Reader, ec.JournalNamespace = c, "operator"
+	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), ec, boundReq(leader, model.ActionModelShardReplace))
+	if err == nil || !errors.Is(err, errPodReplaced) || hr.Emitted {
+		t.Fatalf("same-name/UID conflict must remain an unconfirmed model-shard retirement: err=%v result=%+v", err, hr)
+	}
+	if live, ok := m069Get(t, c, "ns", "leader"); !ok || live.UID != leader.UID || live.Labels[labelRole] != roleRetiring {
+		t.Fatalf("failed old-UID retirement must remain observable: present=%v pod=%+v", ok, live)
+	}
+	if promoted, ok := m069Get(t, c, "ns", "shadow"); !ok || promoted.UID != shadow.UID || promoted.Labels[labelRole] != roleLeader {
+		t.Fatalf("accepted handoff writes must remain explicit on failure: present=%v pod=%+v", ok, promoted)
+	}
+	if len(d.opts["leader"]) != 1 || d.opts["leader"][0].Preconditions == nil ||
+		d.opts["leader"][0].Preconditions.UID == nil || string(*d.opts["leader"][0].Preconditions.UID) != string(leader.UID) {
+		t.Fatalf("retirement was not bound to exact old UID %s: %+v", leader.UID, d.opts["leader"])
+	}
+}
+
 // A rejected eviction means the GPU was NOT freed by this move: Repartition is never called.
 func TestM069MIGRebindRejectedDeleteSkipsRepartition(t *testing.T) {
 	pod := migPod("ns", "infer")

@@ -1,0 +1,257 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: ce754be24f5c24a08a40e2edce5d3c0ded2c0690d29f33183eb953d618d4ff73
+    source_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+    at: '2026-09-21T01:54:26+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-actual-typed-client-go1263.log
+    sha256: a09ac1b6f216edeb667b17f1296536216a59ca4bd10a71f9cef9eba44be03824
+    source_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+    at: '2026-09-21T02:26:07+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: f714b72efd046ff1c7ff33899f52b20d7afae7c3fc8a7222a63da5d8fcb5eacd
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:26:07+00:00'
+    baseline_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 9d761e05994b75531d06ed5bb375558b07929d7c32265fbd9156204aad369150
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:38:28+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 632a02ef967561715add0f276d78388ba3bd050c33a40f74dc4b0a8986b401c8
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:38:28+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 9d761e05994b75531d06ed5bb375558b07929d7c32265fbd9156204aad369150
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:38:28+00:00'
+    inputs:
+    - build/test-harness
+    - workflow
+    inputs_sha256: 75aea6cf49409deb40aa5b8c4cd1ad8d601af2b39cebb9ee9a26c75c6a0f5b3a
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-final.txt
+    sha256: 1d32bab0f7bf06016a4c13f4c1d28ec4c458ac7160e900f17940b17d97ce6120
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:38:28+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    inputs_sha256: 4eaecb44dac255d68c5401b8c124ee9c84830ceebe372b43c0deef591f915d0a
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-final.txt
+    sha256: 1d32bab0f7bf06016a4c13f4c1d28ec4c458ac7160e900f17940b17d97ce6120
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:38:28+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    inputs_sha256: 4eaecb44dac255d68c5401b8c124ee9c84830ceebe372b43c0deef591f915d0a
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-final.txt
+    sha256: 1d32bab0f7bf06016a4c13f4c1d28ec4c458ac7160e900f17940b17d97ce6120
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:38:28+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    inputs_sha256: 4eaecb44dac255d68c5401b8c124ee9c84830ceebe372b43c0deef591f915d0a
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: fbecf4e2f169124e619419ef06c11b8275ebd4f1e22dc6622642cbdcad472899
+    source_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+    at: '2026-09-21T02:45:10+00:00'
+    incident_sha256: f714b72efd046ff1c7ff33899f52b20d7afae7c3fc8a7222a63da5d8fcb5eacd
+fix_id: POST25-SESSION-GVK
+issues:
+- M-170
+title: Preserve typed identity GVK in session receipts
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-session-gvk
+  code_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-session-gvk
+  base_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+  head_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+  stacked_on:
+  - POST25-M043
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/258
+  reviewed_head: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: human_owner
+  action: Merge reviewed PR258; lead executes separately pinned fresh benign live
+    session controls
+updated_at: '2026-09-21T02:46:25+00:00'
+follow_up_to: POST25-SESSION-OBSERVATION
+configuration_history:
+- at: '2026-09-21T01:54:23+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T02:25:22+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T02:38:28+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T02:46:23+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T01:54:24+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T01:54:26+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T02:38:28+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T02:38:30+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T02:45:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T02:45:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T02:46:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: POST25-SESSION-GVK:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

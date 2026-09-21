@@ -516,7 +516,57 @@ const (
 )
 
 func rawSessionIdentityObject(kind string, object any) (json.RawMessage, error) {
-	raw, err := json.Marshal(object)
+	var prepared any
+	switch typed := object.(type) {
+	case *corev1.Pod:
+		if typed == nil {
+			return nil, errors.New("marshal session Pod identity object: nil object")
+		}
+		copy := typed.DeepCopy()
+		if err := setSessionIdentityGVK(kind, &copy.TypeMeta, corev1.SchemeGroupVersion.String(), "Pod"); err != nil {
+			return nil, err
+		}
+		prepared = copy
+	case *appsv1.ReplicaSet:
+		if typed == nil {
+			return nil, errors.New("marshal session ReplicaSet identity object: nil object")
+		}
+		copy := typed.DeepCopy()
+		if err := setSessionIdentityGVK(kind, &copy.TypeMeta, appsv1.SchemeGroupVersion.String(), "ReplicaSet"); err != nil {
+			return nil, err
+		}
+		prepared = copy
+	case *appsv1.Deployment:
+		if typed == nil {
+			return nil, errors.New("marshal session Deployment identity object: nil object")
+		}
+		copy := typed.DeepCopy()
+		if err := setSessionIdentityGVK(kind, &copy.TypeMeta, appsv1.SchemeGroupVersion.String(), "Deployment"); err != nil {
+			return nil, err
+		}
+		prepared = copy
+	case *corev1.Service:
+		if typed == nil {
+			return nil, errors.New("marshal session Service identity object: nil object")
+		}
+		copy := typed.DeepCopy()
+		if err := setSessionIdentityGVK(kind, &copy.TypeMeta, corev1.SchemeGroupVersion.String(), "Service"); err != nil {
+			return nil, err
+		}
+		prepared = copy
+	case *discoveryv1.EndpointSlice:
+		if typed == nil {
+			return nil, errors.New("marshal session EndpointSlice identity object: nil object")
+		}
+		copy := typed.DeepCopy()
+		if err := setSessionIdentityGVK(kind, &copy.TypeMeta, discoveryv1.SchemeGroupVersion.String(), "EndpointSlice"); err != nil {
+			return nil, err
+		}
+		prepared = copy
+	default:
+		return nil, fmt.Errorf("marshal session %s identity object: unsupported typed object %T", kind, object)
+	}
+	raw, err := json.Marshal(prepared)
 	if err != nil {
 		return nil, fmt.Errorf("marshal session %s identity object: %w", kind, err)
 	}
@@ -524,6 +574,21 @@ func rawSessionIdentityObject(kind string, object any) (json.RawMessage, error) 
 		return nil, fmt.Errorf("session %s identity object exceeds %d bytes", kind, sessionIdentityObjectLimit)
 	}
 	return raw, nil
+}
+
+func setSessionIdentityGVK(requestedKind string, typeMeta *metav1.TypeMeta, apiVersion, kind string) error {
+	if requestedKind != kind {
+		return fmt.Errorf("marshal session identity object: requested kind %q differs from typed kind %q", requestedKind, kind)
+	}
+	if typeMeta.APIVersion != "" && typeMeta.APIVersion != apiVersion {
+		return fmt.Errorf("marshal session %s identity object: explicit apiVersion %q differs from %q", kind, typeMeta.APIVersion, apiVersion)
+	}
+	if typeMeta.Kind != "" && typeMeta.Kind != kind {
+		return fmt.Errorf("marshal session %s identity object: explicit kind %q differs", kind, typeMeta.Kind)
+	}
+	typeMeta.APIVersion = apiVersion
+	typeMeta.Kind = kind
+	return nil
 }
 
 func recordSessionIdentityReceipt(env *core.Env, receipt sessionIdentityReceipt) {
@@ -1169,7 +1234,7 @@ func (s *c2EphemeralSessionRotation) originalSessionUIDAbsent(ctx context.Contex
 				return false, errors.New(receipt.Error)
 			}
 			present = true
-			receipt.OriginalPodObject, err = rawSessionIdentityObject("original Pod", &pods.Items[i])
+			receipt.OriginalPodObject, err = rawSessionIdentityObject("Pod", &pods.Items[i])
 			if err != nil {
 				receipt.Error = err.Error()
 				recordSessionIdentityReceipt(env, receipt)

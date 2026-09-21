@@ -87,7 +87,8 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// AI recon facts are scoped to three independent producer witnesses: a declared model,
 	// an explicit serving context, and an actual GPU resource. Cover is granted per physical mechanism,
 	// not to the group as a whole: modelFingerprint stays audit-only because model-shard-replace
-	// has no loaded-identity/effect witness. EndpointPath remains audit-only because route
+	// has no loaded-model-identity/effect witness. A qualified scalar pool's separate
+	// old-process retirement grant comes from standardRecon. EndpointPath remains audit-only because route
 	// restitching does not prove locator invalidation;
 	// mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
 	// GPU co-location remains cover-free because none of these actions proves relocation; and

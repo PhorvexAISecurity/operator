@@ -95,6 +95,15 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	if warmSwapProcessCoverEligible(&view.Pod) {
 		cover[model.ActionWarmSwap] = append(cover[model.ActionWarmSwap], pid.Key(), memFact.Key(), sessFact.Key())
 	}
+	// Scalar model-shard replacement uses the same exact-UID warmCutover retirement
+	// producer as warm-swap, with a distinct family key. Once ingestion has verified
+	// the owning ReplicaSet template and role-routed Service, retiring the selected old
+	// process invalidates these same three process-scoped facts. The loaded model
+	// fingerprint, stable route, GPU placement and durable credentials remain untouched.
+	// Parallel TP/PP groups use a different grouped producer and are deliberately withheld.
+	if modelShardProcessCoverEligible(&view.Pod) {
+		cover[model.ActionModelShardReplace] = append(cover[model.ActionModelShardReplace], pid.Key(), memFact.Key(), sessFact.Key())
+	}
 	if view.Pod.ServingEndpointReady {
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
 	}
@@ -103,11 +112,10 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
-	// route-rotate earns this cover only because its successful path re-keys the pod's route label
-	// and restitches the explicitly declared Service selector, compensating if the second write
-	// fails. Missing deployment
-	// contract returns Emitted=false and receives no actuation credit.
-	cover[model.ActionRouteRotate] = append(cover[model.ActionRouteRotate], nid.Key())
+	// route-rotate deliberately receives no cover. Its successful path changes endpoint
+	// selection membership by re-keying a Pod label and restitching a Service selector,
+	// while retaining the old Pod UID/IP and the stable Service UID/ClusterIP/DNS locator.
+	// A client that already knows either locator has not had that knowledge invalidated.
 	maxUrg, _ := clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	latUrg := 0.5 + 0.5*maxUrg
 	for _, nb := range fctx.Neighbors {
@@ -128,6 +136,16 @@ func warmSwapProcessCoverEligible(p *model.Pod) bool {
 		return false
 	}
 	return p.Labels["phorvex.ai/role"] != "warm-shadow" && p.Labels["phorvex.ai/swap-group"] != ""
+}
+
+func modelShardProcessCoverEligible(p *model.Pod) bool {
+	if p == nil || !p.HasServingDeclaration() || !p.WarmPoolConfigured ||
+		p.WarmPoolOwnerUID == "" || p.RouteService == "" || p.Labels == nil {
+		return false
+	}
+	return p.Labels["phorvex.ai/role"] != "warm-shadow" &&
+		p.Labels["phorvex.ai/model-shard"] != "" &&
+		p.Labels["phorvex.ai/parallel-group"] == ""
 }
 
 // clamp01 clamps a FINITE x into [0,1]. A non-finite x (NaN/±Inf) is not a value: ok=false

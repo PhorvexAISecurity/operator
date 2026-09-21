@@ -51,11 +51,16 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 					if len(af.CoverByAction[model.ActionEndpointRotate]) != 0 {
 						t.Error("endpoint-rotate still has cover")
 					}
-					// Independent positive control through the same producer, even in RED runs.
+					// The same producer withholds route-rotate credit while retaining the
+					// independently qualified quarantine network effect.
 					network := (Fact{Scope: ScopePod, Asset: "ns/llm", Kind: FactNetworkIdentity}).Key()
 					got := af.CoverByAction[model.ActionRouteRotate]
-					if len(got) != 1 || got[0] != network {
-						t.Fatalf("route control=%v", got)
+					if len(got) != 0 {
+						t.Fatalf("route selector change received locator credit=%v", got)
+					}
+					quarantine := af.CoverByAction[model.ActionQuarantine]
+					if len(quarantine) != 1 || quarantine[0] != network {
+						t.Fatalf("quarantine control=%v, want %s", quarantine, network)
 					}
 					if asset.gpu {
 						keys := af.CoverByAction[model.ActionMIGRebind]
@@ -79,7 +84,7 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 					if len(keys) != 1 || keys[0] != expected {
 						t.Errorf("preserved adapter grant=%v, want %s", keys, expected)
 					}
-					t.Logf("audit facts=%d endpoint facts=%d route control=%v", len(af.Facts), count, got)
+					t.Logf("audit facts=%d endpoint facts=%d route cover=%v quarantine control=%v", len(af.Facts), count, got, quarantine)
 				})
 			}
 		}

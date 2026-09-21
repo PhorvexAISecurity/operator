@@ -1497,7 +1497,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M042
 
 ### M-43 · Pod-deleting AI moves are undercredited · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M043
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · killchain
@@ -1590,7 +1590,7 @@ Severity: MINOR · Tier: parallel · Fixes: T11-M045
 
 ### M-44 · rotate is uncredited for networkIdentity · **OPEN** · `KNOWLEDGE`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: POST25-M044
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -2611,7 +2611,7 @@ Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
 
 ### M-170 · APT catalogue labels technique-specific attacks that execute the same generic marker routine · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: POST25-CATALOGUE-CLAIMS, POST25-CHECKPOINT-LOCAL-FIXTURE, POST25-SESSION-OBSERVATION, T5-M170
+Severity: HIGH · Tier: unassigned · Fixes: POST25-CATALOGUE-CLAIMS, POST25-CHECKPOINT-LOCAL-FIXTURE, POST25-SESSION-GVK, POST25-SESSION-OBSERVATION, T5-M170
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

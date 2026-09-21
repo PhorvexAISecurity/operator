@@ -76,6 +76,8 @@ type PodSpec struct {
 	WarmPoolConfigured   bool   `json:"warmPoolConfigured,omitempty"`
 	WarmPoolOwnerUID     string `json:"warmPoolOwnerUID,omitempty"`
 	SwapGroup            string `json:"swapGroup,omitempty"`
+	ModelShard           string `json:"modelShard,omitempty"`
+	ParallelGroup        string `json:"parallelGroup,omitempty"`
 	Role                 string `json:"role,omitempty"`
 }
 
@@ -188,7 +190,7 @@ func Fixtures() []Fixture {
 			Events: []EventSpec{{Type: typ, TargetsPod: targetsPod, Trust: "trusted", AgeSeconds: age}}}
 	}
 	return []Fixture{
-		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts and the rotate/quarantine/route-rotate grants only.",
+		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts, rotate process-state grants and the quarantine network grant; route selector changes are coverless.",
 			Pod: PodSpec{Namespace: ns, Name: "plain", Node: "node-a"}, Ctx: unit},
 		{Name: "stateful", Why: "Stateful CPU pod without a serving endpoint: the session fact reaches full weight but neither endpoint-dependent eraser earns cover.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
@@ -208,6 +210,16 @@ func Fixtures() []Fixture {
 				p.WarmPoolConfigured = true
 				p.WarmPoolOwnerUID = "rs-uid"
 				p.SwapGroup = "g"
+				p.Role = "leader"
+				return p
+			}(), Ctx: gpuCtx},
+		{Name: "gpu-model-shard-pool", Why: "Verified scalar model-shard pool leader: model-shard-replace predicts only exact old-process identity, memory and session retirement; model identity, route and placement facts remain audit-only.",
+			Pod: func() PodSpec {
+				p := gpuPod
+				p.Name = "gpu-model-shard-pool"
+				p.WarmPoolConfigured = true
+				p.WarmPoolOwnerUID = "rs-uid"
+				p.ModelShard = "main"
 				p.Role = "leader"
 				return p
 			}(), Ctx: gpuCtx},
@@ -243,8 +255,13 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
 		WarmPoolConfigured:   f.Pod.WarmPoolConfigured, WarmPoolOwnerUID: f.Pod.WarmPoolOwnerUID,
 	}
-	if f.Pod.SwapGroup != "" || f.Pod.Role != "" {
-		pod.Labels = map[string]string{"phorvex.ai/swap-group": f.Pod.SwapGroup, "phorvex.ai/role": f.Pod.Role}
+	if f.Pod.SwapGroup != "" || f.Pod.ModelShard != "" || f.Pod.ParallelGroup != "" || f.Pod.Role != "" {
+		pod.Labels = map[string]string{
+			"phorvex.ai/swap-group":     f.Pod.SwapGroup,
+			"phorvex.ai/model-shard":    f.Pod.ModelShard,
+			"phorvex.ai/parallel-group": f.Pod.ParallelGroup,
+			"phorvex.ai/role":           f.Pod.Role,
+		}
 	}
 	if pod.SuspectAdapter != "" {
 		pod.UID = "fixture-pod-uid"

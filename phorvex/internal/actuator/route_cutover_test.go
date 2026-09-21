@@ -219,7 +219,10 @@ func newRouteUnitFixture(t *testing.T, action model.Action, floor int) routeUnit
 	sibling := aiPod(ns.Name, "sibling", map[string]string{"app": "route", labelRouteKey: "old", "foreign-selector": "keep"})
 	sibling.Status.PodIP = "10.0.0.11"
 	sibling.Annotations[annoRouteService] = "route"
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "route", UID: "uid-route-service", ResourceVersion: "5"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "route", labelRouteKey: "old", "foreign-selector": "keep"}}}
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "route", UID: "uid-route-service", ResourceVersion: "5"}, Spec: corev1.ServiceSpec{
+		ClusterIP: "10.96.0.44", Ports: []corev1.ServicePort{{Name: "http", Protocol: corev1.ProtocolTCP, Port: 8080}},
+		Selector: map[string]string{"app": "route", labelRouteKey: "old", "foreign-selector": "keep"},
+	}}
 	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "policy", UID: "uid-route-policy"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "route"}}, SLO: v1alpha1.SLOSpec{MinAvailableReplicas: floor}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(action)}}}}
 	refs := []discoveryv1.Endpoint{}
 	for _, p := range []*corev1.Pod{pod, sibling} {
@@ -238,6 +241,46 @@ func newRouteUnitFixture(t *testing.T, action model.Action, floor int) routeUnit
 	native := &NativeActuator{Client: writer, Reader: writer, JournalNamespace: op.Name, RouteObservationTimeout: 100 * time.Millisecond, RouteObservationInterval: time.Millisecond}
 	req := Request{Namespace: ns.Name, Pod: pod.Name, TargetUID: string(pod.UID), Action: action, PolicyName: pol.Name, PolicyUID: string(pol.UID), OperationID: strings.Repeat("a", 40)}
 	return routeUnitFixture{ctx: ctx, client: writer, native: native, policy: pol, pod: pod, sibling: sibling, service: svc, request: req, originalP: copyLabels(pod.Labels), originalS: copyLabels(svc.Spec.Selector)}
+}
+
+func TestM044RouteCutoverRetainsPodAndServiceLocators(t *testing.T) {
+	f := newRouteUnitFixture(t, model.ActionRouteRotate, 1)
+	before := struct {
+		podUID, podIP, serviceUID, serviceIP, serviceDNS string
+		ports                                            []corev1.ServicePort
+	}{
+		podUID: string(f.pod.UID), podIP: f.pod.Status.PodIP,
+		serviceUID: string(f.service.UID), serviceIP: f.service.Spec.ClusterIP,
+		serviceDNS: f.service.Name + "." + f.service.Namespace + ".svc",
+		ports:      append([]corev1.ServicePort(nil), f.service.Spec.Ports...),
+	}
+	result, err := f.native.Actuate(f.ctx, f.request)
+	if err != nil || !result.Emitted {
+		t.Fatalf("route cutover result=%+v err=%v", result, err)
+	}
+	gotPod, gotService, gotSlice := &corev1.Pod{}, &corev1.Service{}, &discoveryv1.EndpointSlice{}
+	if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), gotPod); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.service), gotService); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.client.Get(f.ctx, client.ObjectKey{Namespace: f.service.Namespace, Name: f.service.Name + "-slice"}, gotSlice); err != nil {
+		t.Fatal(err)
+	}
+	afterDNS := gotService.Name + "." + gotService.Namespace + ".svc"
+	if string(gotPod.UID) != before.podUID || gotPod.Status.PodIP != before.podIP {
+		t.Fatalf("route selector change replaced Pod locator: before uid/ip=%s/%s after=%s/%s", before.podUID, before.podIP, gotPod.UID, gotPod.Status.PodIP)
+	}
+	if string(gotService.UID) != before.serviceUID || gotService.Spec.ClusterIP != before.serviceIP || afterDNS != before.serviceDNS || !reflect.DeepEqual(gotService.Spec.Ports, before.ports) {
+		t.Fatalf("route selector change replaced Service locator: before uid/ip/ports/dns=%s/%s/%v/%s after=%s/%s/%v/%s", before.serviceUID, before.serviceIP, before.ports, before.serviceDNS, gotService.UID, gotService.Spec.ClusterIP, gotService.Spec.Ports, afterDNS)
+	}
+	if gotPod.Labels[labelRouteKey] == "old" || gotService.Spec.Selector[labelRouteKey] != gotPod.Labels[labelRouteKey] {
+		t.Fatalf("route operation did not complete selector membership change: pod=%v service=%v", gotPod.Labels, gotService.Spec.Selector)
+	}
+	if len(gotSlice.Endpoints) != 1 || gotSlice.Endpoints[0].TargetRef == nil || gotSlice.Endpoints[0].TargetRef.UID != gotPod.UID || len(gotSlice.Endpoints[0].Addresses) != 1 || gotSlice.Endpoints[0].Addresses[0] != before.podIP {
+		t.Fatalf("final endpoint membership does not retain exact target Pod UID/IP: %+v", gotSlice.Endpoints)
+	}
 }
 
 func TestRouteCutoverSharedEngineCompletesAndRollbackRestoresOwnedFields(t *testing.T) {

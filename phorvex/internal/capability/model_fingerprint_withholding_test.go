@@ -10,8 +10,9 @@ import (
 )
 
 // Exercise actual recon -> pool index -> eligibility -> candidate generation.
-// Only actuator transport is stubbed (okActuator); aliases/model-loaded labels
-// represent declarations, never a witness of distinct loaded model identity.
+// Only actuator transport is stubbed (okActuator). A qualified scalar shard pool may
+// now predict old-process retirement, but aliases/model-loaded labels remain declarations,
+// never a witness that the loaded model fingerprint changes.
 func TestM037CandidateWithholding(t *testing.T) {
 	for _, tc := range []struct {
 		name, leaderAlias, shadowAlias string
@@ -80,22 +81,40 @@ func TestM037CandidateWithholding(t *testing.T) {
 			if _, present := set.FactWeights[fingerprint]; present {
 				t.Error("unsupported fingerprint entered ranking weights")
 			}
+			processKinds := map[string]bool{}
+			for _, fact := range set.FactsByAsset[key] {
+				if fact.Kind == recon.FactPodIdentity || fact.Kind == recon.FactInMemory || fact.Kind == recon.FactSession {
+					processKinds[fact.Key()] = true
+				}
+			}
+			wantProcessCover := tc.leaderAlias != ""
+			wantCandidate := wantProcessCover && capable
 			excluded := false
+			candidate := false
 			for _, e := range set.Excluded {
 				if e.Action == model.ActionModelShardReplace {
 					excluded = true
-					if e.EligibilityKind != ReasonNoCover || len(e.CoverKeys) != 0 || e.FeasibilityEvaluated || e.CostEvaluated {
-						t.Errorf("want early no-cover exclusion, got %+v", e)
+					wantKind := ReasonCapability
+					if !wantProcessCover {
+						wantKind = ReasonNoCover
+					}
+					if e.EligibilityKind != wantKind || (wantProcessCover && len(e.CoverKeys) != 3) || (!wantProcessCover && len(e.CoverKeys) != 0) {
+						t.Errorf("model-shard exclusion does not preserve cover/capability ordering: %+v", e)
 					}
 				}
-			}
-			if !excluded {
-				t.Error("missing model-shard-replace no-cover exclusion")
 			}
 			control := false
 			for _, c := range set.Candidates {
 				if c.Action == model.ActionModelShardReplace {
-					t.Error("unsupported model-shard-replace entered candidates")
+					candidate = true
+					if len(c.CoverKeys) != 3 {
+						t.Errorf("qualified scalar retirement cover = %v", c.CoverKeys)
+					}
+					for _, coverKey := range c.CoverKeys {
+						if !processKinds[coverKey] {
+							t.Errorf("model-shard candidate received non-process cover %s", coverKey)
+						}
+					}
 				}
 				for _, k := range c.CoverKeys {
 					if k == fingerprint {
@@ -105,6 +124,9 @@ func TestM037CandidateWithholding(t *testing.T) {
 				if c.Action == model.ActionGuardrailRotate && len(c.CoverKeys) == 1 && set.FactWeights[c.CoverKeys[0]] > 0 {
 					control = true
 				}
+			}
+			if candidate != wantCandidate || excluded == wantCandidate {
+				t.Fatalf("model-shard candidate=%v excluded=%v, want candidate=%v: exclusions=%+v", candidate, excluded, wantCandidate, set.Excluded)
 			}
 			if control != (tc.leaderAlias != "") {
 				t.Fatalf("guardrail candidate=%v, want declared model=%v: exclusions %+v", control, tc.leaderAlias != "", set.Excluded)
