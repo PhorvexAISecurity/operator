@@ -51,11 +51,14 @@ const (
 	voiceWSAvailabilityPeriod = 200 * time.Millisecond
 	voiceWSReplacementTimeout = 25 * time.Second
 	voiceWSReceiptLimit       = 32 * 1024
-	voiceWSEvidenceMaxFields  = 128
-	voiceWSEvidenceMaxValue   = 512
-	voiceWSEvidenceMaxBytes   = 12 * 1024
+	voiceWSEvidenceMaxFields  = 256
+	voiceWSEvidenceMaxValue   = 4 * 1024
+	voiceWSEvidenceMaxBytes   = 64 * 1024
 	voiceWSReadyUIDLimit      = 16
-	voiceWSSampleLimit        = 16
+	// A producer execution can make one immediate attempt plus one per sampling
+	// period. Keep bounded headroom without truncating the configured window.
+	voiceWSExpectedSampleCount = int(voiceWSExecTimeout/voiceWSAvailabilityPeriod) + 1
+	voiceWSSampleLimit         = voiceWSExpectedSampleCount + 9
 )
 
 const (
@@ -297,6 +300,7 @@ type voiceWSAvailability struct {
 type voiceWSAvailabilityObservation struct {
 	AtUTC     string
 	Known     bool
+	Category  string
 	ReadyUIDs []string
 }
 
@@ -513,7 +517,7 @@ func (s *c2VoiceWebSocketContinuity) SuccessOracle(_ context.Context, _ *core.En
 		"sharedProbeOutcome": s.sharedProbe.Outcome, "sharedProbeTargetPodUID": s.sharedProbe.TargetPodUID,
 		"recoveryOutcome": s.recovery.Outcome, "recoveryTargetPodUID": s.recovery.TargetPodUID,
 	}
-	if s.availability.Samples == 0 || s.availability.Failures != 0 {
+	if s.availability.Samples == 0 || s.availability.Failures != 0 || s.availability.ObservationOverflow || len(s.availability.Observations) != s.availability.Samples+s.availability.Failures {
 		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-availability", errors.New("websocket availability sampling incomplete"))
 	}
 	if !s.availability.OriginalSeen {
@@ -612,15 +616,20 @@ func (s *c2VoiceWebSocketContinuity) updateVoiceWSBenchmarkEvidence(phase, oracl
 		"replacement.observedAt":            s.replacementObservedAt,
 		"availability.samples":              strconv.Itoa(s.availability.Samples),
 		"availability.failures":             strconv.Itoa(s.availability.Failures),
+		"availability.attempts":             strconv.Itoa(s.availability.Samples + s.availability.Failures),
+		"availability.knownSamples":         strconv.Itoa(s.availability.Samples),
+		"availability.unknownSamples":       strconv.Itoa(s.availability.Failures),
 		"availability.minimumReady":         strconv.Itoa(s.availability.MinimumReady),
 		"availability.samplePeriodMillis":   strconv.FormatInt(voiceWSAvailabilityPeriod.Milliseconds(), 10),
+		"availability.observationLimit":     strconv.Itoa(voiceWSSampleLimit),
+		"availability.observationOverflow":  strconv.FormatBool(s.availability.ObservationOverflow),
 		"availability.originalSeen":         strconv.FormatBool(s.availability.OriginalSeen),
 		"availability.originalAbsentSeen":   strconv.FormatBool(s.availability.OriginalAbsentSeen),
 		"availability.readyUIDCount":        strconv.Itoa(len(s.availability.ObservedReadyUIDs)),
 		"availability.readyUIDListComplete": "true",
 		"availability.readyUIDs":            strings.Join(sortedStrings(s.availability.ObservedReadyUIDs), ","),
 		"availability.observationCount":     strconv.Itoa(len(s.availability.Observations)),
-		"availability.observationsComplete": strconv.FormatBool(!s.availability.ObservationOverflow && len(s.availability.Observations) == s.availability.Samples),
+		"availability.observationsComplete": strconv.FormatBool(!s.availability.ObservationOverflow && len(s.availability.Observations) == s.availability.Samples+s.availability.Failures),
 		"oracle.status":                     oracleStatus,
 	}
 	if len(s.availability.ObservedReadyUIDs) > voiceWSReadyUIDLimit {
@@ -636,16 +645,23 @@ func (s *c2VoiceWebSocketContinuity) updateVoiceWSBenchmarkEvidence(phase, oracl
 		}
 		ready := sortedStrings(observation.ReadyUIDs)
 		complete := len(ready) <= voiceWSReadyUIDLimit
+		readyCount := len(observation.ReadyUIDs)
+		if !observation.Known {
+			readyCount = -1
+			complete = false
+			ready = nil
+		}
 		if !complete {
 			ready = nil
 		}
 		value, err := json.Marshal(struct {
 			AtUTC        string   `json:"atUTC"`
 			Known        bool     `json:"known"`
+			Category     string   `json:"category"`
 			ReadyCount   int      `json:"readyCount"`
 			ListComplete bool     `json:"listComplete"`
 			ReadyUIDs    []string `json:"readyUIDs"`
-		}{observation.AtUTC, observation.Known, len(observation.ReadyUIDs), complete, ready})
+		}{observation.AtUTC, observation.Known, observation.Category, readyCount, complete, ready})
 		if err != nil {
 			return err
 		}
@@ -704,7 +720,7 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 	if total > voiceWSEvidenceMaxBytes {
 		return fmt.Errorf("voice websocket benchmark evidence is %d bytes, limit %d", total, voiceWSEvidenceMaxBytes)
 	}
-	required := []string{"schema", "suite", "phase", "claimScope", "fixture.image", "source.runtimeBotSHA256", "source.serverSHA256", "source.clientSHA256", "original.podUID", "replacement.podUID", "original.apiAbsent", "original.deletionTimestamp", "original.absenceObservedAt", "replacement.observedAt", "availability.samples", "availability.failures", "availability.minimumReady", "availability.samplePeriodMillis", "availability.originalSeen", "availability.originalAbsentSeen", "availability.readyUIDCount", "availability.readyUIDListComplete", "availability.readyUIDs", "availability.observationCount", "availability.observationsComplete", "oracle.status"}
+	required := []string{"schema", "suite", "phase", "claimScope", "fixture.image", "source.runtimeBotSHA256", "source.serverSHA256", "source.clientSHA256", "original.podUID", "replacement.podUID", "original.apiAbsent", "original.deletionTimestamp", "original.absenceObservedAt", "replacement.observedAt", "availability.samples", "availability.failures", "availability.attempts", "availability.knownSamples", "availability.unknownSamples", "availability.minimumReady", "availability.samplePeriodMillis", "availability.observationLimit", "availability.observationOverflow", "availability.originalSeen", "availability.originalAbsentSeen", "availability.readyUIDCount", "availability.readyUIDListComplete", "availability.readyUIDs", "availability.observationCount", "availability.observationsComplete", "oracle.status"}
 	allowed := make(map[string]bool, len(required)+60)
 	for _, key := range required {
 		allowed[key] = true
@@ -728,6 +744,7 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 	if err != nil {
 		return err
 	}
+	retainedKnown, retainedUnknown := 0, 0
 	for i := 0; i < observationCount; i++ {
 		key := fmt.Sprintf("availability.observation.%02d", i)
 		allowed[key] = true
@@ -736,10 +753,10 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 			return fmt.Errorf("voice websocket benchmark evidence %s invalid: %w", key, err)
 		}
 		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &fields); err != nil || len(fields) != 5 {
+		if err := json.Unmarshal(raw, &fields); err != nil || len(fields) != 6 {
 			return fmt.Errorf("voice websocket benchmark evidence %s shape invalid", key)
 		}
-		for _, field := range []string{"atUTC", "known", "readyCount", "listComplete", "readyUIDs"} {
+		for _, field := range []string{"atUTC", "known", "category", "readyCount", "listComplete", "readyUIDs"} {
 			if _, ok := fields[field]; !ok {
 				return fmt.Errorf("voice websocket benchmark evidence %s missing %s", key, field)
 			}
@@ -747,6 +764,7 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 		var observation struct {
 			AtUTC        string   `json:"atUTC"`
 			Known        bool     `json:"known"`
+			Category     string   `json:"category"`
 			ReadyCount   int      `json:"readyCount"`
 			ListComplete bool     `json:"listComplete"`
 			ReadyUIDs    []string `json:"readyUIDs"`
@@ -756,8 +774,22 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 		if err := dec.Decode(&observation); err != nil {
 			return fmt.Errorf("voice websocket benchmark evidence %s invalid: %w", key, err)
 		}
-		if err := validateEvidenceTimestamp(observation.AtUTC, false); err != nil || observation.ReadyCount < 0 || observation.ReadyCount > 1024 || (observation.ListComplete && observation.ReadyCount != len(observation.ReadyUIDs)) || (!observation.ListComplete && len(observation.ReadyUIDs) != 0) {
+		if err := validateEvidenceTimestamp(observation.AtUTC, false); err != nil {
 			return fmt.Errorf("voice websocket benchmark evidence %s contradictory", key)
+		}
+		if observation.Known {
+			retainedKnown++
+			if observation.Category != "ready-endpoints" || observation.ReadyCount < 0 || observation.ReadyCount > 1024 || observation.ListComplete != (observation.ReadyCount <= voiceWSReadyUIDLimit) || (observation.ListComplete && observation.ReadyCount != len(observation.ReadyUIDs)) || (!observation.ListComplete && len(observation.ReadyUIDs) != 0) {
+				return fmt.Errorf("voice websocket benchmark evidence %s known observation contradictory", key)
+			}
+			if observation.ListComplete && (!sort.StringsAreSorted(observation.ReadyUIDs) || hasDuplicateStrings(observation.ReadyUIDs)) {
+				return fmt.Errorf("voice websocket benchmark evidence %s ready UID list is not a sorted set", key)
+			}
+		} else {
+			retainedUnknown++
+			if !oneOf(observation.Category, "endpoint-read-unavailable", "context-canceled", "deadline-exceeded") || observation.ReadyCount != -1 || observation.ListComplete || len(observation.ReadyUIDs) != 0 {
+				return fmt.Errorf("voice websocket benchmark evidence %s unknown observation contradictory", key)
+			}
 		}
 		if err := validateEvidenceUIDs(observation.ReadyUIDs); err != nil {
 			return fmt.Errorf("voice websocket benchmark evidence %s: %w", key, err)
@@ -785,12 +817,12 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 	if evidence["source.runtimeBotSHA256"] != voiceWSRuntimeBotSHA256 || evidence["source.serverSHA256"] != voiceWSServerSourceSHA256() || evidence["source.clientSHA256"] != voiceWSClientSourceSHA256() {
 		return errors.New("voice websocket benchmark evidence source pin differs")
 	}
-	for _, key := range []string{"original.apiAbsent", "availability.originalSeen", "availability.originalAbsentSeen", "availability.readyUIDListComplete", "availability.observationsComplete"} {
+	for _, key := range []string{"original.apiAbsent", "availability.originalSeen", "availability.originalAbsentSeen", "availability.readyUIDListComplete", "availability.observationOverflow", "availability.observationsComplete"} {
 		if _, err := strconv.ParseBool(evidence[key]); err != nil {
 			return fmt.Errorf("voice websocket benchmark evidence %s invalid", key)
 		}
 	}
-	for _, key := range []string{"availability.samples", "availability.failures", "availability.readyUIDCount"} {
+	for _, key := range []string{"availability.samples", "availability.failures", "availability.attempts", "availability.knownSamples", "availability.unknownSamples", "availability.readyUIDCount"} {
 		if _, err := boundedEvidenceInt(evidence, key, 0, 100000); err != nil {
 			return err
 		}
@@ -800,6 +832,9 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 	}
 	if evidence["availability.samplePeriodMillis"] != strconv.FormatInt(voiceWSAvailabilityPeriod.Milliseconds(), 10) {
 		return errors.New("voice websocket benchmark evidence sample period differs")
+	}
+	if evidence["availability.observationLimit"] != strconv.Itoa(voiceWSSampleLimit) {
+		return errors.New("voice websocket benchmark evidence observation limit differs")
 	}
 	if err := validateEvidenceUIDs([]string{evidence["original.podUID"], evidence["replacement.podUID"]}); err != nil {
 		return err
@@ -826,9 +861,24 @@ func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
 		return errors.New("voice websocket benchmark evidence ready UID overflow differs")
 	}
 	samples, _ := strconv.Atoi(evidence["availability.samples"])
+	failures, _ := strconv.Atoi(evidence["availability.failures"])
+	attempts, _ := strconv.Atoi(evidence["availability.attempts"])
+	knownSamples, _ := strconv.Atoi(evidence["availability.knownSamples"])
+	unknownSamples, _ := strconv.Atoi(evidence["availability.unknownSamples"])
+	observationOverflow, _ := strconv.ParseBool(evidence["availability.observationOverflow"])
 	observationsComplete, _ := strconv.ParseBool(evidence["availability.observationsComplete"])
-	if observationsComplete != (observationCount == samples) {
+	if attempts != samples+failures || knownSamples != samples || unknownSamples != failures {
+		return errors.New("voice websocket benchmark evidence availability counters differ")
+	}
+	if observationOverflow {
+		if observationCount != voiceWSSampleLimit || attempts <= voiceWSSampleLimit || observationsComplete {
+			return errors.New("voice websocket benchmark evidence observation overflow differs")
+		}
+	} else if observationCount != attempts || !observationsComplete {
 		return errors.New("voice websocket benchmark evidence observation completeness differs")
+	}
+	if observationsComplete && (retainedKnown != knownSamples || retainedUnknown != unknownSamples) {
+		return errors.New("voice websocket benchmark evidence retained observation counters differ")
 	}
 	return nil
 }
@@ -1184,14 +1234,30 @@ func validateVoiceWSReceipt(r voiceWSReceipt, base, sessionID string, frames int
 }
 
 func sampleVoiceWSAvailability(ctx context.Context, env *core.Env, serviceUID, targetDeploymentUID, peerDeploymentUID, originalUID types.UID, stop <-chan struct{}) voiceWSAvailability {
+	return sampleVoiceWSAvailabilityEvery(ctx, env, serviceUID, targetDeploymentUID, peerDeploymentUID, originalUID, stop, voiceWSAvailabilityPeriod)
+}
+
+func sampleVoiceWSAvailabilityEvery(ctx context.Context, env *core.Env, serviceUID, targetDeploymentUID, peerDeploymentUID, originalUID types.UID, stop <-chan struct{}, period time.Duration) voiceWSAvailability {
 	out := voiceWSAvailability{MinimumReady: -1}
 	seen := map[string]bool{}
-	ticker := time.NewTicker(voiceWSAvailabilityPeriod)
+	ticker := time.NewTicker(period)
 	defer ticker.Stop()
 	for {
+		atUTC := time.Now().UTC().Format(time.RFC3339Nano)
 		uids, err := voiceWSReadyEndpointUIDs(ctx, env, voiceWSSharedService, serviceUID, targetDeploymentUID, peerDeploymentUID)
 		if err != nil {
 			out.Failures++
+			category := "endpoint-read-unavailable"
+			if errors.Is(err, context.Canceled) {
+				category = "context-canceled"
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				category = "deadline-exceeded"
+			}
+			if len(out.Observations) < voiceWSSampleLimit {
+				out.Observations = append(out.Observations, voiceWSAvailabilityObservation{AtUTC: atUTC, Known: false, Category: category})
+			} else {
+				out.ObservationOverflow = true
+			}
 		} else {
 			out.Samples++
 			if len(out.Observations) < voiceWSSampleLimit {
@@ -1199,7 +1265,7 @@ func sampleVoiceWSAvailability(ctx context.Context, env *core.Env, serviceUID, t
 				for i, uid := range uids {
 					ready[i] = string(uid)
 				}
-				out.Observations = append(out.Observations, voiceWSAvailabilityObservation{AtUTC: time.Now().UTC().Format(time.RFC3339Nano), Known: true, ReadyUIDs: ready})
+				out.Observations = append(out.Observations, voiceWSAvailabilityObservation{AtUTC: atUTC, Known: true, Category: "ready-endpoints", ReadyUIDs: ready})
 			} else {
 				out.ObservationOverflow = true
 			}
@@ -1227,7 +1293,6 @@ func sampleVoiceWSAvailability(ctx context.Context, env *core.Env, serviceUID, t
 			sort.Strings(out.ObservedReadyUIDs)
 			return out
 		case <-ctx.Done():
-			out.Failures++
 			for uid := range seen {
 				out.ObservedReadyUIDs = append(out.ObservedReadyUIDs, uid)
 			}
