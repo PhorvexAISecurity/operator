@@ -72,13 +72,17 @@ jobs:
   changes:
     runs-on: self-hosted
     outputs:
-      operator: ${{ steps.filter.outputs.operator }}
-      console:  ${{ steps.filter.outputs.console }}
-      phoenix:  ${{ steps.filter.outputs.phoenix }}
+      operator: ${{ steps.decide.outputs.operator }}
+      console:  ${{ steps.decide.outputs.console }}
+      phoenix:  ${{ steps.decide.outputs.phoenix }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release history decides what is unshipped (see "decide")
 
+      # Pull requests: what THIS PR touches, against its base branch (unchanged).
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
@@ -102,6 +106,46 @@ jobs:
               - 'deploy/docker/console.Dockerfile'
             phoenix:
               - 'build/phoenix-extended/**'
+
+      # Pushes to main: what is UNSHIPPED per component, i.e. what changed since the release
+      # commit that last re-tagged THAT component in values-eks.yaml. Comparing against the
+      # previous push (paths-filter's default) forgets a change as soon as one run fails or a
+      # later push touches only another component: 277 operator files merged after v0.4.141
+      # were never built because every following push either failed at build-console or
+      # changed only the console, so the operator image stayed at 0.4.141 for a day.
+      - name: Decide what is unshipped
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_OPERATOR: ${{ steps.filter.outputs.operator }}
+          PR_CONSOLE:  ${{ steps.filter.outputs.console }}
+          PR_PHOENIX:  ${{ steps.filter.outputs.phoenix }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then
+            echo "operator=${PR_OPERATOR:-false}" >> "$GITHUB_OUTPUT"
+            echo "console=${PR_CONSOLE:-false}"   >> "$GITHUB_OUTPUT"
+            echo "phoenix=${PR_PHOENIX:-false}"   >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          F=deploy/helm/phorvex-stack/values-eks.yaml
+          # The commit that last changed a component's pinned tag is its last release.
+          # A component that was never released, or a rewritten history, compares
+          # against the root commit — i.e. it is built.
+          base_for() { git log -1 --format=%H -G"tag: \"[0-9.]*\" *# ci:$1" HEAD -- "$F" 2>/dev/null || true; }
+          root=$(git rev-list --max-parents=0 HEAD | tail -1)
+          changed() { # $1=base $2..=paths ; prints true/false
+            local base=$1; shift
+            [ -n "$base" ] || base=$root
+            if [ -n "$(git diff --name-only "$base" HEAD -- "$@")" ]; then echo true; else echo false; fi
+          }
+          OB=$(base_for phorvex-tag); CB=$(base_for console-tag)
+          LR=$(git log -1 --format=%H --grep='^release: v' HEAD || true)
+          op=$(changed "$OB" 'phorvex/**' 'build/phoenix-extended/**' 'build/metricvalidity/**' deploy/docker/operator.Dockerfile)
+          co=$(changed "$CB" 'dashboard-web/**' 'phorvex/**' 'build/phoenix-extended/**' 'build/metricvalidity/**' 'build/test-harness/**' deploy/docker/console.Dockerfile)
+          ph=$(changed "$LR" 'build/phoenix-extended/**')
+          echo "operator=$op (since ${OB:-root})"; echo "console=$co (since ${CB:-root})"; echo "phoenix=$ph (since ${LR:-root})"
+          { echo "operator=$op"; echo "console=$co"; echo "phoenix=$ph"; } >> "$GITHUB_OUTPUT"
 
   # ── 2. Chart hygiene ───────────────────────────────────────────────────────
   # The Helm chart vendors a copy of the PhorvexPolicy CRD. That copy silently fell behind
