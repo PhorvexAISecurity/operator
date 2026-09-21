@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -106,12 +106,28 @@ checks:
     - phorvex/internal/lossobserver
     - phorvex/internal/model
     inputs_sha256: 9ca4d3984bd4ca3b01c8e32a0f6b38f969e0b0873476c55418af38358ba32e85
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 14a67c50a3feba7525e881ed9242eeb9eeeda897d943ea6e2d918f38c0192116
+    source_sha: c240fb917b58198ec207b24d89ea707956f47550
+    at: '2026-09-21T04:08:51+00:00'
+    baseline_sha: a412b43ebc5f454855d69809aaf7cc30d279b528
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 1943de7c13f1cb1ba49b12ee71095f244db94716eb2bc1299daf0be8717b753d
+    source_sha: c240fb917b58198ec207b24d89ea707956f47550
+    at: '2026-09-21T04:08:51+00:00'
+    incident_sha256: 14a67c50a3feba7525e881ed9242eeb9eeeda897d943ea6e2d918f38c0192116
 fix_id: POST25-M100
 issues:
 - M-100
 title: Observe and retain qualified completed disclosure history
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -157,7 +173,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -177,10 +193,10 @@ residuals:
 - Controlled synthetic live lifecycle for completed loss and distinct current version
   remains mandatory before M100 closure.
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T04:06:41+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T04:08:54+00:00'
 configuration_history:
 - at: '2026-09-21T02:02:47+00:00'
   by: codex-lead
@@ -244,6 +260,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T04:08:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T04:08:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -255,9 +287,9 @@ check_history:
   contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: POST25-M100:11:submit
-  from: sol-post25-economics
+  id: POST25-M100:12:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 11
+  role: coordinator
+  kind: review
+  revision: 12
