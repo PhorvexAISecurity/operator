@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -82,12 +82,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/runner
     inputs_sha256: cd86c4dedc0a3bd6904247d2f5f3f1b123ed0715ae924ecf7c509685f6dab73f
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 6c79737b7f95b5e92d009d7403c3bdded1ddd84f4749dde6d89790a3771c3a86
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:16:09+00:00'
+    baseline_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 10be91a520430a9717536425ae13cc113f7e8b6cd8254776df421af27aada6ed
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:16:09+00:00'
+    incident_sha256: 6c79737b7f95b5e92d009d7403c3bdded1ddd84f4749dde6d89790a3771c3a86
 fix_id: POST25-M135
 issues:
 - M-135
 title: Reconcile owned standing strategy during idle policy ticks
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -132,7 +148,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -148,10 +164,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-21T00:14:37+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T00:16:13+00:00'
 configuration_history:
 - at: '2026-09-20T23:24:25+00:00'
   by: codex-lead
@@ -216,10 +232,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T00:16:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T00:16:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-M135:9:submit
-  from: post25-catalogue
+  id: POST25-M135:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 10
