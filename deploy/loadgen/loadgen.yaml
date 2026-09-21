@@ -94,6 +94,10 @@ spec:
               value: "http://voice-bot.voice.svc.cluster.local:8080"
             - name: VOICE_WS_URL
               value: "ws://voice-bot.voice.svc.cluster.local:8080/ws"
+            # TwiML advertises the public route while the load generator connects to
+            # the in-cluster endpoint. Validate that route explicitly.
+            - name: VOICE_TWIML_STREAM_HOST
+              value: "voicebot.phorvex.ai"
             - name: LITELLM_URL
               value: "http://litellm.litellm.svc.cluster.local:4000"
             - name: LITELLM_KEY

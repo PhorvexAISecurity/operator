@@ -43,8 +43,10 @@ import random
 import signal
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
+from urllib.parse import urlsplit
 
 import httpx
 import websockets
@@ -77,6 +79,7 @@ def _env_b(name: str, default: bool) -> bool:
 CRM_URL = _env("CRM_URL", "http://crm.crm.svc.cluster.local:8080")
 VOICE_URL = _env("VOICE_URL", "http://voice-bot.voice.svc.cluster.local:8080")
 VOICE_WS_URL = _env("VOICE_WS_URL", "ws://voice-bot.voice.svc.cluster.local:8080/ws")
+VOICE_TWIML_STREAM_HOST = _env("VOICE_TWIML_STREAM_HOST", urlsplit(VOICE_WS_URL).hostname or "")
 LITELLM_URL = _env("LITELLM_URL", "http://litellm.litellm.svc.cluster.local:4000")
 LITELLM_KEY = _env("LITELLM_KEY", "sk-phorvex-demo-1234")
 VLLM_URL = _env("VLLM_URL", "http://vllm.vllm.svc.cluster.local:8000")
@@ -95,6 +98,18 @@ DIURNAL = _env_b("DIURNAL", True)
 TZ_OFFSET_HOURS = _env_f("TZ_OFFSET_HOURS", -8.0)  # cluster is us-east-2, users are Pacific
 METRICS_PORT = _env_i("METRICS_PORT", 9090)
 LOG_LEVEL = _env("LOG_LEVEL", "INFO")
+
+# Voice receive bounds are deliberately independent of the WebSocket library's defaults.
+# They bound parsing, evidence counters, and the optional in-memory echo corpus.
+VOICE_MAX_TWIML_BYTES = 64 * 1024
+VOICE_MAX_WS_MESSAGE_BYTES = 256 * 1024
+VOICE_MAX_MEDIA_FRAME_BYTES = 64 * 1024
+VOICE_MAX_VALID_MEDIA_FRAMES = 10_000
+VOICE_MAX_VALID_MEDIA_BYTES = 4 * 1024 * 1024
+VOICE_MAX_RETAINED_AUDIO_BYTES = 48_000  # six seconds of 8 kHz mu-law
+VOICE_IO_TIMEOUT_SECONDS = 10.0
+VOICE_READER_SETTLE_SECONDS = 1.0
+VOICE_PRE_STOP_SETTLE_SECONDS = 0.05
 
 # base sessions per minute at peak; the diurnal curve scales these down off-hours
 BASE_SPM = {
@@ -895,6 +910,105 @@ VOICE_FOLLOWUPS = [
 VOICE_UTTERANCES = VOICE_OPENERS + VOICE_FOLLOWUPS
 
 
+VOICE_OUTCOME_REASONS = frozenset(
+    {
+        "bidirectional-media",
+        "cancelled",
+        "early-close",
+        "invalid-json",
+        "invalid-media",
+        "internal",
+        "missing-media",
+        "receive-limit",
+        "twiml-http",
+        "twiml-invalid",
+        "twiml-stream-contract",
+        "twiml-too-large",
+        "twiml-transport",
+        "wrong-stream",
+        "ws-connect",
+        "ws-receive",
+        "ws-send",
+    }
+)
+
+
+class VoiceCallFailure(Exception):
+    """A bounded, export-safe voice outcome. Messages never contain call identity or media."""
+
+    def __init__(self, reason: str):
+        if reason not in VOICE_OUTCOME_REASONS:
+            raise ValueError("unregistered voice outcome reason")
+        self.reason = reason
+        super().__init__(reason)
+
+
+@dataclass(frozen=True)
+class VoiceTwiMLResponse:
+    status_code: int
+    content: bytes
+
+
+async def _fetch_twiml(ctx: Ctx, form: dict[str, str]) -> VoiceTwiMLResponse:
+    """Fetch TwiML without buffering an unbounded response body."""
+    started = time.monotonic()
+    status: str | None = None
+    try:
+        async with ctx.http.stream(
+            "POST",
+            f"{VOICE_URL}/",
+            data=form,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        ) as response:
+            status = str(response.status_code)
+            raw = bytearray()
+            async for chunk in response.aiter_bytes():
+                if len(raw) + len(chunk) > VOICE_MAX_TWIML_BYTES:
+                    raise VoiceCallFailure("twiml-too-large")
+                raw.extend(chunk)
+            result = VoiceTwiMLResponse(response.status_code, bytes(raw))
+        record("voice", "twiml", status, time.monotonic() - started)
+        return result
+    except VoiceCallFailure:
+        record("voice", "twiml", status or "exception", time.monotonic() - started)
+        raise
+    except Exception as exc:  # noqa: BLE001
+        record("voice", "twiml", "exception", time.monotonic() - started)
+        M.inc("loadgen_errors_total", {"app": "voice", "op": "twiml", "kind": "transport"})
+        raise VoiceCallFailure("twiml-transport") from exc
+
+
+def _validate_twiml_stream(response: VoiceTwiMLResponse) -> None:
+    if not 200 <= response.status_code < 300:
+        raise VoiceCallFailure("twiml-http")
+    raw = response.content
+    if len(raw) > VOICE_MAX_TWIML_BYTES:
+        raise VoiceCallFailure("twiml-too-large")
+    try:
+        root = ET.fromstring(raw)
+    except (ET.ParseError, ValueError):
+        raise VoiceCallFailure("twiml-invalid") from None
+    if root.tag.rsplit("}", 1)[-1] != "Response":
+        raise VoiceCallFailure("twiml-invalid")
+    urls = [node.attrib.get("url", "") for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "Stream"]
+    if len(urls) != 1:
+        raise VoiceCallFailure("twiml-stream-contract")
+    actual = urlsplit(urls[0])
+    expected = urlsplit(VOICE_WS_URL)
+    if (
+        actual.scheme not in {"ws", "wss"}
+        or not actual.hostname
+        or actual.hostname != VOICE_TWIML_STREAM_HOST.lower()
+        or actual.path != expected.path
+    ):
+        raise VoiceCallFailure("twiml-stream-contract")
+
+
+def _voice_attempt(outcome: str, reason: str, started: float) -> None:
+    M.inc("loadgen_voice_call_attempts_total", {"outcome": outcome, "reason": reason})
+    M.observe("loadgen_voice_call_duration_seconds", time.monotonic() - started, {"outcome": outcome})
+
+
 async def voice_session(ctx: Ctx) -> None:
     """One synthetic inbound call.
 
@@ -909,16 +1023,19 @@ async def voice_session(ctx: Ctx) -> None:
     stream_sid = "MZ" + uuid.uuid4().hex
     account_sid = "AC" + uuid.uuid4().hex
 
-    if rng.random() < 0.25:  # some sessions are just someone opening the console page
-        await timed("voice", "web_ui", ctx.http.get(f"{VOICE_URL}/web-ui"))
+    t0 = time.monotonic()
+    received = bytearray()
+    read_task: asyncio.Task[None] | None = None
+    stop_sent = False
+    successful = False
+    try:
+        if rng.random() < 0.25:  # some sessions also open the console page
+            await timed("voice", "web_ui", ctx.http.get(f"{VOICE_URL}/web-ui"))
 
-    # Twilio's webhook: fetch the TwiML that points at the media stream
-    await timed(
-        "voice",
-        "twiml",
-        ctx.http.post(
-            f"{VOICE_URL}/",
-            data={
+        # Twilio's webhook: fetch and validate the TwiML that points at this stream.
+        twiml = await _fetch_twiml(
+            ctx,
+            {
                 "From": phone,
                 "To": "+15550100000",
                 "CallSid": call_sid,
@@ -926,17 +1043,26 @@ async def voice_session(ctx: Ctx) -> None:
                 "CallStatus": "ringing",
                 "Direction": "inbound",
             },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        ),
-    )
-    await think(0.2, 0.8)
+        )
+        _validate_twiml_stream(twiml)
+        await think(0.2, 0.8)
 
-    t0 = time.monotonic()
-    received = bytearray()
-    try:
-        async with websockets.connect(VOICE_WS_URL, open_timeout=15, close_timeout=5, max_size=None) as ws:
-            await ws.send(json.dumps({"event": "connected", "protocol": "Call", "version": "1.0.0"}))
-            await ws.send(
+        try:
+            websocket = websockets.connect(
+                VOICE_WS_URL,
+                open_timeout=15,
+                close_timeout=5,
+                max_size=VOICE_MAX_WS_MESSAGE_BYTES,
+            )
+            ws = await websocket.__aenter__()
+        except Exception as exc:  # noqa: BLE001
+            raise VoiceCallFailure("ws-connect") from exc
+        try:
+            await asyncio.wait_for(
+                ws.send(json.dumps({"event": "connected", "protocol": "Call", "version": "1.0.0"})),
+                VOICE_IO_TIMEOUT_SECONDS,
+            )
+            await asyncio.wait_for(ws.send(
                 json.dumps(
                     {
                         "event": "start",
@@ -952,36 +1078,92 @@ async def voice_session(ctx: Ctx) -> None:
                         "streamSid": stream_sid,
                     }
                 )
-            )
+            ), VOICE_IO_TIMEOUT_SECONDS)
 
             state = {"chunk": 0, "seq": 1}
+            receive = {"frames": 0, "bytes": 0, "first": False}
 
             async def reader() -> None:
-                """Drain what the bot sends and keep its speech for the echo corpus."""
-                async for raw in ws:
-                    with contextlib.suppress(Exception):
-                        msg = json.loads(raw)
+                """Validate returned media and retain only a small bounded echo sample."""
+                try:
+                    async for raw in ws:
+                        if not isinstance(raw, str) or len(raw.encode("utf-8")) > VOICE_MAX_WS_MESSAGE_BYTES:
+                            raise VoiceCallFailure("receive-limit")
+                        try:
+                            msg = json.loads(raw)
+                        except (json.JSONDecodeError, UnicodeError):
+                            raise VoiceCallFailure("invalid-json") from None
+                        if not isinstance(msg, dict):
+                            raise VoiceCallFailure("invalid-json")
                         ev = msg.get("event")
                         if ev == "media":
                             M.inc("loadgen_voice_media_frames_total", {"dir": "rx"})
-                            payload = msg.get("media", {}).get("payload")
-                            if payload and len(received) < 30 * SAMPLE_RATE:
-                                received.extend(base64.b64decode(payload))
+                            if msg.get("streamSid") != stream_sid:
+                                raise VoiceCallFailure("wrong-stream")
+                            media = msg.get("media")
+                            if not isinstance(media, dict):
+                                raise VoiceCallFailure("invalid-media")
+                            payload = media.get("payload")
+                            if not isinstance(payload, str):
+                                raise VoiceCallFailure("invalid-media")
+                            try:
+                                audio = base64.b64decode(payload, validate=True)
+                            except (ValueError, TypeError):
+                                raise VoiceCallFailure("invalid-media") from None
+                            if not audio:
+                                raise VoiceCallFailure("invalid-media")
+                            if (
+                                len(audio) > VOICE_MAX_MEDIA_FRAME_BYTES
+                                or receive["frames"] >= VOICE_MAX_VALID_MEDIA_FRAMES
+                                or receive["bytes"] + len(audio) > VOICE_MAX_VALID_MEDIA_BYTES
+                            ):
+                                raise VoiceCallFailure("receive-limit")
+                            receive["frames"] += 1
+                            receive["bytes"] += len(audio)
+                            M.inc("loadgen_voice_valid_media_frames_total")
+                            M.inc("loadgen_voice_valid_media_bytes_total", value=float(len(audio)))
+                            if not receive["first"]:
+                                receive["first"] = True
+                                M.observe("loadgen_voice_first_valid_audio_seconds", time.monotonic() - t0)
+                            room = VOICE_MAX_RETAINED_AUDIO_BYTES - len(received)
+                            if room > 0:
+                                received.extend(audio[:room])
                         elif ev == "clear":
                             M.inc("loadgen_voice_events_total", {"event": "clear"})
                         elif ev == "mark":
                             M.inc("loadgen_voice_events_total", {"event": "mark"})
+                    if not stop_sent:
+                        raise VoiceCallFailure("early-close")
+                except VoiceCallFailure:
+                    raise
+                except websockets.exceptions.ConnectionClosedOK as exc:
+                    if not stop_sent:
+                        raise VoiceCallFailure("early-close") from exc
+                except Exception as exc:  # noqa: BLE001
+                    raise VoiceCallFailure("ws-receive") from exc
+
+            def check_reader() -> None:
+                if read_task is not None and read_task.done():
+                    if read_task.cancelled():
+                        if stop_sent:
+                            return
+                        raise VoiceCallFailure("ws-receive")
+                    exc = read_task.exception()
+                    if exc is not None:
+                        raise exc
 
             async def send_audio(audio: bytes) -> None:
                 """Push mu-law at wall-clock speed — pacing is what makes the bot's VAD and
                 interruption logic behave as they do on a real call."""
                 deadline = time.monotonic()
                 for off in range(0, len(audio) - FRAME_SAMPLES + 1, FRAME_SAMPLES):
+                    check_reader()
                     frame = audio[off : off + FRAME_SAMPLES]
                     state["chunk"] += 1
                     state["seq"] += 1
-                    await ws.send(
-                        json.dumps(
+                    try:
+                        await asyncio.wait_for(ws.send(
+                            json.dumps(
                             {
                                 "event": "media",
                                 "sequenceNumber": str(state["seq"]),
@@ -992,9 +1174,14 @@ async def voice_session(ctx: Ctx) -> None:
                                     "timestamp": str(int(state["chunk"] * FRAME_SECONDS * 1000)),
                                     "payload": base64.b64encode(frame).decode(),
                                 },
-                            }
-                        )
-                    )
+                            })
+                        ), VOICE_IO_TIMEOUT_SECONDS)
+                    except websockets.exceptions.ConnectionClosedOK as exc:
+                        check_reader()
+                        raise VoiceCallFailure("early-close") from exc
+                    except Exception as exc:  # noqa: BLE001
+                        check_reader()
+                        raise VoiceCallFailure("ws-send") from exc
                     M.inc("loadgen_voice_media_frames_total", {"dir": "tx"})
                     deadline += FRAME_SECONDS
                     delay = deadline - time.monotonic()
@@ -1003,6 +1190,10 @@ async def voice_session(ctx: Ctx) -> None:
 
             read_task = asyncio.create_task(reader())
             try:
+                # Give receive-side close/error frames a chance to become authoritative
+                # before the send path starts buffering media.
+                await asyncio.sleep(0)
+                check_reader()
                 # caller listens to the greeting first
                 await send_audio(silence_ulaw(rng.uniform(2.0, 4.0)))
 
@@ -1025,25 +1216,58 @@ async def voice_session(ctx: Ctx) -> None:
                     # silence while the bot thinks and answers
                     await send_audio(silence_ulaw(rng.uniform(3.0, 6.0)))
 
-                await ws.send(json.dumps({"event": "stop", "streamSid": stream_sid,
-                                          "stop": {"accountSid": account_sid, "callSid": call_sid}}))
-                await asyncio.sleep(0.3)
+                # Let a peer-initiated clean close become visible before emitting our
+                # legitimate stop. Otherwise a buffered send can mask an early hang-up.
+                await asyncio.sleep(VOICE_PRE_STOP_SETTLE_SECONDS)
+                check_reader()
+                await asyncio.wait_for(
+                    ws.send(json.dumps({"event": "stop", "streamSid": stream_sid,
+                                        "stop": {"accountSid": account_sid, "callSid": call_sid}})),
+                    VOICE_IO_TIMEOUT_SECONDS,
+                )
+                stop_sent = True
+                try:
+                    await asyncio.wait_for(asyncio.shield(read_task), VOICE_READER_SETTLE_SECONDS)
+                except asyncio.TimeoutError:
+                    read_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await read_task
+                check_reader()
+                if receive["frames"] == 0:
+                    raise VoiceCallFailure("missing-media")
             finally:
-                read_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await read_task
+                if read_task is not None:
+                    if not read_task.done():
+                        read_task.cancel()
+                    # The main path checks and propagates receive failures. This cleanup
+                    # await retrieves any secondary terminal error without masking it.
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await read_task
+        finally:
+            with contextlib.suppress(Exception):
+                await websocket.__aexit__(None, None, None)
 
-        record("voice", "call", "ok", time.monotonic() - t0)
-        M.inc("loadgen_voice_calls_total", {"outcome": "ok"})
-        M.inc("loadgen_sessions_total", {"app": "voice", "outcome": "ok"})
-    except Exception as exc:  # noqa: BLE001
-        record("voice", "call", "exception", time.monotonic() - t0)
-        M.inc("loadgen_errors_total", {"app": "voice", "op": "call", "kind": type(exc).__name__})
-        M.inc("loadgen_voice_calls_total", {"outcome": "error"})
-        M.inc("loadgen_sessions_total", {"app": "voice", "outcome": "error"})
-        log.debug("voice call failed: %s: %s", type(exc).__name__, exc)
+        record("voice", "call", "voice-bidirectional", time.monotonic() - t0)
+        _voice_attempt("success", "bidirectional-media", t0)
+        M.inc("loadgen_sessions_total", {"app": "voice", "outcome": "voice-bidirectional"})
+        successful = True
+    except asyncio.CancelledError:
+        _voice_attempt("failure", "cancelled", t0)
+        raise
+    except VoiceCallFailure as exc:
+        record("voice", "call", exc.reason, time.monotonic() - t0)
+        _voice_attempt("failure", exc.reason, t0)
+        M.inc("loadgen_errors_total", {"app": "voice", "op": "call", "kind": exc.reason})
+        M.inc("loadgen_sessions_total", {"app": "voice", "outcome": "voice-failed"})
+        log.debug("voice call failed: %s", exc.reason)
+    except Exception:  # noqa: BLE001
+        record("voice", "call", "internal", time.monotonic() - t0)
+        _voice_attempt("failure", "internal", t0)
+        M.inc("loadgen_errors_total", {"app": "voice", "op": "call", "kind": "internal"})
+        M.inc("loadgen_sessions_total", {"app": "voice", "outcome": "voice-failed"})
+        log.debug("voice call failed: internal error")
 
-    if VOICE_USE_ECHO and received:
+    if successful and VOICE_USE_ECHO and received:
         ECHO.offer(bytes(received))
 
 

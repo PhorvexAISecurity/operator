@@ -63,6 +63,7 @@ Everything is an env var on the Deployment. The one dial you usually want is
 | `ENABLE_WRITES` | `1` | Whether sessions perform mutations at all. |
 | `WRITES_PER_MIN` | `2` | Hard token-bucket ceiling on CRM mutations, independent of read volume. |
 | `VOICE_USE_ECHO` | `1` | See **Voice audio** below. |
+| `VOICE_TWIML_STREAM_HOST` | host from `VOICE_WS_URL` | Expected host in the TwiML `<Stream>` URL. The deployment sets the public voice route explicitly while connecting through the in-cluster WebSocket URL. |
 
 ## Voice audio
 
@@ -88,8 +89,24 @@ container stays hardened. If the install fails the pod still starts and logs
 `espeak-ng not installed — voice falls back to speech-shaped tones`; check
 `loadgen_voice_utterances_total{source=...}` to see which mechanism is actually in use.
 
-The echo corpus cannot bootstrap until the LiteLLM breakage below is fixed — the bot doesn't
-greet the caller, so it emits no audio at all until it can answer.
+The echo corpus cannot bootstrap until a call returns valid media. A missing corpus is an
+observation about this generator process, not a diagnosis of the voice service or any one
+of its dependencies.
+
+### Voice outcome semantics
+
+A voice attempt is successful only after a 2xx TwiML response advertises the configured
+stream host and path, the bounded WebSocket exchange completes, and this stream returns at
+least one nonempty valid base64 media frame. `voice-bidirectional` therefore means that
+synthetic audio moved in both directions. It does not prove intelligible speech, a correct
+answer, transcript persistence, caller isolation, or effective defense. The tone fallback
+can exercise transport and VAD pacing but is not speech.
+
+The earlier `loadgen_voice_calls_total` and voice `loadgen_sessions_total{outcome="ok"}`
+series used send-side completion as success. They are intentionally frozen rather than
+silently reinterpreted. New calls use `loadgen_voice_call_attempts_total` and the
+`voice-bidirectional` / `voice-failed` session outcomes. Compare historical and new series
+only with an explicit cutover marker.
 
 ## Synthetic vs. attack data
 
@@ -117,8 +134,11 @@ label needed).
 | `loadgen_errors_total` | `app`, `op`, `kind` |
 | `loadgen_ttft_seconds` | `app` (streamed time-to-first-token) |
 | `loadgen_writes_total` | `app`, `op` |
-| `loadgen_voice_calls_total` | `outcome` |
+| `loadgen_voice_call_attempts_total` | `outcome` (`success`/`failure`), finite `reason` |
+| `loadgen_voice_call_duration_seconds` | `outcome` |
 | `loadgen_voice_media_frames_total` | `dir` (`tx`/`rx`) |
+| `loadgen_voice_valid_media_frames_total`, `loadgen_voice_valid_media_bytes_total` | none |
+| `loadgen_voice_first_valid_audio_seconds` | none |
 | `loadgen_voice_utterances_total` | `source` (`synth`/`echo`) |
 | `loadgen_mcp_tool_results_total` | `tool`, `outcome` |
 | `loadgen_target_sessions_per_min`, `loadgen_diurnal_factor`, `loadgen_inflight_sessions` | gauges |
@@ -126,10 +146,11 @@ label needed).
 `loadgen_requests_total` is the honest baseline denominator for uptime charts: it counts
 what a user *attempted*, so requests lost during a defensive action still appear.
 
-## Pre-existing cluster breakage this surfaced
+## Historical dependency observation
 
-No chat completion through LiteLLM can succeed today, by either path. Both are cluster
-config, not generator bugs — but running the generator is what made them visible.
+The following was observed when this generator was originally introduced. It is retained
+as historical troubleshooting context and is not a claim about the current deployment.
+Re-check current configuration and bounded call outcomes before drawing a diagnosis.
 
 **1. Any caller using the master key → `401`.** `litellm`'s `OPENAI_API_KEY` is the
 placeholder `sk-placeholder-replace-me`, so OpenAI rejects the upstream call:
@@ -147,10 +168,9 @@ never configured:
 400  {"message":"No connected db.","type":"no_db_connection"}
 ```
 
-The consequence is that **the voice agent cannot answer a call at all.** A generated call
-gets all the way through — Deepgram transcribes the caller, the context is assembled, the LLM
-is invoked with the real system prompt — and then dies on that 400. Nothing is spoken back,
-which is why `loadgen_voice_media_frames_total{dir="rx"}` is `0`.
+At that time the observed configuration prevented the voice agent from producing an answer,
+and the receive-side media counter remained zero. Aggregate counters alone do not establish
+that any particular call followed this path.
 
 Fixing both at once, without any external dependency, by pointing the model groups at the
 in-cluster vLLM (which already serves real completions) — in `litellm-config`:
@@ -175,5 +195,5 @@ That resolves the 401. The voice bot's 400 additionally needs either
 `LITELLM_API_KEY=sk-phorvex-demo-1234` on the `voice-bot` deployment, or
 `general_settings.allow_requests_on_db_unavailable: true` on LiteLLM.
 
-Once that is done the echo corpus also starts working: the bot speaks, the generator keeps a
-few of its ElevenLabs clips, and later calls can replay real human-sounding audio.
+After correcting the dependency, a bounded synthetic call should independently demonstrate
+valid returned media before enabling conclusions about the echo corpus.
