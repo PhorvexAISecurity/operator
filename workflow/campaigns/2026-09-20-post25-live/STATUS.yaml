@@ -8,7 +8,7 @@ state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
 created_at: '2026-09-20T13:01:38+00:00'
-updated_at: '2026-09-20T18:09:40+00:00'
+updated_at: '2026-09-21T02:08:49.250088+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: 0.4.138
@@ -19,16 +19,16 @@ scope:
     spend; bounded fixture quotas
   permission: attack
 pins:
-  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
-  digest: sha256:5f2707f639111bfb558435f68db6608d5c2dc36fe52b07f9e239362155ce42fe
-  embedded_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.139
+  digest: sha256:5f5c6449b35dd2174dba773f38d9a2e50b80b08deb172b9463d86f3fbab77a81
+  embedded_git_sha: 92f961bd43fa0ba0b34c21095c4a24f446675a26
 safety:
   stop_conditions:
   - 'Unexpected source change, missing identity/cleanup authority, unmanaged service
     impact: stop affected case and restore'
   phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
   unresolved: []
-  cleanup: FAIL
+  cleanup: PASS
 positive_control: PASS
 rounds:
 - id: round-1
@@ -45,6 +45,18 @@ rounds:
   state: ABORTED
 - id: round-7
   state: ABORTED
+- id: round-8
+  state: ABORTED
+- id: round-9
+  state: ABORTED
+- id: round-10
+  state: ABORTED
+- id: round-11
+  state: ABORTED
+- id: round-12
+  state: ABORTED
+- id: round-13
+  state: ABORTED
 findings: []
 verdict:
   result: pending
@@ -56,8 +68,9 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Retain recurring OOM and review exact current-incarnation baseline for independent
-    bounded controls
+  action: Complete shared-capacity and completed-loss source delivery, session typed
+    identity repair and fresh live control, qualified incident live controls, then
+    graceful termination; preserve remaining evidence gaps.
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -212,3 +225,146 @@ transitions:
   phase_approval_ref: null
   note: null
   forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T18:23:53+00:00'
+  by: codex-lead
+  artifact: rounds/round-8/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T18:28:27+00:00'
+  by: codex-lead
+  artifact: rounds/round-8/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: PAUSED
+  at: '2026-09-20T18:48:38+00:00'
+  by: codex-lead
+  artifact: deployment-0.4.139/REPORT.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Old exact incarnation replaced externally; round8 refused before mutation
+    and remains ABORTED
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-09-20T18:48:38+00:00'
+  by: codex-lead
+  artifact: deployment-0.4.139/REPORT.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Both components independently pinned; historical OOM, Dex missing and behavior
+    debt remain open
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-20T18:51:52+00:00'
+  by: codex-lead
+  artifact: rounds/round-9/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: Exact reviewed0.4.139manager+console,32localcontrolsPASS; historicalresults
+    retained
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T19:02:58+00:00'
+  by: codex-lead
+  artifact: rounds/round-9/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Original supervisor cleanup PASS retained; physical cleanup independently
+    confirmed, failed producer archive missing
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T19:16:44+00:00'
+  by: codex-lead
+  artifact: rounds/round-10/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T19:37:27+00:00'
+  by: codex-lead
+  artifact: rounds/round-10/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Original archive-transfer failure retained; both bounded backend controls
+    and physical cleanup independently accepted
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T19:37:27+00:00'
+  by: codex-lead
+  artifact: rounds/round-11/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T19:50:15+00:00'
+  by: codex-lead
+  artifact: rounds/round-11/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T19:55:07+00:00'
+  by: codex-lead
+  artifact: rounds/round-12/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T20:05:09+00:00'
+  by: codex-lead
+  artifact: rounds/round-12/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-20T20:16:15+00:00'
+  by: codex-lead
+  artifact: rounds/round-13/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-20T20:22:37+00:00'
+  by: codex-lead
+  artifact: rounds/round-13/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+pins_scope: Historical round-1 through round-13 baseline; current accepted source
+  observations are separately bound below.
+current_evidence:
+  observed_at: '2026-09-21T01:47:00+00:00'
+  release: 0.4.141
+  embedded_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+  manager_digest: sha256:ebb1c4a2a7060de74efaffcaf3678205173e85b04bd22eeb80b8107b2b97707c
+  console_digest: sha256:e573ca03b6b16698dcb8ae2ce8ac8003915e1e610202b2fd0d3fccc77c79a145
+  artifact: math-design/evidence/M125-LIVE-TRANSPORT.json
+  limits: Current evidence does not replace historical baseline failures or establish
+    campaign-wide live acceptance. Two missing Dex controls and unverified effects
+    remain.

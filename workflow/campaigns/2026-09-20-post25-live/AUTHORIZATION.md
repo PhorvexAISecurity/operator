@@ -12,4 +12,21 @@ The owner separately requested cleanup of unneeded local repositories/worktrees.
 
 The owner clarified: “Include catalogue improvements and needed actuators.” Assess realistic scenarios and coverage across the supported stacks; implement and review catalogue repairs and new actuators when concrete gaps justify them. Distinguish scenario quality, actual implementation, execution coverage and demonstrated defense. Do not equate additional catalogue entries or simulated outcomes with real effects.
 
-Campaign lead/executor: codex-lead. Independent evidence reviewer: post14-live-reviewer. Implementation workers investigate separately; the lead reviews their plans and code. Five-minute deployment monitoring stays active and observational.
+Campaign lead/executor: codex-lead. Independent evidence reviewer: post14-live-reviewer. Implementation workers investigate separately; the lead reviews their plans and code.
+
+## Owner update: remaining pipeline, September 20
+
+The owner explicitly requested continuing live verification, catalogue/actuator work,
+and all 17 math/design entries urgently. Those entries are active delivery scope;
+the research classification is not a deferral. The lead chooses testable contracts,
+assigns implementation, reviews it and delivers PRs targeting main. Existing
+recommendations must be checked against current source and demonstrated behavior.
+Record design decisions separately from implementation and live acceptance.
+
+The owner explicitly stopped the obsolete Tier6–8 rollout monitor. Its timer and
+service were stopped, the timer disabled, and the STOP marker written. Do not
+restart that monitor or create a replacement automatically. Perform live checks
+as part of this active campaign.
+
+The complete remaining design inventory and delivery dependencies are in
+[PIPELINE.md](PIPELINE.md). Unavailable MIG hardware remains the explicit exception.
