@@ -42,11 +42,32 @@ func baseView(name string) *model.WorkloadView {
 			DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
 		},
 		Phase:       model.PhaseWarm,
+		Telemetry:   model.Telemetry{ReqRate: model.PresentSignal(0, "fixture-measured")},
 		BlastRadius: 0.5,
 		ExposureByVariable: map[string]time.Duration{
 			model.VarPodIdentity:     2 * time.Hour, // past the anti-over-rotation window (rotate's clock)
 			model.VarNetworkIdentity: 2 * time.Hour, // quarantine's M-23 per-action clock, likewise past window
 		},
+	}
+}
+
+func TestMissingLoadUsesConservativeRotateGate(t *testing.T) {
+	d := testDeps()
+	pol := testPolicy()
+	missing := baseView("missing-load")
+	missing.Telemetry.ReqRate = model.Signal{}
+	set := d.Generate([]*model.WorkloadView{missing}, pol)
+	if actionsFor(set, "ns/missing-load")[model.ActionRotate] {
+		t.Fatal("missing request load must not retain the measured-zero rotate candidate")
+	}
+	found := false
+	for _, exclusion := range set.Excluded {
+		if exclusion.Key == "ns/missing-load" && exclusion.Action == model.ActionRotate {
+			found = strings.Contains(exclusion.Reason, "conformal-slo") && exclusion.CostEvaluated && exclusion.CHi > set.CostCeiling
+		}
+	}
+	if !found {
+		t.Fatalf("missing-load rotate lacks explicit conservative cost exclusion: %+v", set.Excluded)
 	}
 }
 

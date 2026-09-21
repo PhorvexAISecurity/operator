@@ -76,6 +76,26 @@ func TestObjectiveDecimalsRejectNonFiniteAPIValues(t *testing.T) {
 	}
 }
 
+func TestEffectiveDisruptionAversionPresenceAndStrictValidation(t *testing.T) {
+	for _, tc := range []struct {
+		raw        string
+		want       float64
+		configured bool
+		wantErr    bool
+	}{
+		{"", 0, false, false}, {"0", 0, true, false}, {"0.25", 0.25, true, false},
+		{"10", 10, true, false}, {"10.0", 10, true, false},
+		{"-1", 0, true, true}, {"10.1", 0, true, true}, {"NaN", 0, true, true},
+		{"Inf", 0, true, true}, {"1e0", 0, true, true}, {"+1", 0, true, true}, {"01", 0, true, true},
+	} {
+		s := PhorvexPolicySpec{Objective: ObjectiveSpec{DisruptionAversion: tc.raw}}
+		got, configured, err := s.EffectiveDisruptionAversion()
+		if got != tc.want || configured != tc.configured || (err != nil) != tc.wantErr {
+			t.Errorf("raw %q: got (%v,%t,%v), want (%v,%t,err=%t)", tc.raw, got, configured, err, tc.want, tc.configured, tc.wantErr)
+		}
+	}
+}
+
 func TestEffectiveOverrides(t *testing.T) {
 	s := PhorvexPolicySpec{
 		Objective: ObjectiveSpec{Lambda: "0.9", CostWeights: CostWeights{NormSparsity: "0.2", FlowDisruption: "0.8"}},

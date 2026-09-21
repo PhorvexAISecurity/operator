@@ -36,6 +36,10 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  # Read-only Service membership inventory for shared availability capacity.
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["create", "patch"]

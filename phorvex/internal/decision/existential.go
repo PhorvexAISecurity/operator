@@ -161,7 +161,7 @@ func finishExistential(d *model.ExistentialDecision, set actionset.ActionSet, ke
 
 // chooseRound is the production bounded-greedy comparison seam, also replayed by
 // the ruling's exact numeric counterexamples.
-func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDecision, covered, selected, attack map[string]bool, lambda float64, prov func(string) float64, evaluated map[string]float64) (int, float64, bool) {
+func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDecision, covered, selected, attack map[string]bool, costCoefficient float64, prov func(string) float64, evaluated map[string]float64, capacity ...*resourceState) (int, float64, bool) {
 	bestIdx := -1
 	bestActive, bestSafe := false, false
 	bestGain, bestMarginal := 0.0, 0.0
@@ -172,6 +172,11 @@ func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDe
 		}
 		if !attack[c.Key] {
 			continue // reactiveOnly: suppress proactive moves on un-attacked assets
+		}
+		if len(capacity) > 0 {
+			if ok, _ := capacity[0].canAdd(c); !ok {
+				continue
+			}
 		}
 		active := states[c.Key].Present
 		ca := containment(c, states[c.Key])
@@ -189,7 +194,7 @@ func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDe
 		}
 		candidateKey := traceCandidateKey(c.Key, c.Action)
 		evaluated[candidateKey] = marginal
-		gain := legacyMixedGain(marginal, prov(c.Key), lambda, c.ECost)
+		gain := objectiveGain(marginal, prov(c.Key), costCoefficient, c.ECost)
 		if preferExistential(active, len(c.SLOExclusions) == 0, gain, bestActive, bestSafe, bestGain, bestIdx >= 0) {
 			bestActive, bestSafe = active, len(c.SLOExclusions) == 0
 			bestGain = gain

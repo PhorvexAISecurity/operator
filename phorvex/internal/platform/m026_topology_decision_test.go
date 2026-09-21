@@ -39,10 +39,12 @@ func TestM150NamespaceDispersionCannotSupplyGPUThreatEvidence(t *testing.T) {
 		return map[string]time.Duration{model.VarPodIdentity: d, model.VarNodePlacement: d, model.VarSession: d}
 	}
 	physics := &model.WorkloadView{Pod: physicsPod, Phase: model.PhaseWarm, Physics: physicsWitness,
-		ExposureByVariable: clocks(90 * time.Second), Neighbors: []model.NeighborRef{{Key: "physics/neighbor", Value: 5}}}
+		ExposureByVariable: clocks(90 * time.Second), Neighbors: []model.NeighborRef{{Key: "physics/neighbor", Value: 5}},
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "m150-fixture")}}
 	due := &model.WorkloadView{Pod: duePod, Phase: model.PhaseWarm, Physics: witnesses["due/serve"],
-		ExposureByVariable: clocks(16 * time.Minute), Neighbors: []model.NeighborRef{{Key: "due/neighbor", Value: 5}}}
-	pol := model.Policy{Tenant: "m026-derived-topology", DryRun: true, Lambda: 0, NormSparsity: .4, FlowDisruption: .6,
+		ExposureByVariable: clocks(16 * time.Minute), Neighbors: []model.NeighborRef{{Key: "due/neighbor", Value: 5}},
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "m150-fixture")}}
+	pol := model.Policy{Tenant: "m026-derived-topology", Namespace: "m026-fixture-policy", DryRun: true, Lambda: 0, NormSparsity: .4, FlowDisruption: .6,
 		WeightSecrets: .8, BlastRadiusFromGraph: true, MaxMovesPerTick: 1, ProactiveFloor: floor,
 		AntiOverRotationWindow: 90 * time.Second, EnabledActions: map[model.Action]bool{model.ActionQuarantine: true},
 		AssetWeightFromLabels: func(l map[string]string) float64 {

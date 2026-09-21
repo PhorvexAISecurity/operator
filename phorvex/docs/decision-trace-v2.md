@@ -1,9 +1,38 @@
-# Decision Trace V2 / V3
+# Decision Trace V2 / V3 / V4 / V5 / V6
 
-`phorvex.decision-trace.v3` (T0-C; supersedes `v2`, which remains readable) is
+`phorvex.decision-trace.v6` supersedes `v5`, `v4`, `v3`, and `v2`, which remain readable. It is
 nested under `decisionTrace` in each `phorvex.audit.v2` per-asset decision record.
-It records the current P1 decision path; it does not change candidate generation,
-feasibility, cost, λ, scoring, selection, learning, or actuation.
+It records the current P1 decision path.
+
+**V6 additions (typed hard capacity):** `resources` records each exact integer
+capacity scope, its limit, outstanding durable reservations, and total selected
+batch consumption. Each candidate carries its own integer consumption vector.
+`move-count` scopes bind a namespace and immutable policy identity;
+`unavailable-ready-replica` scopes additionally bind the Service name, immutable
+Service UID, and immutable controller UID. Objective cost never substitutes for
+these limits. A selected batch is valid only when outstanding plus selected
+consumption is within every recorded limit. The trace records the decision-time
+snapshot; dispatch separately revalidates current object authority and claims a
+durable reservation before backend mutation.
+
+**V5 additions (flow regimes):** each costed Rotate or MIG-rebind candidate
+records the effective load/phase regime, predicted flow mean, conservative
+floor, bounded uncertainty, and conformal applicability. Missing request-rate
+telemetry remains an explicit `missing-load` regime rather than observed zero.
+
+**V4 additions (versioned economics):** `economicsVersion`, optional
+`disruptionAversion`, `effectiveCostCoefficient`, and `costCoefficientSource`
+identify the coefficient used by scoring. In fixed mode
+`objectiveCostContribution` is authoritative and `lambdaContribution` is absent.
+`lambdaDemand` is the counterfactual demand used by the legacy count-pressure
+controller; the retained `candidateDemand` field is its compatibility alias.
+`objectiveCandidateDemand` records demand under the coefficient that actually
+ranked candidates. The same economics metadata is also retained at the audit
+record top level when rich decision tracing is disabled, including the exact
+runtime lambda and exact configured beta; these fields are not rounded with the
+legacy display values. The legacy top-level audit `lambda` remains rounded to
+four decimals for wire compatibility and must equal the descriptor's exact
+runtime lambda after that documented rounding.
 
 **V3 additions (the complete decision path):** `actionStatus` — exactly one row per
 canonical mutating action (`not-enabled` / `no-cover` / `infeasible` /
@@ -66,13 +95,29 @@ classification and do not claim application load.
 ## Reconstruction
 
 Facts are ordered by `factKey`; candidates use canonical action order; cover
-keys are lexical. The current selector is exactly:
+keys are lexical. Legacy mode is exactly:
 
 ```text
 lambdaContribution = lambdaRuntimeLegacy * expectedCost
 netGain = marginalCoverage * provenance - lambdaContribution
-selected only when netGain > 0
+ordinary selection only when netGain > 0
 ```
+
+Fixed opt-in mode is exactly:
+
+```text
+objectiveCostContribution = disruptionAversion * expectedCost
+netGain = marginalCoverage * provenance - objectiveCostContribution
+ordinary selection only when netGain > 0
+```
+
+The two coefficients are never added. Runtime lambda continues to learn in fixed
+mode, but it does not price the fixed-mode objective.
+
+The existing M99 trusted protected-outcome comparator remains a distinct hard
+containment ordering and can select a certified full-containing move with a
+non-positive ordinary objective gain. Such a record names the M99 comparator
+and containment reason; it does not describe the gain as positive.
 
 The comparator is strict: equality does not pass. `perDollar` and
 `proactiveRate` are legacy reporting fields and do not select an action.
@@ -90,6 +135,14 @@ selection round. A noop references none and carries the current reason, such as
 an existing feasibility exclusion, `priced-out`, `budget-exhausted`, or the
 reactive-only gate.
 
+V6 hard-capacity reconstruction is independent of score ordering. Resource
+limits and units are non-negative integers; candidate units are positive.
+Capacity scopes and per-candidate scopes must be unique, and every consumed
+scope must appear in the trace capacity vector. The sum of selected candidate
+units for a scope cannot exceed the batch `selected` value, while
+`outstanding + selected <= limit`. Historical V2–V5 traces must not carry V6
+capacity or consumption fields.
+
 ## Lambda roles and update
 
 `lambdaConfiguredPolicy` is the configured seed. `lambdaRuntimeLegacy` is the
@@ -99,7 +152,7 @@ existing readers. The runtime value is called legacy/mixed because its update
 signal is move-count pressure while it multiplies a weighted disruption score;
 it is not certified as an exact move-budget dual.
 
-The trace records `demand`, `spent`, `budget`, `rawExcess`, `effectiveExcess`,
+The trace records `lambdaDemand`, `spent`, `budget`, `rawExcess`, `effectiveExcess`,
 lambda before/after, whether the transition was applied, and a stable reason
 code. The move budget consumes one slot per selected asset/action; demand counts
 assets, not actions or disruption cost. A shadow decision records the same

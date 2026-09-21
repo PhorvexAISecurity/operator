@@ -308,6 +308,69 @@ type RotationOwnership struct {
 	OwnerResourceVersion string
 }
 
+// ResourceScope is the stable identity of one hard selection resource. A
+// service-availability scope is deliberately bound to both the Service UID and
+// the single controller UID proven to own every endpoint in that scope. Names
+// remain descriptive only; recreated objects cannot inherit capacity.
+type ResourceScope struct {
+	Kind          string `json:"kind"`
+	Namespace     string `json:"namespace,omitempty"`
+	ServiceName   string `json:"serviceName,omitempty"`
+	ServiceUID    string `json:"serviceUID,omitempty"`
+	ControllerUID string `json:"controllerUID,omitempty"`
+}
+
+const (
+	ResourceMoveCount               = "move-count"
+	ResourceUnavailableReadyReplica = "unavailable-ready-replica"
+)
+
+// Key is an unambiguous in-memory identity. The NUL separator cannot appear in
+// Kubernetes names or UIDs and avoids the aliasing possible with joined paths.
+func (r ResourceScope) Key() string {
+	return r.Kind + "\x00" + r.Namespace + "\x00" + r.ServiceUID + "\x00" + r.ControllerUID
+}
+
+// Valid rejects name-only or partially bound resources. Move budgets are scoped
+// to one policy identity in one namespace; availability budgets additionally
+// require the immutable Service and controller UIDs.
+func (r ResourceScope) Valid() bool {
+	switch r.Kind {
+	case ResourceMoveCount:
+		return r.Namespace != "" && r.ControllerUID != "" && r.ServiceName == "" && r.ServiceUID == ""
+	case ResourceUnavailableReadyReplica:
+		return r.Namespace != "" && r.ServiceName != "" && r.ServiceUID != "" && r.ControllerUID != ""
+	default:
+		return false
+	}
+}
+
+// ResourceCapacity and ResourceConsumption use integer units. Objective cost is
+// intentionally absent: disruption preference and physical capacity are
+// different contracts.
+type ResourceCapacity struct {
+	Scope       ResourceScope `json:"scope"`
+	Limit       int           `json:"limit"`
+	Outstanding int           `json:"outstanding"`
+}
+
+type ResourceConsumption struct {
+	Scope ResourceScope `json:"scope"`
+	Units int           `json:"units"`
+}
+
+// ServiceAvailabilityObservation is the snapshot-time proof used to construct
+// unavailable-replica capacity. Complete is true only when the Service,
+// EndpointSlice inventory, target membership and a single exact controller UID
+// were all established. Dispatch re-reads the same objects before mutation.
+type ServiceAvailabilityObservation struct {
+	Scope        ResourceScope `json:"scope"`
+	ReadyMembers int           `json:"readyMembers"`
+	TargetReady  bool          `json:"targetReady"`
+	Complete     bool          `json:"complete"`
+	Reason       string        `json:"reason,omitempty"`
+}
+
 // OwnedValue preserves the distinction between a missing Kubernetes metadata
 // key and a present key whose value is empty. Protected serving operations use
 // these observations for optimistic selection freshness; concatenated legacy
@@ -319,6 +382,12 @@ type OwnedValue struct {
 
 type Pod struct {
 	RotationOwnership RotationOwnership
+	// ServiceAvailability contains one row for every Service whose selector
+	// matches this Pod. Empty or incomplete rows cannot authorize a
+	// replica-removing action against a positive availability floor.
+	ServiceAvailability       []ServiceAvailabilityObservation
+	ServiceAvailabilityKnown  bool
+	ServiceAvailabilityReason string
 
 	Namespace string
 	Name      string
@@ -337,6 +406,10 @@ type Pod struct {
 	ServiceAccount string
 	OwnerKind      string
 	OwnerName      string
+	// ControllerUID is the immutable UID from this Pod's single Kubernetes
+	// controller reference. It is independent of the human-readable owner name
+	// and is the identity used by shared availability scopes.
+	ControllerUID string
 	// WarmPoolConfigured is a conservative read-only snapshot witness for the
 	// scalar ReplicaSet warm-pool contract. Final dispatch rechecks live objects.
 	WarmPoolConfigured bool
@@ -667,6 +740,13 @@ type Policy struct {
 	QuarantineCapacityUsed       int
 	QuarantineCapacityLimit      int
 	QuarantineCapacityReason     string
+	// SharedResourceReservations is the durable outstanding consumption keyed by
+	// ResourceScope.Key(). Production fills it from the protected CAS ledger;
+	// offline callers may leave it nil to model no prior outstanding work.
+	SharedResourceReservations       map[string]int
+	SharedResourceCapacityConfigured bool
+	SharedResourceReservationsKnown  bool
+	SharedResourceReservationsReason string
 
 	TrustBoundarySince           time.Time
 	DecisionAssets               map[string]string
@@ -678,6 +758,8 @@ type Policy struct {
 	Mode                         string
 	DryRun                       bool
 	Lambda                       float64
+	DisruptionAversion           float64
+	DisruptionAversionConfigured bool
 	NormSparsity                 float64
 	FlowDisruption               float64
 	CostCeiling                  float64
@@ -735,7 +817,7 @@ type Decision struct {
 	// It is zero under P1 and is serialized separately so one field never has two meanings.
 	ThreatRisk    float64
 	Cost          float64
-	Net           float64 // engine-specific value - Lambda*Cost
+	Net           float64 // engine-specific value - frozen effective cost coefficient*Cost
 	AssetValue    float64
 	Residual      float64 // observational under the default P1 coverage engine
 	ThreatPosture float64 // observational under the default P1 coverage engine
@@ -792,16 +874,20 @@ type Decision struct {
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
-	Engine        string            // "p0-greedy" | "p1-coverage"
-	CoveredWeight float64           // modeled recon-fact selection opportunity; not measured mitigation
-	CoveredFacts  int               // count of modeled recon facts associated with the selected action
-	PerDollar     float64           // legacy full-value / ECost reporting ratio; not the selector
-	Stage         string            // most-likely kill-chain stage (semi-Markov)
-	StageHazard   float64           // stage-exit hazard h_s(t) (predictive horizon signal)
-	NextStage     string            // forward-projected next stage
-	Lambda        float64           // legacy mixed runtime lambda frozen for this decision
-	ProactiveRate float64           // legacy reporting score derived from PerDollar; not the selector
-	Attribution   []AttributionTerm // SHAP-style decomposition of the move's value
+	Engine        string             // "p0-greedy" | "p1-coverage"
+	CoveredWeight float64            // modeled recon-fact selection opportunity; not measured mitigation
+	CoveredFacts  int                // count of modeled recon facts associated with the selected action
+	PerDollar     float64            // legacy full-value / ECost reporting ratio; not the selector
+	Stage         string             // most-likely kill-chain stage (semi-Markov)
+	StageHazard   float64            // stage-exit hazard h_s(t) (predictive horizon signal)
+	NextStage     string             // forward-projected next stage
+	Lambda        float64            // legacy mixed runtime lambda frozen for this decision
+	Economics     *EconomicsMetadata // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
+	ProactiveRate float64            // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
+	Attribution   []AttributionTerm  // SHAP-style decomposition of the move's value
+	// Resources is the selected candidate's exact hard-capacity consumption.
+	// It is empty for noop and legacy engines.
+	Resources []ResourceConsumption
 
 	// --- P-CONTEXT predictive horizon (additive, audit-visible). ---
 	PreemptMargin         float64 // P(stage not yet transitioned by move-landing) [0,1]

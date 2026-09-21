@@ -21,6 +21,15 @@ const (
 	// status array, CHi reconstruction terms, round semantics, and the dispatch
 	// outcome. V2 records remain readable: Validate branches on the version.
 	DecisionTraceSchemaV3 = "phorvex.decision-trace.v3"
+	// DecisionTraceSchemaV4 makes the scoring coefficient independent of the
+	// separately learned legacy runtime lambda and records both demand views.
+	DecisionTraceSchemaV4 = "phorvex.decision-trace.v4"
+	// DecisionTraceSchemaV5 adds exact M156 flow-regime provenance and validates
+	// it against the candidate action and the recorded phase/load inputs.
+	DecisionTraceSchemaV5 = "phorvex.decision-trace.v5"
+	// DecisionTraceSchemaV6 adds the exact typed hard-capacity vector and each
+	// candidate's integer consumption. V2-V5 remain readable unchanged.
+	DecisionTraceSchemaV6 = "phorvex.decision-trace.v6"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -29,6 +38,9 @@ const (
 	CostRepresentationWeightedDimensionlessV1 = "weighted_dimensionless_v1"
 	// CFlowUnitDimensionlessDisruptionLoss is the formal current CFlow unit.
 	CFlowUnitDimensionlessDisruptionLoss = "confirmed_dimensionless_disruption_loss"
+	// CFlowMaximum is the shared upper end of the learned disruption-loss domain.
+	// Cost evaluation and V5 reconstruction both derive unsupported bounds here.
+	CFlowMaximum = 2.0
 	// SelectorStrictPositiveGain is the exact P1 production comparator.
 	SelectorStrictPositiveGain = "strict_gain_positive"
 	SelectorM99Containment     = "m99_bounded_full_containment"
@@ -344,9 +356,12 @@ type DecisionCandidateV2 struct {
 	ExpectedCost       OptionalFloat `json:"expectedCost"`
 	CostHigh           OptionalFloat `json:"costHigh"`
 	LambdaContribution OptionalFloat `json:"lambdaContribution"`
-	NetGain            OptionalFloat `json:"netGain"`
-	Feasible           OptionalBool  `json:"feasible"`
-	Selected           bool          `json:"selected"`
+	// ObjectiveCostContribution is authoritative in fixed-beta mode. The legacy
+	// lambda contribution remains absent there so readers cannot relabel beta as lambda.
+	ObjectiveCostContribution *OptionalFloat `json:"objectiveCostContribution,omitempty"`
+	NetGain                   OptionalFloat  `json:"netGain"`
+	Feasible                  OptionalBool   `json:"feasible"`
+	Selected                  bool           `json:"selected"`
 
 	// T0-C CHi reconstruction terms (B.1). Present exactly where the cost path
 	// computed them: rotate rows carry ConformalQuantile (the post-clamp slack
@@ -359,6 +374,16 @@ type DecisionCandidateV2 struct {
 	ConformalCalibrated OptionalBool  `json:"conformalCalibrated"`
 	GPUEnvelopeApplied  OptionalBool  `json:"gpuEnvelopeApplied"`
 	GPUEnvelopeSlack    OptionalFloat `json:"gpuEnvelopeSlack"`
+
+	// V5 learned-flow provenance. Costed Rotate/MIGRebind rows carry the complete
+	// set; other actions and historical schemas retain their prior wire contract.
+	FlowPredictedMean         *OptionalFloat `json:"flowPredictedMean,omitempty"`
+	FlowConservativeFloor     *OptionalFloat `json:"flowConservativeFloor,omitempty"`
+	FlowRegime                string         `json:"flowRegime,omitempty"`
+	FlowUncertaintyBound      *OptionalFloat `json:"flowUncertaintyBound,omitempty"`
+	FlowUncertaintySlack      *OptionalFloat `json:"flowUncertaintySlack,omitempty"`
+	ConformalWindowReady      *OptionalBool  `json:"conformalWindowReady,omitempty"`
+	ConformalRegimeApplicable *OptionalBool  `json:"conformalRegimeApplicable,omitempty"`
 	// SLOGateResult is present/true for generated candidates (they passed the
 	// conformal SLO gate), present/false for conformal-slo exclusions, absent
 	// for rows excluded upstream of the gate. SelectionRound is per-candidate,
@@ -373,6 +398,19 @@ type DecisionCandidateV2 struct {
 	// RBAC could not be confirmed this tick; it was NOT excluded (fail-open). Carried
 	// through to the per-action status row.
 	RBACUnknown bool `json:"rbacUnknown,omitempty"`
+	// Resources is the compact V6 consumption vector for this candidate.
+	Resources []ResourceConsumption `json:"resources,omitempty"`
+}
+
+// DecisionResourceCapacityV6 records the current hard limit and already
+// outstanding durable consumption for one immutable resource scope.
+type DecisionResourceCapacityV6 struct {
+	Scope       ResourceScope `json:"scope"`
+	Limit       int           `json:"limit"`
+	Outstanding int           `json:"outstanding"`
+	// Selected is total consumption by the current decision batch for this
+	// scope, rather than only the candidate represented by this audit row.
+	Selected int `json:"selected"`
 }
 
 // DecisionDualUpdateV2 records one legacy runtime-controller transition.
@@ -412,16 +450,21 @@ type DecisionTraceV2 struct {
 	AssetName       string `json:"assetName"`
 	AssetUID        string `json:"assetUID"`
 
-	Budget               int     `json:"budget"`
-	CandidateDemand      int     `json:"candidateDemand"`
-	MovesSpent           int     `json:"movesSpent"`
-	DryRun               bool    `json:"dryRun"`
-	DryRunCause          string  `json:"dryRunCause,omitempty"`
-	ActuationBrakeCause  string  `json:"actuationBrakeCause,omitempty"`
-	KillSwitchEngaged    bool    `json:"killSwitchEngaged"`
-	KillSwitchCause      string  `json:"killSwitchCause,omitempty"`
-	LambdaConfiguredSeed float64 `json:"lambdaConfiguredSeed"`
-	LambdaRuntime        float64 `json:"lambdaRuntime"`
+	Budget          int `json:"budget"`
+	CandidateDemand int `json:"candidateDemand"`
+	// CandidateDemand is retained as the compatibility alias for LambdaDemand.
+	// ObjectiveCandidateDemand records positive demand under the coefficient that
+	// actually ranked candidates.
+	LambdaDemand             int     `json:"lambdaDemand,omitempty"`
+	ObjectiveCandidateDemand int     `json:"objectiveCandidateDemand,omitempty"`
+	MovesSpent               int     `json:"movesSpent"`
+	DryRun                   bool    `json:"dryRun"`
+	DryRunCause              string  `json:"dryRunCause,omitempty"`
+	ActuationBrakeCause      string  `json:"actuationBrakeCause,omitempty"`
+	KillSwitchEngaged        bool    `json:"killSwitchEngaged"`
+	KillSwitchCause          string  `json:"killSwitchCause,omitempty"`
+	LambdaConfiguredSeed     float64 `json:"lambdaConfiguredSeed"`
+	LambdaRuntime            float64 `json:"lambdaRuntime"`
 	// The two fields above remain as wire-compatible aliases for existing readers.
 	// [M-140] Ownership metadata, captured when the economic unit was CREATED and stable
 	// for its life. LambdaConfiguredSeed above re-reads the current policy spec every tick,
@@ -435,11 +478,16 @@ type DecisionTraceV2 struct {
 	BucketCreationEvent       uint64               `json:"bucketCreationEvent"`
 	LambdaConfiguredPolicy    float64              `json:"lambdaConfiguredPolicy"`
 	LambdaRuntimeLegacy       float64              `json:"lambdaRuntimeLegacy"`
+	EconomicsVersion          string               `json:"economicsVersion,omitempty"`
+	DisruptionAversion        *OptionalFloat       `json:"disruptionAversion,omitempty"`
+	EffectiveCostCoefficient  float64              `json:"effectiveCostCoefficient,omitempty"`
+	CostCoefficientSource     string               `json:"costCoefficientSource,omitempty"`
 	SelectorComparator        string               `json:"selectorComparator"`
 	NormWeight                float64              `json:"normWeight"`
 	FlowWeight                float64              `json:"flowWeight"`
 	CFlowUnitStatus           string               `json:"cFlowUnitStatus"`
 	CostRepresentationVersion string               `json:"costRepresentationVersion"`
+	FlowCostSemanticsVersion  string               `json:"flowCostSemanticsVersion,omitempty"`
 	DualUpdate                DecisionDualUpdateV2 `json:"dualUpdate"`
 	// T0-C: CostCeiling is the EFFECTIVE conformal SLO ceiling the generator
 	// enforced (post-defaulting, not the raw policy field); CostModelVersion is
@@ -450,9 +498,10 @@ type DecisionTraceV2 struct {
 	CostModelVersion string  `json:"costModelVersion"`
 	EvaluationRound  int     `json:"evaluationRound"`
 
-	Inputs     DecisionModelInputsV2 `json:"inputs"`
-	Facts      []DecisionFactV2      `json:"facts"`
-	Candidates []DecisionCandidateV2 `json:"candidates"`
+	Inputs     DecisionModelInputsV2        `json:"inputs"`
+	Facts      []DecisionFactV2             `json:"facts"`
+	Candidates []DecisionCandidateV2        `json:"candidates"`
+	Resources  []DecisionResourceCapacityV6 `json:"resources,omitempty"`
 
 	// T0-C: ActionStatus carries exactly one row per model.MutatingActions member
 	// in canonical order (R-2: the complete action accounting, including actions
@@ -523,6 +572,10 @@ func cleanOptional(v OptionalFloat) OptionalFloat {
 // records that lack the v3 arrays.)
 func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out := t
+	if t.DisruptionAversion != nil {
+		cleaned := cleanOptional(*t.DisruptionAversion)
+		out.DisruptionAversion = &cleaned
+	}
 	out.DecisionID = redactTraceString(out.DecisionID)
 	out.TickID = redactTraceString(out.TickID)
 	out.Timestamp = redactTraceString(out.Timestamp)
@@ -631,6 +684,8 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.ExistingExclusionReason = redactTraceString(c.ExistingExclusionReason)
 		c.SelectionReason = redactTraceString(c.SelectionReason)
 		c.CoverKeys = append([]string(nil), c.CoverKeys...)
+		c.Resources = append([]ResourceConsumption(nil), c.Resources...)
+		sort.Slice(c.Resources, func(i, j int) bool { return c.Resources[i].Scope.Key() < c.Resources[j].Scope.Key() })
 		for j := range c.CoverKeys {
 			c.CoverKeys[j] = redactTraceString(c.CoverKeys[j])
 		}
@@ -643,10 +698,33 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.ExpectedCost = cleanOptional(c.ExpectedCost)
 		c.CostHigh = cleanOptional(c.CostHigh)
 		c.LambdaContribution = cleanOptional(c.LambdaContribution)
+		if c.ObjectiveCostContribution != nil {
+			cleaned := cleanOptional(*c.ObjectiveCostContribution)
+			c.ObjectiveCostContribution = &cleaned
+		}
 		c.NetGain = cleanOptional(c.NetGain)
 		c.ConformalQuantile = cleanOptional(c.ConformalQuantile)
 		c.GPUEnvelopeSlack = cleanOptional(c.GPUEnvelopeSlack)
+		if c.FlowPredictedMean != nil {
+			cleaned := cleanOptional(*c.FlowPredictedMean)
+			c.FlowPredictedMean = &cleaned
+		}
+		if c.FlowConservativeFloor != nil {
+			cleaned := cleanOptional(*c.FlowConservativeFloor)
+			c.FlowConservativeFloor = &cleaned
+		}
+		c.FlowRegime = redactTraceString(c.FlowRegime)
+		if c.FlowUncertaintyBound != nil {
+			cleaned := cleanOptional(*c.FlowUncertaintyBound)
+			c.FlowUncertaintyBound = &cleaned
+		}
+		if c.FlowUncertaintySlack != nil {
+			cleaned := cleanOptional(*c.FlowUncertaintySlack)
+			c.FlowUncertaintySlack = &cleaned
+		}
 	}
+	out.Resources = append([]DecisionResourceCapacityV6(nil), t.Resources...)
+	sort.Slice(out.Resources, func(i, j int) bool { return out.Resources[i].Scope.Key() < out.Resources[j].Scope.Key() })
 
 	out.ActionStatus = append([]DecisionActionStatusV3(nil), t.ActionStatus...)
 	for i := range out.ActionStatus {
@@ -696,7 +774,25 @@ func canonicalActionRank(action string) int {
 func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 	type alias DecisionTraceV2
 	canonical := t.Canonical()
-	return json.Marshal(alias(canonical))
+	raw, err := json.Marshal(alias(canonical))
+	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5 && canonical.SchemaVersion != DecisionTraceSchemaV6) {
+		return raw, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	for name, value := range map[string]any{
+		"lambdaDemand": canonical.LambdaDemand, "objectiveCandidateDemand": canonical.ObjectiveCandidateDemand,
+		"effectiveCostCoefficient": canonical.EffectiveCostCoefficient,
+	} {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		object[name] = encoded
+	}
+	return json.Marshal(object)
 }
 
 // Validate checks the version/build identity and selection-reference invariants.
@@ -705,10 +801,14 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 // non-test caller — it is a test-time contract, not a runtime guard; the
 // production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
 	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
+	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
+	isV5 := t.SchemaVersion == DecisionTraceSchemaV5
+	isV6 := t.SchemaVersion == DecisionTraceSchemaV6
+	hasV5 := isV5 || isV6
 	finite := func(values ...float64) bool {
 		for _, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -719,13 +819,44 @@ func (t DecisionTraceV2) Validate() error {
 	}
 	if !finite(t.LambdaConfiguredSeed, t.LambdaRuntime, t.LambdaConfiguredPolicy,
 		t.LambdaRuntimeLegacy, t.NormWeight, t.FlowWeight,
-		t.DualUpdate.LambdaBefore, t.DualUpdate.LambdaAfter) {
+		t.DualUpdate.LambdaBefore, t.DualUpdate.LambdaAfter) ||
+		((isV4 || hasV5) && !finite(t.EffectiveCostCoefficient)) ||
+		(t.DisruptionAversion != nil && t.DisruptionAversion.Present && !finite(t.DisruptionAversion.Value)) {
 		return errors.New("trace contains non-finite controller or cost values")
 	}
+	if t.NormWeight < 0 || t.FlowWeight < 0 {
+		return errors.New("trace cost weights must be non-negative")
+	}
+	for name, value := range map[string]float64{
+		"lambdaConfiguredSeed":    t.LambdaConfiguredSeed,
+		"lambdaRuntime":           t.LambdaRuntime,
+		"lambdaConfiguredPolicy":  t.LambdaConfiguredPolicy,
+		"lambdaRuntimeLegacy":     t.LambdaRuntimeLegacy,
+		"dualUpdate.lambdaBefore": t.DualUpdate.LambdaBefore,
+		"dualUpdate.lambdaAfter":  t.DualUpdate.LambdaAfter,
+	} {
+		if !finiteBoundedCoefficient(value) {
+			return fmt.Errorf("trace %s must be between 0 and 10", name)
+		}
+	}
 	for _, candidate := range t.Candidates {
+		if !isV6 && len(candidate.Resources) != 0 {
+			return fmt.Errorf("historical candidate %q carries V6 resource consumption", candidate.CandidateKey)
+		}
 		values := []OptionalFloat{candidate.GrossFullValue, candidate.MarginalCoverage,
 			candidate.Provenance, candidate.CNorm, candidate.CFlow, candidate.ExpectedCost,
 			candidate.CostHigh, candidate.LambdaContribution, candidate.NetGain}
+		if hasV5 {
+			for _, value := range []*OptionalFloat{candidate.FlowPredictedMean, candidate.FlowConservativeFloor,
+				candidate.FlowUncertaintyBound, candidate.FlowUncertaintySlack} {
+				if value != nil {
+					values = append(values, *value)
+				}
+			}
+		}
+		if candidate.ObjectiveCostContribution != nil {
+			values = append(values, *candidate.ObjectiveCostContribution)
+		}
 		for _, value := range values {
 			if value.Present && !finite(value.Value) {
 				return fmt.Errorf("candidate %q contains a non-finite value", candidate.CandidateKey)
@@ -747,6 +878,18 @@ func (t DecisionTraceV2) Validate() error {
 		}
 	}
 	t = t.Canonical()
+	if !hasV5 {
+		if t.FlowCostSemanticsVersion != "" {
+			return errors.New("historical trace carries V5 flow-cost semantics")
+		}
+		for _, candidate := range t.Candidates {
+			if candidate.FlowPredictedMean != nil || candidate.FlowConservativeFloor != nil || candidate.FlowRegime != "" ||
+				candidate.FlowUncertaintyBound != nil || candidate.FlowUncertaintySlack != nil ||
+				candidate.ConformalWindowReady != nil || candidate.ConformalRegimeApplicable != nil {
+				return fmt.Errorf("historical candidate %q carries V5 flow provenance", candidate.CandidateKey)
+			}
+		}
+	}
 	if t.BrainImage == "" || t.GitSHA == "" {
 		return errors.New("brainImage and gitSHA are mandatory")
 	}
@@ -772,9 +915,16 @@ func (t DecisionTraceV2) Validate() error {
 			selected++
 			selectedKey = c.CandidateKey
 		}
-		if c.NetGain.Present && c.MarginalCoverage.Present && c.Provenance.Present &&
-			c.LambdaContribution.Present {
-			want := c.MarginalCoverage.Value*c.Provenance.Value - c.LambdaContribution.Value
+		contribution := c.LambdaContribution
+		if (isV4 || hasV5) && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
+			if c.ObjectiveCostContribution != nil {
+				contribution = *c.ObjectiveCostContribution
+			} else {
+				contribution = OptionalFloat{}
+			}
+		}
+		if c.NetGain.Present && c.MarginalCoverage.Present && c.Provenance.Present && contribution.Present {
+			want := c.MarginalCoverage.Value*c.Provenance.Value - contribution.Value
 			if math.Abs(want-c.NetGain.Value) > 1e-9 {
 				return fmt.Errorf("candidate %q net gain is not reconstructable", c.CandidateKey)
 			}
@@ -802,10 +952,27 @@ func (t DecisionTraceV2) Validate() error {
 			t.DualUpdate.LambdaBefore != t.LambdaRuntimeLegacy || t.DualUpdate.UpdateReason == "" {
 			return errors.New("dual update is not reconstructable from trace inputs")
 		}
-	} else if isV3 {
-		return errors.New("v3 trace must carry the cost representation semantics")
+	} else if isV3 || isV4 || hasV5 {
+		return errors.New("v3/v4/v5/v6 trace must carry the cost representation semantics")
 	}
-	if isV3 {
+	if isV4 || hasV5 {
+		if err := t.validateV4(); err != nil {
+			return err
+		}
+	}
+	if hasV5 {
+		if err := t.validateV5(); err != nil {
+			return err
+		}
+	}
+	if isV6 {
+		if err := t.validateV6(); err != nil {
+			return err
+		}
+	} else if len(t.Resources) != 0 {
+		return errors.New("historical trace carries V6 resource capacities")
+	}
+	if isV3 || isV4 || hasV5 {
 		if err := t.validateV3(); err != nil {
 			return err
 		}
@@ -818,6 +985,208 @@ func (t DecisionTraceV2) Validate() error {
 	}
 	if selected != 1 || t.SelectedCandidateKey == "" || selectedKey != t.SelectedCandidateKey {
 		return errors.New("selected trace must reference exactly one recorded candidate")
+	}
+	return nil
+}
+
+func (t DecisionTraceV2) validateV6() error {
+	if len(t.Resources) == 0 {
+		return errors.New("v6 trace has no resource capacities")
+	}
+	limits, batchSelected, rowSelected := map[string]int{}, map[string]int{}, map[string]int{}
+	for _, capacity := range t.Resources {
+		key := capacity.Scope.Key()
+		if !capacity.Scope.Valid() || capacity.Limit < 0 || capacity.Outstanding < 0 || capacity.Selected < 0 || capacity.Outstanding+capacity.Selected > capacity.Limit {
+			return errors.New("v6 trace contains invalid resource capacity")
+		}
+		if _, exists := limits[key]; exists {
+			return fmt.Errorf("v6 trace duplicates resource scope %q", key)
+		}
+		limits[key], batchSelected[key] = capacity.Limit, capacity.Selected
+	}
+	for _, candidate := range t.Candidates {
+		if len(candidate.Resources) == 0 && candidate.ExistingExclusionReason == "" {
+			return fmt.Errorf("candidate %q lacks V6 resource consumption", candidate.CandidateKey)
+		}
+		seen := map[string]bool{}
+		for _, demand := range candidate.Resources {
+			key := demand.Scope.Key()
+			if !demand.Scope.Valid() || demand.Units <= 0 {
+				return fmt.Errorf("candidate %q has invalid resource consumption", candidate.CandidateKey)
+			}
+			if seen[key] {
+				return fmt.Errorf("candidate %q duplicates resource scope %q", candidate.CandidateKey, key)
+			}
+			seen[key] = true
+			if _, exists := limits[key]; !exists {
+				return fmt.Errorf("candidate %q consumes unknown resource scope %q", candidate.CandidateKey, key)
+			}
+			if candidate.Selected {
+				rowSelected[key] += demand.Units
+			}
+		}
+	}
+	for key, value := range rowSelected {
+		if value > batchSelected[key] {
+			return fmt.Errorf("selected candidate exceeds batch consumption for resource scope %q: row=%d batch=%d limit=%d", key, value, batchSelected[key], limits[key])
+		}
+	}
+	return nil
+}
+
+func (t DecisionTraceV2) validateV4() error {
+	if t.LambdaDemand != t.CandidateDemand || t.ObjectiveCandidateDemand < 0 || t.LambdaDemand < 0 {
+		return errors.New("v4 demand fields are contradictory")
+	}
+	if !finiteBoundedCoefficient(t.EffectiveCostCoefficient) {
+		return errors.New("v4 effective cost coefficient must be between 0 and 10")
+	}
+	switch t.EconomicsVersion {
+	case EconomicsLegacyRuntimeLambdaV1:
+		if t.DisruptionAversion != nil || t.CostCoefficientSource != CostCoefficientSourceLambda ||
+			t.EffectiveCostCoefficient != t.LambdaRuntimeLegacy {
+			return errors.New("v4 legacy economics metadata is contradictory")
+		}
+	case EconomicsFixedDisruptionAversionV1:
+		if t.DisruptionAversion == nil || !t.DisruptionAversion.Present || !finiteBoundedCoefficient(t.DisruptionAversion.Value) ||
+			t.CostCoefficientSource != CostCoefficientSourceBeta ||
+			t.EffectiveCostCoefficient != t.DisruptionAversion.Value {
+			return errors.New("v4 fixed economics metadata is contradictory")
+		}
+	default:
+		return fmt.Errorf("v4 economicsVersion %q", t.EconomicsVersion)
+	}
+	for _, candidate := range t.Candidates {
+		if !candidate.ExpectedCost.Present {
+			continue
+		}
+		if t.EconomicsVersion == EconomicsLegacyRuntimeLambdaV1 {
+			if !candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution != nil ||
+				math.Abs(candidate.LambdaContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
+				return fmt.Errorf("candidate %q has contradictory legacy cost contribution", candidate.CandidateKey)
+			}
+		} else if candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution == nil || !candidate.ObjectiveCostContribution.Present ||
+			math.Abs(candidate.ObjectiveCostContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
+			return fmt.Errorf("candidate %q has contradictory fixed cost contribution", candidate.CandidateKey)
+		}
+	}
+	return nil
+}
+
+const (
+	flowRegimeMeasuredLoad  = "measured-load"
+	flowRegimeMissingLoad   = "missing-load"
+	flowRegimeDrainingPhase = "draining-phase"
+	flowRegimeUnknownPhase  = "unknown-phase"
+	flowRegimeMIGProxy      = "mig-proxy"
+)
+
+// validateV5 binds learned-flow provenance to the recorded action and current
+// phase/load inputs. Algebraically self-consistent labels are insufficient: an
+// absent request-rate input can never claim the measured-load regime.
+func (t DecisionTraceV2) validateV5() error {
+	if t.FlowCostSemanticsVersion != FlowCostSemanticsConservativeRegimeV1 {
+		return fmt.Errorf("v5 flowCostSemanticsVersion %q", t.FlowCostSemanticsVersion)
+	}
+	phase := WorkloadPhase(t.Inputs.Phase)
+	knownPhase := false
+	for _, candidate := range AllWorkloadPhases {
+		if phase == candidate {
+			knownPhase = true
+			break
+		}
+	}
+	for _, candidate := range t.Candidates {
+		costed := candidate.ExpectedCost.Present
+		respawn := candidate.Action == string(ActionRotate) || candidate.Action == string(ActionMIGRebind)
+		provenancePresent := candidate.FlowPredictedMean != nil || candidate.FlowConservativeFloor != nil ||
+			candidate.FlowRegime != "" || candidate.FlowUncertaintyBound != nil || candidate.FlowUncertaintySlack != nil ||
+			candidate.ConformalWindowReady != nil || candidate.ConformalRegimeApplicable != nil
+		if !costed || !respawn {
+			if provenancePresent {
+				return fmt.Errorf("candidate %q carries v5 flow provenance without a costed respawn", candidate.CandidateKey)
+			}
+			continue
+		}
+		if candidate.FlowPredictedMean == nil || candidate.FlowConservativeFloor == nil ||
+			candidate.FlowUncertaintyBound == nil || candidate.FlowUncertaintySlack == nil ||
+			candidate.ConformalWindowReady == nil || candidate.ConformalRegimeApplicable == nil || candidate.FlowRegime == "" {
+			return fmt.Errorf("candidate %q lacks complete v5 flow provenance", candidate.CandidateKey)
+		}
+		if !candidate.FlowPredictedMean.Present || !candidate.CFlow.Present {
+			return fmt.Errorf("candidate %q lacks the predicted mean or effective flow", candidate.CandidateKey)
+		}
+
+		expectedRegime := flowRegimeMeasuredLoad
+		switch {
+		case candidate.Action == string(ActionMIGRebind):
+			expectedRegime = flowRegimeMIGProxy
+		case !knownPhase || phase == PhaseUnknown:
+			expectedRegime = flowRegimeUnknownPhase
+		case phase == PhaseDraining:
+			expectedRegime = flowRegimeDrainingPhase
+		case !t.Inputs.RequestRate.Present:
+			expectedRegime = flowRegimeMissingLoad
+		}
+		if candidate.FlowRegime != expectedRegime {
+			return fmt.Errorf("candidate %q flow regime %q disagrees with action/phase/load inputs (want %q)", candidate.CandidateKey, candidate.FlowRegime, expectedRegime)
+		}
+
+		floorPresent := false
+		floor := 0.0
+		switch {
+		case !knownPhase || phase == PhaseUnknown:
+			floorPresent, floor = true, 0.5
+		case phase == PhaseDraining:
+			floorPresent, floor = true, 0.2
+		case !t.Inputs.RequestRate.Present:
+			floorPresent = true
+			switch phase {
+			case PhaseColdStarting:
+				floor = 1.0
+			case PhaseWarm:
+				floor = 0.7
+			case PhaseIdle:
+				floor = 0.15
+			default:
+				return fmt.Errorf("candidate %q has no known missing-load floor for phase %q", candidate.CandidateKey, phase)
+			}
+		}
+		if candidate.FlowConservativeFloor.Present != floorPresent ||
+			(floorPresent && math.Abs(candidate.FlowConservativeFloor.Value-floor) > 1e-9) {
+			return fmt.Errorf("candidate %q carries the wrong conservative floor", candidate.CandidateKey)
+		}
+		wantFlow := candidate.FlowPredictedMean.Value
+		if floorPresent && floor > wantFlow {
+			wantFlow = floor
+		}
+		if math.Abs(candidate.CFlow.Value-wantFlow) > 1e-9 {
+			return fmt.Errorf("candidate %q effective flow is not reconstructable", candidate.CandidateKey)
+		}
+
+		unsupported := expectedRegime != flowRegimeMeasuredLoad
+		if candidate.FlowUncertaintyBound.Present != unsupported || candidate.FlowUncertaintySlack.Present != unsupported {
+			return fmt.Errorf("candidate %q uncertainty presence disagrees with its regime", candidate.CandidateKey)
+		}
+		if unsupported {
+			if candidate.FlowUncertaintyBound.Value != CFlowMaximum {
+				return fmt.Errorf("candidate %q carries flow upper bound %g", candidate.CandidateKey, candidate.FlowUncertaintyBound.Value)
+			}
+			wantSlack := t.FlowWeight * math.Max(0, CFlowMaximum-candidate.CFlow.Value)
+			if math.Abs(candidate.FlowUncertaintySlack.Value-wantSlack) > 1e-9 {
+				return fmt.Errorf("candidate %q uncertainty slack is not reconstructable", candidate.CandidateKey)
+			}
+		}
+
+		applicable := candidate.Action == string(ActionRotate) && !unsupported
+		if !candidate.ConformalWindowReady.Present || !candidate.ConformalRegimeApplicable.Present ||
+			candidate.ConformalRegimeApplicable.Value != applicable {
+			return fmt.Errorf("candidate %q carries contradictory conformal applicability", candidate.CandidateKey)
+		}
+		if candidate.Action == string(ActionRotate) && (!candidate.ConformalCalibrated.Present ||
+			candidate.ConformalCalibrated.Value != (candidate.ConformalWindowReady.Value && applicable)) {
+			return fmt.Errorf("candidate %q carries a false row-level calibration claim", candidate.CandidateKey)
+		}
 	}
 	return nil
 }
@@ -923,11 +1292,12 @@ func (t DecisionTraceV2) validateV3() error {
 			continue
 		}
 		want := c.ExpectedCost.Value
+		slack := 0.0
 		if c.Action == string(ActionRotate) {
 			if !c.ConformalQuantile.Present {
 				return fmt.Errorf("candidate %q is a costed rotate without the conformal quantile", c.CandidateKey)
 			}
-			slack := c.ConformalQuantile.Value
+			slack = c.ConformalQuantile.Value
 			if c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value {
 				if !c.GPUEnvelopeSlack.Present {
 					return fmt.Errorf("candidate %q applied the GPU envelope without recording its value", c.CandidateKey)
@@ -936,10 +1306,13 @@ func (t DecisionTraceV2) validateV3() error {
 					slack = c.GPUEnvelopeSlack.Value
 				}
 			}
-			want += slack
 		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
 			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
 		}
+		if (t.SchemaVersion == DecisionTraceSchemaV5 || t.SchemaVersion == DecisionTraceSchemaV6) && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
+			slack = c.FlowUncertaintySlack.Value
+		}
+		want += slack
 		if math.Abs(want-c.CostHigh.Value) > 1e-9 {
 			return fmt.Errorf("candidate %q cost high is not reconstructable (want %g, got %g)",
 				c.CandidateKey, want, c.CostHigh.Value)

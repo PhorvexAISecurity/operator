@@ -136,6 +136,27 @@ func TestCheckQuarantineIncludesCapacityAndRecoveryPermissions(t *testing.T) {
 	}
 }
 
+func TestM103CheckRequiresSharedAvailabilityInventoryAndLedgerCAS(t *testing.T) {
+	reader := policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRotate))
+	for _, tc := range []struct {
+		name, namespace, group, resource, verb string
+	}{
+		{name: "service inventory", namespace: "tenant", resource: "services", verb: "list"},
+		{name: "endpoint membership", namespace: "tenant", group: "discovery.k8s.io", resource: "endpointslices", verb: "list"},
+		{name: "durable ledger update", namespace: "operator", resource: "configmaps", verb: "update"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reviews := &recordingSSAR{deny: func(attributes authorizationv1.ResourceAttributes) bool {
+				return attributes.Namespace == tc.namespace && attributes.Group == tc.group && attributes.Resource == tc.resource && attributes.Verb == tc.verb
+			}}
+			_, err := Check(t.Context(), reader, reviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator"})
+			if err == nil || !strings.Contains(err.Error(), "shared") {
+				t.Fatalf("missing %s permission was accepted: %v", tc.name, err)
+			}
+		})
+	}
+}
+
 func TestCheckNativeAndHybridRequireRecoveryJournalInventory(t *testing.T) {
 	reader := policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRotate))
 	for _, backend := range []actuator.Backend{actuator.BackendNative, actuator.BackendHybrid} {

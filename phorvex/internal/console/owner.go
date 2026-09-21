@@ -3,7 +3,7 @@
  *
  * The platform-OWNER view leaks ZERO Phorvex IP, enforced SERVER-SIDE by a WHITELIST DTO.
  * VERIFIED NECESSITY: audit.Record carries every IP field inline (CoverageValue/ThreatRisk/
- * Cost/Net/Residual/ThreatPosture/Exposure/PHold/AssetValue/BlastRadius/PerDollar/CoveredWeight/Lambda/
+ * Cost/Net/Residual/ThreatPosture/Exposure/PHold/AssetValue/BlastRadius/PerDollar/CoveredWeight/Lambda/Economics/
  * ProactiveRate/Attribution + the raw Reason, which itself inlines cov/$/per-$/lambda/hazard/
  * pHold math). A naive json.Marshal(Record) on the owner path would leak the entire moat.
  *
@@ -26,7 +26,7 @@ import (
 // OwnerEvent is the ONLY shape the owner endpoint returns — the outcome, never the math.
 // Every field here is owner-safe by construction (an owner sees what changed in THEIR
 // platform + that it helped). NO EMR / scarcity / fact-weight / per-dollar / lambda /
-// hazard / pHold / attribution / raw-risk field appears, by design.
+// beta / objective coefficient / hazard / pHold / attribution / raw-risk field appears, by design.
 type OwnerEvent struct {
 	Representation  OwnerRepresentation `json:"representation"`
 	Claim           model.ClaimScope    `json:"claim"`
@@ -223,6 +223,7 @@ var redactedFieldNames = []string{
 	"emr", "scarcity", "imagerarity", "epss", "coresidency", "modelrarity", "dispersion",
 	"factweight", "coveredweight", "coveredfacts", "coverkeys", "factkind",
 	"perdollar", "lambda", "proactiverate", "costceiling", "shadowprice",
+	"economics", "disruptionaversion", "effectivecostcoefficient", "coefficientsource",
 	"residual", "threatposture", "exposure", "belief", "phold", "stagehazard",
 	"preemptmargin", "projectednextstagesec", "assetvalue", "blastradius",
 	"attribution", "coveragevalue", "threatrisk", "\"risk\"", "\"cost\"", "\"net\"", "\"reason\"", "counterfactualnote",

@@ -97,17 +97,22 @@ type attackRecord struct {
 	ObservationError string  `json:"observationError,omitempty"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
-	Why                   string  `json:"why"`
-	PerDollar             float64 `json:"perDollar"`
-	PerDollarAvailable    bool    `json:"perDollarAvailable"`
-	Stage                 string  `json:"stage"`
-	CoveredFacts          int     `json:"coveredFacts"`
-	CoveredFactsAvailable bool    `json:"coveredFactsAvailable"`
-	PHold                 float64 `json:"pHold"`
-	Lambda                float64 `json:"lambda"`
-	LambdaAvailable       bool    `json:"lambdaAvailable"`
-	R6Would               string  `json:"r6Would"`
-	R6Note                string  `json:"r6Note"`
+	Why                       string  `json:"why"`
+	PerDollar                 float64 `json:"perDollar"`
+	PerDollarAvailable        bool    `json:"perDollarAvailable"`
+	Stage                     string  `json:"stage"`
+	CoveredFacts              int     `json:"coveredFacts"`
+	CoveredFactsAvailable     bool    `json:"coveredFactsAvailable"`
+	PHold                     float64 `json:"pHold"`
+	Lambda                    float64 `json:"lambda"`
+	LambdaAvailable           bool    `json:"lambdaAvailable"`
+	EconomicsVersion          string  `json:"economicsVersion,omitempty"`
+	DisruptionAversion        float64 `json:"disruptionAversion,omitempty"`
+	DisruptionAversionPresent bool    `json:"disruptionAversionPresent"`
+	EffectiveCostCoefficient  float64 `json:"effectiveCostCoefficient,omitempty"`
+	EconomicsAvailable        bool    `json:"economicsAvailable"`
+	R6Would                   string  `json:"r6Would"`
+	R6Note                    string  `json:"r6Note"`
 
 	// real uptime, sampled around the attack (ready/desired * 100)
 	UptimeBefore float64 `json:"uptimeBefore"`
@@ -745,11 +750,35 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	if r.LambdaAvailable {
 		r.Lambda = numf(best["lambda"])
 	}
+	if raw, ok := best["economics"]; ok && raw != nil {
+		if economics, ok := decodeAuditEconomics(raw, r.Lambda); ok {
+			r.EconomicsVersion = economics.Version
+			r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
+			r.DisruptionAversionPresent = economics.DisruptionAversion.Present
+			if economics.DisruptionAversion.Present {
+				r.DisruptionAversion = economics.DisruptionAversion.Value
+			}
+			r.EconomicsAvailable = true
+		}
+	}
 	r.CoveredFactsAvailable = auditFieldAvailable(best, "coveredFacts")
 	if r.CoveredFactsAvailable {
 		r.CoveredFacts = int(numf(best["coveredFacts"]))
 	}
 	s.parseDescReasoning(r) // backfill any numbers the audit line lacked (e.g. per-$ from the event desc)
+}
+
+func decodeAuditEconomics(raw any, roundedLambda float64) (model.EconomicsMetadata, bool) {
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return model.EconomicsMetadata{}, false
+	}
+	var economics model.EconomicsMetadata
+	if json.Unmarshal(data, &economics) != nil || model.ValidateEconomicsMetadata(&economics) != nil ||
+		!audit.EconomicsMatchesRoundedLambda(&economics, roundedLambda) {
+		return model.EconomicsMetadata{}, false
+	}
+	return economics, true
 }
 
 func auditFieldAvailable(rec map[string]any, name string) bool {

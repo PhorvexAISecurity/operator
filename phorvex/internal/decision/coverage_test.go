@@ -91,6 +91,10 @@ func covView(name string, secrets bool, exposure time.Duration, stateful bool) *
 		// podIdentity default. Clock every live variable at `exposure` so a fixture pod is gated
 		// identically whatever action a test enables (pre-M-23 all read podIdentity=exposure).
 		ExposureByVariable: allVarsAt(exposure),
+		// Generic decision fixtures represent a measured idle request stream. M156
+		// tests missing load explicitly; leaving this absent would intentionally take
+		// the unsupported-regime upper bound and obscure the gate under test.
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "fixture")},
 	}
 	if secrets {
 		v.Pod.MountedSecrets = []string{"creds"}

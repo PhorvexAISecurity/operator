@@ -85,16 +85,17 @@ type Record struct {
 	BlindCost          float64               `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
 
 	// P1 (coverage engine) fields — present only under the p1-coverage brain.
-	Engine        string                  `json:"engine,omitempty"`
-	PerDollar     float64                 `json:"perDollar,omitempty"`
-	CoveredWeight float64                 `json:"coveredWeight,omitempty"`
-	CoveredFacts  int                     `json:"coveredFacts,omitempty"`
-	Stage         string                  `json:"stage,omitempty"`
-	NextStage     string                  `json:"nextStage,omitempty"`
-	StageHazard   float64                 `json:"stageHazard,omitempty"`
-	Lambda        float64                 `json:"lambda,omitempty"`
-	ProactiveRate float64                 `json:"proactiveRate,omitempty"`
-	Attribution   []model.AttributionTerm `json:"attribution,omitempty"`
+	Engine        string                   `json:"engine,omitempty"`
+	PerDollar     float64                  `json:"perDollar,omitempty"`
+	CoveredWeight float64                  `json:"coveredWeight,omitempty"`
+	CoveredFacts  int                      `json:"coveredFacts,omitempty"`
+	Stage         string                   `json:"stage,omitempty"`
+	NextStage     string                   `json:"nextStage,omitempty"`
+	StageHazard   float64                  `json:"stageHazard,omitempty"`
+	Lambda        float64                  `json:"lambda,omitempty"`
+	Economics     *model.EconomicsMetadata `json:"economics,omitempty"`
+	ProactiveRate float64                  `json:"proactiveRate,omitempty"`
+	Attribution   []model.AttributionTerm  `json:"attribution,omitempty"`
 
 	// P-ACTUATOR native-actuator forensic fields — what the hands actually did, so a
 	// kv-reset is distinguishable from a kill. Present only when the native actuator emitted.
@@ -267,6 +268,12 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	if err := measurementsMatch(r); err != nil {
 		return nil, err
 	}
+	if err := model.ValidateEconomicsMetadata(r.Economics); err != nil {
+		return nil, err
+	}
+	if !EconomicsMatchesRoundedLambda(r.Economics, r.Lambda) {
+		return nil, fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
+	}
 	prepared := r.preparedRepresentation
 	if len(prepared) != 0 {
 		r.Representation = nil
@@ -378,6 +385,12 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	if err := measurementsMatch(Record(decoded)); err != nil {
 		return err
 	}
+	if err := model.ValidateEconomicsMetadata(decoded.Economics); err != nil {
+		return err
+	}
+	if !EconomicsMatchesRoundedLambda(decoded.Economics, decoded.Lambda) {
+		return fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
+	}
 	*r = Record(decoded)
 	return nil
 }
@@ -434,6 +447,11 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		dispatchReason = model.SafeDispatchReason(d.DispatchReason)
 	}
 	var representation *model.Representation
+	var economics *model.EconomicsMetadata
+	if d.Economics != nil {
+		copy := *d.Economics
+		economics = &copy
+	}
 	var preparedRepresentation json.RawMessage
 	if prepareWire && d.Measurements != nil {
 		representation, preparedRepresentation = prepareRepresentation(d.Representation)
@@ -497,6 +515,7 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		EventEvidence:          round4(d.EventEvidence),
 		Events:                 roundEvents(d.Events),
 		Lambda:                 round4(d.Lambda),
+		Economics:              economics,
 		ProactiveRate:          round4(d.ProactiveRate),
 		Attribution:            canonicalizeAttribution(d.Attribution),
 		Handler:                d.Handler,
@@ -678,6 +697,7 @@ func (l *Logger) Record(d model.Decision) error {
 		"perDollar", rec.PerDollar, "coveredWeight", rec.CoveredWeight, "coveredFacts", rec.CoveredFacts,
 		"stage", rec.Stage, "nextStage", rec.NextStage, "hazard", rec.StageHazard,
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,
+		"economics", rec.Economics,
 		"cost", rec.Cost, "net", rec.Net, "asset", rec.AssetValue, "blast", rec.BlastRadius,
 		"attribution", rec.Attribution,
 		"r6Would", rec.R6Counterfactual, "r6Note", rec.CounterfactualNote,
@@ -722,6 +742,13 @@ func (l *Logger) tickSummary(tenant, namespace, policy, uid string, total, selec
 
 func round4(x float64) float64 {
 	return float64(int64(x*10000+sign(x)*0.5)) / 10000
+}
+
+// EconomicsMatchesRoundedLambda verifies the legacy display alias without
+// discarding the descriptor's authoritative full-precision runtime value.
+// Records written before economics metadata remain readable.
+func EconomicsMatchesRoundedLambda(metadata *model.EconomicsMetadata, roundedLambda float64) bool {
+	return metadata == nil || (metadata.LambdaRuntimeLegacy.Present && round4(metadata.LambdaRuntimeLegacy.Value) == roundedLambda)
 }
 
 func sign(x float64) float64 {

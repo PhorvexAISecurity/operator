@@ -3,7 +3,8 @@
 Independent validator for Phorvex audit decision records.
 
 Each record is a `phorvex.audit.v2` envelope carrying a nested
-`decisionTrace` (`phorvex.decision-trace.v2`, v3 hooks reserved).
+`decisionTrace` (`phorvex.decision-trace.v2`, v3, economics-aware v4,
+flow-regime-aware v5, or capacity-aware v6).
 
 The laws asserted here were derived by reading the Go source, NOT by fitting
 the records (see README.md for the file:line of every law):
@@ -34,12 +35,24 @@ from typing import Any, Iterator
 
 TRACE_V2 = "phorvex.decision-trace.v2"
 TRACE_V3 = "phorvex.decision-trace.v3"
+TRACE_V4 = "phorvex.decision-trace.v4"
+TRACE_V5 = "phorvex.decision-trace.v5"
+TRACE_V6 = "phorvex.decision-trace.v6"
 AUDIT_V2 = "phorvex.audit.v2"
+
+ECON_LEGACY = "legacy-runtime-lambda-v1"
+ECON_FIXED = "fixed-disruption-aversion-v1"
+COEFF_LAMBDA = "lambdaRuntimeLegacy"
+COEFF_BETA = "disruptionAversion"
+MAX_COEFFICIENT = 10.0
+FLOW_SEMANTICS_V1 = "conservative-regime-v1"
+FLOW_MAXIMUM = 2.0
 
 # decision_trace.go:25-29
 COST_REPR_V1 = "weighted_dimensionless_v1"
 CFLOW_UNIT = "confirmed_dimensionless_disruption_loss"
 SELECTOR = "strict_gain_positive"
+SELECTOR_M99 = "m99_bounded_full_containment"
 
 # Canonical action order. Hard-coded copy of `MutatingActions` in
 # phorvex/internal/model/types.go lines ~105-114 (the SINGLE SOURCE OF TRUTH
@@ -73,13 +86,19 @@ NOOP_NOT_SELECTED = "not selected by current greedy round"
 
 TOL = 1e-9  # decision_trace.go Validate(): math.Abs(want-got) > 1e-9
 
-# v3 vocabularies (reserved; laws stated in the task, not yet in Go)
+# V3/V4 vocabularies mirrored from internal/model/decision_trace.go.
 V3_STATUS = {"not-enabled", "not-installable", "no-cover", "candidate", "infeasible",
              "conformal-slo", "priced-out", "budget-exhausted", "selected",
-             "not-evaluated-by-current-model"}
+             "not-evaluated-by-current-model", "ineligible"}
 V3_EXCLUSION_KIND = {"not-enabled", "recon-cover", "feasibility", "cost-nan",
-                     "slo-gate", "reactive-only", "selection", "none"}
-V3_DISPATCH = {"not-attempted", "emitted", "emitted-false", "dispatch-error"}
+                     "slo-gate", "reactive-only", "selection", "none",
+                     "not-installable", "no-rbac", "capability-unsupported",
+                     "action-failure-cooldown", "operator-opt-out"}
+V3_INELIGIBLE_EXCLUSIONS = {"no-rbac", "capability-unsupported",
+                            "action-failure-cooldown", "operator-opt-out"}
+V3_DISPATCH = {"not-attempted", "emitted", "emitted-false", "dispatch-error",
+               "refused-no-effect", "already-satisfied", "reconciled-no-new-mutation",
+               "declared-only"}
 
 # Redaction patterns: the task's four, plus the Go patterns from decision_trace.go:189-192.
 SECRET_PATTERNS = [
@@ -199,8 +218,8 @@ def check_schema(rec: dict, tr: dict) -> Check:
     if env != AUDIT_V2:
         problems.append(f"schemaVersion={env!r} (want {AUDIT_V2!r})")
     tv = tr.get("schemaVersion")
-    if tv not in (TRACE_V2, TRACE_V3):
-        problems.append(f"decisionTrace.schemaVersion={tv!r} (want {TRACE_V2!r} or {TRACE_V3!r})")
+    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6):
+        problems.append(f"decisionTrace.schemaVersion={tv!r} (want v2, v3, v4, v5, or v6)")
     if problems:
         return Check(1, "schema", FAIL, "; ".join(problems))
     return Check(1, "schema", PASS, f"envelope {AUDIT_V2}; trace {tv}")
@@ -252,11 +271,19 @@ def check_presence(tr: dict, census: dict[str, list[int]]) -> Check:
         v = tr.get(k)
         if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
             bad.append(f"decisionTrace.{k} is not a finite number ({v!r})")
+        elif k in ("normWeight", "flowWeight") and v < 0:
+            bad.append(f"decisionTrace.{k}={v!r} must be non-negative")
+    for k in ("lambdaConfiguredSeed", "lambdaRuntime", "lambdaConfiguredPolicy", "lambdaRuntimeLegacy"):
+        v = tr.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and not (0 <= v <= MAX_COEFFICIENT):
+            bad.append(f"decisionTrace.{k}={v!r} is outside [0,{MAX_COEFFICIENT:g}]")
     du = tr.get("dualUpdate") or {}
     for k in ("lambdaBefore", "lambdaAfter"):
         v = du.get(k)
         if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
             bad.append(f"decisionTrace.dualUpdate.{k} is not a finite number ({v!r})")
+        elif not (0 <= v <= MAX_COEFFICIENT):
+            bad.append(f"decisionTrace.dualUpdate.{k}={v!r} is outside [0,{MAX_COEFFICIENT:g}]")
     if bad:
         return Check(3, "presence-flags", FAIL, "; ".join(bad))
     return Check(3, "presence-flags", PASS,
@@ -290,8 +317,9 @@ def check_selection_reference(rec: dict, tr: dict) -> Check:
                 problems.append(f"{p}.candidateKey={c.get('candidateKey')!r} != selectedCandidateKey={sel_key!r}")
             if c.get("action") != sel_action:
                 problems.append(f"{p}.action={c.get('action')!r} != selectedAction={sel_action!r}")
-            if c.get("selectionReason") != SR_SELECTED:
-                problems.append(f"{p}.selectionReason={c.get('selectionReason')!r} (want {SR_SELECTED!r})")
+            expected_reason = "selected_full_containment" if tr.get("selectorComparator") == SELECTOR_M99 else SR_SELECTED
+            if c.get("selectionReason") != expected_reason:
+                problems.append(f"{p}.selectionReason={c.get('selectionReason')!r} (want {expected_reason!r})")
         if tr.get("noopReason"):
             problems.append(f"selected trace carries noopReason={tr.get('noopReason')!r}")
     # envelope cross-reference (same record, cheap). The envelope's `action` is authoritative
@@ -342,22 +370,25 @@ def check_ecost(tr: dict) -> Check:
 
 def check_netgain(tr: dict) -> Check:
     # decision_trace.go Validate() ~390-396; coverage.go legacyMixedGain + lambdaContribution = lambda*ECost
-    lam = tr.get("lambdaRuntime")
+    has_v4 = tr.get("schemaVersion") in (TRACE_V4, TRACE_V5, TRACE_V6)
+    fixed = has_v4 and tr.get("economicsVersion") == ECON_FIXED
+    coefficient = tr.get("effectiveCostCoefficient") if has_v4 else tr.get("lambdaRuntime")
+    contribution_key = "objectiveCostContribution" if fixed else "lambdaContribution"
     fails, checked, skipped = [], 0, []
     for i, c in enumerate(tr.get("candidates") or []):
         p = cand_path(i)
-        mc, pv, lc, ng, ec = (optional(c, k, p) for k in
-                              ("marginalCoverage", "provenance", "lambdaContribution", "netGain", "expectedCost"))
-        if lc.ok and ec.ok and isinstance(lam, (int, float)):
-            want = lam * ec.num
+        mc, pv, contribution, ng, ec = (optional(c, k, p) for k in
+                                        ("marginalCoverage", "provenance", contribution_key, "netGain", "expectedCost"))
+        if contribution.ok and ec.ok and isinstance(coefficient, (int, float)):
+            want = coefficient * ec.num
             checked += 1
-            if not approx(want, lc.num):
-                fails.append(f"{lc.path}={lc.num!r} but lambdaRuntime*expectedCost={want!r}")
-        absent = [o for o in (mc, pv, lc, ng) if not o.ok]
+            if not approx(want, contribution.num):
+                fails.append(f"{contribution.path}={contribution.num!r} but effective coefficient*expectedCost={want!r}")
+        absent = [o for o in (mc, pv, contribution, ng) if not o.ok]
         if absent:
             skipped.append(f"{p}: absent {', '.join(o.path.rsplit('.', 1)[1] for o in absent)}")
             continue
-        want = mc.num * pv.num - lc.num
+        want = mc.num * pv.num - contribution.num
         checked += 1
         if not approx(want, ng.num):
             fails.append(f"{ng.path}={ng.num!r} but marginalCoverage*provenance-lambdaContribution={want!r}")
@@ -382,6 +413,27 @@ def check_selection_reconstruction(tr: dict) -> Check:
 
     generated = [(i, c) for i, c in enumerate(cands) if not is_excluded(c)]
     problems = []
+
+    if tr.get("selectorComparator") == SELECTOR_M99 and not is_noop:
+        selected = [(i, c) for i, c in generated if c.get("selected") is True]
+        existential = tr.get("existential") or {}
+        if len(selected) != 1:
+            problems.append(f"M99 trace has {len(selected)} selected generated candidates")
+        else:
+            i, candidate = selected[0]
+            proof = candidate.get("existential") or {}
+            if not (proof.get("present") is True and proof.get("trustedEvidence") is True and
+                    proof.get("constraintApplied") is True and proof.get("contains") is True):
+                problems.append(f"{cand_path(i)} lacks trusted full-containment proof")
+            if candidate.get("selectionReason") != "selected_full_containment":
+                problems.append(f"{cand_path(i)} does not record selected_full_containment")
+        if not (existential.get("present") is True and existential.get("trustedEvidence") is True and
+                existential.get("constraintApplied") is True and existential.get("result") == "selected"):
+            problems.append("decisionTrace.existential does not record a trusted selected constraint")
+        if problems:
+            return Check(7, "selection-reconstruction", FAIL, "; ".join(problems))
+        return Check(7, "selection-reconstruction", PASS,
+                     "M99 selected candidate carries trusted full-containment proof; ordinary net gain is informational")
 
     # Gate 1: reactiveOnly. The greedy skips un-attacked assets before scoring, so
     # every generated candidate carries reactive_only_no_direct_foothold and no netGain.
@@ -567,8 +619,8 @@ def check_dual_update(tr: dict) -> Check:
         problems.append(f"decisionTrace.costRepresentationVersion={crv!r} (want {COST_REPR_V1!r})")
     if tr.get("cFlowUnitStatus") != CFLOW_UNIT:
         problems.append(f"decisionTrace.cFlowUnitStatus={tr.get('cFlowUnitStatus')!r} (want {CFLOW_UNIT!r})")
-    if tr.get("selectorComparator") != SELECTOR:
-        problems.append(f"decisionTrace.selectorComparator={tr.get('selectorComparator')!r} (want {SELECTOR!r})")
+    if tr.get("selectorComparator") not in (SELECTOR, SELECTOR_M99):
+        problems.append(f"decisionTrace.selectorComparator={tr.get('selectorComparator')!r} is unknown")
     if tr.get("lambdaConfiguredPolicy") != tr.get("lambdaConfiguredSeed"):
         problems.append("decisionTrace.lambdaConfiguredPolicy != lambdaConfiguredSeed")
     if tr.get("lambdaRuntimeLegacy") != tr.get("lambdaRuntime"):
@@ -624,6 +676,92 @@ def check_redaction(rec: dict) -> Check:
     return Check(11, "redaction", PASS, f"{n} strings scanned, no secret-shaped content")
 
 
+def check_economics(rec: dict, tr: dict) -> Check:
+    """Reconstruct the V4 scoring coefficient and exact trace-off audit descriptor."""
+    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5, TRACE_V6):
+        return Check(13, "economics-v4", SKIPPED, "trace is v2/v3; economics metadata is not required")
+
+    problems = []
+    mode = tr.get("economicsVersion")
+    source = tr.get("costCoefficientSource")
+    coefficient = tr.get("effectiveCostCoefficient")
+    runtime = tr.get("lambdaRuntimeLegacy")
+    for name, value in (("effectiveCostCoefficient", coefficient), ("lambdaRuntimeLegacy", runtime)):
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or not (0 <= value <= MAX_COEFFICIENT):
+            problems.append(f"decisionTrace.{name}={value!r} is not a finite coefficient in [0,{MAX_COEFFICIENT:g}]")
+
+    beta = optional(tr, "disruptionAversion", "decisionTrace")
+    if mode == ECON_LEGACY:
+        if "disruptionAversion" in tr:
+            problems.append("legacy V4 must omit decisionTrace.disruptionAversion")
+        if source != COEFF_LAMBDA:
+            problems.append(f"legacy V4 costCoefficientSource={source!r}, want {COEFF_LAMBDA!r}")
+        if coefficient != runtime:
+            problems.append("legacy V4 effectiveCostCoefficient != exact lambdaRuntimeLegacy")
+    elif mode == ECON_FIXED:
+        if not beta.ok or not isinstance(beta.value, (int, float)) or isinstance(beta.value, bool) or not (0 <= beta.num <= MAX_COEFFICIENT):
+            problems.append(f"fixed V4 disruptionAversion is missing, malformed, or outside [0,{MAX_COEFFICIENT:g}]")
+        if source != COEFF_BETA:
+            problems.append(f"fixed V4 costCoefficientSource={source!r}, want {COEFF_BETA!r}")
+        if beta.ok and coefficient != beta.num:
+            problems.append("fixed V4 effectiveCostCoefficient != exact disruptionAversion")
+    else:
+        problems.append(f"decisionTrace.economicsVersion={mode!r} is unknown")
+
+    lambda_demand = tr.get("lambdaDemand")
+    objective_demand = tr.get("objectiveCandidateDemand")
+    for name, value in (("lambdaDemand", lambda_demand), ("objectiveCandidateDemand", objective_demand)):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            problems.append(f"decisionTrace.{name}={value!r} is not a non-negative integer")
+    if lambda_demand != tr.get("candidateDemand"):
+        problems.append("decisionTrace.lambdaDemand != candidateDemand compatibility alias")
+
+    for i, candidate in enumerate(tr.get("candidates") or []):
+        expected = optional(candidate, "expectedCost", cand_path(i))
+        if not expected.ok:
+            continue
+        lam = optional(candidate, "lambdaContribution", cand_path(i))
+        obj = optional(candidate, "objectiveCostContribution", cand_path(i))
+        if mode == ECON_LEGACY:
+            if not lam.ok or "objectiveCostContribution" in candidate:
+                problems.append(f"{cand_path(i)} legacy contribution has wrong presence")
+            elif isinstance(coefficient, (int, float)) and not approx(lam.num, coefficient * expected.num):
+                problems.append(f"{lam.path} does not reconstruct from the effective coefficient")
+        elif mode == ECON_FIXED:
+            if "lambdaContribution" not in candidate or lam.present is not False or not obj.ok:
+                problems.append(f"{cand_path(i)} fixed contribution has wrong presence")
+            elif isinstance(coefficient, (int, float)) and not approx(obj.num, coefficient * expected.num):
+                problems.append(f"{obj.path} does not reconstruct from the effective coefficient")
+
+    envelope = rec.get("economics")
+    if not isinstance(envelope, dict):
+        problems.append("audit economics descriptor missing")
+    else:
+        envelope_beta = optional(envelope, "disruptionAversion", "economics")
+        envelope_runtime = optional(envelope, "lambdaRuntimeLegacy", "economics")
+        if not envelope_runtime.ok or not isinstance(envelope_runtime.value, (int, float)) or isinstance(envelope_runtime.value, bool) or not (0 <= envelope_runtime.num <= MAX_COEFFICIENT):
+            problems.append("audit economics.lambdaRuntimeLegacy missing, malformed, or out of bounds")
+        expected_beta_present = mode == ECON_FIXED
+        if envelope_beta.ok != expected_beta_present:
+            problems.append("audit economics.disruptionAversion presence disagrees with trace mode")
+        if envelope.get("version") != mode or envelope.get("coefficientSource") != source or envelope.get("effectiveCostCoefficient") != coefficient:
+            problems.append("audit economics mode/source/effective coefficient disagrees with trace")
+        if envelope_runtime.ok and envelope_runtime.num != runtime:
+            problems.append("audit exact lambdaRuntimeLegacy disagrees with trace")
+        if expected_beta_present and beta.ok and (not envelope_beta.ok or envelope_beta.num != beta.num):
+            problems.append("audit exact disruptionAversion disagrees with trace")
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6):
+            if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
+                problems.append("V5 trace flowCostSemanticsVersion is missing or unknown")
+            if envelope.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
+                problems.append("audit flowCostSemanticsVersion is missing or disagrees with V5 trace")
+
+    if problems:
+        return Check(13, "economics-v4", FAIL, "; ".join(problems))
+    return Check(13, "economics-v4", PASS,
+                 f"{mode} uses exact {source}={coefficient!r}; lambdaDemand={lambda_demand}, objectiveDemand={objective_demand}")
+
+
 # --- v3 hooks --------------------------------------------------------------
 
 def v3_action_status(tr: dict) -> list[str]:
@@ -645,10 +783,14 @@ def v3_action_status(tr: dict) -> list[str]:
             problems.append(f"{p}.status={st!r} not in vocabulary")
         if ek not in V3_EXCLUSION_KIND:
             problems.append(f"{p}.exclusionKind={ek!r} not in vocabulary")
-        if (st == "selected") != (ek == "none"):
-            problems.append(f"{p}: status==selected <=> exclusionKind==none violated (status={st!r}, exclusionKind={ek!r})")
+        if st == "selected" and ek != "none":
+            problems.append(f"{p}: status==selected requires exclusionKind==none (got {ek!r})")
         if ek == "cost-nan" and st != "infeasible":
             problems.append(f"{p}: exclusionKind==cost-nan requires status==infeasible (got {st!r})")
+        if st == "not-installable" and ek != "not-installable":
+            problems.append(f"{p}: status==not-installable requires exclusionKind==not-installable (got {ek!r})")
+        if st == "ineligible" and ek not in V3_INELIGIBLE_EXCLUSIONS:
+            problems.append(f"{p}: status==ineligible requires a recognized eligibility exclusion (got {ek!r})")
     return problems
 
 
@@ -673,6 +815,10 @@ def v3_cost_high(tr: dict) -> list[str]:
             q = cq.num if cq.ok else 0.0
             g = slack.num if (applied and slack.ok) else 0.0
             extra = max(q, g)
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6):
+            uncertainty = optional(c, "flowUncertaintySlack", p)
+            if uncertainty.ok:
+                extra = max(extra, uncertainty.num)
         want = ec.num + extra
         if not approx(want, ch.num):
             problems.append(f"{ch.path}={ch.num!r} but expectedCost+extra={want!r}")
@@ -710,14 +856,223 @@ def v3_dispatch(tr: dict) -> list[str]:
 
 
 def check_v3(tr: dict, strict: bool) -> Check:
-    if tr.get("schemaVersion") != TRACE_V3:
+    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6):
         if strict:
-            return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not {TRACE_V3}")
+            return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not v3/v4/v5/v6")
         return Check(12, "v3-hooks", SKIPPED, "trace is v2; v3 laws (actionStatus/costHigh/coveredBefore/dispatch) not applicable")
     problems = v3_action_status(tr) + v3_cost_high(tr) + v3_covered_before(tr) + v3_dispatch(tr)
     if problems:
         return Check(12, "v3-hooks", FAIL, "; ".join(problems))
     return Check(12, "v3-hooks", PASS, "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold")
+
+
+def check_flow_v5(tr: dict) -> Check:
+    if tr.get("schemaVersion") not in (TRACE_V5, TRACE_V6):
+        return Check(14, "flow-regime-v5", SKIPPED, "historical trace; V5 flow-regime contract is not applicable")
+    problems = []
+    if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
+        problems.append(f"decisionTrace.flowCostSemanticsVersion={tr.get('flowCostSemanticsVersion')!r}")
+    inputs = tr.get("inputs") if isinstance(tr.get("inputs"), dict) else {}
+    phase = inputs.get("phase")
+    request_rate = optional(inputs, "requestRate", "decisionTrace.inputs")
+    known = phase in ("ColdStarting", "Warm", "Idle", "Draining", "Unknown")
+    floor_by_phase = {"ColdStarting": 1.0, "Warm": 0.7, "Idle": 0.15,
+                      "Draining": 0.2, "Unknown": 0.5}
+    for i, candidate in enumerate(tr.get("candidates") or []):
+        p = cand_path(i)
+        expected = optional(candidate, "expectedCost", p)
+        action = candidate.get("action")
+        respawn = action in ("rotate", "mig-rebind")
+        names = ("flowPredictedMean", "flowConservativeFloor", "flowRegime",
+                 "flowUncertaintyBound", "flowUncertaintySlack",
+                 "conformalWindowReady", "conformalRegimeApplicable")
+        any_provenance = any(name in candidate for name in names)
+        if not expected.ok or not respawn:
+            if any_provenance:
+                problems.append(f"{p} carries V5 flow provenance without a costed respawn")
+            continue
+        if any(name not in candidate for name in names):
+            problems.append(f"{p} lacks complete V5 flow provenance")
+            continue
+        predicted = optional(candidate, "flowPredictedMean", p)
+        floor = optional(candidate, "flowConservativeFloor", p)
+        bound = optional(candidate, "flowUncertaintyBound", p)
+        slack = optional(candidate, "flowUncertaintySlack", p)
+        effective = optional(candidate, "cFlow", p)
+        window = optional(candidate, "conformalWindowReady", p)
+        applicable_opt = optional(candidate, "conformalRegimeApplicable", p)
+
+        if action == "mig-rebind":
+            regime = "mig-proxy"
+        elif not known or phase == "Unknown":
+            regime = "unknown-phase"
+        elif phase == "Draining":
+            regime = "draining-phase"
+        elif request_rate.present is not True:
+            regime = "missing-load"
+        else:
+            regime = "measured-load"
+        if candidate.get("flowRegime") != regime:
+            problems.append(f"{p}.flowRegime={candidate.get('flowRegime')!r}, want {regime!r} from action/phase/load")
+
+        floor_present = (not known or phase in ("Unknown", "Draining") or request_rate.present is not True)
+        floor_value = 0.5 if not known else floor_by_phase.get(phase, 0.0)
+        if floor.present is not floor_present or (floor_present and (not floor.ok or not approx(floor.num, floor_value))):
+            problems.append(f"{p}.flowConservativeFloor disagrees with phase/load inputs")
+        if predicted.ok and effective.ok:
+            want_flow = max(predicted.num, floor_value) if floor_present else predicted.num
+            if not approx(effective.num, want_flow):
+                problems.append(f"{p}.cFlow={effective.num!r}, want max(mean,floor)={want_flow!r}")
+        else:
+            problems.append(f"{p} lacks present predicted mean or effective flow")
+
+        unsupported = regime != "measured-load"
+        if bound.present is not unsupported or slack.present is not unsupported:
+            problems.append(f"{p} uncertainty presence disagrees with regime {regime!r}")
+        if unsupported and bound.ok and effective.ok:
+            if bound.num != FLOW_MAXIMUM:
+                problems.append(f"{p}.flowUncertaintyBound={bound.num!r}, want {FLOW_MAXIMUM!r}")
+            weight = tr.get("flowWeight")
+            if isinstance(weight, (int, float)) and not isinstance(weight, bool):
+                want_slack = weight * max(0.0, FLOW_MAXIMUM - effective.num)
+                if not slack.ok or not approx(slack.num, want_slack):
+                    problems.append(f"{p}.flowUncertaintySlack does not reconstruct ({want_slack!r})")
+
+        applicable = action == "rotate" and not unsupported
+        if not window.ok or not isinstance(window.value, bool):
+            problems.append(f"{p}.conformalWindowReady is not a present boolean")
+        if not applicable_opt.ok or not isinstance(applicable_opt.value, bool) or applicable_opt.value is not applicable:
+            problems.append(f"{p}.conformalRegimeApplicable disagrees with action/regime")
+        if action == "rotate":
+            calibrated = optional(candidate, "conformalCalibrated", p)
+            want_calibrated = bool(window.value) and applicable if window.ok else False
+            if not calibrated.ok or not isinstance(calibrated.value, bool) or calibrated.value is not want_calibrated:
+                problems.append(f"{p}.conformalCalibrated makes a false row-level claim")
+    if problems:
+        return Check(14, "flow-regime-v5", FAIL, "; ".join(problems))
+    return Check(14, "flow-regime-v5", PASS, "action/phase/load regime, point floor, uncertainty bound and applicability reconstruct")
+
+
+def resource_scope(scope: Any, path: str) -> tuple[tuple[str, str, str, str] | None, str]:
+    """Validate and key the two closed V6 resource-scope forms."""
+    if not isinstance(scope, dict):
+        return None, f"{path} is not an object"
+    kind = scope.get("kind")
+    namespace = scope.get("namespace", "")
+    service_name = scope.get("serviceName", "")
+    service_uid = scope.get("serviceUID", "")
+    controller_uid = scope.get("controllerUID", "")
+    values = (namespace, service_name, service_uid, controller_uid)
+    if any(not isinstance(value, str) for value in values):
+        return None, f"{path} has a non-string identity field"
+    if kind == "move-count":
+        valid = bool(namespace and controller_uid and not service_name and not service_uid)
+    elif kind == "unavailable-ready-replica":
+        valid = bool(namespace and service_name and service_uid and controller_uid)
+    else:
+        return None, f"{path}.kind={kind!r} is unknown"
+    if not valid:
+        return None, f"{path} is not fully and exactly identity-bound"
+    # ServiceName is descriptive and deliberately absent from the Go in-memory
+    # key; immutable ServiceUID and controllerUID carry authority.
+    return (kind, namespace, service_uid, controller_uid), ""
+
+
+def nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def check_resources_v6(tr: dict) -> Check:
+    """Mirror DecisionTraceV2.validateV6 without deriving capacity from scores."""
+    version = tr.get("schemaVersion")
+    capacities = tr.get("resources")
+    candidates = tr.get("candidates") or []
+    if version != TRACE_V6:
+        problems = []
+        if capacities not in (None, []):
+            problems.append("historical trace carries V6 resource capacities")
+        for i, candidate in enumerate(candidates):
+            if isinstance(candidate, dict) and candidate.get("resources") not in (None, []):
+                problems.append(f"{cand_path(i)} carries V6 resource consumption")
+        if problems:
+            return Check(15, "resources-v6", FAIL, "; ".join(problems))
+        return Check(15, "resources-v6", SKIPPED, "historical trace has no V6 resource fields")
+
+    problems = []
+    if not isinstance(capacities, list) or not capacities:
+        return Check(15, "resources-v6", FAIL, "V6 decisionTrace.resources is missing or empty")
+    limits: dict[tuple[str, str, str, str], int] = {}
+    batch_selected: dict[tuple[str, str, str, str], int] = {}
+    for i, capacity in enumerate(capacities):
+        path = f"decisionTrace.resources[{i}]"
+        if not isinstance(capacity, dict):
+            problems.append(f"{path} is not an object")
+            continue
+        key, issue = resource_scope(capacity.get("scope"), f"{path}.scope")
+        if issue:
+            problems.append(issue)
+            continue
+        limit = capacity.get("limit")
+        outstanding = capacity.get("outstanding")
+        selected = capacity.get("selected")
+        if not all(nonnegative_int(value) for value in (limit, outstanding, selected)):
+            problems.append(f"{path} limit/outstanding/selected are not non-negative integers")
+            continue
+        if outstanding + selected > limit:
+            problems.append(f"{path} outstanding+selected exceeds limit")
+        if key in limits:
+            problems.append(f"{path} duplicates resource scope {key!r}")
+            continue
+        limits[key], batch_selected[key] = limit, selected
+
+    row_selected: dict[tuple[str, str, str, str], int] = {}
+    for i, candidate in enumerate(candidates):
+        path = cand_path(i)
+        if not isinstance(candidate, dict):
+            problems.append(f"{path} is not an object")
+            continue
+        demands = candidate.get("resources")
+        if demands is None:
+            demands = []
+        if not isinstance(demands, list):
+            problems.append(f"{path}.resources is not a list")
+            continue
+        if not demands and not candidate.get("existingExclusionReason"):
+            problems.append(f"{path} lacks V6 resource consumption")
+        seen = set()
+        for j, demand in enumerate(demands):
+            dpath = f"{path}.resources[{j}]"
+            if not isinstance(demand, dict):
+                problems.append(f"{dpath} is not an object")
+                continue
+            key, issue = resource_scope(demand.get("scope"), f"{dpath}.scope")
+            units = demand.get("units")
+            if issue:
+                problems.append(issue)
+                continue
+            if not nonnegative_int(units) or units == 0:
+                problems.append(f"{dpath}.units={units!r} is not a positive integer")
+                continue
+            if key in seen:
+                problems.append(f"{dpath} duplicates candidate resource scope {key!r}")
+                continue
+            seen.add(key)
+            if key not in limits:
+                problems.append(f"{dpath} consumes unknown resource scope {key!r}")
+                continue
+            if candidate.get("selected") is True:
+                row_selected[key] = row_selected.get(key, 0) + units
+
+    for key, units in row_selected.items():
+        if units > batch_selected.get(key, 0):
+            problems.append(
+                f"selected candidate consumption {units} exceeds batch selected "
+                f"{batch_selected.get(key, 0)} for resource scope {key!r}"
+            )
+    if problems:
+        return Check(15, "resources-v6", FAIL, "; ".join(problems))
+    return Check(15, "resources-v6", PASS,
+                 f"{len(limits)} exact resource scope(s) and candidate consumption vectors reconstruct")
 
 
 # --------------------------------------------------------------------------- driver
@@ -745,6 +1100,9 @@ def validate_record(rec: dict, source: str, strict_v3: bool) -> RecordResult:
         check_dual_update(tr),
         check_redaction(rec),
         check_v3(tr, strict_v3),
+        check_economics(rec, tr),
+        check_flow_v5(tr),
+        check_resources_v6(tr),
     ]
     return res
 
@@ -788,8 +1146,8 @@ def markdown_report(results: list[RecordResult]) -> str:
         out.append(f"| `{r.decision_id[:12]}` | {r.tenant_pod} | {r.trace_version.rsplit('.', 1)[-1]} | {tag} | "
                    f"{r.selected_action} | {r.status} | {bad} |")
     out += ["", "## Check matrix", "",
-            "| decisionID | " + " | ".join(str(i) for i in range(1, 13)) + " |",
-            "|---|" + "---|" * 12]
+            "| decisionID | " + " | ".join(str(i) for i in range(1, 16)) + " |",
+            "|---|" + "---|" * 15]
     for r in results:
         out.append(f"| `{r.decision_id[:12]}` | " + " | ".join(c.status for c in r.checks) + " |")
     bad_records = [r for r in results if r.status != PASS]

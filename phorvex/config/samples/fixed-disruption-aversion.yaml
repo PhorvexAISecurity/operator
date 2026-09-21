@@ -1,0 +1,30 @@
+# Opt-in fixed disruption preference. Beta is utility per normalized ECost unit;
+# it is a bounded operator preference, not money, a calibrated optimum, or the
+# legacy count-pressure lambda. Remove disruptionAversion to roll back to legacy
+# runtime-lambda scoring. Existing policies remain legacy unless they add it.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: fixed-disruption-preference
+  namespace: default
+spec:
+  tenant: default
+  selector:
+    matchLabels:
+      app: nim-inference
+  objective:
+    disruptionAversion: "1.25" # dimensionless utility / normalized ECost, allowed [0,10]
+    lambda: "0.6"              # separate seed for legacy count-pressure state
+    costWeights:
+      normSparsity: "0.4"
+      flowDisruption: "0.6"
+  budget:
+    maxMovesPerTick: 1
+    tickInterval: 20s
+    antiOverRotationWindow: 5m
+    proactiveFloor: 1h
+  slo:
+    minAvailableReplicas: 2
+  actions:
+    enabled: ["rotate", "quarantine"]
+  mode: dryRun

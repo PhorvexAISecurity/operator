@@ -136,12 +136,19 @@ func randomArm(set actionset.ActionSet, b int, seed int64) (float64, float64) {
 	covered := map[string]bool{}
 	picks := 0
 	var w, c float64
+	resources := newResourceState(set)
+	if !resources.baseFeasible() {
+		return 0, 0
+	}
 	for _, i := range order {
 		if picks >= b {
 			break
 		}
 		cand := set.Candidates[i]
 		if taken[cand.Key] {
+			continue
+		}
+		if !resources.add(cand) {
 			continue
 		}
 		taken[cand.Key] = true
