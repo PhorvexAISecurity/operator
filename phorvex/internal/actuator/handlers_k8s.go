@@ -17,6 +17,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -50,7 +51,7 @@ func getPod(ctx context.Context, c client.Reader, ns, name string) (*corev1.Pod,
 
 func objRef(kind, ns, name string) string { return fmt.Sprintf("%s/%s/%s", kind, ns, name) }
 
-// --- 1. rotate (native delete request; replacement unconfirmed) ---------------------------------
+// --- 1. rotate (native Eviction admission request; replacement unconfirmed) ----------------------
 
 type rotateHandler struct{}
 
@@ -110,7 +111,7 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 		return refuse("target-grace-period-invalid")
 	}
 
-	// This is deliberately the final authoritative read before the DELETE. The
+	// This is deliberately the final authoritative read before the Eviction. The
 	// Pod's UID/resourceVersion preconditions close its mutation race; Kubernetes
 	// offers no cross-object precondition, so the exact policy epoch is read and
 	// bound as close to the request as the API permits.
@@ -142,15 +143,27 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 	if policyCap < effectiveGrace {
 		effectiveGrace = policyCap
 	}
-	deleteOptions := &client.DeleteOptions{
-		GracePeriodSeconds: &effectiveGrace,
-		Preconditions:      &metav1.Preconditions{UID: &uid, ResourceVersion: &rv},
+	eviction := &policyv1.Eviction{
+		ObjectMeta: metav1.ObjectMeta{Namespace: req.Namespace, Name: req.Pod},
+		DeleteOptions: &metav1.DeleteOptions{
+			GracePeriodSeconds: &effectiveGrace,
+			Preconditions:      &metav1.Preconditions{UID: &uid, ResourceVersion: &rv},
+		},
 	}
-	if err := ec.Client.Delete(ctx, pod, deleteOptions); err != nil {
-		if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
-			return refuse("target-changed-before-delete")
+	if err := ec.Client.SubResource("eviction").Create(ctx, pod, eviction); err != nil {
+		if apierrors.IsTooManyRequests(err) {
+			return refuse("pdb-eviction-admission-refused")
 		}
-		return HandlerResult{}, fmt.Errorf("rotate delete %s/%s: %w", req.Namespace, req.Pod, err)
+		if apierrors.IsForbidden(err) {
+			return refuse("eviction-permission-denied")
+		}
+		if apierrors.IsConflict(err) {
+			return refuse("target-changed-before-eviction")
+		}
+		if apierrors.IsNotFound(err) {
+			return refuse("target-or-eviction-subresource-unavailable")
+		}
+		return HandlerResult{}, fmt.Errorf("rotate eviction %s/%s: %w", req.Namespace, req.Pod, err)
 	}
 	receipt := &model.GracefulTerminationReceipt{
 		PolicyNamespace: req.Namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID),
@@ -163,7 +176,7 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 		Emitted: true, MutationKind: "forward-only",
 		ObjectsTouched:      []string{objRef("Pod", req.Namespace, req.Pod)},
 		GracefulTermination: receipt,
-		Note:                fmt.Sprintf("Pod deletion requested with policy grace cap %ds and effective grace %ds; old-process termination and replacement unconfirmed", policyCap, effectiveGrace),
+		Note:                fmt.Sprintf("Pod Eviction admission accepted with policy grace cap %ds and effective grace %ds; old-process termination and replacement unconfirmed", policyCap, effectiveGrace),
 	}, nil
 }
 

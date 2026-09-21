@@ -23,20 +23,29 @@ import (
 
 type m012AuthorizationClient struct {
 	client.Client
-	deleteCalls     int
-	deleteForbidden bool
+	evictionCalls     int
+	evictionForbidden bool
 }
 
-func (c *m012AuthorizationClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	c.deleteCalls++
-	err := c.Client.Delete(ctx, obj, opts...)
-	c.deleteForbidden = apierrors.IsForbidden(err)
+type m012AuthorizationSubresource struct {
+	client.SubResourceClient
+	parent *m012AuthorizationClient
+}
+
+func (c *m012AuthorizationClient) SubResource(name string) client.SubResourceClient {
+	return &m012AuthorizationSubresource{SubResourceClient: c.Client.SubResource(name), parent: c}
+}
+
+func (s *m012AuthorizationSubresource) Create(ctx context.Context, obj client.Object, sub client.Object, opts ...client.SubResourceCreateOption) error {
+	s.parent.evictionCalls++
+	err := s.SubResourceClient.Create(ctx, obj, sub, opts...)
+	s.parent.evictionForbidden = apierrors.IsForbidden(err)
 	return err
 }
 
 // TestM012RealAPIAuthorizationDenialCountsOneAttempt proves that an API-server
 // authorization denial is an actual backend attempt, while a manager identity
-// with the same read authority and Pod delete authority reaches the positive
+// with the same read authority and Pod eviction authority reaches the positive
 // native path. The restricted identity can read only the exact Namespace, Pod,
 // and owner used by the dispatch; it receives no Pod mutation permission.
 func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
@@ -188,8 +197,8 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	deniedNative := actuator.NewNativeActuator(observedRestricted)
 	deniedNative.SetBoundaryReader(restricted)
 	deniedManager := &Manager{Actuator: deniedNative, BoundaryReader: restricted, Intents: exposure.NewIntents(), Log: logr.Discard()}
-	deniedAttemptLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptError)}
-	deniedFailureLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate), "reason": string(metricspkg.AttemptError)}
+	deniedAttemptLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptRefused)}
+	deniedFailureLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate), "reason": string(metricspkg.AttemptRefused)}
 	deniedAcceptedLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate)}
 	deniedAttemptsBefore := m012Counter(t, "phorvex_actuation_attempts_total", deniedAttemptLabels)
 	deniedFailuresBefore := m012Counter(t, "phorvex_actuation_failures_total", deniedFailureLabels)
@@ -198,11 +207,11 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	if got := deniedManager.actuate(ctx, entry, deniedPolicy, deniedDecision, views); got != 0 {
 		t.Fatalf("restricted identity actuations = %d", got)
 	}
-	if deniedDecision[0].DispatchOutcome != model.DispatchError || deniedDecision[0].Actuated {
+	if deniedDecision[0].DispatchOutcome != model.DispatchRefused || deniedDecision[0].Actuated {
 		t.Fatalf("restricted identity result = %+v", deniedDecision[0])
 	}
-	if observedRestricted.deleteCalls != 1 || !observedRestricted.deleteForbidden {
-		t.Fatalf("restricted identity Delete calls=%d forbidden=%v", observedRestricted.deleteCalls, observedRestricted.deleteForbidden)
+	if observedRestricted.evictionCalls != 1 || !observedRestricted.evictionForbidden {
+		t.Fatalf("restricted identity Eviction calls=%d forbidden=%v", observedRestricted.evictionCalls, observedRestricted.evictionForbidden)
 	}
 	if m012Counter(t, "phorvex_actuation_attempts_total", deniedAttemptLabels) != deniedAttemptsBefore+1 ||
 		m012Counter(t, "phorvex_actuation_failures_total", deniedFailureLabels) != deniedFailuresBefore+1 ||

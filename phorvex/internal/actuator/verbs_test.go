@@ -34,15 +34,15 @@ func TestRequiredVerbsCoversEveryMutatingAction(t *testing.T) {
 // NOT the native pod verbs it never touches (which are bound only per actuatorNamespaces). A
 // native-routed action keeps its own verbs. This is the fix for the no-rbac false-exclusion of
 // quarantine outside the native-bound namespaces. Bounded rotate is now native-routed
-// and therefore requires the namespaced Pod delete grant.
+// and therefore requires the namespaced Pod eviction grant.
 func TestRequiredVerbsRoutingAware(t *testing.T) {
 	got := RequiredVerbs(model.ActionQuarantine)
 	if len(got) != 1 || got[0].Group != "amtd.r6security.com" || got[0].Resource != "securityevents" || got[0].Verb != "create" || !got[0].ClusterScoped {
 		t.Errorf("Phoenix-routed quarantine must gate on amtd.r6security.com/securityevents:create, got %+v", got)
 	}
 	got = RequiredVerbs(model.ActionRotate)
-	if len(got) != 1 || got[0].Resource != "pods" || got[0].Verb != "delete" || got[0].ClusterScoped {
-		t.Errorf("native-routed bounded rotate must gate on namespaced pods/delete, got %+v", got)
+	if len(got) != 1 || got[0].Group != "" || got[0].Resource != "pods" || got[0].Subresource != "eviction" || got[0].Verb != "create" || got[0].ClusterScoped {
+		t.Errorf("native-routed bounded rotate must gate on namespaced core/pods/eviction:create, got %+v", got)
 	}
 	// Native-routed actions keep their native handler verbs.
 	if got := RequiredVerbs(model.ActionKVReset); len(got) != 1 || got[0].Resource != "pods" || got[0].Verb != "update" {
@@ -71,11 +71,11 @@ func TestRequiredVerbsRoutingAware(t *testing.T) {
 
 func TestRequiredVerbsFollowResolvedBackend(t *testing.T) {
 	nativeRotate := RequiredVerbsForBackend(BackendNative, model.ActionRotate)
-	if len(nativeRotate) != 1 || nativeRotate[0].Resource != "pods" || nativeRotate[0].Verb != "delete" {
+	if len(nativeRotate) != 1 || nativeRotate[0].Group != "" || nativeRotate[0].Resource != "pods" || nativeRotate[0].Subresource != "eviction" || nativeRotate[0].Verb != "create" {
 		t.Fatalf("native rotate permissions = %+v", nativeRotate)
 	}
 	hybridRotate := RequiredVerbsForBackend(BackendHybrid, model.ActionRotate)
-	if len(hybridRotate) != 1 || hybridRotate[0].Resource != "pods" || hybridRotate[0].Verb != "delete" || hybridRotate[0].ClusterScoped {
+	if len(hybridRotate) != 1 || hybridRotate[0].Group != "" || hybridRotate[0].Resource != "pods" || hybridRotate[0].Subresource != "eviction" || hybridRotate[0].Verb != "create" || hybridRotate[0].ClusterScoped {
 		t.Fatalf("hybrid rotate permissions = %+v", hybridRotate)
 	}
 	if got := RequiredVerbsForBackend(BackendPhoenix, model.ActionKVReset); len(got) != 0 {

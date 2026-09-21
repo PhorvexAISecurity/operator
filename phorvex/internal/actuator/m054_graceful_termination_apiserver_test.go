@@ -8,9 +8,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -19,7 +21,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-func TestM054ActualAPIServerReceivesBoundedDeleteAndLeavesTerminationUnconfirmed(t *testing.T) {
+func TestM054ActualAPIServerReceivesBoundedEvictionAndLeavesTerminationUnconfirmed(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires local envtest API-server binaries")
 	}
@@ -34,7 +36,7 @@ func TestM054ActualAPIServerReceivesBoundedDeleteAndLeavesTerminationUnconfirmed
 		}
 	})
 	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, v1alpha1.AddToScheme} {
+	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, policyv1.AddToScheme, v1alpha1.AddToScheme} {
 		if err := add(scheme); err != nil {
 			t.Fatal(err)
 		}
@@ -76,8 +78,20 @@ func TestM054ActualAPIServerReceivesBoundedDeleteAndLeavesTerminationUnconfirmed
 	if err := base.Create(ctx, pod); err != nil {
 		t.Fatal(err)
 	}
-	observed := &m054DeleteObservation{}
-	writer := interceptor.NewClient(base, interceptor.Funcs{Delete: observed.delete})
+	minAvailable := intstr.FromInt(1)
+	pdb := &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "web"}, Spec: policyv1.PodDisruptionBudgetSpec{MinAvailable: &minAvailable, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}}}
+	if err := base.Create(ctx, pdb); err != nil {
+		t.Fatal(err)
+	}
+	if err := base.Get(ctx, client.ObjectKeyFromObject(pdb), pdb); err != nil {
+		t.Fatal(err)
+	}
+	pdb.Status = policyv1.PodDisruptionBudgetStatus{ObservedGeneration: pdb.Generation, CurrentHealthy: 2, DesiredHealthy: 1, ExpectedPods: 2, DisruptionsAllowed: 1}
+	if err := base.Status().Update(ctx, pdb); err != nil {
+		t.Fatal(err)
+	}
+	observed := &m054EvictionObservation{forwardSubresource: true}
+	writer := interceptor.NewClient(base, interceptor.Funcs{SubResourceCreate: observed.create, Delete: observed.delete})
 	result, err := dispatch(ctx, EnactCtx{Client: writer, Reader: base}, Request{
 		Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionRotate,
 		PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation,
@@ -86,8 +100,11 @@ func TestM054ActualAPIServerReceivesBoundedDeleteAndLeavesTerminationUnconfirmed
 	if err != nil || !result.Emitted || observed.calls != 1 || result.GracefulTermination == nil {
 		t.Fatalf("result=%+v calls=%d err=%v", result, observed.calls, err)
 	}
-	if observed.options.GracePeriodSeconds == nil || *observed.options.GracePeriodSeconds != cap || observed.options.Preconditions == nil || observed.options.Preconditions.UID == nil || *observed.options.Preconditions.UID != pod.UID || observed.options.Preconditions.ResourceVersion == nil || *observed.options.Preconditions.ResourceVersion != pod.ResourceVersion {
-		t.Fatalf("actual DELETE options=%+v", observed.options)
+	if observed.eviction == nil || observed.eviction.DeleteOptions == nil || observed.eviction.DeleteOptions.GracePeriodSeconds == nil || *observed.eviction.DeleteOptions.GracePeriodSeconds != cap || observed.eviction.DeleteOptions.Preconditions == nil || observed.eviction.DeleteOptions.Preconditions.UID == nil || *observed.eviction.DeleteOptions.Preconditions.UID != pod.UID || observed.eviction.DeleteOptions.Preconditions.ResourceVersion == nil || *observed.eviction.DeleteOptions.Preconditions.ResourceVersion != pod.ResourceVersion {
+		t.Fatalf("actual Eviction options=%+v", observed.eviction)
+	}
+	if observed.deletes != 0 {
+		t.Fatalf("direct Pod DELETE fallback calls=%d", observed.deletes)
 	}
 	fresh := &corev1.Pod{}
 	if err := base.Get(ctx, client.ObjectKeyFromObject(pod), fresh); err != nil {

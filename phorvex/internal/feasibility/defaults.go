@@ -49,6 +49,23 @@ func (availabilityFloor) Check(view *model.WorkloadView, move model.Move, pol mo
 	if !removesReadyReplica(move.Action) {
 		return feasible // in-process move: the pod stays Ready, availability is unchanged
 	}
+	// A scanned-but-unavailable PDB inventory is not evidence that no budget
+	// applies. All matching budgets are aggregated conservatively for planning;
+	// rotate still relies on atomic API Eviction admission at dispatch time.
+	if view.Physics.Scanned && view.Physics.PDBObservationAttempted && !view.Physics.PDBObservationAvailable {
+		return Verdict{Feasible: false, Reason: "pdb: observation unavailable: " + view.Physics.PDBObservationReason}
+	}
+	// Kubernetes Eviction does not support a Pod selected by more than one PDB.
+	// Refuse rotate before dispatch even if each stale snapshot appears to have
+	// headroom; the API remains the final authority for the single-PDB case.
+	if move.Action == model.ActionRotate && view.Physics.PDBMatchCount > 1 {
+		return Verdict{Feasible: false, Reason: fmt.Sprintf("pdb: overlapping budgets unsupported: matches=%d", view.Physics.PDBMatchCount)}
+	}
+	if view.Physics.PDBMatched && view.Physics.PDBDisruptionsAllowed < 1 {
+		return Verdict{Feasible: false, Reason: fmt.Sprintf("pdb: %d matching budget(s), disruptionsAllowed=%d", view.Physics.PDBMatchCount, view.Physics.PDBDisruptionsAllowed)}
+	}
+	// For non-Eviction actions this is only a planning veto from observed
+	// headroom. It does not reserve a disruption slot or claim atomic PDB safety.
 	// Only meaningful when we know the owner's replica counts.
 	if view.Pod.DesiredReplicas <= 0 {
 		return feasible // bare pod / unknown owner: nothing to compare against

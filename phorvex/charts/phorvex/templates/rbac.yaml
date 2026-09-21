@@ -46,6 +46,11 @@ rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  # Planning observes all matching PDB status; the API eviction subresource is
+  # still the final atomic disruption-budget authority.
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
   verbs: ["get", "list", "watch"]
@@ -136,6 +141,9 @@ rules:
   resources: ["pods"]
   # request-drain and protected route/endpoint cutovers use resourceVersion-locked patches.
   verbs: ["get", "list", "delete", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods/eviction"]
+  verbs: ["create"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["create", "get", "list", "delete", "update"]

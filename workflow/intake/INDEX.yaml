@@ -189,3 +189,10 @@ intakes:
     state: FILED
     issue_id: M-182
     aliases: []
+  RPT-20260921-141100-voice-pdb:
+    directory: intake/RPT-20260921-141100-voice-pdb
+    kind: BUG
+    title: Native rotation ignores matching PodDisruptionBudget
+    state: FILED
+    issue_id: M-183
+    aliases: []

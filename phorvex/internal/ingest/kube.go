@@ -65,6 +65,10 @@ type Snapshot struct {
 	// the substrate the platform scanner turns into PhysicsWitness. ---
 	Nodes []NodeInfo
 	PDBs  []PDBInfo
+	// PDBInventoryComplete distinguishes an observed empty PDB set from a list
+	// failure. Replica-removing planning must never call the latter healthy.
+	PDBInventoryAttempted bool
+	PDBInventoryComplete  bool
 	// Services are projected read-only so capability status can verify that request-drain's
 	// target Service actually selects on phorvex.ai/serving.
 	Services []ServiceInfo
@@ -103,10 +107,13 @@ type ServiceInfo struct {
 // PDBInfo is a live PodDisruptionBudget projection (Layer-A availability law, replacing
 // the static policy proxy as an ADDITIVE veto).
 type PDBInfo struct {
-	Namespace          string
-	Selector           labels.Selector
-	MinAvailable       int
-	DisruptionsAllowed int
+	Namespace, Name, UID                                             string
+	Generation, ObservedGeneration                                   int64
+	Selector                                                         labels.Selector
+	SelectorValid                                                    bool
+	MinAvailable                                                     int
+	MinAvailableText, MaxUnavailableText                             string
+	DisruptionsAllowed, CurrentHealthy, DesiredHealthy, ExpectedPods int
 }
 
 // gpuPrefix marks NVIDIA device-plugin resources (GPU / MIG slices).
@@ -270,10 +277,12 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		snap.PolicyInventoryComplete = true
 	}
 
-	// P-PHYSICS additive scan: node capacity + live PodDisruptionBudgets. Best-effort
-	// (read-only, least-privilege); absence degrades the witness to honest-neutral.
+	// P-PHYSICS additive scan: node capacity + live PodDisruptionBudgets. The read
+	// is least-privilege, but its failure is retained separately from an observed
+	// empty inventory so replica-removing planning can fail closed.
 	snap.Nodes = collectNodes(ctx, c)
-	snap.PDBs = collectPDBs(ctx, c)
+	snap.PDBInventoryAttempted = true
+	snap.PDBs, snap.PDBInventoryComplete = collectPDBs(ctx, c)
 	services, servicesComplete := collectServicesInventory(ctx, c)
 	slices, slicesComplete := collectEndpointSlices(ctx, c)
 	snap.Services = services
@@ -577,26 +586,33 @@ func bindServiceAvailability(pods []model.Pod, services []ServiceInfo, slices []
 }
 
 // collectPDBs projects live PodDisruptionBudgets (Layer-A availability law).
-func collectPDBs(ctx context.Context, c client.Client) []PDBInfo {
+func collectPDBs(ctx context.Context, c client.Client) ([]PDBInfo, bool) {
 	var pdbList policyv1.PodDisruptionBudgetList
 	if err := c.List(ctx, &pdbList); err != nil {
-		return nil
+		return nil, false
 	}
 	out := make([]PDBInfo, 0, len(pdbList.Items))
 	for i := range pdbList.Items {
 		pdb := &pdbList.Items[i]
-		info := PDBInfo{Namespace: pdb.Namespace, MinAvailable: -1, DisruptionsAllowed: int(pdb.Status.DisruptionsAllowed)}
+		info := PDBInfo{Namespace: pdb.Namespace, Name: pdb.Name, UID: string(pdb.UID), Generation: pdb.Generation, ObservedGeneration: pdb.Status.ObservedGeneration, MinAvailable: -1, DisruptionsAllowed: int(pdb.Status.DisruptionsAllowed), CurrentHealthy: int(pdb.Status.CurrentHealthy), DesiredHealthy: int(pdb.Status.DesiredHealthy), ExpectedPods: int(pdb.Status.ExpectedPods)}
 		if pdb.Spec.MinAvailable != nil && pdb.Spec.MinAvailable.Type == 0 { // IntValue
 			info.MinAvailable = int(pdb.Spec.MinAvailable.IntVal)
 		}
+		if pdb.Spec.MinAvailable != nil {
+			info.MinAvailableText = pdb.Spec.MinAvailable.String()
+		}
+		if pdb.Spec.MaxUnavailable != nil {
+			info.MaxUnavailableText = pdb.Spec.MaxUnavailable.String()
+		}
 		if sel, err := metav1.LabelSelectorAsSelector(pdb.Spec.Selector); err == nil {
 			info.Selector = sel
+			info.SelectorValid = true
 		} else {
 			info.Selector = labels.Nothing()
 		}
 		out = append(out, info)
 	}
-	return out
+	return out, true
 }
 
 func projectPod(p *corev1.Pod, now time.Time) model.Pod {

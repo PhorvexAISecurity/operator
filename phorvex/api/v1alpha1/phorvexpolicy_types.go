@@ -440,7 +440,7 @@ type ActionsSpec struct {
 type ActionType string
 
 const (
-	// ActionRotate requests a native, policy-bounded graceful Pod deletion.
+	// ActionRotate requests a native, policy-bounded graceful Pod eviction.
 	// A pure Phoenix backend refuses this action because its Delete strategy cannot
 	// carry maxGracePeriodSeconds.
 	ActionRotate ActionType = "rotate"

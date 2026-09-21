@@ -201,9 +201,9 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 			w.SchedulerSlack = s
 		}
 		// live PDB match
-		if mn, da, ok := matchPDB(snap.PDBs, p); ok {
-			w.PDBMinAvailable, w.PDBDisruptionsAllowed = mn, da
-		}
+		pdb := matchPDB(snap.PDBs, snap.PDBInventoryAttempted, snap.PDBInventoryComplete, p)
+		w.PDBObservationAttempted, w.PDBObservationAvailable, w.PDBMatched, w.PDBMatchCount = pdb.attempted, pdb.available, pdb.matched, pdb.count
+		w.PDBMinAvailable, w.PDBDisruptionsAllowed, w.PDBDesiredHealthy, w.PDBObservationReason = pdb.minAvailable, pdb.disruptionsAllowed, pdb.desiredHealthy, pdb.reason
 		// MIG legal-partition geometry (zero DCGM dependency)
 		w.MIGGeometryValid = migValid(p, nodeByName)
 
@@ -235,17 +235,55 @@ func slackOf(ni *ingest.NodeInfo, reqCPU, reqMem int64) float64 {
 	return clamp01(minf(cpu, mem))
 }
 
-// matchPDB finds the live PDB in the pod's namespace whose selector matches its labels.
-func matchPDB(pdbs []ingest.PDBInfo, p *model.Pod) (minAvail, disruptionsAllowed int, ok bool) {
+// matchPDB aggregates every live PDB in the Pod namespace whose selector matches its labels.
+type pdbObservation struct {
+	attempted, available, matched                           bool
+	count, minAvailable, disruptionsAllowed, desiredHealthy int
+	reason                                                  string
+}
+
+func matchPDB(pdbs []ingest.PDBInfo, attempted, inventoryComplete bool, p *model.Pod) pdbObservation {
+	out := pdbObservation{attempted: attempted, available: inventoryComplete, minAvailable: -1, disruptionsAllowed: -1}
+	if !attempted {
+		// Direct synthetic Snapshot callers predating this observation contract
+		// make no PDB claim. collectSnapshot always attempts the inventory.
+		out.reason = "pdb-inventory-unobserved"
+		return out
+	}
+	if !inventoryComplete {
+		out.reason = "pdb-inventory-unavailable"
+		return out
+	}
 	for i := range pdbs {
-		if pdbs[i].Namespace != p.Namespace || pdbs[i].Selector == nil {
+		if pdbs[i].Namespace != p.Namespace {
 			continue
 		}
-		if pdbs[i].Selector.Matches(labels.Set(p.Labels)) {
-			return pdbs[i].MinAvailable, pdbs[i].DisruptionsAllowed, true
+		if !pdbs[i].SelectorValid || pdbs[i].Selector == nil {
+			out.available = false
+			out.reason = "pdb-selector-observation-invalid"
+			continue
+		}
+		if !pdbs[i].Selector.Matches(labels.Set(p.Labels)) {
+			continue
+		}
+		out.matched = true
+		out.count++
+		if pdbs[i].Generation <= 0 || pdbs[i].ObservedGeneration != pdbs[i].Generation {
+			out.available = false
+			out.reason = "pdb-status-generation-stale"
+			continue
+		}
+		if out.disruptionsAllowed < 0 || pdbs[i].DisruptionsAllowed < out.disruptionsAllowed {
+			out.disruptionsAllowed = pdbs[i].DisruptionsAllowed
+		}
+		if pdbs[i].MinAvailable > out.minAvailable {
+			out.minAvailable = pdbs[i].MinAvailable
+		}
+		if pdbs[i].DesiredHealthy > out.desiredHealthy {
+			out.desiredHealthy = pdbs[i].DesiredHealthy
 		}
 	}
-	return -1, -1, false
+	return out
 }
 
 // migValid: a pod with a MIG device is valid iff some node advertises that MIG resource

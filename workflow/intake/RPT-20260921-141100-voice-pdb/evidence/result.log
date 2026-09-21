@@ -1,0 +1,12 @@
+=== RUN   TestLeadVoicePDBFloorReproduction
+=== RUN   TestLeadVoicePDBFloorReproduction/policy-floor-positive
+=== RUN   TestLeadVoicePDBFloorReproduction/matching-pdb-zero-headroom
+    lead_voice_pdb_review_test.go:9: BUG: rotate admitted at Ready=2 with PDB minAvailable=2 and disruptionsAllowed=0
+=== RUN   TestLeadVoicePDBFloorReproduction/nonremoving-positive
+--- FAIL: TestLeadVoicePDBFloorReproduction (0.00s)
+    --- PASS: TestLeadVoicePDBFloorReproduction/policy-floor-positive (0.00s)
+    --- FAIL: TestLeadVoicePDBFloorReproduction/matching-pdb-zero-headroom (0.00s)
+    --- PASS: TestLeadVoicePDBFloorReproduction/nonremoving-positive (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/feasibility	0.002s
+FAIL

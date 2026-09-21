@@ -39,6 +39,10 @@ rules:
   resources:
   - networkpolicies
   verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  resources:
+  - poddisruptionbudgets
+  verbs: ["get", "list", "watch"]
 # --- READ-ONLY: RBAC lateral-movement reachability (blast-radius graph) ---
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources:

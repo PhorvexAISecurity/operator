@@ -96,7 +96,7 @@ type pendingRotation struct {
 	selectionBound       slo.Bound
 	costObserved         bool
 	// Phoenix fields bind asynchronous execution feedback to this exact submit.
-	// Empty EventUID denotes the native direct-delete path.
+	// Empty EventUID denotes the native direct-eviction path.
 	decisionID       string
 	phoenixEventName string
 	phoenixEventUID  string
@@ -1896,7 +1896,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	m.processTenantWithPhysicsObserved(ctx, snap, e, &observation, physicsByKey)
 }
 
-// actuatorUsesNativeRotate reports whether rotate reaches the native delete
+// actuatorUsesNativeRotate reports whether rotate reaches the native eviction
 // handler for the configured actuator. Hybrid routes rotate to native so it
 // must apply the same owner-identity feasibility law as the native backend.
 func actuatorUsesNativeRotate(a actuator.Actuator) bool {

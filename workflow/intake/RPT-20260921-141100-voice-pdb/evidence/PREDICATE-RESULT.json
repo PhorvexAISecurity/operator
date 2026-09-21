@@ -1,0 +1,13 @@
+{
+  "source": "47c22857aa4f9c8972abf36c9c06a792c2ae866a",
+  "runtime_equivalent_to_tested_checkout": "8690791b",
+  "at": "2026-09-21T14:12:24.620645+00:00",
+  "command": "GOMAXPROCS=2 GOFLAGS=-p=1 GOTOOLCHAIN=local go1.26.3 test -overlay=overlay.json ./internal/feasibility -run TestLeadVoicePDBFloorReproduction -count=1 -v",
+  "result": "REPRODUCED_EXPECTED_FAILURE",
+  "controls": {
+    "policy_floor": "PASS",
+    "nonremoving": "PASS"
+  },
+  "limitations": "Constructed source-shaped WorkloadView; not live deletion or whole decision loop",
+  "log_sha256": "f3c368fb4c41c3c09cbae3b3d52592b7660aa8c2bcc4176d8bd30db9d646643e"
+}

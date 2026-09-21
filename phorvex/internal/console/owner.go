@@ -272,8 +272,8 @@ func ownerRefusal(rec audit.Record) string {
 			return "Rotation not performed: no verified replacement controller."
 		case "Rotation not performed: mirror-pod":
 			return "Rotation not performed: this is a mirror of a static Pod."
-		case "Rotation not performed: target-uid-mismatch", "Rotation not performed: target-changed-before-delete":
-			return "Rotation not performed: the target changed before deletion."
+		case "Rotation not performed: target-uid-mismatch", "Rotation not performed: target-changed-before-delete", "Rotation not performed: target-changed-before-eviction":
+			return "Rotation not performed: the target changed before Eviction admission."
 		}
 	}
 	return ""

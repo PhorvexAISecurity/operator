@@ -2,23 +2,21 @@ package actuator
 
 import (
 	"context"
+	"errors"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"strings"
 	"testing"
 )
-
-type m47RaceClient struct {
-	client.Client
-	race bool
-}
 
 type m47PolicyReader struct {
 	client.Reader
@@ -33,19 +31,6 @@ func (r m47PolicyReader) Get(ctx context.Context, key client.ObjectKey, obj clie
 	return r.Reader.Get(ctx, key, obj, opts...)
 }
 
-func (c *m47RaceClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	if c.race {
-		p := &corev1.Pod{}
-		if err := c.Client.Get(ctx, client.ObjectKeyFromObject(obj), p); err != nil {
-			return err
-		}
-		p.OwnerReferences = nil
-		if err := c.Client.Update(ctx, p); err != nil {
-			return err
-		}
-	}
-	return c.Client.Delete(ctx, obj, opts...)
-}
 func TestM47APIServerPreconditions(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires local envtest API-server binaries")
@@ -59,8 +44,9 @@ func TestM47APIServerPreconditions(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
+	_ = policyv1.AddToScheme(s)
 	_ = v1alpha1.AddToScheme(s)
-	c, err := client.New(cfg, client.Options{Scheme: s})
+	c, err := client.NewWithWatch(cfg, client.Options{Scheme: s})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,12 +75,36 @@ func TestM47APIServerPreconditions(t *testing.T) {
 		reader := m47PolicyReader{Reader: c, policy: policy}
 		req := m47Request(p)
 		req.PolicyGeneration = policy.Generation
-		got, err := dispatch(ctx, EnactCtx{Client: &m47RaceClient{Client: c, race: race}, Reader: reader}, req)
+		directDeletes, evictionCalls := 0, 0
+		writer := interceptor.NewClient(c, interceptor.Funcs{
+			Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+				directDeletes++
+				return errors.New("direct Pod DELETE fallback attempted")
+			},
+			SubResourceCreate: func(ctx context.Context, inner client.Client, subresource string, obj client.Object, sub client.Object, opts ...client.SubResourceCreateOption) error {
+				evictionCalls++
+				if race {
+					current := &corev1.Pod{}
+					if err := inner.Get(ctx, client.ObjectKeyFromObject(obj), current); err != nil {
+						return err
+					}
+					current.OwnerReferences = nil
+					if err := inner.Update(ctx, current); err != nil {
+						return err
+					}
+				}
+				return inner.SubResource(subresource).Create(ctx, obj, sub, opts...)
+			},
+		})
+		got, err := dispatch(ctx, EnactCtx{Client: writer, Reader: reader}, req)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if evictionCalls != 1 || directDeletes != 0 {
+			t.Fatalf("evictions=%d directDeletes=%d", evictionCalls, directDeletes)
+		}
 		if race {
-			if got.Emitted || !strings.Contains(got.Note, "target-changed-before-delete") {
+			if got.Emitted || !strings.Contains(got.Note, "target-changed-before-eviction") {
 				t.Fatalf("stale owner mutation accepted: %+v", got)
 			}
 			if err = c.Get(ctx, client.ObjectKeyFromObject(p), p); err != nil || !p.DeletionTimestamp.IsZero() {

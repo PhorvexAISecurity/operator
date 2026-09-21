@@ -229,7 +229,7 @@ func TestCheckOptionalMIGAgentUsesExactDaemonSetAndExecSubresource(t *testing.T)
 func TestCheckRefusesDeniedUnknownAndIncompleteInventory(t *testing.T) {
 	active := policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRotate))
 	denied := &recordingSSAR{deny: func(attributes authorizationv1.ResourceAttributes) bool {
-		return attributes.Resource == "pods" && attributes.Verb == "delete"
+		return attributes.Group == "" && attributes.Resource == "pods" && attributes.Subresource == "eviction" && attributes.Verb == "create"
 	}}
 	if _, err := Check(t.Context(), active, denied, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator"}); err == nil || !strings.Contains(err.Error(), "denied") {
 		t.Fatalf("denial error = %v", err)
@@ -246,7 +246,7 @@ func TestCheckRefusesDeniedUnknownAndIncompleteInventory(t *testing.T) {
 func TestBootRefusalPrecedesControllerMutation(t *testing.T) {
 	mutations := 0
 	reviews := &recordingSSAR{deny: func(attributes authorizationv1.ResourceAttributes) bool {
-		return attributes.Resource == "pods" && attributes.Verb == "delete"
+		return attributes.Group == "" && attributes.Resource == "pods" && attributes.Subresource == "eviction" && attributes.Verb == "create"
 	}}
 	_, err := Check(t.Context(), policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRotate)), reviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator"})
 	if err == nil {

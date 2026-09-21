@@ -35,7 +35,7 @@ func TestM001NativeRuntimeReviewsNativeRotatePermission(t *testing.T) {
 		t.Fatalf("reviews=%+v", reviews.attributes)
 	}
 	got := reviews.attributes[0]
-	if got.Namespace != "tenant" || got.Group != "" || got.Resource != "pods" || got.Subresource != "" || got.Verb != "delete" {
+	if got.Namespace != "tenant" || got.Group != "" || got.Resource != "pods" || got.Subresource != "eviction" || got.Verb != "create" {
 		t.Fatalf("native runtime reviewed wrong route: %+v", got)
 	}
 }

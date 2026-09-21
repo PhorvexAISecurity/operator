@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,11 +23,10 @@ import (
 )
 
 type m091BoundarySpy struct {
-	reads   int
-	deletes int
+	reads, evictions, deletes int
 }
 
-func (s *m091BoundarySpy) reset() { s.reads, s.deletes = 0, 0 }
+func (s *m091BoundarySpy) reset() { s.reads, s.evictions, s.deletes = 0, 0, 0 }
 
 func m091OwnedPod(namespace, name, uid, app, owner string) *corev1.Pod {
 	controller := true
@@ -60,6 +60,9 @@ func newM091Fixture(t *testing.T, objects ...client.Object) *m091Fixture {
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
+	if err := policyv1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
 	if err := phorvexv1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +73,19 @@ func newM091Fixture(t *testing.T, objects ...client.Object) *m091Fixture {
 			return inner.Get(ctx, key, obj, opts...)
 		},
 		Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-			spy.deletes++
+			if _, isPod := obj.(*corev1.Pod); isPod {
+				spy.deletes++
+				return context.Canceled
+			}
 			return inner.Delete(ctx, obj, opts...)
+		},
+		SubResourceCreate: func(ctx context.Context, inner client.Client, name string, obj client.Object, sub client.Object, _ ...client.SubResourceCreateOption) error {
+			spy.evictions++
+			eviction, ok := sub.(*policyv1.Eviction)
+			if name != "eviction" || !ok || eviction.DeleteOptions == nil {
+				return context.Canceled
+			}
+			return inner.Delete(ctx, obj, &client.DeleteOptions{GracePeriodSeconds: eviction.DeleteOptions.GracePeriodSeconds, Preconditions: eviction.DeleteOptions.Preconditions})
 		},
 	}).Build()
 	native := actuator.NewNativeActuator(c)
@@ -152,13 +166,13 @@ func TestM091ActuateRequiresExactOwnerBeforeBoundaryReads(t *testing.T) {
 			}
 			result, err := f.native.Actuate(t.Context(), req)
 			if tc.want {
-				if err != nil || !result.Emitted || f.spy.reads == 0 || f.spy.deletes != 1 {
-					t.Fatalf("exact owner result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
+				if err != nil || !result.Emitted || f.spy.reads == 0 || f.spy.evictions != 1 || f.spy.deletes != 0 {
+					t.Fatalf("exact owner result=%+v err=%v reads=%d evictions=%d deletes=%d", result, err, f.spy.reads, f.spy.evictions, f.spy.deletes)
 				}
 				return
 			}
-			if err == nil || result.Emitted || f.spy.reads != 0 || f.spy.deletes != 0 {
-				t.Fatalf("refused owner crossed boundary: result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
+			if err == nil || result.Emitted || f.spy.reads != 0 || f.spy.evictions != 0 || f.spy.deletes != 0 {
+				t.Fatalf("refused owner crossed boundary: result=%+v err=%v reads=%d evictions=%d deletes=%d", result, err, f.spy.reads, f.spy.evictions, f.spy.deletes)
 			}
 		})
 	}
@@ -195,11 +209,11 @@ func TestM091ManagerRemovalUsesDrainBoundaryAndPreservesSharedOwner(t *testing.T
 	}
 	m.DrainLifecycle()
 	f.spy.reset()
-	if result, err := f.native.Actuate(t.Context(), m091Request(retired, "after", "after-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.deletes != 0 {
-		t.Fatalf("drained owner reached handler: result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
+	if result, err := f.native.Actuate(t.Context(), m091Request(retired, "after", "after-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.evictions != 0 || f.spy.deletes != 0 {
+		t.Fatalf("drained owner reached handler: result=%+v err=%v reads=%d evictions=%d deletes=%d", result, err, f.spy.reads, f.spy.evictions, f.spy.deletes)
 	}
-	if result, err := f.native.Actuate(t.Context(), m091Request(survivor, "survivor", "survivor-uid")); err != nil || !result.Emitted || f.spy.deletes != 1 {
-		t.Fatalf("shared-display survivor lost authority: result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
+	if result, err := f.native.Actuate(t.Context(), m091Request(survivor, "survivor", "survivor-uid")); err != nil || !result.Emitted || f.spy.evictions != 1 || f.spy.deletes != 0 {
+		t.Fatalf("shared-display survivor lost authority: result=%+v err=%v reads=%d evictions=%d deletes=%d", result, err, f.spy.reads, f.spy.evictions, f.spy.deletes)
 	}
 }
 
@@ -228,8 +242,8 @@ func TestM091ManagerCoalescedReplacementRetiresOnlyOldUID(t *testing.T) {
 	}
 	m.DrainLifecycle()
 	f.spy.reset()
-	if result, err := f.native.Actuate(t.Context(), m091Request(old, "old-after", "old-after-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.deletes != 0 {
-		t.Fatalf("replaced UID reached handler: result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
+	if result, err := f.native.Actuate(t.Context(), m091Request(old, "old-after", "old-after-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.evictions != 0 || f.spy.deletes != 0 {
+		t.Fatalf("replaced UID reached handler: result=%+v err=%v reads=%d evictions=%d deletes=%d", result, err, f.spy.reads, f.spy.evictions, f.spy.deletes)
 	}
 	if err := f.client.Delete(t.Context(), old.DeepCopy()); err != nil {
 		t.Fatal(err)
@@ -239,7 +253,7 @@ func TestM091ManagerCoalescedReplacementRetiresOnlyOldUID(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.spy.reset()
-	if result, err := f.native.Actuate(t.Context(), m091Request(next, "new-live", "new-live-uid")); err != nil || !result.Emitted || f.spy.deletes != 1 {
+	if result, err := f.native.Actuate(t.Context(), m091Request(next, "new-live", "new-live-uid")); err != nil || !result.Emitted || f.spy.evictions != 1 || f.spy.deletes != 0 {
 		t.Fatalf("replacement owner unavailable after preparation: result=%+v err=%v", result, err)
 	}
 }
@@ -286,8 +300,8 @@ func TestM091SameUIDDisplayRenameIsNotOwnerRetirement(t *testing.T) {
 		t.Fatalf("renamed binding unavailable: result=%+v err=%v", result, err)
 	}
 	f.spy.reset()
-	if result, err := f.native.Actuate(t.Context(), m091Request(old, "stale-display", "stale-display-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.deletes != 0 {
-		t.Fatalf("old display binding survived refresh: result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
+	if result, err := f.native.Actuate(t.Context(), m091Request(old, "stale-display", "stale-display-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.evictions != 0 || f.spy.deletes != 0 {
+		t.Fatalf("old display binding survived refresh: result=%+v err=%v reads=%d evictions=%d deletes=%d", result, err, f.spy.reads, f.spy.evictions, f.spy.deletes)
 	}
 }
 

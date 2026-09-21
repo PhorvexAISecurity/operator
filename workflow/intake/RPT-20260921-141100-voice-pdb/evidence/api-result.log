@@ -1,0 +1,7 @@
+=== RUN   TestLeadVoicePDBActualAPIRefusal
+    lead_voice_pdb_api_review_test.go:97: positive: actual Eviction API refuses healthy target with zero PDB headroom
+    lead_voice_pdb_api_review_test.go:105: BUG: native rotate bypassed real PDB refusal: emitted=true deleted=true err=<nil>
+--- FAIL: TestLeadVoicePDBActualAPIRefusal (5.84s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/actuator	5.939s
+FAIL

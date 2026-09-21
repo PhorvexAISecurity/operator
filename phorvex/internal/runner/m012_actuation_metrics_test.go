@@ -243,10 +243,10 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 		t.Fatalf("explicit refusal failure count = %v, want %v", got, primaryFailuresBefore+1)
 	}
 
-	// An injected typed API Forbidden unit control is a failed attempt, not an explicit
-	// proof of no effect and therefore cannot license the reserved alternative. The
+	// An injected typed API Forbidden unit control is an explicit no-effect refusal:
+	// the server denied admission, and the handler must not fall back to Pod Delete. The
 	// isolated API-server authorization control lives in m012_actuation_metrics_apiserver_test.go.
-	forbidden := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "pod", errors.New("denied"))
+	forbidden := apierrors.NewForbidden(schema.GroupResource{Resource: "pods/eviction"}, "pod", errors.New("denied"))
 	scheme := m034Scheme(t)
 	controller := true
 	replicas := int32(1)
@@ -270,10 +270,14 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 		Budget:  v1alpha1.BudgetSpec{MaxGracePeriodSeconds: &cap},
 		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
 	}}
-	deleteCalls := 0
+	evictionCalls, deleteCalls := 0, 0
 	apiClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rc, apiPod, apiPolicyObject).WithInterceptorFuncs(interceptor.Funcs{
 		Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
 			deleteCalls++
+			return errors.New("direct Pod DELETE fallback attempted")
+		},
+		SubResourceCreate: func(context.Context, client.Client, string, client.Object, client.Object, ...client.SubResourceCreateOption) error {
+			evictionCalls++
 			return forbidden
 		},
 	}).Build()
@@ -284,12 +288,12 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 	apiView := m010KVView(string(apiPod.UID))
 	apiView.Pod.Name = apiPod.Name
 	apiDecision := []model.Decision{{Namespace: "ns", Pod: apiPod.Name, Action: model.ActionRotate, Selected: true, Feasible: true}}
-	apiLabels := map[string]string{"tenant": apiPolicy.Tenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptError)}
-	apiFailureLabels := map[string]string{"tenant": apiPolicy.Tenant, "action": string(model.ActionRotate), "reason": string(metricspkg.AttemptError)}
+	apiLabels := map[string]string{"tenant": apiPolicy.Tenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptRefused)}
+	apiFailureLabels := map[string]string{"tenant": apiPolicy.Tenant, "action": string(model.ActionRotate), "reason": string(metricspkg.AttemptRefused)}
 	apiAttemptsBefore := m012Counter(t, "phorvex_actuation_attempts_total", apiLabels)
 	apiFailuresBefore := m012Counter(t, "phorvex_actuation_failures_total", apiFailureLabels)
-	if n := actuateWithBoundary(t, apiManager, context.Background(), m010Entry(), apiPolicy, apiDecision, map[string]*model.WorkloadView{"ns/" + apiPod.Name: apiView}); n != 0 || deleteCalls != 1 {
-		t.Fatalf("forbidden dispatch = n=%d deletes=%d", n, deleteCalls)
+	if n := actuateWithBoundary(t, apiManager, context.Background(), m010Entry(), apiPolicy, apiDecision, map[string]*model.WorkloadView{"ns/" + apiPod.Name: apiView}); n != 0 || evictionCalls != 1 || deleteCalls != 0 {
+		t.Fatalf("forbidden dispatch = n=%d evictions=%d directDeletes=%d", n, evictionCalls, deleteCalls)
 	}
 	if m012Counter(t, "phorvex_actuation_attempts_total", apiLabels) != apiAttemptsBefore+1 ||
 		m012Counter(t, "phorvex_actuation_failures_total", apiFailureLabels) != apiFailuresBefore+1 {

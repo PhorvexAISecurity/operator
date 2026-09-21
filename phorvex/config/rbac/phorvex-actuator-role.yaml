@@ -13,7 +13,7 @@
 # journal Role shown below; do not put its ConfigMap writes in tenant namespaces.
 #
 # `kubectl auth can-i` (as system:serviceaccount:<RELEASE-NS>:<MANAGER-SA>) MUST show:
-#   yes: delete/update/patch/get/list pods; create/get/list/delete/update networkpolicies; get replicasets/
+#   yes: delete/update/patch/get/list pods; create pods/eviction; create/get/list/delete/update networkpolicies; get replicasets/
 #        statefulsets/daemonsets/jobs; get/list/update services; list endpointslices (in <NS>)
 #   no : delete pods --all-namespaces; delete pod -n kube-system; get/delete secrets;
 #        patch/create/delete services; create/update/delete endpointslices; update pods/ephemeralcontainers; delete nodes
@@ -38,6 +38,10 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "delete", "update", "patch"]
+  # Native rotate uses policy/v1 Eviction; no direct Pod DELETE fallback is allowed.
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
   # quarantine: create/reconcile deny-all NetworkPolicy; migration/rollback delete verified policies.
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]

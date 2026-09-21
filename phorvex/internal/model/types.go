@@ -38,7 +38,7 @@ type Action string
 const (
 	// ActionNoop leaves the pod untouched.
 	ActionNoop Action = "noop"
-	// ActionRotate requests a native, policy-bounded graceful Pod deletion. Pure
+	// ActionRotate requests a native, policy-bounded graceful Pod eviction. Pure
 	// Phoenix backends refuse it because their Delete strategy cannot carry the cap.
 	ActionRotate Action = "rotate"
 	// ActionQuarantine maps to Phoenix's Quarantine (deny-all + detach).
@@ -656,11 +656,17 @@ type PhysicsWitness struct {
 	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
 	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
 	// learned cap accidentally.
-	DispersionCap         float64
-	SchedulerSlack        float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
-	PDBMinAvailable       int     // live PodDisruptionBudget minAvailable resolved for the owner (-1 = none)
-	PDBDisruptionsAllowed int     // live PDB status.disruptionsAllowed (-1 = none)
-	MIGGeometryValid      bool    // the pod's MIG partition is a legal device-plugin geometry
+	DispersionCap           float64
+	SchedulerSlack          float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
+	PDBMinAvailable         int     // maximum integer minAvailable across matching live PDBs (-1 = none/percentage-only)
+	PDBDisruptionsAllowed   int     // live PDB status.disruptionsAllowed (-1 = none)
+	PDBObservationAvailable bool    // the PDB list and every matching selector/status epoch were observed
+	PDBObservationAttempted bool    // production snapshot attempted the list; false is legacy synthetic input
+	PDBMatched              bool    // at least one current PDB selector matched this Pod
+	PDBMatchCount           int     // all matching PDBs; their minimum headroom is authoritative for planning
+	PDBDesiredHealthy       int     // maximum desiredHealthy across matching PDBs (covers percentage/maxUnavailable)
+	PDBObservationReason    string  // explicit unavailable/stale/invalid reason; empty when available
+	MIGGeometryValid        bool    // the pod's MIG partition is a legal device-plugin geometry
 
 	// --- AI / inference, DCGM-live when GPUPresent=true ---
 	GPUPresent    bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
@@ -748,7 +754,7 @@ type ContextSignals struct {
 // controller builds from a v1alpha1.PhorvexPolicy once per tick, then passes to the
 // interfaces — so interface packages never import the API package.
 type Policy struct {
-	NativeRotate bool // M47: enforce validated ownership for the native delete path.
+	NativeRotate bool // M47: enforce validated ownership for the native eviction path.
 	// Quarantine capacity is operator-owned, namespace-wide state. Configured=false
 	// preserves non-production/offline callers; production always supplies the guard.
 	// Known=false is a hard fail-closed inventory result, never an invented zero.
@@ -821,7 +827,7 @@ type Policy struct {
 	TraceEnabled     bool
 }
 
-// GracefulTerminationReceipt binds an accepted native Pod DELETE to the exact
+// GracefulTerminationReceipt binds an accepted native Pod Eviction request to the exact
 // policy epoch, Pod identity and explicit graceful request sent to Kubernetes.
 // It is request evidence only: TerminationStatus remains "unconfirmed" until a
 // separate lifecycle observer proves the old process/UID absent.
@@ -946,7 +952,7 @@ type Decision struct {
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
 	// GracefulTermination is present only after Kubernetes acknowledged the
-	// exact native rotate DELETE. It records the requested bound while leaving
+	// exact native rotate Eviction request. It records the requested bound while leaving
 	// physical termination explicitly unconfirmed.
 	GracefulTermination *GracefulTerminationReceipt
 

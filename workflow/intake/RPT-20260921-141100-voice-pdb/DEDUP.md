@@ -1,0 +1,3 @@
+# Deduplication
+
+NEW. Search of issue entries for PDB, PodDisruptionBudget, availability floor and eviction found no entry describing this budget-bypass root cause. M-047 concerns missing controller/owner safety and misleading replacement claims; the reproduction here uses an exact legitimate ReplicaSet owner. M-054 governs policy-bounded graceful termination; its valid grace and identity contract is preserved by this reproduction. M-117 covers stateful refusal/containment, whereas this is a stateless Ready replica protected by a matching budget. M-172 is a test-oracle attribution defect, whereas the real actuator here bypasses API budget admission. None requires the missing PDB enforcement being filed.
