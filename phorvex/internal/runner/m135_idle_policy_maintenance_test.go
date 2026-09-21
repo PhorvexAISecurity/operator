@@ -22,6 +22,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -388,7 +389,7 @@ func TestM135SelectedDispatchReusesTickPreparation(t *testing.T) {
 		Namespace: "idle", Name: "api-0", UID: "pod-uid", Labels: map[string]string{"app": "api"},
 		Ready: true, DesiredReplicas: 2, ReadyReplicas: 2,
 	}}
-	preparation := &actuator.RoutePreparation{NativeSkipped: true}
+	preparation := &actuator.RoutePreparation{PhoenixSkipped: true}
 	_, returned, attempted := m.actuatePreparedMode(t.Context(), entry, pol, []model.Decision{decisionRow}, map[string]*model.WorkloadView{"idle/api-0": view}, true,
 		&killSwitchTickState{observation: KillSwitchObservation{Cause: KillSwitchStaticOnly}},
 		&actuationBrakeTickState{namespace: actuationbrake.Namespace(nil)}, preparation)
@@ -397,5 +398,32 @@ func TestM135SelectedDispatchReusesTickPreparation(t *testing.T) {
 	}
 	if maintainer.observeCalls != 0 || maintainer.reconcileCalls != 0 || maintainer.ensureCalls != 0 {
 		t.Fatalf("selected dispatch prepared twice: observe=%d reconcile=%d ensure=%d", maintainer.observeCalls, maintainer.reconcileCalls, maintainer.ensureCalls)
+	}
+}
+
+func TestM054HybridRotateUsesOwnerFeasibility(t *testing.T) {
+	view := &model.WorkloadView{Pod: model.Pod{
+		Ready: true, DesiredReplicas: 2, ReadyReplicas: 2,
+	}}
+	pol := model.Policy{
+		NativeRotate:         actuatorUsesNativeRotate(actuator.NewHybridActuator(nil)),
+		MinAvailableReplicas: 1,
+	}
+	if !pol.NativeRotate {
+		t.Fatal("hybrid rotate did not inherit the native ownership guard")
+	}
+	move := model.Move{Action: model.ActionRotate}
+	if verdict := feasibility.Evaluate(view, move, pol); verdict.Feasible || verdict.Reason != "native-rotation-owner: owner-unresolved" {
+		t.Fatalf("unresolved hybrid owner verdict = %+v", verdict)
+	}
+
+	view.Pod.RotationOwnership = model.RotationOwnership{
+		Eligible: true, OwnerUID: "controller-uid", OwnerResourceVersion: "7",
+	}
+	if verdict := feasibility.Evaluate(view, move, pol); !verdict.Feasible {
+		t.Fatalf("eligible hybrid owner was refused: %+v", verdict)
+	}
+	if actuatorUsesNativeRotate(actuator.NewPhoenixActuator(nil)) {
+		t.Fatal("pure Phoenix rotate was incorrectly classified as native")
 	}
 }

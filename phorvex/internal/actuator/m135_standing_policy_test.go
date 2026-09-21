@@ -136,6 +136,32 @@ func TestM135PhoenixMaintenanceOwnershipGenerationAndFailures(t *testing.T) {
 }
 
 func TestM135HybridRouteIsolationAndNativeObservation(t *testing.T) {
+	rotatePhoenix := &m126CountingClient{Client: fake.NewClientBuilder().WithScheme(m126Scheme(t)).Build()}
+	rotateHybrid := &HybridActuator{phoenix: NewPhoenixActuator(rotatePhoenix), native: NewNativeActuator(nil)}
+	rotateOnly := m135Target()
+	rotateBefore := rotateHybrid.ObserveStandingPolicy(t.Context(), rotateOnly)
+	if rotateBefore.Native.State != PolicyMaintenanceMissing || rotateBefore.Phoenix.State != PolicyMaintenanceNotRequired || rotatePhoenix.creates != 0 {
+		t.Fatalf("rotate-only observation=%+v phoenix creates=%d", rotateBefore, rotatePhoenix.creates)
+	}
+	rotateAfter := rotateHybrid.ReconcileStandingPolicy(t.Context(), rotateOnly)
+	if rotateAfter.Native.State != PolicyMaintenanceRepaired || rotateAfter.Phoenix.State != PolicyMaintenanceNotRequired || rotatePhoenix.creates != 0 {
+		t.Fatalf("rotate-only reconcile=%+v phoenix creates=%d", rotateAfter, rotatePhoenix.creates)
+	}
+	rotateSteady := rotateHybrid.ReconcileStandingPolicy(t.Context(), rotateOnly)
+	if rotateSteady.Native.State != PolicyMaintenanceInSync || rotateSteady.Phoenix.State != PolicyMaintenanceNotRequired || rotatePhoenix.creates != 0 {
+		t.Fatalf("rotate-only steady=%+v phoenix creates=%d", rotateSteady, rotatePhoenix.creates)
+	}
+
+	defaultPhoenix := &m126CountingClient{Client: fake.NewClientBuilder().WithScheme(m126Scheme(t)).Build()}
+	defaultHybrid := &HybridActuator{phoenix: NewPhoenixActuator(defaultPhoenix), native: NewNativeActuator(nil)}
+	defaultRoutes := m135Target()
+	defaultRoutes.EnabledActions = nil
+	defaultResult := defaultHybrid.ReconcileStandingPolicy(t.Context(), defaultRoutes)
+	if defaultResult.Phoenix.State != PolicyMaintenanceRepaired || defaultResult.Native.State != PolicyMaintenanceRepaired ||
+		defaultResult.Preparation.PhoenixSkipped || defaultResult.Preparation.NativeSkipped || defaultPhoenix.creates != 1 {
+		t.Fatalf("default-route reconcile=%+v phoenix creates=%d", defaultResult, defaultPhoenix.creates)
+	}
+
 	phoenixBase := &m126CountingClient{Client: fake.NewClientBuilder().WithScheme(m126Scheme(t)).Build()}
 	native := NewNativeActuator(nil)
 	hybrid := &HybridActuator{phoenix: NewPhoenixActuator(phoenixBase), native: native}
@@ -158,6 +184,7 @@ func TestM135HybridRouteIsolationAndNativeObservation(t *testing.T) {
 	// A Phoenix collision is route-local and cannot prevent independent native binding.
 	both := m135Target()
 	both.PolicyOwnerCount = 2
+	both.EnabledActions[model.ActionQuarantine] = true
 	both.EnabledActions[model.ActionKVReset] = true
 	mixed := hybrid.ReconcileStandingPolicy(context.Background(), both)
 	if mixed.Phoenix.State != PolicyMaintenanceOwnershipRefused || mixed.Native.State != PolicyMaintenanceInSync || mixed.Preparation.NativeErr != nil {

@@ -237,9 +237,13 @@ func TestPost25M108SensitivityNoopGPUCPUUnitsAndInvalidInputs(t *testing.T) {
 
 func TestPost25M108SensitivityRetainsMissingAndHighLoadDistinction(t *testing.T) {
 	missing := covView("missing-load", true, 2*time.Hour, false)
+	// Generic coverage fixtures carry measured idle load. This control needs
+	// truly missing telemetry to exercise the conservative M156 cost regime.
+	missing.Telemetry = model.Telemetry{}
 	loaded := covView("high-load", true, 2*time.Hour, false)
 	loaded.Telemetry.ReqRate = model.PresentSignal(100000, "m108-fixture")
 	loaded.Telemetry.ConnCount = model.PresentSignal(10000, "m108-fixture")
+	missingBefore, loadedBefore := missing.Telemetry, loaded.Telemetry
 	pol := decisionTracePolicy(2, false)
 	result, err := EvaluateSensitivity(fixedTraceEngine(), []*model.WorkloadView{missing, loaded}, pol,
 		SensitivityRequest{Parameter: "economics.fixed-beta", Value: 0.5, Unit: "dimensionless"})
@@ -249,7 +253,7 @@ func TestPost25M108SensitivityRetainsMissingAndHighLoadDistinction(t *testing.T)
 	if len(result.Rows) != 2 || result.Rows[0].Pod != missing.Pod.Name || result.Rows[1].Pod != loaded.Pod.Name {
 		t.Fatalf("missing/high-load snapshots were not evaluated by the actual shadow path: %+v", result)
 	}
-	if missing.Telemetry.ReqRate.State == model.Present || loaded.Telemetry.ReqRate.Value != 100000 {
+	if !reflect.DeepEqual(missing.Telemetry, missingBefore) || !reflect.DeepEqual(loaded.Telemetry, loadedBefore) {
 		t.Fatal("sensitivity mutated its caller-owned frozen snapshots")
 	}
 }

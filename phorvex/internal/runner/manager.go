@@ -1871,6 +1871,16 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	m.processTenantWithPhysicsObserved(ctx, snap, e, &observation, physicsByKey)
 }
 
+// actuatorUsesNativeRotate reports whether rotate reaches the native delete
+// handler for the configured actuator. Hybrid routes rotate to native so it
+// must apply the same owner-identity feasibility law as the native backend.
+func actuatorUsesNativeRotate(a actuator.Actuator) bool {
+	if a == nil {
+		return false
+	}
+	return actuator.RouteFor(actuator.Backend(a.Name()), model.ActionRotate) == actuator.BackendNative
+}
+
 func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killObservation *KillSwitchObservation, physicsByKey map[string]model.PhysicsWitness) {
 	if ctx.Err() != nil {
 		return
@@ -1916,7 +1926,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 	}
-	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
+	pol.NativeRotate = actuatorUsesNativeRotate(m.Actuator)
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
 	pol.GitSHA = m.GitSHA
