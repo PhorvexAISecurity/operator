@@ -231,8 +231,9 @@ func TestRealThreeMemberClusterPreservesAcknowledgedMessageAcrossMemberRestart(t
 	messageA := Message{ID: "restart-a", Payload: []byte("nonce-bound-restart-payload-a")}
 	messageB := Message{ID: "restart-b", Payload: []byte("nonce-bound-restart-payload-b")}
 	receipt, err := probe.RunRestartOracle(t.Context(), messageA, messageB, func(context.Context) (RestartBoundaryReceipt, error) {
+		started := time.Now()
 		oldID, newID := cluster.restart(t, restartIndex)
-		return RestartBoundaryReceipt{Member: member.name, OldProcessID: oldID, NewProcessID: newID, WorkloadUIDBefore: member.name, WorkloadUIDAfter: member.name, VolumeUIDBefore: storeHash, VolumeUIDAfter: storeHash, StorePathHashBefore: storeHash, StorePathHashAfter: storeHash}, nil
+		return RestartBoundaryReceipt{Member: member.name, ActionAttempted: true, ActionSent: true, ActionCompleted: true, ElapsedNanos: time.Since(started).Nanoseconds(), OldProcessID: oldID, NewProcessID: newID, WorkloadUIDBefore: member.name, WorkloadUIDAfter: member.name, VolumeUIDBefore: storeHash, VolumeUIDAfter: storeHash, StorePathHashBefore: storeHash, StorePathHashAfter: storeHash}, nil
 	}, 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -242,6 +243,48 @@ func TestRealThreeMemberClusterPreservesAcknowledgedMessageAcrossMemberRestart(t
 	}
 	if receipt.MessageB.Sequence != receipt.MessageA.Sequence+1 || receipt.StoredBefore != receipt.StoredAfter || receipt.FinalState.Messages != 2 || receipt.FinalState.AckFloor < receipt.MessageB.Sequence {
 		t.Fatalf("restart oracle receipt=%+v", receipt)
+	}
+}
+
+func TestRealThreeMemberClusterRetainsAcknowledgedPartialReceiptOnInvalidRestart(t *testing.T) {
+	cluster := startRealThreeMemberCluster(t)
+	cfg := testConfig(cluster.clientURLs())
+	cfg.Replicas = 3
+	cfg.RequestTimeout = 3 * time.Second
+	probe, err := Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(probe.Close)
+	member := cluster.members[2]
+	serverID := member.srv.ID()
+	receipt, err := probe.RunRestartOracle(t.Context(), Message{ID: "partial-a", Payload: []byte("partial-payload-a")}, Message{ID: "partial-b", Payload: []byte("partial-payload-b")}, func(context.Context) (RestartBoundaryReceipt, error) {
+		return RestartBoundaryReceipt{Member: member.name, ActionAttempted: true, ActionSent: true, ActionCompleted: true, ElapsedNanos: 1, OldProcessID: serverID, NewProcessID: serverID, WorkloadUIDBefore: member.name, WorkloadUIDAfter: member.name, VolumeUIDBefore: member.storeDir, VolumeUIDAfter: member.storeDir, StorePathHashBefore: hash([]byte(member.storeDir)), StorePathHashAfter: hash([]byte(member.storeDir))}, nil
+	}, 10*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "retained the old process identity") {
+		t.Fatalf("invalid actual-producer restart passed: %v", err)
+	}
+	if receipt.MessageA.Sequence == 0 || receipt.DeliveryA.StreamSequence != receipt.MessageA.Sequence || receipt.StoredBefore.StreamSequence != receipt.MessageA.Sequence || !receipt.Restart.ActionSent || receipt.MessageB.Sequence != 0 || receipt.FinalState.Messages != 0 {
+		t.Fatalf("partial receipt did not faithfully retain completed producer stages: %+v", receipt)
+	}
+}
+
+func TestRealThreeMemberClusterNoActionProtocolIsSeparate(t *testing.T) {
+	cluster := startRealThreeMemberCluster(t)
+	cfg := testConfig(cluster.clientURLs())
+	cfg.Replicas = 3
+	cfg.RequestTimeout = 3 * time.Second
+	probe, err := Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(probe.Close)
+	receipt, err := probe.RunNoActionOracle(t.Context(), Message{ID: "control-a", Payload: []byte("control-payload-a")}, Message{ID: "control-b", Payload: []byte("control-payload-b")}, 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.MessageB.Sequence != receipt.MessageA.Sequence+1 || receipt.StoredA.StreamSequence != receipt.MessageA.Sequence || receipt.FinalState.Messages != 2 || receipt.FinalState.ConsumerRedelivered != 0 {
+		t.Fatalf("no-action receipt=%+v", receipt)
 	}
 }
 
@@ -265,7 +308,7 @@ func TestWaitCurrentReplicasDoesNotTreatCancellationAsConvergence(t *testing.T) 
 }
 
 func TestRestartBoundaryRequiresChangedProcessAndStableStorageIdentity(t *testing.T) {
-	valid := RestartBoundaryReceipt{Member: "nats-2", OldProcessID: "old", NewProcessID: "new", WorkloadUIDBefore: "pod", WorkloadUIDAfter: "pod", VolumeUIDBefore: "pvc", VolumeUIDAfter: "pvc", StorePathHashBefore: "store", StorePathHashAfter: "store"}
+	valid := RestartBoundaryReceipt{Member: "nats-2", ActionAttempted: true, ActionSent: true, ActionCompleted: true, ElapsedNanos: 1, OldProcessID: "old", NewProcessID: "new", WorkloadUIDBefore: "pod", WorkloadUIDAfter: "pod", VolumeUIDBefore: "pvc", VolumeUIDAfter: "pvc", StorePathHashBefore: "store", StorePathHashAfter: "store"}
 	if err := validateRestartBoundary(valid); err != nil {
 		t.Fatal(err)
 	}
@@ -275,6 +318,8 @@ func TestRestartBoundaryRequiresChangedProcessAndStableStorageIdentity(t *testin
 		"changed volume": func(r *RestartBoundaryReceipt) { r.VolumeUIDAfter = "foreign" },
 		"changed store":  func(r *RestartBoundaryReceipt) { r.StorePathHashAfter = "foreign" },
 		"missing member": func(r *RestartBoundaryReceipt) { r.Member = "" },
+		"action unsent":  func(r *RestartBoundaryReceipt) { r.ActionSent = false },
+		"no attempt":     func(r *RestartBoundaryReceipt) { r.ActionAttempted = false },
 	} {
 		t.Run(name, func(t *testing.T) {
 			receipt := valid

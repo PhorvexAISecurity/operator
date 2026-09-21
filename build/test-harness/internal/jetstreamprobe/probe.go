@@ -103,6 +103,10 @@ type ReplicationReceipt struct {
 
 type RestartBoundaryReceipt struct {
 	Member              string `json:"member"`
+	ActionAttempted     bool   `json:"actionAttempted"`
+	ActionSent          bool   `json:"actionSent"`
+	ActionCompleted     bool   `json:"actionCompleted"`
+	ElapsedNanos        int64  `json:"elapsedNanos"`
 	OldProcessID        string `json:"oldProcessID"`
 	NewProcessID        string `json:"newProcessID"`
 	WorkloadUIDBefore   string `json:"workloadUIDBefore"`
@@ -114,16 +118,27 @@ type RestartBoundaryReceipt struct {
 }
 
 type RestartOracleReceipt struct {
-	Baseline     ReplicationReceipt     `json:"baseline"`
-	MessageA     PubAckReceipt          `json:"messageA"`
-	DeliveryA    DeliveryReceipt        `json:"deliveryA"`
-	StoredBefore StoredReceipt          `json:"storedBefore"`
-	Restart      RestartBoundaryReceipt `json:"restart"`
-	Recovered    ReplicationReceipt     `json:"recovered"`
-	StoredAfter  StoredReceipt          `json:"storedAfter"`
-	MessageB     PubAckReceipt          `json:"messageB"`
-	DeliveryB    DeliveryReceipt        `json:"deliveryB"`
-	FinalState   StateReceipt           `json:"finalState"`
+	Baseline             ReplicationReceipt     `json:"baseline"`
+	MessageA             PubAckReceipt          `json:"messageA"`
+	DeliveryA            DeliveryReceipt        `json:"deliveryA"`
+	StoredBefore         StoredReceipt          `json:"storedBefore"`
+	Restart              RestartBoundaryReceipt `json:"restart"`
+	Recovered            ReplicationReceipt     `json:"recovered"`
+	RecoveryElapsedNanos int64                  `json:"recoveryElapsedNanos"`
+	StoredAfter          StoredReceipt          `json:"storedAfter"`
+	MessageB             PubAckReceipt          `json:"messageB"`
+	DeliveryB            DeliveryReceipt        `json:"deliveryB"`
+	FinalState           StateReceipt           `json:"finalState"`
+}
+
+type NoActionOracleReceipt struct {
+	Baseline   ReplicationReceipt `json:"baseline"`
+	MessageA   PubAckReceipt      `json:"messageA"`
+	DeliveryA  DeliveryReceipt    `json:"deliveryA"`
+	StoredA    StoredReceipt      `json:"storedA"`
+	MessageB   PubAckReceipt      `json:"messageB"`
+	DeliveryB  DeliveryReceipt    `json:"deliveryB"`
+	FinalState StateReceipt       `json:"finalState"`
 }
 
 type RestartMember func(context.Context) (RestartBoundaryReceipt, error)
@@ -286,6 +301,16 @@ func (p *Probe) Close() {
 	}
 }
 
+// ConnectedServerID returns the server identity selected by the real NATS
+// client connection. Callers use it to prove which fixture member is outside
+// the restart boundary; it is not a reconnect/failover claim.
+func (p *Probe) ConnectedServerID() string {
+	if p == nil || p.nc == nil {
+		return ""
+	}
+	return p.nc.ConnectedServerId()
+}
+
 func (p *Probe) State(ctx context.Context) (StateReceipt, error) {
 	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
 	streamInfo, err := p.stream.Info(reqCtx)
@@ -352,65 +377,131 @@ func (p *Probe) WaitCurrentReplicas(ctx context.Context, window time.Duration) (
 // boundary; the probe validates that its workload, volume, and store identity
 // stayed exact while the process identity changed.
 func (p *Probe) RunRestartOracle(ctx context.Context, messageA, messageB Message, restart RestartMember, window time.Duration) (RestartOracleReceipt, error) {
+	receipt := RestartOracleReceipt{}
 	if restart == nil || messageA.ID == "" || messageB.ID == "" || messageA.ID == messageB.ID {
-		return RestartOracleReceipt{}, errors.New("distinct messages and a restart boundary are required")
+		return receipt, errors.New("distinct messages and a restart boundary are required")
 	}
 	baseline, err := p.WaitCurrentReplicas(ctx, window)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.Baseline = baseline
 	ackA, err := p.Publish(ctx, messageA, false, 0)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.MessageA = ackA
 	deliveryA, err := p.ConsumeAndAck(ctx, messageA, ackA.Sequence)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.DeliveryA = deliveryA
 	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
 	storedBefore, err := p.GetStored(ctx, messageA, ackA.Sequence)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.StoredBefore = storedBefore
+	restartStarted := time.Now()
 	restartReceipt, err := restart(ctx)
+	receipt.Restart = restartReceipt
+	receipt.RecoveryElapsedNanos = time.Since(restartStarted).Nanoseconds()
 	if err != nil {
-		return RestartOracleReceipt{}, fmt.Errorf("restart exact fixture member: %w", err)
+		return receipt, fmt.Errorf("restart exact fixture member: %w", err)
 	}
 	if err := validateRestartBoundary(restartReceipt); err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
 	if !clusterHasMember(baseline.Stream, restartReceipt.Member) || !sameClusterMembers(baseline.Stream, baseline.Consumer) {
-		return RestartOracleReceipt{}, errors.New("restart member or baseline stream/consumer membership differs")
+		return receipt, errors.New("restart member or baseline stream/consumer membership differs")
 	}
 	recovered, err := p.WaitCurrentReplicas(ctx, window)
+	receipt.RecoveryElapsedNanos = time.Since(restartStarted).Nanoseconds()
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.Recovered = recovered
 	if baseline.Stream.Cluster != recovered.Stream.Cluster || baseline.Stream.Replicas != recovered.Stream.Replicas || baseline.Consumer.Cluster != recovered.Consumer.Cluster || baseline.Consumer.Replicas != recovered.Consumer.Replicas || !sameClusterMembers(baseline.Stream, recovered.Stream) || !sameClusterMembers(baseline.Consumer, recovered.Consumer) || !sameClusterMembers(recovered.Stream, recovered.Consumer) {
-		return RestartOracleReceipt{}, errors.New("replication cluster identity changed across restart")
+		return receipt, errors.New("replication cluster identity changed across restart")
 	}
 	storedAfter, err := p.GetStored(ctx, messageA, ackA.Sequence)
 	if err != nil {
-		return RestartOracleReceipt{}, fmt.Errorf("read message A after restart: %w", err)
+		return receipt, fmt.Errorf("read message A after restart: %w", err)
 	}
+	receipt.StoredAfter = storedAfter
 	ackB, err := p.Publish(ctx, messageB, false, ackA.Sequence+1)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.MessageB = ackB
 	deliveryB, err := p.ConsumeAndAck(ctx, messageB, ackB.Sequence)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
+	receipt.DeliveryB = deliveryB
 	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
 	finalState, err := p.waitExactState(ctx, window, ackA.Sequence, ackB.Sequence)
 	if err != nil {
-		return RestartOracleReceipt{}, err
+		return receipt, err
 	}
-	return RestartOracleReceipt{Baseline: baseline, MessageA: ackA, DeliveryA: deliveryA, StoredBefore: storedBefore, Restart: restartReceipt, Recovered: recovered, StoredAfter: storedAfter, MessageB: ackB, DeliveryB: deliveryB, FinalState: finalState}, nil
+	receipt.FinalState = finalState
+	return receipt, nil
+}
+
+// RunNoActionOracle executes the same A/B protocol without a disruption. It is
+// a separate receipt so a healthy baseline cannot be relabeled as restart or
+// actuator evidence.
+func (p *Probe) RunNoActionOracle(ctx context.Context, messageA, messageB Message, window time.Duration) (NoActionOracleReceipt, error) {
+	receipt := NoActionOracleReceipt{}
+	if messageA.ID == "" || messageB.ID == "" || messageA.ID == messageB.ID {
+		return receipt, errors.New("distinct messages are required")
+	}
+	baseline, err := p.WaitCurrentReplicas(ctx, window)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.Baseline = baseline
+	ackA, err := p.Publish(ctx, messageA, false, 0)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.MessageA = ackA
+	deliveryA, err := p.ConsumeAndAck(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.DeliveryA = deliveryA
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return receipt, err
+	}
+	storedA, err := p.GetStored(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.StoredA = storedA
+	ackB, err := p.Publish(ctx, messageB, false, ackA.Sequence+1)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.MessageB = ackB
+	deliveryB, err := p.ConsumeAndAck(ctx, messageB, ackB.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.DeliveryB = deliveryB
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return receipt, err
+	}
+	state, err := p.waitExactState(ctx, window, ackA.Sequence, ackB.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.FinalState = state
+	return receipt, nil
 }
 
 func clusterHasMember(receipt ClusterReceipt, name string) bool {
@@ -435,6 +526,9 @@ func sameClusterMembers(left, right ClusterReceipt) bool {
 }
 
 func validateRestartBoundary(receipt RestartBoundaryReceipt) error {
+	if !receipt.ActionAttempted || !receipt.ActionSent || !receipt.ActionCompleted || receipt.ElapsedNanos <= 0 {
+		return errors.New("restart boundary lacks a completed one-send action")
+	}
 	if receipt.Member == "" || receipt.OldProcessID == "" || receipt.NewProcessID == "" || receipt.WorkloadUIDBefore == "" || receipt.WorkloadUIDAfter == "" || receipt.VolumeUIDBefore == "" || receipt.VolumeUIDAfter == "" || receipt.StorePathHashBefore == "" || receipt.StorePathHashAfter == "" {
 		return errors.New("restart boundary identity is incomplete")
 	}
