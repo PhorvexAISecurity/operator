@@ -9,7 +9,19 @@ WAIT_INTERVAL_SECONDS=${WAIT_INTERVAL_SECONDS:-15}
 [[ $WAIT_ATTEMPTS =~ ^[1-9][0-9]?$ ]] && (( WAIT_ATTEMPTS <= 60 )) || fail 'WAIT_ATTEMPTS must be 1..60'
 [[ $WAIT_INTERVAL_SECONDS =~ ^[1-9][0-9]?$ ]] && (( WAIT_INTERVAL_SECONDS <= 15 )) || fail 'WAIT_INTERVAL_SECONDS must be 1..15'
 for tool in kubectl python3; do
-  command -v "$tool" >/dev/null || fail "Required jump-host tool is missing: $tool"
+  command -v "$tool" >/dev/null || fail "Required tool is missing: $tool"
+done
+# Which components this release actually re-tagged (the ci: markers CI rewrote in
+# values-eks.yaml). A console-only change re-tags only the console; the operator keeps its
+# previous tag, so demanding :$V on the operator would spin until timeout and fail a rollout
+# ArgoCD completed minutes earlier. Default to the operator alone for callers that predate
+# MARKERS.
+declare -A DEPLOY_FOR=( [ci:phorvex-tag]=phorvex-phorvex [ci:console-tag]=phorvex-phorvex-console )
+declare -A CONTAINER_FOR=( [ci:phorvex-tag]=manager [ci:console-tag]=console )
+TARGETS=()
+for m in ${MARKERS:-ci:phorvex-tag}; do
+  [[ -n ${DEPLOY_FOR[$m]:-} ]] || fail "Unknown release marker: $m"
+  TARGETS+=("$m")
 done
 
 for (( attempt=1; attempt<=WAIT_ATTEMPTS; attempt++ )); do
@@ -41,24 +53,33 @@ except (ValueError, KeyError, TypeError):
     sys.exit("Invalid Application response or automated sync policy")
 ') || fail 'Cannot determine automated sync policy; refusing to wait on invalid data'
 
-  IMG=$(kubectl -n phorvex-system get deploy phorvex-phorvex --request-timeout=10s \
-    -o jsonpath='{.spec.template.spec.containers[?(@.name=="manager")].image}') \
-    || fail 'Cannot read phorvex-system/phorvex-phorvex; check deployment and read permissions'
-  [[ -n $IMG ]] || fail 'Deployment has no manager image; cannot verify this release'
-  echo "[$attempt/$WAIT_ATTEMPTS] deployment image: $IMG; automated sync: $POLICY"
-  case "$IMG" in
-    *:"$V")
-      # Matching desired state is not proof of ready pods. Even an intentionally
-      # paused app can already have this release; preserve the real rollout gate.
-      kubectl -n phorvex-system rollout status deploy/phorvex-phorvex --timeout=180s \
-        || fail "Deployment specifies $V but rollout readiness failed"
-      echo "Deployment is ready at $V (automated sync: $POLICY)"
-      exit 0
-      ;;
-  esac
+  PENDING=()
+  SUMMARY=""
+  for m in "${TARGETS[@]}"; do
+    D=${DEPLOY_FOR[$m]}; C=${CONTAINER_FOR[$m]}
+    IMG=$(kubectl -n phorvex-system get deploy "$D" --request-timeout=10s \
+      -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$C\")].image}") \
+      || fail "Cannot read phorvex-system/$D; check deployment and read permissions"
+    [[ -n $IMG ]] || fail "Deployment $D has no $C image; cannot verify this release"
+    SUMMARY+="$D=$IMG "
+    case "$IMG" in *:"$V") ;; *) PENDING+=("$D") ;; esac
+  done
+  echo "[$attempt/$WAIT_ATTEMPTS] $SUMMARY; automated sync: $POLICY"
+  if (( ${#PENDING[@]} == 0 )); then
+    # Matching desired state is not proof of ready pods. Even an intentionally
+    # paused app can already have this release; preserve the real rollout gate.
+    for m in "${TARGETS[@]}"; do
+      D=${DEPLOY_FOR[$m]}
+      kubectl -n phorvex-system rollout status "deploy/$D" --timeout=180s \
+        || fail "Deployment $D specifies $V but rollout readiness failed"
+    done
+    echo "Released deployments are ready at $V: ${TARGETS[*]} (automated sync: $POLICY)"
+    exit 0
+  fi
+  IMG="${PENDING[*]}"
   case "$POLICY" in
-    disabled) fail "argocd/phorvex-stack has spec.syncPolicy.automated.enabled=false; deployment is $IMG, expected :$V. Review the pending GitOps diff and intentionally resume/sync the application. This waiter does not change cluster state." ;;
-    absent) fail "argocd/phorvex-stack has no automated sync policy; deployment is $IMG, expected :$V. Review the application configuration; this waiter does not enable sync." ;;
+    disabled) fail "argocd/phorvex-stack has spec.syncPolicy.automated.enabled=false; still pending on $IMG, expected :$V. Review the pending GitOps diff and intentionally resume/sync the application. This waiter does not change cluster state." ;;
+    absent) fail "argocd/phorvex-stack has no automated sync policy; still pending on $IMG, expected :$V. Review the application configuration; this waiter does not enable sync." ;;
   esac
   if (( attempt < WAIT_ATTEMPTS )); then
     sleep "$WAIT_INTERVAL_SECONDS"

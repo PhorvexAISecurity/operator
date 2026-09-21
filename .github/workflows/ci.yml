@@ -72,13 +72,17 @@ jobs:
   changes:
     runs-on: self-hosted
     outputs:
-      operator: ${{ steps.filter.outputs.operator }}
-      console:  ${{ steps.filter.outputs.console }}
-      phoenix:  ${{ steps.filter.outputs.phoenix }}
+      operator: ${{ steps.decide.outputs.operator }}
+      console:  ${{ steps.decide.outputs.console }}
+      phoenix:  ${{ steps.decide.outputs.phoenix }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release history decides what is unshipped (see "decide")
 
+      # Pull requests: what THIS PR touches, against its base branch (unchanged).
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
@@ -102,6 +106,46 @@ jobs:
               - 'deploy/docker/console.Dockerfile'
             phoenix:
               - 'build/phoenix-extended/**'
+
+      # Pushes to main: what is UNSHIPPED per component, i.e. what changed since the release
+      # commit that last re-tagged THAT component in values-eks.yaml. Comparing against the
+      # previous push (paths-filter's default) forgets a change as soon as one run fails or a
+      # later push touches only another component: 277 operator files merged after v0.4.141
+      # were never built because every following push either failed at build-console or
+      # changed only the console, so the operator image stayed at 0.4.141 for a day.
+      - name: Decide what is unshipped
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_OPERATOR: ${{ steps.filter.outputs.operator }}
+          PR_CONSOLE:  ${{ steps.filter.outputs.console }}
+          PR_PHOENIX:  ${{ steps.filter.outputs.phoenix }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then
+            echo "operator=${PR_OPERATOR:-false}" >> "$GITHUB_OUTPUT"
+            echo "console=${PR_CONSOLE:-false}"   >> "$GITHUB_OUTPUT"
+            echo "phoenix=${PR_PHOENIX:-false}"   >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          F=deploy/helm/phorvex-stack/values-eks.yaml
+          # The commit that last changed a component's pinned tag is its last release.
+          # A component that was never released, or a rewritten history, compares
+          # against the root commit — i.e. it is built.
+          base_for() { git log -1 --format=%H -G"tag: \"[0-9.]*\" *# ci:$1" HEAD -- "$F" 2>/dev/null || true; }
+          root=$(git rev-list --max-parents=0 HEAD | tail -1)
+          changed() { # $1=base $2..=paths ; prints true/false
+            local base=$1; shift
+            [ -n "$base" ] || base=$root
+            if [ -n "$(git diff --name-only "$base" HEAD -- "$@")" ]; then echo true; else echo false; fi
+          }
+          OB=$(base_for phorvex-tag); CB=$(base_for console-tag)
+          LR=$(git log -1 --format=%H --grep='^release: v' HEAD || true)
+          op=$(changed "$OB" 'phorvex/**' 'build/phoenix-extended/**' 'build/metricvalidity/**' deploy/docker/operator.Dockerfile)
+          co=$(changed "$CB" 'dashboard-web/**' 'phorvex/**' 'build/phoenix-extended/**' 'build/metricvalidity/**' 'build/test-harness/**' deploy/docker/console.Dockerfile)
+          ph=$(changed "$LR" 'build/phoenix-extended/**')
+          echo "operator=$op (since ${OB:-root})"; echo "console=$co (since ${CB:-root})"; echo "phoenix=$ph (since ${LR:-root})"
+          { echo "operator=$op"; echo "console=$co"; echo "phoenix=$ph"; } >> "$GITHUB_OUTPUT"
 
   # ── 2. Chart hygiene ───────────────────────────────────────────────────────
   # The Helm chart vendors a copy of the PhorvexPolicy CRD. That copy silently fell behind
@@ -753,18 +797,31 @@ jobs:
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
           V:       ${{ steps.version.outputs.version }}
+          MARKERS: ${{ steps.built.outputs.markers }}
         run: |
+          # Validate before interpolating this tag into any shell command.
+          [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+            echo "::error::Invalid release image tag"
+            exit 1
+          }
+          # Read the rollout directly from the cluster with the job's own OIDC role
+          # (github-actions-phorvex, mapped to the read-only group phorvex-ci-readonly in
+          # aws-auth by the cluster owner). Same script, same verdicts; only WHERE kubectl
+          # runs changes. The jump host remains the fallback when that access is absent.
+          if command -v kubectl >/dev/null \
+             && aws eks update-kubeconfig --region "$AWS_REGION" --name phorvex-dev-eks --kubeconfig "$RUNNER_TEMP/kubeconfig" >/dev/null 2>&1 \
+             && KUBECONFIG="$RUNNER_TEMP/kubeconfig" kubectl auth can-i get applications.argoproj.io -n argocd --request-timeout=15s 2>/dev/null | grep -qx yes; then
+            echo "rollout waiter: direct read-only cluster access"
+            KUBECONFIG="$RUNNER_TEMP/kubeconfig" V="$V" MARKERS="$MARKERS" bash deploy/argocd/wait-for-rollout.sh
+            exit $?
+          fi
+          echo "::notice::rollout waiter: no direct cluster access for the CI role; using the SSH jump host"
           command -v sshpass >/dev/null || {
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
           [ -s "${PHORVEX_SSH_KNOWN_HOSTS:-}" ] || {
             echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; the rollout waiter will not log in to an unverified host."
-            exit 1
-          }
-          # Validate before interpolating this tag into the remote shell command.
-          [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
-            echo "::error::Invalid release image tag"
             exit 1
           }
           # The real read-only waiter diagnoses disabled auto-sync immediately and
@@ -775,7 +832,7 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS" \
             -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no \
             -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V bash -s" \
+            -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V MARKERS='$MARKERS' bash -s" \
             < deploy/argocd/wait-for-rollout.sh
 
   # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
