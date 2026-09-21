@@ -2162,7 +2162,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T4-M019
 
 ### M-100 · F2/F8 — the objective sees only the reversible, detector-visible projection of attacker ground · **OPEN** · `CHOICE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M100
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · decision.coverage
