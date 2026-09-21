@@ -207,3 +207,60 @@ func TestBenignCheckpointStorageClassValidation(t *testing.T) {
 		t.Fatal("invalid storage class accepted")
 	}
 }
+
+func TestBenignCheckpointLocalFixtureValidation(t *testing.T) {
+	base := TargetConfig{
+		Context: "kind-amtd-test", Namespace: "phorvex-harness", OwnedAck: true,
+		TrialsPerArm: 3, CredentialObservationWindowSeconds: 90,
+		BenignCheckpointNodeSelector:   map[string]string{"kubernetes.io/hostname": "reviewed-node"},
+		BenignCheckpointStorageClass:   "checkpoint-local",
+		BenignCheckpointLocalFixture:   true,
+		BenignCheckpointLocalHolderUID: "11111111-2222-4333-8444-555555555555",
+		BenignCheckpointLocalNodeUID:   "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+		BenignCheckpointLocalNonce:     "checkpoint-local-r1",
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid local checkpoint fixture rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*TargetConfig){
+		"missing storage class": func(c *TargetConfig) { c.BenignCheckpointStorageClass = "" },
+		"wrong trials":          func(c *TargetConfig) { c.TrialsPerArm = 2 },
+		"missing node selector": func(c *TargetConfig) { c.BenignCheckpointNodeSelector = nil },
+		"extra node selector":   func(c *TargetConfig) { c.BenignCheckpointNodeSelector["node-type"] = "database" },
+		"bad holder uid":        func(c *TargetConfig) { c.BenignCheckpointLocalHolderUID = "holder" },
+		"bad node uid":          func(c *TargetConfig) { c.BenignCheckpointLocalNodeUID = "node" },
+		"bad nonce":             func(c *TargetConfig) { c.BenignCheckpointLocalNonce = "bad nonce" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := base
+			candidate.BenignCheckpointNodeSelector = map[string]string{"kubernetes.io/hostname": "reviewed-node"}
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid local checkpoint fixture accepted")
+			}
+		})
+	}
+}
+
+func TestBenignCheckpointLocalFieldsRefusedWhenDisabled(t *testing.T) {
+	base := TargetConfig{Context: "kind-amtd-test", Namespace: "phorvex-harness", OwnedAck: true, TrialsPerArm: 1, CredentialObservationWindowSeconds: 90, BenignCheckpointStorageClass: "ordinary-provisioner"}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("default provisioned checkpoint config changed: %v", err)
+	}
+	for name, mutate := range map[string]func(*TargetConfig){
+		"node selector": func(c *TargetConfig) {
+			c.BenignCheckpointNodeSelector = map[string]string{"kubernetes.io/hostname": "reviewed-node"}
+		},
+		"holder uid": func(c *TargetConfig) { c.BenignCheckpointLocalHolderUID = "11111111-2222-4333-8444-555555555555" },
+		"node uid":   func(c *TargetConfig) { c.BenignCheckpointLocalNodeUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" },
+		"nonce":      func(c *TargetConfig) { c.BenignCheckpointLocalNonce = "checkpoint-local-r1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := base
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("disabled local checkpoint accepted partial local identity")
+			}
+		})
+	}
+}

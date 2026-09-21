@@ -257,8 +257,9 @@ func TestPart3_ECostWeightsAndSanityExample(t *testing.T) {
 	if math.Abs(got-0.2833333333333333) > 1e-9 {
 		t.Errorf("ECost(quarantine) = %v, want 0.2833…", got)
 	}
-	// rotate on a bare view: phase is neither cold/warm/idle -> phi = [1,0,0,0,0,0] -> C_flow 0.15
-	wantRot := 0.4*1.0 + 0.6*0.15
+	// An unknown phase with missing load preserves the raw bias as provenance but
+	// cannot be priced below the source-owned Unknown floor.
+	wantRot := 0.4*1.0 + 0.6*0.5
 	gotRot := c.ECost(v, model.Move{Action: model.ActionRotate}, pol)
 	if math.Abs(gotRot-wantRot) > 1e-9 {
 		t.Errorf("ECost(rotate, bare) = %v, want %v", gotRot, wantRot)
@@ -273,8 +274,8 @@ func TestPart3_WeightsComeFromPolicy(t *testing.T) {
 		t.Errorf("with weights (1,0) ECost(rotate) = %v, want C_norm = 1.0", got)
 	}
 	pol = model.Policy{NormSparsity: 0.0, FlowDisruption: 1.0}
-	if got := c.ECost(v, model.Move{Action: model.ActionRotate}, pol); math.Abs(got-0.15) > 1e-9 {
-		t.Errorf("with weights (0,1) ECost(rotate) = %v, want C_flow = 0.15", got)
+	if got := c.ECost(v, model.Move{Action: model.ActionRotate}, pol); math.Abs(got-0.5) > 1e-9 {
+		t.Errorf("with weights (0,1) ECost(rotate) = %v, want conservative C_flow = 0.5", got)
 	}
 }
 

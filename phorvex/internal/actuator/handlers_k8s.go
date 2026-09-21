@@ -19,8 +19,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
 )
@@ -52,6 +54,8 @@ func objRef(kind, ns, name string) string { return fmt.Sprintf("%s/%s/%s", kind,
 
 type rotateHandler struct{}
 
+const defaultWorkloadGracePeriodSeconds int64 = 30
+
 func (rotateHandler) Name() string { return string(model.ActionRotate) }
 
 func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
@@ -68,8 +72,17 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 	if ec.Reader == nil {
 		return refuse("authoritative-reader-unavailable")
 	}
+	if ec.Client == nil {
+		return refuse("mutation-client-unavailable")
+	}
 	if req.TargetUID == "" {
 		return refuse("target-uid-unavailable")
+	}
+	if req.PolicyName == "" || req.PolicyUID == "" {
+		return refuse("selecting-policy-identity-unavailable")
+	}
+	if req.MaxGracePeriodSeconds < 1 || req.MaxGracePeriodSeconds > 300 {
+		return refuse("selecting-policy-grace-cap-invalid")
 	}
 	pod := &corev1.Pod{}
 	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, pod); err != nil {
@@ -89,13 +102,69 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 	if rv == "" {
 		return refuse("target-version-unavailable")
 	}
-	if err := ec.Client.Delete(ctx, pod, &client.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}}); err != nil {
+	workloadGrace, workloadGraceExplicit := defaultWorkloadGracePeriodSeconds, false
+	if pod.Spec.TerminationGracePeriodSeconds != nil {
+		workloadGrace, workloadGraceExplicit = *pod.Spec.TerminationGracePeriodSeconds, true
+	}
+	if workloadGrace < 0 {
+		return refuse("target-grace-period-invalid")
+	}
+
+	// This is deliberately the final authoritative read before the DELETE. The
+	// Pod's UID/resourceVersion preconditions close its mutation race; Kubernetes
+	// offers no cross-object precondition, so the exact policy epoch is read and
+	// bound as close to the request as the API permits.
+	policy := &v1alpha1.PhorvexPolicy{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.PolicyName}, policy); err != nil {
+		return refuse("selecting-policy-unavailable")
+	}
+	if string(policy.UID) != req.PolicyUID || policy.UID == "" {
+		return refuse("selecting-policy-uid-mismatch")
+	}
+	if policy.Generation != req.PolicyGeneration {
+		return refuse("selecting-policy-generation-mismatch")
+	}
+	if policy.DeletionTimestamp != nil || policy.Spec.IsDryRun() || !policy.Spec.ActionEnabled(v1alpha1.ActionRotate) {
+		return refuse("selecting-policy-not-authorized")
+	}
+	selector, err := metav1.LabelSelectorAsSelector(&policy.Spec.Selector)
+	if err != nil || selector.Empty() || !selector.Matches(labels.Set(pod.Labels)) {
+		return refuse("selecting-policy-selector-mismatch")
+	}
+	policyCap, err := policy.Spec.EffectiveMaxGracePeriodSeconds()
+	if err != nil {
+		return refuse("selecting-policy-grace-cap-invalid")
+	}
+	if policyCap != req.MaxGracePeriodSeconds {
+		return refuse("selecting-policy-grace-cap-mismatch")
+	}
+	effectiveGrace := workloadGrace
+	if policyCap < effectiveGrace {
+		effectiveGrace = policyCap
+	}
+	deleteOptions := &client.DeleteOptions{
+		GracePeriodSeconds: &effectiveGrace,
+		Preconditions:      &metav1.Preconditions{UID: &uid, ResourceVersion: &rv},
+	}
+	if err := ec.Client.Delete(ctx, pod, deleteOptions); err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
 			return refuse("target-changed-before-delete")
 		}
 		return HandlerResult{}, fmt.Errorf("rotate delete %s/%s: %w", req.Namespace, req.Pod, err)
 	}
-	return HandlerResult{Emitted: true, MutationKind: "forward-only", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "Pod deletion requested; replacement unconfirmed"}, nil
+	receipt := &model.GracefulTerminationReceipt{
+		PolicyNamespace: req.Namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID),
+		PolicyGeneration: policy.Generation, PolicyGraceCapSeconds: policyCap,
+		WorkloadGraceSeconds: workloadGrace, WorkloadGraceExplicit: workloadGraceExplicit,
+		EffectiveGracePeriodSeconds: effectiveGrace, PodUID: string(uid), PodResourceVersion: rv,
+		TerminationStatus: "unconfirmed",
+	}
+	return HandlerResult{
+		Emitted: true, MutationKind: "forward-only",
+		ObjectsTouched:      []string{objRef("Pod", req.Namespace, req.Pod)},
+		GracefulTermination: receipt,
+		Note:                fmt.Sprintf("Pod deletion requested with policy grace cap %ds and effective grace %ds; old-process termination and replacement unconfirmed", policyCap, effectiveGrace),
+	}, nil
 }
 
 // Quarantine is implemented in quarantine.go and quarantine_plan.go.

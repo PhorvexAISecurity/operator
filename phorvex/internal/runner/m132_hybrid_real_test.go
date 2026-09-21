@@ -95,7 +95,7 @@ func m132RouteFixture(t *testing.T, selector metav1.LabelSelector) (*m132RouteCl
 		}
 	}
 	pod, sibling, svc := m132RouteObjects()
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: selector, SLO: v1alpha1.SLOSpec{MinAvailableReplicas: 1}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate, v1alpha1.ActionRouteRotate}}}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: selector, SLO: v1alpha1.SLOSpec{MinAvailableReplicas: 1}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionQuarantine, v1alpha1.ActionRouteRotate}}}}
 	ready := true
 	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "web-route-slice", UID: "slice-uid", ResourceVersion: "1", Labels: map[string]string{discoveryv1.LabelServiceName: svc.Name}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: svc.UID}}}, AddressType: discoveryv1.AddressTypeIPv4}
 	for _, current := range []*corev1.Pod{pod, sibling} {
@@ -110,9 +110,13 @@ func m132RouteFixture(t *testing.T, selector metav1.LabelSelector) (*m132RouteCl
 	c := &m132RouteClient{Client: base}
 	hybrid := actuator.NewHybridActuator(c)
 	hybrid.ConfigureNativeJournal(c, "operator")
-	m := &Manager{Actuator: hybrid, BoundaryReader: c, Log: logr.Discard()}
+	quarantineCapacity, err := actuator.NewQuarantineCapacity(c, c, "operator", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{Actuator: hybrid, BoundaryReader: c, QuarantineCapacity: quarantineCapacity, Log: logr.Discard()}
 	e := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: policy.Name}, uid: string(policy.UID), namespace: "ns", tenant: "team", spec: policy.Spec}
-	pol := model.Policy{Tenant: "team", PolicyName: policy.Name, PolicyUID: string(policy.UID), MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true, model.ActionRouteRotate: true}}
+	pol := model.Policy{Tenant: "team", PolicyName: policy.Name, PolicyUID: string(policy.UID), MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionQuarantine: true, model.ActionRouteRotate: true}}
 	view := map[string]*model.WorkloadView{"ns/api": {Pod: model.Pod{Namespace: "ns", Name: "api", UID: "pod-uid", Ready: true, DesiredReplicas: 2, ReadyReplicas: 2, RouteService: "web-route", RouteServiceReady: true}}}
 	return c, m, e, pol, view
 }
@@ -122,7 +126,7 @@ func TestM132RealHybridPhoenixRefusalStillDeliversNativeAction(t *testing.T) {
 	selector := metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}, MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "tier", Operator: metav1.LabelSelectorOpExists}}}
 	c, m, e, pol, view := m132RouteFixture(t, selector)
 	decisions := []model.Decision{
-		{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
+		{Selected: true, Feasible: true, Action: model.ActionQuarantine, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 		{Selected: true, Feasible: true, Action: model.ActionRouteRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{DecisionID: "m132-refusal-route"}},
 	}
 	if n, _ := m.actuatePrepared(ctx, e, pol, decisions, view); n != 1 || !decisions[1].Actuated || decisions[0].Actuated || decisions[0].Trace.DispatchReason != "route-preparation-failed" {
@@ -150,7 +154,7 @@ func TestM132RealHybridEqualityControlDeliversBothRoutes(t *testing.T) {
 	ctx := context.Background()
 	c, m, e, pol, view := m132RouteFixture(t, metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}})
 	decisions := []model.Decision{
-		{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
+		{Selected: true, Feasible: true, Action: model.ActionQuarantine, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 		{Selected: true, Feasible: true, Action: model.ActionRouteRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{DecisionID: "m132-equality-route"}},
 	}
 	if n, _ := m.actuatePrepared(ctx, e, pol, decisions, view); n != 2 || !decisions[0].Actuated || !decisions[1].Actuated {

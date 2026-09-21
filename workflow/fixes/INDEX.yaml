@@ -1402,3 +1402,130 @@ fixes:
     stacked_on: []
     branch: post25-calibration-export
     head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
+  POST25-CATALOGUE-CLAIMS:
+    directory: fixes/POST25-CATALOGUE-CLAIMS
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-catalogue-claims
+    head_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad
+  POST25-CHECKPOINT-LOCAL-FIXTURE:
+    directory: fixes/POST25-CHECKPOINT-LOCAL-FIXTURE
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-checkpoint-live-prep
+    head_sha: 85475e7ba32b2bd8cbdef886529849bc3a424b1e
+  POST25-SESSION-OBSERVATION:
+    directory: fixes/POST25-SESSION-OBSERVATION
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - POST25-CHECKPOINT-LOCAL-FIXTURE
+    branch: post25-session-observation
+    head_sha: 91727e68acd99fe1b38fabaef962f67bdb875e45
+  POST25-M044:
+    directory: fixes/POST25-M044
+    aliases: []
+    issues:
+    - M-44
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-m044-route-claims
+    head_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+  POST25-M043:
+    directory: fixes/POST25-M043
+    aliases: []
+    issues:
+    - M-43
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-m043-model-shard-claims
+    head_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+  POST25-SESSION-GVK:
+    directory: fixes/POST25-SESSION-GVK
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - POST25-M043
+    branch: post25-session-gvk
+    head_sha: 2a1c54c6f438aa36572b1b4a0073e99564d98570
+  POST25-M054:
+    directory: fixes/POST25-M054
+    aliases: []
+    issues:
+    - M-54
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - POST25-M043
+    - POST25-M103
+    - POST25-SESSION-GVK
+    branch: post25-m054
+    head_sha: e260345cc78178e2a813611f6787a597fae0ac0e
+  POST25-M103:
+    directory: fixes/POST25-M103
+    aliases: []
+    issues:
+    - M-103
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - POST25-M156
+    branch: post25-m103
+    head_sha: fd66a147146681b8bb67170711dc6bab4a32e42e
+  POST25-M156:
+    directory: fixes/POST25-M156
+    aliases: []
+    issues:
+    - M-156
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: post25-m156
+    head_sha: null
+  T9-M035:
+    directory: fixes/T9-M035
+    aliases: []
+    issues:
+    - M-35
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t9-m035
+    head_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+  T9-M071:
+    directory: fixes/T9-M071
+    aliases: []
+    issues:
+    - M-71
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t9-m071
+    head_sha: b74bc120430d1562e4b1e18a59f5d769b1820622

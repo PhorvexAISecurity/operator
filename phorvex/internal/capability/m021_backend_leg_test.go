@@ -76,13 +76,18 @@ func TestCapableConsultsBackendForNonAIActions(t *testing.T) {
 			t.Fatalf("native implements %s; Capable must agree, got %q", a, why)
 		}
 	}
-	// rotate/quarantine remain supported on BOTH backends — no default-set regression.
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
-		for _, w := range []Witness{phoenixWitness(), nativeWitness()} {
-			if ok, why := w.Capable(v, a); !ok {
-				t.Fatalf("%s must stay supported, got %q", a, why)
-			}
+	// Quarantine remains supported on both backends. Bounded rotate is native-only
+	// because Phoenix Delete has no typed current-policy grace input.
+	for _, w := range []Witness{phoenixWitness(), nativeWitness()} {
+		if ok, why := w.Capable(v, model.ActionQuarantine); !ok {
+			t.Fatalf("quarantine must stay supported, got %q", why)
 		}
+	}
+	if ok, why := phoenixWitness().Capable(v, model.ActionRotate); ok || !strings.Contains(why, actuator.ReasonBackendUnsupported) {
+		t.Fatalf("Phoenix bounded rotate must be unsupported, got capable=%v why=%q", ok, why)
+	}
+	if ok, why := nativeWitness().Capable(v, model.ActionRotate); !ok {
+		t.Fatalf("native bounded rotate must stay supported, got %q", why)
 	}
 }
 

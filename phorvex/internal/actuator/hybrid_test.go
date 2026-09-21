@@ -6,16 +6,15 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-// TestHybridRouting pins the capability split: whatever Phoenix can enact (RuleTypeFor != "")
-// must route to Phoenix so the AMTD-CR path is preserved; everything else (the AI-native
-// moves) must route to native. This mirrors HybridActuator.Actuate's branch exactly, so a
-// change to RuleTypeFor that silently steals an action from native fails here.
+// TestHybridRouting pins the capability split: quarantine preserves the Phoenix
+// AMTD-CR path, while bounded rotate and the AI-native moves route native. This
+// mirrors HybridActuator.Actuate's branch exactly.
 func TestHybridRouting(t *testing.T) {
 	cases := []struct {
-		action    model.Action
-		wantSide  string // "phoenix" | "native"
+		action   model.Action
+		wantSide string // "phoenix" | "native"
 	}{
-		{model.ActionRotate, "phoenix"},
+		{model.ActionRotate, "native"},
 		{model.ActionQuarantine, "phoenix"},
 		{model.ActionKVReset, "native"},
 		{model.ActionEndpointRotate, "native"},
@@ -25,7 +24,7 @@ func TestHybridRouting(t *testing.T) {
 	}
 	for _, c := range cases {
 		side := "native"
-		if RuleTypeFor(c.action) != "" {
+		if RouteFor(BackendHybrid, c.action) == BackendPhoenix {
 			side = "phoenix"
 		}
 		if side != c.wantSide {

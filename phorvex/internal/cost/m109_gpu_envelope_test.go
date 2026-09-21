@@ -21,8 +21,9 @@ func configureM109GPUEnvelope(t *testing.T, value float64) {
 }
 
 func m109Views() (cpu, gpu *model.WorkloadView) {
-	cpu = &model.WorkloadView{Pod: model.Pod{HasGPU: false}, Phase: model.PhaseWarm}
-	gpu = &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm}
+	telemetry := model.Telemetry{ReqRate: model.PresentSignal(0, "m109-control")}
+	cpu = &model.WorkloadView{Pod: model.Pod{HasGPU: false}, Phase: model.PhaseWarm, Telemetry: telemetry}
+	gpu = &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm, Telemetry: telemetry}
 	return cpu, gpu
 }
 
@@ -140,8 +141,11 @@ func TestM109GPUObservationConfigurationAndActionScope(t *testing.T) {
 			if got.GPUEnvelopeApplied || got.GPUEnvelopeSlack != 0 {
 				t.Fatalf("out-of-scope action acquired GPU envelope provenance: %+v", got)
 			}
-			if tc.move.Action != model.ActionRotate {
+			if tc.move.Action != model.ActionRotate && tc.move.Action != model.ActionMIGRebind {
 				requireM109Close(t, "non-rotate robust cost", got.CHi, got.Total)
+			}
+			if tc.move.Action == model.ActionMIGRebind && (!got.FlowUncertaintyApplied || got.CHi < got.Total) {
+				t.Fatalf("MIG lower-bound proxy lost unsupported-regime provenance: %+v", got)
 			}
 		})
 	}

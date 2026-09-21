@@ -67,10 +67,16 @@ func TestServiceRestitchRBACIsNamespacedAndExact(t *testing.T) {
 			t.Errorf("%s must not gain an unconfigured standing Secret grant", path)
 		}
 		endpointVerbs := singleResourceVerbs(text, `resources: ["endpointslices"]`)
-		if len(endpointVerbs) != 1 || endpointVerbs[0] != `verbs: ["list"]` {
-			t.Errorf("%s EndpointSlice grants = %v, want exactly list", path, endpointVerbs)
+		wantEndpointVerbs := []string{`verbs: ["list"]`}
+		if path == "../../charts/phorvex/templates/rbac.yaml" {
+			// The manager's cluster Role observes exact Service membership for
+			// shared capacity while the namespaced actuator Role remains list-only.
+			wantEndpointVerbs = []string{`verbs: ["get", "list", "watch"]`, `verbs: ["list"]`}
 		}
-		for _, forbidden := range []string{"get", "create", "update", "patch", "delete"} {
+		if strings.Join(endpointVerbs, "\n") != strings.Join(wantEndpointVerbs, "\n") {
+			t.Errorf("%s EndpointSlice grants = %v, want %v", path, endpointVerbs, wantEndpointVerbs)
+		}
+		for _, forbidden := range []string{"create", "update", "patch", "delete"} {
 			if strings.Contains(strings.Join(endpointVerbs, " "), `"`+forbidden+`"`) {
 				t.Errorf("%s grants forbidden EndpointSlice %s", path, forbidden)
 			}

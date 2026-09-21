@@ -39,6 +39,7 @@ import (
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
+	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
@@ -233,6 +234,9 @@ type Manager struct {
 	// QuarantineCapacity is the production hard bound shared by native, hybrid and
 	// pure-Phoenix routes. It uses the uncached reader and protected operator ledger.
 	QuarantineCapacity *actuator.QuarantineCapacity
+	// SharedCapacity is the durable cross-policy CAS ledger for hard resources
+	// whose effects can outlive a tick or this process.
+	SharedCapacity *sharedcapacity.Store
 	// Authz is the T1-E SSAR capability checker (cached). nil disables the RBAC leg of the
 	// gate (installability + cover + runtime-capability still apply); the boot layer wires
 	// it from the cluster clientset so no-rbac exclusions become live.
@@ -353,8 +357,17 @@ func clearDispatchResult(d *model.Decision) {
 	d.ObjectsTouched = nil
 	d.RollbackRef = ""
 	d.MutationKind = ""
+	d.GracefulTermination = nil
 	d.Phoenix = nil
 	d.DispatchOutcome, d.DispatchReason = "", ""
+}
+
+func cloneGracefulTermination(in *model.GracefulTerminationReceipt) *model.GracefulTerminationReceipt {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 // resetDispatchAttempt removes every result and runtime-boundary field from a
@@ -559,7 +572,7 @@ func backendPurpose(b actuator.Backend) string {
 	case actuator.BackendNative:
 		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
 	case actuator.BackendHybrid:
-		return "Phoenix for rotate/quarantine, native for the AI-native moves"
+		return "native for policy-bounded rotate and AI-native moves; Phoenix for quarantine"
 	default:
 		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
 	}
@@ -1889,6 +1902,20 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			return
 		}
 	}
+	if m.SharedCapacity != nil {
+		pol.SharedResourceCapacityConfigured = true
+		inventory, inventoryErr := m.SharedCapacity.Inventory(ctx)
+		if inventoryErr != nil {
+			pol.SharedResourceReservationsKnown = false
+			pol.SharedResourceReservationsReason = inventoryErr.Error()
+		} else {
+			pol.SharedResourceReservationsKnown = true
+			pol.SharedResourceReservations = inventory
+		}
+		if ctx.Err() != nil {
+			return
+		}
+	}
 	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
@@ -2469,6 +2496,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		}
 	}
 	d.Action, d.CoverageValue, d.CoveredWeight, d.Cost = a.Action, a.Coverage, a.Marginal, a.Cost
+	d.Resources = append([]model.ResourceConsumption(nil), a.Resources...)
 	costCoefficient := original.Lambda
 	if original.Economics != nil {
 		costCoefficient = original.Economics.EffectiveCostCoefficient
@@ -2498,6 +2526,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 	d.DispatchOutcome, d.DispatchReason = "", ""
 	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
 	d.ObjectsTouched = nil
+	d.GracefulTermination = nil
 	if original.Trace != nil {
 		tr := *original.Trace
 		tr.Existential = d.Existential
@@ -2508,10 +2537,21 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		tr.Candidates = append([]model.DecisionCandidateV2(nil), original.Trace.Candidates...)
 		tr.Facts = append([]model.DecisionFactV2(nil), original.Trace.Facts...)
 		tr.ActionStatus = append([]model.DecisionActionStatusV3(nil), original.Trace.ActionStatus...)
+		tr.Resources = append([]model.DecisionResourceCapacityV6(nil), original.Trace.Resources...)
 		tr.SelectedAction = string(a.Action)
 		tr.SelectedCandidateKey = d.Namespace + "/" + d.Pod + "|" + string(a.Action)
 		tr.DispatchOutcome, tr.DispatchReason = "", ""
 		tr.DualUpdate.Applied = false // this exchange makes no second learning step
+		resourceDelta := map[string]int{}
+		for _, demand := range original.Resources {
+			resourceDelta[demand.Scope.Key()] -= demand.Units
+		}
+		for _, demand := range a.Resources {
+			resourceDelta[demand.Scope.Key()] += demand.Units
+		}
+		for i := range tr.Resources {
+			tr.Resources[i].Selected += resourceDelta[tr.Resources[i].Scope.Key()]
+		}
 		fallbackCover := make(map[string]struct{}, len(a.CoverKeys))
 		for _, key := range a.CoverKeys {
 			fallbackCover[key] = struct{}{}
@@ -2610,8 +2650,69 @@ func actuationAttemptOutcome(res actuator.Result, err error, disposition actuato
 	}
 }
 
+func sharedCapacityRequest(pol model.Policy, d model.Decision, v *model.WorkloadView) sharedcapacity.Request {
+	operationID := ""
+	if d.Trace != nil {
+		operationID = d.Trace.DecisionID
+	}
+	if operationID == "" {
+		operationID = deterministicTraceID("shared-capacity", pol.TickID, pol.PolicyUID, d.Namespace, v.Pod.UID, string(d.Action))
+	}
+	return sharedcapacity.Request{
+		PolicyUID: pol.PolicyUID, TargetNamespace: d.Namespace,
+		TargetName: d.Pod, TargetUID: v.Pod.UID, Action: d.Action,
+		OperationID: operationID, MinAvailableReplica: pol.MinAvailableReplicas,
+		Resources: append([]model.ResourceConsumption(nil), d.Resources...),
+	}
+}
+
+func appendDispatchReason(d *model.Decision, suffix string) {
+	if d == nil || suffix == "" {
+		return
+	}
+	if d.DispatchReason == "" {
+		d.DispatchReason = suffix
+	} else {
+		d.DispatchReason += "; " + suffix
+	}
+	if d.Trace != nil {
+		d.Trace.DispatchReason = d.DispatchReason
+	}
+}
+
+func releaseSharedCapacityNoEffect(ctx context.Context, store *sharedcapacity.Store, reservation *sharedcapacity.Reservation) error {
+	if store == nil || reservation == nil {
+		return nil
+	}
+	releaseCtx := ctx
+	cancel := func() {}
+	if ctx.Err() != nil {
+		// The backend is proven unsent/no-effect at each call site. Complete this
+		// bounded synchronous ledger cleanup even when the action context has just
+		// expired; no goroutine or detached compensation survives the caller.
+		releaseCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	}
+	defer cancel()
+	return store.ReleaseNoEffect(releaseCtx, reservation)
+}
+
 func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
+	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil)
+}
+
+func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation) (int, *actuator.RoutePreparation, bool) {
 	attempted := false
+	inheritedHandled := inheritedReservation == nil
+	defer func() {
+		// A fallback inherits the original reservation while it repeats all
+		// current-authority guards. If it exits before atomic exchange/backend
+		// invocation, the original attempt was definitely unsent and can release.
+		if !inheritedHandled && m.SharedCapacity != nil {
+			if err := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, inheritedReservation); err != nil {
+				m.Log.Error(err, "shared capacity reservation retained after pre-dispatch fallback refusal")
+			}
+		}
+	}()
 	// Clear prior result and boundary metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -2847,21 +2948,76 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
+		var capacityReservation *sharedcapacity.Reservation
+		if m.SharedCapacity != nil {
+			capacityRequest := sharedCapacityRequest(pol, decisions[i], v)
+			var capacityErr error
+			if inheritedReservation != nil {
+				// From this point an exchange may have committed even when its API
+				// acknowledgement is lost. Never separately release the old key.
+				inheritedHandled = true
+				capacityReservation, capacityErr = m.SharedCapacity.Exchange(ctx, inheritedReservation, capacityRequest)
+			} else {
+				capacityReservation, capacityErr = m.SharedCapacity.Acquire(ctx, capacityRequest)
+			}
+			if capacityErr != nil {
+				stampDispatch(model.DispatchNotAttempted, "shared-capacity-refused")
+				recordExistentialEffect(&decisions[i], false)
+				m.Log.Error(capacityErr, "shared capacity refused dispatch before actuator invocation",
+					"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+					"pod", decisions[i].Pod, "action", decisions[i].Action)
+				continue
+			}
+			if capacityReservation != nil && !capacityReservation.Created {
+				// The exact durable identity was observed after a restart or lost
+				// response. Reconcile it through inventory; never replay mutation.
+				stampDispatch(model.DispatchNotAttempted, "shared-capacity-operation-already-recorded")
+				recordExistentialEffect(&decisions[i], false)
+				continue
+			}
+		}
+		if ctx.Err() != nil {
+			if capacityReservation != nil && m.SharedCapacity != nil {
+				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+					m.Log.Error(releaseErr, "shared capacity reservation retained after cancelled pre-dispatch")
+				}
+			}
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
+			return actuated, &preparation, attempted
+		}
+		if capacityReservation != nil && m.SharedCapacity != nil {
+			// Only an acknowledged reserved -> dispatching CAS licenses the
+			// backend call. A failed acknowledgement is ambiguous: the write may
+			// have committed, so neither dispatch nor release is safe here. The
+			// next inventory pass clears a still-reserved record or retains a
+			// dispatching record for effect reconciliation.
+			if claimErr := m.SharedCapacity.Claim(ctx, capacityReservation); claimErr != nil {
+				stampDispatch(model.DispatchNotAttempted, "shared-capacity-claim-unconfirmed")
+				recordExistentialEffect(&decisions[i], false)
+				m.Log.Error(claimErr, "shared capacity dispatch claim was not acknowledged; backend invocation refused",
+					"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+					"pod", decisions[i].Pod, "action", decisions[i].Action)
+				continue
+			}
+		}
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
-			AdapterObservation: v.Pod.AdapterObservation,
-			PolicyName:         pol.PolicyName,
-			PolicyUID:          pol.PolicyUID,
-			Tenant:             pol.Tenant,
-			Namespace:          decisions[i].Namespace,
-			Pod:                decisions[i].Pod,
-			Action:             decisions[i].Action,
-			Reason:             decisions[i].Reason,
-			Score:              score,
-			CoverageValue:      coverageValue,
-			TargetUID:          v.Pod.UID,
-			TickID:             pol.TickID,
+			AdapterObservation:    v.Pod.AdapterObservation,
+			PolicyName:            pol.PolicyName,
+			PolicyUID:             pol.PolicyUID,
+			PolicyGeneration:      pol.PolicyGeneration,
+			MaxGracePeriodSeconds: pol.MaxGracePeriodSeconds,
+			Tenant:                pol.Tenant,
+			Namespace:             decisions[i].Namespace,
+			Pod:                   decisions[i].Pod,
+			Action:                decisions[i].Action,
+			Reason:                decisions[i].Reason,
+			Score:                 score,
+			CoverageValue:         coverageValue,
+			TargetUID:             v.Pod.UID,
+			TickID:                pol.TickID,
 			ServingObservation: &actuator.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
@@ -2876,6 +3032,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		var err error
 		backendInvoked := true
 		if ctx.Err() != nil {
+			if capacityReservation != nil && m.SharedCapacity != nil {
+				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+					m.Log.Error(releaseErr, "shared capacity reservation retained after acknowledged claim but before backend invocation")
+				}
+			}
 			recordExistentialEffect(&decisions[i], false)
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
@@ -2890,6 +3051,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			res, err = m.Actuator.Actuate(ctx, request)
 		}
 		if !backendInvoked {
+			if capacityReservation != nil && m.SharedCapacity != nil {
+				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+					m.Log.Error(releaseErr, "shared capacity reservation retained after backend pre-invocation refusal")
+				}
+			}
 			if ctx.Err() != nil {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "context-cancelled")
@@ -2915,6 +3081,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
 		disposition := noEffectDisposition(res, err)
 		contradictoryDisposition := contradictoryNoEffectResult(res, err)
+		definiteNoEffect := !contradictoryDisposition && (disposition == actuator.NoEffectRefused || disposition == actuator.NoEffectSatisfied || disposition == actuator.NoEffectReconciled || disposition == actuator.NoEffectDeclared)
 		metrics.RecordActuationAttempt(pol.Tenant, string(decisions[i].Action), actuationAttemptOutcome(res, err, disposition, contradictoryDisposition))
 		// M-11 emission-window bookkeeping remains conservative about any producer that
 		// reports an attempted emission. Success, intent and learning accounting below
@@ -2974,6 +3141,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
@@ -3004,6 +3172,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			} else {
 				m.Log.Error(nil, "actuator returned contradictory result evidence", "pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			}
+			reservationTransferred := false
 			if !fallbackBlocked && allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
 				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
 				disposition == actuator.NoEffectRefused {
@@ -3019,7 +3188,8 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 						}
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
-						more, _, fallbackAttempted := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState)
+						reservationTransferred = capacityReservation != nil
+						more, _, fallbackAttempted := m.actuatePreparedModeWithCapacity(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState, capacityReservation)
 						attempted = attempted || fallbackAttempted
 						actuated += more
 						// The recursive call modifies its local slice's owned trace;
@@ -3033,7 +3203,28 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 					}
 				}
 			}
+			if capacityReservation != nil && !reservationTransferred && m.SharedCapacity != nil {
+				if definiteNoEffect {
+					if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
+						appendDispatchReason(&decisions[i], "shared-capacity-release-pending")
+						m.Log.Error(releaseErr, "shared capacity no-effect release was not acknowledged")
+					}
+				} else if retainErr := m.SharedCapacity.RetainUnknown(ctx, capacityReservation); retainErr != nil {
+					appendDispatchReason(&decisions[i], "shared-capacity-unknown-retention-unconfirmed")
+					m.Log.Error(retainErr, "shared capacity unknown outcome retention was not acknowledged")
+				}
+			}
 			continue
+		}
+		var capacityFinalizeErr error
+		if capacityReservation != nil && m.SharedCapacity != nil && !res.Emitted {
+			if definiteNoEffect {
+				if capacityFinalizeErr = releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); capacityFinalizeErr != nil {
+					m.Log.Error(capacityFinalizeErr, "shared capacity no-effect release was not acknowledged")
+				}
+			} else if capacityFinalizeErr = m.SharedCapacity.RetainUnknown(ctx, capacityReservation); capacityFinalizeErr != nil {
+				m.Log.Error(capacityFinalizeErr, "shared capacity unknown outcome retention was not acknowledged")
+			}
 		}
 		if res.Emitted {
 			m.Failures.reset(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, decisions[i].Action})
@@ -3057,6 +3248,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
@@ -3082,6 +3274,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			switch disposition {
 			case actuator.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")
@@ -3091,6 +3284,13 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				stampDispatch(model.DispatchDeclared, "declared-without-implementation")
 			default:
 				stampDispatch(model.DispatchEmittedFalse, "outcome-unknown")
+			}
+			if capacityFinalizeErr != nil {
+				if definiteNoEffect {
+					appendDispatchReason(&decisions[i], "shared-capacity-release-pending")
+				} else {
+					appendDispatchReason(&decisions[i], "shared-capacity-unknown-retention-unconfirmed")
+				}
 			}
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
@@ -3127,6 +3327,12 @@ func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForen
 
 func buildPolicy(e *policyEntry) model.Policy {
 	s := &e.spec
+	maxGracePeriodSeconds, maxGraceErr := s.EffectiveMaxGracePeriodSeconds()
+	if maxGraceErr != nil {
+		// Runtime inputs that bypass CRD validation remain invalid. Zero is a
+		// refusal sentinel at the rotate boundary, never a force-delete value.
+		maxGracePeriodSeconds = 0
+	}
 	disruptionAversion, disruptionAversionConfigured, disruptionAversionErr := s.EffectiveDisruptionAversion()
 	if disruptionAversionErr != nil {
 		disruptionAversion = math.NaN()
@@ -3157,6 +3363,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		WeightSecrets:                s.EffectiveWeightSecrets(),
 		BlastRadiusFromGraph:         s.AssetValue.BlastRadiusFromGraph,
 		MaxMovesPerTick:              s.EffectiveMaxMovesPerTick(),
+		MaxGracePeriodSeconds:        maxGracePeriodSeconds,
 		TickInterval:                 s.EffectiveTickInterval(),
 		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
 		ProactiveFloor:               s.EffectiveProactiveFloor(),

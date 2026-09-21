@@ -42,7 +42,8 @@ func scoredRow(scn, def string, trial int, disruption float64, achieved bool, ac
 	return core.Metric{
 		Scenario: scn, Defender: def, Trial: trial, Validity: v,
 		Category: core.CategoryClassicChain, R6Tag: core.R6Partial,
-		OracleAchieved: achieved, DisruptionVsOracle: disruption,
+		ScenarioRealism: core.RealismExecutable,
+		OracleAchieved:  achieved, DisruptionVsOracle: disruption,
 		DefensiveActions: actions, FalseDefensiveActions: -1,
 		SecurityPerCost: disruption, EvidenceRetention: 1, ObservedState: "measured",
 		TimeToActionSeconds: 1,
@@ -57,7 +58,8 @@ func notMeasuredRow(scn, def string, trial int, status core.MeasurementStatus, r
 	return core.Metric{
 		Scenario: scn, Defender: def, Trial: trial, Validity: v,
 		Category: core.CategoryClassicChain, R6Tag: core.R6Partial,
-		Skipped: true, SkipReason: reason, DefensiveActions: -1, FalseDefensiveActions: -1,
+		ScenarioRealism: core.RealismExecutable,
+		Skipped:         true, SkipReason: reason, DefensiveActions: -1, FalseDefensiveActions: -1,
 	}
 }
 
@@ -66,7 +68,8 @@ func legacyRow(scn, def string, trial int, disruption float64, achieved bool) co
 	return core.Metric{
 		Scenario: scn, Defender: def, Trial: trial,
 		Category: core.CategoryClassicChain, R6Tag: core.R6Partial,
-		OracleAchieved: achieved, DisruptionVsOracle: disruption,
+		ScenarioRealism: core.RealismExecutable,
+		OracleAchieved:  achieved, DisruptionVsOracle: disruption,
 		EvidenceRetention: 1, FalseDefensiveActions: -1,
 	}
 }
@@ -78,6 +81,7 @@ func negControlRow(scn, def string, trial int, falseMoves int, costObserved bool
 	m := core.Metric{
 		Scenario: scn, Defender: def, Trial: trial, Validity: v,
 		Category: core.CategoryClassicChain, R6Tag: core.R6Partial,
+		ScenarioRealism: core.RealismExecutable,
 		NegativeControl: true, FalseDefensiveActions: -1, DefensiveActions: -1,
 	}
 	if costObserved {
@@ -113,7 +117,7 @@ func (l *e2eLogger) RawLogPath() string  { return "" }
 type e2eScenario struct{}
 
 func (s *e2eScenario) Metadata() core.ScenarioMeta {
-	return core.ScenarioMeta{Name: "v161-mixed", Category: core.CategoryClassicChain, R6ResponseTag: core.R6Partial}
+	return core.ScenarioMeta{Name: "v161-mixed", Category: core.CategoryClassicChain, R6ResponseTag: core.R6Partial, Realism: core.RealismExecutable}
 }
 func (s *e2eScenario) Setup(context.Context, *core.Env) error { return nil }
 func (s *e2eScenario) Execute(_ context.Context, env *core.Env) (core.AttackResult, error) {
@@ -441,14 +445,14 @@ func TestValidityEconomicsExcludeUnmeasuredRows(t *testing.T) {
 	if r.Trials != 1 {
 		t.Errorf("economics used %d trial(s), want only the 1 scored cost-observed row", r.Trials)
 	}
-	if r.Validity.Emitted != 4 || r.Validity.Invalid != 1 || r.Validity.Legacy != 1 || r.Validity.CostUnobserved != 1 {
-		t.Errorf("economics accounting = %+v", r.Validity)
+	if r.Validity.Emitted != 4 || r.Validity.Invalid != 1 || r.Validity.Legacy != 1 || r.Validity.CostUnobserved != 2 {
+		t.Errorf("economics accounting = %+v; invalid and otherwise-valid rows with unobserved cost must both remain disclosed", r.Validity)
 	}
 	if r.MeanDefensiveActs != 1 {
 		t.Errorf("mean defensive acts = %v; the -1 unobserved row must not enter the denominator", r.MeanDefensiveActs)
 	}
 	md := RenderDollars(metrics, in, 0.95)
-	if !strings.Contains(md, "Economics measurement validity") || !strings.Contains(md, "costUnobserved=1") {
+	if !strings.Contains(md, "Economics measurement validity") || !strings.Contains(md, "costUnobserved=2") {
 		t.Errorf("economics report hides its exclusions:\n%s", md)
 	}
 }
@@ -471,7 +475,7 @@ func TestValidityEconomicsRenderNAForAnUnmeasuredArm(t *testing.T) {
 	if strings.Contains(md, "| $0 |") {
 		t.Errorf("unmeasured arm rendered a $0 figure:\n%s", md)
 	}
-	if !strings.Contains(md, "| d-fullphoenix | unassessed | 0 | n/a |") {
+	if !strings.Contains(md, "| d-fullphoenix | executable-mechanism | 0 | n/a |") {
 		t.Errorf("unmeasured arm not rendered as n/a:\n%s", md)
 	}
 }

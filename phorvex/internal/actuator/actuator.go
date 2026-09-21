@@ -50,9 +50,9 @@ const (
 	NoEffectDeclared   NoEffectDisposition = "declared-only"
 )
 
-// Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH the SecurityEvent
-// and the AMTD strategy that matches it, it bypasses Phoenix's brittle exact-match
-// problem entirely and drives any action deterministically (PRD §4.3). These rule
+// Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH a controlled
+// SecurityEvent and the AMTD strategy that matches it, the retained quarantine route
+// avoids Phoenix's brittle external-rule matching. These rule
 // fields are Phorvex-private (Source=PhorvexController) so they never collide with a
 // real integrator's events.
 const (
@@ -90,6 +90,11 @@ type Request struct {
 	ServingObservation *ServingSelectionObservation
 	PolicyName         string // Selecting PhorvexPolicy identity for recoverable native operations.
 	PolicyUID          string
+	PolicyGeneration   int64
+	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
+	// cap. The native handler re-reads and matches it at the mutation boundary.
+	// Zero is invalid and never means force deletion.
+	MaxGracePeriodSeconds int64
 
 	Tenant    string
 	Namespace string
@@ -147,6 +152,9 @@ type Result struct {
 	RollbackRef string
 	// MutationKind is "reversible" | "irreversible" | "forward-only" | "swap" | "declared" | "partial".
 	MutationKind string
+	// GracefulTermination is the exact acknowledged native rotate request. It
+	// never claims the old process exited or a replacement became ready.
+	GracefulTermination *model.GracefulTerminationReceipt
 }
 
 // Target is the per-asset context the capability gate (T1-E) passes to SupportsAction.

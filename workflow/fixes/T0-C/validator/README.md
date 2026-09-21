@@ -1,8 +1,8 @@
 # Phorvex audit decision-record validator
 
 Independent, read-only, stdlib-only Python 3.10+ checker for `phorvex.audit.v2`
-records carrying a `decisionTrace` (`phorvex.decision-trace.v2`, v3, or
-economics-aware v4).
+records carrying a `decisionTrace` (`phorvex.decision-trace.v2` through
+capacity-aware v6).
 It re-derives the decision from the record and refuses to treat an absent
 `{present:false}` optional as zero.
 
@@ -19,7 +19,7 @@ python3 audit_trace_validator.py <record.json|records.jsonl>... \
 * Exit `0` iff every record is PASS (no check FAIL and no check UNDECIDABLE);
   `1` otherwise. UNDECIDABLE is a finding, not a crash: it means the record does
   not carry enough scored fields to replay the selection.
-* `--strict-v3`: a v2 record FAILS check 12 instead of SKIPPED; v3 and v4 run
+* `--strict-v3`: a v2 record FAILS check 12 instead of SKIPPED; v3 through v6 run
   the complete action-status checks.
 
 Record status: FAIL if any check FAILs; else UNDECIDABLE if any check is
@@ -52,7 +52,7 @@ null as an empty list.
 
 | # | name | asserts |
 |---|---|---|
-| 1 | schema | envelope `schemaVersion == phorvex.audit.v2`; `decisionTrace.schemaVersion` in {v2, v3, v4}; records which |
+| 1 | schema | envelope `schemaVersion == phorvex.audit.v2`; `decisionTrace.schemaVersion` in {v2, v3, v4, v5, v6}; records which |
 | 2 | identity | brainImage, gitSHA, decisionID, tickID, policyUID, assetUID non-empty strings |
 | 3 | presence-flags | every `{present,value}` object has boolean `present`; present numeric values finite; top-level lambda/weights finite; builds the presence census (`inputs.*`, `facts[].*`, `candidates[].*`, `selectionRound`) |
 | 4 | selection-reference | noop => no `selected:true`, no `selectedCandidateKey`, non-empty `noopReason`; else exactly one selected candidate whose key/action equal `selectedCandidateKey`/`selectedAction` with reason `selected_strict_positive_gain`; envelope `action`/`selected` agree with the trace |
@@ -63,14 +63,16 @@ null as an empty list.
 | 9 | cover-keys-resolve | every candidate coverKey is a `facts[].factKey` |
 | 10 | dual-update | when `costRepresentationVersion` non-empty: representation/unit/selector constants, lambda aliases, `dualUpdate.{demand,spent,budget,lambdaBefore}` equal `candidateDemand,movesSpent,budget,lambdaRuntimeLegacy`, `rawExcess == candidateDemand - budget`, `updateReason` non-empty; SKIPPED (pre-T0-B record) when empty |
 | 11 | redaction | every string in the WHOLE record (envelope + trace, keys included) against `(?i)bearer\s+\S+`, `(?i)authorization\s*[:=]`, `://[^/@\s]+:[^/@\s]+@`, `(?i)(api[_-]?key\|password\|token\|credential)\s*[:=]\s*\S+`, plus the Go `secretKVPattern`; any hit FAILs naming the path |
-| 12 | v3-hooks | for v3/v4: (a) `actionStatus` = 15 unique rows in canonical order and uses the closed Go vocabularies; `selected => none`, `cost-nan => infeasible`, `not-installable => not-installable`, and `ineligible` requires one of `no-rbac`, `capability-unsupported`, `action-failure-cooldown`, or `operator-opt-out`; (b) `costHigh ~= expectedCost + (rotate ? max(conformalQuantile, gpuEnvelopeApplied ? gpuEnvelopeSlack : 0) : 0)` skipping cost-nan rows; (c) `coveredBeforeDecision == (coveredRound.present and coveredRound.value < evaluationRound)` and `marginalCoverage ~= sum finalWeight of coverKeys whose fact is not covered-before`; (d) `dispatchOutcome` uses the closed Go vocabulary, including refusal, satisfaction, reconciliation, and declared-only outcomes. |
-| 13 | economics-v4 | requires exact versioned economics fields, bounded runtime lambda/effective coefficient, distinct fixed-beta versus legacy contribution presence and reconstruction, split demand aliases, and an exact trace-off audit descriptor matching the trace. V2/v3 are SKIPPED for wire compatibility. |
+| 12 | v3-hooks | for v3/v4/v5/v6: (a) `actionStatus` = 15 unique rows in canonical order and uses the closed Go vocabularies; `selected => none`, `cost-nan => infeasible`, `not-installable => not-installable`, and `ineligible` requires one of `no-rbac`, `capability-unsupported`, `action-failure-cooldown`, or `operator-opt-out`; (b) reconstructs the maximum of conformal, GPU, and V5 regime slack without summing them; (c) `coveredBeforeDecision == (coveredRound.present and coveredRound.value < evaluationRound)` and `marginalCoverage ~= sum finalWeight of coverKeys whose fact is not covered-before`; (d) `dispatchOutcome` uses the closed Go vocabulary. |
+| 13 | economics-v4 | requires exact versioned economics fields, bounded runtime lambda/effective coefficient, distinct fixed-beta versus legacy contribution presence and reconstruction, split demand aliases, and an exact trace-off audit descriptor matching the trace. V2/v3 are SKIPPED for wire compatibility; V5 additionally binds the flow semantics descriptor. |
+| 14 | flow-regime-v5 | for every costed Rotate/MIG row, derives regime and floor from actual action/phase/request-rate presence; reconstructs effective flow, model-max uncertainty slack and row-level conformal applicability; rejects provenance on other rows. Historical versions are SKIPPED. |
+| 15 | resources-v6 | validates exact typed scope identities, integer limits/outstanding/selected values, unique capacity and candidate scopes, known-scope consumption, positive units, `outstanding + selected <= limit`, and selected-row consumption within the recorded batch consumption. V2–V5 must carry no V6 resource fields. |
 
 ## Report layout
 
 Header counts (records / pass / fail / undecidable); per-record table
 (decisionID prefix, tenant/pod, trace version, brainImage tag, selectedAction,
-status, failed checks); a 12-column PASS/FAIL/SKIPPED/UNDECIDABLE matrix; a
+status, failed checks); a 15-column PASS/FAIL/SKIPPED/UNDECIDABLE matrix; a
 section per failing/undecidable record with each message verbatim; every check
 message for every record; and the field-presence census (present / absent counts
 per optional field path across all records).

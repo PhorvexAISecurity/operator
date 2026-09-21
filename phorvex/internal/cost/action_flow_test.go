@@ -20,6 +20,7 @@ func TestActionFlowFamiliesUseSeparateShapes(t *testing.T) {
 	c := NewP1Cost()
 	view := bareView()
 	view.Phase = model.PhaseWarm
+	view.Telemetry.ReqRate = model.PresentSignal(0, "fixture")
 	pol := model.Policy{FlowDisruption: 1}
 
 	tests := []struct {
@@ -58,6 +59,7 @@ func TestRotationObservationOnlyRepricesRespawnFamily(t *testing.T) {
 	c := NewP1Cost()
 	view := bareView()
 	view.Phase = model.PhaseWarm
+	view.Telemetry.ReqRate = model.PresentSignal(0, "fixture")
 	pol := model.Policy{FlowDisruption: 1}
 
 	before := make(map[model.Action]float64, len(model.MutatingActions))

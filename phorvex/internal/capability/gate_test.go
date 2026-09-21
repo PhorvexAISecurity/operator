@@ -262,6 +262,7 @@ func TestM034ConfiguredPoolReconCapabilityAndOptimizer(t *testing.T) {
 	views, wit := capFleet()
 	view := views[0]
 	view.Phase = model.PhaseWarm
+	view.Telemetry.ReqRate = model.PresentSignal(0, "fixture-measured")
 	view.Physics = model.NeutralPhysics()
 	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
 	engine := decision.NewCoverageEngine()
@@ -299,6 +300,7 @@ func TestM034RotatePositiveControl(t *testing.T) {
 	views, wit := capFleet()
 	view := views[0]
 	view.Phase = model.PhaseWarm
+	view.Telemetry.ReqRate = model.PresentSignal(0, "fixture-measured")
 	view.Physics = model.NeutralPhysics()
 	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
 	engine := decision.NewCoverageEngine()
@@ -322,6 +324,7 @@ func TestM034WarmSwapAndRotateCompeteOnCost(t *testing.T) {
 	views, wit := capFleet()
 	view := views[0]
 	view.Phase = model.PhaseWarm
+	view.Telemetry.ReqRate = model.PresentSignal(0, "fixture-measured")
 	view.Physics = model.NeutralPhysics()
 	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
 	pol := model.Policy{Tenant: "m034-cost", Namespace: "ns", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1,

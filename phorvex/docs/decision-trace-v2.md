@@ -1,8 +1,24 @@
-# Decision Trace V2 / V3 / V4
+# Decision Trace V2 / V3 / V4 / V5 / V6
 
-`phorvex.decision-trace.v4` supersedes `v3` and `v2`, which remain readable. It is
+`phorvex.decision-trace.v6` supersedes `v5`, `v4`, `v3`, and `v2`, which remain readable. It is
 nested under `decisionTrace` in each `phorvex.audit.v2` per-asset decision record.
 It records the current P1 decision path.
+
+**V6 additions (typed hard capacity):** `resources` records each exact integer
+capacity scope, its limit, outstanding durable reservations, and total selected
+batch consumption. Each candidate carries its own integer consumption vector.
+`move-count` scopes bind a namespace and immutable policy identity;
+`unavailable-ready-replica` scopes additionally bind the Service name, immutable
+Service UID, and immutable controller UID. Objective cost never substitutes for
+these limits. A selected batch is valid only when outstanding plus selected
+consumption is within every recorded limit. The trace records the decision-time
+snapshot; dispatch separately revalidates current object authority and claims a
+durable reservation before backend mutation.
+
+**V5 additions (flow regimes):** each costed Rotate or MIG-rebind candidate
+records the effective load/phase regime, predicted flow mean, conservative
+floor, bounded uncertainty, and conformal applicability. Missing request-rate
+telemetry remains an explicit `missing-load` regime rather than observed zero.
 
 **V4 additions (versioned economics):** `economicsVersion`, optional
 `disruptionAversion`, `effectiveCostCoefficient`, and `costCoefficientSource`
@@ -118,6 +134,14 @@ A selected outcome references exactly one candidate and records its 1-based
 selection round. A noop references none and carries the current reason, such as
 an existing feasibility exclusion, `priced-out`, `budget-exhausted`, or the
 reactive-only gate.
+
+V6 hard-capacity reconstruction is independent of score ordering. Resource
+limits and units are non-negative integers; candidate units are positive.
+Capacity scopes and per-candidate scopes must be unique, and every consumed
+scope must appear in the trace capacity vector. The sum of selected candidate
+units for a scope cannot exceed the batch `selected` value, while
+`outstanding + selected <= limit`. Historical V2–V5 traces must not carry V6
+capacity or consumption fields.
 
 ## Lambda roles and update
 

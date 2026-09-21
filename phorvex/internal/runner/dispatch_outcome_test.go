@@ -34,12 +34,13 @@ func (f *routedDispatchFake) PrepareRoutes(_ context.Context, target actuator.Te
 func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	fa := &routedDispatchFake{dispatchFakeActuator: dispatchFakeActuator{emit: true}, prep: actuator.RoutePreparation{PhoenixErr: errors.New("unrepresentable Phoenix selector")}}
 	m := &Manager{Actuator: fa, Log: logr.Discard()}
-	pol := model.Policy{Tenant: "t", EnabledActions: map[model.Action]bool{model.ActionRotate: true, model.ActionKVReset: true}}
+	pol := model.Policy{Tenant: "t", EnabledActions: map[model.Action]bool{model.ActionQuarantine: true, model.ActionKVReset: true}}
 	e := &policyEntry{namespace: "ns"}
 	e.spec.Selector.MatchLabels = map[string]string{"app": "demo"}
 	e.spec.Selector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "tier", Operator: metav1.LabelSelectorOpExists}}
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "uid-1", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, ServingDeclared: true}}}
 	refused := tracedSelectedDecision()
+	refused[0].Action = model.ActionQuarantine
 	if n := actuateWithBoundary(t, m, context.Background(), e, pol, refused, views); n != 0 || fa.calls != 0 || refused[0].Trace.DispatchReason != "route-preparation-failed" {
 		t.Fatalf("Phoenix refusal dispatched: n=%d calls=%d trace=%+v", n, fa.calls, refused[0].Trace)
 	}
@@ -60,7 +61,9 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 		t.Fatalf("native route suppressed by Phoenix refusal: n=%d calls=%d trace=%+v", n, fa.calls, native[0].Trace)
 	}
 	fa.calls = 0
-	mixed := append(tracedSelectedDecision(), native[0])
+	phoenix := tracedSelectedDecision()
+	phoenix[0].Action = model.ActionQuarantine
+	mixed := append(phoenix, native[0])
 	if n := actuateWithBoundary(t, m, context.Background(), e, pol, mixed, views); n != 1 || fa.calls != 1 || mixed[0].Trace.DispatchOutcome != model.DispatchNotAttempted || mixed[1].Trace.DispatchOutcome != model.DispatchEmitted {
 		t.Fatalf("mixed route isolation failed: n=%d calls=%d traces=%+v / %+v", n, fa.calls, mixed[0].Trace, mixed[1].Trace)
 	}
@@ -69,6 +72,7 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	fa.prep = actuator.RoutePreparation{}
 	fa.calls = 0
 	allowed := tracedSelectedDecision()
+	allowed[0].Action = model.ActionQuarantine
 	if n := actuateWithBoundary(t, m, context.Background(), e, pol, allowed, views); n != 1 || fa.calls != 1 {
 		t.Fatalf("fresh supported route not delivered: n=%d calls=%d trace=%+v", n, fa.calls, allowed[0].Trace)
 	}

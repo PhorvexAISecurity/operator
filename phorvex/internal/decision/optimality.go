@@ -153,6 +153,9 @@ func exactObjective(set actionset.ActionSet, B int, prov func(string) float64, l
 // declines to run: those runs are the evidence for the exactness claim, and evidence that only ever
 // existed in a report is evidence that rots. Production always goes through exactObjective.
 func exactObjectiveWithBudget(set actionset.ActionSet, B int, prov func(string) float64, lambda float64, workBudget float64) (float64, bool) {
+	if resources := newResourceState(set); !resources.baseFeasible() {
+		return 0, false
+	}
 	byAsset := map[string][]actionset.Candidate{}
 	var order []string
 	for _, c := range set.Candidates {
@@ -189,7 +192,9 @@ func exactObjectiveWithBudget(set actionset.ActionSet, B int, prov func(string) 
 		if budget > 0 {
 			for _, c := range byAsset[order[i]] {
 				np := append(append([]actionset.Candidate{}, picks...), c) // copy: no aliasing
-				rec(i+1, budget-1, np)
+				if resourceFeasible(set, np) {
+					rec(i+1, budget-1, np)
+				}
 			}
 		}
 	}
@@ -237,12 +242,19 @@ func greedyPicksOnSet(set actionset.ActionSet, B int, prov func(string) float64,
 	covered := map[string]bool{}
 	selectedAsset := map[string]bool{}
 	var picks []actionset.Candidate
+	resources := newResourceState(set)
+	if !resources.baseFeasible() {
+		return nil
+	}
 	for round := 0; round < B; round++ {
 		bestIdx := -1
 		bestGain := 0.0
 		for i := range set.Candidates {
 			c := set.Candidates[i]
 			if selectedAsset[c.Key] {
+				continue
+			}
+			if ok, _ := resources.canAdd(c); !ok {
 				continue
 			}
 			marginal := 0.0
@@ -261,6 +273,9 @@ func greedyPicksOnSet(set actionset.ActionSet, B int, prov func(string) float64,
 			break
 		}
 		c := set.Candidates[bestIdx]
+		if !resources.add(c) {
+			break
+		}
 		selectedAsset[c.Key] = true
 		for _, k := range c.CoverKeys {
 			covered[k] = true

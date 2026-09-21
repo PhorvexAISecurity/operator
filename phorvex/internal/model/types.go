@@ -38,7 +38,8 @@ type Action string
 const (
 	// ActionNoop leaves the pod untouched.
 	ActionNoop Action = "noop"
-	// ActionRotate maps to Phoenix's Delete (kill + clean respawn).
+	// ActionRotate requests a native, policy-bounded graceful Pod deletion. Pure
+	// Phoenix backends refuse it because their Delete strategy cannot carry the cap.
 	ActionRotate Action = "rotate"
 	// ActionQuarantine maps to Phoenix's Quarantine (deny-all + detach).
 	ActionQuarantine Action = "quarantine"
@@ -70,7 +71,9 @@ const (
 	IdentityRotateUnsupportedReason        = "identity-rotate declared-only: epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
 	// ActionRouteRotate re-keys `phorvex.ai/route-key` on the pod and restitches the
 	// selector of its explicitly declared `phorvex.ai/route-service` (advanced K8s;
-	// native-only). It returns Emitted=false when that deployment contract is absent.
+	// native-only). This changes endpoint membership while retaining the Pod UID/IP and
+	// stable Service UID/ClusterIP/DNS locator. It returns Emitted=false when that
+	// deployment contract is absent.
 	ActionRouteRotate Action = "route-rotate"
 	// ActionWarmSwap rotates WITHOUT the cold-load: provision a Ready warm replacement
 	// then retire (provision-before-retire). ColdLoadSec validation: PHORVEXSEC-87.
@@ -306,6 +309,69 @@ type RotationOwnership struct {
 	OwnerResourceVersion string
 }
 
+// ResourceScope is the stable identity of one hard selection resource. A
+// service-availability scope is deliberately bound to both the Service UID and
+// the single controller UID proven to own every endpoint in that scope. Names
+// remain descriptive only; recreated objects cannot inherit capacity.
+type ResourceScope struct {
+	Kind          string `json:"kind"`
+	Namespace     string `json:"namespace,omitempty"`
+	ServiceName   string `json:"serviceName,omitempty"`
+	ServiceUID    string `json:"serviceUID,omitempty"`
+	ControllerUID string `json:"controllerUID,omitempty"`
+}
+
+const (
+	ResourceMoveCount               = "move-count"
+	ResourceUnavailableReadyReplica = "unavailable-ready-replica"
+)
+
+// Key is an unambiguous in-memory identity. The NUL separator cannot appear in
+// Kubernetes names or UIDs and avoids the aliasing possible with joined paths.
+func (r ResourceScope) Key() string {
+	return r.Kind + "\x00" + r.Namespace + "\x00" + r.ServiceUID + "\x00" + r.ControllerUID
+}
+
+// Valid rejects name-only or partially bound resources. Move budgets are scoped
+// to one policy identity in one namespace; availability budgets additionally
+// require the immutable Service and controller UIDs.
+func (r ResourceScope) Valid() bool {
+	switch r.Kind {
+	case ResourceMoveCount:
+		return r.Namespace != "" && r.ControllerUID != "" && r.ServiceName == "" && r.ServiceUID == ""
+	case ResourceUnavailableReadyReplica:
+		return r.Namespace != "" && r.ServiceName != "" && r.ServiceUID != "" && r.ControllerUID != ""
+	default:
+		return false
+	}
+}
+
+// ResourceCapacity and ResourceConsumption use integer units. Objective cost is
+// intentionally absent: disruption preference and physical capacity are
+// different contracts.
+type ResourceCapacity struct {
+	Scope       ResourceScope `json:"scope"`
+	Limit       int           `json:"limit"`
+	Outstanding int           `json:"outstanding"`
+}
+
+type ResourceConsumption struct {
+	Scope ResourceScope `json:"scope"`
+	Units int           `json:"units"`
+}
+
+// ServiceAvailabilityObservation is the snapshot-time proof used to construct
+// unavailable-replica capacity. Complete is true only when the Service,
+// EndpointSlice inventory, target membership and a single exact controller UID
+// were all established. Dispatch re-reads the same objects before mutation.
+type ServiceAvailabilityObservation struct {
+	Scope        ResourceScope `json:"scope"`
+	ReadyMembers int           `json:"readyMembers"`
+	TargetReady  bool          `json:"targetReady"`
+	Complete     bool          `json:"complete"`
+	Reason       string        `json:"reason,omitempty"`
+}
+
 // OwnedValue preserves the distinction between a missing Kubernetes metadata
 // key and a present key whose value is empty. Protected serving operations use
 // these observations for optimistic selection freshness; concatenated legacy
@@ -317,6 +383,12 @@ type OwnedValue struct {
 
 type Pod struct {
 	RotationOwnership RotationOwnership
+	// ServiceAvailability contains one row for every Service whose selector
+	// matches this Pod. Empty or incomplete rows cannot authorize a
+	// replica-removing action against a positive availability floor.
+	ServiceAvailability       []ServiceAvailabilityObservation
+	ServiceAvailabilityKnown  bool
+	ServiceAvailabilityReason string
 
 	Namespace string
 	Name      string
@@ -335,6 +407,10 @@ type Pod struct {
 	ServiceAccount string
 	OwnerKind      string
 	OwnerName      string
+	// ControllerUID is the immutable UID from this Pod's single Kubernetes
+	// controller reference. It is independent of the human-readable owner name
+	// and is the identity used by shared availability scopes.
+	ControllerUID string
 	// WarmPoolConfigured is a conservative read-only snapshot witness for the
 	// scalar ReplicaSet warm-pool contract. Final dispatch rechecks live objects.
 	WarmPoolConfigured bool
@@ -677,6 +753,13 @@ type Policy struct {
 	QuarantineCapacityUsed       int
 	QuarantineCapacityLimit      int
 	QuarantineCapacityReason     string
+	// SharedResourceReservations is the durable outstanding consumption keyed by
+	// ResourceScope.Key(). Production fills it from the protected CAS ledger;
+	// offline callers may leave it nil to model no prior outstanding work.
+	SharedResourceReservations       map[string]int
+	SharedResourceCapacityConfigured bool
+	SharedResourceReservationsKnown  bool
+	SharedResourceReservationsReason string
 
 	TrustBoundarySince           time.Time
 	DecisionAssets               map[string]string
@@ -696,6 +779,10 @@ type Policy struct {
 	WeightSecrets                float64
 	BlastRadiusFromGraph         bool
 	MaxMovesPerTick              int
+	// MaxGracePeriodSeconds is the resolved selecting-policy cap for native
+	// graceful rotation. Zero denotes invalid/unavailable policy input and must be
+	// refused at the mutation boundary; it never means force deletion.
+	MaxGracePeriodSeconds        int64
 	TickInterval                 time.Duration
 	AntiOverRotationWindow       time.Duration
 	ProactiveFloor               time.Duration
@@ -718,9 +805,9 @@ type Policy struct {
 	EnabledActions        map[Action]bool
 	AssetWeightFromLabels func(labels map[string]string) float64
 
-	// Post-selection identity. Scoring never reads these fields; traces use them
-	// to name the exact policy/build/tick and the observed-outcome boundary uses
-	// the policy identity/generation as an admission epoch.
+	// Policy identity binds both post-selection native dispatch and observed-outcome
+	// admission to the exact current policy epoch; optimizer scoring ignores it.
+	// The remaining fields identify the decision build and tick in its trace.
 	PolicyName       string
 	PolicyUID        string
 	PolicyGeneration int64
@@ -728,6 +815,24 @@ type Policy struct {
 	BrainImage       string
 	GitSHA           string
 	TraceEnabled     bool
+}
+
+// GracefulTerminationReceipt binds an accepted native Pod DELETE to the exact
+// policy epoch, Pod identity and explicit graceful request sent to Kubernetes.
+// It is request evidence only: TerminationStatus remains "unconfirmed" until a
+// separate lifecycle observer proves the old process/UID absent.
+type GracefulTerminationReceipt struct {
+	PolicyNamespace             string `json:"policyNamespace"`
+	PolicyName                  string `json:"policyName"`
+	PolicyUID                   string `json:"policyUID"`
+	PolicyGeneration            int64  `json:"policyGeneration"`
+	PolicyGraceCapSeconds       int64  `json:"policyGraceCapSeconds"`
+	WorkloadGraceSeconds        int64  `json:"workloadGraceSeconds"`
+	WorkloadGraceExplicit       bool   `json:"workloadGraceExplicit"`
+	EffectiveGracePeriodSeconds int64  `json:"effectiveGracePeriodSeconds"`
+	PodUID                      string `json:"podUID"`
+	PodResourceVersion          string `json:"podResourceVersion"`
+	TerminationStatus           string `json:"terminationStatus"`
 }
 
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
@@ -819,6 +924,9 @@ type Decision struct {
 	PersistenceLearning *PersistenceLearningStatus // observed-label source/disposition; never inferred from this decision's PHold
 	ProactiveRate       float64                    // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
 	Attribution         []AttributionTerm          // SHAP-style decomposition of the move's value
+	// Resources is the selected candidate's exact hard-capacity consumption.
+	// It is empty for noop and legacy engines.
+	Resources []ResourceConsumption
 
 	// --- P-CONTEXT predictive horizon (additive, audit-visible). ---
 	PreemptMargin         float64 // P(stage not yet transitioned by move-landing) [0,1]
@@ -832,6 +940,10 @@ type Decision struct {
 	ObjectsTouched []string // cluster objects created/mutated/deleted
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
+	// GracefulTermination is present only after Kubernetes acknowledged the
+	// exact native rotate DELETE. It records the requested bound while leaving
+	// physical termination explicitly unconfirmed.
+	GracefulTermination *GracefulTerminationReceipt
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately

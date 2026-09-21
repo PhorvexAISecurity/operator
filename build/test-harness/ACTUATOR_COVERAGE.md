@@ -97,18 +97,18 @@ Each row below is asserted by `tools/covermap/covermap_test.go`
 (`TestCurrentCoverFactsHoldInEveryFixture`, `TestVectorSteeringIsMeasuredExactly`) against
 the producers, so this table cannot silently drift.
 
-| Action | Cover at d296799 | Condition and contract |
+| Action | Cover at current source | Condition and contract |
 |---|---|---|
 | `rotate` | `podIdentity`, `inMemory`, `session` | every fixture, both profiles |
 | `quarantine` | `networkIdentity`, one `lateralEdge` per neighbour | every fixture; edges only when the graph supplies neighbours |
 | `identity-rotate` | **none** | `profile.go:66`: the handler writes an `identity-epoch` label only (`handlers_k8s.go:223`); UID, SA token, IP and EndpointSlice membership are unchanged, so no fact is invalidated. Excluded `no-cover` before scoring. Removed in `992a52c` (2026-08-09, PHVX-9e). |
-| `route-rotate` | `networkIdentity` | `profile.go:97`: granted again since `ca50e82` (2026-08-26, PHORVEXSEC-129) because the handler now re-keys `phorvex.ai/route-key` **and** restitches the declared `phorvex.ai/route-service` selector, compensating the pod label if the Service write fails (`handlers_k8s.go:267`). Without the annotation the handler returns `Emitted=false` and nothing happens; with exactly one Ready backend it refuses. The recon grant itself is unconditional — the contract is enforced at dispatch, not at fact emission. The register's "route-rotate grant removed" line is stale. |
+| `route-rotate` | — | The handler re-keys `phorvex.ai/route-key` and restitches the declared Service selector, but retains the Pod UID/IP and stable Service UID/ClusterIP/DNS locator. Selector membership is not an invalidation of either locator, so this supported action is an explicit `no-cover` exclusion. Without the annotation the handler returns `Emitted=false`; with exactly one Ready backend it refuses. |
 | `kv-reset` | `session` | only when ingestion produced `Pod.ServingEndpointReady`: Ready plus PodIP plus GPU, model-id or serving-port indication. This is structural eligibility, not proof of a flush effect. |
 | `kv-migrate-invalidate` | `session` | uses the same `ServingEndpointReady` prerequisite and same session key as kv-reset, **not** `endpointPath`. |
 | `endpoint-rotate` | **none** | `endpointPath` is emitted for served models but audit-only (M-35): restitching a selector does not prove the learned locator is unusable. |
-| `model-shard-replace` | **none** | `modelFingerprint` audit-only (M-37): no loaded-identity/effect witness. |
+| `model-shard-replace` | `podIdentity`, `inMemory`, `session` | qualified scalar ReplicaSet pool only: ingestion must verify the owner/template, role-routed Service and non-parallel `model-shard` family. Capability still requires a matching Ready shadow and the unchanged two-schedulable-GPU-node floor. The grant predicts exact old-process retirement through the shared `warmCutover` producer; `modelFingerprint`, stable route, GPU placement and durable credentials remain audit-only. |
 | `mig-rebind` | `gpuContentionChannel` | only when `Pod.MIGDevice != ""` (`ucw.go:131`); never `gpuColocation` — repartitioning does not move the pod. Capability also needs node, GPU id and target profile. |
-| `warm-swap` | **none** | `ucw.go:125` (PHVX-26a): `rewarmShadow` expresses no anti-affinity, so relocation is not guaranteed and neither GPU fact may be granted. Unselectable by the optimizer on every fixture. |
+| `warm-swap` | `podIdentity`, `inMemory`, `session` | qualified scalar ReplicaSet pool only: ingestion must verify the owner/template, role-routed Service and `swap-group` family. This is old-process retirement credit, not GPU relocation: both GPU facts remain outside the grant. |
 | `adapter-rotate` | `adapterIntegrity` | only while `Pod.SuspectAdapter` is set (`ucw.go:175`); ingest populates it from the `phorvex.ai/lora-adapter` annotation only on a pod labelled `phorvex.ai/lora-enabled=true` (`ingest/kube.go`). Weight `base·urg·3`. Marker steerability is M-95 (open). |
 | `request-drain` | `inflightRequests` | served model (`Pod.HasGPU \|\| ModelID`); capability needs a Service selecting on `phorvex.ai/serving`. |
 | `guardrail-rotate` | `guardrailBypass` | served model; capability needs `phorvex.ai/guardrail-tier=true` and ≥2 variants. |
@@ -188,14 +188,15 @@ under test, so their pins are unknown. Summary:
 | Trial | Date | Observed then | Why the selection path is not current source |
 |---|---|---|---|
 | T10 identity-rotate | 2026-08-09 | selected and enacted; SA token still valid, UID unchanged | selection required the `podIdentity` grant removed in `992a52c` (same day). At d296799 identity-rotate is coverless in both profiles and excluded `no-cover` before scoring. The effect finding remains a correct description of the handler. |
-| T11 route-rotate | 2026-08-09 | selected; pod relabelled, Service/EndpointSlice untouched | that handler was replaced in `ca50e82` (2026-08-26): it now restitches the declared Service selector or returns `Emitted=false`. The cover was removed in `992a52c` and restored in `ca50e82`. The T11 effect finding no longer describes the code; the new path has **not** been live-verified by this fix. |
-| T16 warm-swap | 2026-08-10 | selected with cover `gpuColocation`+`sideChannel` (cov 2.18); enactment blocked, no warm pool | both grants were removed in `5f0eea8` (2026-08-16, PHVX-26a) and `sideChannel` was renamed `gpuContentionChannel` in `caaff6c`. At d296799 warm-swap is coverless and cannot be selected. |
-| T46 warm-swap, real warm pool | 2026-08-11 | selected in 4 s (cov 2.61); shadow promoted, in-flight drained, leader retired; F18 surfaced | same as T16: the selection cannot recur at current source. The observed effect and F18 stand as dated observations of that build and topology, not as current-source evidence. |
+| T11 route-rotate | 2026-08-09 | selected; pod relabelled, Service/EndpointSlice untouched | that handler was replaced in `ca50e82` (2026-08-26): it now restitches the declared Service selector or returns `Emitted=false`. The T11 effect finding no longer describes the code. M44 withholds `networkIdentity` credit because the current path still retains both Pod and stable Service locators; its bounded route behavior remains distinct from recon invalidation. |
+| T16 warm-swap | 2026-08-10 | selected with cover `gpuColocation`+`sideChannel` (cov 2.18); enactment blocked, no warm pool | those GPU grants were removed in `5f0eea8` and `sideChannel` was renamed `gpuContentionChannel`; current source can select a verified scalar pool only for its separate old-process retirement facts. The blocked run does not satisfy that witness. |
+| T46 warm-swap, real warm pool | 2026-08-11 | selected in 4 s (cov 2.61); shadow promoted, in-flight drained, leader retired; F18 surfaced | the old GPU-credit selection is not reproducible. Current source can predict only qualified old-process retirement, and the dated effect/F18 observation does not establish the current owner, route, identity and capability checks. |
 
 ## 6. Open obligations this guide does not resolve
 
-- **M-42** common session prerequisite (§4.1). **M-35** endpointPath audit-only. **M-43**
-  pod-deleting AI moves under-credited. **M-37** model-shard-replace cover withheld.
+- **M-42** common session prerequisite (§4.1). **M-35** endpointPath audit-only. **M-37**
+  loaded-model fingerprint invalidation remains withheld from model-shard-replace; M-43 grants only
+  the qualified scalar producer's old-process retirement facts.
 - **M-94** trust boundary: source enforcement is in; live acceptance of the deployed
   composition remains open (`workflow/fixes/T2-M123/AUTHORIZATION.md`: Tier 1 live
   acceptance and PR #187 are explicitly open).

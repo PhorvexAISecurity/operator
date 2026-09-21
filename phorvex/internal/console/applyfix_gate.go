@@ -31,6 +31,10 @@ func canonicalGateFleet() []*model.WorkloadView {
 			BlastRadius:        0.6,
 			Neighbors:          []model.NeighborRef{{Key: "gate/crown1", Value: 5.0}},
 			ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: exposure},
+			// The safety fixture models an observed idle workload. Preserve the
+			// distinction between a measured zero and missing request telemetry:
+			// M156 correctly treats the latter as a conservative unknown-load regime.
+			Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "canonical-safety-fixture")},
 		}
 		if secrets {
 			v.Pod.MountedSecrets = []string{"creds"}

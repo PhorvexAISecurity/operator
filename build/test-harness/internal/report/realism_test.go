@@ -12,8 +12,9 @@ func TestMitreMatrixSeparatesDeclaredFromExecutable(t *testing.T) {
 	marker := metadataScenario{meta: core.ScenarioMeta{Name: "marker", AttackTechniqueIDs: []string{"T1610"}, Realism: core.RealismMarkerSimulation}}
 	executable := metadataScenario{meta: core.ScenarioMeta{Name: "executable", AttackTechniqueIDs: []string{"T1610"}, ExercisedTechniqueIDs: []string{"T1610"}, Realism: core.RealismExecutable}}
 	legacy := metadataScenario{meta: core.ScenarioMeta{Name: "legacy", AttackTechniqueIDs: []string{"T1190"}}}
+	unknown := metadataScenario{meta: core.ScenarioMeta{Name: "unknown", AttackTechniqueIDs: []string{"T1190"}, ExercisedTechniqueIDs: []string{"T1190"}, Realism: core.ScenarioRealism("future-unknown")}}
 	benign := metadataScenario{meta: core.ScenarioMeta{Name: "benign", BenignControl: true, AttackTechniqueIDs: []string{"T1499"}, ExercisedTechniqueIDs: []string{"T1499"}, Realism: core.RealismExecutable}}
-	got := RenderMitreMatrix([]core.Scenario{marker, executable, legacy, benign})
+	got := RenderMitreMatrix([]core.Scenario{marker, executable, legacy, unknown, benign})
 	parts := strings.Split(got, "## Executed mechanism inventory")
 	if len(parts) != 2 {
 		t.Fatalf("missing split inventories:\n%s", got)
@@ -21,10 +22,10 @@ func TestMitreMatrixSeparatesDeclaredFromExecutable(t *testing.T) {
 	if !strings.Contains(parts[0], "marker") || !strings.Contains(parts[0], "legacy") {
 		t.Fatalf("declared mappings missing:\n%s", parts[0])
 	}
-	if strings.Contains(parts[1], "marker") || strings.Contains(parts[1], "legacy") || !strings.Contains(parts[1], "executable") {
+	if strings.Contains(parts[1], "marker") || strings.Contains(parts[1], "legacy") || strings.Contains(parts[1], "unknown") || !strings.Contains(parts[1], "executable") {
 		t.Fatalf("unsupported exercise claim leaked:\n%s", parts[1])
 	}
-	if strings.Contains(got, "T1499") || !strings.Contains(got, "across 3 attack scenarios. 1 benign functional-effect control(s) are excluded") {
+	if strings.Contains(got, "T1499") || !strings.Contains(got, "across 4 attack scenarios. 1 benign functional-effect control(s) are excluded") {
 		t.Fatalf("benign control entered coverage inventory:\n%s", got)
 	}
 	if !strings.Contains(got, "Neither table proves a successful live defense") {
@@ -40,13 +41,14 @@ func TestMarkerSummariesAreSeparatedFromRealPercentages(t *testing.T) {
 }
 
 func TestBenignControlsAreSeparatedFromAttackAggregates(t *testing.T) {
-	attack, marker, benign := splitControlSummaries([]ArmSummary{
+	attack, unassessed, marker, benign := splitControlSummaries([]ArmSummary{
 		{Scenario: "attack", Realism: core.RealismExecutable},
+		{Scenario: "unassessed", Realism: core.RealismUnassessed},
 		{Scenario: "marker", Realism: core.RealismMarkerSimulation},
 		{Scenario: "benign", Realism: core.RealismExecutable, BenignControl: true},
 	})
-	if len(attack) != 1 || attack[0].Scenario != "attack" || len(marker) != 1 || marker[0].Scenario != "marker" || len(benign) != 1 || benign[0].Scenario != "benign" {
-		t.Fatalf("attack=%v marker=%v benign=%v", attack, marker, benign)
+	if len(attack) != 1 || attack[0].Scenario != "attack" || len(unassessed) != 1 || unassessed[0].Scenario != "unassessed" || len(marker) != 1 || marker[0].Scenario != "marker" || len(benign) != 1 || benign[0].Scenario != "benign" {
+		t.Fatalf("attack=%v unassessed=%v marker=%v benign=%v", attack, unassessed, marker, benign)
 	}
 }
 
@@ -59,25 +61,28 @@ func TestRunnerReaderRowsAreOrderIndependentAtReportBoundaries(t *testing.T) {
 	for _, rows := range [][]core.Metric{{unassessed, marker}, {marker, unassessed}} {
 		read := replayThroughReader(t, rows...)
 		ordinary, markers := splitMarkerSummaries(Aggregate(read, 0.95))
-		if len(ordinary) != 1 || ordinary[0].Trials != 1 || len(markers) != 1 || markers[0].Trials != 1 {
+		if len(ordinary) != 1 || ordinary[0].Trials != 0 || ordinary[0].Validity.MechanismExcluded != 1 || len(markers) != 1 || markers[0].Trials != 0 || markers[0].Validity.RealismExcluded != 1 {
 			t.Fatalf("mixed realism rows changed groups by order: ordinary=%+v marker=%+v", ordinary, markers)
 		}
 		economics := recomputeEconomics(read, DollarInputs{BaselineDefender: "d-v161-nomtd"})
-		var excluded, scored int
+		var markerExcluded, mechanismExcluded, scored int
 		for _, row := range economics {
 			if row.Validity.RealismExcluded == 1 && !row.Economics {
-				excluded++
+				markerExcluded++
+			}
+			if row.Validity.MechanismExcluded == 1 && !row.Economics {
+				mechanismExcluded++
 			}
 			if row.Economics {
 				scored++
 			}
 		}
-		if excluded != 1 || scored != 1 {
-			t.Fatalf("economics boundary leaked marker: %+v", economics)
+		if markerExcluded != 1 || mechanismExcluded != 1 || scored != 0 {
+			t.Fatalf("economics boundary leaked marker or unassessed row: %+v", economics)
 		}
 		rendered := RenderDollars(read, DollarInputs{BaselineDefender: "d-v161-nomtd"}, 0.95)
-		if !strings.Contains(rendered, "realismExcluded=1") || !strings.Contains(rendered, "marker simulation excluded") {
-			t.Fatalf("excluded marker not disclosed:\n%s", rendered)
+		if !strings.Contains(rendered, "realismExcluded=1") || !strings.Contains(rendered, "marker simulation excluded") || !strings.Contains(rendered, "mechanismExcluded=1") || !strings.Contains(rendered, "unassessed mechanism excluded") {
+			t.Fatalf("excluded marker or unassessed mechanism not disclosed:\n%s", rendered)
 		}
 	}
 }
@@ -93,9 +98,9 @@ func TestBenignControlBoundaryIsOrderIndependentAndVisible(t *testing.T) {
 
 	for _, rows := range [][]core.Metric{{attack, benign}, {benign, attack}} {
 		read := replayThroughReader(t, rows...)
-		ordinary, markers, controls := splitControlSummaries(Aggregate(read, 0.95))
-		if len(ordinary) != 1 || ordinary[0].Scenario != "attack" || len(markers) != 0 || len(controls) != 1 || controls[0].Scenario != "benign" || controls[0].Trials != 1 {
-			t.Fatalf("aggregate boundary changed by order: attack=%+v marker=%+v benign=%+v", ordinary, markers, controls)
+		ordinary, unassessed, markers, controls := splitControlSummaries(Aggregate(read, 0.95))
+		if len(ordinary) != 1 || ordinary[0].Scenario != "attack" || len(unassessed) != 0 || len(markers) != 0 || len(controls) != 1 || controls[0].Scenario != "benign" || controls[0].Trials != 0 {
+			t.Fatalf("aggregate boundary changed by order: attack=%+v unassessed=%+v marker=%+v benign=%+v", ordinary, unassessed, markers, controls)
 		}
 		filtered := ExcludeNonAttackControls(read)
 		if len(filtered) != 1 || filtered[0].Scenario != "attack" {

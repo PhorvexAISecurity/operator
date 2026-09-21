@@ -124,6 +124,7 @@ type Alternative struct {
 	Coverage, Marginal, Cost, Gain float64
 	CoverKeys                      []string
 	Attribution                    []model.AttributionTerm
+	Resources                      []model.ResourceConsumption
 	CounterfactualNote             string
 }
 
@@ -161,9 +162,14 @@ func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Ac
 	if economics.Version == "" {
 		economics = model.EconomicsMetadata{Version: model.EconomicsLegacyRuntimeLambdaV1,
 			LambdaRuntimeLegacy:      model.OptionalFloat{Present: true, Value: c.lambda},
-			EffectiveCostCoefficient: c.lambda, CoefficientSource: model.CostCoefficientSourceLambda}
+			EffectiveCostCoefficient: c.lambda, CoefficientSource: model.CostCoefficientSourceLambda,
+			FlowCostSemanticsVersion: model.FlowCostSemanticsConservativeRegimeV1}
 	}
-	idx, marginal, _ := chooseRound(filtered, c.states, covered, selected, c.attack, economics.EffectiveCostCoefficient, prov, map[string]float64{})
+	resources, ok := resourcesForPicks(c.set, c.selectedCandidatesExcept(target))
+	if !ok {
+		return Alternative{}, false
+	}
+	idx, marginal, _ := chooseRound(filtered, c.states, covered, selected, c.attack, economics.EffectiveCostCoefficient, prov, map[string]float64{}, resources)
 	if idx < 0 {
 		return Alternative{}, false
 	}
@@ -178,7 +184,8 @@ func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Ac
 	}
 	return Alternative{Action: cand.Action, Coverage: coverage, Marginal: marginal, Cost: cand.ECost,
 		Gain: objectiveGain(marginal, prov(target), economics.EffectiveCostCoefficient, cand.ECost), CoverKeys: append([]string(nil), cand.CoverKeys...),
-		Attribution: attributionForEconomics(cand, c.set.FactWeights, economics), CounterfactualNote: note}, true
+		Attribution: attributionForEconomics(cand, c.set.FactWeights, economics),
+		Resources:   append([]model.ResourceConsumption(nil), cand.Resources...), CounterfactualNote: note}, true
 }
 
 func (c *alternativeContext) currentAction(target string) model.Action {
@@ -191,6 +198,26 @@ func (c *alternativeContext) currentAction(target string) model.Action {
 	return c.selected[target]
 }
 
+func (c *alternativeContext) selectedCandidatesExcept(target string) []actionset.Candidate {
+	if c == nil {
+		return nil
+	}
+	out := make([]actionset.Candidate, 0, len(c.selected))
+	for key := range c.selected {
+		if key == target {
+			continue
+		}
+		action := c.currentAction(key)
+		for _, candidate := range c.set.Candidates {
+			if candidate.Key == key && candidate.Action == action {
+				out = append(out, candidate)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // ReserveAlternative updates only this tick's partition-slot accounting. It
 // never rewrites original scores, dual learning, or the first attempt's audit.
 func (e *CoverageEngine) ReserveAlternative(owner, target string, failed, chosen model.Action) bool {
@@ -199,13 +226,19 @@ func (e *CoverageEngine) ReserveAlternative(owner, target string, failed, chosen
 		return false
 	}
 	valid := false
+	var replacement actionset.Candidate
 	for _, cand := range c.set.Candidates {
 		if cand.Key == target && cand.Action == chosen {
 			valid = true
+			replacement = cand
 			break
 		}
 	}
 	if !valid {
+		return false
+	}
+	resources, ok := resourcesForPicks(c.set, c.selectedCandidatesExcept(target))
+	if !ok || !resources.add(replacement) {
 		return false
 	}
 	if c.exchanged == nil {
@@ -851,13 +884,17 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	evaluatedMarginal := map[string]float64{}
 	prioritySelections := []string{}
 	B := pol.MaxMovesPerTick
+	resources := newResourceState(set)
 	for round := 0; round < B; round++ {
 		lastRound = round + 1
-		bestIdx, bestMarginal, bestActive := chooseRound(set, existential, covered, selectedAsset, attackBackedKey, costCoefficient, prov, evaluatedMarginal)
+		bestIdx, bestMarginal, bestActive := chooseRound(set, existential, covered, selectedAsset, attackBackedKey, costCoefficient, prov, evaluatedMarginal, resources)
 		if bestIdx < 0 {
 			break
 		}
 		c := set.Candidates[bestIdx]
+		if !resources.add(c) {
+			break
+		}
 		if bestActive {
 			prioritySelections = append(prioritySelections, traceCandidateKey(c.Key, c.Action))
 		}
@@ -1049,6 +1086,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			PersistenceLearning:   e.persistenceStatus(pol.Owner()),
 			ProactiveRate:         rate,
 			Attribution:           attribution,
+			Resources:             nil,
 			PreemptMargin:         ac.assess.PreemptMargin,
 			ProjectedNextStageSec: ac.assess.ProjectedNextStageSec,
 			AIClassified:          ac.assess.AIClassified,
@@ -1068,6 +1106,9 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 				EventEvidence:         traceOptional(true, ac.assess.EventEvidence),
 				Provenance:            traceOptional(true, prov(key)),
 			},
+		}
+		if chosen != nil && selected {
+			decision.Resources = append([]model.ResourceConsumption(nil), chosen.Resources...)
 		}
 		finishExistential(existential[key], set, key, selected, B-len(selectedAsset), prioritySelections)
 		decision.Existential = existential[key]
@@ -1094,6 +1135,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			}
 			decision.Trace = e.buildDecisionTrace(v, pol, now, set, ac, lambda, economics, objectiveDemand, lambdaDemand,
 				len(selectedAsset), selectedAsset[key], selectedAction[key], selectedRound[key],
+				selectedAction,
 				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov,
 				tcost, evaluatedMarginal, dualUpdate, coveredRound, evaluationRound, mode)
 		}
@@ -1129,6 +1171,16 @@ func traceOptionalPtr(present bool, value float64) *model.OptionalFloat {
 		return nil
 	}
 	out := model.OptionalFloat{Present: true, Value: value}
+	return &out
+}
+
+func traceOptionalBoolPtr(value bool) *model.OptionalBool {
+	out := model.OptionalBool{Present: true, Value: value}
+	return &out
+}
+
+func traceOptionalFloatPtr(present bool, value float64) *model.OptionalFloat {
+	out := model.OptionalFloat{Present: present, Value: value}
 	return &out
 }
 
@@ -1276,6 +1328,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	selected bool,
 	selectedAction model.Action,
 	selectionRound int,
+	selectedActions map[string]model.Action,
 	attackBacked bool,
 	infeasibleWhy string,
 	primed bool,
@@ -1296,7 +1349,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 	}
 	trace := &model.DecisionTraceV2{
-		SchemaVersion:             model.DecisionTraceSchemaV4,
+		SchemaVersion:             model.DecisionTraceSchemaV6,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
@@ -1334,12 +1387,40 @@ func (e *CoverageEngine) buildDecisionTrace(
 		FlowWeight:                pol.FlowDisruption,
 		CFlowUnitStatus:           model.CFlowUnitDimensionlessDisruptionLoss,
 		CostRepresentationVersion: model.CostRepresentationWeightedDimensionlessV1,
+		FlowCostSemanticsVersion:  model.FlowCostSemanticsConservativeRegimeV1,
 		DualUpdate:                traceDualUpdate(dualUpdate),
 		CostCeiling:               set.CostCeiling,
 		CostModelVersion:          tcost.Name(),
 		EvaluationRound:           evaluationRound,
 		SelectedAction:            string(model.ActionNoop),
 		TieBreakReason:            "notApplicable",
+	}
+	batchUsage := map[string]int{}
+	relevantResources := map[string]bool{}
+	for _, candidate := range set.Candidates {
+		if candidate.Key == assetKey {
+			for _, demand := range candidate.Resources {
+				relevantResources[demand.Scope.Key()] = true
+			}
+		}
+		if selectedActions[candidate.Key] != candidate.Action {
+			continue
+		}
+		for _, demand := range candidate.Resources {
+			batchUsage[demand.Scope.Key()] += demand.Units
+		}
+	}
+	for _, capacity := range set.Resources {
+		// Every row retains the global integer move budget. Service scopes are
+		// included only when this asset's candidates consume them, avoiding a
+		// full tenant Service inventory in every decision record.
+		if capacity.Scope.Kind != model.ResourceMoveCount && !relevantResources[capacity.Scope.Key()] {
+			continue
+		}
+		trace.Resources = append(trace.Resources, model.DecisionResourceCapacityV6{
+			Scope: capacity.Scope, Limit: capacity.Limit, Outstanding: capacity.Outstanding,
+			Selected: batchUsage[capacity.Scope.Key()],
+		})
 	}
 
 	exposure, exposurePresent := v.ExposureByVariable[model.VarPodIdentity]
@@ -1468,11 +1549,14 @@ func (e *CoverageEngine) buildDecisionTrace(
 		conformalQuantile, quantileOK := tcost.ConformalQuantile()
 		conformalCalibrated, calibratedOK := tcost.ConformalCalibrated()
 		selectionReason := "not_selected_by_current_greedy_ranking"
+		resourceBlocked := blockingResource(set, candidate, selectedActions)
 		switch {
 		case candidateSelected:
 			selectionReason = "selected_strict_positive_gain"
 		case !attackBacked:
 			selectionReason = "reactive_only_no_direct_foothold"
+		case resourceBlocked != "":
+			selectionReason = "resource_capacity_exhausted:" + resourceBlocked
 		case selected:
 			selectionReason = "partition_other_action_selected"
 		case !wasEvaluated && pol.MaxMovesPerTick <= 0:
@@ -1490,6 +1574,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 			CoverKeys:    append([]string(nil), candidate.CoverKeys...),
 			TieBreakRank: tieBreakRank,
 			RBACUnknown:  candidate.RBACUnknown, // T1-E fail-open flag → trace
+			Resources:    append([]model.ResourceConsumption(nil), candidate.Resources...),
 
 			GrossFullValue:              traceOptional(true, grossFull),
 			MarginalCoverage:            traceOptional(wasEvaluated, marginal),
@@ -1509,9 +1594,18 @@ func (e *CoverageEngine) buildDecisionTrace(
 			SLOGateResult:      model.OptionalBool{Present: true, Value: true},
 			GPUEnvelopeApplied: model.OptionalBool{Present: true, Value: evaluation.GPUEnvelopeApplied},
 		}
+		if candidate.Action == model.ActionRotate || candidate.Action == model.ActionMIGRebind {
+			row.FlowPredictedMean = traceOptionalFloatPtr(true, evaluation.FlowPredictedMean)
+			row.FlowConservativeFloor = traceOptionalFloatPtr(evaluation.FlowFloorApplied, evaluation.FlowConservativeFloor)
+			row.FlowRegime = string(evaluation.FlowRegime)
+			row.FlowUncertaintyBound = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintyBound)
+			row.FlowUncertaintySlack = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintySlack)
+			row.ConformalWindowReady = traceOptionalBoolPtr(evaluation.ConformalWindowReady)
+			row.ConformalRegimeApplicable = traceOptionalBoolPtr(evaluation.ConformalRegimeApplicable)
+		}
 		if candidate.Action == model.ActionRotate {
 			row.ConformalQuantile = traceOptional(quantileOK, conformalQuantile)
-			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated}
+			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated && evaluation.ConformalRegimeApplicable}
 			row.GPUEnvelopeSlack = traceOptional(evaluation.GPUEnvelopeApplied, evaluation.GPUEnvelopeSlack)
 		}
 		if candidateSelected {
@@ -1556,11 +1650,20 @@ func (e *CoverageEngine) buildDecisionTrace(
 			// rotate rows carry the same CHi reconstruction terms as candidates.
 			candidate.SLOGateResult = model.OptionalBool{Present: true, Value: false}
 			candidate.GPUEnvelopeApplied = model.OptionalBool{Present: true, Value: evaluation.GPUEnvelopeApplied}
+			if exclusion.Action == model.ActionRotate || exclusion.Action == model.ActionMIGRebind {
+				candidate.FlowPredictedMean = traceOptionalFloatPtr(true, evaluation.FlowPredictedMean)
+				candidate.FlowConservativeFloor = traceOptionalFloatPtr(evaluation.FlowFloorApplied, evaluation.FlowConservativeFloor)
+				candidate.FlowRegime = string(evaluation.FlowRegime)
+				candidate.FlowUncertaintyBound = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintyBound)
+				candidate.FlowUncertaintySlack = traceOptionalFloatPtr(evaluation.FlowUncertaintyApplied, evaluation.FlowUncertaintySlack)
+				candidate.ConformalWindowReady = traceOptionalBoolPtr(evaluation.ConformalWindowReady)
+				candidate.ConformalRegimeApplicable = traceOptionalBoolPtr(evaluation.ConformalRegimeApplicable)
+			}
 			if exclusion.Action == model.ActionRotate {
 				q, qOK := tcost.ConformalQuantile()
 				cal, calOK := tcost.ConformalCalibrated()
 				candidate.ConformalQuantile = traceOptional(qOK, q)
-				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal}
+				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal && evaluation.ConformalRegimeApplicable}
 				candidate.GPUEnvelopeSlack = traceOptional(evaluation.GPUEnvelopeApplied, evaluation.GPUEnvelopeSlack)
 			}
 		}

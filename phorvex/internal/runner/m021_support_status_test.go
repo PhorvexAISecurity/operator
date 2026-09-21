@@ -149,8 +149,8 @@ func TestMixedPolicyCannotClaimAllSupported(t *testing.T) {
 	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
 	views := []*model.WorkloadView{{Pod: pod}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{
-		model.ActionRotate:  true, // phoenix enacts this
-		model.ActionKVReset: true, // phoenix rejects this
+		model.ActionQuarantine: true, // phoenix enacts this
+		model.ActionKVReset:    true, // phoenix rejects this
 	}}
 	rep := capabilityGaps(pol, views, backendWitness([]model.Pod{pod}, backend))
 	if len(rep.gaps) != 1 || rep.gaps[0].action != model.ActionKVReset {
@@ -166,7 +166,7 @@ func TestMixedPolicyCannotClaimAllSupported(t *testing.T) {
 	if got.status != metav1.ConditionFalse {
 		t.Fatalf("a mixed policy with one rejected action must not claim all-supported, got %s (%s)", got.status, got.message)
 	}
-	if strings.Contains(got.message, "rotate unsupported") {
+	if strings.Contains(got.message, "quarantine unsupported") {
 		t.Fatalf("the SUPPORTED action must not be reported as a gap, got %q", got.message)
 	}
 }
@@ -205,15 +205,18 @@ func TestSupportedActionsRemainSupported(t *testing.T) {
 		!strings.Contains(got.message, "insecure compatibility") || !strings.Contains(got.message, "legacy-plaintext") {
 		t.Fatalf("no-gap legacy status must stay green and disclose insecurity, got %s / %q", got.status, got.message)
 	}
-	// The default policy (nil EnabledActions = rotate+quarantine) stays green on BOTH
-	// backends: M-21 changes no default and flips nothing that used to work.
-	for _, b := range []actuator.Actuator{phoenixBackend(), nativeBackend()} {
-		def := capabilityGaps(model.Policy{}, views, backendWitness([]model.Pod{pod}, b))
-		if len(def.gaps) != 0 {
-			t.Fatalf("%s: the DEFAULT action set must remain fully supported, got %+v", b.Name(), def.gaps)
+	// The default pair remains rotate+quarantine. Native supports both; pure
+	// Phoenix visibly refuses bounded rotate rather than ignoring its policy cap.
+	for _, tc := range []struct {
+		backend  actuator.Actuator
+		wantGaps int
+	}{{phoenixBackend(), 1}, {nativeBackend(), 0}} {
+		def := capabilityGaps(model.Policy{}, views, backendWitness([]model.Pod{pod}, tc.backend))
+		if len(def.gaps) != tc.wantGaps || (tc.wantGaps == 1 && def.gaps[0].action != model.ActionRotate) {
+			t.Fatalf("%s: default action gaps=%+v want rotate-only=%t", tc.backend.Name(), def.gaps, tc.wantGaps == 1)
 		}
 		if def.enabled != 2 {
-			t.Fatalf("%s: a nil EnabledActions map must evaluate the documented default pair, got %d", b.Name(), def.enabled)
+			t.Fatalf("%s: a nil EnabledActions map must evaluate the documented default pair, got %d", tc.backend.Name(), def.enabled)
 		}
 	}
 }

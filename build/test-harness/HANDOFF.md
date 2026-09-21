@@ -44,7 +44,7 @@ Live engine = **`CoverageEngine` ("p1-coverage")** in `phorvex/internal/decision
 | `podIdentity` | rotate, **identity-rotate** |
 | `inMemory` (implant/secrets) | **rotate only** |
 | `session` (KV-cache / agent session) | rotate; **kv-reset** (GPU/stateful pods only) |
-| `networkIdentity` | quarantine, **route-rotate** |
+| `networkIdentity` | **quarantine only**; route selector membership retains the Pod and stable Service locators |
 | `lateralEdge` (per reachable neighbor) | **quarantine only** |
 | `modelFingerprint` | model-shard-replace |
 | `endpointPath` | endpoint-rotate, kv-migrate-invalidate |

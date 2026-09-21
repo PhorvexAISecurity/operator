@@ -198,18 +198,16 @@ func TestPhoenixSupportMatchesDispatch(t *testing.T) {
 }
 
 // TestPhoenixAcceptanceStaysQualified: mapped acceptance must NOT be reported as proof of
-// execution. Rotate and quarantine remain supported (the positive controls) but keep the
-// "unverified" qualification, so nobody can read the support flag as effect confirmation.
+// execution. Quarantine remains supported but keeps the "unverified" qualification, while
+// bounded rotate is explicitly refused because Phoenix cannot carry its policy cap.
 func TestPhoenixAcceptanceStaysQualified(t *testing.T) {
 	pa := NewPhoenixActuator(fake.NewClientBuilder().WithScheme(newScheme(t)).Build())
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
-		ok, why := pa.SupportsAction(t.Context(), a, Target{})
-		if !ok {
-			t.Fatalf("control: phoenix must still support %s (%s)", a, why)
-		}
-		if !strings.HasPrefix(why, "unverified: ") {
-			t.Fatalf("phoenix acceptance of %s must stay qualified as unverified, got %q", a, why)
-		}
+	ok, why := pa.SupportsAction(t.Context(), model.ActionQuarantine, Target{})
+	if !ok || !strings.HasPrefix(why, "unverified: ") {
+		t.Fatalf("phoenix quarantine support=(%v,%q), want qualified acceptance", ok, why)
+	}
+	if ok, why = pa.SupportsAction(t.Context(), model.ActionRotate, Target{}); ok || !strings.Contains(why, detailGraceCapUnsupported) {
+		t.Fatalf("phoenix rotate support=(%v,%q), want explicit grace-cap refusal", ok, why)
 	}
 }
 
@@ -300,8 +298,8 @@ func TestHybridAsksTheRouteItWouldDispatchTo(t *testing.T) {
 		if gotOK != wantOK || gotWhy != wantWhy {
 			t.Fatalf("hybrid %s must answer as its %s route (%v,%q), got (%v,%q)", a, route, wantOK, wantWhy, gotOK, gotWhy)
 		}
-		// The union would be strictly more permissive: assert we did NOT take it. rotate
-		// and quarantine route to phoenix even though native also has handlers for them.
+		// The union would be strictly more permissive: assert we did NOT take it.
+		// Quarantine routes to Phoenix even though native also has a handler.
 		if route == BackendPhoenix {
 			if _, nativeHas := HandlerRegistry.Get(string(a)); !nativeHas {
 				t.Fatalf("fixture: expected native to also register %s, so the no-union assertion is meaningful", a)
@@ -316,8 +314,8 @@ func TestHybridAsksTheRouteItWouldDispatchTo(t *testing.T) {
 	if RouteFor(BackendHybrid, model.ActionKVReset) != BackendNative {
 		t.Fatal("kv-reset must route to native under hybrid")
 	}
-	if RouteFor(BackendHybrid, model.ActionRotate) != BackendPhoenix {
-		t.Fatal("rotate must route to phoenix under hybrid — the AMTD CR mechanism is preserved")
+	if RouteFor(BackendHybrid, model.ActionRotate) != BackendNative {
+		t.Fatal("bounded rotate must route native under hybrid so the policy cap is enforced")
 	}
 }
 

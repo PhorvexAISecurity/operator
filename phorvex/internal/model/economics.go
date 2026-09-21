@@ -11,6 +11,10 @@ const (
 	CostCoefficientSourceLambda        = "lambdaRuntimeLegacy"
 	CostCoefficientSourceBeta          = "disruptionAversion"
 	MaxDisruptionAversion              = 10.0
+	// FlowCostSemanticsConservativeRegimeV1 identifies the M156 point-floor and
+	// unsupported-regime upper-bound contract. It is also emitted when rich
+	// decision tracing is disabled, so the effective cost semantics remain visible.
+	FlowCostSemanticsConservativeRegimeV1 = "conservative-regime-v1"
 )
 
 // EconomicsMetadata identifies the coefficient used by one frozen decision.
@@ -21,6 +25,7 @@ type EconomicsMetadata struct {
 	LambdaRuntimeLegacy      OptionalFloat `json:"lambdaRuntimeLegacy"`
 	EffectiveCostCoefficient float64       `json:"effectiveCostCoefficient"`
 	CoefficientSource        string        `json:"coefficientSource"`
+	FlowCostSemanticsVersion string        `json:"flowCostSemanticsVersion,omitempty"`
 }
 
 // Economics resolves the objective coefficient for one decision. The adaptive
@@ -38,6 +43,7 @@ func (p Policy) Economics(lambdaRuntime float64) (EconomicsMetadata, error) {
 			LambdaRuntimeLegacy:      OptionalFloat{Present: true, Value: lambdaRuntime},
 			EffectiveCostCoefficient: lambdaRuntime,
 			CoefficientSource:        CostCoefficientSourceLambda,
+			FlowCostSemanticsVersion: FlowCostSemanticsConservativeRegimeV1,
 		}, nil
 	}
 	if !finiteBoundedCoefficient(p.DisruptionAversion) {
@@ -49,6 +55,7 @@ func (p Policy) Economics(lambdaRuntime float64) (EconomicsMetadata, error) {
 		LambdaRuntimeLegacy:      OptionalFloat{Present: true, Value: lambdaRuntime},
 		EffectiveCostCoefficient: p.DisruptionAversion,
 		CoefficientSource:        CostCoefficientSourceBeta,
+		FlowCostSemanticsVersion: FlowCostSemanticsConservativeRegimeV1,
 	}, nil
 }
 
@@ -63,6 +70,9 @@ func ValidateEconomicsMetadata(metadata *EconomicsMetadata) error {
 	}
 	if !finiteBoundedCoefficient(metadata.EffectiveCostCoefficient) {
 		return fmt.Errorf("economics coefficient must be finite and between 0 and 10")
+	}
+	if metadata.FlowCostSemanticsVersion != "" && metadata.FlowCostSemanticsVersion != FlowCostSemanticsConservativeRegimeV1 {
+		return fmt.Errorf("unknown flow-cost semantics version %q", metadata.FlowCostSemanticsVersion)
 	}
 	switch metadata.Version {
 	case EconomicsLegacyRuntimeLambdaV1:

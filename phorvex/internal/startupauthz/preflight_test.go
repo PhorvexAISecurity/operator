@@ -86,7 +86,7 @@ func TestCheckFollowsNativeAndHybridRoutingAndClusterScope(t *testing.T) {
 		forbidResource string
 	}{
 		{name: "native", backend: actuator.BackendNative, wantResource: "pods", wantNamespace: "tenant", forbidResource: "securityevents"},
-		{name: "hybrid", backend: actuator.BackendHybrid, wantResource: "securityevents", wantNamespace: "", forbidResource: "pods"},
+		{name: "hybrid", backend: actuator.BackendHybrid, wantResource: "pods", wantNamespace: "tenant", forbidResource: "securityevents"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			reviews := &recordingSSAR{}
@@ -95,7 +95,7 @@ func TestCheckFollowsNativeAndHybridRoutingAndClusterScope(t *testing.T) {
 			}
 			var found bool
 			for _, attributes := range reviews.attributes {
-				if attributes.Resource == test.forbidResource && (test.backend != actuator.BackendHybrid || attributes.Verb == "delete") {
+				if attributes.Resource == test.forbidResource {
 					t.Fatalf("%s acquired wrong-route permission: %+v", test.backend, attributes)
 				}
 				if attributes.Resource == test.wantResource && attributes.Namespace == test.wantNamespace {
@@ -133,6 +133,27 @@ func TestCheckQuarantineIncludesCapacityAndRecoveryPermissions(t *testing.T) {
 		if !found {
 			t.Errorf("missing %s", requirement)
 		}
+	}
+}
+
+func TestM103CheckRequiresSharedAvailabilityInventoryAndLedgerCAS(t *testing.T) {
+	reader := policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRotate))
+	for _, tc := range []struct {
+		name, namespace, group, resource, verb string
+	}{
+		{name: "service inventory", namespace: "tenant", resource: "services", verb: "list"},
+		{name: "endpoint membership", namespace: "tenant", group: "discovery.k8s.io", resource: "endpointslices", verb: "list"},
+		{name: "durable ledger update", namespace: "operator", resource: "configmaps", verb: "update"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reviews := &recordingSSAR{deny: func(attributes authorizationv1.ResourceAttributes) bool {
+				return attributes.Namespace == tc.namespace && attributes.Group == tc.group && attributes.Resource == tc.resource && attributes.Verb == tc.verb
+			}}
+			_, err := Check(t.Context(), reader, reviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator"})
+			if err == nil || !strings.Contains(err.Error(), "shared") {
+				t.Fatalf("missing %s permission was accepted: %v", tc.name, err)
+			}
+		})
 	}
 }
 

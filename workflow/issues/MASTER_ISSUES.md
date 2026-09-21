@@ -552,7 +552,7 @@ Severity: HIGH · Tier: 2 · Fixes: T11-M012
 
 ### M-71 · adapter-rotate: no post-unload verification; retry errors instead of no-op · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: HIGH · Tier: 2 · Fixes: none
+Severity: HIGH · Tier: 2 · Fixes: T9-M071
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
@@ -640,7 +640,7 @@ Severity: HIGH (claim validation) · Tier: 3 · Fixes: none
 
 ### M-156 · RLS prices `Unknown`/`Draining` phases at the idle floor — the learned path's cheapest rotation is the least-known pod · **OPEN** · `MATH-GATE`
 
-Severity: HIGH once active · Tier: 3 · Fixes: none
+Severity: HIGH once active · Tier: 3 · Fixes: POST25-M156
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · slo.contract
@@ -951,7 +951,7 @@ Severity: HIGH · Tier: parallel · Fixes: T6-M052
 
 ### M-54 · rotate honors the pod's own grace period · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M054
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -1396,7 +1396,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T3-M033
 
 ### M-35 · `endpoint-rotate`: unconditional cover, conditional effect · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T9-M035
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -1497,7 +1497,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M042
 
 ### M-43 · Pod-deleting AI moves are undercredited · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M043
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · killchain
@@ -1590,7 +1590,7 @@ Severity: MINOR · Tier: parallel · Fixes: T11-M045
 
 ### M-44 · rotate is uncredited for networkIdentity · **OPEN** · `KNOWLEDGE`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: POST25-M044
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -1941,7 +1941,7 @@ Severity: HIGH · Tier: parallel · Fixes: POST25-M137, POST25-M137-TRACE, T20-M
 
 ### M-103 · F6b — the per-tick move budget rate-limits the defender, not the attacker · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: POST25-M103
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -2611,7 +2611,7 @@ Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
 
 ### M-170 · APT catalogue labels technique-specific attacks that execute the same generic marker routine · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: T5-M170
+Severity: HIGH · Tier: unassigned · Fixes: POST25-CATALOGUE-CLAIMS, POST25-CHECKPOINT-LOCAL-FIXTURE, POST25-SESSION-GVK, POST25-SESSION-OBSERVATION, T5-M170
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

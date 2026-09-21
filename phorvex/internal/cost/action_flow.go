@@ -19,6 +19,29 @@ const (
 	flowLightweight
 )
 
+// RespawnFlowRegime identifies the input/action support behind one learned
+// respawn estimate. It is deliberately independent of the RLS feature vector:
+// changing this classification must not migrate or reset learned owner state.
+type RespawnFlowRegime string
+
+const (
+	RespawnFlowMeasuredLoad  RespawnFlowRegime = "measured-load"
+	RespawnFlowMissingLoad   RespawnFlowRegime = "missing-load"
+	RespawnFlowDrainingPhase RespawnFlowRegime = "draining-phase"
+	RespawnFlowUnknownPhase  RespawnFlowRegime = "unknown-phase"
+	RespawnFlowMIGProxy      RespawnFlowRegime = "mig-proxy"
+)
+
+type respawnFlowEstimate struct {
+	PredictedMean      float64
+	Effective          float64
+	Regime             RespawnFlowRegime
+	ConservativeFloor  float64
+	FloorApplied       bool
+	UncertaintyBound   float64
+	UncertaintyApplied bool
+}
+
 // These are dimensionless disruption-loss priors, NOT fabricated durations and
 // NOT conversions to replacement PodReady seconds.
 //
@@ -32,7 +55,7 @@ const (
 	estimatedServingStateBase = 0.05
 	estimatedServingLoadSpan  = 0.10
 	estimatedLightweightFlow  = 0.02
-	unknownActionFlowMax      = 2.00
+	unknownActionFlowMax      = model.CFlowMaximum
 	quarantineBase            = 0.25
 	quarantineConnectionSpan  = 0.15
 	requestRateNormalizer     = 200.0
@@ -81,9 +104,7 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 	case flowNone:
 		return 0
 	case flowRespawn:
-		// Calibrated only from measured replacement PodReady delay. For mig-rebind
-		// this is explicitly a lower-bound proxy until repartition timing exists.
-		return c.RLS.Predict(Features(view))
+		return c.respawnFlow(view, action).Effective
 	case flowQuarantine:
 		flow := quarantineBase
 		// cAdvisor ConnCount is infra-universal; gate on its own usability, not any-signal.
@@ -102,6 +123,64 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 	default:
 		return unknownActionFlowMax
 	}
+}
+
+// respawnFlow preserves the six-dimensional RLS prediction as the learned mean,
+// then applies source-owned policy floors only where the action or current inputs
+// are unsupported. The robust upper bound is consumed by P1Cost.Evaluation; it is
+// not folded into the mean and never becomes a training label.
+func (c *P1Cost) respawnFlow(view *model.WorkloadView, action model.Action) respawnFlowEstimate {
+	predicted := c.RLS.Predict(Features(view))
+	estimate := respawnFlowEstimate{PredictedMean: predicted, Effective: predicted}
+
+	phase := model.PhaseUnknown
+	reqRateUsable := false
+	if view != nil {
+		phase = view.Phase
+		reqRateUsable = view.Telemetry.ReqRate.Usable()
+	}
+	knownPhase := false
+	for _, candidate := range model.AllWorkloadPhases {
+		if phase == candidate {
+			knownPhase = true
+			break
+		}
+	}
+
+	switch {
+	case action == model.ActionMIGRebind:
+		estimate.Regime = RespawnFlowMIGProxy
+	case !knownPhase || phase == model.PhaseUnknown:
+		estimate.Regime = RespawnFlowUnknownPhase
+	case phase == model.PhaseDraining:
+		estimate.Regime = RespawnFlowDrainingPhase
+	case !reqRateUsable:
+		estimate.Regime = RespawnFlowMissingLoad
+	default:
+		estimate.Regime = RespawnFlowMeasuredLoad
+	}
+
+	// MIG is always an unsupported proxy, but it still receives the same phase/load
+	// point floor as a rotate so an unsupported action cannot bypass input uncertainty.
+	switch {
+	case !knownPhase || phase == model.PhaseUnknown:
+		estimate.ConservativeFloor = phaseEncoding(model.PhaseUnknown).switchPrior
+		estimate.FloorApplied = true
+	case phase == model.PhaseDraining:
+		estimate.ConservativeFloor = phaseEncoding(model.PhaseDraining).switchPrior
+		estimate.FloorApplied = true
+	case !reqRateUsable:
+		estimate.ConservativeFloor = phaseEncoding(phase).switchPrior
+		estimate.FloorApplied = true
+	}
+	if estimate.FloorApplied && estimate.Effective < estimate.ConservativeFloor {
+		estimate.Effective = estimate.ConservativeFloor
+	}
+	if estimate.Regime != RespawnFlowMeasuredLoad {
+		estimate.UncertaintyBound = unknownActionFlowMax
+		estimate.UncertaintyApplied = true
+	}
+	return estimate
 }
 
 // servingLoadPressure is a bounded, dimensionless pressure signal. It does not

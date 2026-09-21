@@ -1,0 +1,115 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0b93d6513b92d93ef5e870fe82b97a69d18737c7999ce42e60fef8001ae2a0d0
+    source_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+    at: '2026-09-20T23:36:58+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+fix_id: POST25-M156
+issues:
+- M-156
+title: Conservatively bound unsupported flow-cost regimes
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post14-live-reviewer
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-economics
+  code_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-m156
+  base_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: post14-live-reviewer
+  action: Implement signed conservative phase/load contract now
+updated_at: '2026-09-20T23:36:59+00:00'
+configuration_history:
+- at: '2026-09-20T23:36:56+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T23:36:57+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T23:36:59+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false

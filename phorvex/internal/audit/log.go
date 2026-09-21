@@ -111,10 +111,11 @@ type Record struct {
 
 	// P-ACTUATOR native-actuator forensic fields — what the hands actually did, so a
 	// kv-reset is distinguishable from a kill. Present only when the native actuator emitted.
-	Handler        string   `json:"handler,omitempty"`
-	ObjectsTouched []string `json:"objectsTouched,omitempty"`
-	RollbackRef    string   `json:"rollbackRef,omitempty"`
-	MutationKind   string   `json:"mutationKind,omitempty"`
+	Handler             string                            `json:"handler,omitempty"`
+	ObjectsTouched      []string                          `json:"objectsTouched,omitempty"`
+	RollbackRef         string                            `json:"rollbackRef,omitempty"`
+	MutationKind        string                            `json:"mutationKind,omitempty"`
+	GracefulTermination *model.GracefulTerminationReceipt `json:"gracefulTermination,omitempty"`
 
 	// M-18 Phoenix forensic identity of the emission attempt: the AMTD context, the
 	// created SecurityEvent's name and server-assigned UID, and the logical rule tuple.
@@ -690,6 +691,7 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		ObjectsTouched:         d.ObjectsTouched,
 		RollbackRef:            d.RollbackRef,
 		MutationKind:           d.MutationKind,
+		GracefulTermination:    gracefulTerminationRecord(d.GracefulTermination),
 		Phoenix:                phoenixRecord(d.Phoenix),
 		PreemptMargin:          round4(d.PreemptMargin),
 		ProjectedNextStageSec:  round4(d.ProjectedNextStageSec),
@@ -703,6 +705,14 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		record.ParameterMaterialReason = "material-not-retained"
 	}
 	return record
+}
+
+func gracefulTerminationRecord(in *model.GracefulTerminationReceipt) *model.GracefulTerminationReceipt {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func recordMeasurements(in *model.DecisionMeasurementsV1) *model.DecisionMeasurementsV1 {

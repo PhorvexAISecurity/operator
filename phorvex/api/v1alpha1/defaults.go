@@ -27,16 +27,17 @@ var nonnegativeDecimal = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 // proposals that trace the PRD PART 7 example values; they are NEVER inherited from
 // R6's self-reported numbers. nil/empty == this default == the documented baseline.
 const (
-	defaultLambda               = 0.6
-	defaultNormSparsity         = 0.4
-	defaultFlowDisruption       = 0.6
-	defaultWeightSecrets        = 0.8
-	defaultMaxMovesPerTick      = 3
-	defaultMinAvailableReplicas = 1
-	defaultTickInterval         = 20 * time.Second
-	defaultAntiOverRotation     = 5 * time.Minute
-	defaultProactiveFloor       = time.Hour
-	defaultEventAgeHorizon      = time.Hour
+	defaultLambda                      = 0.6
+	defaultNormSparsity                = 0.4
+	defaultFlowDisruption              = 0.6
+	defaultWeightSecrets               = 0.8
+	defaultMaxMovesPerTick             = 3
+	defaultMaxGracePeriodSeconds int64 = 30
+	defaultMinAvailableReplicas        = 1
+	defaultTickInterval                = 20 * time.Second
+	defaultAntiOverRotation            = 5 * time.Minute
+	defaultProactiveFloor              = time.Hour
+	defaultEventAgeHorizon             = time.Hour
 )
 
 // ParseDecimal parses a decimal string, returning def on empty/invalid input. It is
@@ -50,6 +51,21 @@ func ParseDecimal(s string, def float64) float64 {
 		return def
 	}
 	return v
+}
+
+// EffectiveMaxGracePeriodSeconds resolves the native graceful-rotation cap.
+// Admission accepts only 1..300. The error return preserves that contract for
+// direct Go objects and rolling-upgrade inputs that bypass schema validation;
+// invalid explicit values never silently become the default.
+func (s *PhorvexPolicySpec) EffectiveMaxGracePeriodSeconds() (int64, error) {
+	if s.Budget.MaxGracePeriodSeconds == nil {
+		return defaultMaxGracePeriodSeconds, nil
+	}
+	v := *s.Budget.MaxGracePeriodSeconds
+	if v < 1 || v > 300 {
+		return 0, fmt.Errorf("maxGracePeriodSeconds %d must be between 1 and 300", v)
+	}
+	return v, nil
 }
 
 // EffectiveTenant returns the tenant identity: Spec.Tenant if set, else the

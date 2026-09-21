@@ -50,6 +50,7 @@ func m091Owner(namespace, name, app string) *corev1.ReplicationController {
 
 type m091Fixture struct {
 	native *actuator.NativeActuator
+	client client.Client
 	spy    *m091BoundarySpy
 }
 
@@ -75,22 +76,47 @@ func newM091Fixture(t *testing.T, objects ...client.Object) *m091Fixture {
 	}).Build()
 	native := actuator.NewNativeActuator(c)
 	native.SetBoundaryReader(c)
-	return &m091Fixture{native: native, spy: spy}
+	return &m091Fixture{native: native, client: c, spy: spy}
 }
 
 func m091Policy(namespace, name, uid, tenant, app string) *phorvexv1alpha1.PhorvexPolicy {
+	cap := int64(30)
 	return &phorvexv1alpha1.PhorvexPolicy{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uid)},
-		Spec:       phorvexv1alpha1.PhorvexPolicySpec{Tenant: tenant, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": app}}},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uid), Generation: 1},
+		Spec: phorvexv1alpha1.PhorvexPolicySpec{
+			Mode: phorvexv1alpha1.ModeActive, Tenant: tenant,
+			Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": app}},
+			Budget:   phorvexv1alpha1.BudgetSpec{MaxGracePeriodSeconds: &cap},
+			Actions:  phorvexv1alpha1.ActionsSpec{Enabled: []phorvexv1alpha1.ActionType{phorvexv1alpha1.ActionRotate}},
+		},
 	}
 }
 
 func m091Target(p *phorvexv1alpha1.PhorvexPolicy) actuator.TenantTarget {
-	return actuator.TenantTarget{Tenant: p.EffectiveTenant(), Namespace: p.Namespace, PolicyName: p.Name, PolicyUID: string(p.UID), Selector: p.Spec.Selector.DeepCopy()}
+	return actuator.TenantTarget{
+		Tenant: p.EffectiveTenant(), Namespace: p.Namespace, PolicyName: p.Name,
+		PolicyUID: string(p.UID), Generation: p.Generation, Selector: p.Spec.Selector.DeepCopy(),
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true},
+	}
 }
 
 func m091Request(p *phorvexv1alpha1.PhorvexPolicy, pod, uid string) actuator.Request {
-	return actuator.Request{Tenant: p.EffectiveTenant(), Namespace: p.Namespace, Pod: pod, PolicyName: p.Name, PolicyUID: string(p.UID), TargetUID: uid, Action: model.ActionRotate}
+	cap, err := p.Spec.EffectiveMaxGracePeriodSeconds()
+	if err != nil {
+		panic(err)
+	}
+	return actuator.Request{
+		Tenant: p.EffectiveTenant(), Namespace: p.Namespace, Pod: pod,
+		PolicyName: p.Name, PolicyUID: string(p.UID), PolicyGeneration: p.Generation,
+		MaxGracePeriodSeconds: cap, TargetUID: uid, Action: model.ActionRotate,
+	}
+}
+
+func m091CreatePolicy(t *testing.T, f *m091Fixture, p *phorvexv1alpha1.PhorvexPolicy) {
+	t.Helper()
+	if err := f.client.Create(t.Context(), p.DeepCopy()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func m091Manager(f *m091Fixture) *Manager {
@@ -111,11 +137,12 @@ func TestM091ActuateRequiresExactOwnerBeforeBoundaryReads(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			policy := m091Policy("ns", "policy", "owner-uid", "tenant", "app")
 			f := newM091Fixture(t,
 				m091Owner("ns", "owner", "app"),
 				m091OwnedPod("ns", "target", "target-uid", "app", "owner"),
+				policy.DeepCopy(),
 			)
-			policy := m091Policy("ns", "policy", "owner-uid", "tenant", "app")
 			if err := f.native.EnsurePolicy(t.Context(), m091Target(policy)); err != nil {
 				t.Fatal(err)
 			}
@@ -149,6 +176,8 @@ func TestM091ManagerRemovalUsesDrainBoundaryAndPreservesSharedOwner(t *testing.T
 	m := m091Manager(f)
 	retired := m091Policy("ns-a", "policy-a", "policy-a-uid", "shared", "a")
 	survivor := m091Policy("ns-b", "policy-b", "policy-b-uid", "shared", "b")
+	m091CreatePolicy(t, f, retired)
+	m091CreatePolicy(t, f, survivor)
 	for _, p := range []*phorvexv1alpha1.PhorvexPolicy{retired, survivor} {
 		if err := m.Upsert(p); err != nil {
 			t.Fatal(err)
@@ -184,6 +213,7 @@ func TestM091ManagerCoalescedReplacementRetiresOnlyOldUID(t *testing.T) {
 	m := m091Manager(f)
 	old := m091Policy("ns", "policy", "old-uid", "shared", "app")
 	next := m091Policy("ns", "policy", "new-uid", "shared", "app")
+	m091CreatePolicy(t, f, old)
 	if err := m.Upsert(old); err != nil {
 		t.Fatal(err)
 	}
@@ -201,9 +231,14 @@ func TestM091ManagerCoalescedReplacementRetiresOnlyOldUID(t *testing.T) {
 	if result, err := f.native.Actuate(t.Context(), m091Request(old, "old-after", "old-after-uid")); err == nil || result.Emitted || f.spy.reads != 0 || f.spy.deletes != 0 {
 		t.Fatalf("replaced UID reached handler: result=%+v err=%v reads=%d deletes=%d", result, err, f.spy.reads, f.spy.deletes)
 	}
+	if err := f.client.Delete(t.Context(), old.DeepCopy()); err != nil {
+		t.Fatal(err)
+	}
+	m091CreatePolicy(t, f, next)
 	if err := f.native.EnsurePolicy(t.Context(), m091Target(next)); err != nil {
 		t.Fatal(err)
 	}
+	f.spy.reset()
 	if result, err := f.native.Actuate(t.Context(), m091Request(next, "new-live", "new-live-uid")); err != nil || !result.Emitted || f.spy.deletes != 1 {
 		t.Fatalf("replacement owner unavailable after preparation: result=%+v err=%v", result, err)
 	}
@@ -218,6 +253,7 @@ func TestM091SameUIDDisplayRenameIsNotOwnerRetirement(t *testing.T) {
 	)
 	m := m091Manager(f)
 	old := m091Policy("ns", "policy", "same-uid", "before", "app")
+	m091CreatePolicy(t, f, old)
 	if err := m.Upsert(old); err != nil {
 		t.Fatal(err)
 	}
@@ -233,6 +269,15 @@ func TestM091SameUIDDisplayRenameIsNotOwnerRetirement(t *testing.T) {
 	m.DrainLifecycle()
 	if result, err := f.native.Actuate(t.Context(), m091Request(old, "old-display", "old-display-uid")); err != nil || !result.Emitted {
 		t.Fatalf("metrics-only drain retired owner binding: result=%+v err=%v", result, err)
+	}
+	current := &phorvexv1alpha1.PhorvexPolicy{}
+	if err := f.client.Get(t.Context(), client.ObjectKeyFromObject(old), current); err != nil {
+		t.Fatal(err)
+	}
+	current.Spec = renamed.Spec
+	current.Generation = renamed.Generation
+	if err := f.client.Update(t.Context(), current); err != nil {
+		t.Fatal(err)
 	}
 	if err := f.native.EnsurePolicy(t.Context(), m091Target(renamed)); err != nil {
 		t.Fatal(err)

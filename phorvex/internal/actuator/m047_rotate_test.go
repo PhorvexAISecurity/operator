@@ -2,6 +2,8 @@ package actuator
 
 import (
 	"context"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +21,7 @@ func m47Pair() (*corev1.Pod, *appsv1.ReplicaSet) {
 	n := int32(2)
 	p := aiPod("ns", "p", map[string]string{"app": "web"})
 	p.UID = "pod-uid"
+	p.ResourceVersion = "7"
 	p.OwnerReferences = []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "rs", UID: "rs-uid", Controller: &yes}}
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "rs", UID: "rs-uid"}, Spec: appsv1.ReplicaSetSpec{Replicas: &n, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}}}
 	return p, rs
@@ -51,12 +54,12 @@ func TestM47OwnershipMatrix(t *testing.T) {
 			p, r := m47Pair()
 			tc.edit(p, r)
 			c := m47Client(p, r)
-			got, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: "p", TargetUID: string(p.UID), Action: model.ActionRotate})
+			got, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, m47Request(p))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if tc.reason == "" {
-				if !got.Emitted || got.Note != "Pod deletion requested; replacement unconfirmed" {
+				if !got.Emitted || !strings.Contains(got.Note, "replacement unconfirmed") || got.GracefulTermination == nil {
 					t.Fatalf("%+v", got)
 				}
 			} else {
@@ -78,7 +81,9 @@ func TestM47NameReuseAndMissingBoundary(t *testing.T) {
 		uid    types.UID
 		reason string
 	}{{c, "old-uid", "target-uid-mismatch"}, {nil, p.UID, "authoritative-reader-unavailable"}, {c, "", "target-uid-unavailable"}} {
-		got, err := (rotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: tc.reader}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(tc.uid)})
+		req := m47Request(p)
+		req.TargetUID = string(tc.uid)
+		got, err := (rotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: tc.reader}, req)
 		if err != nil || got.Emitted || !strings.Contains(got.Note, tc.reason) {
 			t.Fatalf("%+v %v", got, err)
 		}
@@ -89,7 +94,27 @@ func m47Client(objects ...client.Object) client.Client {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
+	objects = append(objects, m47Policy())
 	return fake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+}
+
+func m47Policy() *v1alpha1.PhorvexPolicy {
+	return &v1alpha1.PhorvexPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid", Generation: 3},
+		Spec: v1alpha1.PhorvexPolicySpec{
+			Mode:     v1alpha1.ModeActive,
+			Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}},
+			Actions:  v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
+		},
+	}
+}
+
+func m47Request(p *corev1.Pod) Request {
+	return Request{
+		Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: model.ActionRotate,
+		PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 3, MaxGracePeriodSeconds: 30,
+	}
 }
 
 func TestM47ParentAndReplicationController(t *testing.T) {
@@ -101,7 +126,7 @@ func TestM47ParentAndReplicationController(t *testing.T) {
 	for _, paused := range []bool{true, false} {
 		d.Spec.Paused = paused
 		c := m47Client(p, rs, d)
-		got, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: model.ActionRotate})
+		got, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, m47Request(p))
 		if err != nil || got.Emitted == paused {
 			t.Fatalf("paused=%v: %+v %v", paused, got, err)
 		}
@@ -109,7 +134,7 @@ func TestM47ParentAndReplicationController(t *testing.T) {
 	rc := &corev1.ReplicationController{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "rc", UID: "rc-uid"}, Spec: corev1.ReplicationControllerSpec{Replicas: &n, Selector: map[string]string{"app": "web"}}}
 	p.OwnerReferences = []metav1.OwnerReference{{APIVersion: "v1", Kind: "ReplicationController", Name: rc.Name, UID: rc.UID, Controller: &yes}}
 	c := m47Client(p, rc)
-	got, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: model.ActionRotate})
+	got, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, m47Request(p))
 	if err != nil || !got.Emitted {
 		t.Fatalf("RC positive: %+v %v", got, err)
 	}

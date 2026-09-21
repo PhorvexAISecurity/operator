@@ -60,7 +60,8 @@ const (
 	FactModelFingerprint = "modelFingerprint"
 	// FactEndpointPath = inference endpoint / API route the attacker mapped. AUDIT-ONLY:
 	// endpoint-rotate does not prove the learned locator is invalidated.
-	// route-rotate retains its separate networkIdentity grant.
+	// route-rotate also retains the Pod and stable Service locators, so selector membership
+	// changes do not grant it endpointPath or networkIdentity cover.
 	FactEndpointPath = "endpointPath"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather

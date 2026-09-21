@@ -365,7 +365,8 @@ func runNativeDemo(ctx context.Context, c client.Client, ns, adminNS string, w i
 		return report.write(w)
 	}
 	n := newDemoActuator(&demoTrackingClient{Client: c, run: run})
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "native-demo-" + strings.ReplaceAll(run.token, "-", ""), Namespace: ns}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"phorvex.ai/native-demo-run": run.token}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionQuarantine, v1alpha1.ActionWarmSwap, v1alpha1.ActionModelShardReplace, v1alpha1.ActionRouteRotate, v1alpha1.ActionEndpointRotate}}}}
+	maxGracePeriodSeconds := int64(30)
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "native-demo-" + strings.ReplaceAll(run.token, "-", ""), Namespace: ns}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"phorvex.ai/native-demo-run": run.token}}, Budget: v1alpha1.BudgetSpec{MaxGracePeriodSeconds: &maxGracePeriodSeconds, TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate, v1alpha1.ActionQuarantine, v1alpha1.ActionWarmSwap, v1alpha1.ActionModelShardReplace, v1alpha1.ActionRouteRotate, v1alpha1.ActionEndpointRotate}}}}
 	policyReady := true
 	if err := run.create(ctx, policy); err != nil {
 		policyReady = false
@@ -385,7 +386,7 @@ func runNativeDemo(ctx context.Context, c client.Client, ns, adminNS string, w i
 		n.JournalNamespace = adminNS
 	}
 	req := func(p *corev1.Pod, a model.Action) actuator.Request {
-		return actuator.Request{Tenant: ns, Namespace: ns, Pod: p.Name, TargetUID: string(p.UID), Action: a, Reason: "native-demo", Score: 0.9, PolicyName: policy.Name, PolicyUID: string(policy.UID)}
+		return actuator.Request{Tenant: ns, Namespace: ns, Pod: p.Name, TargetUID: string(p.UID), Action: a, Reason: "native-demo", Score: 0.9, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: maxGracePeriodSeconds}
 	}
 	makePod := func(action, name string, labels map[string]string) (*corev1.Pod, bool) {
 		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: map[string]string{"phorvex.ai/native-demo": "true", "app": name}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36", Command: []string{"sh", "-c", "sleep 3600"}}}}}
@@ -601,7 +602,12 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 		row.observed = "current policy identity unavailable"
 		return row
 	}
-	request := actuator.Request{Tenant: ns, Namespace: ns, Pod: target.Name, TargetUID: string(target.UID), Action: action, Reason: "native-demo", Score: 0.9, PolicyName: policy.Name, PolicyUID: string(policy.UID), OperationID: run.token + ":" + a}
+	maxGracePeriodSeconds, capErr := policy.Spec.EffectiveMaxGracePeriodSeconds()
+	if capErr != nil {
+		row.observed = "current policy grace cap invalid: " + capErr.Error()
+		return row
+	}
+	request := actuator.Request{Tenant: ns, Namespace: ns, Pod: target.Name, TargetUID: string(target.UID), Action: action, Reason: "native-demo", Score: 0.9, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: maxGracePeriodSeconds, OperationID: run.token + ":" + a}
 	result, actErr := demoActuate(ctx, n, request)
 	mutated, readErr := demoRouteRestitched(ctx, run.client, target, svc)
 	var afterSvc corev1.Service

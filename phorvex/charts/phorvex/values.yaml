@@ -169,7 +169,10 @@ phorvex:
   # Actuator backend. Accepted values are exactly: phoenix, native, hybrid.
   #   phoenix - drives UNMODIFIED Phoenix through SecurityEvent/AMTD CRs
   #   native  - Phorvex's own client-go hands (no Phoenix CRDs)
-  #   hybrid  - Phoenix for rotate/quarantine, native for the AI-native moves
+  #   hybrid  - native for policy-bounded rotate and AI-native moves; Phoenix for quarantine
+  # The default/unset phoenix backend refuses rotate because Phoenix Delete cannot carry
+  # budget.maxGracePeriodSeconds. Select native or hybrid and grant actuatorNamespaces
+  # to migrate policies that require bounded rotation.
   # EMPTY (the default here) renders NO PHORVEX_ACTUATOR env var at all, so the operator
   # binary applies its own documented default, phoenix. That is the only way to get the
   # default: any NON-empty value is matched EXACTLY by the binary — no trimming, no case

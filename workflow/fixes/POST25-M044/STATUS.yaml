@@ -1,0 +1,274 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: fb76ea43218a910eab3fdcb7c17994a35f539ae2dab6e76bbec18009d921b1bd
+    source_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
+    at: '2026-09-21T00:20:09+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1e5264daed4085b1f2bd5df60c30f451b675b3014d0012421578208bb9882f28
+    source_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
+    at: '2026-09-21T00:56:55+00:00'
+    approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: b81165dece98958d7ecd47b9cc7246419fcc6c6e473778a97b6f96024fcc7ed4
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:02:39+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 59794a2de3802a1be3eef9ebd815ef00a3a0d27d73343b2d64b595f64462cbbc
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:02:39+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: b81165dece98958d7ecd47b9cc7246419fcc6c6e473778a97b6f96024fcc7ed4
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:02:39+00:00'
+    inputs:
+    - build/test-harness
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: d9cc988ef24b8e34ed9430a4bc4290b0c38b29ed6e4e0364022e459ce10c8840
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-r2.txt
+    sha256: 05cef2af90f0d674606433557f30644baf428bb03851b5666d7ddc4214f1a443
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:02:39+00:00'
+    inputs:
+    - phorvex/docs/recon-cover-map.generated.md
+    - phorvex/internal/actionset
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/recon
+    - phorvex/tools/covermap
+    inputs_sha256: 92b98ef95a65da017b9a34a1796fbe9afdaffdd7df0b61c3f0a16e4fb2312298
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/decision-fixtures-repaired.txt
+    sha256: 9c67ca2e33ab36655fd6d4830710b9c3e9c310ef3ca53b55e65d4d09e743b656
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:02:39+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    - phorvex/internal/feasibility
+    - phorvex/internal/recon
+    inputs_sha256: 412fc267d35332f9164cc37f6855dee736784b63ed3972b04a114235fed2f61b
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-r2.txt
+    sha256: 05cef2af90f0d674606433557f30644baf428bb03851b5666d7ddc4214f1a443
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:02:39+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/recon
+    inputs_sha256: 0adddb97f4d0662c4d5dcc1545297e2870e9e83e57913f48fe94144416fa130a
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1e5264daed4085b1f2bd5df60c30f451b675b3014d0012421578208bb9882f28
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:04:15+00:00'
+    baseline_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: dc289c20a08e54541610c310b5873b041ab74c91d69047843519a0f4e23ccce9
+    source_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+    at: '2026-09-21T01:04:15+00:00'
+    incident_sha256: 1e5264daed4085b1f2bd5df60c30f451b675b3014d0012421578208bb9882f28
+fix_id: POST25-M044
+issues:
+- M-44
+title: Remove unsupported network identity credit from route selector changes
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-m044-route-claims
+  code_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-m044-route-claims
+  base_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
+  head_sha: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/253
+  reviewed_head: 5f899b2576a1bee88b934bbdd1e103d8fea25710
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: human_owner
+  action: Review PR253; after deployment run old locator/session live controls
+updated_at: '2026-09-21T01:05:15+00:00'
+configuration_history:
+- at: '2026-09-21T00:20:06+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:39:34+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: workflow/fixes/POST25-M044/AUTHORIZATION.md
+- at: '2026-09-21T01:00:50+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: workflow/fixes/POST25-M044/AUTHORIZATION.md
+- at: '2026-09-21T01:02:38+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T01:05:14+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T00:20:07+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T00:20:09+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T01:02:39+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T01:02:41+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T01:04:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T01:04:17+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T01:05:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+handoff:
+  id: POST25-M044:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

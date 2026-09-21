@@ -17,6 +17,7 @@ func TestPost25EconomicsAuditSurvivesTraceDisabled(t *testing.T) {
 			DisruptionAversion:       model.OptionalFloat{Present: true, Value: beta},
 			LambdaRuntimeLegacy:      model.OptionalFloat{Present: true, Value: lambdaRuntime},
 			EffectiveCostCoefficient: beta, CoefficientSource: model.CostCoefficientSourceBeta,
+			FlowCostSemanticsVersion: model.FlowCostSemanticsConservativeRegimeV1,
 		},
 	}
 	raw, err := json.Marshal(ToRecord(d))
@@ -30,7 +31,8 @@ func TestPost25EconomicsAuditSurvivesTraceDisabled(t *testing.T) {
 	if decoded.DecisionTrace != nil || decoded.Economics == nil || decoded.Economics.Version != model.EconomicsFixedDisruptionAversionV1 ||
 		!decoded.Economics.DisruptionAversion.Present || decoded.Economics.DisruptionAversion.Value != beta ||
 		decoded.Economics.EffectiveCostCoefficient != beta || !decoded.Economics.LambdaRuntimeLegacy.Present ||
-		decoded.Economics.LambdaRuntimeLegacy.Value != lambdaRuntime || decoded.Lambda != 0.1235 {
+		decoded.Economics.LambdaRuntimeLegacy.Value != lambdaRuntime ||
+		decoded.Economics.FlowCostSemanticsVersion != model.FlowCostSemanticsConservativeRegimeV1 || decoded.Lambda != 0.1235 {
 		t.Fatalf("trace-off economics metadata lost or relabelled: %+v", decoded)
 	}
 }
