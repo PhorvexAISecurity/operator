@@ -185,7 +185,7 @@ func TestM091PublicRollbackChecksExactOwnerBeforeEffects(t *testing.T) {
 	}
 }
 
-func TestM091HybridForwardsRetirementAndPreservesPhoenixRoute(t *testing.T) {
+func TestM091HybridForwardsRetirementAndPreservesPhoenixQuarantineRoute(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
 	h := NewHybridActuator(c)
 	prep := h.PrepareRoutes(t.Context(), TenantTarget{
@@ -204,8 +204,8 @@ func TestM091HybridForwardsRetirementAndPreservesPhoenixRoute(t *testing.T) {
 	if _, err := h.Actuate(t.Context(), req); err == nil || !strings.Contains(err.Error(), "DENIED (O7)") {
 		t.Fatalf("hybrid did not forward native retirement: %v", err)
 	}
-	result, err = h.Actuate(t.Context(), Request{Tenant: "tenant", Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate})
-	if err != nil || !result.Emitted || result.RuleType != RuleTypeRotate {
+	result, err = h.Actuate(t.Context(), Request{Tenant: "tenant", Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", TargetNamespaceUID: "namespace-uid", OperationID: strings.Repeat("a", 40), Action: model.ActionQuarantine})
+	if err != nil || !result.Emitted || result.RuleType != RuleTypeQuarantine {
 		t.Fatalf("Phoenix route changed by native retirement: result=%+v err=%v", result, err)
 	}
 }

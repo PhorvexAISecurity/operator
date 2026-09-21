@@ -82,12 +82,13 @@ func TestPhoenixActuateEmitsSecurityEvent(t *testing.T) {
 
 	res, err := pa.Actuate(ctx, Request{
 		Tenant: "team-a", Namespace: "ns", Pod: "demo-1", TargetUID: "demo-uid",
-		Action: model.ActionRotate, Reason: "test", Score: 0.9,
+		TargetNamespaceUID: "namespace-uid", OperationID: strings.Repeat("a", 40),
+		Action: model.ActionQuarantine, Reason: "test", Score: 0.9,
 	})
 	if err != nil {
 		t.Fatalf("Actuate: %v", err)
 	}
-	if !res.Emitted || res.RuleType != RuleTypeRotate || res.RuleSource != RuleSource {
+	if !res.Emitted || res.RuleType != RuleTypeQuarantine || res.RuleSource != RuleSource {
 		t.Errorf("unexpected result: %+v", res)
 	}
 
@@ -99,13 +100,13 @@ func TestPhoenixActuateEmitsSecurityEvent(t *testing.T) {
 		t.Fatalf("want 1 SecurityEvent emitted, got %d", len(seList.Items))
 	}
 	se := seList.Items[0]
-	if se.Annotations[PhoenixRotateTargetUIDAnnotation] != "demo-uid" {
-		t.Fatalf("rotate target UID envelope = %q", se.Annotations[PhoenixRotateTargetUIDAnnotation])
+	if se.Annotations[phorvexQuarantineTargetUIDAnnotation] != "demo-uid" {
+		t.Fatalf("quarantine target UID envelope = %q", se.Annotations[phorvexQuarantineTargetUIDAnnotation])
 	}
 	if len(se.Spec.Targets) != 1 || se.Spec.Targets[0] != "ns/demo-1" {
 		t.Errorf("target = %v, want [ns/demo-1]", se.Spec.Targets)
 	}
-	if se.Spec.Rule.Type != RuleTypeRotate || se.Spec.Rule.Source != RuleSource || se.Spec.Rule.ThreatLevel != RuleThreatLevel {
+	if se.Spec.Rule.Type != RuleTypeQuarantine || se.Spec.Rule.Source != RuleSource || se.Spec.Rule.ThreatLevel != RuleThreatLevel {
 		t.Errorf("rule = %+v", se.Spec.Rule)
 	}
 	if se.Spec.AnomalyScore == nil || *se.Spec.AnomalyScore != "0.9000" {
@@ -113,11 +114,11 @@ func TestPhoenixActuateEmitsSecurityEvent(t *testing.T) {
 	}
 }
 
-func TestM009PhoenixRotateRefusesMissingTargetUID(t *testing.T) {
+func TestM054PhoenixRotateRefusesUnsupportedGraceContract(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
-	result, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "ns", Pod: "pod", Action: model.ActionRotate})
-	if !IsNoEffectRefusal(err) || result.Emitted {
-		t.Fatalf("missing target UID result=%+v err=%v", result, err)
+	result, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", Action: model.ActionRotate, MaxGracePeriodSeconds: 30})
+	if !IsNoEffectRefusal(err) || result.Emitted || !strings.Contains(err.Error(), detailGraceCapUnsupported) {
+		t.Fatalf("unsupported bounded rotate result=%+v err=%v", result, err)
 	}
 	var events amtdv1beta1.SecurityEventList
 	if listErr := c.List(context.Background(), &events); listErr != nil || len(events.Items) != 0 {

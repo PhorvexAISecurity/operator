@@ -55,15 +55,16 @@ func NewPhoenixActuator(c client.Client) *PhoenixActuator {
 // Name implements Actuator.
 func (*PhoenixActuator) Name() string { return "phoenix" }
 
-// SupportsAction answers from the SAME predicate Actuate dispatches on (RuleTypeFor), so
+// SupportsAction answers from the SAME predicate Actuate dispatches on, so
 // this adapter can never claim an action it would then refuse. [M-21]
 //
 // Two answers, deliberately distinct:
-//   - An action Phoenix maps (rotate, quarantine) is ACCEPTED, but qualified UNVERIFIED:
+//   - Controlled quarantine is ACCEPTED, but qualified UNVERIFIED:
 //     the adapter takes the move, yet this layer verifies no per-target AMTD fixture, so
 //     acceptance is never reported as proof the move executed or had any security effect
 //     (T1-E's rule that a stub returns capable-but-unverified, never a silent false).
-//   - Any other action — every AI-native move, the native-only K8s moves, the noop
+//   - Bounded rotate and every other action — the AI-native moves, the native-only
+//     K8s moves, the noop
 //     sentinel and anything outside the vocabulary — is REJECTED, naming the backend, the
 //     action and the reason. Before M-21 all of these were claimed as supported while
 //     Actuate rejected them, which is exactly how a GPU fleet on the default backend
@@ -187,6 +188,9 @@ func validateAMTDOwnership(amtd *amtdv1beta1.AdaptiveMovingTargetDefense, target
 
 // Actuate emits the controlled SecurityEvent for one move. Implements Actuator.
 func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, error) {
+	if req.Action == model.ActionRotate {
+		return Result{Actuator: p.Name(), NoEffect: NoEffectRefused}, RefusedWithoutEffect(fmt.Errorf("phoenix actuator: bounded rotate refused: %s", detailGraceCapUnsupported))
+	}
 	ruleType := RuleTypeFor(req.Action)
 	if ruleType == "" {
 		return Result{}, fmt.Errorf("phoenix actuator: unsupported action %q", req.Action)

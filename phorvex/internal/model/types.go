@@ -38,7 +38,8 @@ type Action string
 const (
 	// ActionNoop leaves the pod untouched.
 	ActionNoop Action = "noop"
-	// ActionRotate maps to Phoenix's Delete (kill + clean respawn).
+	// ActionRotate requests a native, policy-bounded graceful Pod deletion. Pure
+	// Phoenix backends refuse it because their Delete strategy cannot carry the cap.
 	ActionRotate Action = "rotate"
 	// ActionQuarantine maps to Phoenix's Quarantine (deny-all + detach).
 	ActionQuarantine Action = "quarantine"
@@ -766,6 +767,10 @@ type Policy struct {
 	WeightSecrets                float64
 	BlastRadiusFromGraph         bool
 	MaxMovesPerTick              int
+	// MaxGracePeriodSeconds is the resolved selecting-policy cap for native
+	// graceful rotation. Zero denotes invalid/unavailable policy input and must be
+	// refused at the mutation boundary; it never means force deletion.
+	MaxGracePeriodSeconds        int64
 	TickInterval                 time.Duration
 	AntiOverRotationWindow       time.Duration
 	ProactiveFloor               time.Duration
@@ -788,14 +793,34 @@ type Policy struct {
 	EnabledActions        map[Action]bool
 	AssetWeightFromLabels func(labels map[string]string) float64
 
-	// Decision-trace-only identity. The optimizer never reads these fields while
-	// scoring; they let the post-selection trace name the exact policy/build/tick.
-	PolicyName   string
-	PolicyUID    string
-	TickID       string
-	BrainImage   string
-	GitSHA       string
-	TraceEnabled bool
+	// Policy identity does not affect optimizer scoring. PolicyName/UID/Generation
+	// bind post-selection native dispatch to the exact current policy epoch, while
+	// the remaining fields name the decision build and tick in its trace.
+	PolicyName       string
+	PolicyUID        string
+	PolicyGeneration int64
+	TickID           string
+	BrainImage       string
+	GitSHA           string
+	TraceEnabled     bool
+}
+
+// GracefulTerminationReceipt binds an accepted native Pod DELETE to the exact
+// policy epoch, Pod identity and explicit graceful request sent to Kubernetes.
+// It is request evidence only: TerminationStatus remains "unconfirmed" until a
+// separate lifecycle observer proves the old process/UID absent.
+type GracefulTerminationReceipt struct {
+	PolicyNamespace             string `json:"policyNamespace"`
+	PolicyName                  string `json:"policyName"`
+	PolicyUID                   string `json:"policyUID"`
+	PolicyGeneration            int64  `json:"policyGeneration"`
+	PolicyGraceCapSeconds       int64  `json:"policyGraceCapSeconds"`
+	WorkloadGraceSeconds        int64  `json:"workloadGraceSeconds"`
+	WorkloadGraceExplicit       bool   `json:"workloadGraceExplicit"`
+	EffectiveGracePeriodSeconds int64  `json:"effectiveGracePeriodSeconds"`
+	PodUID                      string `json:"podUID"`
+	PodResourceVersion          string `json:"podResourceVersion"`
+	TerminationStatus           string `json:"terminationStatus"`
 }
 
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
@@ -901,6 +926,10 @@ type Decision struct {
 	ObjectsTouched []string // cluster objects created/mutated/deleted
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
+	// GracefulTermination is present only after Kubernetes acknowledged the
+	// exact native rotate DELETE. It records the requested bound while leaving
+	// physical termination explicitly unconfirmed.
+	GracefulTermination *GracefulTerminationReceipt
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately

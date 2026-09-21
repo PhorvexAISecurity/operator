@@ -2,7 +2,8 @@ package actuator
 
 import (
 	"context"
-	"github.com/phorvex/phorvex/internal/model"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,19 @@ import (
 type m47RaceClient struct {
 	client.Client
 	race bool
+}
+
+type m47PolicyReader struct {
+	client.Reader
+	policy *v1alpha1.PhorvexPolicy
+}
+
+func (r m47PolicyReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if policy, ok := obj.(*v1alpha1.PhorvexPolicy); ok && key.Namespace == r.policy.Namespace && key.Name == r.policy.Name {
+		r.policy.DeepCopyInto(policy)
+		return nil
+	}
+	return r.Reader.Get(ctx, key, obj, opts...)
 }
 
 func (c *m47RaceClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
@@ -45,6 +59,7 @@ func TestM47APIServerPreconditions(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +84,12 @@ func TestM47APIServerPreconditions(t *testing.T) {
 		if err = c.Create(ctx, p); err != nil {
 			t.Fatal(err)
 		}
-		got, err := dispatch(ctx, EnactCtx{Client: &m47RaceClient{Client: c, race: race}, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: model.ActionRotate})
+		policy := m47Policy()
+		policy.Namespace = ns.Name
+		reader := m47PolicyReader{Reader: c, policy: policy}
+		req := m47Request(p)
+		req.PolicyGeneration = policy.Generation
+		got, err := dispatch(ctx, EnactCtx{Client: &m47RaceClient{Client: c, race: race}, Reader: reader}, req)
 		if err != nil {
 			t.Fatal(err)
 		}

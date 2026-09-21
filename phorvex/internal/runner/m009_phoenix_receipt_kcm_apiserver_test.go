@@ -17,10 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientcmd "k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
@@ -28,16 +26,14 @@ import (
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/slo"
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
-	phoenixcontrollers "github.com/r6security/phoenix/pkg/controllers"
 )
 
-// TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController exercises
-// the cross-module seam from the real Phorvex producer and its historical Delete
-// strategy through the API receipt projection, runner correlation, and a real
-// ReplicaSet replacement. RegisterCoreControllers is the same public bridge used
-// by the shipped manager, so the consumer and status write are production code.
-func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testing.T) {
+// TestM009ActualNativeReceiptSnapshotRunnerAndReplicaSetController exercises
+// the cross-module seam from the real native bounded-rotate producer through
+// runner receipt projection and a real ReplicaSet replacement. The workload's
+// explicit zero grace lets envtest, which has no kubelet, finish deletion; the
+// receipt still proves the selecting policy cap and exact DELETE identities.
+func TestM009ActualNativeReceiptSnapshotRunnerAndReplicaSetController(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" || os.Getenv("KUBE_CONTROLLER_MANAGER") == "" {
 		t.Skip("requires pinned envtest and kube-controller-manager")
 	}
@@ -46,7 +42,7 @@ func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testi
 		t.Fatalf("kube-controller-manager must be v1.34.0: %q %v", out, err)
 	}
 	local := false
-	env := &envtest.Environment{CRDDirectoryPaths: []string{"../../../build/phoenix-extended/config/crd/bases"}, ErrorIfCRDPathMissing: true, UseExistingCluster: &local}
+	env := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases", "../../../build/phoenix-extended/config/crd/bases"}, ErrorIfCRDPathMissing: true, UseExistingCluster: &local}
 	cfg, err := env.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -54,29 +50,11 @@ func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testi
 	t.Cleanup(func() { _ = env.Stop() })
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: m034Scheme(t), Metrics: metricsserver.Options{BindAddress: "0"}, HealthProbeBindAddress: "0"})
+	c, err := client.NewWithWatch(cfg, client.Options{Scheme: m034Scheme(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := phoenixcontrollers.RegisterCoreControllers(mgr); err != nil {
-		t.Fatal(err)
-	}
-	managerDone := make(chan error, 1)
-	go func() { managerDone <- mgr.Start(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case err := <-managerDone:
-			if err != nil {
-				t.Errorf("stop Phoenix manager: %v", err)
-			}
-		case <-time.After(5 * time.Second):
-			t.Error("Phoenix manager did not stop")
-		}
-	})
-	if !mgr.GetCache().WaitForCacheSync(ctx) {
-		t.Fatal("Phoenix manager cache did not synchronize")
-	}
+	reader := client.Reader(c)
 	kubeconfig := filepath.Join(t.TempDir(), "kubeconfig")
 	kcfg := clientcmdapi.Config{Clusters: map[string]*clientcmdapi.Cluster{"local": {Server: cfg.Host, CertificateAuthorityData: cfg.CAData}}, AuthInfos: map[string]*clientcmdapi.AuthInfo{"admin": {ClientCertificateData: cfg.CertData, ClientKeyData: cfg.KeyData}}, Contexts: map[string]*clientcmdapi.Context{"local": {Cluster: "local", AuthInfo: "admin"}}, CurrentContext: "local"}
 	if err := clientcmd.WriteToFile(kcfg, kubeconfig); err != nil {
@@ -88,7 +66,7 @@ func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testi
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cancel(); _ = cmd.Wait() })
-	c, reader := mgr.GetClient(), mgr.GetAPIReader()
+
 	ns := "m009"
 	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}); err != nil {
 		t.Fatal(err)
@@ -123,56 +101,43 @@ func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testi
 		return true, nil
 	})
 
-	producer := actuator.NewPhoenixActuator(c)
-	if err := producer.EnsurePolicy(ctx, actuator.TenantTarget{Namespace: ns, Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", MatchLabels: map[string]string{"app": "api"}, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}); err != nil {
+	cap := int64(3)
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{
+		Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "api"}},
+		Budget:  v1alpha1.BudgetSpec{MaxGracePeriodSeconds: &cap, TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}},
+		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
+	}}
+	if err := c.Create(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
-	amtds := &amtdv1beta1.AdaptiveMovingTargetDefenseList{}
-	if err := reader.List(ctx, amtds, client.InNamespace(ns)); err != nil || len(amtds.Items) != 1 {
-		t.Fatalf("actual producer AMTDs=%d err=%v", len(amtds.Items), err)
+	producer := actuator.NewNativeActuator(c)
+	producer.Reader = reader
+	if err := producer.EnsurePolicy(ctx, actuator.TenantTarget{Namespace: ns, Tenant: "tenant", PolicyName: policy.Name, PolicyUID: string(policy.UID), Generation: policy.Generation, Selector: &policy.Spec.Selector, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}); err != nil {
+		t.Fatal(err)
 	}
-	foundDelete := false
-	for _, strategy := range amtds.Items[0].Spec.Strategy {
-		if strategy.Rule.Type == actuator.RuleTypeRotate && strategy.Action.Delete != nil && strategy.Action.Rotate == nil {
-			foundDelete = true
-		}
-	}
-	if !foundDelete {
-		t.Fatalf("actual producer did not preserve controlled rotate→Delete strategy: %+v", amtds.Items[0].Spec.Strategy)
-	}
-	m034Poll(t, 15*time.Second, func() (bool, error) {
-		if err := reader.Get(ctx, client.ObjectKeyFromObject(original), original); err != nil {
-			return false, err
-		}
-		return original.Annotations["amtd.r6security.com/managed-by"] != "", nil
-	})
 
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: ns, Name: original.Name, UID: string(original.UID), OwnerKind: "ReplicaSet", OwnerName: rs.Name, Ready: true, ReadyAt: original.Status.Conditions[0].LastTransitionTime.Time, ReadyReplicas: 1}}
 	var auditOut bytes.Buffer
 	opt := &observingOptimizer{}
 	manager := &Manager{Actuator: producer, BoundaryReader: reader, Optimizer: opt, Disruption: slo.NewLedger(time.Hour), Audit: audit.New(logr.Discard(), &auditOut), Log: logr.Discard()}
-	entry := &policyEntry{key: types.NamespacedName{Namespace: ns, Name: "policy"}, uid: "policy-uid", tenant: "tenant", namespace: ns,
-		spec: v1alpha1.PhorvexPolicySpec{Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "api"}}}}
-	pol := model.Policy{Tenant: "tenant", Namespace: ns, PolicyName: "policy", PolicyUID: "policy-uid", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	entry := &policyEntry{key: types.NamespacedName{Namespace: ns, Name: policy.Name}, uid: string(policy.UID), generation: policy.Generation, tenant: "tenant", namespace: ns,
+		spec: policy.Spec}
+	pol := model.Policy{Tenant: "tenant", Namespace: ns, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: cap, MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	decisions := []model.Decision{{Selected: true, Feasible: true, Namespace: ns, Pod: original.Name, Action: model.ActionRotate,
 		Trace: &model.DecisionTraceV2{DecisionID: "decision-m009", DispatchOutcome: model.DispatchNotAttempted}}}
-	if n := manager.actuate(ctx, entry, pol, decisions, map[string]*model.WorkloadView{ns + "/" + original.Name: view}); n != 1 || !decisions[0].Actuated || decisions[0].Phoenix == nil {
+	if n := manager.actuate(ctx, entry, pol, decisions, map[string]*model.WorkloadView{ns + "/" + original.Name: view}); n != 1 || !decisions[0].Actuated || decisions[0].Phoenix != nil || decisions[0].GracefulTermination == nil {
 		t.Fatalf("actual runner dispatch failed: count=%d decision=%+v", n, decisions[0])
 	}
-	if len(manager.pendingRotations) != 1 {
-		t.Fatalf("runner did not retain actual producer identity: pending=%d", len(manager.pendingRotations))
+	receipt := decisions[0].GracefulTermination
+	if receipt.PolicyUID != string(policy.UID) || receipt.PolicyGeneration != policy.Generation || receipt.PolicyGraceCapSeconds != cap || receipt.WorkloadGraceSeconds != 0 || receipt.EffectiveGracePeriodSeconds != 0 || receipt.PodUID != string(original.UID) || receipt.PodResourceVersion == "" || receipt.TerminationStatus != "unconfirmed" {
+		t.Fatalf("native graceful termination receipt=%+v", receipt)
 	}
-	eventName, eventUID := decisions[0].Phoenix.EventName, decisions[0].Phoenix.EventUID
+	if len(manager.pendingRotations) != 1 {
+		t.Fatalf("runner did not retain actual native rotation identity: pending=%d", len(manager.pendingRotations))
+	}
 
-	event := &amtdv1beta1.SecurityEvent{}
 	var replacement *corev1.Pod
 	m034Poll(t, 20*time.Second, func() (bool, error) {
-		if err := reader.Get(ctx, client.ObjectKey{Name: eventName}, event); err != nil {
-			return false, err
-		}
-		if event.Status.AppliedAction != "rotate" || event.Status.ProcessedAt.IsZero() {
-			return false, nil
-		}
 		if err := reader.List(ctx, &pods, client.InNamespace(ns)); err != nil {
 			return false, err
 		}
@@ -203,14 +168,16 @@ func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testi
 		if collectErr != nil {
 			return false, collectErr
 		}
-		receipt := current.PhoenixReceipts[eventName]
-		recovered := false
+		recovered, originalPresent := false, false
 		for i := range current.Pods {
+			if current.Pods[i].UID == string(original.UID) {
+				originalPresent = true
+			}
 			if current.Pods[i].UID == string(replacement.UID) && current.Pods[i].Ready {
 				recovered = true
 			}
 		}
-		if receipt.EventUID != eventUID || receipt.AppliedAction != "rotate" || !recovered {
+		if originalPresent || !recovered {
 			return false, nil
 		}
 		snapshot = current
@@ -218,12 +185,9 @@ func TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController(t *testi
 	})
 	manager.observeReadyRotations(snapshot)
 	if len(opt.observations) != 1 || len(manager.pendingRotations) != 0 {
-		t.Fatalf("exact API receipt/replacement did not resolve runner: observations=%v pending=%d", opt.observations, len(manager.pendingRotations))
+		t.Fatalf("exact native request/replacement did not resolve runner: observations=%v pending=%d", opt.observations, len(manager.pendingRotations))
 	}
-	if !strings.Contains(auditOut.String(), `"outcome":"confirmed-execution-recovery"`) {
-		t.Fatalf("missing exact terminal observation audit: %s", auditOut.String())
-	}
-	if got := snapshot.PhoenixReceipts[eventName]; got.EventUID != eventUID || got.TargetUID != string(original.UID) || got.AppliedAction != "rotate" {
-		t.Fatalf("snapshot receipt=%+v, want actual producer/consumer identities", got)
+	if strings.Contains(auditOut.String(), `"outcome":"confirmed-execution-recovery"`) {
+		t.Fatalf("native request must not inherit Phoenix execution-receipt claims: %s", auditOut.String())
 	}
 }

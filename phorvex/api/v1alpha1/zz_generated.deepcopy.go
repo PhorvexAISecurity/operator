@@ -110,6 +110,11 @@ func (in *BudgetSpec) DeepCopyInto(out *BudgetSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.MaxGracePeriodSeconds != nil {
+		in, out := &in.MaxGracePeriodSeconds, &out.MaxGracePeriodSeconds
+		*out = new(int64)
+		**out = **in
+	}
 	out.TickInterval = in.TickInterval
 	out.AntiOverRotationWindow = in.AntiOverRotationWindow
 	out.ProactiveFloor = in.ProactiveFloor

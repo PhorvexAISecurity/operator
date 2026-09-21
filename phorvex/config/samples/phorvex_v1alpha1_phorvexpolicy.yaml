@@ -19,6 +19,9 @@ spec:
       flowDisruption: "0.6"
   budget:
     maxMovesPerTick: 3
+    # Native rotate caps long workload termination grace at this bound. A
+    # shorter workload grace remains shorter; Phoenix-only rotate is refused.
+    maxGracePeriodSeconds: 30
     tickInterval: 20s
     antiOverRotationWindow: 5m
     proactiveFloor: 1h        # a.k.a. the hygiene floor (detection-independent)

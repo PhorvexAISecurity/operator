@@ -339,8 +339,17 @@ func clearDispatchResult(d *model.Decision) {
 	d.ObjectsTouched = nil
 	d.RollbackRef = ""
 	d.MutationKind = ""
+	d.GracefulTermination = nil
 	d.Phoenix = nil
 	d.DispatchOutcome, d.DispatchReason = "", ""
+}
+
+func cloneGracefulTermination(in *model.GracefulTerminationReceipt) *model.GracefulTerminationReceipt {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 // resetDispatchAttempt removes every result and runtime-boundary field from a
@@ -545,7 +554,7 @@ func backendPurpose(b actuator.Backend) string {
 	case actuator.BackendNative:
 		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
 	case actuator.BackendHybrid:
-		return "Phoenix for rotate/quarantine, native for the AI-native moves"
+		return "native for policy-bounded rotate and AI-native moves; Phoenix for quarantine"
 	default:
 		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
 	}
@@ -2468,6 +2477,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 	d.DispatchOutcome, d.DispatchReason = "", ""
 	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
 	d.ObjectsTouched = nil
+	d.GracefulTermination = nil
 	if original.Trace != nil {
 		tr := *original.Trace
 		tr.Existential = d.Existential
@@ -2945,18 +2955,20 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
-			AdapterObservation: v.Pod.AdapterObservation,
-			PolicyName:         pol.PolicyName,
-			PolicyUID:          pol.PolicyUID,
-			Tenant:             pol.Tenant,
-			Namespace:          decisions[i].Namespace,
-			Pod:                decisions[i].Pod,
-			Action:             decisions[i].Action,
-			Reason:             decisions[i].Reason,
-			Score:              score,
-			CoverageValue:      coverageValue,
-			TargetUID:          v.Pod.UID,
-			TickID:             pol.TickID,
+			AdapterObservation:    v.Pod.AdapterObservation,
+			PolicyName:            pol.PolicyName,
+			PolicyUID:             pol.PolicyUID,
+			PolicyGeneration:      pol.PolicyGeneration,
+			MaxGracePeriodSeconds: pol.MaxGracePeriodSeconds,
+			Tenant:                pol.Tenant,
+			Namespace:             decisions[i].Namespace,
+			Pod:                   decisions[i].Pod,
+			Action:                decisions[i].Action,
+			Reason:                decisions[i].Reason,
+			Score:                 score,
+			CoverageValue:         coverageValue,
+			TargetUID:             v.Pod.UID,
+			TickID:                pol.TickID,
 			ServingObservation: &actuator.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
@@ -3080,6 +3092,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
@@ -3186,6 +3199,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
@@ -3211,6 +3225,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].ObjectsTouched = res.ObjectsTouched
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
+			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			switch disposition {
 			case actuator.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")
@@ -3263,6 +3278,12 @@ func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForen
 
 func buildPolicy(e *policyEntry) model.Policy {
 	s := &e.spec
+	maxGracePeriodSeconds, maxGraceErr := s.EffectiveMaxGracePeriodSeconds()
+	if maxGraceErr != nil {
+		// Runtime inputs that bypass CRD validation remain invalid. Zero is a
+		// refusal sentinel at the rotate boundary, never a force-delete value.
+		maxGracePeriodSeconds = 0
+	}
 	disruptionAversion, disruptionAversionConfigured, disruptionAversionErr := s.EffectiveDisruptionAversion()
 	if disruptionAversionErr != nil {
 		disruptionAversion = math.NaN()
@@ -3281,6 +3302,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		Namespace:                    e.namespace,
 		PolicyName:                   e.key.Name,
 		PolicyUID:                    e.uid,
+		PolicyGeneration:             e.generation,
 		Mode:                         s.EffectiveMode(),
 		DryRun:                       s.IsDryRun(),
 		Lambda:                       s.EffectiveLambda(),
@@ -3292,6 +3314,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		WeightSecrets:                s.EffectiveWeightSecrets(),
 		BlastRadiusFromGraph:         s.AssetValue.BlastRadiusFromGraph,
 		MaxMovesPerTick:              s.EffectiveMaxMovesPerTick(),
+		MaxGracePeriodSeconds:        maxGracePeriodSeconds,
 		TickInterval:                 s.EffectiveTickInterval(),
 		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
 		ProactiveFloor:               s.EffectiveProactiveFloor(),

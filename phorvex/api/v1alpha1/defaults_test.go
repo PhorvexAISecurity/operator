@@ -302,6 +302,31 @@ func TestActionEnabled(t *testing.T) {
 	}
 }
 
+func TestM054EffectiveMaxGracePeriodSeconds(t *testing.T) {
+	ptr := func(v int64) *int64 { return &v }
+	for _, tt := range []struct {
+		name    string
+		value   *int64
+		want    int64
+		wantErr bool
+	}{
+		{name: "omitted-default", want: 30},
+		{name: "lower-bound", value: ptr(1), want: 1},
+		{name: "upper-bound", value: ptr(300), want: 300},
+		{name: "zero", value: ptr(0), wantErr: true},
+		{name: "negative", value: ptr(-1), wantErr: true},
+		{name: "oversized", value: ptr(301), wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := PhorvexPolicySpec{Budget: BudgetSpec{MaxGracePeriodSeconds: tt.value}}
+			got, err := spec.EffectiveMaxGracePeriodSeconds()
+			if (err != nil) != tt.wantErr || (!tt.wantErr && got != tt.want) {
+				t.Fatalf("EffectiveMaxGracePeriodSeconds()=(%d,%v), want (%d,error=%t)", got, err, tt.want, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestEffectiveTenant(t *testing.T) {
 	p := &PhorvexPolicy{}
 	p.Namespace = "team-a"

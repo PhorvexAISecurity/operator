@@ -9,7 +9,10 @@ top of **UNMODIFIED extended Phoenix** and decides *which* workload to move, *wh
 and *which action*, by optimizing security gained against disruption cost — then
 drives Phoenix through Phoenix's own CRDs (**Seam 1**: emit `SecurityEvent` + maintain
 an `AdaptiveMovingTargetDefense` strategy). The default Phoenix backend does not write
-pods; native/hybrid actuation is opt-in and uses per-tenant namespaced Roles.
+Pods. It continues to route quarantine through Phoenix, but refuses `rotate` because
+Phoenix Delete cannot carry the selecting policy's typed graceful-termination cap.
+Choose `native` or `hybrid` and grant the tenant namespace Role to enable bounded
+rotation; hybrid keeps quarantine on Phoenix while routing rotate natively.
 
 > This is a **separate Go module** (`github.com/phorvex/phorvex`). It depends on the
 > Phoenix module ONLY to construct/emit Phoenix's typed CRs, via a consumer-side
@@ -35,7 +38,8 @@ pods; native/hybrid actuation is opt-in and uses per-tenant namespaced Roles.
 - **Per-variable exposure-clock** scaffold (pod identity + node placement live; image
   / env / GPU / network / session declared).
 - **Actuator interface**: `PhoenixActuator` (Seam 1) plus native/hybrid handlers behind
-  an explicit backend setting and namespaced write RBAC.
+  an explicit backend setting and namespaced write RBAC. Pure Phoenix accepts quarantine
+  and explicitly refuses bounded rotate; hybrid routes rotate to the native handler.
 - **Dry-run decision log** + **Prometheus metrics** + **Grafana risk heatmap**.
 - **Least-privilege RBAC**: writes ONLY its own CRD + SecurityEvent/AMTD; never pods.
 
@@ -48,7 +52,7 @@ pods; native/hybrid actuation is opt-in and uses per-tenant namespaced Roles.
 | **FR3** | Context: CVE/value/blast-radius, kill-chain state, exposure timer, SLO headroom | [internal/ctxprov/](internal/ctxprov/), [internal/graph/](internal/graph/), [internal/exposure/](internal/exposure/), [internal/belief/](internal/belief/) | ✅ built (CVE/CVSS prior = roadmap; posture is recorded for audit; raw event severity drives P1 through kill-chain P(hold)/stage urgency) |
 | **FR4** | Optimizer: argmax(E[sec] − λ·E[K]) s.t. feasibility + budget + anti-over-rotation; ranked + explainable | [internal/decision/engine.go](internal/decision/engine.go) | ✅ greedy top-B (the PRD's MVP form; mixed-strategy solver = later) |
 | **FR5** | Trigger: event-driven + proactive exposure floor (detection-independent) | [internal/belief/reconexposure.go](internal/belief/reconexposure.go), `budget.proactiveFloor` | ✅ built |
-| **FR6** | Actuation: emit SecurityEvent + maintain AMTD → Phoenix runs rotate\|quarantine | [internal/actuator/phoenix.go](internal/actuator/phoenix.go) | ✅ built (Seam 1) |
+| **FR6** | Actuation: Phoenix quarantine plus native policy-bounded rotate and advanced moves | [internal/actuator/](internal/actuator/) | ✅ built; pure Phoenix rotate refused |
 | **FR7** | Audit/dashboard: per-decision inputs, action, attribution, R6 counterfactual; Grafana heatmap | [internal/audit/](internal/audit/), [internal/metrics/](internal/metrics/), [grafana/phorvex-heatmap.json](grafana/phorvex-heatmap.json) | ✅ built |
 | **FR8** | Safety: global kill-switch; per-namespace dry-run; configurable B/λ/thresholds/window; evidence-retention guard | [internal/runner/killswitch.go](internal/runner/killswitch.go), `mode:dryRun`, `feasibility/anti-over-rotation` | ✅ built |
 | **FR9** | *(not defined in the PRD; the PRD lists FR1–FR8.)* Mapped here to the **CRD config surface + NFR envelope**: PhorvexPolicy knobs, least-privilege RBAC (NFR4), restart-safe exposure (NFR3), <1s tick metric (NFR1) | [api/v1alpha1/](api/v1alpha1/), [config/rbac/role.yaml](config/rbac/role.yaml) | ✅ built — **FR9 itself is undefined upstream; flagged honestly** |
@@ -127,6 +131,13 @@ go run ./cmd/main.go --integration-emit \
 `phorvex.ai/route-key`, and at least two matching Ready replicas must exist before a
 restitch. The handler re-keys the target pod and the Service selector together; rollback
 restores both. See `config/samples/route-rotate-contract.yaml` for a complete reference.
+
+Bounded `rotate` is a compatibility boundary for backend selection. The default/unset
+`phoenix` backend now reports rotate unsupported rather than emitting a Phoenix
+Delete that ignores `budget.maxGracePeriodSeconds`. Existing policies remain
+stored unchanged, but rotate is excluded by the capability gate until the deployment
+selects `native` or `hybrid`. `hybrid` is the migration path when Phoenix quarantine
+must remain in use.
 
 For native/hybrid operation, list each protected tenant namespace in Helm values:
 
