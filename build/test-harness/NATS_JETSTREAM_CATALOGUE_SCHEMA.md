@@ -7,6 +7,11 @@ chooses one mode. `no-action` measures the genuine protocol without disruption;
 volume. Direct-native and installed-dispatch are separate later entries and can
 never be inferred from either mode.
 
+Invoke the harness with both `-negative-control=false` and `-adaptive=false`.
+Their CLI defaults are `true`, but either extra arm would reuse the same external
+PV authority after its single owned trial. The command refuses this combination
+before it builds Kubernetes clients; it does not silently disable an arm.
+
 The authority binds one reviewed node and holder UID, the exact UID of a
 no-provisioner Immediate/Retain StorageClass, three unique Available local PV
 names/UIDs/slots/path hashes, and a nonce. Each PV must carry the exact holder,
@@ -18,6 +23,11 @@ the installed NATS workload.
 The probe connects through an exact port-forward to member 0 with reconnects
 disabled. `member-restart` targets only member 2. It therefore measures a
 non-client member restart; client-member and leader failover remain unmeasured.
+After each explicit consumer ACK, the same-consumer negative observation window
+is 500 ms while the configured consumer `AckWait` is 2 seconds. The receipt only
+claims that no same-consumer delivery was observed during that completed 500 ms
+window (including a final queued-message drain); it does not claim a full-AckWait
+or indefinite absence of redelivery.
 Every successful restart result records the suite version, mode, source and
 image identities, stream/subject/consumer/nonce, exact Pod/PVC/PV/server member
 identities, A and B PubAcks, delivery ACKs, independent stored-message reads,
