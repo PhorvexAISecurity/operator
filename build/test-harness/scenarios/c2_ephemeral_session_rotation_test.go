@@ -1,6 +1,7 @@
 package scenarios
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -677,8 +678,102 @@ func TestEphemeralSessionIdentityReceiptPersistsThroughRealTrialLogger(t *testin
 		t.Fatalf("persisted raw identity objects incomplete: %+v", receipt)
 	}
 	var recordedPod corev1.Pod
-	if err := json.Unmarshal(receipt.PodObject, &recordedPod); err != nil || recordedPod.UID != "replacement" {
-		t.Fatalf("persisted Pod object is not independently usable: uid=%s err=%v raw=%s", recordedPod.UID, err, receipt.PodObject)
+	if err := json.Unmarshal(receipt.PodObject, &recordedPod); err != nil || recordedPod.APIVersion != "v1" || recordedPod.Kind != "Pod" || recordedPod.UID != "replacement" {
+		t.Fatalf("persisted Pod object is not independently usable: gvk=%s/%s uid=%s err=%v raw=%s", recordedPod.APIVersion, recordedPod.Kind, recordedPod.UID, err, receipt.PodObject)
+	}
+	for _, tc := range []struct {
+		name, rawObject, apiVersion, kind, uid string
+	}{
+		{name: "Pod", rawObject: string(receipt.PodObject), apiVersion: "v1", kind: "Pod", uid: "replacement"},
+		{name: "ReplicaSet", rawObject: string(receipt.ReplicaSetObject), apiVersion: "apps/v1", kind: "ReplicaSet", uid: "session-rs-owned"},
+		{name: "Deployment", rawObject: string(receipt.DeploymentObject), apiVersion: "apps/v1", kind: "Deployment", uid: "deployment-owned"},
+		{name: "Service", rawObject: string(receipt.ServiceObject), apiVersion: "v1", kind: "Service", uid: "service-owned"},
+		{name: "EndpointSlice", rawObject: string(receipt.EndpointSliceObjects[0]), apiVersion: "discovery.k8s.io/v1", kind: "EndpointSlice", uid: "session-slice-owned"},
+	} {
+		var envelope struct {
+			APIVersion string `json:"apiVersion"`
+			Kind       string `json:"kind"`
+			Metadata   struct {
+				UID types.UID `json:"uid"`
+			} `json:"metadata"`
+		}
+		if err := json.Unmarshal([]byte(tc.rawObject), &envelope); err != nil || envelope.APIVersion != tc.apiVersion || envelope.Kind != tc.kind || envelope.Metadata.UID != types.UID(tc.uid) {
+			t.Fatalf("persisted %s envelope differs: %+v err=%v rawSHA256=%x", tc.name, envelope, err, sha256.Sum256([]byte(tc.rawObject)))
+		}
+	}
+}
+
+func TestSessionIdentityObjectAddsExactGVKWithoutMutatingTypedClientObjects(t *testing.T) {
+	objects := []struct {
+		kind, apiVersion string
+		object           any
+	}{
+		{kind: "Pod", apiVersion: "v1", object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", UID: "pod-uid", ResourceVersion: "17"}, Spec: corev1.PodSpec{NodeName: "node"}}},
+		{kind: "ReplicaSet", apiVersion: "apps/v1", object: &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", UID: "rs-uid", ResourceVersion: "18"}}},
+		{kind: "Deployment", apiVersion: "apps/v1", object: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "deployment", UID: "deployment-uid", ResourceVersion: "19"}}},
+		{kind: "Service", apiVersion: "v1", object: &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", UID: "service-uid", ResourceVersion: "20"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": sessionApp}}}},
+		{kind: "EndpointSlice", apiVersion: "discovery.k8s.io/v1", object: &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "slice", UID: "slice-uid", ResourceVersion: "21"}, AddressType: discoveryv1.AddressTypeIPv4}},
+	}
+	for _, tc := range objects {
+		t.Run(tc.kind, func(t *testing.T) {
+			before, err := json.Marshal(tc.object)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var beforeEnvelope struct {
+				APIVersion string `json:"apiVersion"`
+				Kind       string `json:"kind"`
+			}
+			if err := json.Unmarshal(before, &beforeEnvelope); err != nil || beforeEnvelope.APIVersion != "" || beforeEnvelope.Kind != "" {
+				t.Fatalf("fixture does not reproduce zero TypeMeta: %+v err=%v", beforeEnvelope, err)
+			}
+			raw, err := rawSessionIdentityObject(tc.kind, tc.object)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got struct {
+				APIVersion string `json:"apiVersion"`
+				Kind       string `json:"kind"`
+				Metadata   struct {
+					Name            string    `json:"name"`
+					UID             types.UID `json:"uid"`
+					ResourceVersion string    `json:"resourceVersion"`
+				} `json:"metadata"`
+			}
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.APIVersion != tc.apiVersion || got.Kind != tc.kind || got.Metadata.Name == "" || got.Metadata.UID == "" || got.Metadata.ResourceVersion == "" {
+				t.Fatalf("typed identity envelope incomplete: %+v rawSHA256=%x", got, sha256.Sum256(raw))
+			}
+			after, err := json.Marshal(tc.object)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatalf("identity producer mutated client object:\nbefore=%s\nafter=%s", before, after)
+			}
+		})
+	}
+}
+
+func TestSessionIdentityObjectRejectsTypeAmbiguity(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		object     any
+	}{
+		{name: "requested kind differs", kind: "Service", object: &corev1.Pod{}},
+		{name: "explicit kind differs", kind: "Pod", object: &corev1.Pod{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Service"}}},
+		{name: "explicit api version differs", kind: "Pod", object: &corev1.Pod{TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Pod"}}},
+		{name: "nil typed object", kind: "Pod", object: (*corev1.Pod)(nil)},
+		{name: "unknown typed object", kind: "PartialObjectMetadata", object: &metav1.PartialObjectMetadata{}},
+		{name: "nonpointer substitution", kind: "Pod", object: corev1.Pod{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if raw, err := rawSessionIdentityObject(tc.kind, tc.object); err == nil {
+				t.Fatalf("ambiguous identity object accepted: %s", raw)
+			}
+		})
 	}
 }
 
@@ -1055,7 +1150,7 @@ func setSessionFixtureEndpoint(t *testing.T, env *core.Env, pod *corev1.Pod) {
 		}
 	}
 	ready, controller := true, true
-	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "session-slice", Namespace: env.Config.Namespace, Labels: map[string]string{discoveryv1.LabelServiceName: sessionService}, OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: sessionService, UID: "service-owned", Controller: &controller}}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"127.0.0.1"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: env.Config.Namespace, Name: pod.Name, UID: pod.UID}}}}
+	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "session-slice", Namespace: env.Config.Namespace, UID: "session-slice-owned", Labels: map[string]string{discoveryv1.LabelServiceName: sessionService}, OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: sessionService, UID: "service-owned", Controller: &controller}}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"127.0.0.1"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: env.Config.Namespace, Name: pod.Name, UID: pod.UID}}}}
 	if _, err := env.Kube.DiscoveryV1().EndpointSlices(env.Config.Namespace).Create(context.Background(), slice, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
