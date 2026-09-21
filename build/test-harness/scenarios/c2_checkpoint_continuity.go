@@ -38,6 +38,11 @@ const (
 	checkpointImage             = sessionPythonImage
 	checkpointObservationWindow = 20 * time.Second
 	checkpointSampleInterval    = 2 * time.Second
+	checkpointRecoveryWindow    = 12 * time.Second
+	checkpointRecoveryInterval  = 250 * time.Millisecond
+	checkpointRecoveryAttempts  = 3
+	checkpointMaxOutageSamples  = 32
+	checkpointMaxOutageJSON     = 8192
 	checkpointLocalHolder       = "checkpoint-local-holder"
 	checkpointLocalCampaign     = "post25-checkpoint-local-r1"
 	checkpointLocalOwnerLabel   = "fixture.phorvex.ai/external-owner"
@@ -174,10 +179,60 @@ type c2CheckpointContinuity struct {
 	pvName, storageClassName, storageProvisioner   string
 	pvUID, storageClassUID                         types.UID
 	incarnationChain                               []checkpointIncarnationObservation
+	benchmarkEvidence                              map[string]string
+	outageSamples                                  []checkpointOutageSample
+	observationAttempts, observationSuccesses      int
+	recoveryAttempts                               int
+	recoveryStarted, recoveryEnded                 time.Time
+	durabilityObserved                             bool
+	latestAcknowledgedAtUTC                        string
+	lastRecoveredAtUTC                             string
+	observationPhase                               string
+	outcomeClass, outcomeCategory                  string
 	localFixture                                   bool
 	localSlot                                      int
 	localHolderUID, localNodeUID                   types.UID
 	localNodeName, localNonce, localPath           string
+}
+
+type checkpointObservationClass string
+
+const (
+	checkpointAcknowledged           checkpointObservationClass = "acknowledged"
+	checkpointApplicationUnavailable checkpointObservationClass = "application-unavailable"
+	checkpointHardIntegrity          checkpointObservationClass = "hard-integrity"
+	checkpointMeasurementError       checkpointObservationClass = "measurement-error"
+)
+
+type checkpointObservationError struct {
+	Class      checkpointObservationClass
+	Category   string
+	HTTPStatus int
+	Receipt    checkpointReceipt
+	Cause      error
+}
+
+func (e *checkpointObservationError) Error() string {
+	if e == nil || e.Cause == nil {
+		return "checkpoint observation failed"
+	}
+	return string(e.Class) + ": " + e.Category + ": " + e.Cause.Error()
+}
+
+func (e *checkpointObservationError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+type checkpointOutageSample struct {
+	Ordinal      int    `json:"ordinal"`
+	Phase        string `json:"phase"`
+	StartedAtUTC string `json:"startedAtUTC"`
+	EndedAtUTC   string `json:"endedAtUTC"`
+	Category     string `json:"category"`
+	HTTPStatus   int    `json:"httpStatus,omitempty"`
 }
 
 type checkpointIncarnationObservation struct {
@@ -195,8 +250,8 @@ type checkpointIncarnationObservation struct {
 func (s *c2CheckpointContinuity) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{Name: "c2-checkpoint-continuity", Category: core.CategoryR6Claimed, Source: "Post25 benign stateful checkpoint continuity control", R6ResponseTag: core.R6Partial, BenignControl: true, Realism: core.RealismExecutable,
 		Mechanism:          fmt.Sprintf("PVC-mounted Python CPU counter with atomic fsync+replace+directory-fsync checkpoints and ordinary HTTP observation; image=%s sourceSHA256=%s", checkpointImage, checkpointSourceSHA256()),
-		ClaimLimits:        "benign functional control only; zero ATT&CK techniques; no attack, detection, containment, network-isolation, continuous-availability, GPU-training, mitigation, security-coverage, ROI, or proof of every wholly unobserved intermediate Pod/process incarnation",
-		OracleDescription:  "same identity must continue acknowledged progress; every observed bounded successive replacement must prove its last observed predecessor UID absent, retain the same owner/storage/service authority, use a new observed Pod UID and process incarnation, boot at or above that predecessor's latest acknowledgement, and preserve monotonic progress through the final observed incarnation",
+		ClaimLimits:        "benign functional control only; zero ATT&CK techniques; no attack, detection, containment, network-isolation, continuous-availability, GPU-training, mitigation, security-coverage, ROI, or proof of every wholly unobserved intermediate Pod/process incarnation; sampled application outages remain separate from recovered durability",
+		OracleDescription:  "same identity must continue acknowledged progress; every observed bounded successive replacement must prove its last observed predecessor UID absent, retain the same owner/storage/service authority, use a new observed Pod UID and process incarnation, boot at or above that predecessor's latest acknowledgement, and preserve monotonic progress through the final observed incarnation; typed application unavailability may receive at most three recovery observations within twelve seconds and remains explicit evidence",
 		CleanupDescription: "UID-preconditioned deletion of only the successfully created Deployment, ReplicaSet/target Pod identities, Service, producer Pod, and PVC",
 		R6Justification:    "Measures only acknowledged synthetic checkpoint continuity across Pod replacement through a real application protocol."}
 }
@@ -258,7 +313,7 @@ func (s *c2CheckpointContinuity) validateCheckpointLocalHolder(ctx context.Conte
 	}
 	holderPod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, checkpointLocalHolder, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read checkpoint local holder: %w", err)
+		return measurementCheckpointObservation("local-holder-read", checkpointReceipt{}, fmt.Errorf("read checkpoint local holder: %w", err))
 	}
 	if holderPod.UID != s.localHolderUID || holderPod.DeletionTimestamp != nil || holderPod.Spec.NodeName != s.localNodeName || holderPod.Status.Phase != corev1.PodRunning || !podReady(holderPod) {
 		return fmt.Errorf("checkpoint local holder identity/readiness differs: name=%s uid=%s node=%s phase=%s", holderPod.Name, holderPod.UID, holderPod.Spec.NodeName, holderPod.Status.Phase)
@@ -299,7 +354,7 @@ func (s *c2CheckpointContinuity) validateCheckpointLocalHolder(ctx context.Conte
 	}
 	node, err := env.Kube.CoreV1().Nodes().Get(ctx, s.localNodeName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read checkpoint local node: %w", err)
+		return measurementCheckpointObservation("local-node-read", checkpointReceipt{}, fmt.Errorf("read checkpoint local node: %w", err))
 	}
 	gpu := node.Status.Allocatable[corev1.ResourceName("nvidia.com/gpu")]
 	if node.UID != s.localNodeUID || !checkpointNodeReady(node) || !gpu.IsZero() {
@@ -645,107 +700,405 @@ func (s *c2CheckpointContinuity) Execute(ctx context.Context, env *core.Env) (co
 	s.windowStarted = time.Time{}
 	s.windowEnded = time.Time{}
 	s.incarnationChain = nil
+	s.benchmarkEvidence = map[string]string{}
+	s.outageSamples = nil
+	s.observationAttempts = 0
+	s.observationSuccesses = 0
+	s.recoveryAttempts = 0
+	s.recoveryStarted = time.Time{}
+	s.recoveryEnded = time.Time{}
+	s.durabilityObserved = false
+	s.latestAcknowledgedAtUTC = ""
+	s.lastRecoveredAtUTC = ""
+	s.observationPhase = "establishment"
+	s.outcomeClass = "pending"
+	s.outcomeCategory = "pending"
 	original, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, s.targetName, metav1.GetOptions{})
-	if err != nil || original.UID != s.targetUID || !podReady(original) || original.DeletionTimestamp != nil {
-		return core.AttackResult{}, fmt.Errorf("checkpoint original identity/readiness unavailable: pod=%v err=%v", original, err)
-	}
-	if err := s.validateObservedCheckpointWorkload(ctx, env, original); err != nil {
-		return core.AttackResult{}, err
-	}
-	first, err := s.request(ctx, env)
 	if err != nil {
-		return core.AttackResult{}, err
+		return s.checkpointAttackFailure(nil, nil, measurementCheckpointObservation("original-pod-read", checkpointReceipt{}, fmt.Errorf("read checkpoint original Pod: %w", err)))
+	}
+	if original.UID != s.targetUID || !podReady(original) || original.DeletionTimestamp != nil {
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("original-pod-identity", checkpointReceipt{}, fmt.Errorf("checkpoint original identity/readiness changed: pod=%v", original)))
+	}
+	if _, err := s.validateObservedCheckpointWorkload(ctx, env, original); err != nil {
+		return s.checkpointAttackFailure(nil, nil, err)
+	}
+	first, firstReceipt, err := s.request(ctx, env)
+	s.recordCheckpointAttempt(err, firstReceipt)
+	if err != nil {
+		return s.checkpointAttackFailure(nil, nil, err)
 	}
 	if err = validateCheckpointIdentity(first, s.targetUID, s.pvcUID); err != nil {
-		return core.AttackResult{}, err
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("initial-checkpoint-identity", firstReceipt, err))
 	}
 	if first.InitializedFresh == nil || !*first.InitializedFresh || first.BootSequence != 0 {
-		return core.AttackResult{}, errors.New("owned volume did not prove one fresh initial initialization")
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("initial-volume-provenance", firstReceipt, errors.New("owned volume did not prove one fresh initial initialization")))
 	}
 	var second checkpointBody
+	var secondReceipt checkpointReceipt
 	for i := 0; i < 10; i++ {
 		select {
 		case <-ctx.Done():
-			return core.AttackResult{}, ctx.Err()
+			return s.checkpointAttackFailure(nil, nil, measurementCheckpointObservation("establishment-context", checkpointReceipt{}, ctx.Err()))
 		case <-time.After(250 * time.Millisecond):
 		}
-		second, err = s.request(ctx, env)
+		second, secondReceipt, err = s.request(ctx, env)
+		s.recordCheckpointAttempt(err, secondReceipt)
 		if err == nil && second.Sequence > first.Sequence {
 			break
 		}
+		if err != nil && observationClass(err) != checkpointApplicationUnavailable {
+			return s.checkpointAttackFailure(nil, nil, err)
+		}
 	}
 	if err != nil {
-		return core.AttackResult{}, err
+		return s.checkpointAttackFailure(nil, nil, err)
 	}
 	if second.Sequence <= first.Sequence {
-		return core.AttackResult{}, errors.New("original checkpoint writer did not advance twice")
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("initial-progress-stalled", checkpointReceipt{}, errors.New("original checkpoint writer did not advance twice")))
 	}
 	if err = validateCheckpointIdentity(second, s.targetUID, s.pvcUID); err != nil {
-		return core.AttackResult{}, err
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("second-checkpoint-identity", checkpointReceipt{}, err))
 	}
 	if second.Incarnation != first.Incarnation {
-		return core.AttackResult{}, errors.New("original incarnation changed during establishment")
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("initial-incarnation", checkpointReceipt{}, errors.New("original incarnation changed during establishment")))
 	}
 	if second.InitializedFresh == nil || !*second.InitializedFresh || second.BootSequence != first.BootSequence || second.BootChecksum != first.BootChecksum {
-		return core.AttackResult{}, errors.New("original initialization/boot provenance changed during establishment")
+		return s.checkpointAttackFailure(nil, nil, hardCheckpointObservation("initial-boot-provenance", checkpointReceipt{}, errors.New("original initialization/boot provenance changed during establishment")))
 	}
 	s.originalIncarnation = second.Incarnation
 	s.lastOriginal = second
 	s.incarnationChain = []checkpointIncarnationObservation{checkpointIncarnationFrom(s.targetName, s.targetUID, second, false)}
-	var integrityErr error
+	s.latestAcknowledgedAtUTC = secondReceipt.RequestEndedAtUTC
+	s.observationPhase = "window"
+	var terminalObservationErr error
 	start, end, samples, sampleFailures, err := checkpointObservationWait(ctx, checkpointObservationWindow, checkpointSampleInterval, func() (checkpointBody, error) {
-		body, requestErr := s.request(ctx, env)
-		if requestErr != nil {
-			return body, requestErr
+		body, sampleErr := s.observeCheckpointAttempt(ctx, env, false)
+		if sampleErr != nil && observationClass(sampleErr) != checkpointApplicationUnavailable && terminalObservationErr == nil {
+			terminalObservationErr = sampleErr
 		}
-		if sampleErr := s.observeCheckpointSample(ctx, env, body); sampleErr != nil {
-			if integrityErr == nil {
-				integrityErr = sampleErr
-			}
-			return body, sampleErr
-		}
-		return body, nil
+		return body, sampleErr
 	})
+	if err == nil {
+		err = terminalObservationErr
+	}
+	if err != nil {
+		var observed *checkpointObservationError
+		if !errors.As(err, &observed) {
+			err = measurementCheckpointObservation("observation-wait", checkpointReceipt{}, err)
+		}
+		s.recordCheckpointOutcome(err)
+	}
 	s.windowStarted, s.windowEnded = start, end
 	notes := map[string]string{"classification": "benign functional-effect control", "originalPodUID": string(s.targetUID), "pvcUID": string(s.pvcUID), "originalIncarnation": s.originalIncarnation, "lastOriginalSequence": strconv.FormatInt(s.lastOriginal.Sequence, 10), "lastOriginalChecksum": s.lastOriginal.Checksum, "fixtureImage": checkpointImage, "serverSourceSHA256": checkpointSourceSHA256(), "storageClass": s.storageClassName, "storageProvisioner": s.storageProvisioner, "boundPV": s.pvName, "boundPVUID": string(s.pvUID), "observationSamples": strconv.Itoa(samples), "observationFailures": strconv.Itoa(sampleFailures), "observationWindowStartedAtUTC": start.UTC().Format(time.RFC3339Nano), "observationWindowEndedAtUTC": end.UTC().Format(time.RFC3339Nano), "incarnationChain": s.checkpointIncarnationChainJSON()}
 	s.addCheckpointLocalEvidence(notes)
+	result := s.checkpointAttackResult([]string{"establish two durable original acknowledgements", "sample checkpoint Service during bounded observation window"}, notes)
 	if err != nil {
-		return core.AttackResult{Stages: []string{"establish two durable original acknowledgements", "sample checkpoint Service during bounded observation window"}, Notes: notes}, err
+		return result, err
 	}
-	if integrityErr != nil {
-		return core.AttackResult{Stages: []string{"establish two durable original acknowledgements", "sample checkpoint Service during bounded observation window"}, Notes: notes}, fmt.Errorf("checkpoint observation integrity failed: %w", integrityErr)
-	}
-	if samples == 0 || sampleFailures == samples {
-		return core.AttackResult{Stages: []string{"establish two durable original acknowledgements", "sample checkpoint Service during bounded observation window"}, Notes: notes}, errors.New("checkpoint observation window had no successful Service sample")
-	}
-	return core.AttackResult{Stages: []string{"establish two durable original acknowledgements", "sample checkpoint Service during bounded observation window"}, Notes: notes}, nil
+	return result, nil
+}
+
+func (s *c2CheckpointContinuity) checkpointAttackResult(stages []string, notes map[string]string) core.AttackResult {
+	s.updateCheckpointBenchmarkEvidence()
+	return core.AttackResult{Stages: stages, Notes: notes, BenchmarkEvidence: s.benchmarkEvidence}
+}
+
+func (s *c2CheckpointContinuity) checkpointAttackFailure(stages []string, notes map[string]string, err error) (core.AttackResult, error) {
+	s.recordCheckpointOutcome(err)
+	return s.checkpointAttackResult(stages, notes), err
 }
 
 func (s *c2CheckpointContinuity) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
 	if s.targetName == "" || s.targetUID == "" || s.pvcUID == "" || s.originalIncarnation == "" || s.lastOriginal.Sequence < 0 || s.windowEnded.Sub(s.windowStarted) < checkpointObservationWindow {
-		return core.OracleResult{}, errors.New("checkpoint stimulus/window provenance missing")
+		err := hardCheckpointObservation("oracle-provenance", checkpointReceipt{}, errors.New("checkpoint stimulus/window provenance missing"))
+		s.recordCheckpointOutcome(err)
+		s.updateCheckpointBenchmarkEvidence()
+		return core.OracleResult{}, err
 	}
 	if err := s.verifyStorageIdentity(ctx, env); err != nil {
+		s.recordCheckpointOutcome(err)
+		s.updateCheckpointBenchmarkEvidence()
 		return core.OracleResult{}, err
 	}
-	reply, err := s.request(ctx, env)
+	s.recoveryStarted = time.Now()
+	s.observationPhase = "recovery"
+	recoveryCtx, cancel := context.WithTimeout(ctx, checkpointRecoveryWindow)
+	defer cancel()
+	var pod *corev1.Pod
+	var reply checkpointBody
+	var transitioned bool
+recoveryLoop:
+	for s.recoveryAttempts < checkpointRecoveryAttempts && recoveryCtx.Err() == nil {
+		if s.recoveryAttempts > 0 {
+			timer := time.NewTimer(checkpointRecoveryInterval)
+			select {
+			case <-recoveryCtx.Done():
+				timer.Stop()
+				if ctx.Err() == nil {
+					break recoveryLoop
+				}
+				s.recoveryEnded = time.Now()
+				err := measurementCheckpointObservation("recovery-context-cancelled", checkpointReceipt{}, recoveryCtx.Err())
+				s.recordCheckpointOutcome(err)
+				s.updateCheckpointBenchmarkEvidence()
+				return core.OracleResult{}, err
+			case <-timer.C:
+			}
+		}
+		s.recoveryAttempts++
+		var err error
+		reply, pod, transitioned, err = s.observeCheckpointAttemptDetailed(recoveryCtx, env, true)
+		if err == nil {
+			s.recoveryEnded = time.Now()
+			s.durabilityObserved = true
+			s.updateCheckpointBenchmarkEvidence()
+			ev := s.checkpointOracleEvidence(pod, reply, transitioned)
+			state := "benign checkpoint durability control: exact original Pod and process continued acknowledged durable progress"
+			if len(s.incarnationChain) > 1 {
+				state = "benign checkpoint durability control: exact successive observed Pod incarnations loaded retained checkpoints and produced a later durable acknowledgement"
+			}
+			if len(s.outageSamples) > 0 {
+				state += "; sampled application availability was interrupted and later recovery does not prove continuous availability"
+			}
+			return core.OracleResult{Achieved: true, ObservedState: state, Evidence: ev}, nil
+		}
+		if observationClass(err) != checkpointApplicationUnavailable {
+			s.recoveryEnded = time.Now()
+			s.updateCheckpointBenchmarkEvidence()
+			return core.OracleResult{}, err
+		}
+	}
+	s.recoveryEnded = time.Now()
+	if err := ctx.Err(); err != nil {
+		observedErr := measurementCheckpointObservation("recovery-parent-context-cancelled", checkpointReceipt{}, err)
+		s.recordCheckpointOutcome(observedErr)
+		s.updateCheckpointBenchmarkEvidence()
+		return core.OracleResult{}, observedErr
+	}
+	s.updateCheckpointBenchmarkEvidence()
+	ev := s.checkpointOracleEvidence(nil, checkpointBody{}, false)
+	return core.OracleResult{Achieved: false, ObservedState: "benign checkpoint durability control: durability remained unverified after bounded application unavailability; no continuous-availability or corruption conclusion", Evidence: ev}, nil
+}
+
+func observationClass(err error) checkpointObservationClass {
+	var observed *checkpointObservationError
+	if errors.As(err, &observed) {
+		return observed.Class
+	}
+	return checkpointHardIntegrity
+}
+
+func hardCheckpointObservation(category string, receipt checkpointReceipt, cause error) error {
+	return &checkpointObservationError{Class: checkpointHardIntegrity, Category: category, Receipt: receipt, Cause: cause}
+}
+
+func measurementCheckpointObservation(category string, receipt checkpointReceipt, cause error) error {
+	return &checkpointObservationError{Class: checkpointMeasurementError, Category: category, Receipt: receipt, Cause: cause}
+}
+
+func unavailableCheckpointObservation(category string, status int, receipt checkpointReceipt, cause error) error {
+	return &checkpointObservationError{Class: checkpointApplicationUnavailable, Category: category, HTTPStatus: status, Receipt: receipt, Cause: cause}
+}
+
+func (s *c2CheckpointContinuity) recordCheckpointOutcome(err error) {
+	if err == nil {
+		s.outcomeClass = string(checkpointAcknowledged)
+		s.outcomeCategory = "checkpoint-acknowledged"
+		return
+	}
+	var observed *checkpointObservationError
+	if errors.As(err, &observed) {
+		s.outcomeClass = string(observed.Class)
+		s.outcomeCategory = observed.Category
+		return
+	}
+	s.outcomeClass = string(checkpointHardIntegrity)
+	s.outcomeCategory = "unclassified-integrity-error"
+}
+
+func (s *c2CheckpointContinuity) recordCheckpointAttempt(err error, receipt checkpointReceipt) {
+	s.observationAttempts++
+	s.recordCheckpointOutcome(err)
+	if err == nil {
+		s.observationSuccesses++
+		if len(s.outageSamples) > 0 && receipt.RequestEndedAtUTC != "" {
+			s.lastRecoveredAtUTC = receipt.RequestEndedAtUTC
+		}
+		return
+	}
+	var observed *checkpointObservationError
+	if !errors.As(err, &observed) || observed.Class != checkpointApplicationUnavailable {
+		return
+	}
+	if len(s.outageSamples) >= checkpointMaxOutageSamples {
+		return
+	}
+	start, end := observed.Receipt.RequestStartedAtUTC, observed.Receipt.RequestEndedAtUTC
+	if start == "" {
+		start = receipt.RequestStartedAtUTC
+	}
+	if end == "" {
+		end = receipt.RequestEndedAtUTC
+	}
+	phase := s.observationPhase
+	if phase == "" {
+		phase = "observation"
+	}
+	s.outageSamples = append(s.outageSamples, checkpointOutageSample{Ordinal: s.observationAttempts, Phase: phase, StartedAtUTC: start, EndedAtUTC: end, Category: observed.Category, HTTPStatus: observed.HTTPStatus})
+	s.lastRecoveredAtUTC = ""
+}
+
+func (s *c2CheckpointContinuity) observeCheckpointAttempt(ctx context.Context, env *core.Env, final bool) (checkpointBody, error) {
+	reply, _, _, err := s.observeCheckpointAttemptDetailed(ctx, env, final)
+	return reply, err
+}
+
+func (s *c2CheckpointContinuity) observeCheckpointAttemptDetailed(ctx context.Context, env *core.Env, final bool) (checkpointBody, *corev1.Pod, bool, error) {
+	reply, receipt, requestErr := s.request(ctx, env)
+	if requestErr != nil {
+		if observationClass(requestErr) == checkpointApplicationUnavailable {
+			if bindErr := s.validateUnavailableCheckpointAuthority(ctx, env, reply, receipt); bindErr != nil && observationClass(bindErr) != checkpointApplicationUnavailable {
+				s.recordCheckpointAttempt(bindErr, receipt)
+				return reply, nil, false, bindErr
+			}
+		}
+		s.recordCheckpointAttempt(requestErr, receipt)
+		return reply, nil, false, requestErr
+	}
+	pod, transitioned, routeAvailable, err := s.observeCheckpointReply(ctx, env, reply, receipt, final)
+	if err == nil {
+		s.latestAcknowledgedAtUTC = receipt.RequestEndedAtUTC
+	}
+	if err == nil && (!routeAvailable || !podReady(pod) || pod.DeletionTimestamp != nil) {
+		category := "route-zero-ready"
+		if !podReady(pod) || pod.DeletionTimestamp != nil {
+			category = "workload-unavailable"
+		}
+		err = unavailableCheckpointObservation(category, 0, receipt, errors.New("checkpoint durability acknowledgement bound while sampled application route was unavailable"))
+	}
+	s.recordCheckpointAttempt(err, receipt)
+	return reply, pod, transitioned, err
+}
+
+func (s *c2CheckpointContinuity) validateUnavailableCheckpointAuthority(ctx context.Context, env *core.Env, reply checkpointBody, receipt checkpointReceipt) error {
+	if err := s.ensureCheckpointIncarnationChain(); err != nil {
+		return hardCheckpointObservation("incarnation-chain-provenance", receipt, err)
+	}
+	current := &s.incarnationChain[len(s.incarnationChain)-1]
+	pod, absent, err := checkpointObservationTarget(ctx, env, checkpointApp, current.PodName, types.UID(current.PodUID), receipt)
 	if err != nil {
-		return core.OracleResult{}, err
+		return err
 	}
-	pod, transitioned, err := s.observeCheckpointReply(ctx, env, reply, true)
-	if err != nil {
-		return core.OracleResult{}, err
+	if _, err := s.validateObservedCheckpointWorkload(ctx, env, pod); err != nil {
+		if observationClass(err) == checkpointMeasurementError {
+			return measurementCheckpointObservation("workload-authority-read", receipt, err)
+		}
+		return hardCheckpointObservation("workload-authority", receipt, err)
 	}
-	ev := map[string]string{"originalPodUID": string(s.targetUID), "observedPodUID": string(pod.UID), "pvcUID": string(s.pvcUID), "pvName": s.pvName, "pvUID": string(s.pvUID), "storageClass": s.storageClassName, "originalUIDAbsent": strconv.FormatBool(len(s.incarnationChain) > 1), "previousUIDAbsent": strconv.FormatBool(transitioned), "bootSequence": strconv.FormatInt(reply.BootSequence, 10), "sequence": strconv.FormatInt(reply.Sequence, 10), "bootChecksum": reply.BootChecksum, "checksum": reply.Checksum, "incarnation": reply.Incarnation, "incarnationChain": s.checkpointIncarnationChainJSON(), "classification": "benign functional-effect control"}
+	if receipt.ExitCode == 0 && receipt.Stdout != "" {
+		if err := validateCheckpointPayloadIdentity(reply, pod.UID, s.pvcUID); err != nil {
+			return hardCheckpointObservation("unavailable-response-identity-or-checksum", receipt, err)
+		}
+		if _, err := s.acceptCheckpointContinuity(pod, absent, reply, receipt, false); err != nil {
+			return err
+		}
+		s.latestAcknowledgedAtUTC = receipt.RequestEndedAtUTC
+	}
+	return nil
+}
+
+func (s *c2CheckpointContinuity) checkpointOracleEvidence(pod *corev1.Pod, reply checkpointBody, transitioned bool) map[string]string {
+	ev := map[string]string{"originalPodUID": string(s.targetUID), "pvcUID": string(s.pvcUID), "pvName": s.pvName, "pvUID": string(s.pvUID), "storageClass": s.storageClassName, "originalUIDAbsent": strconv.FormatBool(len(s.incarnationChain) > 1), "previousUIDAbsent": strconv.FormatBool(transitioned), "incarnationChain": s.checkpointIncarnationChainJSON(), "classification": "benign functional-effect control"}
+	if pod != nil {
+		ev["observedPodUID"] = string(pod.UID)
+		ev["bootSequence"] = strconv.FormatInt(reply.BootSequence, 10)
+		ev["sequence"] = strconv.FormatInt(reply.Sequence, 10)
+		ev["bootChecksum"] = reply.BootChecksum
+		ev["checksum"] = reply.Checksum
+		ev["incarnation"] = reply.Incarnation
+	}
+	for key, value := range s.benchmarkEvidence {
+		ev[key] = value
+	}
 	s.addCheckpointLocalEvidence(ev)
-	if len(s.incarnationChain) == 1 {
-		return core.OracleResult{Achieved: true, ObservedState: "benign checkpoint control: exact original Pod and process continued acknowledged durable progress", Evidence: ev}, nil
+	return ev
+}
+
+func (s *c2CheckpointContinuity) updateCheckpointBenchmarkEvidence() {
+	if s.benchmarkEvidence == nil {
+		s.benchmarkEvidence = map[string]string{}
 	}
-	return core.OracleResult{Achieved: true, ObservedState: "benign checkpoint control: exact successive Pod incarnations loaded retained checkpoints and produced a later durable acknowledgement", Evidence: ev}, nil
+	latest := checkpointIncarnationObservation{}
+	if len(s.incarnationChain) > 0 {
+		latest = s.incarnationChain[len(s.incarnationChain)-1]
+	}
+	outageRaw, _ := json.Marshal(s.outageSamples)
+	if len(outageRaw) > checkpointMaxOutageJSON {
+		outageRaw = []byte(`[{"category":"evidence-bound-exceeded"}]`)
+	}
+	outcomeClass, outcomeCategory := s.outcomeClass, s.outcomeCategory
+	if outcomeClass == "" {
+		outcomeClass, outcomeCategory = "pending", "pending"
+	}
+	s.benchmarkEvidence["durabilityObserved"] = strconv.FormatBool(s.durabilityObserved)
+	s.benchmarkEvidence["outcomeClass"] = outcomeClass
+	s.benchmarkEvidence["outcomeCategory"] = outcomeCategory
+	s.benchmarkEvidence["durabilityStatus"] = "pending"
+	if !s.recoveryEnded.IsZero() {
+		if s.durabilityObserved {
+			s.benchmarkEvidence["durabilityStatus"] = "acknowledged"
+		} else {
+			s.benchmarkEvidence["durabilityStatus"] = "unverified"
+		}
+	}
+	s.benchmarkEvidence["availabilityInterrupted"] = strconv.FormatBool(len(s.outageSamples) > 0)
+	s.benchmarkEvidence["availabilityUnavailableSamples"] = strconv.Itoa(len(s.outageSamples))
+	httpFailures := 0
+	for _, sample := range s.outageSamples {
+		if sample.Category == "http-transport-unavailable" || sample.HTTPStatus != 0 {
+			httpFailures++
+		}
+	}
+	s.benchmarkEvidence["availabilityHTTPFailureSamples"] = strconv.Itoa(httpFailures)
+	s.benchmarkEvidence["observationAttempts"] = strconv.Itoa(s.observationAttempts)
+	s.benchmarkEvidence["observationSuccessfulSamples"] = strconv.Itoa(s.observationSuccesses)
+	s.benchmarkEvidence["recoveryAttempts"] = strconv.Itoa(s.recoveryAttempts)
+	s.benchmarkEvidence["recoveryLimitAttempts"] = strconv.Itoa(checkpointRecoveryAttempts)
+	s.benchmarkEvidence["recoveryWindowMillis"] = strconv.FormatInt(checkpointRecoveryWindow.Milliseconds(), 10)
+	s.benchmarkEvidence["observationWindowMillis"] = strconv.FormatInt(checkpointObservationWindow.Milliseconds(), 10)
+	s.benchmarkEvidence["sampleIntervalMillis"] = strconv.FormatInt(checkpointSampleInterval.Milliseconds(), 10)
+	exposure := s.windowEnded.Sub(s.windowStarted)
+	if !s.recoveryStarted.IsZero() && !s.recoveryEnded.IsZero() {
+		recoveryExposure := s.recoveryEnded.Sub(s.recoveryStarted)
+		s.benchmarkEvidence["recoveryExposureMillis"] = strconv.FormatInt(recoveryExposure.Milliseconds(), 10)
+		exposure += recoveryExposure
+	}
+	if exposure < 0 {
+		exposure = 0
+	}
+	s.benchmarkEvidence["observationExposureMillis"] = strconv.FormatInt(exposure.Milliseconds(), 10)
+	s.benchmarkEvidence["outageSamplesJSON"] = string(outageRaw)
+	if len(s.outageSamples) > 0 {
+		s.benchmarkEvidence["firstUnavailableAtUTC"] = s.outageSamples[0].StartedAtUTC
+		s.benchmarkEvidence["lastUnavailableAtUTC"] = s.outageSamples[len(s.outageSamples)-1].EndedAtUTC
+		if s.durabilityObserved && s.lastRecoveredAtUTC != "" {
+			s.benchmarkEvidence["recoveredAtUTC"] = s.lastRecoveredAtUTC
+		}
+	}
+	if latest.PodUID != "" {
+		s.benchmarkEvidence["latestAcknowledgedPodUID"] = latest.PodUID
+		s.benchmarkEvidence["latestAcknowledgedIncarnation"] = latest.Incarnation
+		s.benchmarkEvidence["latestAcknowledgedSequence"] = strconv.FormatInt(latest.AcknowledgedSequence, 10)
+		s.benchmarkEvidence["latestAcknowledgedChecksum"] = latest.AcknowledgedChecksum
+		if s.latestAcknowledgedAtUTC != "" {
+			s.benchmarkEvidence["latestAcknowledgedAtUTC"] = s.latestAcknowledgedAtUTC
+		}
+	}
 }
 
 func (s *c2CheckpointContinuity) observeCheckpointSample(ctx context.Context, env *core.Env, reply checkpointBody) error {
-	_, _, err := s.observeCheckpointReply(ctx, env, reply, false)
+	_, _, _, err := s.observeCheckpointReply(ctx, env, reply, checkpointReceipt{}, false)
 	return err
 }
 
@@ -764,61 +1117,71 @@ func (s *c2CheckpointContinuity) ensureCheckpointIncarnationChain() error {
 	return nil
 }
 
-func (s *c2CheckpointContinuity) observeCheckpointReply(ctx context.Context, env *core.Env, reply checkpointBody, final bool) (*corev1.Pod, bool, error) {
+func (s *c2CheckpointContinuity) observeCheckpointReply(ctx context.Context, env *core.Env, reply checkpointBody, receipt checkpointReceipt, final bool) (*corev1.Pod, bool, bool, error) {
 	if err := s.ensureCheckpointIncarnationChain(); err != nil {
-		return nil, false, err
+		return nil, false, false, hardCheckpointObservation("incarnation-chain-provenance", receipt, err)
 	}
 	current := &s.incarnationChain[len(s.incarnationChain)-1]
-	pod, absent, err := c2DwellObservationTarget(ctx, env, checkpointApp, current.PodName, types.UID(current.PodUID))
+	pod, absent, err := checkpointObservationTarget(ctx, env, checkpointApp, current.PodName, types.UID(current.PodUID), receipt)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
-	if !podReady(pod) || pod.DeletionTimestamp != nil {
-		return nil, false, errors.New("checkpoint observation target is unavailable")
-	}
-	if err = s.validateObservedCheckpointWorkload(ctx, env, pod); err != nil {
-		return nil, false, err
+	routeAvailable, err := s.validateObservedCheckpointWorkload(ctx, env, pod)
+	if err != nil {
+		if observationClass(err) == checkpointMeasurementError {
+			return nil, false, false, measurementCheckpointObservation("workload-authority-read", receipt, err)
+		}
+		return nil, false, false, hardCheckpointObservation("workload-authority", receipt, err)
 	}
 	if err = validateCheckpointIdentity(reply, pod.UID, s.pvcUID); err != nil {
-		return nil, false, err
+		return nil, false, false, hardCheckpointObservation("checkpoint-identity-or-checksum", receipt, err)
 	}
+	transitioned, err := s.acceptCheckpointContinuity(pod, absent, reply, receipt, final)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return pod, transitioned, routeAvailable && podReady(pod) && pod.DeletionTimestamp == nil, nil
+}
+
+func (s *c2CheckpointContinuity) acceptCheckpointContinuity(pod *corev1.Pod, absent bool, reply checkpointBody, receipt checkpointReceipt, requirePostBootAdvance bool) (bool, error) {
+	current := &s.incarnationChain[len(s.incarnationChain)-1]
 	if !absent {
 		if string(pod.UID) != current.PodUID || reply.Incarnation != current.Incarnation {
-			return nil, false, errors.New("checkpoint reply changed current Pod/process identity")
+			return false, hardCheckpointObservation("current-process-identity", receipt, errors.New("checkpoint reply changed current Pod/process identity"))
 		}
 		if reply.BootSequence != current.BootSequence || reply.BootChecksum != current.BootChecksum || reply.InitializedFresh == nil || (*reply.InitializedFresh) != (len(s.incarnationChain) == 1) {
-			return nil, false, errors.New("checkpoint boot provenance changed within incarnation")
+			return false, hardCheckpointObservation("boot-provenance", receipt, errors.New("checkpoint boot provenance changed within incarnation"))
 		}
 		if reply.Sequence < current.AcknowledgedSequence {
-			return nil, false, errors.New("checkpoint sequence moved backwards within incarnation")
+			return false, hardCheckpointObservation("sequence-rollback", receipt, errors.New("checkpoint sequence moved backwards within incarnation"))
 		}
-		if final && len(s.incarnationChain) == 1 && reply.Sequence == current.AcknowledgedSequence {
-			return nil, false, errors.New("same-Pod checkpoint progress stalled")
+		if requirePostBootAdvance && len(s.incarnationChain) == 1 && reply.Sequence == current.AcknowledgedSequence {
+			return false, hardCheckpointObservation("same-pod-progress-stalled", receipt, errors.New("same-Pod checkpoint progress stalled"))
 		}
 		current.AcknowledgedSequence, current.AcknowledgedChecksum = reply.Sequence, reply.Checksum
 		current.PostBootAdvance = current.PostBootAdvance || reply.Sequence > reply.BootSequence
 		if len(s.incarnationChain) == 1 {
 			s.lastOriginal = reply
 		}
-		if final && !current.PostBootAdvance {
-			return nil, false, errors.New("final checkpoint incarnation did not advance beyond boot")
+		if requirePostBootAdvance && !current.PostBootAdvance {
+			return false, hardCheckpointObservation("post-boot-progress-stalled", receipt, errors.New("final checkpoint incarnation did not advance beyond boot"))
 		}
-		return pod, false, nil
+		return false, nil
 	}
 	for _, seen := range s.incarnationChain {
 		if string(pod.UID) == seen.PodUID || reply.Incarnation == seen.Incarnation {
-			return nil, false, errors.New("checkpoint replacement reused a prior Pod UID or process incarnation")
+			return false, hardCheckpointObservation("replacement-identity-reuse", receipt, errors.New("checkpoint replacement reused a prior Pod UID or process incarnation"))
 		}
 	}
 	if len(s.incarnationChain) >= checkpointMaxIncarnations {
-		return nil, false, errors.New("checkpoint incarnation chain exceeds bounded capacity")
+		return false, hardCheckpointObservation("incarnation-capacity", receipt, errors.New("checkpoint incarnation chain exceeds bounded capacity"))
 	}
 	high := checkpointBody{Sequence: current.AcknowledgedSequence, Checksum: current.AcknowledgedChecksum}
-	if err = validateCheckpointReplacement(reply, high, current.Incarnation, final); err != nil {
-		return nil, false, err
+	if err := validateCheckpointReplacement(reply, high, current.Incarnation, requirePostBootAdvance); err != nil {
+		return false, hardCheckpointObservation("replacement-continuity", receipt, err)
 	}
 	s.incarnationChain = append(s.incarnationChain, checkpointIncarnationFrom(pod.Name, pod.UID, reply, true))
-	return pod, true, nil
+	return true, nil
 }
 
 func (s *c2CheckpointContinuity) checkpointIncarnationChainJSON() string {
@@ -826,9 +1189,9 @@ func (s *c2CheckpointContinuity) checkpointIncarnationChainJSON() string {
 	return string(raw)
 }
 
-func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.Context, env *core.Env, pod *corev1.Pod) error {
+func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.Context, env *core.Env, pod *corev1.Pod) (bool, error) {
 	if pod == nil || pod.UID == "" || s.deploymentUID == "" || s.replicaSetUID == "" || s.serviceUID == "" {
-		return errors.New("checkpoint workload identity provenance missing")
+		return false, errors.New("checkpoint workload identity provenance missing")
 	}
 	ownedByReplicaSet := false
 	for _, owner := range pod.OwnerReferences {
@@ -837,7 +1200,7 @@ func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.
 		}
 	}
 	if !ownedByReplicaSet {
-		return errors.New("checkpoint Pod is not owned by exact ReplicaSet UID")
+		return false, errors.New("checkpoint Pod is not owned by exact ReplicaSet UID")
 	}
 	mounted := false
 	for _, volume := range pod.Spec.Volumes {
@@ -846,11 +1209,14 @@ func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.
 		}
 	}
 	if !mounted {
-		return errors.New("checkpoint Pod does not mount exact owned PVC")
+		return false, errors.New("checkpoint Pod does not mount exact owned PVC")
 	}
 	rs, err := env.Kube.AppsV1().ReplicaSets(env.Config.Namespace).Get(ctx, s.replicaSetName, metav1.GetOptions{})
-	if err != nil || rs.UID != s.replicaSetUID {
-		return fmt.Errorf("checkpoint ReplicaSet identity changed: rs=%v err=%v", rs, err)
+	if err != nil {
+		return false, measurementCheckpointObservation("replicaset-read", checkpointReceipt{}, fmt.Errorf("read checkpoint ReplicaSet: %w", err))
+	}
+	if rs.UID != s.replicaSetUID {
+		return false, fmt.Errorf("checkpoint ReplicaSet identity changed: rs=%v err=%v", rs, err)
 	}
 	rsOwned := false
 	for _, owner := range rs.OwnerReferences {
@@ -859,22 +1225,28 @@ func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.
 		}
 	}
 	if !rsOwned {
-		return errors.New("checkpoint ReplicaSet is not owned by exact Deployment UID")
+		return false, errors.New("checkpoint ReplicaSet is not owned by exact Deployment UID")
 	}
 	dep, err := env.Kube.AppsV1().Deployments(env.Config.Namespace).Get(ctx, checkpointApp, metav1.GetOptions{})
-	if err != nil || dep.UID != s.deploymentUID {
-		return fmt.Errorf("checkpoint Deployment identity changed: deployment=%v err=%v", dep, err)
+	if err != nil {
+		return false, measurementCheckpointObservation("deployment-read", checkpointReceipt{}, fmt.Errorf("read checkpoint Deployment: %w", err))
+	}
+	if dep.UID != s.deploymentUID {
+		return false, fmt.Errorf("checkpoint Deployment identity changed: deployment=%v err=%v", dep, err)
 	}
 	svc, err := env.Kube.CoreV1().Services(env.Config.Namespace).Get(ctx, checkpointService, metav1.GetOptions{})
-	if err != nil || svc.UID != s.serviceUID {
-		return fmt.Errorf("checkpoint Service identity changed: service=%v err=%v", svc, err)
+	if err != nil {
+		return false, measurementCheckpointObservation("service-read", checkpointReceipt{}, fmt.Errorf("read checkpoint Service: %w", err))
+	}
+	if svc.UID != s.serviceUID {
+		return false, fmt.Errorf("checkpoint Service identity changed: service=%v err=%v", svc, err)
 	}
 	if len(svc.Spec.Selector) != 1 || svc.Spec.Selector["app"] != checkpointApp {
-		return fmt.Errorf("checkpoint Service selector changed: %v", svc.Spec.Selector)
+		return false, fmt.Errorf("checkpoint Service selector changed: %v", svc.Spec.Selector)
 	}
 	slices, err := env.Kube.DiscoveryV1().EndpointSlices(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: discoveryv1.LabelServiceName + "=" + checkpointService})
 	if err != nil {
-		return fmt.Errorf("list checkpoint EndpointSlices: %w", err)
+		return false, measurementCheckpointObservation("endpointslice-list", checkpointReceipt{}, fmt.Errorf("list checkpoint EndpointSlices: %w", err))
 	}
 	readyTargets := 0
 	for i := range slices.Items {
@@ -886,7 +1258,7 @@ func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.
 			}
 		}
 		if !ownedByService {
-			return fmt.Errorf("checkpoint EndpointSlice %q is not owned by exact Service UID", slice.Name)
+			return false, fmt.Errorf("checkpoint EndpointSlice %q is not owned by exact Service UID", slice.Name)
 		}
 		for _, endpoint := range slice.Endpoints {
 			if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
@@ -894,14 +1266,14 @@ func (s *c2CheckpointContinuity) validateObservedCheckpointWorkload(ctx context.
 			}
 			readyTargets++
 			if endpoint.TargetRef == nil || endpoint.TargetRef.Kind != "Pod" || endpoint.TargetRef.Namespace != env.Config.Namespace || endpoint.TargetRef.Name != pod.Name || endpoint.TargetRef.UID != pod.UID {
-				return fmt.Errorf("checkpoint ready endpoint is not exact observed Pod UID %s", pod.UID)
+				return false, fmt.Errorf("checkpoint ready endpoint is not exact observed Pod UID %s", pod.UID)
 			}
 		}
 	}
-	if readyTargets != 1 {
-		return fmt.Errorf("checkpoint Service has %d ready endpoint targets; require exactly one", readyTargets)
+	if readyTargets > 1 {
+		return false, fmt.Errorf("checkpoint Service repeats exact observed Pod UID in %d ready endpoint targets", readyTargets)
 	}
-	return nil
+	return readyTargets == 1, nil
 }
 
 func validateCheckpointReplacement(reply, highWater checkpointBody, originalIncarnation string, requirePostBootAdvance bool) error {
@@ -958,34 +1330,37 @@ func (s *c2CheckpointContinuity) Teardown(ctx context.Context, env *core.Env) er
 func (s *c2CheckpointContinuity) verifyStorageIdentity(ctx context.Context, env *core.Env) error {
 	pvc, err := env.Kube.CoreV1().PersistentVolumeClaims(env.Config.Namespace).Get(ctx, checkpointPVC, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read checkpoint PVC identity: %w", err)
+		return measurementCheckpointObservation("pvc-read", checkpointReceipt{}, fmt.Errorf("read checkpoint PVC identity: %w", err))
 	}
 	if pvc.UID != s.pvcUID || pvc.Status.Phase != corev1.ClaimBound || pvc.Spec.VolumeName != s.pvName || pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != s.storageClassName {
-		return fmt.Errorf("checkpoint PVC identity/binding changed: uid=%s volume=%q", pvc.UID, pvc.Spec.VolumeName)
+		return hardCheckpointObservation("pvc-binding", checkpointReceipt{}, fmt.Errorf("checkpoint PVC identity/binding changed: uid=%s volume=%q", pvc.UID, pvc.Spec.VolumeName))
 	}
 	pv, err := env.Kube.CoreV1().PersistentVolumes().Get(ctx, s.pvName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read checkpoint PV identity: %w", err)
+		return measurementCheckpointObservation("pv-read", checkpointReceipt{}, fmt.Errorf("read checkpoint PV identity: %w", err))
 	}
 	if pv.UID != s.pvUID || pv.Spec.StorageClassName != s.storageClassName || !checkpointPVClaimsPVC(pv, pvc) {
-		return fmt.Errorf("checkpoint PV identity/binding changed: observedUID=%s expectedUID=%s", pv.UID, s.pvUID)
+		return hardCheckpointObservation("pv-binding", checkpointReceipt{}, fmt.Errorf("checkpoint PV identity/binding changed: observedUID=%s expectedUID=%s", pv.UID, s.pvUID))
 	}
 	if s.localFixture {
 		if err := s.validateCheckpointLocalPVC(pvc, s.pvName, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot)); err != nil {
-			return err
+			return hardCheckpointObservation("local-pvc-binding", checkpointReceipt{}, err)
 		}
 		sc, err := env.Kube.StorageV1().StorageClasses().Get(ctx, s.storageClassName, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("read checkpoint local StorageClass identity: %w", err)
+			return measurementCheckpointObservation("local-storageclass-read", checkpointReceipt{}, fmt.Errorf("read checkpoint local StorageClass identity: %w", err))
 		}
 		if err := validateCheckpointLocalStorageClass(sc, s.storageClassUID, s.localNonce); err != nil {
-			return err
+			return hardCheckpointObservation("local-storageclass-binding", checkpointReceipt{}, err)
 		}
 		if err := s.validateCheckpointLocalPV(pv, checkpointLocalSelector(env.DefenderName, env.Trial, s.localSlot), false); err != nil {
-			return err
+			return hardCheckpointObservation("local-pv-binding", checkpointReceipt{}, err)
 		}
 		if err := s.validateCheckpointLocalHolder(ctx, env); err != nil {
-			return err
+			if observationClass(err) == checkpointMeasurementError {
+				return err
+			}
+			return hardCheckpointObservation("local-holder-binding", checkpointReceipt{}, err)
 		}
 	}
 	return nil
@@ -1048,20 +1423,20 @@ type checkpointReceipt struct {
 	DurationMillis      int64  `json:"durationMillis,omitempty"`
 }
 
-func (s *c2CheckpointContinuity) request(ctx context.Context, env *core.Env) (checkpointBody, error) {
+func (s *c2CheckpointContinuity) request(ctx context.Context, env *core.Env) (checkpointBody, checkpointReceipt, error) {
 	url := fmt.Sprintf("http://%s:%d/progress", checkpointService, checkpointPort)
 	rec := checkpointReceipt{URL: url, ProducerUID: string(s.producerUID), ExitCode: -1}
 	p, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, checkpointProducer, metav1.GetOptions{})
 	if err != nil {
 		rec.IdentityError = err.Error()
 		recordCheckpointReceipt(env, rec)
-		return checkpointBody{}, err
+		return checkpointBody{}, rec, measurementCheckpointObservation("producer-identity-read", rec, err)
 	}
 	rec.ObservedProducerUID = string(p.UID)
 	if s.producerUID == "" || p.UID != s.producerUID {
 		rec.IdentityError = "producer UID mismatch"
 		recordCheckpointReceipt(env, rec)
-		return checkpointBody{}, errors.New(rec.IdentityError)
+		return checkpointBody{}, rec, measurementCheckpointObservation("producer-identity", rec, errors.New(rec.IdentityError))
 	}
 	started := time.Now()
 	res := env.Exec(ctx, checkpointProducer, "producer", []string{"python3", "-B", "-c", checkpointClientSource, url})
@@ -1080,22 +1455,26 @@ func (s *c2CheckpointContinuity) request(ctx context.Context, env *core.Env) (ch
 	}
 	recordCheckpointReceipt(env, rec)
 	if res.Err != nil {
-		return checkpointBody{}, res.Err
+		return checkpointBody{}, rec, measurementCheckpointObservation("exec-transport", rec, res.Err)
 	}
 	if err := ctx.Err(); err != nil {
-		return checkpointBody{}, err
+		return checkpointBody{}, rec, measurementCheckpointObservation("request-context", rec, err)
 	}
 	if res.ExitCode != 0 {
-		return checkpointBody{}, fmt.Errorf("checkpoint HTTP producer exit=%d: %s", res.ExitCode, rec.Stderr)
+		cause := fmt.Errorf("checkpoint HTTP producer exit=%d: %s", res.ExitCode, rec.Stderr)
+		if res.ExitCode == 17 {
+			return checkpointBody{}, rec, unavailableCheckpointObservation("http-transport-unavailable", 0, rec, cause)
+		}
+		return checkpointBody{}, rec, measurementCheckpointObservation("client-envelope", rec, cause)
 	}
 	reply, err := parseCheckpointReply(res.Stdout)
 	if err != nil {
-		return checkpointBody{}, err
+		return checkpointBody{}, rec, measurementCheckpointObservation("response-envelope", rec, err)
 	}
 	if reply.HTTPStatus != 200 {
-		return checkpointBody{}, fmt.Errorf("checkpoint HTTP status=%d error=%q", reply.HTTPStatus, reply.Body.Error)
+		return reply.Body, rec, unavailableCheckpointObservation("http-status-unavailable", reply.HTTPStatus, rec, fmt.Errorf("checkpoint HTTP status=%d error=%q", reply.HTTPStatus, reply.Body.Error))
 	}
-	return reply.Body, nil
+	return reply.Body, rec, nil
 }
 func recordCheckpointReceipt(env *core.Env, r checkpointReceipt) {
 	raw, _ := json.Marshal(r)
@@ -1192,6 +1571,13 @@ func validateCheckpointIdentity(b checkpointBody, pod, pvc types.UID) error {
 	if b.Ready == nil || !*b.Ready {
 		return errors.New("checkpoint reply not explicitly ready")
 	}
+	if b.Error != "" {
+		return errors.New("checkpoint reply reported application error")
+	}
+	return validateCheckpointPayloadIdentity(b, pod, pvc)
+}
+
+func validateCheckpointPayloadIdentity(b checkpointBody, pod, pvc types.UID) error {
 	if b.Version != 1 || b.PodUID == "" || b.PodUID != string(pod) || b.PVCUID == "" || b.PVCUID != string(pvc) || b.Incarnation == "" || b.Sequence < 0 || b.BootSequence < 0 {
 		return errors.New("checkpoint reply identity/version invalid")
 	}
@@ -1207,6 +1593,47 @@ func validateCheckpointIdentity(b checkpointBody, pod, pvc types.UID) error {
 	}
 	return nil
 }
+
+func checkpointObservationTarget(ctx context.Context, env *core.Env, app, originalName string, originalUID types.UID, receipt checkpointReceipt) (*corev1.Pod, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, measurementCheckpointObservation("target-context", receipt, err)
+	}
+	if originalName == "" || originalUID == "" {
+		return nil, false, hardCheckpointObservation("target-identity", receipt, fmt.Errorf("checkpoint target original identity missing for app=%s", app))
+	}
+	original, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, originalName, metav1.GetOptions{})
+	if err == nil && original.UID == originalUID {
+		return original, false, nil
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, false, measurementCheckpointObservation("target-get", receipt, fmt.Errorf("checkpoint target original get failed for pod=%s: %w", originalName, err))
+	}
+	pods, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + app})
+	if err != nil {
+		return nil, false, measurementCheckpointObservation("target-list", receipt, fmt.Errorf("checkpoint target list failed for app=%s: %w", app, err))
+	}
+	var replacements []*corev1.Pod
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.UID == originalUID {
+			return pod, false, nil
+		}
+		if pod.DeletionTimestamp == nil && pod.Status.Phase == corev1.PodRunning {
+			replacements = append(replacements, pod)
+		}
+	}
+	if len(replacements) == 0 {
+		return nil, true, unavailableCheckpointObservation("workload-absent", 0, receipt, fmt.Errorf("checkpoint target predecessor UID %s absent with no running replacement", originalUID))
+	}
+	if len(replacements) != 1 {
+		return nil, true, hardCheckpointObservation("replacement-ambiguity", receipt, fmt.Errorf("checkpoint target predecessor UID %s absent with running replacements=%d", originalUID, len(replacements)))
+	}
+	if replacements[0].UID == "" {
+		return nil, true, hardCheckpointObservation("replacement-identity", receipt, errors.New("checkpoint target replacement UID missing"))
+	}
+	return replacements[0], true, nil
+}
+
 func waitCheckpointObservation(ctx context.Context, window, interval time.Duration, sample func() (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
 	start := time.Now()
 	deadline := time.NewTimer(window)
@@ -1225,6 +1652,9 @@ func waitCheckpointObservation(ctx context.Context, window, interval time.Durati
 			n++
 			if _, err := sample(); err != nil {
 				failures++
+				if observationClass(err) != checkpointApplicationUnavailable {
+					return start, time.Now(), n, failures, err
+				}
 			}
 		}
 	}

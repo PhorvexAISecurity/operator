@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -34,6 +35,27 @@ import (
 	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 )
+
+type checkpointEvidenceRunnerScenario struct {
+	name  string
+	inner *c2CheckpointContinuity
+}
+
+var checkpointEvidenceRunnerSequence atomic.Uint64
+
+func (s *checkpointEvidenceRunnerScenario) Metadata() core.ScenarioMeta {
+	meta := s.inner.Metadata()
+	meta.Name = s.name
+	return meta
+}
+func (*checkpointEvidenceRunnerScenario) Setup(context.Context, *core.Env) error { return nil }
+func (s *checkpointEvidenceRunnerScenario) Execute(context.Context, *core.Env) (core.AttackResult, error) {
+	return s.inner.checkpointAttackResult([]string{"checkpoint evidence lifecycle"}, map[string]string{"legacySensitiveValue": "must-not-reach-jsonl"}), nil
+}
+func (s *checkpointEvidenceRunnerScenario) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
+	return s.inner.SuccessOracle(ctx, env)
+}
+func (*checkpointEvidenceRunnerScenario) Teardown(context.Context, *core.Env) error { return nil }
 
 func TestCheckpointContinuityMetadataIsBenign(t *testing.T) {
 	m := (&c2CheckpointContinuity{}).Metadata()
@@ -131,6 +153,96 @@ func TestCheckpointServerWritesAsActualNonRootProcess(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "checkpoint.json")); err != nil {
 		t.Fatalf("non-root writer did not create checkpoint: %v", err)
+	}
+}
+
+func TestCheckpointActualProducerRefusalThenReplacementLoadsLatestAcknowledgement(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("requires a non-root test process")
+	}
+	dir := t.TempDir()
+	port := freePort(t)
+	old := startCheckpointServer(t, dir, port, "old-pod", "pvc", "")
+	acknowledged := waitCheckpointHTTP(t, port, func(b checkpointBody) bool { return b.Sequence >= 3 })
+	if err := old.Process.Signal(syscall.SIGSTOP); err != nil {
+		t.Fatal(err)
+	}
+	client := exec.Command("python3", "-B", "-c", checkpointClientSource, fmt.Sprintf("http://127.0.0.1:%d/progress", port))
+	var clientOutput bytes.Buffer
+	client.Stdout = &clientOutput
+	client.Stderr = &clientOutput
+	if err := client.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if err := old.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = old.Wait()
+	err := client.Wait()
+	out := clientOutput.Bytes()
+	if err == nil {
+		t.Fatalf("in-flight request unexpectedly succeeded: %s", out)
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 17 {
+		t.Fatalf("in-flight producer error=%v output=%s", err, out)
+	}
+	replacement := startCheckpointServer(t, dir, port, "new-pod", "pvc", "")
+	defer stopCheckpointServer(t, replacement)
+	recovered := waitCheckpointHTTP(t, port, func(b checkpointBody) bool { return b.Sequence > b.BootSequence })
+	if recovered.PodUID != "new-pod" || recovered.PVCUID != "pvc" || recovered.Incarnation == acknowledged.Incarnation || recovered.InitializedFresh == nil || *recovered.InitializedFresh || recovered.BootSequence < acknowledged.Sequence || recovered.Sequence <= recovered.BootSequence {
+		t.Fatalf("replacement continuity acknowledgement=%+v recovered=%+v", acknowledged, recovered)
+	}
+}
+
+func TestCheckpointActualFaultedReplacement503AdvancesDurableFloorAndRejectsStaleSuccessor(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("requires a non-root test process")
+	}
+	dir := t.TempDir()
+	port := freePort(t)
+	oldServer := startCheckpointServer(t, dir, port, "old", "pvc", "")
+	acknowledged := waitCheckpointHTTP(t, port, func(b checkpointBody) bool { return b.Sequence >= 3 })
+	stopCheckpointServer(t, oldServer)
+
+	env := checkpointRequestEnv(t, "old")
+	s := observedCheckpointScenario()
+	s.originalIncarnation = acknowledged.Incarnation
+	s.lastOriginal = acknowledged
+	s.incarnationChain = []checkpointIncarnationObservation{checkpointIncarnationFrom("target", "old", acknowledged, false)}
+	newPod := replaceCheckpointTestPod(t, env, "target", "new")
+	faultedServer := startCheckpointServer(t, dir, port, "new", "pvc", "before-file-fsync")
+	defer stopCheckpointServer(t, faultedServer)
+	_, faulted := waitCheckpointEnvelope(t, port, func(status int, b checkpointBody) bool {
+		return status == 503 && b.PodUID == "new" && b.Ready != nil && !*b.Ready
+	})
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		cmd := exec.Command("python3", "-B", "-c", checkpointClientSource, fmt.Sprintf("http://127.0.0.1:%d/progress", port))
+		out, err := cmd.Output()
+		if err != nil {
+			return core.ExecResult{ExitCode: 1, Err: err}
+		}
+		return core.ExecResult{Stdout: string(out), ExitCode: 0}
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	_, _, _, err := s.observeCheckpointAttemptDetailed(context.Background(), env, true)
+	if observationClass(err) != checkpointApplicationUnavailable || len(s.incarnationChain) != 2 || s.incarnationChain[1].PodUID != "new" || s.incarnationChain[1].AcknowledgedSequence != faulted.Sequence || len(s.outageSamples) != 1 || s.latestAcknowledgedAtUTC == "" || s.latestAcknowledgedAtUTC != s.outageSamples[0].EndedAtUTC {
+		t.Fatalf("faulted 503 was not bound as availability plus paired durable floor/time: err=%v faulted=%+v chain=%+v latestAt=%q outages=%+v", err, faulted, s.incarnationChain, s.latestAcknowledgedAtUTC, s.outageSamples)
+	}
+
+	stopCheckpointServer(t, faultedServer)
+	stalePod := replaceCheckpointTestPod(t, env, newPod.Name, "stale")
+	staleBoot := faulted.Sequence - 1
+	if staleBoot < 0 {
+		staleBoot = 0
+	}
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, checkpointFixture(string(stalePod.UID), "pvc", "stale-inc", faulted.Sequence+1, staleBoot), 200)
+	})
+	_, _, _, err = s.observeCheckpointAttemptDetailed(context.Background(), env, true)
+	if observationClass(err) != checkpointHardIntegrity || len(s.incarnationChain) != 2 {
+		t.Fatalf("stale successor crossed 503 durable floor: err=%v chain=%+v", err, s.incarnationChain)
 	}
 }
 
@@ -246,7 +358,7 @@ func TestCheckpointReceiptPersistsRawEnvelope(t *testing.T) {
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
 	s := observedCheckpointScenario()
-	if _, err := s.request(context.Background(), env); err != nil {
+	if _, _, err := s.request(context.Background(), env); err != nil {
 		t.Fatal(err)
 	}
 	if err := logger.(interface{ Close() error }).Close(); err != nil {
@@ -274,7 +386,7 @@ func TestCheckpointReceiptPersistsTransportFailure(t *testing.T) {
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
 	s := observedCheckpointScenario()
-	if _, err := s.request(context.Background(), env); !errors.Is(err, context.DeadlineExceeded) {
+	if _, _, err := s.request(context.Background(), env); !errors.Is(err, context.DeadlineExceeded) || observationClass(err) != checkpointMeasurementError {
 		t.Fatalf("transport error=%v", err)
 	}
 	if err := logger.(interface{ Close() error }).Close(); err != nil {
@@ -288,6 +400,384 @@ func TestCheckpointReceiptPersistsTransportFailure(t *testing.T) {
 		if !strings.Contains(string(raw), want) {
 			t.Fatalf("raw transport receipt lacks %s: %s", want, raw)
 		}
+	}
+}
+
+func TestCheckpointProducerIdentityAndCancelledRequestAreMeasurementErrors(t *testing.T) {
+	t.Run("producer-uid", func(t *testing.T) {
+		env := checkpointRequestEnv(t, "old")
+		producer, err := env.Kube.CoreV1().Pods("sandbox").Get(context.Background(), checkpointProducer, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		producer.UID = "replacement-producer"
+		if _, err := env.Kube.CoreV1().Pods("sandbox").Update(context.Background(), producer, metav1.UpdateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err = observedCheckpointScenario().request(context.Background(), env)
+		if observationClass(err) != checkpointMeasurementError {
+			t.Fatalf("producer identity err=%v", err)
+		}
+	})
+	t.Run("cancelled", func(t *testing.T) {
+		env := checkpointRequestEnv(t, "old")
+		core.SetExecer(func(ctx context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, _ []string) core.ExecResult {
+			return core.ExecResult{ExitCode: -1, Err: ctx.Err()}
+		})
+		t.Cleanup(func() { core.SetExecer(nil) })
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, _, err := observedCheckpointScenario().request(ctx, env)
+		if observationClass(err) != checkpointMeasurementError || !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled err=%v", err)
+		}
+	})
+}
+
+func TestCheckpointProducerEnvelopeFailuresAreMeasurementErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		result core.ExecResult
+	}{
+		{name: "oversized-body-exit", result: core.ExecResult{ExitCode: 18, Stderr: "body-too-large"}},
+		{name: "malformed-envelope", result: core.ExecResult{ExitCode: 0, Stdout: "200"}},
+		{name: "malformed-base64", result: core.ExecResult{ExitCode: 0, Stdout: "200\n%%%"}},
+		{name: "malformed-json", result: core.ExecResult{ExitCode: 0, Stdout: "200\n" + base64.StdEncoding.EncodeToString([]byte("{"))}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := checkpointRequestEnv(t, "old")
+			calls := 0
+			core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				calls++
+				return tc.result
+			})
+			t.Cleanup(func() { core.SetExecer(nil) })
+			_, err := observedCheckpointScenario().SuccessOracle(context.Background(), env)
+			if observationClass(err) != checkpointMeasurementError || calls != 1 {
+				t.Fatalf("producer envelope error classified/retried incorrectly: class=%q calls=%d err=%v", observationClass(err), calls, err)
+			}
+		})
+	}
+}
+
+func TestCheckpointStorageReadFailureIsMeasurementAndBindingDriftIsHard(t *testing.T) {
+	t.Run("read-failure", func(t *testing.T) {
+		env := checkpointRequestEnv(t, "old")
+		client := env.Kube.(*k8sfake.Clientset)
+		client.PrependReactor("get", "persistentvolumeclaims", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, context.DeadlineExceeded
+		})
+		err := observedCheckpointScenario().verifyStorageIdentity(context.Background(), env)
+		if observationClass(err) != checkpointMeasurementError || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("storage read err=%v class=%q", err, observationClass(err))
+		}
+	})
+	t.Run("uid-drift", func(t *testing.T) {
+		env := checkpointRequestEnv(t, "old")
+		pvc, err := env.Kube.CoreV1().PersistentVolumeClaims("sandbox").Get(context.Background(), checkpointPVC, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pvc.UID = "foreign"
+		if _, err := env.Kube.CoreV1().PersistentVolumeClaims("sandbox").Update(context.Background(), pvc, metav1.UpdateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		err = observedCheckpointScenario().verifyStorageIdentity(context.Background(), env)
+		if observationClass(err) != checkpointHardIntegrity {
+			t.Fatalf("storage binding drift err=%v class=%q", err, observationClass(err))
+		}
+	})
+}
+
+func TestCheckpointObservationWaitFailureIsMeasurementEvidence(t *testing.T) {
+	oldWait := checkpointObservationWait
+	checkpointObservationWait = func(context.Context, time.Duration, time.Duration, func() (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
+		start := time.Now()
+		return start, start, 0, 0, context.Canceled
+	}
+	t.Cleanup(func() { checkpointObservationWait = oldWait; core.SetExecer(nil) })
+	env := checkpointRequestEnv(t, "old")
+	calls := 0
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		calls++
+		return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", int64(4+calls), 0), 200)
+	})
+	result, err := (&c2CheckpointContinuity{targetName: "target", targetUID: "old", producerUID: "producer-owned", pvcUID: "pvc", deploymentUID: "deployment-uid", replicaSetName: "checkpoint-rs", replicaSetUID: "rs-uid", serviceUID: "service-uid", pvName: "pv-owned", pvUID: "pv-uid", storageClassName: "reviewed-storage"}).Execute(context.Background(), env)
+	if observationClass(err) != checkpointMeasurementError || result.BenchmarkEvidence["outcomeClass"] != string(checkpointMeasurementError) || result.BenchmarkEvidence["outcomeCategory"] != "observation-wait" {
+		t.Fatalf("wait failure err=%v evidence=%+v", err, result.BenchmarkEvidence)
+	}
+}
+
+func TestCheckpointBoundedRecoveryRetainsOutageAndProvesDurabilityOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "raw.log")
+	logger, err := core.NewTrialLogger(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := checkpointRequestEnv(t, "old")
+	env.Log = logger
+	s := observedCheckpointScenario()
+	calls := 0
+	core.SetExecer(func(ctx context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, _ []string) core.ExecResult {
+		calls++
+		if calls == 1 {
+			replaceCheckpointTestPod(t, env, "target", "new")
+			return core.ExecResult{ExitCode: 17, Stderr: "typed producer network exception"}
+		}
+		return checkpointExecReply(t, checkpointFixture("new", "pvc", "new-inc", 9, 5), 200)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	got, err := s.SuccessOracle(context.Background(), env)
+	if err != nil || !got.Achieved || calls != 2 {
+		t.Fatalf("got=%+v err=%v calls=%d", got, err, calls)
+	}
+	if got.Evidence["durabilityStatus"] != "acknowledged" || got.Evidence["availabilityInterrupted"] != "true" || got.Evidence["availabilityUnavailableSamples"] != "1" || !strings.Contains(got.Evidence["outageSamplesJSON"], `"phase":"recovery"`) || !strings.Contains(got.ObservedState, "does not prove continuous availability") {
+		t.Fatalf("recovered evidence=%+v state=%q", got.Evidence, got.ObservedState)
+	}
+	if err := logger.(interface{ Close() error }).Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(raw), "c2-checkpoint-continuity http-receipt=") != 2 || !strings.Contains(string(raw), `"exitCode":17`) {
+		t.Fatalf("raw receipts=%s", raw)
+	}
+}
+
+func TestCheckpointPermanentApplicationUnavailableIsObservedFailureNotPass(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	s := observedCheckpointScenario()
+	calls := 0
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		calls++
+		return core.ExecResult{ExitCode: 17, Stderr: "typed producer network exception"}
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	got, err := s.SuccessOracle(context.Background(), env)
+	if err != nil || got.Achieved || calls != checkpointRecoveryAttempts {
+		t.Fatalf("got=%+v err=%v calls=%d", got, err, calls)
+	}
+	if got.Evidence["durabilityStatus"] != "unverified" || got.Evidence["durabilityObserved"] != "false" || got.Evidence["availabilityInterrupted"] != "true" || got.Evidence["availabilityUnavailableSamples"] != strconv.Itoa(checkpointRecoveryAttempts) || !strings.Contains(got.ObservedState, "durability remained unverified") {
+		t.Fatalf("permanent-unavailable evidence=%+v state=%q", got.Evidence, got.ObservedState)
+	}
+}
+
+func TestCheckpointZeroReadyRouteRetainsBoundAcknowledgementBeforeRecovery(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	deleteCheckpointEndpoints(t, env)
+	s := observedCheckpointScenario()
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", 9, 0), 200)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	_, _, _, err := s.observeCheckpointAttemptDetailed(context.Background(), env, true)
+	if observationClass(err) != checkpointApplicationUnavailable || s.incarnationChain[0].AcknowledgedSequence != 9 || len(s.outageSamples) != 1 || s.outageSamples[0].Category != "route-zero-ready" {
+		t.Fatalf("err=%v chain=%+v outages=%+v", err, s.incarnationChain, s.outageSamples)
+	}
+	pod, err := env.Kube.CoreV1().Pods("sandbox").Get(context.Background(), "target", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	setCheckpointFixtureEndpoint(t, env, pod)
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", 10, 0), 200)
+	})
+	if _, _, _, err := s.observeCheckpointAttemptDetailed(context.Background(), env, true); err != nil || s.incarnationChain[0].AcknowledgedSequence != 10 {
+		t.Fatalf("recovery err=%v chain=%+v", err, s.incarnationChain)
+	}
+}
+
+func TestCheckpointHTTPUnavailableStatusIsTypedAndStatusBound(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	s := observedCheckpointScenario()
+	body := checkpointFixture("old", "pvc", "old-inc", 9, 0)
+	ready := false
+	body.Ready = &ready
+	body.Error = "writer-not-ready"
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, body, 503)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	_, _, _, err := s.observeCheckpointAttemptDetailed(context.Background(), env, true)
+	if observationClass(err) != checkpointApplicationUnavailable || len(s.outageSamples) != 1 || s.outageSamples[0].Category != "http-status-unavailable" || s.outageSamples[0].HTTPStatus != 503 || s.incarnationChain[0].AcknowledgedSequence != 9 {
+		t.Fatalf("err=%v outages=%+v chain=%+v", err, s.outageSamples, s.incarnationChain)
+	}
+}
+
+func TestCheckpointHTTPUnavailableStatusRejectsIncarnationChangeAndRollback(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body checkpointBody
+	}{
+		{name: "same-pod-incarnation-change", body: checkpointFixture("old", "pvc", "foreign-inc", 9, 0)},
+		{name: "same-pod-sequence-rollback", body: checkpointFixture("old", "pvc", "old-inc", 4, 0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := checkpointRequestEnv(t, "old")
+			s := observedCheckpointScenario()
+			ready := false
+			tc.body.Ready = &ready
+			tc.body.Error = "writer-not-ready"
+			core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				return checkpointExecReply(t, tc.body, 503)
+			})
+			t.Cleanup(func() { core.SetExecer(nil) })
+			_, _, _, err := s.observeCheckpointAttemptDetailed(context.Background(), env, true)
+			if observationClass(err) != checkpointHardIntegrity || s.incarnationChain[0].AcknowledgedSequence != 5 || len(s.outageSamples) != 0 {
+				t.Fatalf("invalid 503 state accepted: err=%v chain=%+v outages=%+v", err, s.incarnationChain, s.outageSamples)
+			}
+		})
+	}
+}
+
+func TestCheckpointForeignReadyEndpointIsHardAndNeverRetried(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	slices, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slice := slices.Items[0]
+	slice.Endpoints[0].TargetRef.UID = "foreign"
+	if _, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").Update(context.Background(), &slice, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		calls++
+		return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", 9, 0), 200)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	_, err = observedCheckpointScenario().SuccessOracle(context.Background(), env)
+	if observationClass(err) != checkpointHardIntegrity || calls != 1 {
+		t.Fatalf("err=%v calls=%d", err, calls)
+	}
+}
+
+func TestCheckpointNoActionFinalEvidenceHasNoInventedOutage(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", 9, 0), 200)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	got, err := observedCheckpointScenario().SuccessOracle(context.Background(), env)
+	if err != nil || !got.Achieved || got.Evidence["durabilityStatus"] != "acknowledged" || got.Evidence["availabilityInterrupted"] != "false" || got.Evidence["availabilityUnavailableSamples"] != "0" || got.Evidence["observationAttempts"] != "1" {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+}
+
+func TestCheckpointOracleUpdatesTheAttackResultBenchmarkEvidenceMap(t *testing.T) {
+	env := checkpointRequestEnv(t, "old")
+	s := observedCheckpointScenario()
+	attack := s.checkpointAttackResult([]string{"sample"}, map[string]string{"legacy-only": "not-exported"})
+	core.SetExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+		return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", 9, 0), 200)
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	got, err := s.SuccessOracle(context.Background(), env)
+	if err != nil || !got.Achieved || attack.BenchmarkEvidence["durabilityStatus"] != "acknowledged" || attack.BenchmarkEvidence["availabilityInterrupted"] != "false" {
+		t.Fatalf("attack=%+v oracle=%+v err=%v", attack.BenchmarkEvidence, got, err)
+	}
+	if _, leaked := attack.BenchmarkEvidence["legacy-only"]; leaked {
+		t.Fatalf("legacy Notes leaked into benchmark evidence: %+v", attack.BenchmarkEvidence)
+	}
+}
+
+func TestCheckpointBenchmarkEvidenceSurvivesOracleThroughRunnerJSONL(t *testing.T) {
+	cases := []struct {
+		name         string
+		execer       func(*testing.T) func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult
+		wantClass    checkpointObservationClass
+		wantCategory string
+		wantAchieved bool
+		wantOutage   string
+	}{
+		{
+			name: "recovered",
+			execer: func(t *testing.T) func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				calls := 0
+				return func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+					calls++
+					body := checkpointFixture("old", "pvc", "old-inc", int64(5+calls), 0)
+					status := 200
+					if calls == 1 {
+						ready := false
+						body.Ready = &ready
+						body.Error = "writer-not-ready"
+						status = 503
+					}
+					return checkpointExecReply(t, body, status)
+				}
+			},
+			wantClass: checkpointAcknowledged, wantCategory: "checkpoint-acknowledged", wantAchieved: true, wantOutage: "true",
+		},
+		{
+			name: "hard-integrity",
+			execer: func(t *testing.T) func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				return func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+					return checkpointExecReply(t, checkpointFixture("old", "foreign-pvc", "old-inc", 6, 0), 200)
+				}
+			},
+			wantClass: checkpointHardIntegrity, wantCategory: "checkpoint-identity-or-checksum", wantAchieved: false, wantOutage: "false",
+		},
+		{
+			name: "measurement-error",
+			execer: func(*testing.T) func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				return func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+					return core.ExecResult{ExitCode: 0, Stdout: "malformed"}
+				}
+			},
+			wantClass: checkpointMeasurementError, wantCategory: "response-envelope", wantAchieved: false, wantOutage: "false",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			name := fmt.Sprintf("c2-checkpoint-evidence-runner-%s-%d", tc.name, checkpointEvidenceRunnerSequence.Add(1))
+			inner := observedCheckpointScenario()
+			core.RegisterScenario(&checkpointEvidenceRunnerScenario{name: name, inner: inner})
+			core.SetExecer(tc.execer(t))
+			t.Cleanup(func() { core.SetExecer(nil) })
+			metricsPath := filepath.Join(t.TempDir(), "metrics.jsonl")
+			writer, err := core.NewMetricWriter(metricsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			factory := func(_, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
+				env := checkpointRequestEnv(t, "old")
+				env.ScenarioName, env.DefenderName, env.Trial = name, defender, trial
+				return env, func() error { return nil }, nil
+			}
+			runner := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: t.TempDir(), ScenarioFilter: map[string]bool{name: true}, DefenderFilter: map[string]bool{"d-nomtd": true}, CleanupTimeout: 2 * time.Second}, factory, writer, nil)
+			rows, err := runner.Run(context.Background())
+			if err != nil {
+				t.Fatalf("runner: %v", err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(metricsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), "must-not-reach-jsonl") {
+				t.Fatalf("legacy Notes leaked into JSONL: %s", raw)
+			}
+			var metric core.Metric
+			for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+				var candidate core.Metric
+				if err := json.Unmarshal([]byte(line), &candidate); err != nil {
+					t.Fatalf("decode metric: %v", err)
+				}
+				if candidate.Scenario == name && candidate.Defender == "d-nomtd" {
+					metric = candidate
+				}
+			}
+			if len(rows) == 0 || metric.Scenario == "" || metric.OracleAchieved != tc.wantAchieved || metric.BenchmarkEvidence["outcomeClass"] != string(tc.wantClass) || metric.BenchmarkEvidence["outcomeCategory"] != tc.wantCategory || metric.BenchmarkEvidence["availabilityInterrupted"] != tc.wantOutage {
+				t.Fatalf("rows=%+v metric=%+v evidence=%+v", rows, metric, metric.BenchmarkEvidence)
+			}
+		})
 	}
 }
 
@@ -476,7 +966,7 @@ func TestCheckpointActualRound40MultiRotationValuesAreAcceptedAsObservedChain(t 
 		t.Fatal(err)
 	}
 	replaceCheckpointTestPod(t, env, first.Name, finalUID)
-	if _, _, err := s.observeCheckpointReply(context.Background(), env, checkpointFixture(finalUID, pvcUID, "bf433261-d6ad-4b08-822b-a2339e54a5cd", 90, 79), true); err != nil {
+	if _, _, _, err := s.observeCheckpointReply(context.Background(), env, checkpointFixture(finalUID, pvcUID, "bf433261-d6ad-4b08-822b-a2339e54a5cd", 90, 79), checkpointReceipt{}, true); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.incarnationChain) != 3 || s.incarnationChain[0].AcknowledgedSequence != 37 || s.incarnationChain[1].BootSequence != 48 || s.incarnationChain[1].AcknowledgedSequence != 66 || s.incarnationChain[2].BootSequence != 79 || s.incarnationChain[2].AcknowledgedSequence != 90 {
@@ -544,6 +1034,28 @@ func TestCheckpointObservedWorkloadBinding(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		{name: "duplicate-ready-endpoint", mutate: func(t *testing.T, env *core.Env, _ *corev1.Pod) {
+			slices, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").List(context.Background(), metav1.ListOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			slice := &slices.Items[0]
+			slice.Endpoints = append(slice.Endpoints, slice.Endpoints[0])
+			if _, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").Update(context.Background(), slice, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "foreign-endpoint-owner", mutate: func(t *testing.T, env *core.Env, _ *corev1.Pod) {
+			slices, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").List(context.Background(), metav1.ListOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			slice := &slices.Items[0]
+			slice.OwnerReferences[0].UID = "foreign-service"
+			if _, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").Update(context.Background(), slice, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := checkpointRequestEnv(t, "old")
@@ -555,7 +1067,7 @@ func TestCheckpointObservedWorkloadBinding(t *testing.T) {
 				tc.mutate(t, env, pod)
 			}
 			s := observedCheckpointScenario()
-			err = s.validateObservedCheckpointWorkload(context.Background(), env, pod)
+			_, err = s.validateObservedCheckpointWorkload(context.Background(), env, pod)
 			if (err == nil) != tc.valid {
 				t.Fatalf("binding err=%v valid=%v", err, tc.valid)
 			}
@@ -1209,6 +1721,17 @@ func bindCheckpointFixturePod(pod *corev1.Pod) {
 
 func setCheckpointFixtureEndpoint(t *testing.T, env *core.Env, pod *corev1.Pod) {
 	t.Helper()
+	deleteCheckpointEndpoints(t, env)
+	ready := true
+	controller := true
+	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-slice", Namespace: "sandbox", Labels: map[string]string{discoveryv1.LabelServiceName: checkpointService}, OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: checkpointService, UID: "service-uid", Controller: &controller}}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"127.0.0.1"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: "sandbox", Name: pod.Name, UID: pod.UID}}}}
+	if _, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").Create(context.Background(), slice, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func deleteCheckpointEndpoints(t *testing.T, env *core.Env) {
+	t.Helper()
 	slices, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -1217,12 +1740,6 @@ func setCheckpointFixtureEndpoint(t *testing.T, env *core.Env, pod *corev1.Pod) 
 		if err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").Delete(context.Background(), slices.Items[i].Name, metav1.DeleteOptions{}); err != nil {
 			t.Fatal(err)
 		}
-	}
-	ready := true
-	controller := true
-	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-slice", Namespace: "sandbox", Labels: map[string]string{discoveryv1.LabelServiceName: checkpointService}, OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: checkpointService, UID: "service-uid", Controller: &controller}}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"127.0.0.1"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: "sandbox", Name: pod.Name, UID: pod.UID}}}}
-	if _, err := env.Kube.DiscoveryV1().EndpointSlices("sandbox").Create(context.Background(), slice, metav1.CreateOptions{}); err != nil {
-		t.Fatal(err)
 	}
 }
 func observedCheckpointScenario() *c2CheckpointContinuity {
