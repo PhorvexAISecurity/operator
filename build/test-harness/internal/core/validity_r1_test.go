@@ -388,7 +388,7 @@ func TestR1ActualCleanupOwnedPropagatesEveryAPIFailure(t *testing.T) {
 		}
 		// Every kind is reported, not just the first: one broken kind must not
 		// mask the others.
-		for _, want := range []string{"pods", "deployments", "services", "configmaps", "secrets", "roles"} {
+		for _, want := range []string{"pods", "deployments", "replicasets", "persistentvolumeclaims", "services", "configmaps", "secrets", "serviceaccounts", "rolebindings", "roles"} {
 			if !containsSubstring(err.Error(), want) {
 				t.Errorf("aggregated error does not mention %q: %v", want, err)
 			}

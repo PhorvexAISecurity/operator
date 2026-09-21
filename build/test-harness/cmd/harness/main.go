@@ -358,7 +358,7 @@ func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) 
 	deleteNamespace := !env.Config.BenignCheckpointLocalFixture
 	cleanupErr := env.CleanupOwned(fctx, deleteNamespace)
 	if cleanupErr == nil && !deleteNamespace {
-		env.Log.Logf("cleanup: verified generic-owned residue absent; preserving exact external checkpoint holder and namespace for collector handoff")
+		env.Log.Logf("cleanup: verified supported generic-owned residue absent; preserving exact external checkpoint holder and namespace for collector handoff")
 	}
 	closeErr := boundedClose(closer)
 	return errors.Join(cleanupErr, closeErr)

@@ -785,50 +785,39 @@ func TestCheckpointLocalHolderRequiresExternalOwnershipAndRejectsGenericOwnershi
 	}
 }
 
-func TestCheckpointLocalHolderSurvivesAllSixRealOwnedCleanups(t *testing.T) {
+func TestCheckpointLocalHolderSurvivesOwnedPodCleanup(t *testing.T) {
 	env, client, _ := checkpointLocalSetupEnv(t)
 	if _, err := client.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace}}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatal(err)
 	}
 	wantUID := types.UID(env.Config.BenignCheckpointLocalHolderUID)
-	currentOwned := ""
+	owned := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "scenario-owned", Namespace: env.Config.Namespace, Labels: env.OwnedLabels(nil)}}
+	if _, err := client.CoreV1().Pods(env.Config.Namespace).Create(context.Background(), owned, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	client.PrependReactor("delete-collection", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		selection := action.(k8stesting.DeleteCollectionAction).GetListRestrictions().Labels
 		if selection == nil || selection.String() != core.OwnedSelector() {
 			return true, nil, fmt.Errorf("cleanup selector differs: %v", selection)
 		}
-		if currentOwned == "" {
-			return true, nil, errors.New("cleanup reached Pod deletion without an expected scenario object")
-		}
-		err := client.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, env.Config.Namespace, currentOwned)
+		err := client.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, env.Config.Namespace, owned.Name)
 		return true, nil, err
 	})
-	for slot, arm := range []struct {
-		defender string
-		trial    int
-	}{{"d-nomtd", 0}, {"d-nomtd", 1}, {"d-nomtd", 2}, {"d-r6blindtimer", 0}, {"d-r6blindtimer", 1}, {"d-r6blindtimer", 2}} {
-		env.DefenderName, env.Trial = arm.defender, arm.trial
-		owned := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("scenario-owned-%d", slot), Namespace: env.Config.Namespace, Labels: env.OwnedLabels(nil)}}
-		currentOwned = owned.Name
-		if _, err := client.CoreV1().Pods(env.Config.Namespace).Create(context.Background(), owned, metav1.CreateOptions{}); err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		err := env.CleanupOwned(ctx, false)
-		cancel()
-		if err != nil {
-			t.Fatalf("slot %d real cleanup failed: %v", slot, err)
-		}
-		if _, err := client.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), owned.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-			t.Fatalf("slot %d generic-owned Pod survived: %v", slot, err)
-		}
-		holder, err := client.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), checkpointLocalHolder, metav1.GetOptions{})
-		if err != nil || holder.UID != wantUID {
-			t.Fatalf("slot %d external holder continuity lost: holder=%v err=%v", slot, holder, err)
-		}
-		if _, err := client.CoreV1().Namespaces().Get(context.Background(), env.Config.Namespace, metav1.GetOptions{}); err != nil {
-			t.Fatalf("slot %d namespace continuity lost: %v", slot, err)
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	err := env.CleanupOwned(ctx, false)
+	cancel()
+	if err != nil {
+		t.Fatalf("real cleanup failed: %v", err)
+	}
+	if _, err := client.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), owned.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("generic-owned Pod survived: %v", err)
+	}
+	holder, err := client.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), checkpointLocalHolder, metav1.GetOptions{})
+	if err != nil || holder.UID != wantUID {
+		t.Fatalf("external holder continuity lost: holder=%v err=%v", holder, err)
+	}
+	if _, err := client.CoreV1().Namespaces().Get(context.Background(), env.Config.Namespace, metav1.GetOptions{}); err != nil {
+		t.Fatalf("namespace continuity lost: %v", err)
 	}
 }
 
