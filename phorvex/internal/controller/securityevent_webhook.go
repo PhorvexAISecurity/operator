@@ -159,6 +159,9 @@ func (s SecurityEventStamper) validateCompletedDisclosureAdmission(ctx context.C
 		if creator == "" || creator != payload.Classification.ObserverIdentity || !ingest.CompletedDisclosureTrust().Allows(creator) {
 			return "", time.Time{}, "", errors.New("completed-disclosure creator authority is invalid")
 		}
+		if req.UserInfo.Username != creator {
+			return "", time.Time{}, "", errors.New("only the original loss observer may update completed-disclosure evidence")
+		}
 		return string(canonical), admittedAt, creator, nil
 	}
 	if !ingest.CompletedDisclosureTrust().Allows(req.UserInfo.Username) {

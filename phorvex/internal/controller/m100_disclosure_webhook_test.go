@@ -111,8 +111,8 @@ func TestM100DisclosureAdmissionIsDedicatedFailClosedAndImmutable(t *testing.T) 
 	if resp := m100Admission(t, admissionv1.Update, observer, strings.Replace(payload, "evidence", "changed", 1), nil, payload); resp.Allowed {
 		t.Fatal("changed evidence update admitted")
 	}
-	if resp := m100Admission(t, admissionv1.Update, canaryUser, payload, nil, payload); !resp.Allowed {
-		t.Fatalf("immutable disclosure blocked unrelated status-capable updater: %+v", resp.Result)
+	if resp := m100Admission(t, admissionv1.Update, canaryUser, payload, nil, payload); resp.Allowed {
+		t.Fatal("unrelated full-resource updater retained the original observer authority")
 	}
 	if resp := m100Admission(t, admissionv1.Update, observer, payload, func(e *amtdv1beta1.SecurityEvent) {
 		delete(e.Annotations, disclosure.Annotation)

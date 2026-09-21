@@ -34,8 +34,8 @@
 #     Fail-closed on belief, open on ingestion.
 #   - A missing/empty username never authorises a non-empty claim (equality fails).
 #   - The dedicated completed-disclosure payload is immutable. Its original creator and exact
-#     admission stamps survive ordinary full-resource controller updates; removing or changing
-#     any of them is denied. Other events retain the generic requester-equality rule.
+#     admission stamps may be retained only by that same authenticated observer; removing or
+#     changing any of them is denied. Status-subresource updates are outside this policy.
 #
 # SUBRESOURCES. `resources` names the full resource only, never securityevents/status. A
 # status write is a different resource, so it is not matched and legitimate status updates by
@@ -102,9 +102,7 @@ spec:
          variables.claim == variables.oldClaim)
       reason: Forbidden
       message: "securityevent/completed-disclosure: payload and admission authority are immutable."
-    - expression: >-
-        variables.claim == '' || variables.claim == variables.actor ||
-        (variables.oldCompleted && variables.completed && variables.claim == variables.oldClaim)
+    - expression: "variables.claim == '' || variables.claim == variables.actor"
       reason: Forbidden
       messageExpression: >-
         "securityevent/creator-identity: the phorvex.ai/creator-identity annotation must name the
