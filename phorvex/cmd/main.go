@@ -41,6 +41,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/calib"
+	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
@@ -500,6 +501,12 @@ func main() {
 	// Kill-switch dispatch admission must bypass the informer cache: every route,
 	// selected dispatch, fallback and maintenance boundary reads current sentinel state.
 	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetAPIReader(), Namespace: operatorNS}
+	sharedCapacity, sharedCapacityErr := sharedcapacity.NewStore(mgr.GetClient(), mgr.GetAPIReader(), operatorNS)
+	if sharedCapacityErr != nil {
+		setupLog.Error(sharedCapacityErr, "cannot initialize durable shared capacity ledger")
+		os.Exit(1)
+	}
+	rmgr.SharedCapacity = sharedCapacity
 
 	// Telemetry source: real Prometheus client if a URL is set, else honest nil source.
 	rmgr.PromURL = promURL         // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)

@@ -3,8 +3,8 @@
 Independent validator for Phorvex audit decision records.
 
 Each record is a `phorvex.audit.v2` envelope carrying a nested
-`decisionTrace` (`phorvex.decision-trace.v2`, v3, economics-aware v4, or
-flow-regime-aware v5).
+`decisionTrace` (`phorvex.decision-trace.v2`, v3, economics-aware v4,
+flow-regime-aware v5, or capacity-aware v6).
 
 The laws asserted here were derived by reading the Go source, NOT by fitting
 the records (see README.md for the file:line of every law):
@@ -37,6 +37,7 @@ TRACE_V2 = "phorvex.decision-trace.v2"
 TRACE_V3 = "phorvex.decision-trace.v3"
 TRACE_V4 = "phorvex.decision-trace.v4"
 TRACE_V5 = "phorvex.decision-trace.v5"
+TRACE_V6 = "phorvex.decision-trace.v6"
 AUDIT_V2 = "phorvex.audit.v2"
 
 ECON_LEGACY = "legacy-runtime-lambda-v1"
@@ -217,8 +218,8 @@ def check_schema(rec: dict, tr: dict) -> Check:
     if env != AUDIT_V2:
         problems.append(f"schemaVersion={env!r} (want {AUDIT_V2!r})")
     tv = tr.get("schemaVersion")
-    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5):
-        problems.append(f"decisionTrace.schemaVersion={tv!r} (want v2, v3, v4, or v5)")
+    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6):
+        problems.append(f"decisionTrace.schemaVersion={tv!r} (want v2, v3, v4, v5, or v6)")
     if problems:
         return Check(1, "schema", FAIL, "; ".join(problems))
     return Check(1, "schema", PASS, f"envelope {AUDIT_V2}; trace {tv}")
@@ -369,9 +370,9 @@ def check_ecost(tr: dict) -> Check:
 
 def check_netgain(tr: dict) -> Check:
     # decision_trace.go Validate() ~390-396; coverage.go legacyMixedGain + lambdaContribution = lambda*ECost
-    is_v4 = tr.get("schemaVersion") == TRACE_V4
-    fixed = is_v4 and tr.get("economicsVersion") == ECON_FIXED
-    coefficient = tr.get("effectiveCostCoefficient") if is_v4 else tr.get("lambdaRuntime")
+    has_v4 = tr.get("schemaVersion") in (TRACE_V4, TRACE_V5, TRACE_V6)
+    fixed = has_v4 and tr.get("economicsVersion") == ECON_FIXED
+    coefficient = tr.get("effectiveCostCoefficient") if has_v4 else tr.get("lambdaRuntime")
     contribution_key = "objectiveCostContribution" if fixed else "lambdaContribution"
     fails, checked, skipped = [], 0, []
     for i, c in enumerate(tr.get("candidates") or []):
@@ -677,7 +678,7 @@ def check_redaction(rec: dict) -> Check:
 
 def check_economics(rec: dict, tr: dict) -> Check:
     """Reconstruct the V4 scoring coefficient and exact trace-off audit descriptor."""
-    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5):
+    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5, TRACE_V6):
         return Check(13, "economics-v4", SKIPPED, "trace is v2/v3; economics metadata is not required")
 
     problems = []
@@ -749,7 +750,7 @@ def check_economics(rec: dict, tr: dict) -> Check:
             problems.append("audit exact lambdaRuntimeLegacy disagrees with trace")
         if expected_beta_present and beta.ok and (not envelope_beta.ok or envelope_beta.num != beta.num):
             problems.append("audit exact disruptionAversion disagrees with trace")
-        if tr.get("schemaVersion") == TRACE_V5:
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6):
             if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
                 problems.append("V5 trace flowCostSemanticsVersion is missing or unknown")
             if envelope.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
@@ -814,7 +815,7 @@ def v3_cost_high(tr: dict) -> list[str]:
             q = cq.num if cq.ok else 0.0
             g = slack.num if (applied and slack.ok) else 0.0
             extra = max(q, g)
-        if tr.get("schemaVersion") == TRACE_V5:
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6):
             uncertainty = optional(c, "flowUncertaintySlack", p)
             if uncertainty.ok:
                 extra = max(extra, uncertainty.num)
@@ -855,9 +856,9 @@ def v3_dispatch(tr: dict) -> list[str]:
 
 
 def check_v3(tr: dict, strict: bool) -> Check:
-    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5):
+    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6):
         if strict:
-            return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not v3/v4/v5")
+            return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not v3/v4/v5/v6")
         return Check(12, "v3-hooks", SKIPPED, "trace is v2; v3 laws (actionStatus/costHigh/coveredBefore/dispatch) not applicable")
     problems = v3_action_status(tr) + v3_cost_high(tr) + v3_covered_before(tr) + v3_dispatch(tr)
     if problems:
@@ -866,7 +867,7 @@ def check_v3(tr: dict, strict: bool) -> Check:
 
 
 def check_flow_v5(tr: dict) -> Check:
-    if tr.get("schemaVersion") != TRACE_V5:
+    if tr.get("schemaVersion") not in (TRACE_V5, TRACE_V6):
         return Check(14, "flow-regime-v5", SKIPPED, "historical trace; V5 flow-regime contract is not applicable")
     problems = []
     if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
@@ -952,6 +953,128 @@ def check_flow_v5(tr: dict) -> Check:
     return Check(14, "flow-regime-v5", PASS, "action/phase/load regime, point floor, uncertainty bound and applicability reconstruct")
 
 
+def resource_scope(scope: Any, path: str) -> tuple[tuple[str, str, str, str] | None, str]:
+    """Validate and key the two closed V6 resource-scope forms."""
+    if not isinstance(scope, dict):
+        return None, f"{path} is not an object"
+    kind = scope.get("kind")
+    namespace = scope.get("namespace", "")
+    service_name = scope.get("serviceName", "")
+    service_uid = scope.get("serviceUID", "")
+    controller_uid = scope.get("controllerUID", "")
+    values = (namespace, service_name, service_uid, controller_uid)
+    if any(not isinstance(value, str) for value in values):
+        return None, f"{path} has a non-string identity field"
+    if kind == "move-count":
+        valid = bool(namespace and controller_uid and not service_name and not service_uid)
+    elif kind == "unavailable-ready-replica":
+        valid = bool(namespace and service_name and service_uid and controller_uid)
+    else:
+        return None, f"{path}.kind={kind!r} is unknown"
+    if not valid:
+        return None, f"{path} is not fully and exactly identity-bound"
+    # ServiceName is descriptive and deliberately absent from the Go in-memory
+    # key; immutable ServiceUID and controllerUID carry authority.
+    return (kind, namespace, service_uid, controller_uid), ""
+
+
+def nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def check_resources_v6(tr: dict) -> Check:
+    """Mirror DecisionTraceV2.validateV6 without deriving capacity from scores."""
+    version = tr.get("schemaVersion")
+    capacities = tr.get("resources")
+    candidates = tr.get("candidates") or []
+    if version != TRACE_V6:
+        problems = []
+        if capacities not in (None, []):
+            problems.append("historical trace carries V6 resource capacities")
+        for i, candidate in enumerate(candidates):
+            if isinstance(candidate, dict) and candidate.get("resources") not in (None, []):
+                problems.append(f"{cand_path(i)} carries V6 resource consumption")
+        if problems:
+            return Check(15, "resources-v6", FAIL, "; ".join(problems))
+        return Check(15, "resources-v6", SKIPPED, "historical trace has no V6 resource fields")
+
+    problems = []
+    if not isinstance(capacities, list) or not capacities:
+        return Check(15, "resources-v6", FAIL, "V6 decisionTrace.resources is missing or empty")
+    limits: dict[tuple[str, str, str, str], int] = {}
+    batch_selected: dict[tuple[str, str, str, str], int] = {}
+    for i, capacity in enumerate(capacities):
+        path = f"decisionTrace.resources[{i}]"
+        if not isinstance(capacity, dict):
+            problems.append(f"{path} is not an object")
+            continue
+        key, issue = resource_scope(capacity.get("scope"), f"{path}.scope")
+        if issue:
+            problems.append(issue)
+            continue
+        limit = capacity.get("limit")
+        outstanding = capacity.get("outstanding")
+        selected = capacity.get("selected")
+        if not all(nonnegative_int(value) for value in (limit, outstanding, selected)):
+            problems.append(f"{path} limit/outstanding/selected are not non-negative integers")
+            continue
+        if outstanding + selected > limit:
+            problems.append(f"{path} outstanding+selected exceeds limit")
+        if key in limits:
+            problems.append(f"{path} duplicates resource scope {key!r}")
+            continue
+        limits[key], batch_selected[key] = limit, selected
+
+    row_selected: dict[tuple[str, str, str, str], int] = {}
+    for i, candidate in enumerate(candidates):
+        path = cand_path(i)
+        if not isinstance(candidate, dict):
+            problems.append(f"{path} is not an object")
+            continue
+        demands = candidate.get("resources")
+        if demands is None:
+            demands = []
+        if not isinstance(demands, list):
+            problems.append(f"{path}.resources is not a list")
+            continue
+        if not demands and not candidate.get("existingExclusionReason"):
+            problems.append(f"{path} lacks V6 resource consumption")
+        seen = set()
+        for j, demand in enumerate(demands):
+            dpath = f"{path}.resources[{j}]"
+            if not isinstance(demand, dict):
+                problems.append(f"{dpath} is not an object")
+                continue
+            key, issue = resource_scope(demand.get("scope"), f"{dpath}.scope")
+            units = demand.get("units")
+            if issue:
+                problems.append(issue)
+                continue
+            if not nonnegative_int(units) or units == 0:
+                problems.append(f"{dpath}.units={units!r} is not a positive integer")
+                continue
+            if key in seen:
+                problems.append(f"{dpath} duplicates candidate resource scope {key!r}")
+                continue
+            seen.add(key)
+            if key not in limits:
+                problems.append(f"{dpath} consumes unknown resource scope {key!r}")
+                continue
+            if candidate.get("selected") is True:
+                row_selected[key] = row_selected.get(key, 0) + units
+
+    for key, units in row_selected.items():
+        if units > batch_selected.get(key, 0):
+            problems.append(
+                f"selected candidate consumption {units} exceeds batch selected "
+                f"{batch_selected.get(key, 0)} for resource scope {key!r}"
+            )
+    if problems:
+        return Check(15, "resources-v6", FAIL, "; ".join(problems))
+    return Check(15, "resources-v6", PASS,
+                 f"{len(limits)} exact resource scope(s) and candidate consumption vectors reconstruct")
+
+
 # --------------------------------------------------------------------------- driver
 
 def validate_record(rec: dict, source: str, strict_v3: bool) -> RecordResult:
@@ -979,6 +1102,7 @@ def validate_record(rec: dict, source: str, strict_v3: bool) -> RecordResult:
         check_v3(tr, strict_v3),
         check_economics(rec, tr),
         check_flow_v5(tr),
+        check_resources_v6(tr),
     ]
     return res
 
@@ -1022,8 +1146,8 @@ def markdown_report(results: list[RecordResult]) -> str:
         out.append(f"| `{r.decision_id[:12]}` | {r.tenant_pod} | {r.trace_version.rsplit('.', 1)[-1]} | {tag} | "
                    f"{r.selected_action} | {r.status} | {bad} |")
     out += ["", "## Check matrix", "",
-            "| decisionID | " + " | ".join(str(i) for i in range(1, 15)) + " |",
-            "|---|" + "---|" * 14]
+            "| decisionID | " + " | ".join(str(i) for i in range(1, 16)) + " |",
+            "|---|" + "---|" * 15]
     for r in results:
         out.append(f"| `{r.decision_id[:12]}` | " + " | ".join(c.status for c in r.checks) + " |")
     bad_records = [r for r in results if r.status != PASS]

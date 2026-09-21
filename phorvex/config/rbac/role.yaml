@@ -20,6 +20,10 @@ rules:
   - nodes
   - services
   verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources:
+  - endpointslices
+  verbs: ["get", "list", "watch"]
 # --- Kubernetes Events: surface unsupported enabled actions on the policy object ---
 - apiGroups: [""]
   resources:

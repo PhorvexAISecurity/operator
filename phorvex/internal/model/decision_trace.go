@@ -27,6 +27,9 @@ const (
 	// DecisionTraceSchemaV5 adds exact M156 flow-regime provenance and validates
 	// it against the candidate action and the recorded phase/load inputs.
 	DecisionTraceSchemaV5 = "phorvex.decision-trace.v5"
+	// DecisionTraceSchemaV6 adds the exact typed hard-capacity vector and each
+	// candidate's integer consumption. V2-V5 remain readable unchanged.
+	DecisionTraceSchemaV6 = "phorvex.decision-trace.v6"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -395,6 +398,19 @@ type DecisionCandidateV2 struct {
 	// RBAC could not be confirmed this tick; it was NOT excluded (fail-open). Carried
 	// through to the per-action status row.
 	RBACUnknown bool `json:"rbacUnknown,omitempty"`
+	// Resources is the compact V6 consumption vector for this candidate.
+	Resources []ResourceConsumption `json:"resources,omitempty"`
+}
+
+// DecisionResourceCapacityV6 records the current hard limit and already
+// outstanding durable consumption for one immutable resource scope.
+type DecisionResourceCapacityV6 struct {
+	Scope       ResourceScope `json:"scope"`
+	Limit       int           `json:"limit"`
+	Outstanding int           `json:"outstanding"`
+	// Selected is total consumption by the current decision batch for this
+	// scope, rather than only the candidate represented by this audit row.
+	Selected int `json:"selected"`
 }
 
 // DecisionDualUpdateV2 records one legacy runtime-controller transition.
@@ -482,9 +498,10 @@ type DecisionTraceV2 struct {
 	CostModelVersion string  `json:"costModelVersion"`
 	EvaluationRound  int     `json:"evaluationRound"`
 
-	Inputs     DecisionModelInputsV2 `json:"inputs"`
-	Facts      []DecisionFactV2      `json:"facts"`
-	Candidates []DecisionCandidateV2 `json:"candidates"`
+	Inputs     DecisionModelInputsV2        `json:"inputs"`
+	Facts      []DecisionFactV2             `json:"facts"`
+	Candidates []DecisionCandidateV2        `json:"candidates"`
+	Resources  []DecisionResourceCapacityV6 `json:"resources,omitempty"`
 
 	// T0-C: ActionStatus carries exactly one row per model.MutatingActions member
 	// in canonical order (R-2: the complete action accounting, including actions
@@ -667,6 +684,8 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.ExistingExclusionReason = redactTraceString(c.ExistingExclusionReason)
 		c.SelectionReason = redactTraceString(c.SelectionReason)
 		c.CoverKeys = append([]string(nil), c.CoverKeys...)
+		c.Resources = append([]ResourceConsumption(nil), c.Resources...)
+		sort.Slice(c.Resources, func(i, j int) bool { return c.Resources[i].Scope.Key() < c.Resources[j].Scope.Key() })
 		for j := range c.CoverKeys {
 			c.CoverKeys[j] = redactTraceString(c.CoverKeys[j])
 		}
@@ -704,6 +723,8 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 			c.FlowUncertaintySlack = &cleaned
 		}
 	}
+	out.Resources = append([]DecisionResourceCapacityV6(nil), t.Resources...)
+	sort.Slice(out.Resources, func(i, j int) bool { return out.Resources[i].Scope.Key() < out.Resources[j].Scope.Key() })
 
 	out.ActionStatus = append([]DecisionActionStatusV3(nil), t.ActionStatus...)
 	for i := range out.ActionStatus {
@@ -754,7 +775,7 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 	type alias DecisionTraceV2
 	canonical := t.Canonical()
 	raw, err := json.Marshal(alias(canonical))
-	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5) {
+	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5 && canonical.SchemaVersion != DecisionTraceSchemaV6) {
 		return raw, err
 	}
 	var object map[string]json.RawMessage
@@ -780,12 +801,14 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 // non-test caller — it is a test-time contract, not a runtime guard; the
 // production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
 	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
 	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
 	isV5 := t.SchemaVersion == DecisionTraceSchemaV5
+	isV6 := t.SchemaVersion == DecisionTraceSchemaV6
+	hasV5 := isV5 || isV6
 	finite := func(values ...float64) bool {
 		for _, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -797,7 +820,7 @@ func (t DecisionTraceV2) Validate() error {
 	if !finite(t.LambdaConfiguredSeed, t.LambdaRuntime, t.LambdaConfiguredPolicy,
 		t.LambdaRuntimeLegacy, t.NormWeight, t.FlowWeight,
 		t.DualUpdate.LambdaBefore, t.DualUpdate.LambdaAfter) ||
-		((isV4 || isV5) && !finite(t.EffectiveCostCoefficient)) ||
+		((isV4 || hasV5) && !finite(t.EffectiveCostCoefficient)) ||
 		(t.DisruptionAversion != nil && t.DisruptionAversion.Present && !finite(t.DisruptionAversion.Value)) {
 		return errors.New("trace contains non-finite controller or cost values")
 	}
@@ -817,10 +840,13 @@ func (t DecisionTraceV2) Validate() error {
 		}
 	}
 	for _, candidate := range t.Candidates {
+		if !isV6 && len(candidate.Resources) != 0 {
+			return fmt.Errorf("historical candidate %q carries V6 resource consumption", candidate.CandidateKey)
+		}
 		values := []OptionalFloat{candidate.GrossFullValue, candidate.MarginalCoverage,
 			candidate.Provenance, candidate.CNorm, candidate.CFlow, candidate.ExpectedCost,
 			candidate.CostHigh, candidate.LambdaContribution, candidate.NetGain}
-		if isV5 {
+		if hasV5 {
 			for _, value := range []*OptionalFloat{candidate.FlowPredictedMean, candidate.FlowConservativeFloor,
 				candidate.FlowUncertaintyBound, candidate.FlowUncertaintySlack} {
 				if value != nil {
@@ -852,7 +878,7 @@ func (t DecisionTraceV2) Validate() error {
 		}
 	}
 	t = t.Canonical()
-	if !isV5 {
+	if !hasV5 {
 		if t.FlowCostSemanticsVersion != "" {
 			return errors.New("historical trace carries V5 flow-cost semantics")
 		}
@@ -890,7 +916,7 @@ func (t DecisionTraceV2) Validate() error {
 			selectedKey = c.CandidateKey
 		}
 		contribution := c.LambdaContribution
-		if (isV4 || isV5) && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
+		if (isV4 || hasV5) && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
 			if c.ObjectiveCostContribution != nil {
 				contribution = *c.ObjectiveCostContribution
 			} else {
@@ -926,20 +952,27 @@ func (t DecisionTraceV2) Validate() error {
 			t.DualUpdate.LambdaBefore != t.LambdaRuntimeLegacy || t.DualUpdate.UpdateReason == "" {
 			return errors.New("dual update is not reconstructable from trace inputs")
 		}
-	} else if isV3 || isV4 || isV5 {
-		return errors.New("v3/v4/v5 trace must carry the cost representation semantics")
+	} else if isV3 || isV4 || hasV5 {
+		return errors.New("v3/v4/v5/v6 trace must carry the cost representation semantics")
 	}
-	if isV4 || isV5 {
+	if isV4 || hasV5 {
 		if err := t.validateV4(); err != nil {
 			return err
 		}
 	}
-	if isV5 {
+	if hasV5 {
 		if err := t.validateV5(); err != nil {
 			return err
 		}
 	}
-	if isV3 || isV4 || isV5 {
+	if isV6 {
+		if err := t.validateV6(); err != nil {
+			return err
+		}
+	} else if len(t.Resources) != 0 {
+		return errors.New("historical trace carries V6 resource capacities")
+	}
+	if isV3 || isV4 || hasV5 {
 		if err := t.validateV3(); err != nil {
 			return err
 		}
@@ -952,6 +985,51 @@ func (t DecisionTraceV2) Validate() error {
 	}
 	if selected != 1 || t.SelectedCandidateKey == "" || selectedKey != t.SelectedCandidateKey {
 		return errors.New("selected trace must reference exactly one recorded candidate")
+	}
+	return nil
+}
+
+func (t DecisionTraceV2) validateV6() error {
+	if len(t.Resources) == 0 {
+		return errors.New("v6 trace has no resource capacities")
+	}
+	limits, batchSelected, rowSelected := map[string]int{}, map[string]int{}, map[string]int{}
+	for _, capacity := range t.Resources {
+		key := capacity.Scope.Key()
+		if !capacity.Scope.Valid() || capacity.Limit < 0 || capacity.Outstanding < 0 || capacity.Selected < 0 || capacity.Outstanding+capacity.Selected > capacity.Limit {
+			return errors.New("v6 trace contains invalid resource capacity")
+		}
+		if _, exists := limits[key]; exists {
+			return fmt.Errorf("v6 trace duplicates resource scope %q", key)
+		}
+		limits[key], batchSelected[key] = capacity.Limit, capacity.Selected
+	}
+	for _, candidate := range t.Candidates {
+		if len(candidate.Resources) == 0 && candidate.ExistingExclusionReason == "" {
+			return fmt.Errorf("candidate %q lacks V6 resource consumption", candidate.CandidateKey)
+		}
+		seen := map[string]bool{}
+		for _, demand := range candidate.Resources {
+			key := demand.Scope.Key()
+			if !demand.Scope.Valid() || demand.Units <= 0 {
+				return fmt.Errorf("candidate %q has invalid resource consumption", candidate.CandidateKey)
+			}
+			if seen[key] {
+				return fmt.Errorf("candidate %q duplicates resource scope %q", candidate.CandidateKey, key)
+			}
+			seen[key] = true
+			if _, exists := limits[key]; !exists {
+				return fmt.Errorf("candidate %q consumes unknown resource scope %q", candidate.CandidateKey, key)
+			}
+			if candidate.Selected {
+				rowSelected[key] += demand.Units
+			}
+		}
+	}
+	for key, value := range rowSelected {
+		if value > batchSelected[key] {
+			return fmt.Errorf("selected candidate exceeds batch consumption for resource scope %q: row=%d batch=%d limit=%d", key, value, batchSelected[key], limits[key])
+		}
 	}
 	return nil
 }
@@ -1231,7 +1309,7 @@ func (t DecisionTraceV2) validateV3() error {
 		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
 			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
 		}
-		if t.SchemaVersion == DecisionTraceSchemaV5 && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
+		if (t.SchemaVersion == DecisionTraceSchemaV5 || t.SchemaVersion == DecisionTraceSchemaV6) && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
 			slack = c.FlowUncertaintySlack.Value
 		}
 		want += slack

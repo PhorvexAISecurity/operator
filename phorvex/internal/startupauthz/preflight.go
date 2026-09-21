@@ -109,6 +109,16 @@ func Check(parent context.Context, reader client.Reader, reviews SSARClient, cfg
 			if !accepted(cfg.Backend, action) {
 				continue
 			}
+			if action == model.ActionRotate || action == model.ActionQuarantine {
+				for _, verb := range []string{"get", "list"} {
+					add(requirements, Requirement{Namespace: policy.Namespace, Verb: authz.Verb{Resource: "pods", Verb: verb}, Reason: "shared availability capacity Pod authority"})
+					add(requirements, Requirement{Namespace: policy.Namespace, Verb: authz.Verb{Resource: "services", Verb: verb}, Reason: "shared availability capacity Service authority"})
+				}
+				add(requirements, Requirement{Namespace: policy.Namespace, Verb: authz.Verb{Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}, Reason: "shared availability capacity EndpointSlice authority"})
+				for _, verb := range []string{"get", "list", "create", "update"} {
+					add(requirements, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: verb}, Reason: "durable shared capacity ledger"})
+				}
+			}
 			addActionRequirements(requirements, cfg, policy.Namespace, action)
 		}
 		// Every active route performs uncached namespace and target-Pod authority

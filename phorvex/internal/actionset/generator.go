@@ -30,6 +30,7 @@ type Candidate struct {
 	CoverKeys      []string // recon fact keys this move invalidates
 	ECost          float64  // expected (objective) cost
 	CHi            float64  // conformal worst-case cost (used by the hard SLO gate)
+	Resources      []model.ResourceConsumption
 	// RBACUnknown is set when the capability gate's SSAR errored (T1-E fail-open): the
 	// candidate is NOT excluded, but the record flags that its RBAC could not be
 	// confirmed this tick (P-NO-FREEZE) — surfaced in the trace + a metric.
@@ -40,6 +41,9 @@ type Candidate struct {
 // recon fact-weight map (cover keys index into it for the coverage objective).
 type ActionSet struct {
 	Candidates []Candidate
+	// Resources is the complete hard-capacity vector used by every selection
+	// path. Each scope appears exactly once.
+	Resources []model.ResourceCapacity
 	// FactWeights contains only keys referenced by at least one action cover. Audit-only facts stay
 	// in recon.AssetFacts but cannot enter marginal gain, normalization, or collision ownership.
 	FactWeights map[string]float64
@@ -194,6 +198,43 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{},
 		FactsAbsent: map[string]string{},
 		CostCeiling: d.CostCeiling, CoverByAsset: map[string]map[model.Action][]string{}}
+	resourceIndex := map[string]int{}
+	moveIdentity := pol.PolicyUID
+	if moveIdentity == "" {
+		moveIdentity = pol.Tenant
+	}
+	moveNamespace := pol.Namespace
+	if moveNamespace == "" {
+		for _, view := range views {
+			if view == nil || view.Pod.Namespace == "" {
+				continue
+			}
+			if moveNamespace == "" {
+				moveNamespace = view.Pod.Namespace
+			} else if moveNamespace != view.Pod.Namespace {
+				moveNamespace = ""
+				break
+			}
+		}
+	}
+	moveScope := model.ResourceScope{Kind: model.ResourceMoveCount, Namespace: moveNamespace, ControllerUID: moveIdentity}
+	addCapacity := func(capacity model.ResourceCapacity) {
+		key := capacity.Scope.Key()
+		if existing, ok := resourceIndex[key]; ok {
+			// Different observations for one immutable scope are contradictory.
+			// Keep the conservative lower limit and higher outstanding count.
+			if capacity.Limit < out.Resources[existing].Limit {
+				out.Resources[existing].Limit = capacity.Limit
+			}
+			if capacity.Outstanding > out.Resources[existing].Outstanding {
+				out.Resources[existing].Outstanding = capacity.Outstanding
+			}
+			return
+		}
+		resourceIndex[key] = len(out.Resources)
+		out.Resources = append(out.Resources, capacity)
+	}
+	addCapacity(model.ResourceCapacity{Scope: moveScope, Limit: pol.MaxMovesPerTick})
 	keyOwners := map[string]string{}
 	claim := func(factKey, block string) bool {
 		owner, exists := keyOwners[factKey]
@@ -320,6 +361,18 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				continue
 			}
 			move := model.Move{Action: action}
+			resources, capacities, resourceReason := candidateResources(v, action, pol, moveScope)
+			if resourceReason != "" {
+				out.Excluded = append(out.Excluded, Exclusion{
+					GenerationRank: generationRank, Key: key, Action: action,
+					Reason:    "resource-capacity: " + resourceReason,
+					CoverKeys: append([]string(nil), coverKeys...),
+				})
+				continue
+			}
+			for _, capacity := range capacities {
+				addCapacity(capacity)
+			}
 			var sloExclusions []string
 			verdict := feasibility.Evaluate(v, move, pol)
 			if d.RetainSLO != nil && d.RetainSLO(key) {
@@ -373,11 +426,76 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				CoverKeys:      coverKeys,
 				ECost:          ecost,
 				CHi:            chi,
+				Resources:      resources,
 				RBACUnknown:    rbacUnknown,
 			})
 		}
 	}
 	return out
+}
+
+func candidateResources(view *model.WorkloadView, action model.Action, pol model.Policy, moveScope model.ResourceScope) ([]model.ResourceConsumption, []model.ResourceCapacity, string) {
+	demands := []model.ResourceConsumption{{Scope: moveScope, Units: 1}}
+	capacities := []model.ResourceCapacity{{Scope: moveScope, Limit: pol.MaxMovesPerTick}}
+	if !feasibility.RemovesReadyReplica(action) || pol.MinAvailableReplicas <= 0 {
+		return demands, capacities, ""
+	}
+	// The production manager always wires the durable store. Explicit offline
+	// evaluators that do not configure it retain their historical move-count-only
+	// contract rather than fabricating Service inventory.
+	if !pol.SharedResourceCapacityConfigured {
+		return demands, capacities, ""
+	}
+	if !pol.SharedResourceReservationsKnown {
+		reason := pol.SharedResourceReservationsReason
+		if reason == "" {
+			reason = "durable shared reservation inventory unavailable"
+		}
+		return nil, nil, reason
+	}
+	if view == nil || !view.Pod.ServiceAvailabilityKnown {
+		reason := "service availability inventory unavailable"
+		if view != nil && view.Pod.ServiceAvailabilityReason != "" {
+			reason = view.Pod.ServiceAvailabilityReason
+		}
+		return nil, nil, reason
+	}
+	if len(view.Pod.ServiceAvailability) == 0 {
+		return nil, nil, "target has no authoritative Service/EndpointSlice membership"
+	}
+	seen := map[string]bool{}
+	for _, observation := range view.Pod.ServiceAvailability {
+		if !observation.Complete || !observation.TargetReady || observation.Scope.Kind != model.ResourceUnavailableReadyReplica ||
+			observation.Scope.Namespace == "" || observation.Scope.ServiceUID == "" || observation.Scope.ControllerUID == "" {
+			reason := observation.Reason
+			if reason == "" {
+				reason = "incomplete Service availability observation"
+			}
+			return nil, nil, reason
+		}
+		key := observation.Scope.Key()
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		limit := observation.ReadyMembers - pol.MinAvailableReplicas
+		if limit < 0 {
+			limit = 0
+		}
+		outstanding := 0
+		if pol.SharedResourceReservations != nil {
+			outstanding = pol.SharedResourceReservations[key]
+		}
+		// A stricter newly observed floor can leave a pre-existing obligation
+		// above today's raw spare count. Keep that obligation representable while
+		// allowing no additional removal from this scope.
+		if limit < outstanding {
+			limit = outstanding
+		}
+		capacities = append(capacities, model.ResourceCapacity{Scope: observation.Scope, Limit: limit, Outstanding: outstanding})
+		demands = append(demands, model.ResourceConsumption{Scope: observation.Scope, Units: 1})
+	}
+	return demands, capacities, ""
 }
 
 func ftoa(f float64) string {

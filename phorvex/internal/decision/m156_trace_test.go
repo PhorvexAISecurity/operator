@@ -119,7 +119,7 @@ func m156MeasuredTrace(t *testing.T, ceiling float64) *model.DecisionTraceV2 {
 
 func TestM156TraceV5BindsActualInputsAndReconstructsCost(t *testing.T) {
 	trace := m156MeasuredTrace(t, 10)
-	if trace.SchemaVersion != model.DecisionTraceSchemaV5 ||
+	if trace.SchemaVersion != model.DecisionTraceSchemaV6 ||
 		trace.FlowCostSemanticsVersion != model.FlowCostSemanticsConservativeRegimeV1 {
 		t.Fatalf("wrong current trace semantics: %+v", trace)
 	}
@@ -181,8 +181,10 @@ func TestM156HistoricalV4RejectsV5FieldsAndRemainsReadableWithoutThem(t *testing
 		t.Fatal("historical V4 accepted V5 provenance")
 	}
 	trace.FlowCostSemanticsVersion = ""
+	trace.Resources = nil
 	for i := range trace.Candidates {
 		row := &trace.Candidates[i]
+		row.Resources = nil
 		row.FlowPredictedMean = nil
 		row.FlowConservativeFloor = nil
 		row.FlowRegime = ""
