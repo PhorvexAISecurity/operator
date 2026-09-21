@@ -1350,11 +1350,11 @@ fixes:
     issues:
     - M-106
     related_issues: []
-    state: AGREED
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: post25-m106
-    head_sha: 9fbcbf0d0ae16553fc1070d92fb5d597f22e9e32
+    head_sha: 483a73ef5b23469262d1aaf200a1084c1a6363c6
   POST25-M108:
     directory: fixes/POST25-M108
     aliases: []
