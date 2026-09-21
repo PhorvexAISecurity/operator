@@ -1,0 +1,321 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 16
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6ad2d9db94832ec7d8a849470fd7f1310dac3a18572c4bf4667094ef68e5331a
+    source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+    at: '2026-09-20T19:50:49+00:00'
+    contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+    approval_ref: /home/mehrdad/operator-live-post25/workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+    rationale: Existing owner authorization delegates remaining source fixes and needed
+      actuator improvements; operations/AUTONOMY.md permits material changes within
+      scope through re-signed lead plan. This specifies existing cancel/compensation
+      semantics without expanding environment, cost, action names or risk acceptance.
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 394a602be9f9132e5065e13e9e6d872ba3ee539dfa86467a0f4cbe9b7cf7872d
+    source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+    at: '2026-09-20T20:52:14+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 07f67fbe4fd230eafb559df1c74033bb951e9fc5aa003d2143292ebf304a3182
+    source_sha: 48387ec7a1f75cfc94f5a8541d6f269d4aa0aced
+    at: '2026-09-20T22:53:07+00:00'
+    baseline_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  preflight:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/preflight/receipt.json
+    sha256: cd1a5a05724274ed72ea01408c27f829fd53478eb0b5fa85826400ee1631c84c
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:18+00:00'
+  implementation:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: 04-diff.patch
+    sha256: 4eed2c440e1b0f5b68d7acb7126053b40a5016a97643e4ca181bc5ce547b7fde
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:18+00:00'
+  l0:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/preflight/receipt.json
+    sha256: cd1a5a05724274ed72ea01408c27f829fd53478eb0b5fa85826400ee1631c84c
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:18+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: f8c4b7583e577b7e2c3848a1e52db680cc83cc5ab407d8b50414f047a9a8db87
+  l1:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/worker/python-engine-current.log
+    sha256: f6586c8da1c19bdab55e0fa150bb4c53159443cf962e192eb3ef35bef0b5363f
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:18+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-drain-v11
+    - build/test-harness/guardrail
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: b74e4af9a986ec64c97fe4af4011ab2a0c2ecd75b2d218ed7915c28ebdba24fe
+  l2:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/preflight/run-1789944211772412313/go-phorvex.log
+    sha256: d53bb13751eee34c264cee0dbc0720d3e1cf9d5fdd3ed81dc773cc93783c5b9f
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:18+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 44d92d0e962117ac0706ba130083ac52e812369c6e4a755972176f99fb6e0400
+  positive_control:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/worker/python-proxy-current.log
+    sha256: cfc83663e7cb6ce6c24677708393a325d003a114652b98a34c154d09ea84c8b9
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:18+00:00'
+    inputs:
+    - build/integrations/vllm-0.7.3-drain-v11
+    - build/test-harness/guardrail
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: b74e4af9a986ec64c97fe4af4011ab2a0c2ecd75b2d218ed7915c28ebdba24fe
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 394a602be9f9132e5065e13e9e6d872ba3ee539dfa86467a0f4cbe9b7cf7872d
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:50+00:00'
+    baseline_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 0723fbb562345d0da57c41bbc73071770223df7b6c73b2da4613f4dd59e18552
+    source_sha: d919752d531830357af00a8390d6dc9505b35013
+    at: '2026-09-20T22:53:50+00:00'
+    incident_sha256: 394a602be9f9132e5065e13e9e6d872ba3ee539dfa86467a0f4cbe9b7cf7872d
+fix_id: POST25-M067-DRAIN
+issues:
+- M-67
+title: Require operation-bound engine quiescence before drain completion
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post14-live-reviewer
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: live-post25
+  code_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.138
+  deployed_git_sha: 7460fe5a9ccc03219914255632c130276c40e74d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-drain-v11
+  base_sha: 48387ec7a1f75cfc94f5a8541d6f269d4aa0aced
+  head_sha: d919752d531830357af00a8390d6dc9505b35013
+  stacked_on:
+  - T25-M067
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/247
+  reviewed_head: d919752d531830357af00a8390d6dc9505b35013
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  - L4
+  live_required: true
+  soak_required: true
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Real GPU engine cancellation/order and actual traffic/retirement remain pending
+  live acceptance.
+- MIG hardware unavailable; no physical erasure claim.
+next_action:
+  owner: codex-lead
+  action: PR247 open targeting main; actual GPU and installed-source live acceptance
+    remain pending
+updated_at: '2026-09-20T22:55:46+00:00'
+follow_up_to: T25-M067
+configuration_history:
+- at: '2026-09-20T17:49:15+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - residuals
+  - roles
+  - verification
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+- at: '2026-09-20T17:50:39+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-20T20:58:57+00:00'
+  by: post14-live-reviewer
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T22:31:22+00:00'
+  by: post14-live-reviewer
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T22:53:18+00:00'
+  by: post14-live-reviewer
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-20T22:55:44+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-20T17:50:07+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-20T17:51:06+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-20T22:53:18+00:00'
+  by: post14-live-reviewer
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-20T22:53:20+00:00'
+  by: post14-live-reviewer
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-20T22:53:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-20T22:53:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-20T22:55:46+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 0ebb5292943df7228723fc9af0915d8750291feccf20f79ae2a0f22195ee3152
+  source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  at: '2026-09-20T17:50:19+00:00'
+  contract_sha256: 2024051d8775c9193cf8646692e4e41baa91446f706a3ecab17dea55a6b83f73
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 0ebb5292943df7228723fc9af0915d8750291feccf20f79ae2a0f22195ee3152
+  source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  at: '2026-09-20T17:50:58+00:00'
+  contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+  approval_ref: workflow/campaigns/2026-09-20-post25-live/AUTHORIZATION.md
+  rationale: Existing owner authorization covers source design; correcting required
+    L4 bookkeeping to match already selected soak requirement before implementation
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 732eb572129b60a4c3312ef5d050cc4be0b7985f2ca4a6cc754e728ec7a92086
+  source_sha: 5118bd0c35cf0dcb3c934d4ff124b9742b1ac3f4
+  at: '2026-09-20T20:51:15+00:00'
+handoff:
+  id: POST25-M067-DRAIN:14:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 14

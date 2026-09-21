@@ -77,7 +77,8 @@ func (e servingEndpoint) routeURL(route string) string {
 	if scheme == "" {
 		scheme = "http"
 	}
-	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: route}).String()
+	path, query, _ := strings.Cut(route, "?")
+	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: path, RawQuery: query}).String()
 }
 
 const (
@@ -288,13 +289,18 @@ func (c *httpVLLM) request(ctx context.Context, method, rawURL, token, contentTy
 }
 
 func (c *httpVLLM) requestWithClient(ctx context.Context, endpointClient *http.Client, method, rawURL, token, contentType string, body []byte) (int, string, error) {
+	code, response, _, err := c.requestWithClientMetadata(ctx, endpointClient, method, rawURL, token, contentType, body)
+	return code, response, err
+}
+
+func (c *httpVLLM) requestWithClientMetadata(ctx context.Context, endpointClient *http.Client, method, rawURL, token, contentType string, body []byte) (int, string, string, error) {
 	var requestBody io.Reader
 	if body != nil {
 		requestBody = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, requestBody)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
@@ -342,16 +348,16 @@ func (c *httpVLLM) requestWithClient(ctx context.Context, endpointClient *http.C
 	resp, err := requestClient.Do(req)
 	if err != nil {
 		if trustworthyAttempt && definitelyUnsentServingRequest(err) {
-			return 0, "", &definiteServingUnreachableError{cause: err}
+			return 0, "", "", &definiteServingUnreachableError{cause: err}
 		}
-		return 0, "", fmt.Errorf("%w: %w", errServingOutcomeUnknown, err)
+		return 0, "", "", fmt.Errorf("%w: %w", errServingOutcomeUnknown, err)
 	}
 	defer resp.Body.Close()
 	b, readErr := readServingResponse(resp.Body)
 	if readErr != nil {
-		return resp.StatusCode, "", fmt.Errorf("%w after HTTP %d: %w", errServingOutcomeUnknown, resp.StatusCode, readErr)
+		return resp.StatusCode, "", resp.Header.Get("Content-Type"), fmt.Errorf("%w after HTTP %d: %w", errServingOutcomeUnknown, resp.StatusCode, readErr)
 	}
-	return resp.StatusCode, b, nil
+	return resp.StatusCode, b, resp.Header.Get("Content-Type"), nil
 }
 
 func readServingResponse(body io.Reader) (string, error) {

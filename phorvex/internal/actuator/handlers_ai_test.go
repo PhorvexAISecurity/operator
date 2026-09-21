@@ -2,6 +2,7 @@ package actuator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,6 +35,7 @@ type mockVLLM struct {
 	adapterStates                                    []bool
 	adapterObserveErr                                error
 	loadedAdapter, loadedSource                      string
+	drainStatus                                      drainV11StatusResponse
 }
 
 func (m *mockVLLM) ModelReady(_ context.Context, _ servingEndpoint) (bool, error) {
@@ -70,6 +72,89 @@ func (m *mockVLLM) LoadAdapter(_ context.Context, _ servingEndpoint, adapter, so
 func (m *mockVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, error) {
 	m.drainCalls++
 	return m.drained, m.drainErr
+}
+
+func (m *mockVLLM) DrainV11Capability(_ context.Context, _ servingEndpoint) (drainV11CapabilityResponse, error) {
+	return drainV11CapabilityResponse{Schema: drainV11Schema, Capability: drainV11Capability,
+		LedgerID: strings.Repeat("1", 32), ProxyBootID: strings.Repeat("2", 32),
+		EngineBootID: strings.Repeat("3", 32), IncarnationDigest: strings.Repeat("4", 64),
+		ProxySource: "injected-proxy", EngineSource: "injected-engine", EngineMode: "v0-frontend-multiprocessing",
+		VirtualEngineIDs: []int{0}, GenerationHighWater: "0", NextOperationGeneration: "1",
+		Admission: "OPEN", RawSHA256: strings.Repeat("5", 64)}, nil
+}
+
+func (m *mockVLLM) DrainV11Create(_ context.Context, _ servingEndpoint, request drainV11CreateRequest) (drainV11StatusResponse, error) {
+	m.drainCalls++
+	if m.drainErr != nil {
+		return drainV11StatusResponse{}, m.drainErr
+	}
+	ownerDigest, err := drainV11OwnerDigest(request.Owner)
+	if err != nil {
+		return drainV11StatusResponse{}, err
+	}
+	zero := drainV11Queues{Waiting: []string{}, Running: []string{}, Swapped: []string{}, Cached: []string{}}
+	snapshot := drainV11Queues{Waiting: []string{}, Running: []string{}, Swapped: []string{}, Cached: []string{}}
+	dispositions := map[string]string{}
+	for i := 0; i < m.drained; i++ {
+		id := fmt.Sprintf("request-%d", i)
+		snapshot.Running = append(snapshot.Running, id)
+		dispositions[id] = "aborted"
+	}
+	deadline, err := time.Parse(time.RFC3339Nano, request.Deadline)
+	if err != nil {
+		return drainV11StatusResponse{}, err
+	}
+	status := drainV11StatusResponse{Schema: drainV11Schema, OperationID: request.OperationID,
+		OperationGeneration: request.OperationGeneration, Attempt: request.Attempt, OwnerDigest: ownerDigest,
+		BackendIncarnationDigest: request.ExpectedIncarnationDigest, Revision: "3", State: "QUIESCENT",
+		Admission: "CLOSED", AdmissionGeneration: request.OperationGeneration, EngineBootID: strings.Repeat("3", 32),
+		VirtualEngineIDs: []int{0}, EngineSnapshot: map[string]drainV11Queues{"0": snapshot},
+		TerminalDispositions: dispositions, ProxySnapshot: map[string]json.RawMessage{
+			"before_engine_begin": json.RawMessage(fmt.Sprintf(`{"active":%d}`, m.drained)),
+			"after_engine_begin":  json.RawMessage(fmt.Sprintf(`{"cancelled":%d,"remaining":0}`, m.drained)),
+		}, Observations: []drainV11Observation{
+			{Nonce: strings.Repeat("6", 32), Sequence: "1", Queues: map[string]drainV11Queues{"0": zero}, Hash: strings.Repeat("7", 64)},
+			{Nonce: strings.Repeat("8", 32), Sequence: "2", Queues: map[string]drainV11Queues{"0": zero}, Hash: strings.Repeat("9", 64)},
+		}, Deadline: request.Deadline, CancellationGraceDeadline: drainV11Time(deadline.Add(drainV11CancelGrace)),
+		TransitionReason: "none", CancelBoundaryRevision: "0", LastTransition: drainV11Time(time.Now()), QueryNonce: nil}
+	status.ReceiptSHA256, err = drainV11StatusDigest(status)
+	m.drainStatus = status
+	return status, err
+}
+
+func drainV11StatusDigest(status drainV11StatusResponse) (string, error) {
+	body := map[string]any{"schema": status.Schema, "operation_id": status.OperationID,
+		"operation_generation": status.OperationGeneration, "attempt": status.Attempt,
+		"owner_digest": status.OwnerDigest, "backend_incarnation_digest": status.BackendIncarnationDigest,
+		"revision": status.Revision, "state": status.State, "admission": status.Admission,
+		"admission_generation": status.AdmissionGeneration, "engine_boot_id": status.EngineBootID,
+		"virtual_engine_ids": status.VirtualEngineIDs, "engine_snapshot": status.EngineSnapshot,
+		"terminal_dispositions": status.TerminalDispositions, "proxy_snapshot": status.ProxySnapshot,
+		"observations": status.Observations, "deadline": status.Deadline,
+		"cancellation_grace_deadline": status.CancellationGraceDeadline,
+		"transition_reason":           status.TransitionReason, "cancel_boundary_revision": status.CancelBoundaryRevision,
+		"last_transition": status.LastTransition, "query_nonce": status.QueryNonce}
+	return drainV11Digest("phorvex-drain-status-v1", body)
+}
+
+func (m *mockVLLM) DrainV11Status(_ context.Context, _ servingEndpoint, _, _ string, nonce string) (drainV11StatusResponse, error) {
+	status := m.drainStatus
+	status.QueryNonce = &nonce
+	var err error
+	status.ReceiptSHA256, err = drainV11StatusDigest(status)
+	return status, err
+}
+
+func (m *mockVLLM) DrainV11Cancel(_ context.Context, _ servingEndpoint, _, _ string, _ drainV11IntentRequest) (drainV11StatusResponse, error) {
+	return drainV11StatusResponse{}, errors.New("unexpected injected drain cancellation")
+}
+
+func (m *mockVLLM) DrainV11Reopen(_ context.Context, _ servingEndpoint, _, _ string, _ drainV11IntentRequest) (drainV11StatusResponse, error) {
+	status := m.drainStatus
+	status.State, status.Admission, status.Revision = "OPENED", "OPEN", "4"
+	var err error
+	status.ReceiptSHA256, err = drainV11StatusDigest(status)
+	return status, err
 }
 
 type mockMIG struct {
@@ -221,7 +306,7 @@ func leaderRole(p *corev1.Pod) string { return p.Labels[labelRole] }
 // boundReq is the runner's shape of a destructive AI request: it names the Pod AND binds the
 // identity (TargetUID) of the observed object the selection was made against.
 func boundReq(p *corev1.Pod, a model.Action) Request {
-	return Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a, PolicyName: "policy", PolicyUID: "policy-uid", TickID: "fixture-tick",
+	return Request{Tenant: "tenant", Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a, PolicyName: "policy", PolicyUID: "policy-uid", TickID: "fixture-tick",
 		ServingObservation: &ServingSelectionObservation{
 			KVReset:       model.OwnedValue{Present: hasKey(p.Annotations, annoKVResetEpoch), Value: p.Annotations[annoKVResetEpoch]},
 			KVMigrate:     model.OwnedValue{Present: hasKey(p.Annotations, annoKVEpoch), Value: p.Annotations[annoKVEpoch]},

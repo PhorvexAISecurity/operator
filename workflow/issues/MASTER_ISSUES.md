@@ -804,7 +804,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T17-M065
 
 ### M-67 · Warm-swap wedges on drain 404/timeout AFTER the leadership flip · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: T25-M067
+Severity: MAJOR · Tier: parallel · Fixes: POST25-M067-DRAIN, T25-M067
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100

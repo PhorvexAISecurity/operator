@@ -33,6 +33,13 @@ func (m *t3DrainHook) DrainRequests(_ context.Context, _ servingEndpoint) (int, 
 	return 0, m.drainErr
 }
 
+func (m *t3DrainHook) DrainV11Create(ctx context.Context, ep servingEndpoint, request drainV11CreateRequest) (drainV11StatusResponse, error) {
+	if m.hook != nil {
+		m.hook()
+	}
+	return m.mockVLLM.DrainV11Create(ctx, ep, request)
+}
+
 func (c *t3FaultClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	name := obj.GetName()
 	c.updates = append(c.updates, name)

@@ -144,7 +144,7 @@ func gcCompletedServingReceipt(ctx context.Context, ec EnactCtx, cm *corev1.Conf
 }
 
 func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (string, error) {
-	if r.Version == warmDrainReceiptVersion {
+	if r.Version == warmDrainReceiptVersion || r.Version == operationDrainReceiptVersion {
 		return recoverWarmDrainCutover(ctx, ec, cm, r)
 	}
 	if r.Version == 1 {
