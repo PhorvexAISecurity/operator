@@ -683,7 +683,7 @@ Severity: MEDIUM · Tier: 3 · Fixes: POST25-M106
 
 ### M-108 · Constants debt: 61 inventoried — 3 derived, 8 calibrated, 39 heuristic, 6 arbitrary · **OPEN** · `ECONOMICS`
 
-Severity: CALIBRATION PROGRAM · Tier: 3 · Fixes: none
+Severity: CALIBRATION PROGRAM · Tier: 3 · Fixes: POST25-M108
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · cost.p1
