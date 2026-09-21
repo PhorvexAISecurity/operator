@@ -59,7 +59,7 @@ func TestRegistryAuthChartOptInProjectsExactSecretAndHosts(t *testing.T) {
 	for _, required := range []string{
 		"--epss-feed-registry-auth-file=/var/run/secrets/phorvex-epss-registry-auth/config.json",
 		"--epss-feed-registry-auth-registries=" + testECR1 + "," + testECR2,
-		"secretName: feed-auth", "key: docker-config.json", "path: config.json", "defaultMode: 0440",
+		`secretName: "feed-auth"`, `key: "docker-config.json"`, "path: config.json", "defaultMode: 0440",
 		"mountPath: /var/run/secrets/phorvex-epss-registry-auth", "readOnly: true",
 	} {
 		if !strings.Contains(out, required) {
