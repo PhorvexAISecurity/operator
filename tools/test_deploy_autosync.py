@@ -105,7 +105,10 @@ class DeployAutosyncTests(unittest.TestCase):
                     if s.get('name') == 'Wait for ArgoCD to roll it out')
         self.assertEqual(step['if'], "steps.publish.outputs.released == 'true'")
         self.assertIn('< deploy/argocd/wait-for-rollout.sh', step['run'])
-        self.assertIn('V=$V bash -s', step['run'])
+        # Direct read-only cluster access first; the SSH jump host is the fallback. Both
+        # carry MARKERS so the waiter checks only the components this release re-tagged.
+        self.assertIn('V="$V" MARKERS="$MARKERS" bash deploy/argocd/wait-for-rollout.sh', step['run'])
+        self.assertIn("V=$V MARKERS='$MARKERS' bash -s", step['run'])
         self.assertLess(step['run'].index('[[ "$V" =~'), step['run'].index('sshpass -e ssh'))
         # The waiter logs in with the shared jump-host password, so it verifies the same
         # pinned host identity as the E2E transport (T1-E2E-AUTH) and never accepts an
@@ -144,7 +147,7 @@ class DeployAutosyncTests(unittest.TestCase):
             with self.subTest(value=value):
                 result, calls = self.run_wait(apps=[app(value)])
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn('Deployment is ready at 0.4.104', result.stdout)
+                self.assertIn('ready at 0.4.104', result.stdout)
                 self.assertEqual(sum(c[0] == 'sleep' for c in calls), 1)
                 self.assertEqual(sum(c[3:5] == ['rollout', 'status'] for c in calls), 1)
 
@@ -176,7 +179,7 @@ class DeployAutosyncTests(unittest.TestCase):
 
     def test_deployment_read_error_and_missing_manager_fail_explicitly(self):
         for kwargs, diagnosis in (({'deploy_error': True}, 'Cannot read phorvex-system'),
-                                  ({'images': ['']}, 'Deployment has no manager image')):
+                                  ({'images': ['']}, 'has no manager image')):
             result, calls = self.run_wait(**kwargs)
             self.assert_early_failure(result, calls, diagnosis)
 
@@ -193,7 +196,7 @@ class DeployAutosyncTests(unittest.TestCase):
             result, calls = self.run_wait(apps=[app(value)], images=[WANTED], rollout_error=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('rollout readiness failed', result.stderr)
-            self.assertNotIn('Deployment is ready', result.stdout)
+            self.assertNotIn('ready at', result.stdout)
 
     def test_wrong_or_superseding_version_times_out_with_finite_poll_count(self):
         for image in (OLD, WANTED + '0', 'example.invalid/phorvex:0.4.105'):
