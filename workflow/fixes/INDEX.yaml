@@ -1373,9 +1373,9 @@ fixes:
     issues:
     - M-100
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on:
     - POST25-M108
     branch: post25-m100
-    head_sha: null
+    head_sha: c240fb917b58198ec207b24d89ea707956f47550
