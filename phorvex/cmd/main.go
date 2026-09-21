@@ -437,14 +437,17 @@ func main() {
 		hybrid.SetServingSecurity(servingSecurity)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
+	rmgr.LossHistoryReader = mgr.GetAPIReader()
 	if lossHistoryDir != "" {
 		lossStore, storeErr := losshistory.New(lossHistoryDir)
 		if storeErr != nil {
-			setupLog.Error(storeErr, "loss history store unavailable; refusing configured M100 startup")
-			os.Exit(1)
+			// M100 history is optional reporting evidence. Its failure is explicit,
+			// but cannot disable otherwise authorized defensive actuation.
+			setupLog.Error(storeErr, "loss history store unavailable; retained disclosure history disabled")
+		} else {
+			rmgr.LossHistory = lossStore
+			setupLog.Info("synthetic completed-disclosure history enabled", "history", lossStore.String(), "trustedLossObservers", lossObservers.List())
 		}
-		rmgr.LossHistory = lossStore
-		setupLog.Info("synthetic completed-disclosure history enabled", "history", lossStore.String(), "trustedLossObservers", lossObservers.List())
 	}
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce

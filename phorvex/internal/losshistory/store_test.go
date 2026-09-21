@@ -2,6 +2,8 @@ package losshistory
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,5 +174,27 @@ func TestM100LossHistoryDirectoryPrivacy(t *testing.T) {
 	}
 	if _, err := New(groupPrivate); err != nil {
 		t.Fatalf("fsGroup-private PVC root rejected: %v", err)
+	}
+}
+
+func TestM100LossHistoryWriteFailureLatchesIncompleteAcrossRestart(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "history")
+	store, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.writeAll = func(io.Writer, []byte) error { return errors.New("injected record write failure") }
+	if err := store.Put(admittedRecord(t, "lost", "v1")); err == nil {
+		t.Fatal("injected retention failure was hidden")
+	}
+	if got := store.Query("policy-uid", "deployment-uid"); got.Status != "partial" || len(got.Records) != 0 {
+		t.Fatalf("failed write later looked like complete empty history: %+v", got)
+	}
+	restarted, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := restarted.Query("policy-uid", "deployment-uid"); got.Status != "partial" || len(got.Records) != 0 {
+		t.Fatalf("restart forgot retention incompleteness: %+v", got)
 	}
 }

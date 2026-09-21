@@ -33,11 +33,9 @@
 #     outage is not blocked; its event simply lands unstamped and carries no belief evidence.
 #     Fail-closed on belief, open on ingestion.
 #   - A missing/empty username never authorises a non-empty claim (equality fails).
-#   - There is deliberately NO exception for an UNCHANGED foreign stamp on UPDATE. Such an
-#     exception was proposed and rejected: it lets an untrusted updater rewrite a trusted
-#     event's targets/rule/score/annotations while retaining the original principal's stamp,
-#     which is the same forgery through a different door. An updater that has no business
-#     owning the stamp must clear it (the event becomes untrusted) or be denied.
+#   - The dedicated completed-disclosure payload is immutable. Its original creator and exact
+#     admission stamps survive ordinary full-resource controller updates; removing or changing
+#     any of them is denied. Other events retain the generic requester-equality rule.
 #
 # SUBRESOURCES. `resources` names the full resource only, never securityevents/status. A
 # status write is a different resource, so it is not matched and legitimate status updates by
@@ -83,10 +81,30 @@ spec:
           : ''
     - name: actor
       expression: "request.userInfo.username"
+    - name: oldClaim
+      expression: >-
+        request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/creator-identity' in oldObject.metadata.annotations
+          ? oldObject.metadata.annotations['phorvex.ai/creator-identity']
+          : ''
+    - name: completed
+      expression: "has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations"
+    - name: oldCompleted
+      expression: "request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in oldObject.metadata.annotations"
   validations:
-    # One rule, no exemption list: either the object carries no creator claim, or the claim
-    # names the authenticated requester.
-    - expression: "variables.claim == '' || variables.claim == variables.actor"
+    - expression: "!variables.oldCompleted || variables.completed"
+      reason: Forbidden
+      message: "securityevent/completed-disclosure: admitted evidence cannot be removed."
+    - expression: >-
+        !variables.oldCompleted ||
+        (object.metadata.annotations['phorvex.ai/completed-disclosure-v1'] == oldObject.metadata.annotations['phorvex.ai/completed-disclosure-v1'] &&
+         object.metadata.annotations['phorvex.ai/completed-disclosure-admitted-at'] == oldObject.metadata.annotations['phorvex.ai/completed-disclosure-admitted-at'] &&
+         object.metadata.annotations['phorvex.ai/completed-disclosure-admission-contract'] == oldObject.metadata.annotations['phorvex.ai/completed-disclosure-admission-contract'] &&
+         variables.claim == variables.oldClaim)
+      reason: Forbidden
+      message: "securityevent/completed-disclosure: payload and admission authority are immutable."
+    - expression: >-
+        variables.claim == '' || variables.claim == variables.actor ||
+        (variables.oldCompleted && variables.completed && variables.claim == variables.oldClaim)
       reason: Forbidden
       messageExpression: >-
         "securityevent/creator-identity: the phorvex.ai/creator-identity annotation must name the

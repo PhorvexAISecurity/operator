@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	Annotation       = "phorvex.ai/completed-disclosure-v1"
-	BoundaryContract = "completed-disclosure-boundary-v1"
-	MaxPayloadBytes  = 16 << 10
-	MaxResponseBytes = 8 << 20
+	Annotation                  = "phorvex.ai/completed-disclosure-v1"
+	AdmissionTimeAnnotation     = "phorvex.ai/completed-disclosure-admitted-at"
+	AdmissionContractAnnotation = "phorvex.ai/completed-disclosure-admission-contract"
+	BoundaryContract            = "completed-disclosure-boundary-v2"
+	BoundaryContractAnnotation  = "phorvex.ai/completed-disclosure-boundary-contract"
+	MaxPayloadBytes             = 16 << 10
+	MaxResponseBytes            = 8 << 20
 )
 
 func validText(s string, max int) bool {

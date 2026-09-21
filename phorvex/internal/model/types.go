@@ -467,11 +467,14 @@ type SecurityEventInfo struct {
 	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
 	CreatorIdentity string
 	// CompletedDisclosureRaw is an admission-validated producer payload candidate.
-	// It still requires current boundary, API UID, policy epoch and owner-chain
-	// checks before durable admission. Generic event trust never consumes it.
-	CompletedDisclosureRaw string
-	AdapterName            string // event-owned phorvex.ai/adapter-name, never copied from a Pod
-	AdapterTargetUID       string // event-owned phorvex.ai/target-pod-uid
+	// It still requires current boundary, API UID, policy epoch and exact admission
+	// authority before durable retention. The owner chain was frozen by the
+	// fail-closed admission transaction. Generic event trust never consumes it.
+	CompletedDisclosureRaw               string
+	CompletedDisclosureAdmittedAt        string
+	CompletedDisclosureAdmissionContract string
+	AdapterName                          string // event-owned phorvex.ai/adapter-name, never copied from a Pod
+	AdapterTargetUID                     string // event-owned phorvex.ai/target-pod-uid
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).

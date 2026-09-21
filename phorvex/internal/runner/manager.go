@@ -200,6 +200,13 @@ type Manager struct {
 	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
 	// leaves representation history honestly unavailable.
 	LossHistory *losshistory.Store
+	// LossHistoryReader performs optional completed-disclosure authority and
+	// replacement-owner reads under a separate bounded context. Production sets
+	// it to the uncached API reader; a stall cannot consume the actuation tick.
+	LossHistoryReader client.Reader
+	// LossHistoryReadTimeout bounds the whole optional history transaction. Zero
+	// uses the conservative default in completed_disclosure.go.
+	LossHistoryReadTimeout time.Duration
 	// ActuationBrakeReadTimeout bounds each uncached Namespace/Pod authority read.
 	// Zero uses actuationbrake.DefaultReadTimeout.
 	ActuationBrakeReadTimeout time.Duration
@@ -2163,16 +2170,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// No effect has been attempted yet. Stop promptly while preparing the
 	// immutable reporting inputs rather than carrying an expired tick into
 	// actuation. After an attempt, the audit loop below must drain completely.
-	var historyInputs map[string]representationHistoryInput
-	var representationInputs []model.RepresentationSnapshot
-	var complete bool
-	if m.LossHistory == nil {
-		representationInputs, complete = representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory)
-	} else {
-		lossIngestGaps := m.admitCompletedDisclosures(ctx, snap.Events, pol, snap.Now)
-		historyInputs = m.representationHistoryInputs(ctx, decisions, versions, pol, lossIngestGaps)
-		representationInputs, complete = representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory, historyInputs)
-	}
+	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, snap.Events, snap.Now)
 	if !complete {
 		return
 	}

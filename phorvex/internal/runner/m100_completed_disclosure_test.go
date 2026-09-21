@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/audit"
@@ -25,6 +26,18 @@ import (
 	"github.com/phorvex/phorvex/internal/representation"
 )
 
+type m100BlockingReader struct{}
+
+func (m100BlockingReader) Get(ctx context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (m100BlockingReader) List(ctx context.Context, _ client.ObjectList, _ ...client.ListOption) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 func m100OwnerRef(kind, name, uid string) metav1.OwnerReference {
 	yes := true
 	return metav1.OwnerReference{APIVersion: "apps/v1", Kind: kind, Name: name, UID: types.UID(uid), Controller: &yes}
@@ -33,7 +46,8 @@ func m100OwnerRef(kind, name, uid string) metav1.OwnerReference {
 func m100Boundary(at time.Time) *admissionv1.MutatingWebhookConfiguration {
 	fail := admissionv1.Fail
 	path := "/stamp-amtd-r6security-com-v1beta1-securityevent"
-	return &admissionv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "loss-boundary", UID: "mwc-uid", ResourceVersion: "7", CreationTimestamp: metav1.NewTime(at)},
+	return &admissionv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "loss-boundary", UID: "mwc-uid", ResourceVersion: "7", CreationTimestamp: metav1.NewTime(at),
+		Annotations: map[string]string{disclosure.BoundaryContractAnnotation: disclosure.BoundaryContract}},
 		Webhooks: []admissionv1.MutatingWebhook{{Name: "stamp-completed-disclosures.phorvex.ai", FailurePolicy: &fail,
 			MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: ingest.CompletedDisclosureMatch}},
 			ClientConfig:    admissionv1.WebhookClientConfig{CABundle: []byte("ca"), Service: &admissionv1.ServiceReference{Namespace: "system", Name: "webhook", Path: &path}},
@@ -58,9 +72,12 @@ func m100PayloadAndEvent(t *testing.T, now time.Time) (model.CompletedDisclosure
 	if err != nil {
 		t.Fatal(err)
 	}
-	return p, model.SecurityEventInfo{Name: "loss-event", UID: "event-uid", CreatedAt: now.Add(-500 * time.Millisecond),
+	created := now.Add(-500 * time.Millisecond)
+	return p, model.SecurityEventInfo{Name: "loss-event", UID: "event-uid", CreatedAt: created,
 		CreatorIdentity: "system:serviceaccount:ns:observer", Type: model.CompletedDisclosureRuleType, ThreatLevel: "high", Source: model.CompletedDisclosureSource,
-		Description: model.CompletedDisclosureDescription, ResolvedTargets: []string{"ns/old-pod"}, CompletedDisclosureRaw: raw}
+		Description: model.CompletedDisclosureDescription, ResolvedTargets: []string{"ns/old-pod"}, CompletedDisclosureRaw: raw,
+		CompletedDisclosureAdmittedAt:        created.Add(250 * time.Millisecond).Format(time.RFC3339Nano),
+		CompletedDisclosureAdmissionContract: disclosure.BoundaryContract}
 }
 
 func TestM100AdmittedHistorySurvivesPodAndReplicaSetReplacement(t *testing.T) {
@@ -147,6 +164,45 @@ func TestM100AdmittedHistorySurvivesPodAndReplicaSetReplacement(t *testing.T) {
 	}
 }
 
+func TestM100OptionalHistoryTimeoutDoesNotDisableSelectedActuation(t *testing.T) {
+	store, err := losshistory.New(filepath.Join(t.TempDir(), "history"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeActuator := &dispatchFakeActuator{emit: true}
+	m := &Manager{LossHistory: store, LossHistoryReader: m100BlockingReader{}, LossHistoryReadTimeout: 10 * time.Millisecond,
+		Actuator: fakeActuator, Log: logr.Discard()}
+	decisions := tracedSelectedDecision()
+	decisions[0].Tenant = "tenant"
+	versions := map[string]string{"ns/p1": "uid-1"}
+	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	snapshots, histories, complete := m.prepareRepresentationSnapshots(ctx, decisions, policy, versions, model.ClaimScope{}, nil, nil, time.Now())
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond || !complete || len(snapshots) != 1 ||
+		histories["ns/p1"].result.Status != "unavailable" || ctx.Err() != nil {
+		t.Fatalf("optional history consumed core tick: elapsed=%v complete=%t snapshots=%d history=%+v ctx=%v", elapsed, complete, len(snapshots), histories, ctx.Err())
+	}
+	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "uid-1", Ready: true, DesiredReplicas: 2, ReadyReplicas: 2}}}
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, policy, decisions, views); got != 1 || fakeActuator.calls != 1 || !decisions[0].Actuated {
+		t.Fatalf("optional history timeout disabled safe action: got=%d calls=%d decision=%+v", got, fakeActuator.calls, decisions[0])
+	}
+
+	// A configured but unavailable store at startup is represented by nil and
+	// likewise leaves unrelated dispatch available.
+	m.LossHistory = nil
+	decisions = tracedSelectedDecision()
+	decisions[0].Tenant = "tenant"
+	if _, histories, complete := m.prepareRepresentationSnapshots(ctx, decisions, policy, versions, model.ClaimScope{}, nil, nil, time.Now()); !complete || histories != nil {
+		t.Fatalf("unavailable store changed core snapshot completion: complete=%t histories=%v", complete, histories)
+	}
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, policy, decisions, views); got != 1 || fakeActuator.calls != 2 {
+		t.Fatalf("unavailable store disabled safe action: got=%d calls=%d", got, fakeActuator.calls)
+	}
+}
+
 func TestM100AdmissionRejectsUnboundCurrentState(t *testing.T) {
 	now := time.Unix(800, 0).UTC()
 	scheme := runtime.NewScheme()
@@ -175,9 +231,9 @@ func TestM100AdmissionRejectsUnboundCurrentState(t *testing.T) {
 		{"observation after event", func(p *model.CompletedDisclosureV1, e *model.SecurityEventInfo) {
 			p.Observation.CompletedAt = e.CreatedAt.Add(time.Second)
 		}, "completed-disclosure-observation-time-unbound"},
-		{"owner UID", func(p *model.CompletedDisclosureV1, _ *model.SecurityEventInfo) {
-			p.StableWorkloadOwner.UID = "other-deployment"
-		}, "completed-disclosure-owner-binding-mismatch"},
+		{"admission contract", func(_ *model.CompletedDisclosureV1, e *model.SecurityEventInfo) {
+			e.CompletedDisclosureAdmissionContract = ""
+		}, "completed-disclosure-observation-time-unbound"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

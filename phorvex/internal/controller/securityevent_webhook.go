@@ -10,13 +10,17 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -35,9 +39,9 @@ const securityEventStampPath = "/stamp-amtd-r6security-com-v1beta1-securityevent
 // `source: K3Detector`). The authenticated identity exists in exactly one place — the admission
 // request's UserInfo — so this handler copies it onto the object and ingest allowlists THAT.
 //
-// The stamp is authoritative WHEN THIS HANDLER RUNS: whatever the client put in the annotation
-// is OVERWRITTEN on every CREATE and UPDATE, so an identity cannot self-declare a trusted
-// creator, and cannot keep a stale stamp by editing an event it did not create.
+// The stamp is authoritative WHEN THIS HANDLER RUNS: generic events are stamped from each
+// request. Dedicated completed disclosures bind creator, policy and owner at first admission;
+// later updates must preserve that immutable admission authority.
 //
 // The webhook is registered failurePolicy=Ignore on purpose: it must never be able to block the
 // cluster's security-event flow. That availability choice is NOT self-securing, and the earlier
@@ -53,10 +57,13 @@ const securityEventStampPath = "/stamp-amtd-r6security-com-v1beta1-securityevent
 // So: this handler WRITES the identity, the policy GUARANTEES that a written identity is real.
 // Neither alone is the trust boundary, and a binary-only deployment (no chart, no policy) does
 // not have the guarantee.
-type SecurityEventStamper struct{}
+type SecurityEventStamper struct {
+	Reader client.Reader
+	Now    func() time.Time
+}
 
 // Handle implements admission.Handler.
-func (SecurityEventStamper) Handle(_ context.Context, req admission.Request) admission.Response {
+func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation != admissionv1.Create && req.Operation != admissionv1.Update {
 		return admission.Allowed("no stamp needed")
 	}
@@ -68,14 +75,30 @@ func (SecurityEventStamper) Handle(_ context.Context, req admission.Request) adm
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
-	if raw, present := annotations[disclosure.Annotation]; present {
-		canonical, err := validateCompletedDisclosureAdmission(req, raw)
+	raw, present := annotations[disclosure.Annotation]
+	var oldEvent amtdv1beta1.SecurityEvent
+	oldPresent := false
+	if req.Operation == admissionv1.Update {
+		var err error
+		oldEvent, err = disclosureEvent(req.OldObject.Raw)
+		if err != nil {
+			return admission.Denied("completed disclosure rejected: old SecurityEvent is missing")
+		}
+		_, oldPresent = oldEvent.Annotations[disclosure.Annotation]
+		if oldPresent && !present {
+			return admission.Denied("completed disclosure rejected: completed-disclosure evidence cannot be removed")
+		}
+	}
+	if present {
+		canonical, admittedAt, creator, err := s.validateCompletedDisclosureAdmission(ctx, req, raw, oldEvent, oldPresent)
 		if err != nil {
 			return admission.Denied("completed disclosure rejected: " + err.Error())
 		}
 		annotations[disclosure.Annotation] = canonical
-	}
-	if user := req.UserInfo.Username; user != "" {
+		annotations[disclosure.AdmissionTimeAnnotation] = admittedAt.Format(time.RFC3339Nano)
+		annotations[disclosure.AdmissionContractAnnotation] = disclosure.BoundaryContract
+		annotations[ingest.CreatorIdentityAnnotation] = creator
+	} else if user := req.UserInfo.Username; user != "" {
 		annotations[ingest.CreatorIdentityAnnotation] = user
 	} else {
 		// No authenticated user on the request: remove any client-supplied claim rather than
@@ -103,49 +126,86 @@ func disclosureEvent(raw []byte) (amtdv1beta1.SecurityEvent, error) {
 	return event, nil
 }
 
-func validateCompletedDisclosureAdmission(req admission.Request, raw string) (string, error) {
+func (s SecurityEventStamper) validateCompletedDisclosureAdmission(ctx context.Context, req admission.Request, raw string, oldEvent amtdv1beta1.SecurityEvent, oldPresent bool) (string, time.Time, string, error) {
 	payload, canonical, _, err := disclosure.Parse(raw)
 	if err != nil {
-		return "", err
-	}
-	if !ingest.CompletedDisclosureTrust().Allows(req.UserInfo.Username) {
-		return "", errors.New("authenticated creator is not an allowed loss observer")
-	}
-	if payload.Classification.ObserverIdentity != req.UserInfo.Username {
-		return "", errors.New("authenticated creator does not match disclosure observer identity")
+		return "", time.Time{}, "", err
 	}
 	event, err := disclosureEvent(req.Object.Raw)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, "", err
 	}
 	if event.Spec.Rule.Type != model.CompletedDisclosureRuleType || event.Spec.Rule.Source != model.CompletedDisclosureSource ||
 		event.Spec.Rule.ThreatLevel != "high" || len(event.Spec.Rule.Match) != 0 || event.Spec.Rule.ScoreThreshold != nil ||
 		event.Spec.AnomalyScore != nil || len(event.Spec.Metrics) != 0 || event.Spec.Evidence != nil ||
 		event.Spec.Description != model.CompletedDisclosureDescription {
-		return "", errors.New("unexpected completed-disclosure rule")
+		return "", time.Time{}, "", errors.New("unexpected completed-disclosure rule")
 	}
 	wantTarget := payload.DecisionAsset.Namespace + "/" + payload.DecisionAsset.Name
 	if len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != wantTarget {
-		return "", errors.New("SecurityEvent target does not match disclosure target")
+		return "", time.Time{}, "", errors.New("SecurityEvent target does not match disclosure target")
 	}
-	if req.Operation == admissionv1.Update {
-		oldEvent, err := disclosureEvent(req.OldObject.Raw)
-		if err != nil {
-			return "", errors.New("old completed-disclosure event is missing")
-		}
+	if oldPresent {
 		oldRaw := oldEvent.Annotations[disclosure.Annotation]
 		if oldRaw == "" || !disclosure.EqualPayload(oldRaw, raw) || len(oldEvent.Spec.Targets) != 1 ||
 			oldEvent.Spec.Targets[0] != event.Spec.Targets[0] || !reflect.DeepEqual(oldEvent.Spec.Rule, event.Spec.Rule) {
-			return "", errors.New("completed-disclosure evidence is immutable")
+			return "", time.Time{}, "", errors.New("completed-disclosure evidence is immutable")
 		}
+		admittedAt, err := time.Parse(time.RFC3339Nano, oldEvent.Annotations[disclosure.AdmissionTimeAnnotation])
+		if err != nil || oldEvent.Annotations[disclosure.AdmissionContractAnnotation] != disclosure.BoundaryContract {
+			return "", time.Time{}, "", errors.New("completed-disclosure admission authority is missing")
+		}
+		creator := oldEvent.Annotations[ingest.CreatorIdentityAnnotation]
+		if creator == "" || creator != payload.Classification.ObserverIdentity || !ingest.CompletedDisclosureTrust().Allows(creator) {
+			return "", time.Time{}, "", errors.New("completed-disclosure creator authority is invalid")
+		}
+		return string(canonical), admittedAt, creator, nil
 	}
-	return string(canonical), nil
+	if !ingest.CompletedDisclosureTrust().Allows(req.UserInfo.Username) {
+		return "", time.Time{}, "", errors.New("authenticated creator is not an allowed loss observer")
+	}
+	if payload.Classification.ObserverIdentity != req.UserInfo.Username {
+		return "", time.Time{}, "", errors.New("authenticated creator does not match disclosure observer identity")
+	}
+	if s.Reader == nil {
+		return "", time.Time{}, "", errors.New("authoritative disclosure reader is unavailable")
+	}
+	var policy v1alpha1.PhorvexPolicy
+	if err := s.Reader.Get(ctx, types.NamespacedName{Namespace: payload.PolicyEpoch.Namespace, Name: payload.PolicyEpoch.Name}, &policy); err != nil ||
+		string(policy.UID) != payload.PolicyEpoch.UID || policy.Generation != payload.PolicyEpoch.Generation {
+		return "", time.Time{}, "", errors.New("policy epoch is not current")
+	}
+	tenant := policy.Spec.Tenant
+	if tenant == "" {
+		tenant = policy.Namespace
+	}
+	if tenant != payload.ProtectedScope.Tenant {
+		return "", time.Time{}, "", errors.New("policy tenant does not match protected scope")
+	}
+	immediate, stable, err := ingest.ResolveStableWorkloadOwner(ctx, s.Reader,
+		payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
+	if err != nil || !sameDisclosureIdentity(immediate, payload.ImmediateController) || !sameDisclosureIdentity(stable, payload.StableWorkloadOwner) {
+		return "", time.Time{}, "", errors.New("workload owner identity is not current")
+	}
+	now := time.Now().UTC()
+	if s.Now != nil {
+		now = s.Now().UTC()
+	}
+	if payload.Observation.CompletedAt.After(now) {
+		return "", time.Time{}, "", errors.New("completed observation is after admission")
+	}
+	return string(canonical), now, req.UserInfo.Username, nil
+}
+
+func sameDisclosureIdentity(a, b model.ObjectIdentity) bool {
+	return a.APIVersion == b.APIVersion && a.Kind == b.Kind && a.Namespace == b.Namespace &&
+		a.Name == b.Name && a.UID == b.UID
 }
 
 // SetupSecurityEventWebhookWithManager registers the creator-identity stamp. It is a raw
 // handler (not a CustomDefaulter) because only the admission REQUEST carries UserInfo — the
 // object never does.
 func SetupSecurityEventWebhookWithManager(mgr ctrl.Manager) error {
-	mgr.GetWebhookServer().Register(securityEventStampPath, &webhook.Admission{Handler: SecurityEventStamper{}})
+	mgr.GetWebhookServer().Register(securityEventStampPath, &webhook.Admission{Handler: SecurityEventStamper{Reader: mgr.GetAPIReader()}})
 	return nil
 }

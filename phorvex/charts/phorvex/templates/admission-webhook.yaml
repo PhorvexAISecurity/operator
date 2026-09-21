@@ -148,6 +148,8 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: {{ printf "%s-completed-disclosure-stamp" $fullname | trunc 63 | trimSuffix "-" }}
+  annotations:
+    phorvex.ai/completed-disclosure-boundary-contract: completed-disclosure-boundary-v2
   labels:
     {{- include "phorvex.labels" . | nindent 4 }}
 webhooks:
@@ -160,7 +162,7 @@ webhooks:
   timeoutSeconds: 5
   matchConditions:
   - name: completed-disclosures
-    expression: "has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations"
+    expression: "(has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations) || (request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in oldObject.metadata.annotations)"
   clientConfig:
     caBundle: {{ $caCert | b64enc | quote }}
     service:

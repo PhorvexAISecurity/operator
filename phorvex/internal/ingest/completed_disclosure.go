@@ -12,10 +12,6 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-func sameObjectIdentity(a, b model.ObjectIdentity) bool {
-	return a.APIVersion == b.APIVersion && a.Kind == b.Kind && a.Namespace == b.Namespace && a.Name == b.Name && a.UID == b.UID
-}
-
 // AdmitCompletedDisclosures is the dedicated producer-to-ledger transaction.
 // Every authority input is API-observed; malformed or forged evidence remains
 // an explicit gap and never disables unrelated selection or actuation.
@@ -58,7 +54,13 @@ func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store 
 			gaps = append(gaps, "completed-disclosure-event-identity-unavailable")
 			continue
 		}
-		if payload.Observation.StartedAt.Before(boundary.ActivationTime) || payload.Observation.CompletedAt.After(event.CreatedAt) {
+		admittedAt, err := time.Parse(time.RFC3339Nano, event.CompletedDisclosureAdmittedAt)
+		// Kubernetes CreationTimestamp is serialized at second precision. The
+		// admission annotation retains the exact webhook clock: it must fall in
+		// that one-second creation interval and after the completed observation.
+		if err != nil || event.CompletedDisclosureAdmissionContract != disclosure.BoundaryContract ||
+			admittedAt.Before(boundary.ActivationTime) || admittedAt.Before(event.CreatedAt) || !admittedAt.Before(event.CreatedAt.Add(time.Second)) || admittedAt.After(now) ||
+			payload.Observation.StartedAt.Before(boundary.ActivationTime) || payload.Observation.CompletedAt.After(admittedAt) {
 			gaps = append(gaps, "completed-disclosure-observation-time-unbound")
 			continue
 		}
@@ -70,12 +72,10 @@ func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store 
 			gaps = append(gaps, "completed-disclosure-observer-identity-mismatch")
 			continue
 		}
-		immediate, stable, err := ResolveStableWorkloadOwner(ctx, reader,
-			payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
-		if err != nil || !sameObjectIdentity(immediate, payload.ImmediateController) || !sameObjectIdentity(stable, payload.StableWorkloadOwner) {
-			gaps = append(gaps, "completed-disclosure-owner-binding-mismatch")
-			continue
-		}
+		// The fail-closed admission transaction already bound the exact policy
+		// epoch, Pod UID and stable owner before persistence. Re-resolving the
+		// original Pod here would discard an accepted observation if rotation
+		// deletes it between admission and the first ledger tick.
 		record := model.AdmittedLossV1{
 			SchemaVersion: model.AdmittedLossSchemaV1, Disclosure: payload, CanonicalPayloadSHA256: digest,
 			SecurityEvent:        model.SecurityEventIdentity{Name: event.Name, UID: event.UID, CreationTimestamp: event.CreatedAt},

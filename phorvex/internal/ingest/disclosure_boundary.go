@@ -11,7 +11,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-const CompletedDisclosureMatch = "has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations"
+const CompletedDisclosureMatch = "(has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations) || (request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in oldObject.metadata.annotations)"
 
 // CheckCompletedDisclosureBoundary verifies the independent fail-closed M100
 // webhook. The generic detector boundary does not authorize loss evidence.
@@ -35,6 +35,9 @@ func CheckCompletedDisclosureBoundary(ctx context.Context, c client.Reader) (mod
 			}
 			if cfg.UID == "" || cfg.ResourceVersion == "" || cfg.CreationTimestamp.IsZero() {
 				return model.DisclosureTrustBoundary{}, "loss-boundary-identity-unavailable"
+			}
+			if cfg.Annotations[disclosure.BoundaryContractAnnotation] != disclosure.BoundaryContract {
+				return model.DisclosureTrustBoundary{}, "loss-boundary-contract-unverified"
 			}
 			if w.FailurePolicy == nil || *w.FailurePolicy != admission.Fail {
 				return model.DisclosureTrustBoundary{}, "loss-stamp-not-fail-closed"

@@ -38,11 +38,17 @@ func stampReq(t *testing.T, op admissionv1.Operation, user string, annotations m
 	if err != nil {
 		t.Fatal(err)
 	}
+	req := admissionv1.AdmissionRequest{
+		Operation: op,
+		UserInfo:  authenticationv1.UserInfo{Username: user},
+		Object:    runtime.RawExtension{Raw: raw},
+	}
+	if op == admissionv1.Update {
+		req.OldObject = runtime.RawExtension{Raw: raw}
+	}
 	return SecurityEventStamper{}.Handle(context.Background(), admission.Request{
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: op,
-			UserInfo:  authenticationv1.UserInfo{Username: user},
-			Object:    runtime.RawExtension{Raw: raw},
+			Operation: req.Operation, UserInfo: req.UserInfo, Object: req.Object, OldObject: req.OldObject,
 		},
 	})
 }

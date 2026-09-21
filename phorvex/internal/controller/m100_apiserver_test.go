@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/lossobserver"
@@ -50,7 +51,7 @@ func m100InstalledWebhook() *admissionv1.MutatingWebhookConfiguration {
 	failure, sideEffects, scope := admissionv1.Fail, admissionv1.SideEffectClassNone, admissionv1.ClusterScope
 	path := securityEventStampPath
 	return &admissionv1.MutatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{Name: "m100-completed-disclosure"},
+		ObjectMeta: metav1.ObjectMeta{Name: "m100-completed-disclosure", Annotations: map[string]string{disclosure.BoundaryContractAnnotation: disclosure.BoundaryContract}},
 		Webhooks: []admissionv1.MutatingWebhook{{
 			Name: "stamp-completed-disclosures.phorvex.ai", FailurePolicy: &failure, SideEffects: &sideEffects,
 			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: ingest.CompletedDisclosureMatch}},
@@ -103,9 +104,13 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 			t.Errorf("stop envtest: %v", err)
 		}
 	})
+	admin, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := webhook.NewServer(webhook.Options{Host: env.WebhookInstallOptions.LocalServingHost,
 		Port: env.WebhookInstallOptions.LocalServingPort, CertDir: env.WebhookInstallOptions.LocalServingCertDir})
-	server.Register(securityEventStampPath, &webhook.Admission{Handler: SecurityEventStamper{}})
+	server.Register(securityEventStampPath, &webhook.Admission{Handler: SecurityEventStamper{Reader: admin}})
 	serverCtx, cancelServer := context.WithCancel(context.Background())
 	t.Cleanup(cancelServer)
 	serverErr := make(chan error, 1)
@@ -118,17 +123,14 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	admin, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx := context.Background()
 	if err := admin.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}); err != nil {
 		t.Fatal(err)
 	}
 	observerName := "loss-observer"
 	otherObserverName := "other-observer"
-	for _, name := range []string{observerName, otherObserverName} {
+	untrustedName := "untrusted-writer"
+	for _, name := range []string{observerName, otherObserverName, untrustedName} {
 		if err := admin.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name}}); err != nil {
 			t.Fatal(err)
 		}
@@ -141,11 +143,11 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 		RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: role.Name},
 		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}}}
 	clusterRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "m100-observer"}, Rules: []rbacv1.PolicyRule{
-		{APIGroups: []string{"amtd.r6security.com"}, Resources: []string{"securityevents"}, Verbs: []string{"create"}},
+		{APIGroups: []string{"amtd.r6security.com"}, Resources: []string{"securityevents"}, Verbs: []string{"create", "get", "update"}},
 	}}
 	clusterBinding := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "m100-observer"},
 		RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: clusterRole.Name},
-		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}}}
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "ns", Name: observerName}, {Kind: "ServiceAccount", Namespace: "ns", Name: otherObserverName}, {Kind: "ServiceAccount", Namespace: "ns", Name: untrustedName}}}
 	for _, object := range []client.Object{role, roleBinding, clusterRole, clusterBinding} {
 		if err := admin.Create(ctx, object); err != nil {
 			t.Fatal(err)
@@ -172,6 +174,14 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	if err := admin.Create(ctx, pod); err != nil {
 		t.Fatal(err)
 	}
+	policyObject := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{
+		Mode: v1alpha1.ModeActive, Tenant: "tenant", Selector: metav1.LabelSelector{MatchLabels: labels},
+		Budget:  v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}},
+		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
+	}}
+	if err := admin.Create(ctx, policyObject); err != nil {
+		t.Fatal(err)
+	}
 
 	body := []byte("synthetic-canary-v1")
 	sum := sha256.Sum256(body)
@@ -184,19 +194,65 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	}))
 	defer canary.Close()
 	observerClient := m100ImpersonatedClient(t, cfg, scheme, observerIdentity)
+	// Start comfortably inside a UTC second so the completed observation keeps
+	// non-zero nanoseconds while the API object's CreationTimestamp is serialized
+	// to the beginning of that same second.
+	for frac := time.Now().Nanosecond(); frac < 200_000_000 || frac > 500_000_000; frac = time.Now().Nanosecond() {
+		time.Sleep(5 * time.Millisecond)
+	}
 	now := time.Now
 	event, err := lossobserver.ObserveOnce(ctx, observerClient, canary.Client(), lossobserver.ObserverConfig{
-		URL: canary.URL + "/canary/v1", PolicyEpoch: model.PolicyEpoch{Namespace: "ns", Name: "policy", UID: "policy-uid", Generation: 4},
+		URL: canary.URL + "/canary/v1", PolicyEpoch: model.PolicyEpoch{Namespace: "ns", Name: "policy", UID: string(policyObject.UID), Generation: policyObject.Generation},
 		TargetNamespace: "ns", TargetName: pod.Name, TargetUID: string(pod.UID),
 		ProtectedScope: model.ProtectedScope{Tenant: "tenant", Asset: "synthetic/customer-row", Version: "data-v1", Property: "confidentiality"},
 		EvidenceID:     "copy-1", RuleVersion: "rule-v1", RuleDigest: strings.Repeat("a", 64), ObserverIdentity: observerIdentity,
-		ExpectedBytes: int64(len(body)), ExpectedSHA256: hex.EncodeToString(sum[:]), Timeout: time.Second,
+		ExpectedBytes: int64(len(body)), ExpectedSHA256: hex.EncodeToString(sum[:]), Timeout: 10 * time.Second,
 	}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if event.UID == "" || event.CreationTimestamp.IsZero() || event.Annotations[ingest.CreatorIdentityAnnotation] != observerIdentity {
+	if event.UID == "" || event.CreationTimestamp.IsZero() || event.Annotations[ingest.CreatorIdentityAnnotation] != observerIdentity ||
+		event.Annotations[disclosure.AdmissionContractAnnotation] != disclosure.BoundaryContract {
 		t.Fatalf("API/admission identity missing: uid=%q created=%v annotations=%v", event.UID, event.CreationTimestamp, event.Annotations)
+	}
+	payload, _, _, err := disclosure.Parse(event.Annotations[disclosure.Annotation])
+	if err != nil {
+		t.Fatal(err)
+	}
+	admittedAt, err := time.Parse(time.RFC3339Nano, event.Annotations[disclosure.AdmissionTimeAnnotation])
+	if err != nil || !payload.Observation.CompletedAt.After(event.CreationTimestamp.Time) || admittedAt.Before(payload.Observation.CompletedAt) ||
+		admittedAt.Before(event.CreationTimestamp.Time) || !admittedAt.Before(event.CreationTimestamp.Add(time.Second)) {
+		t.Fatalf("same-second admission precision was not retained: completed=%v created=%v admitted=%v err=%v", payload.Observation.CompletedAt, event.CreationTimestamp, admittedAt, err)
+	}
+
+	// The dedicated fail-closed hook matches OLD payloads too. Neither the
+	// original observer nor an unrelated API writer can remove accepted evidence.
+	for name, c := range map[string]client.Client{
+		"original observer": observerClient,
+		"untrusted writer":  m100ImpersonatedClient(t, cfg, scheme, "system:serviceaccount:ns:"+untrustedName),
+	} {
+		current := &amtdv1beta1.SecurityEvent{}
+		if err := c.Get(ctx, client.ObjectKey{Name: event.Name}, current); err != nil {
+			t.Fatal(err)
+		}
+		delete(current.Annotations, disclosure.Annotation)
+		if err := c.Update(ctx, current); err == nil {
+			t.Fatalf("%s removed completed disclosure", name)
+		}
+	}
+	// A second allowlisted API identity cannot submit the first observer's
+	// payload while every other authoritative binding is still current.
+	other := m100ImpersonatedClient(t, cfg, scheme, "system:serviceaccount:ns:other-observer")
+	forged := event.DeepCopy()
+	forged.ResourceVersion, forged.UID, forged.Name, forged.GenerateName = "", "", "", "forged-loss-"
+	if err := other.Create(ctx, forged); err == nil {
+		t.Fatal("allowlisted identity substituted another observer's payload")
+	}
+
+	// The original Pod may be deleted immediately after authoritative admission;
+	// the frozen owner binding must still reach durable history on the first tick.
+	if err := admin.Delete(ctx, pod); err != nil {
+		t.Fatal(err)
 	}
 
 	snapshot, err := ingest.CollectSnapshot(ctx, admin, time.Now().Add(time.Second), nil)
@@ -221,7 +277,7 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 4}
+	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: string(policyObject.UID), PolicyGeneration: policyObject.Generation}
 	if gaps := ingest.AdmitCompletedDisclosures(ctx, reader, store, snapshot.Events, policy, time.Now().Add(2*time.Second), logr.Discard()); len(gaps) != 0 {
 		t.Fatalf("actual producer admission gaps: %v", gaps)
 	}
@@ -230,14 +286,6 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 		t.Fatalf("durable API observation missing: %+v", result)
 	}
 
-	// A second allowlisted API identity cannot submit the first observer's
-	// payload. The fail-closed webhook rejects before persistence.
-	other := m100ImpersonatedClient(t, cfg, scheme, "system:serviceaccount:ns:other-observer")
-	forged := event.DeepCopy()
-	forged.ResourceVersion, forged.UID, forged.Name, forged.GenerateName = "", "", "", "forged-loss-"
-	if err := other.Create(ctx, forged); err == nil {
-		t.Fatal("allowlisted identity substituted another observer's payload")
-	}
 	if got := store.Query(policy.PolicyUID, string(dep.UID)); len(got.Records) != 1 {
 		t.Fatalf("rejected API write changed retained history: %+v", got)
 	}

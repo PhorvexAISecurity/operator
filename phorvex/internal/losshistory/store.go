@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	MaxRecords     = 4096
-	MaxRecordBytes = 64 << 10
+	MaxRecords       = 4096
+	MaxRecordBytes   = 64 << 10
+	incompleteMarker = ".history-incomplete"
 )
 
 type Result struct {
@@ -55,6 +56,44 @@ func (s *Store) addGap(gap string) {
 		}
 	}
 	s.gaps = append(s.gaps, gap)
+}
+
+// latchGap records that this store can no longer claim complete history. The
+// marker is monotonic: successful later writes cannot prove that the missing
+// record was recovered, so restart must preserve the partial verdict.
+func (s *Store) latchGap(gap string) {
+	s.addGap(gap)
+	if err := validateDir(s.root); err != nil {
+		s.addGap("history-incomplete-marker-unavailable")
+		return
+	}
+	path := filepath.Join(s.root, incompleteMarker)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0600)
+	if err == nil {
+		_, writeErr := f.Write([]byte("retention-incomplete\n"))
+		err = errors.Join(writeErr, f.Sync(), f.Close())
+	} else if errors.Is(err, os.ErrExist) {
+		return
+	}
+	if err != nil {
+		s.addGap("history-incomplete-marker-unavailable")
+		if f != nil {
+			_ = f.Close()
+		}
+		return
+	}
+	if dir, openErr := os.Open(s.root); openErr == nil {
+		if syncErr := errors.Join(dir.Sync(), dir.Close()); syncErr != nil {
+			s.addGap("history-incomplete-marker-unavailable")
+		}
+	} else {
+		s.addGap("history-incomplete-marker-unavailable")
+	}
+}
+
+func (s *Store) retentionError(gap string, err error) error {
+	s.latchGap(gap)
+	return err
 }
 
 func validateDir(path string) error {
@@ -180,6 +219,15 @@ func (s *Store) scan() {
 		return
 	}
 	for _, entry := range entries {
+		if entry.Name() == incompleteMarker {
+			info, statErr := entry.Info()
+			if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+				s.addGap("history-incomplete-marker-invalid")
+			} else {
+				s.addGap("history-retention-incomplete")
+			}
+			continue
+		}
 		if len(s.byID) >= s.max {
 			s.full = true
 			s.addGap("history-capacity-exhausted")
@@ -255,8 +303,7 @@ func (s *Store) Put(r model.AdmittedLossV1) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := validateDir(s.root); err != nil {
-		s.addGap("history-root-unavailable")
-		return err
+		return s.retentionError("history-root-unavailable", err)
 	}
 	if prior, ok := s.byID[key]; ok {
 		if prior.record.CanonicalPayloadSHA256 == r.CanonicalPayloadSHA256 && prior.record.SecurityEvent.UID == r.SecurityEvent.UID {
@@ -271,8 +318,7 @@ func (s *Store) Put(r model.AdmittedLossV1) error {
 	}
 	if len(s.byID) >= s.max {
 		s.full = true
-		s.addGap("history-capacity-exhausted")
-		return errors.New("loss history capacity exhausted")
+		return s.retentionError("history-capacity-exhausted", errors.New("loss history capacity exhausted"))
 	}
 	if prior, readErr := readRecord(path); readErr == nil {
 		var existing model.AdmittedLossV1
@@ -286,18 +332,18 @@ func (s *Store) Put(r model.AdmittedLossV1) error {
 		if validationErr == nil && bytes.Equal(prior, existingCanonical) && existing.CanonicalPayloadSHA256 == r.CanonicalPayloadSHA256 && existing.SecurityEvent.UID == r.SecurityEvent.UID {
 			return s.add(existing, prior)
 		}
-		return errors.New("loss history collision or on-disk tamper")
+		return s.retentionError("history-entry-collision-or-tamper", errors.New("loss history collision or on-disk tamper"))
 	} else if !errors.Is(readErr, os.ErrNotExist) {
-		return readErr
+		return s.retentionError("history-entry-unreadable", readErr)
 	}
 	random := make([]byte, 12)
 	if _, err := rand.Read(random); err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	tmp := filepath.Join(s.root, "."+fileName(key)+"."+hex.EncodeToString(random)+".tmp")
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	committed := false
 	defer func() {
@@ -307,13 +353,13 @@ func (s *Store) Put(r model.AdmittedLossV1) error {
 		}
 	}()
 	if err := s.writeAll(f, raw); err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	if err := f.Sync(); err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	if err := f.Close(); err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	if err := os.Link(tmp, path); err != nil {
 		if errors.Is(err, os.ErrExist) {
@@ -334,18 +380,18 @@ func (s *Store) Put(r model.AdmittedLossV1) error {
 				}
 			}
 		}
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	if err := os.Remove(tmp); err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	committed = true
 	dir, err := os.Open(s.root)
 	if err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	if err := errors.Join(dir.Sync(), dir.Close()); err != nil {
-		return err
+		return s.retentionError("history-retention-failed", err)
 	}
 	return s.add(r, raw)
 }
