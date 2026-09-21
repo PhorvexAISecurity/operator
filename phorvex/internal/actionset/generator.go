@@ -437,9 +437,12 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 func candidateResources(view *model.WorkloadView, action model.Action, pol model.Policy, moveScope model.ResourceScope) ([]model.ResourceConsumption, []model.ResourceCapacity, string) {
 	demands := []model.ResourceConsumption{{Scope: moveScope, Units: 1}}
 	capacities := []model.ResourceCapacity{{Scope: moveScope, Limit: pol.MaxMovesPerTick}}
-	if !feasibility.RemovesReadyReplica(action) || pol.MinAvailableReplicas <= 0 {
+	if !feasibility.RemovesReadyReplica(action) {
 		return demands, capacities, ""
 	}
+	// A policy-local floor of zero does not erase another policy's retained floor
+	// for the same Service. Every configured replica removal therefore carries its
+	// exact Service demand into the durable cross-policy Acquire/Claim boundary.
 	// The production manager always wires the durable store. Explicit offline
 	// evaluators that do not configure it retain their historical move-count-only
 	// contract rather than fabricating Service inventory.

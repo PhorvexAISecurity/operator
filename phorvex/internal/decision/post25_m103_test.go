@@ -1,6 +1,7 @@
 package decision
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -106,25 +107,50 @@ func TestM103IndependentAndOverlappingScopes(t *testing.T) {
 }
 
 func TestM103UnknownInventoryRefusesOnlyReplicaRemovingCandidates(t *testing.T) {
-	view := covView("unknown", true, 2*time.Hour, false)
-	view.Pod.ServiceAvailabilityKnown = false
-	view.Pod.ServiceAvailabilityReason = "EndpointSlice inventory unavailable"
+	for _, floor := range []int{1, 0} {
+		t.Run(fmt.Sprintf("floor-%d", floor), func(t *testing.T) {
+			view := covView("unknown", true, 2*time.Hour, false)
+			view.Pod.ServiceAvailabilityKnown = false
+			view.Pod.ServiceAvailabilityReason = "EndpointSlice inventory unavailable"
+			pol := m103Policy()
+			pol.MinAvailableReplicas = floor
+			set, _ := NewCoverageEngine().AssembleSet([]*model.WorkloadView{view}, pol)
+			for _, candidate := range set.Candidates {
+				if candidate.Action == model.ActionRotate {
+					t.Fatal("unknown shared inventory authorized a replica-removing candidate")
+				}
+			}
+			found := false
+			for _, excluded := range set.Excluded {
+				if excluded.Action == model.ActionRotate && strings.Contains(excluded.Reason, "EndpointSlice inventory unavailable") {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("unknown shared inventory lacks explicit exclusion: %+v", set.Excluded)
+			}
+		})
+	}
+}
+
+func TestM103ZeroFloorCandidateCarriesAuthoritativeServiceDemand(t *testing.T) {
+	shared := m103Scope("serving", "service-uid", "controller-uid")
+	view := m103CapacityView("a", shared)
+	view.Pod.ServiceAvailability[0].ReadyMembers = 3
 	pol := m103Policy()
+	pol.MinAvailableReplicas = 0
 	set, _ := NewCoverageEngine().AssembleSet([]*model.WorkloadView{view}, pol)
 	for _, candidate := range set.Candidates {
-		if candidate.Action == model.ActionRotate {
-			t.Fatal("unknown shared inventory authorized a replica-removing candidate")
+		if candidate.Action != model.ActionRotate {
+			continue
+		}
+		for _, demand := range candidate.Resources {
+			if demand.Scope == shared && demand.Units == 1 {
+				return
+			}
 		}
 	}
-	found := false
-	for _, excluded := range set.Excluded {
-		if excluded.Action == model.ActionRotate && strings.Contains(excluded.Reason, "EndpointSlice inventory unavailable") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("unknown shared inventory lacks explicit exclusion: %+v", set.Excluded)
-	}
+	t.Fatalf("floor-zero replica removal omitted authoritative Service demand: %+v", set)
 }
 
 func TestM103OutstandingReadinessAndZeroBudgetRemainHardBounds(t *testing.T) {
