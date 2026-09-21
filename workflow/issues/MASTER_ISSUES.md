@@ -280,7 +280,7 @@ Severity: HIGH · Tier: 1 · Fixes: none
 
 ### M-104 · F7/C4 — EPSS: a gameable external anchor, applied at the wrong layer · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: 1 · Fixes: POST25-M104-SCOPED-FEED
+Severity: MEDIUM · Tier: 1 · Fixes: POST25-M104-REGISTRY-AUTH, POST25-M104-SCOPED-FEED
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.first_epss
@@ -670,7 +670,7 @@ Severity: HIGH/MEDIUM · Tier: 3 · Fixes: none
 
 ### M-106 · C3 — the belief calibrator and the cost calibrator are epistemically incoherent · **OPEN** · `ECONOMICS`
 
-Severity: MEDIUM · Tier: 3 · Fixes: POST25-M106
+Severity: MEDIUM · Tier: 3 · Fixes: POST25-M106, POST25-M106-SCOPED-OUTCOMES
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · belief

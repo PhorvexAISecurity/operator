@@ -925,7 +925,8 @@ type Decision struct {
 	Lambda              float64                    // legacy mixed runtime lambda frozen for this decision
 	Economics           *EconomicsMetadata         // frozen objective coefficient; present for P1 decisions even when rich tracing is disabled
 	ParameterSet        *ParameterSetReference     // compact source/default and exact effective-policy identity; present for new P1 decisions
-	PersistenceLearning *PersistenceLearningStatus // observed-label source/disposition; never inferred from this decision's PHold
+	PersistenceLearning *PersistenceLearningStatus // legacy audit compatibility only; new outcomes never write or consume it
+	ScopedOutcomes      *ScopedOutcomeReport       // reporting-only synthetic session outcome cohorts; never consumed by PHold or selection
 	ProactiveRate       float64                    // reporting score derived from PerDollar and the frozen effective coefficient; not the selector
 	Attribution         []AttributionTerm          // SHAP-style decomposition of the move's value
 	// Resources is the selected candidate's exact hard-capacity consumption.

@@ -18,7 +18,9 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -602,39 +604,120 @@ func countContainerMatches(targets []imageTarget, cache map[string]Score) int {
 
 // TrivyScanner invokes the pinned Trivy binary bundled in the feed image.
 type TrivyScanner struct {
-	Path     string
-	CacheDir string
-	Timeout  time.Duration
+	Path         string
+	CacheDir     string
+	Timeout      time.Duration
+	RegistryAuth RegistryAuthProvider
+	Now          func() time.Time
 }
 
 func (s TrivyScanner) Scan(ctx context.Context, image string) (map[string]float64, error) {
 	if s.Path == "" {
 		s.Path = "/trivy"
 	}
+	if !filepath.IsAbs(s.Path) {
+		return nil, fmt.Errorf("trivy scan %q: scanner path must be absolute", image)
+	}
 	if s.CacheDir == "" {
 		s.CacheDir = "/tmp/trivy"
 	}
+	if !filepath.IsAbs(s.CacheDir) {
+		return nil, fmt.Errorf("trivy scan %q: cache path must be absolute", image)
+	}
 	if s.Timeout <= 0 {
 		s.Timeout = 10 * time.Minute
+	}
+	if s.Now == nil {
+		s.Now = time.Now
+	}
+	if configuredPrivateECR(image) && s.RegistryAuth == nil {
+		return nil, fmt.Errorf("trivy scan %q: private ECR authentication is not configured", image)
+	}
+	dockerConfig := ""
+	authenticated := false
+	if s.RegistryAuth != nil {
+		var authErr error
+		dockerConfig, authenticated, authErr = s.RegistryAuth.DockerConfigFor(image, s.Now().UTC(), s.Timeout)
+		if authErr != nil {
+			return nil, fmt.Errorf("trivy scan %q: registry authentication unavailable", image)
+		}
+	}
+	if err := os.MkdirAll(s.CacheDir, 0o700); err != nil {
+		return nil, fmt.Errorf("trivy scan %q: create controlled work directory", image)
+	}
+	workDir, err := os.MkdirTemp(s.CacheDir, "phorvex-work-")
+	if err != nil {
+		return nil, fmt.Errorf("trivy scan %q: create private work directory", image)
+	}
+	defer os.RemoveAll(workDir)
+	if err := os.Chmod(workDir, 0o700); err != nil {
+		return nil, fmt.Errorf("trivy scan %q: protect controlled work directory", image)
 	}
 	scanCtx, cancel := context.WithTimeout(ctx, s.Timeout)
 	defer cancel()
 	args := []string{
 		"image", "--quiet", "--skip-version-check", "--scanners", "vuln",
-		"--format", "json", "--cache-dir", s.CacheDir, "--timeout", s.Timeout.String(), image,
+		"--image-src", "remote", "--format", "json", "--cache-dir", s.CacheDir,
+		"--timeout", s.Timeout.String(), image,
 	}
 	cmd := exec.CommandContext(scanCtx, s.Path, args...)
-	var stderr bytes.Buffer
+	cmd.Dir = workDir
+	cmd.Env = []string{
+		"HOME=" + workDir,
+		"XDG_CONFIG_HOME=" + workDir,
+		"TMPDIR=" + workDir,
+		"AWS_EC2_METADATA_DISABLED=true",
+	}
+	if dockerConfig != "" {
+		cmd.Env = append(cmd.Env, "DOCKER_CONFIG="+dockerConfig)
+	}
+	stdout := boundedOutput{limit: 32 << 20}
+	stderr := boundedOutput{limit: 64 << 10}
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	err = cmd.Run()
 	if err != nil {
+		if authenticated {
+			return nil, fmt.Errorf("trivy scan %q: authenticated registry scan failed", image)
+		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
-			message = err.Error()
+			message = "scanner process failed"
 		}
 		return nil, fmt.Errorf("trivy scan %q: %s", image, message)
 	}
-	return parseTrivyReport(out)
+	if stdout.overflow {
+		if authenticated {
+			return nil, fmt.Errorf("trivy scan %q: authenticated registry scan returned an invalid report", image)
+		}
+		return nil, fmt.Errorf("trivy scan %q: scanner output exceeds the bounded response size", image)
+	}
+	parsed, parseErr := parseTrivyReport(stdout.Bytes())
+	if parseErr != nil && authenticated {
+		return nil, fmt.Errorf("trivy scan %q: authenticated registry scan returned an invalid report", image)
+	}
+	return parsed, parseErr
+}
+
+type boundedOutput struct {
+	bytes.Buffer
+	limit    int
+	overflow bool
+}
+
+func (b *boundedOutput) Write(p []byte) (int, error) {
+	original := len(p)
+	remaining := b.limit - b.Len()
+	if remaining <= 0 {
+		b.overflow = true
+		return original, nil
+	}
+	if len(p) > remaining {
+		p = p[:remaining]
+		b.overflow = true
+	}
+	_, _ = b.Buffer.Write(p)
+	return original, nil
 }
 
 type trivyCLIReport struct {

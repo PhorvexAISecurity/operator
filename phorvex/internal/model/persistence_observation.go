@@ -1,29 +1,38 @@
 package model
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 	"unicode/utf8"
 )
 
 const (
-	PersistenceObservationSchemaV1 = "phorvex.persistence-observation.v1"
-	PersistenceLearningSchemaV1    = "phorvex.persistence-learning.v1"
+	PersistenceObservationSchemaV1   = "phorvex.persistence-observation.v1"
+	PersistenceLearningSchemaV1      = "phorvex.persistence-learning.v1"
+	ScopedOutcomeObservationSchemaV1 = "phorvex.scoped-session-outcome.v1"
+	ScopedOutcomeReportSchemaV1      = "phorvex.scoped-session-cohort.v1"
+	ScopedSessionNativeRotateV1      = "synthetic-process-session/native-rotate/v1"
+	ScopedSessionCapability          = "synthetic-process-session"
 
 	PersistenceHeld     = "held"
 	PersistenceRevoked  = "revoked"
 	PersistenceUnknown  = "unknown"
 	PersistenceCensored = "censored"
 
-	PersistenceDispositionNoProducer = "no-qualified-live-label-producer"
-	PersistenceDispositionNoLabel    = "no-qualified-observed-label"
-	PersistenceDispositionApplied    = "applied"
-	PersistenceDispositionDuplicate  = "duplicate-idempotent"
-	PersistenceDispositionConflict   = "evidence-id-conflict"
-	PersistenceDispositionSaturated  = "dedup-saturated"
-	PersistenceDispositionExpired    = "observation-expired"
-	PersistenceDispositionRejected   = "binding-rejected"
-	PersistenceDispositionUnresolved = "outcome-unresolved"
+	PersistenceDispositionNoProducer  = "no-qualified-live-label-producer"
+	PersistenceDispositionNoLabel     = "no-qualified-observed-label"
+	PersistenceDispositionApplied     = "applied"
+	PersistenceDispositionDuplicate   = "duplicate-idempotent"
+	PersistenceDispositionConflict    = "evidence-id-conflict"
+	PersistenceDispositionSaturated   = "dedup-saturated"
+	PersistenceDispositionExpired     = "observation-expired"
+	PersistenceDispositionRejected    = "binding-rejected"
+	PersistenceDispositionUnresolved  = "outcome-unresolved"
+	PersistenceDispositionEarly       = "observation-too-early"
+	PersistenceDispositionUnavailable = "producer-unavailable"
 )
 
 // PolicyEpoch is the exact active policy identity to which an observation is bound.
@@ -32,6 +41,37 @@ type PolicyEpoch struct {
 	Name       string `json:"name"`
 	UID        string `json:"uid"`
 	Generation int64  `json:"generation"`
+}
+
+// PersistenceWorkloadScope is the stable workload authority across an intended
+// Pod replacement. ControllerUID remains the immediate owner elsewhere; this
+// value is the independently resolved top-level workload UID.
+type PersistenceWorkloadScope struct {
+	Namespace string `json:"namespace"`
+	OwnerKind string `json:"ownerKind"`
+	OwnerName string `json:"ownerName"`
+	OwnerUID  string `json:"ownerUID"`
+}
+
+func (s PersistenceWorkloadScope) Validate() error {
+	for name, value := range map[string]string{"namespace": s.Namespace, "ownerKind": s.OwnerKind, "ownerName": s.OwnerName, "ownerUID": s.OwnerUID} {
+		if value == "" || len(value) > 253 || !utf8.ValidString(value) {
+			return fmt.Errorf("workload scope %s is missing, oversized, or invalid UTF-8", name)
+		}
+	}
+	return nil
+}
+
+func (s PersistenceWorkloadScope) Digest() (string, error) {
+	if err := s.Validate(); err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func (e PolicyEpoch) Owner() string { return OwnerKey(OwnerKindUID, e.UID) }
@@ -53,29 +93,49 @@ func (e PolicyEpoch) Validate() error {
 // effect producer. TargetUID is the object on which the operation began; a
 // successful revocation remains bound to that old UID after replacement.
 type PersistenceOperationBinding struct {
-	Policy               PolicyEpoch `json:"policy"`
-	OperationID          string      `json:"operationID"`
-	TargetUID            string      `json:"targetUID"`
-	Capability           string      `json:"capability"`
-	Scope                string      `json:"scope"`
-	ObservationNotBefore time.Time   `json:"observationNotBefore"`
-	ObservationDeadline  time.Time   `json:"observationDeadline"`
+	Policy                        PolicyEpoch              `json:"policy"`
+	ProcessEpochID                string                   `json:"processEpochID"`
+	ContractVersion               string                   `json:"contractVersion"`
+	Workload                      PersistenceWorkloadScope `json:"workload"`
+	OperationID                   string                   `json:"operationID"`
+	TargetUID                     string                   `json:"targetUID"`
+	Capability                    string                   `json:"capability"`
+	Action                        Action                   `json:"action"`
+	DispatchAcknowledgedAt        time.Time                `json:"dispatchAcknowledgedAt"`
+	ObservationNotBefore          time.Time                `json:"observationNotBefore"`
+	ObservationDeadline           time.Time                `json:"observationDeadline"`
+	TargetTerminationGraceSeconds int64                    `json:"targetTerminationGraceSeconds"`
 }
 
 // PersistenceObservation is a categorical observed outcome. It deliberately
 // has no PHold or confidence target: predictions cannot be submitted as labels.
 type PersistenceObservation struct {
-	SchemaVersion    string      `json:"schemaVersion"`
-	Source           string      `json:"source"`
-	EvidenceID       string      `json:"evidenceID"`
-	Policy           PolicyEpoch `json:"policy"`
-	OperationID      string      `json:"operationID"`
-	TargetUID        string      `json:"targetUID"`
-	Capability       string      `json:"capability"`
-	Scope            string      `json:"scope"`
-	ObservationStart time.Time   `json:"observationStart"`
-	ObservationEnd   time.Time   `json:"observationEnd"`
-	Outcome          string      `json:"outcome"`
+	SchemaVersion    string                   `json:"schemaVersion"`
+	Source           string                   `json:"source"`
+	ProcessEpochID   string                   `json:"processEpochID"`
+	ContractVersion  string                   `json:"contractVersion"`
+	EvidenceID       string                   `json:"evidenceID"`
+	Policy           PolicyEpoch              `json:"policy"`
+	Workload         PersistenceWorkloadScope `json:"workload"`
+	OperationID      string                   `json:"operationID"`
+	TargetUID        string                   `json:"targetUID"`
+	Capability       string                   `json:"capability"`
+	Action           Action                   `json:"action"`
+	BeforeSHA256     string                   `json:"beforeSHA256"`
+	ActionSHA256     string                   `json:"actionSHA256"`
+	AfterSHA256      string                   `json:"afterSHA256"`
+	ObservationStart time.Time                `json:"observationStart"`
+	ObservationEnd   time.Time                `json:"observationEnd"`
+	Outcome          string                   `json:"outcome"`
+}
+
+// ScopedOutcomeDelivery is the bounded observer-to-runner handoff. Exactly one
+// of Observation or an unavailable disposition is present. It is process-local.
+type ScopedOutcomeDelivery struct {
+	Policy      PolicyEpoch
+	Observation *PersistenceObservation
+	Disposition string
+	Reason      string
 }
 
 // PersistenceLearningStatus is audit provenance, not an efficacy or

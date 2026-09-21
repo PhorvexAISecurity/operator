@@ -303,6 +303,14 @@ phorvex:
           repository: aquasec/trivy
           tag: "0.65.0"
           pullPolicy: IfNotPresent
+      # Optional caller-provisioned, short-lived Docker config for exact private
+      # ECR hosts. The Secret is projected read-only; the feed never reads Secrets
+      # through the Kubernetes API or generates registry credentials.
+      registryAuth:
+        enabled: false
+        secretName: ""
+        secretKey: config.json
+        registries: []
       scanTimeout: 10m
       activeDeadlineSeconds: 3600
       serviceAccount:

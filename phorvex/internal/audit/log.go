@@ -103,11 +103,14 @@ type Record struct {
 	// A reference alone never implies that its material was retained.
 	ParameterMaterialStatus string `json:"parameterMaterialStatus,omitempty"`
 	ParameterMaterialReason string `json:"parameterMaterialReason,omitempty"`
-	// PersistenceLearning reports the source and disposition of independent
-	// categorical labels. It is provenance, not an efficacy claim.
+	// PersistenceLearning is retained for old record decoding. New scoped
+	// outcomes are never relabelled into this owner-wide legacy field.
 	PersistenceLearning *model.PersistenceLearningStatus `json:"persistenceLearning,omitempty"`
-	ProactiveRate       float64                          `json:"proactiveRate,omitempty"`
-	Attribution         []model.AttributionTerm          `json:"attribution,omitempty"`
+	// ScopedOutcomes reports exact synthetic session cohorts. It is descriptive
+	// and never implies attacker-state learning or calibrated efficacy.
+	ScopedOutcomes *model.ScopedOutcomeReport `json:"scopedOutcomes,omitempty"`
+	ProactiveRate  float64                    `json:"proactiveRate,omitempty"`
+	Attribution    []model.AttributionTerm    `json:"attribution,omitempty"`
 
 	// P-ACTUATOR native-actuator forensic fields — what the hands actually did, so a
 	// kv-reset is distinguishable from a kill. Present only when the native actuator emitted.
@@ -295,6 +298,9 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	if err := model.ValidatePersistenceLearningStatus(r.PersistenceLearning); err != nil {
 		return nil, err
 	}
+	if err := model.ValidateScopedOutcomeReport(r.ScopedOutcomes); err != nil {
+		return nil, err
+	}
 	if !EconomicsMatchesRoundedLambda(r.Economics, r.Lambda) {
 		return nil, fmt.Errorf("rounded lambda alias contradicts exact economics metadata")
 	}
@@ -425,6 +431,9 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if err := model.ValidatePersistenceLearningStatus(decoded.PersistenceLearning); err != nil {
+		return err
+	}
+	if err := model.ValidateScopedOutcomeReport(decoded.ScopedOutcomes); err != nil {
 		return err
 	}
 	if !EconomicsMatchesRoundedLambda(decoded.Economics, decoded.Lambda) {
@@ -619,6 +628,22 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		}
 		persistenceLearning = &copy
 	}
+	var scopedOutcomes *model.ScopedOutcomeReport
+	if d.ScopedOutcomes != nil {
+		copy := *d.ScopedOutcomes
+		if copy.Policy != nil {
+			policy := *copy.Policy
+			copy.Policy = &policy
+		}
+		copy.Cohorts = append([]model.ScopedOutcomeCohort(nil), copy.Cohorts...)
+		for i := range copy.Cohorts {
+			if copy.Cohorts[i].RawHeldInterval != nil {
+				interval := *copy.Cohorts[i].RawHeldInterval
+				copy.Cohorts[i].RawHeldInterval = &interval
+			}
+		}
+		scopedOutcomes = &copy
+	}
 	var preparedRepresentation json.RawMessage
 	if prepareWire && d.Measurements != nil {
 		representation, preparedRepresentation = prepareRepresentation(d.Representation)
@@ -685,6 +710,7 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		Economics:              economics,
 		ParameterSet:           parameterSet,
 		PersistenceLearning:    persistenceLearning,
+		ScopedOutcomes:         scopedOutcomes,
 		ProactiveRate:          round4(d.ProactiveRate),
 		Attribution:            canonicalizeAttribution(d.Attribution),
 		Handler:                d.Handler,
@@ -885,6 +911,7 @@ func (l *Logger) Record(d model.Decision) error {
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,
 		"economics", rec.Economics,
 		"persistenceLearning", rec.PersistenceLearning,
+		"scopedOutcomes", rec.ScopedOutcomes,
 		"cost", rec.Cost, "net", rec.Net, "asset", rec.AssetValue, "blast", rec.BlastRadius,
 		"attribution", rec.Attribution,
 		"r6Would", rec.R6Counterfactual, "r6Note", rec.CounterfactualNote,

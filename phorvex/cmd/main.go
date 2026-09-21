@@ -114,6 +114,8 @@ func main() {
 		epssFeedScopeNamespaces          string
 		epssFeedScopeDigests             string
 		epssFeedMetadataTTL              time.Duration
+		epssFeedRegistryAuthFile         string
+		epssFeedRegistryAuthRegistries   string
 		killSwitch                       bool
 		auditJSON                        string
 		operatorNS                       string
@@ -247,6 +249,8 @@ func main() {
 	flag.StringVar(&epssFeedScopeNamespaces, "epss-feed-scope-namespaces", "", "[epss-feed] comma-separated exact namespaces; requires exact digest scope.")
 	flag.StringVar(&epssFeedScopeDigests, "epss-feed-scope-digests", "", "[epss-feed] comma-separated repo@sha256 digests; requires namespace scope.")
 	flag.DurationVar(&epssFeedMetadataTTL, "epss-feed-metadata-ttl", 26*time.Hour, "[scoped epss-feed] authoritative metadata validity interval.")
+	flag.StringVar(&epssFeedRegistryAuthFile, "epss-feed-registry-auth-file", "", "[epss-feed] read-only Docker config.json with strict x-phorvex expiry metadata for allowlisted private ECR hosts.")
+	flag.StringVar(&epssFeedRegistryAuthRegistries, "epss-feed-registry-auth-registries", "", "[epss-feed] comma-separated exact private ECR hosts whose credentials must be present in the registry auth file.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
 	flag.StringVar(&auditSourceAddr, "audit-source-addr", "", "Optional mTLS read-only audit listener; disabled when empty.")
@@ -359,7 +363,7 @@ func main() {
 	setupLog.Info("serving control security configured", "mode", securityMode, "bindings", len(servingSecurity.Bindings))
 
 	if epssFeed {
-		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssMetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests); err != nil {
+		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssMetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests, epssFeedRegistryAuthFile, epssFeedRegistryAuthRegistries); err != nil {
 			setupLog.Error(err, "epss-feed failed; inspect the emitted result mode for the cache outcome")
 			os.Exit(1)
 		}
@@ -711,9 +715,13 @@ func main() {
 	}
 }
 
-func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, metadataKey, firstURL, trivyPath string, scanTimeout, metadataTTL time.Duration, scopeNamespaces, scopeDigests string) error {
+func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, metadataKey, firstURL, trivyPath string, scanTimeout, metadataTTL time.Duration, scopeNamespaces, scopeDigests, registryAuthFile, registryAuthRegistries string) error {
 	if namespace == "" {
 		return fmt.Errorf("epss-feed-namespace is required (set POD_NAMESPACE in-cluster)")
+	}
+	registryAuth, err := epssfeed.LoadRegistryAuthConfiguration(registryAuthFile, registryAuthRegistries, time.Now().UTC(), scanTimeout)
+	if err != nil {
+		return err
 	}
 	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
 	if err != nil {
@@ -725,8 +733,8 @@ func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKe
 	}
 	result, err := epssfeed.Run(ctrl.SetupSignalHandler(), epssfeed.Options{
 		Client: clientset,
-		Scanner: epssfeed.TrivyScanner{
-			Path: trivyPath, CacheDir: "/tmp/trivy", Timeout: scanTimeout,
+		Scanner: &epssfeed.TrivyScanner{
+			Path: trivyPath, CacheDir: "/tmp/trivy", Timeout: scanTimeout, RegistryAuth: registryAuth,
 		},
 		EPSS:      epssfeed.FIRSTClient{BaseURL: firstURL},
 		Namespace: namespace, ConfigMapName: configMapName, ConfigMapKey: configMapKey,

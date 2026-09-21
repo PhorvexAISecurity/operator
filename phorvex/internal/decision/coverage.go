@@ -71,11 +71,10 @@ type CoverageEngine struct {
 	// It is intentionally nil in the initial production delivery: optimizer
 	// selections, action acknowledgements, and detector inputs are not labels.
 	PersistenceAuthority PersistenceObservationAuthority
-	// PersistenceDedupLimit bounds accepted evidence IDs per owner lifecycle.
-	// Saturation refuses new labels without evicting an old ID that could replay.
-	PersistenceDedupLimit int
-	persistenceEpochs     map[string]model.PolicyEpoch
-	persistenceLearning   map[string]*persistenceLearningState
+	// scopedOutcomes retains reporting-only synthetic session outcomes. It is a
+	// pointer so shadow/sensitivity copies share one read-only snapshot instead of
+	// copying a mutex or allocating counterfactual state.
+	scopedOutcomes *scopedOutcomeStore
 
 	// Capability is the T1-E capability gate, set per tick by the runner (which holds the
 	// snapshot + actuator + SSAR checker to build the witness). nil = gate off (legacy /
@@ -335,7 +334,6 @@ func (e *CoverageEngine) SetOwnerLive(owner string, live bool) {
 		return
 	}
 	delete(e.live, owner)
-	delete(e.persistenceEpochs, owner)
 }
 
 // ownerAbsent reports whether lifecycle tracking is active AND this owner is not live.
@@ -369,8 +367,7 @@ func (e *CoverageEngine) ForgetOwner(owner string) {
 	delete(e.costByOwner, owner)
 	delete(e.bucketMeta, owner)
 	delete(e.live, owner)
-	delete(e.persistenceEpochs, owner)
-	delete(e.persistenceLearning, owner)
+	e.retireScopedOutcomeOwner(owner)
 	if e.Killchain != nil {
 		if e.Killchain.Memory != nil {
 			e.Killchain.Memory.Forget(owner)
@@ -497,7 +494,7 @@ func (e *CoverageEngine) ObserveRotation(owner string, view *model.WorkloadView,
 // NewCoverageEngine builds the engine from the registered defaults + fresh stateful
 // calibrators.
 func NewCoverageEngine() *CoverageEngine {
-	e := &CoverageEngine{Killchain: killchain.NewModel(), Cost: cost.NewP1Cost()}
+	e := &CoverageEngine{Killchain: killchain.NewModel(), Cost: cost.NewP1Cost(), scopedOutcomes: newScopedOutcomeStore()}
 	if r, ok := recon.Registry.Default(); ok {
 		e.Recon = r
 	}
@@ -1083,7 +1080,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Lambda:                lambda,
 			Economics:             cloneEconomicsMetadata(economics),
 			ParameterSet:          cloneParameterSetReference(parameterSet),
-			PersistenceLearning:   e.persistenceStatus(pol.Owner()),
+			ScopedOutcomes:        e.scopedOutcomeReport(pol.Owner()),
 			ProactiveRate:         rate,
 			Attribution:           attribution,
 			Resources:             nil,

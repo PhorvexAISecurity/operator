@@ -1,9 +1,15 @@
 package runner
 
 import (
+	"context"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
+
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
 	"k8s.io/apimachinery/pkg/types"
@@ -11,41 +17,118 @@ import (
 
 type m106RunnerAuthority struct {
 	binding model.PersistenceOperationBinding
+	allowed model.PersistenceObservation
 }
 
-func (a m106RunnerAuthority) Source() string { return "runner-fixture-observer" }
+func (m106RunnerAuthority) Source() string { return model.ScopedSessionCapability }
 func (a m106RunnerAuthority) AuthorizeObservation(observation model.PersistenceObservation) (model.PersistenceOperationBinding, bool) {
-	return a.binding, observation.OperationID == a.binding.OperationID && observation.Outcome == model.PersistenceHeld && observation.EvidenceID == "evidence"
+	return a.binding, reflect.DeepEqual(observation, a.allowed)
 }
 
-func TestPost25M106ManagerRegistersExactPolicyEpoch(t *testing.T) {
+func TestPost25M106ManagerRegistersExactPolicyEpochWithoutBeliefTraining(t *testing.T) {
 	engine := decision.NewCoverageEngine()
 	entry := &policyEntry{namespace: "ns", key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", generation: 9, tenant: "tenant"}
 	manager := &Manager{Optimizer: engine, policies: map[string]*policyEntry{entry.key.String(): entry}}
 	manager.syncOwnerLiveness()
 
 	policy := buildPolicy(entry)
-	if policy.PolicyGeneration != entry.generation || policy.PolicyUID != entry.uid || policy.PolicyName != entry.key.Name {
-		t.Fatalf("resolved policy lost exact epoch: %+v", policy)
-	}
-	status, allocated := engine.PersistenceLearningStatusFor(policy.Owner())
 	wantEpoch := model.PolicyEpoch{Namespace: policy.Namespace, Name: policy.PolicyName, UID: policy.PolicyUID, Generation: policy.PolicyGeneration}
-	if allocated || status.Source != "none" || status.Disposition != model.PersistenceDispositionNoProducer || status.QualifiedLabels != 0 ||
-		status.Policy == nil || *status.Policy != wantEpoch {
-		t.Fatalf("initial manager wiring invented a qualified label producer: %+v allocated=%t", status, allocated)
+	report, allocated := engine.ScopedOutcomeReportFor(policy.Owner())
+	if !allocated || report.Source != "none" || report.Disposition != model.PersistenceDispositionNoProducer || report.Policy == nil || *report.Policy != wantEpoch {
+		t.Fatalf("manager did not register an empty exact scoped lifecycle: %+v allocated=%t", report, allocated)
 	}
 
 	now := time.Date(2026, 9, 20, 23, 0, 0, 0, time.UTC)
-	epoch := wantEpoch
-	binding := model.PersistenceOperationBinding{Policy: epoch, OperationID: "operation", TargetUID: "old-target-uid", Capability: "persistence", Scope: "pod/process", ObservationNotBefore: now.Add(-time.Hour), ObservationDeadline: now.Add(time.Hour)}
+	dispatched := now.Add(-62 * time.Second)
+	binding := model.PersistenceOperationBinding{
+		Policy: wantEpoch, ProcessEpochID: engine.ScopedOutcomeProcessEpochID(), ContractVersion: model.ScopedSessionNativeRotateV1,
+		Workload:    model.PersistenceWorkloadScope{Namespace: "ns", OwnerKind: "Deployment", OwnerName: "app", OwnerUID: "deployment-uid"},
+		OperationID: "operation", TargetUID: "old-target-uid", Capability: model.ScopedSessionCapability, Action: model.ActionRotate,
+		DispatchAcknowledgedAt: dispatched, ObservationNotBefore: dispatched.Add(60 * time.Second), ObservationDeadline: dispatched.Add(65 * time.Second),
+		TargetTerminationGraceSeconds: 30,
+	}
+	observation := model.PersistenceObservation{
+		SchemaVersion: model.ScopedOutcomeObservationSchemaV1, Source: model.ScopedSessionCapability,
+		ProcessEpochID: binding.ProcessEpochID, ContractVersion: binding.ContractVersion, EvidenceID: "evidence", Policy: wantEpoch,
+		Workload: binding.Workload, OperationID: binding.OperationID, TargetUID: binding.TargetUID, Capability: binding.Capability, Action: binding.Action,
+		BeforeSHA256: strings.Repeat("a", 64), ActionSHA256: strings.Repeat("b", 64), AfterSHA256: strings.Repeat("c", 64),
+		ObservationStart: dispatched.Add(60 * time.Second), ObservationEnd: dispatched.Add(61 * time.Second), Outcome: model.PersistenceHeld,
+	}
 	engine.Now = func() time.Time { return now }
-	engine.PersistenceAuthority = m106RunnerAuthority{binding: binding}
-	result := engine.AdmitPersistenceObservation(model.PersistenceObservation{
-		SchemaVersion: model.PersistenceObservationSchemaV1, Source: "runner-fixture-observer", EvidenceID: "evidence",
-		Policy: epoch, OperationID: binding.OperationID, TargetUID: binding.TargetUID, Capability: binding.Capability, Scope: binding.Scope,
-		ObservationStart: now.Add(-30 * time.Minute), ObservationEnd: now.Add(-time.Minute), Outcome: model.PersistenceHeld,
-	})
-	if !result.Applied || result.Status.QualifiedLabels != 1 {
-		t.Fatalf("manager did not register the exact active epoch: %+v", result)
+	engine.PersistenceAuthority = m106RunnerAuthority{binding: binding, allowed: observation}
+	alpha, beta := engine.Killchain.Memory.Prior(policy.Owner())
+	result := engine.AdmitPersistenceObservation(observation)
+	afterAlpha, afterBeta := engine.Killchain.Memory.Prior(policy.Owner())
+	if !result.Applied || result.Status.Cohorts[0].Held != 1 || alpha != afterAlpha || beta != afterBeta {
+		t.Fatalf("manager epoch report changed attacker-state memory: result=%+v prior=(%g,%g)->(%g,%g)", result, alpha, beta, afterAlpha, afterBeta)
+	}
+}
+
+type m106NativeActuator struct {
+	calls  int
+	result *actuator.Result
+}
+
+func (*m106NativeActuator) Name() string                                              { return "native" }
+func (*m106NativeActuator) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
+func (a *m106NativeActuator) Actuate(_ context.Context, req actuator.Request) (actuator.Result, error) {
+	a.calls++
+	if a.result != nil {
+		return *a.result, nil
+	}
+	return actuator.Result{Actuator: "native", Handler: string(req.Action), Emitted: true, MutationKind: "forward-only", ObjectsTouched: []string{"Pod/ns/old"}}, nil
+}
+
+func TestPost25M106ContradictoryNativeReceiptNeverFeedsProducer(t *testing.T) {
+	contradictory := actuator.Result{Actuator: "native", Handler: string(model.ActionRotate), Emitted: true,
+		NoEffect: actuator.NoEffectRefused, MutationKind: "forward-only", ObjectsTouched: []string{"Pod/ns/old"}}
+	act := &m106NativeActuator{result: &contradictory}
+	producer := &m106RunnerProducer{}
+	manager := &Manager{Actuator: act, ScopedOutcomeProducer: producer, Log: logr.Discard()}
+	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	entry := &policyEntry{namespace: "ns"}
+	views := map[string]*model.WorkloadView{"ns/old": {Pod: model.Pod{Namespace: "ns", Name: "old", UID: "old-uid", Ready: true}}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "old", Trace: &model.DecisionTraceV2{}}}
+	_ = actuateWithBoundary(t, manager, context.Background(), entry, policy, decisions, views)
+	if act.calls != 1 || producer.calls != 0 {
+		t.Fatalf("contradictory native receipt reached scoped producer: native=%d producer=%d", act.calls, producer.calls)
+	}
+}
+func (*m106NativeActuator) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+
+type m106RunnerProducer struct {
+	calls   int
+	request actuator.Request
+	result  actuator.Result
+}
+
+func (*m106RunnerProducer) Source() string { return model.ScopedSessionCapability }
+func (*m106RunnerProducer) AuthorizeObservation(model.PersistenceObservation) (model.PersistenceOperationBinding, bool) {
+	return model.PersistenceOperationBinding{}, false
+}
+func (p *m106RunnerProducer) RecordNativeRotate(_ model.Policy, _ *model.WorkloadView, req actuator.Request, result actuator.Result, _ time.Time) bool {
+	p.calls++
+	p.request, p.result = req, result
+	return true
+}
+func (*m106RunnerProducer) Drain(int) []model.ScopedOutcomeDelivery { return nil }
+
+func TestPost25M106ActualNativeDispatchFeedsOnlyNonblockingProducerHook(t *testing.T) {
+	act := &m106NativeActuator{}
+	producer := &m106RunnerProducer{}
+	manager := &Manager{Actuator: act, ScopedOutcomeProducer: producer, Log: logr.Discard()}
+	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	entry := &policyEntry{namespace: "ns"}
+	views := map[string]*model.WorkloadView{"ns/old": {Pod: model.Pod{Namespace: "ns", Name: "old", UID: "old-uid", Ready: true}}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "old", Trace: &model.DecisionTraceV2{}}}
+	if n := actuateWithBoundary(t, manager, context.Background(), entry, policy, decisions, views); n != 1 || act.calls != 1 || !decisions[0].Actuated {
+		t.Fatalf("native dispatch did not complete: n=%d calls=%d decision=%+v", n, act.calls, decisions[0])
+	}
+	if producer.calls != 1 || producer.request.TargetUID != "old-uid" || producer.result.Handler != string(model.ActionRotate) {
+		t.Fatalf("producer did not receive exact native request/receipt: calls=%d request=%+v result=%+v", producer.calls, producer.request, producer.result)
 	}
 }
