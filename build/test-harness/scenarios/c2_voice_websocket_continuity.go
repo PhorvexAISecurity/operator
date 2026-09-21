@@ -51,6 +51,17 @@ const (
 	voiceWSAvailabilityPeriod = 200 * time.Millisecond
 	voiceWSReplacementTimeout = 25 * time.Second
 	voiceWSReceiptLimit       = 32 * 1024
+	voiceWSEvidenceMaxFields  = 128
+	voiceWSEvidenceMaxValue   = 512
+	voiceWSEvidenceMaxBytes   = 12 * 1024
+	voiceWSReadyUIDLimit      = 16
+	voiceWSSampleLimit        = 16
+)
+
+const (
+	voiceWSEvidenceSchema     = "phorvex.voice-websocket-benchmark-evidence.v1"
+	voiceWSEvidenceSuite      = "post25-voice-websocket-continuity.v1"
+	voiceWSEvidenceClaimScope = "synthetic-websocket-transport-only"
 )
 
 // voiceWSServerSource is a deterministic protocol replica. It uses the runtime
@@ -235,6 +246,21 @@ type c2VoiceWebSocketContinuity struct {
 	recovery                  voiceWSReceipt
 	sharedProbe               voiceWSReceipt
 	availability              voiceWSAvailability
+	targetObservation         voiceWSExchangeObservation
+	sharedObservation         voiceWSExchangeObservation
+	recoveryObservation       voiceWSExchangeObservation
+	benchmarkEvidence         map[string]string
+	defenderArm               string
+}
+
+type voiceWSExchangeObservation struct {
+	ProducerStatus       string
+	ProducerStdoutBytes  int
+	ProducerStdoutSHA256 string
+	ProducerExitCode     int
+	ReceiptDecoded       bool
+	ReceiptValidated     bool
+	Receipt              voiceWSReceipt
 }
 
 type voiceWSReceipt struct {
@@ -258,12 +284,20 @@ type voiceWSReceipt struct {
 }
 
 type voiceWSAvailability struct {
-	Samples            int
-	Failures           int
-	MinimumReady       int
-	OriginalSeen       bool
-	OriginalAbsentSeen bool
-	ObservedReadyUIDs  []string
+	Samples             int
+	Failures            int
+	MinimumReady        int
+	OriginalSeen        bool
+	OriginalAbsentSeen  bool
+	ObservedReadyUIDs   []string
+	Observations        []voiceWSAvailabilityObservation
+	ObservationOverflow bool
+}
+
+type voiceWSAvailabilityObservation struct {
+	AtUTC     string
+	Known     bool
+	ReadyUIDs []string
 }
 
 func (s *c2VoiceWebSocketContinuity) Metadata() core.ScenarioMeta {
@@ -390,20 +424,22 @@ func voiceWSProducerPod(env *core.Env) *corev1.Pod {
 }
 
 func (s *c2VoiceWebSocketContinuity) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {
+	s.benchmarkEvidence = make(map[string]string)
+	s.defenderArm = env.DefenderName
 	targets, err := waitVoiceWSReadyPods(ctx, env, "target", 1, 20*time.Second)
 	if err != nil {
-		return core.AttackResult{}, err
+		return s.attackResult(nil, "execute-started", err)
 	}
 	original := targets[0]
 	if original.UID == "" || original.ResourceVersion == "" || original.DeletionTimestamp != nil {
-		return core.AttackResult{}, errors.New("voice websocket original target identity is incomplete")
+		return s.attackResult(nil, "execute-started", errors.New("voice websocket original target identity is incomplete"))
 	}
 	if err := validateVoiceWSPodFixture(ctx, env, &original, s.targetDeploymentUID, s.peerDeploymentUID); err != nil {
-		return core.AttackResult{}, err
+		return s.attackResult(nil, "execute-started", err)
 	}
 	s.originalName, s.originalUID = original.Name, original.UID
 	if env.Rand == nil {
-		return core.AttackResult{}, errors.New("voice websocket producer has no deterministic trial RNG")
+		return s.attackResult(nil, "target-observed", errors.New("voice websocket producer has no deterministic trial RNG"))
 	}
 	stopSamples := make(chan struct{})
 	availabilityDone := make(chan voiceWSAvailability, 1)
@@ -411,8 +447,8 @@ func (s *c2VoiceWebSocketContinuity) Execute(ctx context.Context, env *core.Env)
 		availabilityDone <- sampleVoiceWSAvailability(ctx, env, s.sharedServiceUID, s.targetDeploymentUID, s.peerDeploymentUID, s.originalUID, stopSamples)
 	}()
 	type probeResult struct {
-		receipt voiceWSReceipt
-		err     error
+		observation voiceWSExchangeObservation
+		err         error
 	}
 	sharedDone := make(chan probeResult, 1)
 	sharedID := fmt.Sprintf("shared-%d-%016x", env.Trial, env.Rand.Uint64())
@@ -425,44 +461,46 @@ func (s *c2VoiceWebSocketContinuity) Execute(ctx context.Context, env *core.Env)
 			return
 		case <-timer.C:
 		}
-		receipt, err := performVoiceWS(ctx, env, voiceWSSharedService, s.sharedServiceUID, map[string]string{"app": voiceWSApp}, sharedID, 2, 10*time.Millisecond, s.producerUID)
-		sharedDone <- probeResult{receipt: receipt, err: err}
+		observation, err := performVoiceWS(ctx, env, voiceWSSharedService, s.sharedServiceUID, map[string]string{"app": voiceWSApp}, sharedID, 2, 10*time.Millisecond, s.producerUID)
+		sharedDone <- probeResult{observation: observation, err: err}
 	}()
 	sessionID := fmt.Sprintf("voice-%d-%016x", env.Trial, env.Rand.Uint64())
-	receipt, requestErr := performVoiceWS(ctx, env, voiceWSTargetService, s.targetServiceUID, map[string]string{"app": voiceWSApp, "role": "target"}, sessionID, voiceWSExpectedFrames, voiceWSFrameInterval, s.producerUID)
+	targetObservation, requestErr := performVoiceWS(ctx, env, voiceWSTargetService, s.targetServiceUID, map[string]string{"app": voiceWSApp, "role": "target"}, sessionID, voiceWSExpectedFrames, voiceWSFrameInterval, s.producerUID)
 	shared := <-sharedDone
 	close(stopSamples)
 	s.availability = <-availabilityDone
-	s.receipt, s.sharedProbe = receipt, shared.receipt
+	s.targetObservation, s.sharedObservation = targetObservation, shared.observation
+	s.receipt, s.sharedProbe = targetObservation.Receipt, shared.observation.Receipt
 	if requestErr != nil {
-		return core.AttackResult{Stages: []string{"establish deterministic Twilio-shaped WebSocket through target Service"}}, requestErr
+		return s.attackResult([]string{"establish deterministic Twilio-shaped WebSocket through target Service"}, "exchanges-observed", requestErr)
 	}
-	if shared.err != nil || !voiceWSReceiptCompleted(shared.receipt) {
-		return core.AttackResult{}, fmt.Errorf("shared Service availability websocket failed: receipt=%+v err=%v", shared.receipt, shared.err)
+	if shared.err != nil || !voiceWSReceiptCompleted(shared.observation.Receipt) {
+		return s.attackResult(nil, "exchanges-observed", fmt.Errorf("shared Service availability websocket failed: receipt=%+v err=%v", shared.observation.Receipt, shared.err))
 	}
-	if receipt.TargetPodUID != string(s.originalUID) {
-		return core.AttackResult{}, fmt.Errorf("websocket target UID %q differs from authoritative target %q", receipt.TargetPodUID, s.originalUID)
+	if s.receipt.TargetPodUID != string(s.originalUID) {
+		return s.attackResult(nil, "exchanges-observed", fmt.Errorf("websocket target UID %q differs from authoritative target %q", s.receipt.TargetPodUID, s.originalUID))
 	}
 	replacement, replaced, timeline, err := waitVoiceWSTargetOutcome(ctx, env, s.originalName, s.originalUID, s.targetDeploymentUID, voiceWSReplacementTimeout)
 	if err != nil {
-		return core.AttackResult{}, err
+		return s.attackResult(nil, "exchanges-observed", err)
 	}
 	if replaced {
 		if err := validateVoiceWSPodFixture(ctx, env, replacement, s.targetDeploymentUID, s.peerDeploymentUID); err != nil {
-			return core.AttackResult{}, fmt.Errorf("replacement voice websocket fixture invalid: %w", err)
+			return s.attackResult(nil, "replacement-observed", fmt.Errorf("replacement voice websocket fixture invalid: %w", err))
 		}
 		s.replacementName, s.replacementUID, s.originalAPIAbsent = replacement.Name, replacement.UID, true
 		s.originalDeletionTimestamp, s.originalAbsenceObservedAt, s.replacementObservedAt = timeline.DeletionTimestamp, timeline.AbsenceObservedAt, timeline.ReplacementObservedAt
 		recoveryID := fmt.Sprintf("recovery-%d-%016x", env.Trial, env.Rand.Uint64())
-		s.recovery, err = performVoiceWS(ctx, env, voiceWSTargetService, s.targetServiceUID, map[string]string{"app": voiceWSApp, "role": "target"}, recoveryID, 2, 10*time.Millisecond, s.producerUID)
+		s.recoveryObservation, err = performVoiceWS(ctx, env, voiceWSTargetService, s.targetServiceUID, map[string]string{"app": voiceWSApp, "role": "target"}, recoveryID, 2, 10*time.Millisecond, s.producerUID)
+		s.recovery = s.recoveryObservation.Receipt
 		if err != nil {
-			return core.AttackResult{}, fmt.Errorf("replacement websocket recovery: %w", err)
+			return s.attackResult(nil, "replacement-observed", fmt.Errorf("replacement websocket recovery: %w", err))
 		}
 		if s.recovery.TargetPodUID != string(s.replacementUID) || !voiceWSReceiptCompleted(s.recovery) {
-			return core.AttackResult{}, errors.New("replacement did not complete exact fresh websocket recovery")
+			return s.attackResult(nil, "replacement-observed", errors.New("replacement did not complete exact fresh websocket recovery"))
 		}
 	}
-	return core.AttackResult{Stages: []string{"establish one exact UID-bound WebSocket through target Service", "exchange deterministic sequential synthetic media during the defender window", "sample shared Service endpoint availability", "bind original presence or exact controller replacement", "run a concurrent fresh exchange through the shared Service", "run replacement recovery exchange when rotation occurred"}, Notes: map[string]string{"classification": "benign websocket transport continuity control", "originalPodUID": string(s.originalUID), "replacementPodUID": string(s.replacementUID), "fixtureImage": voiceWSRuntimeImage, "runtimeBotSourceSHA256": voiceWSRuntimeBotSHA256, "serverSourceSHA256": voiceWSServerSourceSHA256(), "clientSourceSHA256": voiceWSClientSourceSHA256(), "outcome": receipt.Outcome, "receivedFrames": strconv.Itoa(len(receipt.ReceivedSequences)), "expectedFrames": strconv.Itoa(receipt.ExpectedFrames), "minimumReadyEndpoints": strconv.Itoa(s.availability.MinimumReady), "defenderArm": env.DefenderName, "originalDeletionTimestamp": s.originalDeletionTimestamp, "originalAbsenceObservedAt": s.originalAbsenceObservedAt, "replacementObservedAt": s.replacementObservedAt}}, nil
+	return s.attackResult([]string{"establish one exact UID-bound WebSocket through target Service", "exchange deterministic sequential synthetic media during the defender window", "sample shared Service endpoint availability", "bind original presence or exact controller replacement", "run a concurrent fresh exchange through the shared Service", "run replacement recovery exchange when rotation occurred"}, "execute-complete", nil)
 }
 
 func (s *c2VoiceWebSocketContinuity) SuccessOracle(_ context.Context, _ *core.Env) (core.OracleResult, error) {
@@ -476,45 +514,543 @@ func (s *c2VoiceWebSocketContinuity) SuccessOracle(_ context.Context, _ *core.En
 		"recoveryOutcome": s.recovery.Outcome, "recoveryTargetPodUID": s.recovery.TargetPodUID,
 	}
 	if s.availability.Samples == 0 || s.availability.Failures != 0 {
-		return core.OracleResult{Evidence: evidence}, errors.New("websocket availability sampling incomplete")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-availability", errors.New("websocket availability sampling incomplete"))
 	}
 	if !s.availability.OriginalSeen {
-		return core.OracleResult{Evidence: evidence}, errors.New("exact original Pod UID was not observed as an authorized Ready endpoint")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-original", errors.New("exact original Pod UID was not observed as an authorized Ready endpoint"))
 	}
 	if s.availability.MinimumReady < 2 {
-		return core.OracleResult{Evidence: evidence}, fmt.Errorf("shared Service Ready endpoint floor fell below two: %d", s.availability.MinimumReady)
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-availability", fmt.Errorf("shared Service Ready endpoint floor fell below two: %d", s.availability.MinimumReady))
 	}
 	if !voiceWSReceiptCompleted(s.sharedProbe) {
-		return core.OracleResult{Evidence: evidence}, errors.New("shared Service did not complete a concurrent fresh websocket")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-shared-probe", errors.New("shared Service did not complete a concurrent fresh websocket"))
 	}
 	if s.replacementUID == "" {
 		if !voiceWSReceiptCompleted(s.receipt) {
-			return core.OracleResult{Evidence: evidence}, errors.New("no-action websocket did not complete exact sequence and end marker")
+			return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-no-action", errors.New("no-action websocket did not complete exact sequence and end marker"))
 		}
-		return core.OracleResult{Achieved: true, ObservedState: "no-action control: exact original Pod UID completed every numbered synthetic media response and explicit end marker while shared availability remained at least two", Evidence: evidence}, nil
+		return s.oracleResult(core.OracleResult{Achieved: true, ObservedState: "no-action control: exact original Pod UID completed every numbered synthetic media response and explicit end marker while shared availability remained at least two", Evidence: evidence}, "observed-no-action", nil)
 	}
 	if s.replacementUID == s.originalUID || !s.originalAPIAbsent || !s.availability.OriginalAbsentSeen {
-		return core.OracleResult{Evidence: evidence}, errors.New("exact original Pod UID route/API absence or distinct replacement is unproven")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-replacement-identity", errors.New("exact original Pod UID route/API absence or distinct replacement is unproven"))
 	}
 	if s.receipt.Outcome != "early-close" || s.receipt.EndMarker || len(s.receipt.ReceivedSequences) >= s.receipt.ExpectedFrames {
-		return core.OracleResult{Evidence: evidence}, errors.New("rotation did not yield a discriminating incomplete established-session outcome")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-target-outcome", errors.New("rotation did not yield a discriminating incomplete established-session outcome"))
 	}
 	if s.sharedProbe.TargetPodUID == string(s.originalUID) {
-		return core.OracleResult{Evidence: evidence}, errors.New("shared availability probe was still served by deleted original UID")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-shared-target", errors.New("shared availability probe was still served by deleted original UID"))
 	}
 	if !slices.Contains(s.availability.ObservedReadyUIDs, s.sharedProbe.TargetPodUID) {
-		return core.OracleResult{Evidence: evidence}, errors.New("shared availability probe target was not independently observed as an authorized Ready endpoint")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-endpoint-binding", errors.New("shared availability probe target was not independently observed as an authorized Ready endpoint"))
 	}
 	started, startErr := time.Parse(time.RFC3339Nano, s.receipt.StartedAtUTC)
 	absentAt, absentErr := time.Parse(time.RFC3339Nano, s.originalAbsenceObservedAt)
 	replacementAt, replacementErr := time.Parse(time.RFC3339Nano, s.replacementObservedAt)
 	if startErr != nil || absentErr != nil || replacementErr != nil || absentAt.Before(started) || replacementAt.Before(absentAt) {
-		return core.OracleResult{Evidence: evidence}, errors.New("original absence/replacement timeline is invalid")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-timeline", errors.New("original absence/replacement timeline is invalid"))
 	}
 	if !voiceWSReceiptCompleted(s.recovery) || s.recovery.TargetPodUID != string(s.replacementUID) {
-		return core.OracleResult{Evidence: evidence}, errors.New("exact replacement recovery websocket is absent")
+		return s.oracleResult(core.OracleResult{Evidence: evidence}, "invalid-recovery", errors.New("exact replacement recovery websocket is absent"))
 	}
-	return core.OracleResult{Achieved: false, ObservedState: "timer-driven Pod-replacement comparison: an established WebSocket lost its exact original Pod UID before the end marker; API observations then showed original absence, a Ready replacement, at least two Ready shared endpoints and fresh-session recovery. Without a target-matched actuator receipt this is an observed interruption/replacement sequence, not exclusive causal attribution.", Evidence: evidence}, nil
+	return s.oracleResult(core.OracleResult{Achieved: false, ObservedState: "timer-driven Pod-replacement comparison: an established WebSocket lost its exact original Pod UID before the end marker; API observations then showed original absence, a Ready replacement, at least two Ready shared endpoints and fresh-session recovery. Without a target-matched actuator receipt this is an observed interruption/replacement sequence, not exclusive causal attribution.", Evidence: evidence}, "observed-replacement-interruption", nil)
+}
+
+func (s *c2VoiceWebSocketContinuity) attackResult(stages []string, phase string, cause error) (core.AttackResult, error) {
+	evidenceErr := s.updateVoiceWSBenchmarkEvidence(phase, "not-observed")
+	result := core.AttackResult{Stages: stages, BenchmarkEvidence: s.benchmarkEvidence}
+	if cause == nil {
+		result.Notes = map[string]string{
+			"classification":            "benign websocket transport continuity control",
+			"originalPodUID":            string(s.originalUID),
+			"replacementPodUID":         string(s.replacementUID),
+			"fixtureImage":              voiceWSRuntimeImage,
+			"runtimeBotSourceSHA256":    voiceWSRuntimeBotSHA256,
+			"serverSourceSHA256":        voiceWSServerSourceSHA256(),
+			"clientSourceSHA256":        voiceWSClientSourceSHA256(),
+			"outcome":                   s.receipt.Outcome,
+			"receivedFrames":            strconv.Itoa(len(s.receipt.ReceivedSequences)),
+			"expectedFrames":            strconv.Itoa(s.receipt.ExpectedFrames),
+			"minimumReadyEndpoints":     strconv.Itoa(s.availability.MinimumReady),
+			"defenderArm":               s.defenderArm,
+			"originalDeletionTimestamp": s.originalDeletionTimestamp,
+			"originalAbsenceObservedAt": s.originalAbsenceObservedAt,
+			"replacementObservedAt":     s.replacementObservedAt,
+		}
+	}
+	if cause != nil {
+		cause = fmt.Errorf("voice websocket execution refused at %s", phase)
+	}
+	return result, errors.Join(cause, evidenceErr)
+}
+
+func (s *c2VoiceWebSocketContinuity) oracleResult(result core.OracleResult, status string, cause error) (core.OracleResult, error) {
+	phase := "oracle-complete"
+	if cause != nil {
+		phase = "oracle-invalid"
+	}
+	if cause != nil {
+		cause = fmt.Errorf("voice websocket oracle refused with status %s", status)
+	}
+	return result, errors.Join(cause, s.updateVoiceWSBenchmarkEvidence(phase, status))
+}
+
+func (s *c2VoiceWebSocketContinuity) updateVoiceWSBenchmarkEvidence(phase, oracleStatus string) error {
+	evidence := map[string]string{
+		"schema":                            voiceWSEvidenceSchema,
+		"suite":                             voiceWSEvidenceSuite,
+		"phase":                             phase,
+		"claimScope":                        voiceWSEvidenceClaimScope,
+		"fixture.image":                     voiceWSRuntimeImage,
+		"source.runtimeBotSHA256":           voiceWSRuntimeBotSHA256,
+		"source.serverSHA256":               voiceWSServerSourceSHA256(),
+		"source.clientSHA256":               voiceWSClientSourceSHA256(),
+		"original.podUID":                   string(s.originalUID),
+		"replacement.podUID":                string(s.replacementUID),
+		"original.apiAbsent":                strconv.FormatBool(s.originalAPIAbsent),
+		"original.deletionTimestamp":        s.originalDeletionTimestamp,
+		"original.absenceObservedAt":        s.originalAbsenceObservedAt,
+		"replacement.observedAt":            s.replacementObservedAt,
+		"availability.samples":              strconv.Itoa(s.availability.Samples),
+		"availability.failures":             strconv.Itoa(s.availability.Failures),
+		"availability.minimumReady":         strconv.Itoa(s.availability.MinimumReady),
+		"availability.samplePeriodMillis":   strconv.FormatInt(voiceWSAvailabilityPeriod.Milliseconds(), 10),
+		"availability.originalSeen":         strconv.FormatBool(s.availability.OriginalSeen),
+		"availability.originalAbsentSeen":   strconv.FormatBool(s.availability.OriginalAbsentSeen),
+		"availability.readyUIDCount":        strconv.Itoa(len(s.availability.ObservedReadyUIDs)),
+		"availability.readyUIDListComplete": "true",
+		"availability.readyUIDs":            strings.Join(sortedStrings(s.availability.ObservedReadyUIDs), ","),
+		"availability.observationCount":     strconv.Itoa(len(s.availability.Observations)),
+		"availability.observationsComplete": strconv.FormatBool(!s.availability.ObservationOverflow && len(s.availability.Observations) == s.availability.Samples),
+		"oracle.status":                     oracleStatus,
+	}
+	if len(s.availability.ObservedReadyUIDs) > voiceWSReadyUIDLimit {
+		evidence["availability.readyUIDs"] = "BOUND_EXCEEDED"
+		evidence["availability.readyUIDListComplete"] = "false"
+	}
+	addVoiceWSExchangeEvidence(evidence, "target", s.targetObservation)
+	addVoiceWSExchangeEvidence(evidence, "shared", s.sharedObservation)
+	addVoiceWSExchangeEvidence(evidence, "recovery", s.recoveryObservation)
+	for i, observation := range s.availability.Observations {
+		if i >= voiceWSSampleLimit {
+			break
+		}
+		ready := sortedStrings(observation.ReadyUIDs)
+		complete := len(ready) <= voiceWSReadyUIDLimit
+		if !complete {
+			ready = nil
+		}
+		value, err := json.Marshal(struct {
+			AtUTC        string   `json:"atUTC"`
+			Known        bool     `json:"known"`
+			ReadyCount   int      `json:"readyCount"`
+			ListComplete bool     `json:"listComplete"`
+			ReadyUIDs    []string `json:"readyUIDs"`
+		}{observation.AtUTC, observation.Known, len(observation.ReadyUIDs), complete, ready})
+		if err != nil {
+			return err
+		}
+		evidence[fmt.Sprintf("availability.observation.%02d", i)] = string(value)
+	}
+	if s.benchmarkEvidence == nil {
+		s.benchmarkEvidence = make(map[string]string, len(evidence))
+	}
+	clear(s.benchmarkEvidence)
+	for key, value := range evidence {
+		s.benchmarkEvidence[key] = value
+	}
+	return validateVoiceWSBenchmarkEvidence(s.benchmarkEvidence)
+}
+
+func addVoiceWSExchangeEvidence(evidence map[string]string, prefix string, observation voiceWSExchangeObservation) {
+	status := observation.ProducerStatus
+	if status == "" {
+		status = "not-attempted"
+	}
+	r := observation.Receipt
+	present := r.Version != 0
+	evidence[prefix+".producerStatus"] = status
+	evidence[prefix+".stdoutBytes"] = strconv.Itoa(observation.ProducerStdoutBytes)
+	evidence[prefix+".stdoutSHA256"] = observation.ProducerStdoutSHA256
+	evidence[prefix+".exitCode"] = strconv.Itoa(observation.ProducerExitCode)
+	evidence[prefix+".receiptDecoded"] = strconv.FormatBool(observation.ReceiptDecoded)
+	evidence[prefix+".receiptValidated"] = strconv.FormatBool(observation.ReceiptValidated)
+	evidence[prefix+".receiptPresent"] = strconv.FormatBool(present)
+	evidence[prefix+".receipt.outcome"] = r.Outcome
+	evidence[prefix+".receipt.targetPodUID"] = r.TargetPodUID
+	evidence[prefix+".receipt.expectedFrames"] = strconv.Itoa(r.ExpectedFrames)
+	evidence[prefix+".receipt.receivedFrameCount"] = strconv.Itoa(len(r.ReceivedSequences))
+	evidence[prefix+".receipt.receivedSequences"] = joinInts(r.ReceivedSequences)
+	evidence[prefix+".receipt.gaps"] = strconv.Itoa(r.Gaps)
+	evidence[prefix+".receipt.duplicateSequences"] = strconv.Itoa(r.DuplicateSequences)
+	evidence[prefix+".receipt.endMarker"] = strconv.FormatBool(r.EndMarker)
+	evidence[prefix+".receipt.closeCode"] = strconv.Itoa(r.CloseCode)
+	evidence[prefix+".receipt.startedAtUTC"] = r.StartedAtUTC
+	evidence[prefix+".receipt.endedAtUTC"] = r.EndedAtUTC
+	evidence[prefix+".receipt.twimlStatus"] = strconv.Itoa(r.TwiMLStatus)
+	evidence[prefix+".receipt.twimlSHA256"] = r.TwiMLSHA256
+}
+
+func validateVoiceWSBenchmarkEvidence(evidence map[string]string) error {
+	if len(evidence) > voiceWSEvidenceMaxFields {
+		return fmt.Errorf("voice websocket benchmark evidence has %d fields, limit %d", len(evidence), voiceWSEvidenceMaxFields)
+	}
+	total := 0
+	for key, value := range evidence {
+		if len(key) > 64 || len(value) > voiceWSEvidenceMaxValue {
+			return fmt.Errorf("voice websocket benchmark evidence field exceeds bound: %s", key)
+		}
+		total += len(key) + len(value)
+	}
+	if total > voiceWSEvidenceMaxBytes {
+		return fmt.Errorf("voice websocket benchmark evidence is %d bytes, limit %d", total, voiceWSEvidenceMaxBytes)
+	}
+	required := []string{"schema", "suite", "phase", "claimScope", "fixture.image", "source.runtimeBotSHA256", "source.serverSHA256", "source.clientSHA256", "original.podUID", "replacement.podUID", "original.apiAbsent", "original.deletionTimestamp", "original.absenceObservedAt", "replacement.observedAt", "availability.samples", "availability.failures", "availability.minimumReady", "availability.samplePeriodMillis", "availability.originalSeen", "availability.originalAbsentSeen", "availability.readyUIDCount", "availability.readyUIDListComplete", "availability.readyUIDs", "availability.observationCount", "availability.observationsComplete", "oracle.status"}
+	allowed := make(map[string]bool, len(required)+60)
+	for _, key := range required {
+		allowed[key] = true
+		if _, ok := evidence[key]; !ok {
+			return fmt.Errorf("voice websocket benchmark evidence missing %s", key)
+		}
+	}
+	for _, prefix := range []string{"target", "shared", "recovery"} {
+		for _, suffix := range []string{"producerStatus", "stdoutBytes", "stdoutSHA256", "exitCode", "receiptDecoded", "receiptValidated", "receiptPresent", "receipt.outcome", "receipt.targetPodUID", "receipt.expectedFrames", "receipt.receivedFrameCount", "receipt.receivedSequences", "receipt.gaps", "receipt.duplicateSequences", "receipt.endMarker", "receipt.closeCode", "receipt.startedAtUTC", "receipt.endedAtUTC", "receipt.twimlStatus", "receipt.twimlSHA256"} {
+			key := prefix + "." + suffix
+			allowed[key] = true
+			if _, ok := evidence[key]; !ok {
+				return fmt.Errorf("voice websocket benchmark evidence missing %s", key)
+			}
+		}
+		if err := validateVoiceWSExchangeEvidence(evidence, prefix); err != nil {
+			return err
+		}
+	}
+	observationCount, err := boundedEvidenceInt(evidence, "availability.observationCount", 0, voiceWSSampleLimit)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < observationCount; i++ {
+		key := fmt.Sprintf("availability.observation.%02d", i)
+		allowed[key] = true
+		raw := []byte(evidence[key])
+		if err := rejectDuplicateJSONFields(raw); err != nil {
+			return fmt.Errorf("voice websocket benchmark evidence %s invalid: %w", key, err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil || len(fields) != 5 {
+			return fmt.Errorf("voice websocket benchmark evidence %s shape invalid", key)
+		}
+		for _, field := range []string{"atUTC", "known", "readyCount", "listComplete", "readyUIDs"} {
+			if _, ok := fields[field]; !ok {
+				return fmt.Errorf("voice websocket benchmark evidence %s missing %s", key, field)
+			}
+		}
+		var observation struct {
+			AtUTC        string   `json:"atUTC"`
+			Known        bool     `json:"known"`
+			ReadyCount   int      `json:"readyCount"`
+			ListComplete bool     `json:"listComplete"`
+			ReadyUIDs    []string `json:"readyUIDs"`
+		}
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&observation); err != nil {
+			return fmt.Errorf("voice websocket benchmark evidence %s invalid: %w", key, err)
+		}
+		if err := validateEvidenceTimestamp(observation.AtUTC, false); err != nil || observation.ReadyCount < 0 || observation.ReadyCount > 1024 || (observation.ListComplete && observation.ReadyCount != len(observation.ReadyUIDs)) || (!observation.ListComplete && len(observation.ReadyUIDs) != 0) {
+			return fmt.Errorf("voice websocket benchmark evidence %s contradictory", key)
+		}
+		if err := validateEvidenceUIDs(observation.ReadyUIDs); err != nil {
+			return fmt.Errorf("voice websocket benchmark evidence %s: %w", key, err)
+		}
+	}
+	for key := range evidence {
+		if !allowed[key] {
+			return fmt.Errorf("voice websocket benchmark evidence key %s is not allowed", key)
+		}
+	}
+	if evidence["schema"] != voiceWSEvidenceSchema || evidence["suite"] != voiceWSEvidenceSuite || evidence["claimScope"] != voiceWSEvidenceClaimScope || evidence["fixture.image"] != voiceWSRuntimeImage {
+		return errors.New("voice websocket benchmark evidence schema/scope differs")
+	}
+	if !oneOf(evidence["phase"], "execute-started", "target-observed", "exchanges-observed", "replacement-observed", "execute-complete", "oracle-complete", "oracle-invalid") {
+		return errors.New("voice websocket benchmark evidence phase invalid")
+	}
+	if !oneOf(evidence["oracle.status"], "not-observed", "observed-no-action", "observed-replacement-interruption", "invalid-availability", "invalid-original", "invalid-shared-probe", "invalid-no-action", "invalid-replacement-identity", "invalid-target-outcome", "invalid-shared-target", "invalid-endpoint-binding", "invalid-timeline", "invalid-recovery") {
+		return errors.New("voice websocket benchmark evidence oracle status invalid")
+	}
+	for _, key := range []string{"source.runtimeBotSHA256", "source.serverSHA256", "source.clientSHA256"} {
+		if !isLowerHexSHA256(evidence[key]) {
+			return fmt.Errorf("voice websocket benchmark evidence %s invalid", key)
+		}
+	}
+	if evidence["source.runtimeBotSHA256"] != voiceWSRuntimeBotSHA256 || evidence["source.serverSHA256"] != voiceWSServerSourceSHA256() || evidence["source.clientSHA256"] != voiceWSClientSourceSHA256() {
+		return errors.New("voice websocket benchmark evidence source pin differs")
+	}
+	for _, key := range []string{"original.apiAbsent", "availability.originalSeen", "availability.originalAbsentSeen", "availability.readyUIDListComplete", "availability.observationsComplete"} {
+		if _, err := strconv.ParseBool(evidence[key]); err != nil {
+			return fmt.Errorf("voice websocket benchmark evidence %s invalid", key)
+		}
+	}
+	for _, key := range []string{"availability.samples", "availability.failures", "availability.readyUIDCount"} {
+		if _, err := boundedEvidenceInt(evidence, key, 0, 100000); err != nil {
+			return err
+		}
+	}
+	if _, err := boundedEvidenceInt(evidence, "availability.minimumReady", -1, 1024); err != nil {
+		return err
+	}
+	if evidence["availability.samplePeriodMillis"] != strconv.FormatInt(voiceWSAvailabilityPeriod.Milliseconds(), 10) {
+		return errors.New("voice websocket benchmark evidence sample period differs")
+	}
+	if err := validateEvidenceUIDs([]string{evidence["original.podUID"], evidence["replacement.podUID"]}); err != nil {
+		return err
+	}
+	for _, key := range []string{"original.deletionTimestamp", "original.absenceObservedAt", "replacement.observedAt"} {
+		if err := validateEvidenceTimestamp(evidence[key], true); err != nil {
+			return fmt.Errorf("voice websocket benchmark evidence %s invalid", key)
+		}
+	}
+	readyCount, _ := strconv.Atoi(evidence["availability.readyUIDCount"])
+	readyComplete, _ := strconv.ParseBool(evidence["availability.readyUIDListComplete"])
+	if readyComplete {
+		ready := splitNonempty(evidence["availability.readyUIDs"])
+		if len(ready) != readyCount || len(ready) > voiceWSReadyUIDLimit {
+			return errors.New("voice websocket benchmark evidence ready UID count differs")
+		}
+		if err := validateEvidenceUIDs(ready); err != nil {
+			return err
+		}
+		if !sort.StringsAreSorted(ready) || hasDuplicateStrings(ready) {
+			return errors.New("voice websocket benchmark evidence ready UID list is not a sorted set")
+		}
+	} else if evidence["availability.readyUIDs"] != "BOUND_EXCEEDED" || readyCount <= voiceWSReadyUIDLimit {
+		return errors.New("voice websocket benchmark evidence ready UID overflow differs")
+	}
+	samples, _ := strconv.Atoi(evidence["availability.samples"])
+	observationsComplete, _ := strconv.ParseBool(evidence["availability.observationsComplete"])
+	if observationsComplete != (observationCount == samples) {
+		return errors.New("voice websocket benchmark evidence observation completeness differs")
+	}
+	return nil
+}
+
+func validateVoiceWSExchangeEvidence(evidence map[string]string, prefix string) error {
+	status := evidence[prefix+".producerStatus"]
+	if !oneOf(status, "not-attempted", "preflight-refused", "exec-failed", "receipt-too-large", "receipt-decode-refused", "receipt-validation-refused", "validated") {
+		return fmt.Errorf("voice websocket benchmark evidence %s status invalid", prefix)
+	}
+	if _, err := boundedEvidenceInt(evidence, prefix+".stdoutBytes", 0, voiceWSReceiptLimit*2); err != nil {
+		return err
+	}
+	if _, err := boundedEvidenceInt(evidence, prefix+".exitCode", -1, 255); err != nil {
+		return err
+	}
+	for _, suffix := range []string{"receiptDecoded", "receiptValidated", "receiptPresent", "receipt.endMarker"} {
+		if _, err := strconv.ParseBool(evidence[prefix+"."+suffix]); err != nil {
+			return fmt.Errorf("voice websocket benchmark evidence %s.%s invalid", prefix, suffix)
+		}
+	}
+	if status != "not-attempted" && status != "preflight-refused" && !isLowerHexSHA256(evidence[prefix+".stdoutSHA256"]) {
+		return fmt.Errorf("voice websocket benchmark evidence %s stdout hash invalid", prefix)
+	}
+	if (status == "not-attempted" || status == "preflight-refused") && evidence[prefix+".stdoutSHA256"] != "" {
+		return fmt.Errorf("voice websocket benchmark evidence %s has pre-exec stdout hash", prefix)
+	}
+	present, _ := strconv.ParseBool(evidence[prefix+".receiptPresent"])
+	validated, _ := strconv.ParseBool(evidence[prefix+".receiptValidated"])
+	decoded, _ := strconv.ParseBool(evidence[prefix+".receiptDecoded"])
+	if validated != (status == "validated") || validated && (!present || !decoded) {
+		return fmt.Errorf("voice websocket benchmark evidence %s validation flags contradict status", prefix)
+	}
+	if decoded != (status == "validated" || status == "receipt-validation-refused") || present && !decoded {
+		return fmt.Errorf("voice websocket benchmark evidence %s decode flags contradict status", prefix)
+	}
+	if !present {
+		for _, suffix := range []string{"receipt.outcome", "receipt.targetPodUID", "receipt.receivedSequences", "receipt.startedAtUTC", "receipt.endedAtUTC", "receipt.twimlSHA256"} {
+			if evidence[prefix+"."+suffix] != "" {
+				return fmt.Errorf("voice websocket benchmark evidence %s has receipt data without receipt", prefix)
+			}
+		}
+		for _, suffix := range []string{"receipt.expectedFrames", "receipt.receivedFrameCount", "receipt.gaps", "receipt.duplicateSequences", "receipt.closeCode", "receipt.twimlStatus"} {
+			if evidence[prefix+"."+suffix] != "0" {
+				return fmt.Errorf("voice websocket benchmark evidence %s has receipt counters without receipt", prefix)
+			}
+		}
+		if evidence[prefix+".receipt.endMarker"] != "false" {
+			return fmt.Errorf("voice websocket benchmark evidence %s has end marker without receipt", prefix)
+		}
+		return nil
+	}
+	if !decoded || !oneOf(evidence[prefix+".receipt.outcome"], "completed", "early-close", "protocol-error") || !isLowerHexSHA256(evidence[prefix+".receipt.twimlSHA256"]) {
+		return fmt.Errorf("voice websocket benchmark evidence %s receipt binding invalid", prefix)
+	}
+	if err := validateEvidenceUIDs([]string{evidence[prefix+".receipt.targetPodUID"]}); err != nil {
+		return err
+	}
+	started, err := time.Parse(time.RFC3339Nano, evidence[prefix+".receipt.startedAtUTC"])
+	if err != nil {
+		return err
+	}
+	ended, err := time.Parse(time.RFC3339Nano, evidence[prefix+".receipt.endedAtUTC"])
+	if err != nil {
+		return err
+	}
+	if ended.Before(started) {
+		return fmt.Errorf("voice websocket benchmark evidence %s receipt timeline invalid", prefix)
+	}
+	expected, err := boundedEvidenceInt(evidence, prefix+".receipt.expectedFrames", 1, 64)
+	if err != nil {
+		return err
+	}
+	received, err := boundedEvidenceInt(evidence, prefix+".receipt.receivedFrameCount", 0, 64)
+	if err != nil {
+		return err
+	}
+	sequences, err := parseEvidenceInts(evidence[prefix+".receipt.receivedSequences"], 64)
+	if err != nil || len(sequences) != received {
+		return fmt.Errorf("voice websocket benchmark evidence %s received sequences invalid", prefix)
+	}
+	for _, sequence := range sequences {
+		if sequence < 1 || sequence > expected {
+			return fmt.Errorf("voice websocket benchmark evidence %s sequence outside request", prefix)
+		}
+	}
+	unique := map[int]bool{}
+	for _, sequence := range sequences {
+		unique[sequence] = true
+	}
+	gaps, err := boundedEvidenceInt(evidence, prefix+".receipt.gaps", 0, expected)
+	if err != nil {
+		return err
+	}
+	duplicates, err := boundedEvidenceInt(evidence, prefix+".receipt.duplicateSequences", 0, received)
+	if err != nil {
+		return err
+	}
+	if gaps != expected-len(unique) || duplicates != received-len(unique) {
+		return fmt.Errorf("voice websocket benchmark evidence %s gap/duplicate counts differ", prefix)
+	}
+	closeCode, err := boundedEvidenceInt(evidence, prefix+".receipt.closeCode", 0, 4999)
+	if err != nil {
+		return err
+	}
+	if _, err := boundedEvidenceInt(evidence, prefix+".receipt.twimlStatus", 100, 599); err != nil {
+		return err
+	}
+	endMarker, _ := strconv.ParseBool(evidence[prefix+".receipt.endMarker"])
+	switch evidence[prefix+".receipt.outcome"] {
+	case "completed":
+		if received != expected || gaps != 0 || duplicates != 0 || !endMarker || closeCode != 1000 {
+			return fmt.Errorf("voice websocket benchmark evidence %s completion contradicts receipt", prefix)
+		}
+		for i, sequence := range sequences {
+			if sequence != i+1 {
+				return fmt.Errorf("voice websocket benchmark evidence %s completed sequence differs", prefix)
+			}
+		}
+	case "early-close":
+		if received >= expected || endMarker {
+			return fmt.Errorf("voice websocket benchmark evidence %s early close contradicts receipt", prefix)
+		}
+	}
+	return nil
+}
+
+func boundedEvidenceInt(evidence map[string]string, key string, minimum, maximum int) (int, error) {
+	value, err := strconv.Atoi(evidence[key])
+	if err != nil || value < minimum || value > maximum {
+		return 0, fmt.Errorf("voice websocket benchmark evidence %s invalid", key)
+	}
+	return value, nil
+}
+
+func validateEvidenceTimestamp(value string, optional bool) error {
+	if value == "" && optional {
+		return nil
+	}
+	_, err := time.Parse(time.RFC3339Nano, value)
+	return err
+}
+
+func validateEvidenceUIDs(values []string) error {
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if len(value) > 128 {
+			return errors.New("voice websocket benchmark evidence UID exceeds bound")
+		}
+		for _, c := range value {
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == ':' || c == '-') {
+				return errors.New("voice websocket benchmark evidence UID has invalid character")
+			}
+		}
+	}
+	return nil
+}
+
+func isLowerHexSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, c := range value {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func oneOf(value string, allowed ...string) bool {
+	return slices.Contains(allowed, value)
+}
+
+func joinInts(values []int) string {
+	parts := make([]string, len(values))
+	for i, value := range values {
+		parts[i] = strconv.Itoa(value)
+	}
+	return strings.Join(parts, ",")
+}
+
+func parseEvidenceInts(value string, limit int) ([]int, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parts := strings.Split(value, ",")
+	if len(parts) > limit {
+		return nil, errors.New("voice websocket benchmark evidence integer list exceeds bound")
+	}
+	values := make([]int, len(parts))
+	for i, part := range parts {
+		parsed, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = parsed
+	}
+	return values, nil
+}
+
+func splitNonempty(value string) []string {
+	if value == "" {
+		return nil
+	}
+	return strings.Split(value, ",")
+}
+
+func sortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
+}
+
+func hasDuplicateStrings(values []string) bool {
+	for i := 1; i < len(values); i++ {
+		if values[i] == values[i-1] {
+			return true
+		}
+	}
+	return false
 }
 
 func voiceWSReceiptCompleted(r voiceWSReceipt) bool {
@@ -529,59 +1065,75 @@ func voiceWSReceiptCompleted(r voiceWSReceipt) bool {
 	return true
 }
 
-func performVoiceWS(ctx context.Context, env *core.Env, service string, serviceUID types.UID, selector map[string]string, sessionID string, frames int, interval time.Duration, expectedProducerUID types.UID) (voiceWSReceipt, error) {
+func performVoiceWS(ctx context.Context, env *core.Env, service string, serviceUID types.UID, selector map[string]string, sessionID string, frames int, interval time.Duration, expectedProducerUID types.UID) (voiceWSExchangeObservation, error) {
+	observation := voiceWSExchangeObservation{ProducerStatus: "preflight-refused", ProducerExitCode: -1}
 	var receipt voiceWSReceipt
 	if frames < 1 || frames > 64 || interval < 0 || interval > 2*time.Second {
-		return receipt, errors.New("voice websocket producer bounds invalid")
+		return observation, errors.New("voice websocket producer bounds invalid")
 	}
 	deadline := voiceWSExecTimeout
 	if callerDeadline, ok := ctx.Deadline(); ok && time.Until(callerDeadline) < deadline {
 		deadline = time.Until(callerDeadline)
 	}
 	if deadline <= time.Second {
-		return receipt, errors.New("voice websocket caller deadline too short")
+		return observation, errors.New("voice websocket caller deadline too short")
 	}
 	execCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	if err := validateVoiceWSService(execCtx, env, service, serviceUID, selector); err != nil {
-		return receipt, err
+		return observation, err
 	}
 	producer, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(execCtx, voiceWSProducer, metav1.GetOptions{})
 	if err != nil || producer.UID != expectedProducerUID || !podReady(producer) || producer.DeletionTimestamp != nil {
-		return receipt, fmt.Errorf("voice websocket producer identity/readiness invalid: pod=%v err=%v", producer, err)
+		return observation, fmt.Errorf("voice websocket producer identity/readiness invalid: pod=%v err=%v", producer, err)
 	}
 	base := fmt.Sprintf("http://%s:%d", service, voiceWSPort)
 	result := env.ExecWithTimeout(execCtx, voiceWSProducer, "producer", deadline, []string{"python3", "-B", "-c", voiceWSClientSource, base, sessionID, strconv.Itoa(frames), strconv.FormatFloat(interval.Seconds(), 'f', 3, 64)})
 	raw := []byte(result.Stdout)
+	observation.ProducerStdoutBytes = len(raw)
+	observation.ProducerStdoutSHA256 = fmt.Sprintf("%x", sha256.Sum256(raw))
+	observation.ProducerExitCode = result.ExitCode
 	env.Log.Logf("c2-voice-websocket-continuity receipt service=%s producerUID=%s stdoutBytes=%d stdoutSHA256=%x exit=%d", service, producer.UID, len(raw), sha256.Sum256(raw), result.ExitCode)
 	if result.Err != nil || result.ExitCode != 0 {
-		return receipt, fmt.Errorf("voice websocket producer failed: exit=%d err=%v stderr=%s", result.ExitCode, result.Err, truncateSessionDetail(result.Stderr))
+		observation.ProducerStatus = "exec-failed"
+		return observation, fmt.Errorf("voice websocket producer failed: exit=%d err=%v stderr=%s", result.ExitCode, result.Err, truncateSessionDetail(result.Stderr))
 	}
 	if len(raw) > voiceWSReceiptLimit {
-		return receipt, fmt.Errorf("voice websocket receipt exceeds %d bytes", voiceWSReceiptLimit)
+		observation.ProducerStatus = "receipt-too-large"
+		return observation, fmt.Errorf("voice websocket receipt exceeds %d bytes", voiceWSReceiptLimit)
 	}
 	if err := rejectDuplicateJSONFields(raw); err != nil {
-		return receipt, err
+		observation.ProducerStatus = "receipt-decode-refused"
+		return observation, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&receipt); err != nil {
-		return receipt, fmt.Errorf("decode voice websocket receipt: %w", err)
+		observation.ProducerStatus = "receipt-decode-refused"
+		return observation, fmt.Errorf("decode voice websocket receipt: %w", err)
 	}
 	if err := ensureJSONEOF(dec); err != nil {
-		return receipt, err
+		observation.ProducerStatus = "receipt-decode-refused"
+		return observation, err
 	}
+	observation.ReceiptDecoded = true
 	if err := validateVoiceWSReceipt(receipt, base, sessionID, frames); err != nil {
-		return receipt, err
+		observation.ProducerStatus = "receipt-validation-refused"
+		return observation, err
 	}
+	observation.Receipt = receipt
 	if err := validateVoiceWSService(execCtx, env, service, serviceUID, selector); err != nil {
-		return receipt, err
+		observation.ProducerStatus = "receipt-validation-refused"
+		return observation, err
 	}
 	producerAfter, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(execCtx, voiceWSProducer, metav1.GetOptions{})
 	if err != nil || producerAfter.UID != expectedProducerUID || !podReady(producerAfter) {
-		return receipt, fmt.Errorf("voice websocket producer identity changed after exchange: pod=%v err=%v", producerAfter, err)
+		observation.ProducerStatus = "receipt-validation-refused"
+		return observation, fmt.Errorf("voice websocket producer identity changed after exchange: pod=%v err=%v", producerAfter, err)
 	}
-	return receipt, nil
+	observation.ReceiptValidated = true
+	observation.ProducerStatus = "validated"
+	return observation, nil
 }
 
 func validateVoiceWSReceipt(r voiceWSReceipt, base, sessionID string, frames int) error {
@@ -642,6 +1194,15 @@ func sampleVoiceWSAvailability(ctx context.Context, env *core.Env, serviceUID, t
 			out.Failures++
 		} else {
 			out.Samples++
+			if len(out.Observations) < voiceWSSampleLimit {
+				ready := make([]string, len(uids))
+				for i, uid := range uids {
+					ready[i] = string(uid)
+				}
+				out.Observations = append(out.Observations, voiceWSAvailabilityObservation{AtUTC: time.Now().UTC().Format(time.RFC3339Nano), Known: true, ReadyUIDs: ready})
+			} else {
+				out.ObservationOverflow = true
+			}
 			if out.MinimumReady < 0 || len(uids) < out.MinimumReady {
 				out.MinimumReady = len(uids)
 			}

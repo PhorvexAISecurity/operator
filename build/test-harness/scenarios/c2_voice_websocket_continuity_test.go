@@ -2,9 +2,12 @@ package scenarios
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"github.com/r6security/phoenix-test-harness/defenders"
 	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	"github.com/r6security/phoenix-test-harness/internal/report"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -108,6 +112,229 @@ func TestVoiceWSOracleNoActionAndTimerReplacementAreDiscriminating(t *testing.T)
 	rotate.availability.MinimumReady = 1
 	if _, err = rotate.SuccessOracle(context.Background(), nil); err == nil {
 		t.Fatal("availability-floor breach accepted")
+	}
+}
+
+func validatedVoiceWSObservation(t *testing.T, receipt voiceWSReceipt) voiceWSExchangeObservation {
+	t.Helper()
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return voiceWSExchangeObservation{
+		ProducerStatus:       "validated",
+		ProducerStdoutBytes:  len(raw),
+		ProducerStdoutSHA256: fmt.Sprintf("%x", sha256.Sum256(raw)),
+		ProducerExitCode:     0,
+		ReceiptDecoded:       true,
+		ReceiptValidated:     true,
+		Receipt:              receipt,
+	}
+}
+
+func voiceWSEvidenceNoActionState(t *testing.T) c2VoiceWebSocketContinuity {
+	t.Helper()
+	target := completeVoiceWSReceipt("old-uid", voiceWSExpectedFrames)
+	shared := completeVoiceWSReceipt("peer-1", 2)
+	return c2VoiceWebSocketContinuity{
+		originalUID:       types.UID("old-uid"),
+		receipt:           target,
+		sharedProbe:       shared,
+		targetObservation: validatedVoiceWSObservation(t, target),
+		sharedObservation: validatedVoiceWSObservation(t, shared),
+		availability: voiceWSAvailability{
+			Samples:           2,
+			MinimumReady:      3,
+			OriginalSeen:      true,
+			ObservedReadyUIDs: []string{"old-uid", "peer-1", "peer-2"},
+			Observations: []voiceWSAvailabilityObservation{
+				{AtUTC: "2026-09-21T00:00:00Z", Known: true, ReadyUIDs: []string{"old-uid", "peer-1", "peer-2"}},
+				{AtUTC: "2026-09-21T00:00:01Z", Known: true, ReadyUIDs: []string{"old-uid", "peer-1", "peer-2"}},
+			},
+		},
+	}
+}
+
+func voiceWSEvidenceReplacementState(t *testing.T) c2VoiceWebSocketContinuity {
+	t.Helper()
+	state := voiceWSEvidenceNoActionState(t)
+	early := completeVoiceWSReceipt("old-uid", voiceWSExpectedFrames)
+	early.Outcome = "early-close"
+	early.EndMarker = false
+	early.CloseCode = 1006
+	early.ReceivedSequences = []int{1, 2, 3, 4}
+	early.Gaps = voiceWSExpectedFrames - len(early.ReceivedSequences)
+	early.Failure = "SECRET-RECEIPT-FAILURE"
+	recovery := completeVoiceWSReceipt("new-uid", 2)
+	state.receipt = early
+	state.targetObservation = validatedVoiceWSObservation(t, early)
+	state.replacementUID = types.UID("new-uid")
+	state.originalAPIAbsent = true
+	state.originalAbsenceObservedAt = "2026-09-21T00:00:01Z"
+	state.replacementObservedAt = "2026-09-21T00:00:02Z"
+	state.recovery = recovery
+	state.recoveryObservation = validatedVoiceWSObservation(t, recovery)
+	state.availability.MinimumReady = 2
+	state.availability.OriginalAbsentSeen = true
+	state.availability.ObservedReadyUIDs = []string{"old-uid", "new-uid", "peer-1", "peer-2"}
+	state.availability.Observations[1] = voiceWSAvailabilityObservation{AtUTC: "2026-09-21T00:00:01Z", Known: true, ReadyUIDs: []string{"new-uid", "peer-1", "peer-2"}}
+	return state
+}
+
+type voiceWSEvidenceRunnerScenario struct {
+	name  string
+	mode  string
+	state c2VoiceWebSocketContinuity
+	t     *testing.T
+}
+
+func (s *voiceWSEvidenceRunnerScenario) Metadata() core.ScenarioMeta {
+	return core.ScenarioMeta{Name: s.name, Category: core.CategoryR6Claimed, Source: "voice benchmark evidence JSONL integration control", R6ResponseTag: core.R6Partial, R6Justification: "test-only wrapper exercises the voice producer evidence boundary without claiming defensive attribution", BenignControl: true, Realism: core.RealismExecutable, Mechanism: "test wrapper over voice evidence producer", ClaimLimits: voiceWSEvidenceClaimScope}
+}
+
+func (s *voiceWSEvidenceRunnerScenario) Setup(context.Context, *core.Env) error {
+	s.state = c2VoiceWebSocketContinuity{}
+	return nil
+}
+
+func (s *voiceWSEvidenceRunnerScenario) Execute(context.Context, *core.Env) (core.AttackResult, error) {
+	switch s.mode {
+	case "no-action":
+		s.state = voiceWSEvidenceNoActionState(s.t)
+		result, err := s.state.attackResult([]string{"actual bounded producer receipt"}, "execute-complete", nil)
+		result.Notes = map[string]string{"legacySecret": "SECRET-LEGACY-NOTE"}
+		return result, err
+	case "replacement":
+		s.state = voiceWSEvidenceReplacementState(s.t)
+		result, err := s.state.attackResult([]string{"actual bounded early-close and recovery receipts"}, "execute-complete", nil)
+		result.Notes = map[string]string{"legacySecret": "SECRET-LEGACY-NOTE"}
+		return result, err
+	case "invalid-partial":
+		raw := []byte(`{"version":1,"partial":"SECRET-PARTIAL-PAYLOAD"}`)
+		target := completeVoiceWSReceipt("old-uid", voiceWSExpectedFrames)
+		s.state.originalUID = types.UID("old-uid")
+		s.state.receipt = target
+		s.state.targetObservation = validatedVoiceWSObservation(s.t, target)
+		s.state.sharedObservation = voiceWSExchangeObservation{ProducerStatus: "exec-failed", ProducerStdoutBytes: len(raw), ProducerStdoutSHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), ProducerExitCode: -1}
+		s.state.availability = voiceWSAvailability{Samples: 1, MinimumReady: 2, OriginalSeen: true, ObservedReadyUIDs: []string{"old-uid", "peer-1"}, Observations: []voiceWSAvailabilityObservation{{AtUTC: "2026-09-21T00:00:00Z", Known: true, ReadyUIDs: []string{"old-uid", "peer-1"}}}}
+		result, err := s.state.attackResult([]string{"producer started"}, "exchanges-observed", errors.New("SECRET-EXEC-ERROR"))
+		result.Notes = map[string]string{"legacySecret": "SECRET-LEGACY-NOTE"}
+		return result, err
+	default:
+		return core.AttackResult{}, errors.New("unknown voice evidence test mode")
+	}
+}
+
+func (s *voiceWSEvidenceRunnerScenario) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
+	return s.state.SuccessOracle(ctx, env)
+}
+
+func (*voiceWSEvidenceRunnerScenario) Teardown(context.Context, *core.Env) error { return nil }
+
+func TestVoiceWSBenchmarkEvidenceSurvivesRunnerJSONLBoundedAndSanitized(t *testing.T) {
+	const prefix = "voice-evidence-jsonl-"
+	for _, mode := range []string{"no-action", "replacement", "invalid-partial"} {
+		name := prefix + mode
+		if registered, ok := core.LookupScenario(name); ok {
+			registered.(*voiceWSEvidenceRunnerScenario).t = t
+		} else {
+			core.RegisterScenario(&voiceWSEvidenceRunnerScenario{name: name, mode: mode, t: t})
+		}
+	}
+	path := filepath.Join(t.TempDir(), "metrics.jsonl")
+	writer, err := core.NewMetricWriter(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	factory := func(_, _ string, _ int, _ int64, _ string) (*core.Env, func() error, error) {
+		return &core.Env{Config: config.TargetConfig{Namespace: "owned"}, Log: &ctLogger{}, Guard: ctGuard{}}, func() error { return nil }, nil
+	}
+	runner := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: t.TempDir(), ScenarioFilter: map[string]bool{prefix + "no-action": true, prefix + "replacement": true, prefix + "invalid-partial": true}, DefenderFilter: map[string]bool{"d-nomtd": true}, CleanupTimeout: 2 * time.Second}, factory, writer, nil)
+	rows, err := runner.Run(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows=%d want 3", len(rows))
+	}
+	read, err := report.ReadMetricsFile(path)
+	if err != nil || len(read.Undecodable) != 0 || len(read.Metrics) != 3 {
+		t.Fatalf("read=%+v err=%v", read, err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"SECRET-LEGACY-NOTE", "SECRET-EXEC-ERROR", "SECRET-PARTIAL-PAYLOAD", "SECRET-RECEIPT-FAILURE"} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatalf("unsafe value %q leaked to JSONL", secret)
+		}
+	}
+	for _, row := range read.Metrics {
+		if err := validateVoiceWSBenchmarkEvidence(row.BenchmarkEvidence); err != nil {
+			t.Fatalf("%s evidence invalid after JSONL: %v", row.Scenario, err)
+		}
+		switch row.Scenario {
+		case prefix + "no-action":
+			if row.MeasurementState().Status != core.MeasurementValid || !row.OracleAchieved || row.BenchmarkEvidence["oracle.status"] != "observed-no-action" || row.BenchmarkEvidence["target.receipt.receivedSequences"] != "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20" {
+				t.Fatalf("no-action row=%+v", row)
+			}
+		case prefix + "replacement":
+			if row.MeasurementState().Status != core.MeasurementValid || row.OracleAchieved || row.BenchmarkEvidence["oracle.status"] != "observed-replacement-interruption" || row.BenchmarkEvidence["replacement.podUID"] != "new-uid" || row.BenchmarkEvidence["recovery.receipt.targetPodUID"] != "new-uid" {
+				t.Fatalf("replacement row=%+v", row)
+			}
+		case prefix + "invalid-partial":
+			if row.MeasurementState().Status != core.MeasurementInvalid || row.IsScored() || row.BenchmarkEvidence["oracle.status"] != "not-observed" || row.BenchmarkEvidence["target.producerStatus"] != "validated" || row.BenchmarkEvidence["target.receipt.receivedFrameCount"] != "20" || row.BenchmarkEvidence["shared.producerStatus"] != "exec-failed" || !isLowerHexSHA256(row.BenchmarkEvidence["shared.stdoutSHA256"]) {
+				t.Fatalf("invalid partial row=%+v", row)
+			}
+		}
+	}
+}
+
+func TestVoiceWSBenchmarkEvidenceRefusesUnknownContradictoryAndUnboundedData(t *testing.T) {
+	state := voiceWSEvidenceNoActionState(t)
+	if err := state.updateVoiceWSBenchmarkEvidence("execute-complete", "not-observed"); err != nil {
+		t.Fatal(err)
+	}
+	clone := func() map[string]string {
+		out := make(map[string]string, len(state.benchmarkEvidence))
+		for key, value := range state.benchmarkEvidence {
+			out[key] = value
+		}
+		return out
+	}
+	for name, mutate := range map[string]func(map[string]string){
+		"unknown-key": func(e map[string]string) { e["legacy.notes"] = "unsafe" },
+		"oversized-value": func(e map[string]string) {
+			e["target.receipt.outcome"] = strings.Repeat("x", voiceWSEvidenceMaxValue+1)
+		},
+		"malformed-hash":     func(e map[string]string) { e["target.stdoutSHA256"] = "ABC" },
+		"changed-source-pin": func(e map[string]string) { e["source.serverSHA256"] = strings.Repeat("b", 64) },
+		"malformed-time":     func(e map[string]string) { e["target.receipt.startedAtUTC"] = "yesterday" },
+		"contradictory-list": func(e map[string]string) { e["target.receipt.receivedFrameCount"] = "19" },
+		"contradictory-status": func(e map[string]string) {
+			e["target.receiptValidated"] = "false"
+		},
+		"too-many-sequences": func(e map[string]string) { e["target.receipt.receivedSequences"] = strings.Repeat("1,", 64) + "1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			evidence := clone()
+			mutate(evidence)
+			if err := validateVoiceWSBenchmarkEvidence(evidence); err == nil {
+				t.Fatal("unsafe evidence accepted")
+			}
+		})
+	}
+	state.availability.ObservedReadyUIDs = nil
+	for i := 0; i < voiceWSReadyUIDLimit+1; i++ {
+		state.availability.ObservedReadyUIDs = append(state.availability.ObservedReadyUIDs, fmt.Sprintf("pod-%02d", i))
+	}
+	if err := state.updateVoiceWSBenchmarkEvidence("execute-complete", "not-observed"); err != nil {
+		t.Fatal(err)
+	}
+	if state.benchmarkEvidence["availability.readyUIDs"] != "BOUND_EXCEEDED" || state.benchmarkEvidence["availability.readyUIDListComplete"] != "false" || state.benchmarkEvidence["availability.readyUIDCount"] != "17" {
+		t.Fatalf("overflow marker=%v", state.benchmarkEvidence)
 	}
 }
 
@@ -278,7 +505,7 @@ func TestVoiceWSProducerUsesExplicitThirtySecondForegroundExec(t *testing.T) {
 	})
 	t.Cleanup(func() { core.SetExecer(nil); core.SetTimedExecer(nil) })
 	got, err := performVoiceWS(t.Context(), env, voiceWSTargetService, serviceUID, selector, "voice-1", voiceWSExpectedFrames, voiceWSFrameInterval, producerUID)
-	if err != nil || !voiceWSReceiptCompleted(got) || defaultCalls != 0 || timedCalls != 1 {
+	if err != nil || !voiceWSReceiptCompleted(got.Receipt) || got.ProducerStatus != "validated" || !got.ReceiptDecoded || !got.ReceiptValidated || got.ProducerStdoutSHA256 != fmt.Sprintf("%x", sha256.Sum256(raw)) || defaultCalls != 0 || timedCalls != 1 {
 		t.Fatalf("receipt=%+v default/timed=%d/%d err=%v", got, defaultCalls, timedCalls, err)
 	}
 	core.SetTimedExecer(func(ctx context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, timeout time.Duration, _ []string) core.ExecResult {
@@ -291,8 +518,9 @@ func TestVoiceWSProducerUsesExplicitThirtySecondForegroundExec(t *testing.T) {
 	})
 	shortCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
-	if _, err := performVoiceWS(shortCtx, env, voiceWSTargetService, serviceUID, selector, "voice-1", voiceWSExpectedFrames, voiceWSFrameInterval, producerUID); err == nil || !strings.Contains(err.Error(), "producer failed") || !strings.Contains(err.Error(), "deadline exceeded") {
-		t.Fatalf("earlier parent deadline was not a producer failure: %v", err)
+	partial, err := performVoiceWS(shortCtx, env, voiceWSTargetService, serviceUID, selector, "voice-1", voiceWSExpectedFrames, voiceWSFrameInterval, producerUID)
+	if err == nil || !strings.Contains(err.Error(), "producer failed") || !strings.Contains(err.Error(), "deadline exceeded") || partial.ProducerStatus != "exec-failed" || partial.ProducerStdoutBytes != len(`{"partial":true}`) || !isLowerHexSHA256(partial.ProducerStdoutSHA256) || partial.ReceiptDecoded || partial.ReceiptValidated {
+		t.Fatalf("earlier parent deadline observation=%+v err=%v", partial, err)
 	}
 }
 
