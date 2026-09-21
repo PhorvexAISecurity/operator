@@ -552,7 +552,7 @@ Severity: HIGH · Tier: 2 · Fixes: T11-M012
 
 ### M-71 · adapter-rotate: no post-unload verification; retry errors instead of no-op · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: HIGH · Tier: 2 · Fixes: none
+Severity: HIGH · Tier: 2 · Fixes: T9-M071
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
@@ -1396,7 +1396,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T3-M033
 
 ### M-35 · `endpoint-rotate`: unconditional cover, conditional effect · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T9-M035
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -2611,7 +2611,7 @@ Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
 
 ### M-170 · APT catalogue labels technique-specific attacks that execute the same generic marker routine · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: POST25-CATALOGUE-CLAIMS, T5-M170
+Severity: HIGH · Tier: unassigned · Fixes: POST25-CATALOGUE-CLAIMS, POST25-CHECKPOINT-LOCAL-FIXTURE, T5-M170
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.
