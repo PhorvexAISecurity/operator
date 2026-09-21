@@ -1388,3 +1388,15 @@ fixes:
     stacked_on: []
     branch: post25-m043-model-shard-claims
     head_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+  POST25-SESSION-GVK:
+    directory: fixes/POST25-SESSION-GVK
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on:
+    - POST25-M043
+    branch: post25-session-gvk
+    head_sha: null

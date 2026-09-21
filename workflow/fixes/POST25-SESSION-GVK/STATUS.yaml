@@ -1,0 +1,117 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: ce754be24f5c24a08a40e2edce5d3c0ded2c0690d29f33183eb953d618d4ff73
+    source_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+    at: '2026-09-21T01:54:26+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: AUTHORIZATION.md
+fix_id: POST25-SESSION-GVK
+issues:
+- M-170
+title: Preserve typed identity GVK in session receipts
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: post25-catalogue
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-session-gvk
+  code_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+  deployed_image: null
+  deployed_git_sha: a4235d1f20ba2de4fbf9a5c217ca707cc751db51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-session-gvk
+  base_sha: 5ad498abc94f731a3b282c7f33c8970399812a1e
+  head_sha: null
+  stacked_on:
+  - POST25-M043
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: post25-catalogue
+  action: Implement bounded typed GVK producer fix and real typed-client regressions;
+    fresh live package after review
+updated_at: '2026-09-21T01:54:26+00:00'
+follow_up_to: POST25-SESSION-OBSERVATION
+configuration_history:
+- at: '2026-09-21T01:54:23+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-21T01:54:24+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-21T01:54:26+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
