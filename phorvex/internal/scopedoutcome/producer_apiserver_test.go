@@ -85,7 +85,7 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 	}
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{
 		Tenant: namespace, Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: labels},
-		Budget:  v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}},
+		Budget:  v1alpha1.BudgetSpec{MaxGracePeriodSeconds: &grace, TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}},
 		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate)}},
 	}}
 	if err := apiClient.Create(ctx, policy); err != nil {
@@ -175,7 +175,8 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 	native := actuator.NewNativeActuator(apiClient)
 	native.SetBoundaryReader(apiClient)
 	request := actuator.Request{Tenant: namespace, Namespace: namespace, Pod: oldPod.Name, TargetUID: string(oldPod.UID),
-		PolicyName: policy.Name, PolicyUID: string(policy.UID), Action: model.ActionRotate, TickID: "m106-api-tick"}
+		PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: grace,
+		Action: model.ActionRotate, TickID: "m106-api-tick"}
 	result, err := native.Actuate(ctx, request)
 	if err != nil || !result.Emitted || result.Actuator != "native" || result.Handler != string(model.ActionRotate) {
 		t.Fatalf("actual Native receipt was not coherent: result=%+v err=%v", result, err)
@@ -203,7 +204,7 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 	}
 	replacementUID.Store(string(replacementPod.UID))
 	rotated.Store(true)
-	resolvedPolicy := model.Policy{Tenant: namespace, Namespace: namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation}
+	resolvedPolicy := model.Policy{Tenant: namespace, Namespace: namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: grace}
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: namespace, Name: oldPod.Name, UID: string(oldPod.UID)}}
 	if !producer.RecordNativeRotate(resolvedPolicy, view, request, result, acknowledgedAt) {
 		t.Fatal("actual Native receipt did not bind the prepared session")
