@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 10
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,101 @@ checks:
     at: '2026-09-20T23:36:58+00:00'
     contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 01792db78ae6bf3a7edb310b7d1c979985161baef4cd2a3b8e2e3de4b4632fae
+    source_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+    at: '2026-09-21T00:31:40+00:00'
+    approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/preflight/receipt.json
+    sha256: 2ca89b24e194b44688e418571f8cf551e77488928b53e01e661de25608ced375
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:33:38+00:00'
+  implementation:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: 04-diff.patch
+    sha256: 8053feaa59637375db738aacf5993435fbc333c97a8a60d29ca2fcdd6c2714cd
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:33:38+00:00'
+  l0:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/preflight/receipt.json
+    sha256: 2ca89b24e194b44688e418571f8cf551e77488928b53e01e661de25608ced375
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:33:38+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 10afca75eeba232c39f3360f35a4c8721ce0165c9fc132f0dbc81f90cfbddcca
+  l1:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/focused/go-test.log
+    sha256: ac50a839b211819871f6390dd30dde8c7a89568a38466268c3cb666bb69ac8ad
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:33:39+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/audit
+    - phorvex/internal/capability
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    - phorvex/internal/model
+    - phorvex/internal/runner
+    inputs_sha256: 3b07113669491b7131d585958689af5586a32e5e878b0bc99e527a8befa66a0e
+  l2:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/preflight/run-1789950380532337327/go-phorvex.log
+    sha256: 397850f38b43fca21c0081c98405147c90ef1ddf0a0149eb1a37912c06a00ef4
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:33:39+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: e531126c35ee90a2840bccb7a9bcf4aa06c8a6463c395124506fe77e3bbd90b8
+  positive_control:
+    result: PASS
+    by: post14-live-reviewer
+    artifact: evidence/incident.md
+    sha256: 01792db78ae6bf3a7edb310b7d1c979985161baef4cd2a3b8e2e3de4b4632fae
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:33:39+00:00'
+    inputs:
+    - phorvex/internal/cost
+    - phorvex/internal/decision
+    - phorvex/internal/model
+    inputs_sha256: 8c74044d26a5eb608cdd8f32343461f96fecba77c4f9a9b47fdd46e090283924
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 01792db78ae6bf3a7edb310b7d1c979985161baef4cd2a3b8e2e3de4b4632fae
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:36:06+00:00'
+    baseline_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 245ffa05296b332f70e0ed2ab6941fb8f45f161750de07c45694c83a70d65998
+    source_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
+    at: '2026-09-21T00:36:06+00:00'
+    incident_sha256: 01792db78ae6bf3a7edb310b7d1c979985161baef4cd2a3b8e2e3de4b4632fae
 fix_id: POST25-M156
 issues:
 - M-156
 title: Conservatively bound unsupported flow-cost regimes
 profile: standard
-state: AGREED
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,11 +134,11 @@ blind_derivation:
 implementation:
   branch: post25-m156
   base_sha: a8fed80a8c4f4c106823569c85ea2e484830d758
-  head_sha: null
+  head_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/251
+  reviewed_head: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -66,13 +155,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +171,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: post14-live-reviewer
-  action: Implement signed conservative phase/load contract now
-updated_at: '2026-09-20T23:36:59+00:00'
+  owner: mehrdad
+  action: Review/merge PR251 then DevOps deployment and source-matched V5 cost regime
+    live verification
+updated_at: '2026-09-21T00:38:16+00:00'
 configuration_history:
 - at: '2026-09-20T23:36:56+00:00'
   by: codex-lead
@@ -96,6 +186,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:33:25+00:00'
+  by: post14-live-reviewer
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:33:38+00:00'
+  by: post14-live-reviewer
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T00:38:14+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -113,3 +218,50 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T00:33:39+00:00'
+  by: post14-live-reviewer
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T00:33:40+00:00'
+  by: post14-live-reviewer
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T00:36:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T00:36:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-21T00:38:16+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+handoff:
+  id: POST25-M156:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8

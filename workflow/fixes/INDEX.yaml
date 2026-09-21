@@ -1502,11 +1502,11 @@ fixes:
     issues:
     - M-156
     related_issues: []
-    state: AGREED
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: post25-m156
-    head_sha: null
+    head_sha: 2edf75802495ff86b97a12cf8ec1d103a5a97f14
   T9-M035:
     directory: fixes/T9-M035
     aliases: []
