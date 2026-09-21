@@ -166,7 +166,7 @@ export function ReadStatus({ error, hasData, refreshing, updatedAt, onRetry }: {
   return <div role={error ? "alert" : "status"} className="rounded-md border border-warning/30 bg-warning/[0.04] px-3 py-2 text-xs text-muted-foreground">
     {error ? "Showing the last authorized snapshot; refresh failed." : "Refreshing this snapshot…"}
     {updatedAt ? ` Updated ${new Date(updatedAt).toLocaleTimeString()}.` : ""}
-    {error && <button type="button" className="ml-2 text-primary underline" onClick={onRetry}>Retry</button>}
+    {error ? <button type="button" className="ml-2 text-primary underline" onClick={onRetry}>Retry</button> : null}
   </div>;
 }
 export function Empty({ msg }: { msg: string }) {
