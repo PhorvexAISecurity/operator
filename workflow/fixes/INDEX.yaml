@@ -1372,7 +1372,7 @@ fixes:
     issues:
     - M-135
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: post25-m135-idle-maintenance

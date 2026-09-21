@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -24,12 +24,70 @@ checks:
     source_sha: 2d905d11110d26a50909bf9e192f1c9c9edd2479
     at: '2026-09-20T23:53:12+00:00'
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 782a3cdf32f4025f6a1bc8f4a696c080b0d73f18e675d6122420fa0b541bb2c5
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:14:32+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 4e03bdce0d381b025301b09ea880d77c080d0bcd79ac9ae3c888805fa6f59a98
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:14:32+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: 782a3cdf32f4025f6a1bc8f4a696c080b0d73f18e675d6122420fa0b541bb2c5
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:14:32+00:00'
+    inputs:
+    - phorvex
+    - workflow
+    inputs_sha256: 3f6684b2b2afec478f7d74c2d05e5aea27827f6e2e50e1dee29ce986734da43c
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-tests.txt
+    sha256: a1ae2ba2ab1078074b6e51ed8853fbfbfc7f48eeb21d9832a881ab5ebab4fe66
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:14:33+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: cd86c4dedc0a3bd6904247d2f5f3f1b123ed0715ae924ecf7c509685f6dab73f
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/full-package-tests.txt
+    sha256: 12cc1e23bf61c95dde60f9f2df4c7d363099bcaf8ca9e09b7daf29e391cf11e0
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:14:33+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: cd86c4dedc0a3bd6904247d2f5f3f1b123ed0715ae924ecf7c509685f6dab73f
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused-tests.txt
+    sha256: a1ae2ba2ab1078074b6e51ed8853fbfbfc7f48eeb21d9832a881ab5ebab4fe66
+    source_sha: 18d195b3313a8a241bb2ee8156cbb4a5b39d6020
+    at: '2026-09-21T00:14:33+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    inputs_sha256: cd86c4dedc0a3bd6904247d2f5f3f1b123ed0715ae924ecf7c509685f6dab73f
 fix_id: POST25-M135
 issues:
 - M-135
 title: Reconcile owned standing strategy during idle policy ticks
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -75,12 +133,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -90,9 +148,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: post25-catalogue
-  action: Implement signed contract now
-updated_at: '2026-09-20T23:58:35+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-21T00:14:37+00:00'
 configuration_history:
 - at: '2026-09-20T23:24:25+00:00'
   by: codex-lead
@@ -119,6 +178,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T00:14:32+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -136,3 +200,26 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T00:14:33+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T00:14:35+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-M135:9:submit
+  from: post25-catalogue
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 9
