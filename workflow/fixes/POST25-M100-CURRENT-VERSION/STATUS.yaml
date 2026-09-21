@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 12
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,106 @@ checks:
     at: '2026-09-21T04:13:12+00:00'
     contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 42823e318dbad8b922a2c39d6dd192c847109a0816dd933ead92a0bf92d98a1f
+    source_sha: 0bc68fc983b8b504433e484020288103975b3f56
+    at: '2026-09-21T05:37:26+00:00'
+    rationale: Same independently exercised runtime; two generated artifacts refreshed;
+      baselineRED/positive unchanged; live not claimed
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: e967ff3f420b4a2f3a4c42d294ef45635b9cfb840952811aabd2ee1624bc1b85
+    source_sha: 0bc68fc983b8b504433e484020288103975b3f56
+    at: '2026-09-21T05:31:08+00:00'
+    baseline_sha: 0bc68fc983b8b504433e484020288103975b3f56
+    rationale: Independent actual producer-to-runner baseline RED and positive; actual
+      API separately PASS; live debt explicit
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 42823e318dbad8b922a2c39d6dd192c847109a0816dd933ead92a0bf92d98a1f
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:37:27+00:00'
+    baseline_sha: 0bc68fc983b8b504433e484020288103975b3f56
+    rationale: Same independently exercised runtime; two generated artifacts refreshed;
+      baselineRED/positive unchanged; live not claimed
+  preflight:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: fe091b0479021baa45da6226b9294dd67da70bd7aa78fd7aabe311dc23a877e1
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:41:58+00:00'
+  implementation:
+    result: PASS
+    by: sol-post25-economics
+    artifact: 04-diff.patch
+    sha256: 905f62efa893192c644ca4bdaa3c72cbb68dd918910edf8d437307e5877caeb5
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:41:58+00:00'
+  l0:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/receipt.json
+    sha256: fe091b0479021baa45da6226b9294dd67da70bd7aa78fd7aabe311dc23a877e1
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:41:58+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 70a0e2b314a0316388e2ac206da3607affce6fbef9c80c4b2281549a78b2a110
+  l1:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/worker/api-r4.log
+    sha256: 77133887067ef0ea63a28f2e7c76531de517794291dc5cfe35024b2fb3e6e018
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:41:59+00:00'
+    inputs:
+    - phorvex/internal/controller
+    - phorvex/internal/currentinventory
+    - phorvex/internal/currentobserver
+    - phorvex/internal/ingest
+    - phorvex/internal/runner
+    inputs_sha256: b82a7b8490d7ee262ce3d6ba417d5c5fa67916cb6273173a5b54b32765b1afb3
+  l2:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/preflight/run-1789969014011295817/go-phorvex.log
+    sha256: f63cea987d75ee5eef3ae6ce836431d7b7e58eff44662c35309b9e6c2b5f72ca
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:41:59+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 091e9d302d3efaef750b4b536e18a7f92205e35cba32273027b31882a92026a7
+  positive_control:
+    result: PASS
+    by: sol-post25-economics
+    artifact: evidence/lead/ROOT-INDEPENDENT-REVIEW.json
+    sha256: 0680acb3c7973455c595878e4e79ff5bf716a164fc56baa81793cd5e8d56bbc2
+    source_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
+    at: '2026-09-21T05:41:59+00:00'
+    inputs:
+    - phorvex/internal/controller
+    - phorvex/internal/currentobserver
+    - phorvex/internal/ingest
+    - phorvex/internal/lossobserver
+    - phorvex/internal/runner
+    inputs_sha256: d313b86d0afa2db2df18ddcf647f1ea263945f989141132bb0cd6915aa1952ee
 fix_id: POST25-M100-CURRENT-VERSION
 issues:
 - M-100
 title: Bind current protected version evidence
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +139,7 @@ blind_derivation:
 implementation:
   branch: post25-m100-current-version
   base_sha: 0bc68fc983b8b504433e484020288103975b3f56
-  head_sha: null
+  head_sha: 17fea51fb0ce02d54eaf9d3216a0376ab80dd918
   stacked_on:
   - POST25-M100
 pull_request:
@@ -68,12 +162,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -83,10 +177,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-post25-economics
-  action: Implement signed current-version producer and mixed actual runner/audit
-    controls; reserve Go slot
-updated_at: '2026-09-21T04:13:12+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-21T05:42:03+00:00'
 follow_up_to: POST25-M100
 configuration_history:
 - at: '2026-09-21T04:13:09+00:00'
@@ -99,6 +193,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T05:27:33+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T05:35:22+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T05:41:58+00:00'
+  by: sol-post25-economics
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -116,3 +225,46 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T05:41:59+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T05:42:01+00:00'
+  by: sol-post25-economics
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 6c280c3e72d941323674bfe83e2f0cf046f45f026838767a964fe17c4d379f27
+  source_sha: 0bc68fc983b8b504433e484020288103975b3f56
+  at: '2026-09-21T05:31:08+00:00'
+  rationale: Independent actual producer-to-runner baseline RED and positive; actual
+    API separately PASS; live debt explicit
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 6c280c3e72d941323674bfe83e2f0cf046f45f026838767a964fe17c4d379f27
+  source_sha: 0cce8f0922baee2b1cdad3c5fe18efe764a15ff9
+  at: '2026-09-21T05:31:09+00:00'
+  baseline_sha: 0bc68fc983b8b504433e484020288103975b3f56
+  rationale: Independent actual producer-to-runner baseline RED and positive; actual
+    API separately PASS; live debt explicit
+handoff:
+  id: POST25-M100-CURRENT-VERSION:12:submit
+  from: sol-post25-economics
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 12
