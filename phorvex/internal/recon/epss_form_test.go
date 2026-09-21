@@ -130,7 +130,7 @@ func TestEPSSEntersExactlyOneLayer(t *testing.T) {
 				continue
 			}
 			src, _ := os.ReadFile(filepath.Join(root, pkg, ent.Name()))
-			count += strings.Count(string(src), "e*(c/10)") + strings.Count(string(src), "0.5*e.EPSS")
+			count += strings.Count(string(src), "e*(c/CVSSMaximum)") + strings.Count(string(src), "e*(c/10)") + strings.Count(string(src), "0.5*e.EPSS")
 		}
 	}
 	if count != 1 {

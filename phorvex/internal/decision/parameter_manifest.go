@@ -174,9 +174,15 @@ func EffectivePolicyParameterSet(pol model.Policy) (model.EffectivePolicyOverrid
 	if cost.EffectiveCostCeiling(pol) <= 0 || math.IsNaN(cost.EffectiveCostCeiling(pol)) || math.IsInf(cost.EffectiveCostCeiling(pol), 0) {
 		return model.EffectivePolicyOverrides{}, fmt.Errorf("effective cost ceiling must be positive and finite")
 	}
+	fixedBeta := pol.DisruptionAversion
+	if !pol.DisruptionAversionConfigured {
+		// An absent fixed preference is legacy mode. Its ignored carrier value
+		// cannot change the effective-policy identity.
+		fixedBeta = 0
+	}
 	values := []model.EffectivePolicyParameter{
 		{Name: "policy.lambda-seed", Unit: "dimensionless", Present: true, Value: pol.Lambda},
-		{Name: "policy.fixed-beta", Unit: "dimensionless", Present: pol.DisruptionAversionConfigured, Value: pol.DisruptionAversion},
+		{Name: "policy.fixed-beta", Unit: "dimensionless", Present: pol.DisruptionAversionConfigured, Value: fixedBeta},
 		{Name: "policy.norm-sparsity", Unit: "weight", Present: true, Value: pol.NormSparsity},
 		{Name: "policy.flow-disruption", Unit: "weight", Present: true, Value: pol.FlowDisruption},
 		{Name: "policy.secret-weight", Unit: "weight", Present: true, Value: pol.WeightSecrets},

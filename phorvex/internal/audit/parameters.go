@@ -59,6 +59,10 @@ func ensurePrivateMaterialDir(path string) error {
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return err
 	}
+	return validatePrivateMaterialDir(path)
+}
+
+func validatePrivateMaterialDir(path string) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err
@@ -100,11 +104,17 @@ func (s *ParameterMaterialStore) materialPath(kind, hash string) (string, error)
 	if s == nil || s.root == "" || !validParameterMaterialKind(kind) {
 		return "", errors.New("invalid parameter material store or kind")
 	}
+	if err := validatePrivateMaterialDir(s.root); err != nil {
+		return "", err
+	}
 	digest, err := parameterDigest(hash)
 	if err != nil {
 		return "", err
 	}
 	dir := filepath.Join(s.root, kind)
+	if err := validatePrivateMaterialDir(dir); err != nil {
+		return "", err
+	}
 	path := filepath.Join(dir, digest+".json")
 	if filepath.Dir(path) != dir {
 		return "", errors.New("parameter material path escaped its root")
@@ -150,9 +160,16 @@ func canonicalParameterMaterial(kind string, material any) ([]byte, string, erro
 }
 
 func (s *ParameterMaterialStore) documentCount() (int, error) {
+	if err := validatePrivateMaterialDir(s.root); err != nil {
+		return 0, err
+	}
 	total := 0
 	for _, kind := range []string{ParameterMaterialManifest, ParameterMaterialPolicyOverrides} {
-		entries, err := os.ReadDir(filepath.Join(s.root, kind))
+		dir := filepath.Join(s.root, kind)
+		if err := validatePrivateMaterialDir(dir); err != nil {
+			return 0, err
+		}
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return 0, err
 		}

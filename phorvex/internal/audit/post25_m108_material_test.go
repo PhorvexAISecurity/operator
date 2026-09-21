@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -239,6 +240,97 @@ func TestPost25M108MaterialStoreRejectsOversizedDocument(t *testing.T) {
 	}
 	if err := store.Store(ref, manifest, overrides); err == nil {
 		t.Fatal("oversized canonical material accepted")
+	}
+}
+
+func TestPost25M108MaterialStoreRejectsSymlinkedRootAndKindAfterInitialization(t *testing.T) {
+	ref, manifest, overrides := post25M108MaterialFixture(t, "ns/policy@uid:1", 0.25)
+
+	rootStore, err := NewParameterMaterialStore(filepath.Join(t.TempDir(), "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rootStore.Store(ref, manifest, overrides); err != nil {
+		t.Fatal(err)
+	}
+	realRoot := rootStore.root + ".real"
+	if err := os.Rename(rootStore.root, realRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realRoot, rootStore.root); err != nil {
+		t.Fatal(err)
+	}
+	if err := rootStore.Store(ref, manifest, overrides); err == nil {
+		t.Fatal("symlinked material root accepted for write")
+	}
+	if _, err := ReadParameterMaterial(strings.TrimSuffix(rootStore.root, ".parameters"), ParameterMaterialManifest, ref.ManifestHash); err == nil {
+		t.Fatal("symlinked material root accepted for read")
+	}
+
+	kindStore, err := NewParameterMaterialStore(filepath.Join(t.TempDir(), "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := kindStore.Store(ref, manifest, overrides); err != nil {
+		t.Fatal(err)
+	}
+	kindDir := filepath.Join(kindStore.root, ParameterMaterialManifest)
+	realKind := kindDir + ".real"
+	if err := os.Rename(kindDir, realKind); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realKind, kindDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := kindStore.Store(ref, manifest, overrides); err == nil {
+		t.Fatal("symlinked material kind directory accepted for write")
+	}
+	if _, err := ReadParameterMaterial(strings.TrimSuffix(kindStore.root, ".parameters"), ParameterMaterialManifest, ref.ManifestHash); err == nil {
+		t.Fatal("symlinked material kind directory accepted for read")
+	}
+}
+
+func TestPost25M108ParameterRetentionBookkeepingIsBounded(t *testing.T) {
+	logger := New(logr.Discard(), nil)
+	saturated, err := NewParameterMaterialStore(filepath.Join(t.TempDir(), "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	saturated.maxDocs = 0
+	var first, latest *model.ParameterSetReference
+	for i := 0; i <= maxParameterRetentionEntries+127; i++ {
+		ref, manifest, overrides := post25M108MaterialFixture(t, "policy-"+strconv.Itoa(i), float64(i%100)/100)
+		if i == 0 {
+			first = ref
+		}
+		if i%2 != 0 {
+			logger.SetParameterMaterialStore(saturated)
+		} else {
+			logger.SetParameterMaterialStore(nil)
+		}
+		latest = ref
+		if err := logger.RetainParameterSet("tenant-a", ref, manifest, overrides); err == nil {
+			t.Fatal("unconfigured/saturated material unexpectedly retained")
+		}
+	}
+	logger.parameterMu.Lock()
+	entries, order := len(logger.parameterRetention), len(logger.parameterOrder)
+	logger.parameterMu.Unlock()
+	if entries != maxParameterRetentionEntries || order != maxParameterRetentionEntries {
+		t.Fatalf("retention bookkeeping grew past bound: entries=%d order=%d", entries, order)
+	}
+	if got := logger.parameterMaterialStatus(first); got.status != parameterMaterialUnavailable || got.reason != "material-not-retained" {
+		t.Fatalf("evicted cache miss was not safely unavailable: %+v", got)
+	}
+	if got := logger.parameterMaterialStatus(latest); got.status != parameterMaterialFailed || got.reason != "store-write-failed" {
+		t.Fatalf("current failure was not retained explicitly: %+v", got)
+	}
+	logger.parameterMu.Lock()
+	logger.setParameterRetentionLocked(parameterMaterialKey(latest), parameterMaterialRetention{parameterMaterialRetained, ""})
+	entries, order = len(logger.parameterRetention), len(logger.parameterOrder)
+	logger.parameterMu.Unlock()
+	if entries != maxParameterRetentionEntries || order != maxParameterRetentionEntries || logger.parameterMaterialStatus(latest).status != parameterMaterialRetained {
+		t.Fatalf("same-key reuse changed bound or lost current status: entries=%d order=%d status=%+v", entries, order, logger.parameterMaterialStatus(latest))
 	}
 }
 

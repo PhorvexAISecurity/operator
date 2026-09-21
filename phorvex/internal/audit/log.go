@@ -445,6 +445,8 @@ type Logger struct {
 	degraded           map[string]bool // sink routes awaiting a subsequent successful persistence attempt
 	parameterStore     *ParameterMaterialStore
 	parameterRetention map[string]parameterMaterialRetention
+	parameterOrder     []string
+	parameterNext      int
 	parameterMu        sync.Mutex
 	// OnlySelected, when true, logs only Selected (non-noop) decisions to the logger
 	// to keep operator logs quiet; the JSON sink (if set) always gets every record.
@@ -469,9 +471,32 @@ const (
 	parameterMaterialRetained    = "retained"
 	parameterMaterialUnavailable = "unavailable"
 	parameterMaterialFailed      = "failed"
+	maxParameterRetentionEntries = MaxParameterMaterialDocuments
 )
 
 type parameterMaterialRetention struct{ status, reason string }
+
+// setParameterRetentionLocked bounds transient per-reference outcomes separately
+// from the immutable sibling store. Eviction loses only the ability to assert a
+// retention result on a later row; a miss is reported as unavailable and never
+// deletes or contradicts durable material.
+func (l *Logger) setParameterRetentionLocked(key string, retention parameterMaterialRetention) {
+	if l.parameterRetention == nil {
+		l.parameterRetention = make(map[string]parameterMaterialRetention)
+	}
+	if _, exists := l.parameterRetention[key]; exists {
+		l.parameterRetention[key] = retention
+		return
+	}
+	if len(l.parameterOrder) < maxParameterRetentionEntries {
+		l.parameterOrder = append(l.parameterOrder, key)
+	} else {
+		delete(l.parameterRetention, l.parameterOrder[l.parameterNext])
+		l.parameterOrder[l.parameterNext] = key
+		l.parameterNext = (l.parameterNext + 1) % maxParameterRetentionEntries
+	}
+	l.parameterRetention[key] = retention
+}
 
 func parameterMaterialKey(ref *model.ParameterSetReference) string {
 	if ref == nil {
@@ -516,29 +541,26 @@ func (l *Logger) RetainParameterSet(tenant string, ref *model.ParameterSetRefere
 	key := parameterMaterialKey(ref)
 	l.parameterMu.Lock()
 	defer l.parameterMu.Unlock()
-	if l.parameterRetention == nil {
-		l.parameterRetention = make(map[string]parameterMaterialRetention)
-	}
 	if err := model.VerifyParameterSet(ref, &manifest, &overrides); err != nil {
-		l.parameterRetention[key] = parameterMaterialRetention{parameterMaterialFailed, "material-invalid"}
+		l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialFailed, "material-invalid"})
 		parameterMaterialErrors.WithLabelValues(parameterMaterialFailed).Inc()
 		l.log.Error(err, "parameter material verification failed", "tenant", tenant)
 		return err
 	}
 	if l.parameterStore == nil {
 		err := errors.New("parameter material store is not configured")
-		l.parameterRetention[key] = parameterMaterialRetention{parameterMaterialUnavailable, "store-unconfigured"}
+		l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialUnavailable, "store-unconfigured"})
 		parameterMaterialErrors.WithLabelValues(parameterMaterialUnavailable).Inc()
 		l.log.Error(err, "parameter material retention unavailable", "tenant", tenant)
 		return err
 	}
 	if err := l.parameterStore.Store(ref, manifest, overrides); err != nil {
-		l.parameterRetention[key] = parameterMaterialRetention{parameterMaterialFailed, "store-write-failed"}
+		l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialFailed, "store-write-failed"})
 		parameterMaterialErrors.WithLabelValues(parameterMaterialFailed).Inc()
 		l.log.Error(err, "parameter material retention failed", "tenant", tenant)
 		return err
 	}
-	l.parameterRetention[key] = parameterMaterialRetention{parameterMaterialRetained, ""}
+	l.setParameterRetentionLocked(key, parameterMaterialRetention{parameterMaterialRetained, ""})
 	return nil
 }
 
