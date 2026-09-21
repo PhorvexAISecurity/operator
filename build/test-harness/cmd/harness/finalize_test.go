@@ -15,11 +15,17 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 	ktest "k8s.io/client-go/testing"
 
@@ -38,12 +44,17 @@ func (allowSandbox) AssertMutationAllowed(ns string) error {
 	return nil
 }
 
-type quietLogger struct{ cmds []string }
+type quietLogger struct {
+	cmds []string
+	logs []string
+}
 
-func (l *quietLogger) Logf(string, ...any) {}
-func (l *quietLogger) Command(c string)    { l.cmds = append(l.cmds, c) }
-func (l *quietLogger) Commands() []string  { return l.cmds }
-func (l *quietLogger) RawLogPath() string  { return "" }
+func (l *quietLogger) Logf(format string, args ...any) {
+	l.logs = append(l.logs, fmt.Sprintf(format, args...))
+}
+func (l *quietLogger) Command(c string)   { l.cmds = append(l.cmds, c) }
+func (l *quietLogger) Commands() []string { return l.cmds }
+func (l *quietLogger) RawLogPath() string { return "" }
 
 // countingFactory reports whether the run-level teardown actually reached the
 // cluster, and whether its closer ran.
@@ -54,20 +65,50 @@ type countingFactory struct {
 	deleteErr bool
 	// hangClose makes the context-free closer never return.
 	hangClose bool
+	// localFixture preserves the externally owned checkpoint holder and namespace.
+	localFixture bool
+	logger       *quietLogger
+	kube         *fake.Clientset
 }
 
 func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 	f.built++
-	kube := fake.NewSimpleClientset()
+	objects := []runtime.Object{}
+	if f.localFixture {
+		objects = append(objects,
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox"}},
+			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-local-holder", Namespace: "sandbox", UID: "external-holder", Labels: map[string]string{"fixture.phorvex.ai/external-owner": "checkpoint-local-holder"}}},
+			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generic-residue", Namespace: "sandbox", UID: "generic-owned", Labels: map[string]string{core.OwnedLabelKey: core.OwnedLabelValue}}},
+		)
+	}
+	kube := fake.NewSimpleClientset(objects...)
+	f.kube = kube
+	if f.localFixture {
+		kube.PrependReactor("delete-collection", "pods", func(action ktest.Action) (bool, runtime.Object, error) {
+			selection := action.(ktest.DeleteCollectionAction).GetListRestrictions().Labels
+			if selection == nil || selection.String() != core.OwnedSelector() {
+				return true, nil, fmt.Errorf("cleanup selector differs: %v", selection)
+			}
+			err := kube.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, "sandbox", "generic-residue")
+			if apierrors.IsNotFound(err) {
+				err = nil
+			}
+			return true, nil, err
+		})
+	}
 	if f.deleteErr {
 		kube.PrependReactor("*", "*", func(ktest.Action) (bool, runtime.Object, error) {
 			return true, nil, errors.New("final teardown API unavailable")
 		})
 	}
+	logger := &quietLogger{}
+	f.logger = logger
+	cfg := config.WithDollarDefaults(config.TargetConfig{Namespace: "sandbox", Context: "kind-test", OwnedAck: true})
+	cfg.BenignCheckpointLocalFixture = f.localFixture
 	env := &core.Env{
 		Kube:   kube,
-		Config: config.WithDollarDefaults(config.TargetConfig{Namespace: "sandbox", Context: "kind-test", OwnedAck: true}),
-		Log:    &quietLogger{},
+		Config: cfg,
+		Log:    logger,
 		Guard:  allowSandbox{},
 		Trial:  trial, ScenarioName: scenario, DefenderName: defender,
 	}
@@ -79,6 +120,37 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 		return nil
 	}
 	return env, closer, nil
+}
+
+func TestFinalTeardownPreservesExternalCheckpointFixtureOnlyWhenConfigured(t *testing.T) {
+	f := &countingFactory{localFixture: true}
+	if err := finalTeardown(context.Background(), f.build, t.TempDir()); err != nil {
+		t.Fatalf("local-fixture final teardown failed: %v", err)
+	}
+	if _, err := f.kube.CoreV1().Namespaces().Get(context.Background(), "sandbox", metav1.GetOptions{}); err != nil {
+		t.Fatalf("external-cleanup namespace was not preserved: %v", err)
+	}
+	holder, err := f.kube.CoreV1().Pods("sandbox").Get(context.Background(), "checkpoint-local-holder", metav1.GetOptions{})
+	if err != nil || holder.UID != "external-holder" {
+		t.Fatalf("external holder was not preserved exactly: holder=%v err=%v", holder, err)
+	}
+	if _, err := f.kube.CoreV1().Pods("sandbox").Get(context.Background(), "generic-residue", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("generic-owned residue survived final cleanup: %v", err)
+	}
+	if !slices.ContainsFunc(f.logger.logs, func(line string) bool { return strings.Contains(line, "collector handoff") }) {
+		t.Fatalf("external cleanup handoff was not logged: %v", f.logger.logs)
+	}
+
+	ordinary := &countingFactory{}
+	if err := finalTeardown(context.Background(), ordinary.build, t.TempDir()); err != nil {
+		t.Fatalf("ordinary final teardown failed: %v", err)
+	}
+	for _, action := range ordinary.kube.Actions() {
+		if action.GetVerb() == "delete" && action.GetResource().Resource == "namespaces" {
+			return
+		}
+	}
+	t.Fatal("ordinary default-false teardown did not delete its namespace")
 }
 
 // liveLate is a cleanup call this run still owns: it has NOT returned.

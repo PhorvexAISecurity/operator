@@ -24,9 +24,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -741,6 +743,95 @@ func TestCheckpointLocalFixtureRequiresOneDeterministicSlot(t *testing.T) {
 	}
 }
 
+func TestCheckpointLocalHolderRequiresExternalOwnershipAndRejectsGenericOwnership(t *testing.T) {
+	env, client, _ := checkpointLocalSetupEnv(t)
+	s := &c2CheckpointContinuity{
+		localFixture:   true,
+		localSlot:      0,
+		localHolderUID: types.UID(env.Config.BenignCheckpointLocalHolderUID),
+		localNodeUID:   types.UID(env.Config.BenignCheckpointLocalNodeUID),
+		localNodeName:  env.Config.BenignCheckpointNodeSelector["kubernetes.io/hostname"],
+		localNonce:     env.Config.BenignCheckpointLocalNonce,
+	}
+	if err := s.validateCheckpointLocalHolder(context.Background(), env); err != nil {
+		t.Fatalf("exact external holder rejected: %v", err)
+	}
+	original, err := client.CoreV1().Pods("sandbox").Get(context.Background(), checkpointLocalHolder, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*corev1.Pod)
+	}{
+		{name: "missing-external-owner", mutate: func(p *corev1.Pod) { delete(p.Labels, checkpointLocalOwnerLabel) }},
+		{name: "wrong-external-owner", mutate: func(p *corev1.Pod) { p.Labels[checkpointLocalOwnerLabel] = "foreign" }},
+		{name: "generic-owned-key-true", mutate: func(p *corev1.Pod) { p.Labels[core.OwnedLabelKey] = core.OwnedLabelValue }},
+		{name: "generic-owned-key-false", mutate: func(p *corev1.Pod) { p.Labels[core.OwnedLabelKey] = "false" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := original.DeepCopy()
+			tc.mutate(candidate)
+			if _, err := client.CoreV1().Pods("sandbox").Update(context.Background(), candidate, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.validateCheckpointLocalHolder(context.Background(), env); err == nil {
+				t.Fatal("unsafe holder ownership accepted")
+			}
+			if _, err := client.CoreV1().Pods("sandbox").Update(context.Background(), original.DeepCopy(), metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestCheckpointLocalHolderSurvivesAllSixRealOwnedCleanups(t *testing.T) {
+	env, client, _ := checkpointLocalSetupEnv(t)
+	if _, err := client.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Config.Namespace}}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatal(err)
+	}
+	wantUID := types.UID(env.Config.BenignCheckpointLocalHolderUID)
+	currentOwned := ""
+	client.PrependReactor("delete-collection", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		selection := action.(k8stesting.DeleteCollectionAction).GetListRestrictions().Labels
+		if selection == nil || selection.String() != core.OwnedSelector() {
+			return true, nil, fmt.Errorf("cleanup selector differs: %v", selection)
+		}
+		if currentOwned == "" {
+			return true, nil, errors.New("cleanup reached Pod deletion without an expected scenario object")
+		}
+		err := client.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, env.Config.Namespace, currentOwned)
+		return true, nil, err
+	})
+	for slot, arm := range []struct {
+		defender string
+		trial    int
+	}{{"d-nomtd", 0}, {"d-nomtd", 1}, {"d-nomtd", 2}, {"d-r6blindtimer", 0}, {"d-r6blindtimer", 1}, {"d-r6blindtimer", 2}} {
+		env.DefenderName, env.Trial = arm.defender, arm.trial
+		owned := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("scenario-owned-%d", slot), Namespace: env.Config.Namespace, Labels: env.OwnedLabels(nil)}}
+		currentOwned = owned.Name
+		if _, err := client.CoreV1().Pods(env.Config.Namespace).Create(context.Background(), owned, metav1.CreateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		err := env.CleanupOwned(ctx, false)
+		cancel()
+		if err != nil {
+			t.Fatalf("slot %d real cleanup failed: %v", slot, err)
+		}
+		if _, err := client.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), owned.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("slot %d generic-owned Pod survived: %v", slot, err)
+		}
+		holder, err := client.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), checkpointLocalHolder, metav1.GetOptions{})
+		if err != nil || holder.UID != wantUID {
+			t.Fatalf("slot %d external holder continuity lost: holder=%v err=%v", slot, holder, err)
+		}
+		if _, err := client.CoreV1().Namespaces().Get(context.Background(), env.Config.Namespace, metav1.GetOptions{}); err != nil {
+			t.Fatalf("slot %d namespace continuity lost: %v", slot, err)
+		}
+	}
+}
+
 func TestCheckpointLocalFixtureRefusesBoundClaimRefMismatchBeforeWriter(t *testing.T) {
 	env, client, pv := checkpointLocalSetupEnv(t)
 	client.PrependReactor("create", "persistentvolumeclaims", func(a k8stesting.Action) (bool, runtime.Object, error) {
@@ -825,7 +916,7 @@ func checkpointLocalSetupEnv(t *testing.T) (*core.Env, *k8sfake.Clientset, *core
 		volumes = append(volumes, corev1.Volume{Name: fmt.Sprintf("slot-%d", slot), VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &capacity}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: fmt.Sprintf("slot-%d", slot), MountPath: fmt.Sprintf("/checkpoint/slot-%d", slot)})
 	}
-	holder := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: checkpointLocalHolder, Namespace: "sandbox", UID: types.UID(env.Config.BenignCheckpointLocalHolderUID), Labels: map[string]string{core.OwnedLabelKey: core.OwnedLabelValue, "fixture.phorvex.ai/campaign": checkpointLocalCampaign}, Annotations: map[string]string{"fixture.phorvex.ai/nonce": env.Config.BenignCheckpointLocalNonce}}, Spec: corev1.PodSpec{AutomountServiceAccountToken: &noToken, RestartPolicy: corev1.RestartPolicyNever, NodeName: "reviewed-node", NodeSelector: map[string]string{"kubernetes.io/hostname": "reviewed-node"}, SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &nonroot, RunAsUser: &uid, RunAsGroup: &uid, FSGroup: &uid}, Volumes: volumes, Containers: []corev1.Container{{Name: "holder", Image: checkpointImage, SecurityContext: &corev1.SecurityContext{RunAsNonRoot: &nonroot, RunAsUser: &uid, RunAsGroup: &uid, AllowPrivilegeEscalation: &noEsc, ReadOnlyRootFilesystem: &ro, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, VolumeMounts: mounts}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: "holder", Ready: true}}}}
+	holder := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: checkpointLocalHolder, Namespace: "sandbox", UID: types.UID(env.Config.BenignCheckpointLocalHolderUID), Labels: map[string]string{checkpointLocalOwnerLabel: checkpointLocalOwnerValue, "fixture.phorvex.ai/campaign": checkpointLocalCampaign}, Annotations: map[string]string{"fixture.phorvex.ai/nonce": env.Config.BenignCheckpointLocalNonce}}, Spec: corev1.PodSpec{AutomountServiceAccountToken: &noToken, RestartPolicy: corev1.RestartPolicyNever, NodeName: "reviewed-node", NodeSelector: map[string]string{"kubernetes.io/hostname": "reviewed-node"}, SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &nonroot, RunAsUser: &uid, RunAsGroup: &uid, FSGroup: &uid}, Volumes: volumes, Containers: []corev1.Container{{Name: "holder", Image: checkpointImage, SecurityContext: &corev1.SecurityContext{RunAsNonRoot: &nonroot, RunAsUser: &uid, RunAsGroup: &uid, AllowPrivilegeEscalation: &noEsc, ReadOnlyRootFilesystem: &ro, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, VolumeMounts: mounts}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: "holder", Ready: true}}}}
 	if _, err := client.CoreV1().Pods("sandbox").Create(context.Background(), holder, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}

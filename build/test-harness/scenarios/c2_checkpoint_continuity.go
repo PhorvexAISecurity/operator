@@ -40,6 +40,8 @@ const (
 	checkpointSampleInterval    = 2 * time.Second
 	checkpointLocalHolder       = "checkpoint-local-holder"
 	checkpointLocalCampaign     = "post25-checkpoint-local-r1"
+	checkpointLocalOwnerLabel   = "fixture.phorvex.ai/external-owner"
+	checkpointLocalOwnerValue   = "checkpoint-local-holder"
 	checkpointLocalMarker       = ".phorvex-holder.json"
 	checkpointLocalCapacity     = "64Mi"
 )
@@ -250,7 +252,7 @@ func (s *c2CheckpointContinuity) validateCheckpointLocalHolder(ctx context.Conte
 	if holderPod.UID != s.localHolderUID || holderPod.DeletionTimestamp != nil || holderPod.Spec.NodeName != s.localNodeName || holderPod.Status.Phase != corev1.PodRunning || !podReady(holderPod) {
 		return fmt.Errorf("checkpoint local holder identity/readiness differs: name=%s uid=%s node=%s phase=%s", holderPod.Name, holderPod.UID, holderPod.Spec.NodeName, holderPod.Status.Phase)
 	}
-	if holderPod.Labels[core.OwnedLabelKey] != core.OwnedLabelValue || holderPod.Labels["fixture.phorvex.ai/campaign"] != checkpointLocalCampaign || holderPod.Annotations["fixture.phorvex.ai/nonce"] != s.localNonce {
+	if _, genericOwned := holderPod.Labels[core.OwnedLabelKey]; genericOwned || holderPod.Labels[checkpointLocalOwnerLabel] != checkpointLocalOwnerValue || holderPod.Labels["fixture.phorvex.ai/campaign"] != checkpointLocalCampaign || holderPod.Annotations["fixture.phorvex.ai/nonce"] != s.localNonce {
 		return errors.New("checkpoint local holder ownership/nonce differs")
 	}
 	if holderPod.Spec.AutomountServiceAccountToken == nil || *holderPod.Spec.AutomountServiceAccountToken || holderPod.Spec.RestartPolicy != corev1.RestartPolicyNever || len(holderPod.Spec.Containers) != 1 || len(holderPod.Spec.NodeSelector) != 1 || holderPod.Spec.NodeSelector["kubernetes.io/hostname"] != s.localNodeName {

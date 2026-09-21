@@ -340,10 +340,14 @@ func finalizeRun(ctx context.Context, late []core.LateCleanup, factory core.EnvF
 	return finalTeardown(ctx, factory, outDir), true
 }
 
-// finalTeardown removes the sandbox namespace and every owned object after the
-// matrix, and returns whether that VERIFIED. Every link of the real chain —
-// building the environment, the cleanup helper and the closer — is a failure
-// worth returning, because any of them leaves state the next run would inherit.
+// finalTeardown removes every harness-owned object after the matrix and normally
+// removes the sandbox namespace too. The explicitly configured node-local
+// checkpoint fixture is externally owned: its collector needs the namespace and
+// holder Pod intact to archive and remove the six local-storage slots, so that
+// mode verifies generic-owned residue is gone and records the cleanup handoff.
+// Every link of the real chain — building the environment, the cleanup helper
+// and the closer — is a failure worth returning, because any of them leaves
+// state the next run would inherit.
 func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) error {
 	env, closer, ferr := factory("final", "teardown", -1, 0, filepath.Join(outDir, "raw", "final_teardown.log"))
 	if ferr != nil {
@@ -351,7 +355,11 @@ func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) 
 	}
 	fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
 	defer fcancel()
-	cleanupErr := env.CleanupOwned(fctx, true)
+	deleteNamespace := !env.Config.BenignCheckpointLocalFixture
+	cleanupErr := env.CleanupOwned(fctx, deleteNamespace)
+	if cleanupErr == nil && !deleteNamespace {
+		env.Log.Logf("cleanup: verified generic-owned residue absent; preserving exact external checkpoint holder and namespace for collector handoff")
+	}
 	closeErr := boundedClose(closer)
 	return errors.Join(cleanupErr, closeErr)
 }
