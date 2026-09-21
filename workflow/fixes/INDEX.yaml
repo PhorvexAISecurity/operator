@@ -1355,3 +1355,14 @@ fixes:
     stacked_on: []
     branch: post25-calibration-export
     head_sha: db8703bac4c5ed7627b5c879668ee3c4c59c7f25
+  POST25-CATALOGUE-CLAIMS:
+    directory: fixes/POST25-CATALOGUE-CLAIMS
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: post25-catalogue-claims
+    head_sha: 2dca7f6908c7423616ba56ceb4ffad62e61c88ad

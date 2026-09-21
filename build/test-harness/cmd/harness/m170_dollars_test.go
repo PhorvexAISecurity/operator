@@ -16,18 +16,32 @@ import (
 const m170ScenarioName = "m170-cli-producer"
 
 func init() {
-	core.RegisterScenario(m170CLIScenario{})
+	for _, scenario := range []m170CLIScenario{
+		{name: m170ScenarioName + "-positive", realism: core.RealismExecutable},
+		{name: m170ScenarioName + "-empty"},
+		{name: m170ScenarioName + "-unassessed", realism: core.RealismUnassessed},
+		{name: m170ScenarioName + "-unknown", realism: core.ScenarioRealism("future-unknown")},
+		{name: m170ScenarioName + "-marker", realism: core.RealismMarkerSimulation},
+		{name: m170ScenarioName + "-benign", realism: core.RealismExecutable, benign: true},
+	} {
+		scenario := scenario
+		core.RegisterScenario(&scenario)
+	}
 	core.RegisterDefender(m170CLIDefender{name: "m170-cli-arm"})
 }
 
-func TestDollarsOnlyExcludesMarkerRowsInEitherFileOrder(t *testing.T) {
+func TestDollarsOnlyRequiresAssessedExecutableAttackInEitherFileOrder(t *testing.T) {
 	dir := t.TempDir()
 	metricsPath := filepath.Join(dir, "producer.jsonl")
 	mw, err := core.NewMetricWriter(metricsPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: dir, ScenarioFilter: map[string]bool{m170ScenarioName: true}, DefenderFilter: map[string]bool{"d-nomtd": true, "m170-cli-arm": true}}, func(s, d string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
+	filter := map[string]bool{}
+	for _, suffix := range []string{"positive", "empty", "unassessed", "unknown", "marker", "benign"} {
+		filter[m170ScenarioName+"-"+suffix] = true
+	}
+	r := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: dir, ScenarioFilter: filter, DefenderFilter: map[string]bool{"d-nomtd": true, "m170-cli-arm": true}}, func(s, d string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 		return &core.Env{Log: &m170CLILogger{}, ScenarioName: s, DefenderName: d, Trial: trial, Config: config.WithDollarDefaults(config.TargetConfig{})}, func() error { return nil }, nil
 	}, mw, nil)
 	if _, err := r.Run(context.Background()); err != nil {
@@ -40,19 +54,14 @@ func TestDollarsOnlyExcludesMarkerRowsInEitherFileOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var produced core.Metric
-	for _, row := range read {
-		if row.Defender == "m170-cli-arm" {
-			produced = row
-		}
+	if len(read) != 12 {
+		t.Fatalf("real Runner rows=%d, want 12", len(read))
 	}
-	if produced.Validity == nil || !produced.IsScored() {
-		t.Fatalf("real Runner row missing: %+v", produced)
+	reversed := append([]core.Metric(nil), read...)
+	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
+		reversed[i], reversed[j] = reversed[j], reversed[i]
 	}
-	marker, unassessed := produced, produced
-	marker.ScenarioRealism = core.RealismMarkerSimulation
-	unassessed.ScenarioRealism = ""
-	for i, rows := range [][]core.Metric{{unassessed, marker}, {marker, unassessed}} {
+	for i, rows := range [][]core.Metric{read, reversed} {
 		path := filepath.Join(dir, "order-"+string(rune('a'+i))+".jsonl")
 		var raw []byte
 		for _, row := range rows {
@@ -70,26 +79,40 @@ func TestDollarsOnlyExcludesMarkerRowsInEitherFileOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(reportBytes)
-		if !strings.Contains(text, "marker-simulation") || !strings.Contains(text, "realismExcluded=1") || !strings.Contains(text, "| "+m170ScenarioName+" | m170-cli-arm | marker-simulation | 0 | n/a |") {
-			t.Fatalf("CLI dollars report leaked or hid marker row:\n%s", text)
+		for _, want := range []string{
+			"| " + m170ScenarioName + "-positive | m170-cli-arm | executable-mechanism | 1 | 100% |",
+			"| " + m170ScenarioName + "-empty | m170-cli-arm | unassessed | 0 | n/a |",
+			"| " + m170ScenarioName + "-unassessed | m170-cli-arm | unassessed | 0 | n/a |",
+			"| " + m170ScenarioName + "-unknown | m170-cli-arm | future-unknown | 0 | n/a |",
+			"| " + m170ScenarioName + "-marker | m170-cli-arm | marker-simulation | 0 | n/a |",
+			"| " + m170ScenarioName + "-benign | m170-cli-arm | executable-mechanism | 0 | n/a |",
+			"realismExcluded=1", "benignControlExcluded=1", "mechanismExcluded=1",
+		} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("CLI dollars report missing %q or leaked an excluded row:\n%s", want, text)
+			}
 		}
 	}
 }
 
-type m170CLIScenario struct{}
-
-func (m170CLIScenario) Metadata() core.ScenarioMeta {
-	return core.ScenarioMeta{Name: m170ScenarioName, Category: core.CategoryClassicChain, R6ResponseTag: core.R6Partial}
+type m170CLIScenario struct {
+	name    string
+	realism core.ScenarioRealism
+	benign  bool
 }
-func (m170CLIScenario) Setup(context.Context, *core.Env) error { return nil }
-func (m170CLIScenario) Execute(_ context.Context, env *core.Env) (core.AttackResult, error) {
+
+func (s *m170CLIScenario) Metadata() core.ScenarioMeta {
+	return core.ScenarioMeta{Name: s.name, Category: core.CategoryClassicChain, R6ResponseTag: core.R6Partial, Realism: s.realism, BenignControl: s.benign}
+}
+func (*m170CLIScenario) Setup(context.Context, *core.Env) error { return nil }
+func (*m170CLIScenario) Execute(_ context.Context, env *core.Env) (core.AttackResult, error) {
 	env.Log.Command("marker-producer")
 	return core.AttackResult{Commands: []string{"marker-producer"}}, nil
 }
-func (m170CLIScenario) SuccessOracle(_ context.Context, env *core.Env) (core.OracleResult, error) {
+func (*m170CLIScenario) SuccessOracle(_ context.Context, env *core.Env) (core.OracleResult, error) {
 	return core.OracleResult{Achieved: env.DefenderName == "d-nomtd", ObservedState: "runner-produced"}, nil
 }
-func (m170CLIScenario) Teardown(context.Context, *core.Env) error { return nil }
+func (*m170CLIScenario) Teardown(context.Context, *core.Env) error { return nil }
 
 type m170CLIDefender struct{ name string }
 
@@ -101,7 +124,7 @@ func (m170CLIDefender) Start(context.Context, *core.Env) error    { return nil }
 func (m170CLIDefender) Stop(context.Context, *core.Env) error     { return nil }
 func (m170CLIDefender) Teardown(context.Context, *core.Env) error { return nil }
 func (m170CLIDefender) DefensiveActions(context.Context, *core.Env) (int, []float64, error) {
-	return 1, []float64{0}, nil
+	return 1, []float64{1}, nil
 }
 
 type m170CLILogger struct{ commands []string }

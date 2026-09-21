@@ -66,8 +66,8 @@ func TestAggregateAnchorsDisruption(t *testing.T) {
 // but never enter a certified score.
 func TestAggregateExcludesLegacyRowsFromCertifiedScores(t *testing.T) {
 	metrics := []core.Metric{
-		{Scenario: "s1", Defender: "d-nomtd", Trial: 0, OracleAchieved: true, DisruptionVsOracle: 0, Category: core.CategoryR6Claimed, R6Tag: core.R6Covers},
-		{Scenario: "s1", Defender: "d-full", Trial: 0, OracleAchieved: false, DisruptionVsOracle: 1, DefensiveActions: 1, Category: core.CategoryR6Claimed, R6Tag: core.R6Covers},
+		{Scenario: "s1", Defender: "d-nomtd", Trial: 0, OracleAchieved: true, DisruptionVsOracle: 0, Category: core.CategoryR6Claimed, R6Tag: core.R6Covers, ScenarioRealism: core.RealismExecutable},
+		{Scenario: "s1", Defender: "d-full", Trial: 0, OracleAchieved: false, DisruptionVsOracle: 1, DefensiveActions: 1, Category: core.CategoryR6Claimed, R6Tag: core.R6Covers, ScenarioRealism: core.RealismExecutable},
 	}
 	for _, s := range Aggregate(metrics, 0.95) {
 		if s.Trials != 0 || s.Disruption.N != 0 || s.OracleObservedTrials != 0 {
