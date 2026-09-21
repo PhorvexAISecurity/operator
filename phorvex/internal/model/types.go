@@ -465,9 +465,13 @@ type SecurityEventInfo struct {
 	Trust string
 	// CreatorIdentity is the authenticated identity the admission stamp recorded, e.g.
 	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
-	CreatorIdentity  string
-	AdapterName      string // event-owned phorvex.ai/adapter-name, never copied from a Pod
-	AdapterTargetUID string // event-owned phorvex.ai/target-pod-uid
+	CreatorIdentity string
+	// CompletedDisclosureRaw is an admission-validated producer payload candidate.
+	// It still requires current boundary, API UID, policy epoch and owner-chain
+	// checks before durable admission. Generic event trust never consumes it.
+	CompletedDisclosureRaw string
+	AdapterName            string // event-owned phorvex.ai/adapter-name, never copied from a Pod
+	AdapterTargetUID       string // event-owned phorvex.ai/target-pod-uid
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).

@@ -65,17 +65,27 @@ type RepresentationFact struct {
 // not a SecurityEvent/source string. Nonempty references are necessary, not a
 // substitute for independent review of the referenced event-to-outcome rule.
 type LossWitness struct {
-	Scope                           ProtectedScope `json:"scope"`
-	EventRef                        string         `json:"eventRef"`
-	EventTime                       string         `json:"eventTime"`
-	IngestionTime                   string         `json:"ingestionTime"`
-	AuthenticatedIdentity           string         `json:"authenticatedIdentity"`
-	TrustAtIngestionRef             string         `json:"trustAtIngestionRef"`
-	RuleVersion                     string         `json:"ruleVersion"`
-	PayloadPredicateRef             string         `json:"payloadPredicateRef"`
-	CompletedUnauthorizedOutcomeRef string         `json:"completedUnauthorizedOutcomeRef"`
-	IrreversibilitySemantics        string         `json:"irreversibilitySemantics"`
-	ClassificationRef               string         `json:"classificationRef"`
+	SchemaVersion                   string                    `json:"schemaVersion,omitempty"`
+	EvidenceID                      string                    `json:"evidenceID,omitempty"`
+	PolicyEpoch                     *PolicyEpoch              `json:"policyEpoch,omitempty"`
+	DecisionAsset                   *DecisionAssetIdentity    `json:"decisionAsset,omitempty"`
+	ImmediateController             *ObjectIdentity           `json:"immediateController,omitempty"`
+	StableWorkloadOwner             *ObjectIdentity           `json:"stableWorkloadOwner,omitempty"`
+	Classification                  *DisclosureClassification `json:"classification,omitempty"`
+	Observation                     *DisclosureObservation    `json:"observation,omitempty"`
+	CanonicalPayloadSHA256          string                    `json:"canonicalPayloadSHA256,omitempty"`
+	SecurityEventUID                string                    `json:"securityEventUID,omitempty"`
+	Scope                           ProtectedScope            `json:"scope"`
+	EventRef                        string                    `json:"eventRef"`
+	EventTime                       string                    `json:"eventTime"`
+	IngestionTime                   string                    `json:"ingestionTime"`
+	AuthenticatedIdentity           string                    `json:"authenticatedIdentity"`
+	TrustAtIngestionRef             string                    `json:"trustAtIngestionRef"`
+	RuleVersion                     string                    `json:"ruleVersion"`
+	PayloadPredicateRef             string                    `json:"payloadPredicateRef"`
+	CompletedUnauthorizedOutcomeRef string                    `json:"completedUnauthorizedOutcomeRef"`
+	IrreversibilitySemantics        string                    `json:"irreversibilitySemantics"`
+	ClassificationRef               string                    `json:"classificationRef"`
 }
 
 type RetainedLoss struct {
@@ -126,6 +136,8 @@ type RepresentationSnapshot struct {
 	Covers                 RepresentationCovers  `json:"covers"`
 	Candidates             RepresentationCovers  `json:"candidates"`
 	HistoryStatus          string                `json:"historyStatus"`
+	HistoryPolicyUID       string                `json:"historyPolicyUID,omitempty"`
+	HistoryStableOwnerUID  string                `json:"historyStableOwnerUID,omitempty"`
 	LossMappingVersion     string                `json:"lossMappingVersion"`
 	DispatchEvidence       string                `json:"dispatchEvidence"`
 	LossAssessment         string                `json:"lossAssessment"`

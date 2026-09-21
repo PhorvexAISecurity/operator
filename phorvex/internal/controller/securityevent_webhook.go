@@ -7,7 +7,9 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"reflect"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -15,7 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/model"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
 // securityEventStampPath is the mutating endpoint that binds a SecurityEvent to the identity
@@ -63,6 +68,13 @@ func (SecurityEventStamper) Handle(_ context.Context, req admission.Request) adm
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
+	if raw, present := annotations[disclosure.Annotation]; present {
+		canonical, err := validateCompletedDisclosureAdmission(req, raw)
+		if err != nil {
+			return admission.Denied("completed disclosure rejected: " + err.Error())
+		}
+		annotations[disclosure.Annotation] = canonical
+	}
 	if user := req.UserInfo.Username; user != "" {
 		annotations[ingest.CreatorIdentityAnnotation] = user
 	} else {
@@ -78,6 +90,56 @@ func (SecurityEventStamper) Handle(_ context.Context, req admission.Request) adm
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	return admission.PatchResponseFromRaw(req.Object.Raw, patched)
+}
+
+func disclosureEvent(raw []byte) (amtdv1beta1.SecurityEvent, error) {
+	var event amtdv1beta1.SecurityEvent
+	if len(raw) == 0 {
+		return event, errors.New("SecurityEvent body is missing")
+	}
+	if err := json.Unmarshal(raw, &event); err != nil {
+		return event, err
+	}
+	return event, nil
+}
+
+func validateCompletedDisclosureAdmission(req admission.Request, raw string) (string, error) {
+	payload, canonical, _, err := disclosure.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	if !ingest.CompletedDisclosureTrust().Allows(req.UserInfo.Username) {
+		return "", errors.New("authenticated creator is not an allowed loss observer")
+	}
+	if payload.Classification.ObserverIdentity != req.UserInfo.Username {
+		return "", errors.New("authenticated creator does not match disclosure observer identity")
+	}
+	event, err := disclosureEvent(req.Object.Raw)
+	if err != nil {
+		return "", err
+	}
+	if event.Spec.Rule.Type != model.CompletedDisclosureRuleType || event.Spec.Rule.Source != model.CompletedDisclosureSource ||
+		event.Spec.Rule.ThreatLevel != "high" || len(event.Spec.Rule.Match) != 0 || event.Spec.Rule.ScoreThreshold != nil ||
+		event.Spec.AnomalyScore != nil || len(event.Spec.Metrics) != 0 || event.Spec.Evidence != nil ||
+		event.Spec.Description != model.CompletedDisclosureDescription {
+		return "", errors.New("unexpected completed-disclosure rule")
+	}
+	wantTarget := payload.DecisionAsset.Namespace + "/" + payload.DecisionAsset.Name
+	if len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != wantTarget {
+		return "", errors.New("SecurityEvent target does not match disclosure target")
+	}
+	if req.Operation == admissionv1.Update {
+		oldEvent, err := disclosureEvent(req.OldObject.Raw)
+		if err != nil {
+			return "", errors.New("old completed-disclosure event is missing")
+		}
+		oldRaw := oldEvent.Annotations[disclosure.Annotation]
+		if oldRaw == "" || !disclosure.EqualPayload(oldRaw, raw) || len(oldEvent.Spec.Targets) != 1 ||
+			oldEvent.Spec.Targets[0] != event.Spec.Targets[0] || !reflect.DeepEqual(oldEvent.Spec.Rule, event.Spec.Rule) {
+			return "", errors.New("completed-disclosure evidence is immutable")
+		}
+	}
+	return string(canonical), nil
 }
 
 // SetupSecurityEventWebhookWithManager registers the creator-identity stamp. It is a raw

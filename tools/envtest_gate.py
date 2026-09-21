@@ -3,7 +3,7 @@
 
 The plain `go -C phorvex test ./...` job deliberately runs with KUBEBUILDER_ASSETS
 blank, so envtest-backed tests `t.Skip` there and `go test` still exits 0. This gate
-is the CI proof that the seven packages carrying those tests were executed in full
+is the CI proof that the eight packages carrying those tests were executed in full
 against local kube-apiserver/etcd binaries and the pinned Kubernetes controllers:
 
   * the COMPLETE test suites of the selected packages run, with no `-run` filter,
@@ -82,6 +82,9 @@ REQUIRED = {
         'TestM064RealAPIRunnerNativeAccounting',
         'TestM178RealAPINativeReceiptAndIngest',
     ),
+    'github.com/phorvex/phorvex/internal/controller': (
+        'TestM100ActualAPIObserverAdmissionIngestAndDurableHistory',
+    ),
     'github.com/phorvex/phorvex/internal/authz': (
         'TestClusterScopedReviewRejectsNamespacedOnlyGrant',
     ),
@@ -99,7 +102,7 @@ REQUIRED = {
 EXPECTED = REQUIRED  # retained name for earlier review probes
 # Import paths run in full; each must be a key of REQUIRED. This keeps newly added
 # envtest tests in these security-sensitive packages inside the no-skip boundary.
-PACKAGES = ('./api/v1alpha1', './internal/actuator', './internal/runner', './internal/authz',
+PACKAGES = ('./api/v1alpha1', './internal/actuator', './internal/runner', './internal/controller', './internal/authz',
             './internal/startupauthz', './internal/console', './cmd')
 TERMINAL = ('pass', 'fail', 'skip')
 REQUIRED_BINARIES = ('kube-apiserver', 'etcd')

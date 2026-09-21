@@ -54,6 +54,35 @@ phorvex:
     - vllm/detector-kv-canary
     - vllm/detector-adapter-inv
     - phorvex-system/operator-controller-manager
+  # Opt-in M100 synthetic completed-disclosure history. This authority is
+  # independent of trustedDetectors. Durable history requires an operator-owned
+  # existing PVC whose mount root is writable by UID/GID 65532 and inaccessible
+  # to other users; the chart does not silently use ephemeral storage.
+  lossHistory:
+    enabled: false
+    mountPath: /var/lib/phorvex-loss-history
+    existingClaim: ""
+    trustedObservers: []
+    observer:
+      enabled: false
+      targetNamespace: ""
+      targetName: ""
+      targetUID: ""
+      policyNamespace: ""
+      policyName: ""
+      canaryURL: ""
+      serverName: ""
+      caSecretName: ""
+      clientSecretName: ""
+      protectedAsset: ""
+      protectedVersion: ""
+      protectedProperty: confidentiality
+      evidenceID: ""
+      ruleVersion: ""
+      ruleSHA256: ""
+      expectedBytes: 0
+      expectedSHA256: ""
+      timeout: 10s
   # M-94 server-side guard that makes the stamp above worth trusting: a
   # ValidatingAdmissionPolicy + Deny binding requiring that any phorvex.ai/creator-identity
   # annotation on a SecurityEvent CREATE/UPDATE equals the authenticated requester. It is

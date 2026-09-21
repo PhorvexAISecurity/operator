@@ -44,6 +44,7 @@ import (
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -196,6 +197,9 @@ type Manager struct {
 	// BoundaryReader bypasses informer staleness for admission enforcement and
 	// actuation-brake authority reads.
 	BoundaryReader client.Reader
+	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
+	// leaves representation history honestly unavailable.
+	LossHistory *losshistory.Store
 	// ActuationBrakeReadTimeout bounds each uncached Namespace/Pod authority read.
 	// Zero uses actuationbrake.DefaultReadTimeout.
 	ActuationBrakeReadTimeout time.Duration
@@ -2147,7 +2151,8 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		return
 	}
 
-	// M100: freeze the reporting source BEFORE actuation; no later resnapshot or
+	// M100: admit the dedicated evidence stream and freeze the reporting source
+	// BEFORE actuation; no later resnapshot or
 	// shared map/slice can rewrite the evidence used for this claim.
 	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	representationInventory := outcomeInventory(snap.Events, pol)
@@ -2158,7 +2163,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// No effect has been attempted yet. Stop promptly while preparing the
 	// immutable reporting inputs rather than carrying an expired tick into
 	// actuation. After an attempt, the audit loop below must drain completely.
-	representationInputs, complete := representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory)
+	var historyInputs map[string]representationHistoryInput
+	var representationInputs []model.RepresentationSnapshot
+	var complete bool
+	if m.LossHistory == nil {
+		representationInputs, complete = representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory)
+	} else {
+		lossIngestGaps := m.admitCompletedDisclosures(ctx, snap.Events, pol, snap.Now)
+		historyInputs = m.representationHistoryInputs(ctx, decisions, versions, pol, lossIngestGaps)
+		representationInputs, complete = representationSnapshotsBeforeEffect(ctx, decisions, pol, versions, reportClaim, representationInventory, historyInputs)
+	}
 	if !complete {
 		return
 	}
@@ -2208,8 +2222,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		if m.fallbackDecisions[i].Trace != nil {
 			m.fallbackDecisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
 		}
-		appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
-			versions[m.fallbackDecisions[i].Namespace+"/"+m.fallbackDecisions[i].Pod], reportClaim, representationInventory))
+		fallbackKey := m.fallbackDecisions[i].Namespace + "/" + m.fallbackDecisions[i].Pod
+		if historyInputs == nil {
+			appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+				versions[fallbackKey], reportClaim, representationInventory))
+		} else {
+			appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+				versions[fallbackKey], reportClaim, representationInventory, historyInputs[fallbackKey]))
+		}
 		m.Audit.Record(m.fallbackDecisions[i])
 		m.recordColocation(assessmentInput, m.fallbackDecisions[i], pol)
 	}

@@ -65,11 +65,16 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -a -o /phorvex-mig-allocation-helper ./cmd/mig-allocation-helper
 
+# Independently authenticated one-shot synthetic completed-disclosure observer.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -a -o /loss-observer ./cmd/loss-observer
+
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /manager .
 COPY --from=builder /phorvex-recovery .
 COPY --from=builder /phorvex-mig-allocation-helper .
+COPY --from=builder /loss-observer .
 USER 65532:65532
 ENTRYPOINT ["/manager"]
