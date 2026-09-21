@@ -166,7 +166,8 @@ func m018SelectedDecision(namespace, pod string) []model.Decision {
 func m018TickView(namespace, pod string) map[string]*model.WorkloadView {
 	return map[string]*model.WorkloadView{
 		namespace + "/" + pod: {Pod: model.Pod{
-			Namespace: namespace, Name: pod, DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
+			Namespace: namespace, Name: pod, UID: "test-uid-" + namespace + "-" + pod,
+			DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
 		}},
 	}
 }
