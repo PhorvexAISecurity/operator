@@ -1379,3 +1379,14 @@ fixes:
     - POST25-M108
     branch: post25-m100
     head_sha: c240fb917b58198ec207b24d89ea707956f47550
+  POST25-M100-CURRENT-VERSION:
+    directory: fixes/POST25-M100-CURRENT-VERSION
+    aliases: []
+    issues:
+    - M-100
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: null
+    head_sha: null

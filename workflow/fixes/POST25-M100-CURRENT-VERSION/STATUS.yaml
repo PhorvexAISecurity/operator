@@ -1,0 +1,79 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 0
+change_class: null
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks: {}
+fix_id: POST25-M100-CURRENT-VERSION
+issues:
+- M-100
+title: Bind current protected version evidence
+profile: standard
+state: TRIAGED
+roles:
+  human_owner: unassigned
+  proposer: unassigned
+  implementer: unassigned
+  skeptic: unassigned
+  live_verifier: unassigned
+  coordinator: unassigned
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: null
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: null
+  base_sha: null
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  live_required: null
+  soak_required: null
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Assign participants and pins; deliver independently reviewed PR under standing
+    scope.
+updated_at: '2026-09-21T04:11:30+00:00'
+follow_up_to: POST25-M100
