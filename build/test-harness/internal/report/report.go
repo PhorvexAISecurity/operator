@@ -64,7 +64,11 @@ type ArmValidity struct {
 	// BenignControlExcluded counts otherwise valid executable benign-control rows
 	// withheld from attack coverage and economics denominators.
 	BenignControlExcluded int
-	Reasons               []string
+	// MechanismExcluded counts rows whose scenario does not explicitly declare
+	// the supported executable-mechanism classification. Empty, unassessed and
+	// unknown future values remain visible, but cannot establish attack efficacy.
+	MechanismExcluded int
+	Reasons           []string
 }
 
 // addReason appends each distinct, non-empty reason, skipping duplicates. Every
@@ -257,6 +261,10 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 
 		a := touch(m)
 		a.validity.Emitted++
+		claimEligible := isAssessedAttackMetric(m)
+		if !claimEligible {
+			recordClaimExclusion(&a.validity, m)
+		}
 		if val.Legacy {
 			a.validity.Legacy++
 			a.validity.addReason(val.Reasons()...)
@@ -312,6 +320,9 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 			if a.skipReason == "" {
 				a.skipReason = v.UnscoredReason
 			}
+			continue
+		}
+		if !claimEligible {
 			continue
 		}
 		a.validity.Scored++
@@ -399,12 +410,12 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	summaries := Aggregate(metrics, ciLevel)
 	adaptive := AggregateAdaptive(metrics, ciLevel)
 	anchors := AggregateAnchorControls(metrics, ciLevel)
-	realAdaptive, markerAdaptive, benignAdaptive := splitControlSummaries(adaptive)
-	realAnchors, markerAnchors, benignAnchors := splitControlSummaries(anchors)
+	realAdaptive, unassessedAdaptive, markerAdaptive, benignAdaptive := splitControlSummaries(adaptive)
+	realAnchors, unassessedAnchors, markerAnchors, benignAnchors := splitControlSummaries(anchors)
 
 	b.WriteString("# Phoenix / Phorvex Attack-Harness Report\n\n")
 	b.WriteString(fmt.Sprintf("Confidence level: %.0f%%. Disruption is measured STRICTLY against each scenario's concrete observable oracle, anchored to the undefended positive control OBSERVED AT THE SAME TRIAL INDEX AND KIND.\n\n", ciLevel*100))
-	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only rows whose validity block records a completed lifecycle, an observed outcome and a usable positive control are scored. Invalid, skipped, unanchored and legacy/unverified rows are counted below and excluded from every mean, denominator and ROI figure. `n/a` means NOT MEASURED — it is never a measured zero.\n\n", core.MeasurementValidityVersion))
+	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: aggregate attack claims require an explicitly classified executable, non-benign scenario plus a validity block that records a completed lifecycle, an observed outcome and a usable positive control. Other mechanism classes retain their raw validity and observations in separate sections but are excluded from every attack-mitigation mean, denominator and ROI figure. `n/a` means NOT MEASURED — it is never a measured zero.\n\n", core.MeasurementValidityVersion))
 	b.WriteString(renderRunCompleteness(run))
 
 	if len(capNotes) > 0 {
@@ -420,15 +431,21 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString("\n")
 	}
 
-	realSummaries, markerSummaries, benignSummaries := splitControlSummaries(summaries)
-	b.WriteString("## Per-arm results — executable/unassessed scenarios\n\n")
+	realSummaries, unassessedSummaries, markerSummaries, benignSummaries := splitControlSummaries(summaries)
+	b.WriteString("## Per-arm results — assessed executable attacks\n\n")
 	b.WriteString("Trials counts SCORED trials only; see Measurement validity for what the arm emitted.\n\n")
-	b.WriteString("Legacy `unassessed` rows remain visible but do not establish technique-level realism.\n\n")
 	b.WriteString(renderArmTable(realSummaries))
+	if len(unassessedSummaries) > 0 {
+		b.WriteString("## Unassessed or unsupported mechanism observations (excluded from attack claims)\n\n")
+		b.WriteString("These raw observations retain their original mechanism classification and evidence. They do not contribute attack-mitigation percentages, coverage, economics, replay anchors, or hypotheses.\n\n")
+		b.WriteString(renderObservationTable(metrics, core.TrialOrdinary, false, func(m core.Metric) bool {
+			return !m.ScenarioBenignControl && effectiveMetricRealism(m) != core.RealismMarkerSimulation && effectiveMetricRealism(m) != core.RealismExecutable
+		}))
+	}
 	if len(benignSummaries) > 0 {
 		b.WriteString("## Benign functional-effect controls (excluded from attack-mitigation and security-coverage percentages)\n\n")
 		b.WriteString("These executable controls measure only their stated functional side effect. They carry no ATT&CK technique mapping and do not enter attack-coverage or economics denominators.\n\n")
-		b.WriteString(renderArmTable(benignSummaries))
+		b.WriteString(renderObservationTable(metrics, core.TrialOrdinary, false, func(m core.Metric) bool { return m.ScenarioBenignControl }))
 		b.WriteString("### Benign functional-effect grounding\n\n")
 		for _, line := range functionalGrounding(metrics) {
 			b.WriteString(line)
@@ -437,15 +454,17 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	}
 	if len(markerSummaries) > 0 {
 		b.WriteString("## Marker-simulation results (excluded from real attack-defense percentages)\n\n")
-		b.WriteString("These percentages measure disruption of the stated marker fixture only. They do not measure the declared operation, ATT&CK/ATLAS techniques, or GPU mechanisms.\n\n")
-		b.WriteString(renderArmTable(markerSummaries))
+		b.WriteString("These raw observations describe only the stated marker fixture. They do not measure the declared operation, ATT&CK/ATLAS techniques, or GPU mechanisms.\n\n")
+		b.WriteString(renderObservationTable(metrics, core.TrialOrdinary, false, func(m core.Metric) bool {
+			return !m.ScenarioBenignControl && effectiveMetricRealism(m) == core.RealismMarkerSimulation
+		}))
 	}
 
 	b.WriteString(renderValidityTable("Measurement validity", summaries))
 
 	// Controls.
 	b.WriteString("## Controls\n\n")
-	b.WriteString("- **Positive control (undefended):** every attack MUST achieve its oracle on the undefended arm (OracleHit% should be ~100). A comparison is scored ONLY against a control that was observed, valid and successful at the same trial index and kind.\n")
+	b.WriteString("- **Positive control (undefended):** every assessed attack MUST achieve its oracle on the undefended arm (OracleHit% should be ~100). A comparison is scored ONLY against a control that was observed, valid and successful at the same trial index and kind.\n")
 	b.WriteString("- **Negative control (no-attack):** each defender arm should show ~0 disruption and a MEASURED 0 false defensive moves. `not-run` and `unobserved` are reported as such and never as a measured 0.\n")
 	b.WriteString("- **Pairing scope:** `TrialSeed` includes the defender identity, so the baseline arm's trial *i* and a defended arm's trial *i* are seeded differently. Read a scored comparison as \"this arm vs the undefended arm at the same index\", NOT as the same trial re-run with the defense removed.\n\n")
 	if len(realAnchors) > 0 {
@@ -454,10 +473,18 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString(renderArmTable(realAnchors))
 		b.WriteString(renderValidityTable("Anchor-only control validity", realAnchors))
 	}
+	if len(unassessedAnchors) > 0 {
+		b.WriteString("### Unassessed anchor-only observations\n\n")
+		b.WriteString("These retained controls cannot anchor an assessed attack claim.\n\n")
+		b.WriteString(renderObservationTable(metrics, core.TrialOrdinary, true, func(m core.Metric) bool {
+			return !m.ScenarioBenignControl && effectiveMetricRealism(m) != core.RealismMarkerSimulation && effectiveMetricRealism(m) != core.RealismExecutable
+		}))
+		b.WriteString(renderValidityTable("Unassessed anchor-only validity", unassessedAnchors))
+	}
 	if len(benignAnchors) > 0 {
 		b.WriteString("### Benign functional-effect anchor-only controls\n\n")
 		b.WriteString("These anchor observations remain outside attack-mitigation and economics aggregates.\n\n")
-		b.WriteString(renderArmTable(benignAnchors))
+		b.WriteString(renderObservationTable(metrics, core.TrialOrdinary, true, func(m core.Metric) bool { return m.ScenarioBenignControl }))
 		b.WriteString(renderValidityTable("Benign anchor-only control validity", benignAnchors))
 	}
 
@@ -469,15 +496,34 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString(renderArmTable(realAdaptive))
 		b.WriteString(renderValidityTable("Adaptive measurement validity", realAdaptive))
 	}
+	if len(unassessedAdaptive) > 0 {
+		b.WriteString("## Unassessed adaptive observations\n\n")
+		b.WriteString("These observations remain outside attack-mitigation, security-coverage, economics, and hypothesis aggregates.\n\n")
+		b.WriteString(renderObservationTable(metrics, core.TrialAdaptive, false, func(m core.Metric) bool {
+			return !m.ScenarioBenignControl && effectiveMetricRealism(m) != core.RealismMarkerSimulation && effectiveMetricRealism(m) != core.RealismExecutable
+		}))
+		b.WriteString(renderValidityTable("Unassessed adaptive validity", unassessedAdaptive))
+	}
 	if len(markerAdaptive)+len(markerAnchors) > 0 {
 		b.WriteString("## Additional marker-simulation control/adaptive observations\n\n")
 		b.WriteString("These remain fixture-only observations and are excluded from real attack-defense percentages and economics.\n\n")
-		b.WriteString(renderArmTable(append(markerAnchors, markerAdaptive...)))
+		if len(markerAnchors) > 0 {
+			b.WriteString(renderObservationTable(metrics, core.TrialOrdinary, true, func(m core.Metric) bool {
+				return !m.ScenarioBenignControl && effectiveMetricRealism(m) == core.RealismMarkerSimulation
+			}))
+		}
+		if len(markerAdaptive) > 0 {
+			b.WriteString(renderObservationTable(metrics, core.TrialAdaptive, false, func(m core.Metric) bool {
+				return !m.ScenarioBenignControl && effectiveMetricRealism(m) == core.RealismMarkerSimulation
+			}))
+		}
+		b.WriteString(renderValidityTable("Marker-simulation control/adaptive validity", append(markerAnchors, markerAdaptive...)))
 	}
 	if len(benignAdaptive) > 0 {
 		b.WriteString("## Benign functional-effect adaptive observations\n\n")
 		b.WriteString("These observations remain outside attack-mitigation, security-coverage, and economics aggregates.\n\n")
-		b.WriteString(renderArmTable(benignAdaptive))
+		b.WriteString(renderObservationTable(metrics, core.TrialAdaptive, false, func(m core.Metric) bool { return m.ScenarioBenignControl }))
+		b.WriteString(renderValidityTable("Benign adaptive validity", benignAdaptive))
 	}
 
 	// Pass-B AI split-oracle / MTD-effect surface (only rows that stamped it).
@@ -486,7 +532,7 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	// Honest R6 grounding per scenario, taken from a row whose oracle was
 	// actually observed (an errored oracle has no observed state to report).
 	b.WriteString("## Honest R6 grounding\n\n")
-	for _, g := range r6Grounding(withoutBenignControls(metrics)) {
+	for _, g := range r6Grounding(assessedAttackMetrics(metrics)) {
 		b.WriteString(g)
 	}
 	b.WriteString("\nEvery number above traces to a raw log + command via provenance.json.\n")
@@ -508,15 +554,9 @@ func ExcludeMarkerSimulations(metrics []core.Metric) []core.Metric {
 
 // ExcludeNonAttackControls returns only rows eligible for aggregate attack-
 // mitigation, security-coverage, and economics claims. Raw metrics and the main
-// report retain both excluded groups in explicitly labelled sections.
+// report retain every excluded group in explicitly labelled sections.
 func ExcludeNonAttackControls(metrics []core.Metric) []core.Metric {
-	out := make([]core.Metric, 0, len(metrics))
-	for _, m := range metrics {
-		if effectiveMetricRealism(m) != core.RealismMarkerSimulation && !m.ScenarioBenignControl {
-			out = append(out, m)
-		}
-	}
-	return out
+	return assessedAttackMetrics(metrics)
 }
 
 func effectiveMetricRealism(m core.Metric) core.ScenarioRealism {
@@ -537,28 +577,51 @@ func splitMarkerSummaries(in []ArmSummary) (other, marker []ArmSummary) {
 	return other, marker
 }
 
-func splitControlSummaries(in []ArmSummary) (attack, marker, benign []ArmSummary) {
+func splitControlSummaries(in []ArmSummary) (attack, unassessed, marker, benign []ArmSummary) {
 	for _, s := range in {
 		switch {
 		case s.BenignControl:
 			benign = append(benign, s)
 		case s.Realism == core.RealismMarkerSimulation:
 			marker = append(marker, s)
+		case s.Realism != core.RealismExecutable:
+			unassessed = append(unassessed, s)
 		default:
 			attack = append(attack, s)
 		}
 	}
-	return attack, marker, benign
+	return attack, unassessed, marker, benign
 }
 
-func withoutBenignControls(metrics []core.Metric) []core.Metric {
+func isAssessedAttackMetric(m core.Metric) bool {
+	return m.ScenarioRealism == core.RealismExecutable && !m.ScenarioBenignControl
+}
+
+func assessedAttackMetrics(metrics []core.Metric) []core.Metric {
 	out := make([]core.Metric, 0, len(metrics))
 	for _, m := range metrics {
-		if !m.ScenarioBenignControl {
+		if isAssessedAttackMetric(m) {
 			out = append(out, m)
 		}
 	}
 	return out
+}
+
+func recordClaimExclusion(v *ArmValidity, m core.Metric) {
+	switch {
+	case m.ScenarioBenignControl:
+		v.BenignControlExcluded++
+		v.addReason("benign functional-effect control excluded from attack-mitigation claims")
+	case effectiveMetricRealism(m) == core.RealismMarkerSimulation:
+		v.RealismExcluded++
+		v.addReason("marker simulation excluded from attack-mitigation claims")
+	case m.ScenarioRealism == "" || m.ScenarioRealism == core.RealismUnassessed:
+		v.MechanismExcluded++
+		v.addReason("unassessed mechanism excluded from attack-mitigation claims")
+	default:
+		v.MechanismExcluded++
+		v.addReason(fmt.Sprintf("unsupported scenario realism %q excluded from attack-mitigation claims", m.ScenarioRealism))
+	}
 }
 
 func functionalGrounding(metrics []core.Metric) []string {
@@ -579,6 +642,39 @@ func functionalGrounding(metrics []core.Metric) []string {
 		}
 	}
 	return lines
+}
+
+func renderObservationTable(metrics []core.Metric, kind core.TrialKind, anchorOnly bool, include func(core.Metric) bool) string {
+	var b strings.Builder
+	b.WriteString("| Scenario | Defender | Realism | Trial | Validity | Oracle observed | Oracle achieved | Observed state | Trigger attribution | Capability pending / note | Claim limits | Raw log |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	for _, m := range metrics {
+		if m.AnchorOnly != anchorOnly || m.Kind() != kind || !include(m) {
+			continue
+		}
+		val := m.Validated()
+		achieved := "n/a"
+		if val.OracleUsable {
+			achieved = fmt.Sprint(m.OracleAchieved)
+		}
+		capability := fmt.Sprintf("%v", m.CapabilityPending)
+		if m.CapabilityNote != "" {
+			capability += ": " + m.CapabilityNote
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %s | %v | %s | %s | %s | %s | %s | %s |\n",
+			markdownCell(m.Scenario), markdownCell(m.Defender), markdownCell(string(effectiveMetricRealism(m))), m.Trial, markdownCell(string(val.Status())), val.OracleUsable, achieved,
+			markdownCell(truncate(m.ObservedState, 120)), markdownCell(dash(m.TriggerAttribution)), markdownCell(truncate(capability, 120)),
+			markdownCell(truncate(m.ScenarioClaimLimits, 120)), markdownCell(dash(m.RawLogPath))))
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+func markdownCell(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	s = strings.ReplaceAll(s, "\n", "<br>")
+	return strings.ReplaceAll(s, "|", "\\|")
 }
 
 func renderRunCompleteness(run *core.RunOutcome) string {
@@ -640,8 +736,8 @@ func renderArmTable(summaries []ArmSummary) string {
 // so a partially observed control cannot pass as a clean one.
 func armAccounting(s ArmSummary) string {
 	v := s.Validity
-	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d benignControlExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
-		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.BenignControlExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d benignControlExcluded=%d mechanismExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.BenignControlExcluded, v.MechanismExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
 		s.NegativeControl, s.NegControlUsable, s.NegControlTotal)
 	if !v.Complete() {
 		acct = "INCOMPLETE " + acct
@@ -718,9 +814,12 @@ func renderMTDEffectTable(metrics []core.Metric) string {
 		if m.Kind() != core.TrialOrdinary || m.AnchorOnly || m.IsLegacy() {
 			continue
 		}
+		if !isAssessedAttackMetric(m) {
+			continue
+		}
 		// A MEASURED effect requires an interpretable, valid row: an unverified
 		// or contradictory one never contributes an MTD verdict.
-		if val := m.Validated(); val.Unverified || val.Status() != core.MeasurementValid {
+		if val := m.Validated(); val.Unverified || !val.Scorable {
 			continue
 		}
 		if m.SplitOracle == "" && m.MTDEffect == "" {
@@ -744,7 +843,7 @@ func renderMTDEffectTable(metrics []core.Metric) string {
 	})
 	var b strings.Builder
 	b.WriteString("## AI split-oracle & MEASURED MTD-effect (Pass-B)\n\n")
-	b.WriteString("MTDEffect is MEASURED per arm from the oracle + persistence outcome of a VALID trial (never assumed, never lifted from an invalid or legacy row). Trigger attribution carries the audit honesty so a missing-trigger result is not read as a Phoenix failure. See report-dollars.md for ROI($)/Schwartau/reusability + H1/H2/H3.\n\n")
+	b.WriteString("MTDEffect is MEASURED per arm from the oracle + persistence outcome of a SCORED trial with a usable positive control (never assumed, never lifted from an invalid, unanchored or legacy row). Trigger attribution carries the audit honesty so a missing-trigger result is not read as a Phoenix failure. See report-dollars.md for ROI($)/Schwartau/reusability + H1/H2/H3.\n\n")
 	b.WriteString("| Scenario | Defender | SplitOracle | MTDEffect | TriggerAttribution | CapPending |\n|---|---|---|---|---|---|\n")
 	for _, r := range rows {
 		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %v |\n", r.scenario, r.defender, dash(r.split), dash(r.mtd), dash(r.trigger), r.capPending))

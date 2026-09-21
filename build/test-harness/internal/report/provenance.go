@@ -12,19 +12,22 @@ import (
 // that produced it, so every table cell is reproducible from the fixed seed. It
 // also carries the measurement-validity verdict for the row, so a provenance
 // consumer can tell a measured comparison from a failed, abstained, unanchored
-// or legacy/unverified one without re-reading metrics.jsonl.
+// or legacy/unverified one without re-reading metrics.jsonl. Scored is the raw
+// measurement-validity verdict; ScenarioRealism and BenignControl still govern
+// whether that observation may enter an aggregate attack claim.
 type ProvenanceEntry struct {
-	Scenario        string   `json:"scenario"`
-	Defender        string   `json:"defender"`
-	Trial           int      `json:"trial"`
-	Seed            int64    `json:"seed"`
-	RawLogPath      string   `json:"rawLogPath"`
-	Commands        []string `json:"commands"`
-	OracleAchieved  bool     `json:"oracleAchieved"`
-	Disruption      float64  `json:"disruptionVsOracle"`
-	ObservedState   string   `json:"observedState"`
-	NegativeControl bool     `json:"negativeControl"`
-	BenignControl   bool     `json:"benignControl,omitempty"`
+	Scenario        string               `json:"scenario"`
+	Defender        string               `json:"defender"`
+	Trial           int                  `json:"trial"`
+	Seed            int64                `json:"seed"`
+	RawLogPath      string               `json:"rawLogPath"`
+	Commands        []string             `json:"commands"`
+	OracleAchieved  bool                 `json:"oracleAchieved"`
+	Disruption      float64              `json:"disruptionVsOracle"`
+	ObservedState   string               `json:"observedState"`
+	NegativeControl bool                 `json:"negativeControl"`
+	BenignControl   bool                 `json:"benignControl,omitempty"`
+	ScenarioRealism core.ScenarioRealism `json:"scenarioRealism"`
 
 	// TrialKind / Status / Scored describe HOW MUCH of this row is a measurement.
 	// Disruption is only a measurement when Scored is true.
@@ -106,6 +109,7 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 			ObservedState:     m.ObservedState,
 			NegativeControl:   m.NegativeControl,
 			BenignControl:     m.ScenarioBenignControl,
+			ScenarioRealism:   effectiveMetricRealism(m),
 			TrialKind:         m.Kind(),
 			Status:            val.Status(),
 			Scored:            val.Scorable,

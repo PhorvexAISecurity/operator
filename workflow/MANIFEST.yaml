@@ -23,6 +23,8 @@ canonical:
   anatomy_pin: anatomy/PIN.yaml
   fixes: fixes
   fix_index: fixes/INDEX.yaml
+  fix_index_status_source: fixes/*/STATUS.yaml
+  fix_alias_source: fixes/*/ALIASES.yaml
   current_release: releases/CURRENT.yaml
   attack_catalogue: attacks/catalogue.yaml
   attack_runbook: attacks/README.md
@@ -51,6 +53,7 @@ generated_files:
 
 rules:
   generated_files_are_read_only: true
+  fix_index_is_discovered_from_records: true
   bus_is_not_authoritative: true
   destructive_live_actions_require_human_approval: true
   deployment_requires_human_approval: true

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -104,6 +105,20 @@ type TargetConfig struct {
 	// provisioner for the benign checkpoint-continuity control. Empty keeps that
 	// control unavailable and causes no storage mutation.
 	BenignCheckpointStorageClass string `json:"benignCheckpointStorageClass"`
+
+	// BenignCheckpointNodeSelector pins only the benign checkpoint workload and
+	// its producer to the reviewed node used by the local fixture. It is a
+	// local-fixture-only field; the ordinary provisioned path rejects it.
+	BenignCheckpointNodeSelector map[string]string `json:"benignCheckpointNodeSelector"`
+
+	// BenignCheckpointLocalFixture opts the checkpoint-continuity control into
+	// the separately owned local-volume fixture. The default false preserves the
+	// existing provisioned-storage behavior. The identity fields below are valid
+	// only when this flag is true and bind the runtime-created holder and node.
+	BenignCheckpointLocalFixture   bool   `json:"benignCheckpointLocalFixture"`
+	BenignCheckpointLocalHolderUID string `json:"benignCheckpointLocalHolderUID"`
+	BenignCheckpointLocalNodeUID   string `json:"benignCheckpointLocalNodeUID"`
+	BenignCheckpointLocalNonce     string `json:"benignCheckpointLocalNonce"`
 }
 
 // DefaultCredentialObservationWindowSeconds is the observation interval applied
@@ -117,6 +132,8 @@ const MaxCredentialObservationWindowSeconds = 30 * 60
 // MaxBenignSessionNodeSelectorEntries keeps this narrowly-scoped placement
 // override reviewable and prevents an accidentally unbounded config object.
 const MaxBenignSessionNodeSelectorEntries = 8
+
+var kubernetesUIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // ErrAckMissing is returned when OwnedAck is not true.
 var ErrAckMissing = errors.New("config: ownedAck is REQUIRED and must be true — this is an offensive harness; you must acknowledge you OWN/are AUTHORIZED on the target cluster")
@@ -224,10 +241,48 @@ func (c TargetConfig) Validate() error {
 			return fmt.Errorf("config: benignSessionNodeSelector value for %q is invalid: %s", key, strings.Join(problems, "; "))
 		}
 	}
+	for key, value := range c.BenignCheckpointNodeSelector {
+		if problems := validation.IsQualifiedName(key); len(problems) != 0 {
+			return fmt.Errorf("config: benignCheckpointNodeSelector key %q is invalid: %s", key, strings.Join(problems, "; "))
+		}
+		if problems := validation.IsValidLabelValue(value); len(problems) != 0 {
+			return fmt.Errorf("config: benignCheckpointNodeSelector value for %q is invalid: %s", key, strings.Join(problems, "; "))
+		}
+	}
 	if value := strings.TrimSpace(c.BenignCheckpointStorageClass); value != "" {
 		if problems := validation.IsDNS1123Subdomain(value); len(problems) != 0 {
 			return fmt.Errorf("config: benignCheckpointStorageClass %q is invalid: %s", value, strings.Join(problems, "; "))
 		}
+	}
+	localValues := []string{c.BenignCheckpointLocalHolderUID, c.BenignCheckpointLocalNodeUID, c.BenignCheckpointLocalNonce}
+	if !c.BenignCheckpointLocalFixture {
+		if len(c.BenignCheckpointNodeSelector) != 0 {
+			return errors.New("config: benignCheckpointNodeSelector requires benignCheckpointLocalFixture=true")
+		}
+		for _, value := range localValues {
+			if strings.TrimSpace(value) != "" {
+				return errors.New("config: benign checkpoint local identity fields require benignCheckpointLocalFixture=true")
+			}
+		}
+		return nil
+	}
+	if strings.TrimSpace(c.BenignCheckpointStorageClass) == "" {
+		return errors.New("config: benignCheckpointStorageClass is required for benign checkpoint local fixture")
+	}
+	if c.TrialsPerArm != 3 {
+		return fmt.Errorf("config: benign checkpoint local fixture requires exactly 3 trialsPerArm, got %d", c.TrialsPerArm)
+	}
+	if len(c.BenignCheckpointNodeSelector) != 1 || strings.TrimSpace(c.BenignCheckpointNodeSelector["kubernetes.io/hostname"]) == "" {
+		return errors.New("config: benign checkpoint local fixture requires exactly one kubernetes.io/hostname node selector")
+	}
+	if !kubernetesUIDPattern.MatchString(c.BenignCheckpointLocalHolderUID) {
+		return errors.New("config: benignCheckpointLocalHolderUID must be an exact lowercase Kubernetes UUID")
+	}
+	if !kubernetesUIDPattern.MatchString(c.BenignCheckpointLocalNodeUID) {
+		return errors.New("config: benignCheckpointLocalNodeUID must be an exact lowercase Kubernetes UUID")
+	}
+	if value := c.BenignCheckpointLocalNonce; strings.TrimSpace(value) != value || value == "" || len(value) > 63 || len(validation.IsValidLabelValue(value)) != 0 {
+		return errors.New("config: benignCheckpointLocalNonce must be a nonempty label-safe value of at most 63 bytes")
 	}
 	return nil
 }

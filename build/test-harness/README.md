@@ -343,10 +343,14 @@ func (s *myScenario) Teardown(ctx context.Context, env *core.Env) error {
 
 The run writes `scenario_inventory.md` beside the report. `marker-simulation`
 rows measure only their marker fixture and are excluded from real attack-defense
-percentages and economics. An omitted realism descriptor is rendered as
-`unassessed`; declared ATT&CK/ATLAS mappings never become exercised coverage by
-name alone. Historical output directories retain the labels produced by their
-older binaries and are not rewritten by later runs.
+percentages and economics. Aggregate attack-mitigation, exercised-coverage,
+replay-anchor, economics, and hypothesis claims require the exact
+`executable-mechanism` classification and a non-benign scenario. An omitted
+descriptor is rendered as `unassessed`; explicit `unassessed` and unknown future
+values remain visible as raw observations but enter none of those denominators.
+Declared ATT&CK/ATLAS mappings never become exercised coverage by name alone.
+Historical output directories retain the labels produced by their older
+binaries and are not rewritten by later runs.
 
 **Optional:** to drive the genuine reactive Phoenix matcher path, have `Execute`
 look up the active defender's `Emitter` (see `scenarios/c2_persistence_evict.go`)

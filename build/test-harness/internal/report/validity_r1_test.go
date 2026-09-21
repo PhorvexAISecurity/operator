@@ -230,7 +230,7 @@ func TestR1FullyObservedNegativeControlStillPublishesItsMeasuredZero(t *testing.
 // fully observed either.
 func TestR1LegacyNegativeControlDemotesTheArm(t *testing.T) {
 	legacyNeg := core.Metric{Scenario: "v161-mixed", Defender: "d-v161-arm", Trial: 2,
-		NegativeControl: true, FalseDefensiveActions: 0}
+		NegativeControl: true, FalseDefensiveActions: 0, ScenarioRealism: core.RealismExecutable}
 	metrics := replayThroughReader(t,
 		r1ProducerRow(t),
 		negControlRow("v161-mixed", "d-v161-arm", 1, 0, true),
