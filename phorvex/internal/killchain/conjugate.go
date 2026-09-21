@@ -178,8 +178,9 @@ func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 	}
 }
 
-// ObserveBernoulli applies one qualified categorical outcome: held adds exactly
-// one alpha count and revoked adds exactly one beta count.
+// ObserveBernoulli submits one unit of qualified categorical evidence: held to
+// alpha and revoked to beta. Observe then applies the existing maxMass rescaling,
+// so effective alpha/beta mass is bounded and is not the raw qualified-label count.
 func (m *ConjugateMemory) ObserveBernoulli(tenant string, held bool) {
 	if held {
 		m.Observe(tenant, 1)

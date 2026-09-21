@@ -1,6 +1,7 @@
 package decision
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -112,6 +113,35 @@ func TestPost25M106QualifiedHeldAndRevokedApplyOneBernoulliCount(t *testing.T) {
 	}
 	if a3, b3 := e.Killchain.Memory.Prior(pol.Owner()); a3 != a2 || b3 != b2 {
 		t.Fatalf("selection added another count after qualified labels: before=(%g,%g) after=(%g,%g)", a2, b2, a3, b3)
+	}
+}
+
+func TestPost25M106QualifiedCountIsRawWhileBeliefMassRemainsCapped(t *testing.T) {
+	const observations = 210
+	e, pol, authority, template := m106Fixture(t, observations+1)
+	initialAlpha, initialBeta := e.Killchain.Memory.Prior(pol.Owner())
+	for i := 0; i < observations; i++ {
+		observation := template
+		observation.EvidenceID = fmt.Sprintf("evidence-%03d", i)
+		observation.OperationID = fmt.Sprintf("operation-%03d", i)
+		binding := authority.bindings[template.OperationID]
+		binding.OperationID = observation.OperationID
+		authority.bindings[observation.OperationID] = binding
+		authority.allowed[observation.EvidenceID] = observation
+		if result := e.AdmitPersistenceObservation(observation); !result.Applied {
+			t.Fatalf("qualified outcome %d was not applied: %+v", i, result)
+		}
+	}
+	status, ok := e.PersistenceLearningStatusFor(pol.Owner())
+	if !ok || status.QualifiedLabels != observations || status.HeldLabels != observations || status.DedupEntries != observations {
+		t.Fatalf("raw qualified outcome accounting changed: %+v ok=%t", status, ok)
+	}
+	alpha, beta := e.Killchain.Memory.Prior(pol.Owner())
+	if alpha+beta >= initialAlpha+initialBeta+float64(status.QualifiedLabels) {
+		t.Fatalf("effective pseudo-count mass was not capped: initial=%g final=%g raw=%d", initialAlpha+initialBeta, alpha+beta, status.QualifiedLabels)
+	}
+	if alpha+beta > 200.000000001 {
+		t.Fatalf("effective pseudo-count mass exceeded the existing cap: alpha=%g beta=%g", alpha, beta)
 	}
 }
 
