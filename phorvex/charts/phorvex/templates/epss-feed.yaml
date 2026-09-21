@@ -3,6 +3,12 @@
 {{- if or (and .Values.phorvex.epss.feed.scopeNamespaces (empty .Values.phorvex.epss.feed.scopeDigests)) (and .Values.phorvex.epss.feed.scopeDigests (empty .Values.phorvex.epss.feed.scopeNamespaces)) }}
 {{- fail "scoped EPSS feed requires both scopeNamespaces and scopeDigests" }}
 {{- end }}
+{{- if and .Values.phorvex.epss.feed.registryAuth.enabled (or (empty .Values.phorvex.epss.feed.registryAuth.secretName) (empty .Values.phorvex.epss.feed.registryAuth.secretKey) (empty .Values.phorvex.epss.feed.registryAuth.registries)) }}
+{{- fail "EPSS registry authentication requires secretName, secretKey, and exact registries" }}
+{{- end }}
+{{- if and (not .Values.phorvex.epss.feed.registryAuth.enabled) (or .Values.phorvex.epss.feed.registryAuth.secretName .Values.phorvex.epss.feed.registryAuth.registries) }}
+{{- fail "EPSS registry authentication values require registryAuth.enabled=true" }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -187,6 +193,10 @@ spec:
             - --epss-feed-first-url={{ .Values.phorvex.epss.feed.firstURL }}
             - --epss-feed-trivy={{ .Values.phorvex.epss.feed.trivyPath }}
             - --epss-feed-scan-timeout={{ .Values.phorvex.epss.feed.scanTimeout }}
+            {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
+            - --epss-feed-registry-auth-file=/var/run/secrets/phorvex-epss-registry-auth/config.json
+            - --epss-feed-registry-auth-registries={{ join "," .Values.phorvex.epss.feed.registryAuth.registries }}
+            {{- end }}
             env:
             - name: POD_NAMESPACE
               valueFrom:
@@ -208,11 +218,25 @@ spec:
             - name: trivy-bin
               mountPath: /tools
               readOnly: true
+            {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
+            - name: registry-auth
+              mountPath: /var/run/secrets/phorvex-epss-registry-auth
+              readOnly: true
+            {{- end }}
           volumes:
           - name: trivy-cache
             emptyDir: {}
           - name: trivy-bin
             emptyDir: {}
+          {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
+          - name: registry-auth
+            secret:
+              secretName: {{ .Values.phorvex.epss.feed.registryAuth.secretName | quote }}
+              defaultMode: 0440
+              items:
+              - key: {{ .Values.phorvex.epss.feed.registryAuth.secretKey | quote }}
+                path: config.json
+          {{- end }}
           {{- with .Values.phorvex.epss.feed.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
