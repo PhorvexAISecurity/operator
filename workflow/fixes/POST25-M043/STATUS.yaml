@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 9
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,101 @@ checks:
     at: '2026-09-21T01:11:40+00:00'
     contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-producer.log
+    sha256: 4cc8224c7dd39ece9fa91512c1994a05589c2d7ddf2801322d8d41096ea2a4bb
+    source_sha: 25e7902a5aa8e6086f650d0d309b1e18280ecbf5
+    at: '2026-09-21T01:46:27+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 592d97e62f4f8ea9c86b061a2ef4c0aebdfaa4a431ae2091f1b133f9b612ec1e
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:50:39+00:00'
+    baseline_sha: 25e7902a5aa8e6086f650d0d309b1e18280ecbf5
+  preflight:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: d552b3edd9d50f25492d38d2fac5f6cb11a344c71e8aba951fe4cafdb117855e
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:46:43+00:00'
+  implementation:
+    result: PASS
+    by: post25-catalogue
+    artifact: 04-diff.patch
+    sha256: 802d162fc64ef907054addedabaa006e79c716486b9ef575b5c6144909d927b0
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:46:43+00:00'
+  l0:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/preflight/receipt.json
+    sha256: d552b3edd9d50f25492d38d2fac5f6cb11a344c71e8aba951fe4cafdb117855e
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:46:43+00:00'
+    inputs:
+    - build/test-harness
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: a4ba247d1a36b4f1c2ed495d096dc7d44bdaa1f9965ea9eadb1c68cf7d43d7f6
+  l1:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused.txt
+    sha256: 03b2620c8c493bce11de108ffc694404c349b4e9fc7d38a3deb80d86258331e0
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:46:43+00:00'
+    inputs:
+    - phorvex/docs/recon-cover-map.generated.md
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/recon
+    - phorvex/tools/covermap
+    inputs_sha256: 81eeeec17529a4e32126d31e4c8dfd3456c4b3ca21c2b923c05b0a3ea133adb8
+  l2:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused.txt
+    sha256: 03b2620c8c493bce11de108ffc694404c349b4e9fc7d38a3deb80d86258331e0
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:46:43+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/recon
+    inputs_sha256: be29af895c1f9a704555679dd03777679b8d747e44122a1487580e24d11ac58d
+  positive_control:
+    result: PASS
+    by: post25-catalogue
+    artifact: evidence/worker/focused.txt
+    sha256: 03b2620c8c493bce11de108ffc694404c349b4e9fc7d38a3deb80d86258331e0
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:46:43+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/recon
+    inputs_sha256: be29af895c1f9a704555679dd03777679b8d747e44122a1487580e24d11ac58d
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 26fc902deccaab30a833785890eef9d9635055ce1069201135c62cb0f8b70fcb
+    source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+    at: '2026-09-21T01:50:39+00:00'
+    incident_sha256: 592d97e62f4f8ea9c86b061a2ef4c0aebdfaa4a431ae2091f1b133f9b612ec1e
 fix_id: POST25-M043
 issues:
 - M-43
 title: Credit qualified scalar model shard process retirement
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +134,7 @@ blind_derivation:
 implementation:
   branch: post25-m043-model-shard-claims
   base_sha: 25e7902a5aa8e6086f650d0d309b1e18280ecbf5
-  head_sha: null
+  head_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +155,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +171,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: post25-catalogue
-  action: Implement signed scalar retirement contract and discriminating controls
-updated_at: '2026-09-21T01:11:40+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-21T01:50:43+00:00'
 configuration_history:
 - at: '2026-09-21T01:11:37+00:00'
   by: codex-lead
@@ -95,6 +185,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-21T01:45:30+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-21T01:46:43+00:00'
+  by: post25-catalogue
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -112,3 +212,51 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-21T01:46:43+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-21T01:46:45+00:00'
+  by: post25-catalogue
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-21T01:50:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-21T01:50:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-M043:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
+check_history:
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 592d97e62f4f8ea9c86b061a2ef4c0aebdfaa4a431ae2091f1b133f9b612ec1e
+  source_sha: 29a5e82fe4241578b02f0c0e3989c04a8b7f7569
+  at: '2026-09-21T01:46:28+00:00'
+  baseline_sha: 25e7902a5aa8e6086f650d0d309b1e18280ecbf5

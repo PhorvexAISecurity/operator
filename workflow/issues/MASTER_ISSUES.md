@@ -1497,7 +1497,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M042
 
 ### M-43 · Pod-deleting AI moves are undercredited · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: POST25-M043
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · killchain
