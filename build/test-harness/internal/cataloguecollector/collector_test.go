@@ -123,13 +123,13 @@ func TestCollectKeepsMissingAndUnsupportedProfilesVisible(t *testing.T) {
 	if err := json.Unmarshal(opaqueRaw, &row); err != nil {
 		t.Fatal(err)
 	}
-	row["scenario"] = "c2-nats-jetstream-durability"
+	row["scenario"] = "c2-vllm-prefix-cache-reset"
 	b, _ := json.Marshal(row)
 	b = append(b, '\n')
 	os.WriteFile(filepath.Join(dir, "nats.jsonl"), b, 0o600)
 	opaque := available
 	opaque.ID = "nats-control"
-	opaque.ProfileID = "nats-no-action"
+	opaque.ProfileID = "gpu-prefix-cache-reset-no-action"
 	opaque.MetricsFile = "nats.jsonl"
 	opaque.MetricsSHA256 = sumTest(b)
 	opaque.ExternalReviewState = "unreviewed"
@@ -212,7 +212,7 @@ func TestCollectRejectsDuplicateKeysAndConflictingMetricReuse(t *testing.T) {
 	dir, rec = fixtureIndex(t)
 	second := rec
 	second.ID = "conflict"
-	second.ProfileID = "nats-no-action"
+	second.ProfileID = rec.ProfileID
 	if _, err := Collect(writeIndex(t, dir, []RunRecord{rec, second})); err == nil || !strings.Contains(err.Error(), "metrics file reused") {
 		t.Fatalf("reuse err=%v", err)
 	}

@@ -31,20 +31,39 @@ type Index struct {
 }
 
 type RunRecord struct {
-	ID                      string `json:"id"`
-	ProfileID               string `json:"profileID"`
-	SuiteFile               string `json:"suiteFile"`
-	SuiteSHA256             string `json:"suiteSHA256"`
-	SourceRevision          string `json:"sourceRevision"`
-	HarnessSHA256           string `json:"harnessSHA256"`
-	ConfigSHA256            string `json:"configSHA256"`
-	MetricsFile             string `json:"metricsFile"`
-	MetricsSHA256           string `json:"metricsSHA256"`
-	WorkloadSchedule        string `json:"workloadSchedule"`
-	State                   string `json:"state"` // available, missing, failed
-	FailureReason           string `json:"failureReason,omitempty"`
-	ExternalReviewState     string `json:"externalReviewState"`
-	ExternalReviewReference string `json:"externalReviewReference"`
+	ID                      string           `json:"id"`
+	ProfileID               string           `json:"profileID"`
+	SuiteFile               string           `json:"suiteFile"`
+	SuiteSHA256             string           `json:"suiteSHA256"`
+	SourceRevision          string           `json:"sourceRevision"`
+	HarnessSHA256           string           `json:"harnessSHA256"`
+	ConfigSHA256            string           `json:"configSHA256"`
+	MetricsFile             string           `json:"metricsFile"`
+	MetricsSHA256           string           `json:"metricsSHA256"`
+	WorkloadSchedule        string           `json:"workloadSchedule"`
+	State                   string           `json:"state"` // available, missing, failed
+	FailureReason           string           `json:"failureReason,omitempty"`
+	ExternalReviewState     string           `json:"externalReviewState"`
+	ExternalReviewReference string           `json:"externalReviewReference"`
+	NATSIdentity            *NATSRunIdentity `json:"natsIdentity,omitempty"`
+}
+
+// NATSRunIdentity is supplied by the explicit run index. The collector checks
+// every retained receipt against this authority but does not claim to have
+// independently resolved these live identities.
+type NATSRunIdentity struct {
+	Mode             string   `json:"mode"`
+	FixtureNonce     string   `json:"fixtureNonce"`
+	NodeName         string   `json:"nodeName"`
+	NodeUID          string   `json:"nodeUID"`
+	ConnectedMember  string   `json:"connectedMember"`
+	StorageClass     string   `json:"storageClass"`
+	StorageClassUID  string   `json:"storageClassUID"`
+	PodUIDs          []string `json:"podUIDs"`
+	PVCUIDs          []string `json:"pvcUIDs"`
+	PVUIDs           []string `json:"pvUIDs"`
+	StorePathSHA256s []string `json:"storePathSHA256s"`
+	InitialServerIDs []string `json:"initialServerIDs"`
 }
 
 type Report struct {
@@ -84,6 +103,7 @@ type RunResult struct {
 	AnchorInvalidTrials       int                      `json:"anchorInvalidTrials"`
 	Trials                    []TrialResult            `json:"trials"`
 	InstalledSession          *InstalledSessionSummary `json:"installedSession,omitempty"`
+	NATSJetStream             *NATSJetStreamSummary    `json:"natsJetStream,omitempty"`
 }
 
 type TrialResult struct {
@@ -94,6 +114,48 @@ type TrialResult struct {
 	Status           string                   `json:"status"`
 	Reasons          []string                 `json:"reasons,omitempty"`
 	InstalledSession *InstalledSessionSummary `json:"installedSession,omitempty"`
+	NATSJetStream    *NATSJetStreamSummary    `json:"natsJetStream,omitempty"`
+}
+
+type NATSJetStreamSummary struct {
+	IdentityAuthority                string   `json:"identityAuthority"`
+	Mode                             string   `json:"mode"`
+	FixtureNonce                     string   `json:"fixtureNonce"`
+	ReceiptSHA256                    string   `json:"receiptSHA256"`
+	ProtocolStatus                   string   `json:"protocolStatus"`
+	Stream                           string   `json:"stream"`
+	Consumer                         string   `json:"consumer"`
+	Replicas                         int      `json:"replicas"`
+	FinalMessages                    uint64   `json:"finalMessages"`
+	FinalFirstSequence               uint64   `json:"finalFirstSequence"`
+	FinalLastSequence                uint64   `json:"finalLastSequence"`
+	FinalAckFloor                    uint64   `json:"finalAckFloor"`
+	FinalAckPending                  int      `json:"finalAckPending"`
+	FinalConsumerPending             uint64   `json:"finalConsumerPending"`
+	FinalConsumerRedelivered         int      `json:"finalConsumerRedelivered"`
+	MessageASequence                 uint64   `json:"messageASequence"`
+	MessageBSequence                 uint64   `json:"messageBSequence,omitempty"`
+	MessageXSequence                 uint64   `json:"messageXSequence,omitempty"`
+	MessageYSequence                 uint64   `json:"messageYSequence,omitempty"`
+	ActionAttempted                  bool     `json:"actionAttempted"`
+	ActionCompleted                  bool     `json:"actionCompleted"`
+	ActionCount                      int      `json:"actionCount"`
+	RestartBoundaryNanos             int64    `json:"restartBoundaryNanos,omitempty"`
+	ReplicaRecoveryNanos             int64    `json:"replicaRecoveryNanos,omitempty"`
+	QuorumPauseObservedNanos         int64    `json:"quorumPauseObservedNanos,omitempty"`
+	QuorumPauseMaximumNanos          int64    `json:"quorumPauseMaximumNanos,omitempty"`
+	DuringPausePublicationStatus     string   `json:"duringPausePublicationStatus,omitempty"`
+	DuringPausePublicationErrorClass string   `json:"duringPausePublicationErrorClass,omitempty"`
+	DuringPausePingReachable         bool     `json:"duringPausePingReachable,omitempty"`
+	PausedMembers                    []string `json:"pausedMembers,omitempty"`
+	PodUIDs                          []string `json:"podUIDs"`
+	VolumeUIDs                       []string `json:"volumeUIDs"`
+	InitialServerIDs                 []string `json:"initialServerIDs"`
+	CleanupComplete                  bool     `json:"cleanupComplete"`
+	CleanupVerified                  bool     `json:"cleanupVerified"`
+	SecurityOutcome                  string   `json:"securityOutcome"`
+	InstalledDispatchProven          bool     `json:"installedDispatchProven"`
+	DirectNativeActuatorProven       bool     `json:"directNativeActuatorProven"`
 }
 
 type InstalledSessionSummary struct {
@@ -192,6 +254,8 @@ func Collect(indexPath string) (Report, error) {
 		"Functional observations only; no security efficacy, monetary ROI, attacker mitigation, or green campaign verdict.",
 		"Known HTTP 404 is an application response without the session, not a successful session read.",
 		"Sampling gaps are unobserved time; no continuous availability claim.",
+		"A timed-out NATS quorum-loss publication is an unknown initial outcome, not message loss or acknowledged success.",
+		"NATS nonce, node, workload, volume, storage, and initial server identities are supplied run-index authority checked against retained receipts.",
 		"External review state is supplied input and is not issued by this collector.",
 		"Source, harness, and configuration hashes are supplied provenance pins; referenced file hashes are checked, but binary lineage is not independently established.",
 	}}
@@ -253,6 +317,16 @@ func Collect(indexPath string) (Report, error) {
 		if !ok {
 			return Report{}, fmt.Errorf("record %s unknown profile %q", rec.ID, rec.ProfileID)
 		}
+		isNATSProfile := strings.HasPrefix(rec.ProfileID, "nats-")
+		if isNATSProfile {
+			if rec.State == "available" || rec.NATSIdentity != nil {
+				if err := validateNATSAuthority(rec.ProfileID, rec.NATSIdentity); err != nil {
+					return Report{}, fmt.Errorf("record %s NATS identity: %w", rec.ID, err)
+				}
+			}
+		} else if rec.NATSIdentity != nil {
+			return Report{}, fmt.Errorf("record %s supplies NATS identity for non-NATS profile", rec.ID)
+		}
 		requestedDenominator := p.trials * len(p.defenders) * len(p.scenarios)
 		anchorDenominator := 0
 		if !p.defenders["d-nomtd"] {
@@ -311,6 +385,13 @@ func Collect(indexPath string) (Report, error) {
 					}
 					tr.InstalledSession = &summary
 				}
+				if isNATSProfile {
+					summary, err := decodeNATS(m, rec.ProfileID, rec.NATSIdentity)
+					if err != nil {
+						return Report{}, fmt.Errorf("record %s NATS row evidence: %w", rec.ID, err)
+					}
+					tr.NATSJetStream = &summary
+				}
 				if rowErr == nil {
 					rr.ValidTrials++
 					if isAnchor {
@@ -352,6 +433,16 @@ func Collect(indexPath string) (Report, error) {
 					if rr.AnchorInvalidTrials > 0 {
 						rr.MeasurementStatus = "DECODED_FUNCTIONAL_WITH_INVALID_ANCHOR"
 					}
+				}
+			} else if isNATSProfile {
+				if len(rr.Trials) != 1 || rr.Trials[0].NATSJetStream == nil {
+					return Report{}, fmt.Errorf("record %s requested NATS summary missing", rec.ID)
+				}
+				rr.NATSJetStream = rr.Trials[0].NATSJetStream
+				if rr.RequestedInvalidTrials > 0 {
+					rr.MeasurementStatus = "INVALID"
+				} else {
+					rr.MeasurementStatus = "DECODED_FUNCTIONAL"
 				}
 			} else {
 				if rr.InvalidTrials > 0 {
@@ -651,10 +742,11 @@ func decodeInstalled(m core.Metric) (InstalledSessionSummary, error) {
 }
 func functionalRowError(m core.Metric) error {
 	v := m.MeasurementState()
+	const benignReason = "benign functional-effect control is excluded from attack, security and economics scoring"
 	if !m.ScenarioBenignControl || m.ScenarioRealism != core.RealismExecutable {
 		return errors.New("row is not an explicit executable benign functional control")
 	}
-	if v.Status != core.MeasurementValid || v.Phase != core.PhaseComplete || !v.AttackExecuted || !v.OracleObserved || !v.CostObserved || v.Scored || m.IsScored() || !m.Skipped || !strings.Contains(m.SkipReason, "UNSCORED(benign-control)") || !v.Cleanup.Complete || !v.Cleanup.Verified {
+	if v.Status != core.MeasurementValid || v.Phase != core.PhaseComplete || !v.AttackExecuted || !v.OracleObserved || !v.CostObserved || v.Scored || v.UnscoredReason != benignReason || m.IsScored() || !m.Skipped || m.SkipReason != "UNSCORED(benign-control): "+benignReason || !v.Cleanup.Complete || !v.Cleanup.Verified {
 		return errors.New("row is not valid, complete, benign-unscored, and cleanup-verified")
 	}
 	if m.DisruptionVsOracle != 0 || m.SecurityPerCost != 0 || m.ROI != nil || m.Schwartau != nil || m.MTDEffect != "" || m.Reuse != nil {
@@ -751,6 +843,28 @@ func Markdown(r Report) string {
 		}
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d | %d (%d known) | %d | %d | %d |\n", x.ID, x.ProfileID, x.State, x.MeasurementStatus, x.TrialDenominator, s, k, p, n, u)
 	}
-	b.WriteString("\nKnown 404 responses are not session successes. Inter-segment time is unobserved; the report makes no continuous-availability, security, ROI, attacker-mitigation, installed-action, or campaign-PASS claim. Source, harness, and configuration hashes are supplied pins, not independently established binary lineage.\n")
+	b.WriteString("\n## NATS JetStream protocol receipts\n\n| Run | Qualification | Mode | Protocol | Final messages | Sequences | Initial X publication | Actions | Restart ns | Recovery ns | Quorum overlap ns | Cleanup |\n|---|---|---|---|---:|---|---|---:|---:|---:|---:|---|\n")
+	for _, x := range r.Runs {
+		if x.NATSJetStream == nil {
+			continue
+		}
+		n := x.NATSJetStream
+		sequences := fmt.Sprintf("A=%d", n.MessageASequence)
+		if n.MessageBSequence != 0 {
+			sequences += fmt.Sprintf(" B=%d", n.MessageBSequence)
+		}
+		if n.MessageXSequence != 0 {
+			sequences += fmt.Sprintf(" X=%d", n.MessageXSequence)
+		}
+		if n.MessageYSequence != 0 {
+			sequences += fmt.Sprintf(" Y=%d", n.MessageYSequence)
+		}
+		initial := n.DuringPausePublicationStatus
+		if initial == "" {
+			initial = "not-applicable"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d | %s | %s | %d | %d | %d | %d | complete=%t verified=%t |\n", x.ID, x.MeasurementStatus, n.Mode, n.ProtocolStatus, n.FinalMessages, sequences, initial, n.ActionCount, n.RestartBoundaryNanos, n.ReplicaRecoveryNanos, n.QuorumPauseObservedNanos, n.CleanupComplete, n.CleanupVerified)
+	}
+	b.WriteString("\nA reconstructed protocol receipt does not qualify a row whose benign scoring or cleanup disposition is invalid. A timeout-unknown initial NATS publication is neither loss nor acknowledged success. Known 404 responses are not session successes. Inter-segment time is unobserved; the report makes no continuous-availability, security, ROI, attacker-mitigation, installed-action, or campaign-PASS claim. Source, harness, and configuration hashes are supplied pins, not independently established binary lineage.\n")
 	return b.String()
 }
