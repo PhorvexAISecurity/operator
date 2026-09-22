@@ -444,6 +444,15 @@ func (s *Server) startVLLMEffectRecord(service, pod, attack, attackID, evidenceL
 	return s.startAttackRecordAtKind("", service, vllmAttackNS, pod, attack, attackID, evidenceLabel, expected, false, base, started, started.Add(d), "vllm-in-place-effect", started)
 }
 
+func (s *Server) startVLLMUnsupportedRecord(service, pod, attack, attackID, evidenceLabel, expected string, base defenseBaseline) string {
+	d := s.cfg.AttackWatchDuration
+	if d <= 0 {
+		d = 95 * time.Second
+	}
+	started := s.cfg.now()
+	return s.startAttackRecordAtKind("", service, vllmAttackNS, pod, attack, attackID, evidenceLabel, expected, false, base, started, started.Add(d), "vllm-unsupported-stimulus", started)
+}
+
 // startAttackRecordAt pre-registers one exact observation window. Experiment arms use
 // this form so producer/API overhead cannot make one arm's measurement longer than another.
 func (s *Server) startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline, started, deadline time.Time) string {
@@ -559,8 +568,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if r.Outcome != "" || r.ResponseObserved || r.EffectEvidence != nil {
 			continue
 		}
-		switch r.AttackID {
-		case "endpoint-rotate", "guardrail-rotate":
+		if r.EvidenceKind == "vllm-in-place-effect" {
 			effect, probeErr := s.observeVLLMInPlaceEffect(r)
 			if probeErr != nil {
 				r.ObservationError = "in-place effect observation: " + probeErr.Error()
@@ -575,12 +583,17 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				}
 				effect.Seconds = round2(s.cfg.now().Sub(r.started).Seconds())
 				r.EffectEvidence = effect
-				// The effect signature is exact, while attribution remains temporal until the
-				// manager audit carries the unique SecurityEvent UID. Do not set Actuated.
+				// Exact mechanism evidence is not by itself a behavioral or causal verdict.
 				r.Action, r.Actuated, r.TimeToDefendSec = r.AttackID, false, 0
 				r.OutcomeClass = "effect-only"
 				publishAttack(r)
 			}
+			continue
+		}
+		if r.EvidenceKind == "vllm-unsupported-stimulus" {
+			continue
+		}
+		switch r.AttackID {
 		case "poison": // adapter-rotate: real actuation bumps the adapter epoch
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch"); ep != "" && ep != epoch0 {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "adapter-rotate", true
@@ -662,7 +675,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				r.ObservationError = "no exact target-bound in-place effect observed within the registered window"
 			}
 		}
-	} else if r.EvidenceKind == "synthetic-detector-signal" {
+	} else if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "vllm-unsupported-stimulus" {
 		// A detector signal is not an exploit and supplies no attacker foothold. Persist
 		// response evidence without manufacturing DEFENDED/LANDED, containment or dwell.
 		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
@@ -682,7 +695,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
-	} else if r.EvidenceKind == "vllm-in-place-effect" {
+	} else if r.EvidenceKind == "vllm-in-place-effect" || r.EvidenceKind == "vllm-unsupported-stimulus" {
 		// Decision evidence remains explicitly temporal unless the manager later exports the
 		// unique SecurityEvent UID in its audit schema.
 		s.fillReasoning(ctxName, r)

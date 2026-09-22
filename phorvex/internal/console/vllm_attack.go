@@ -1,17 +1,14 @@
 /*
- * Phorvex Console — DASHBOARD-TRIGGERED live vLLM attacks.
+ * Phorvex Console — dashboard-triggered vLLM observations.
  *
- * POST /api/vllm/attack {action} launches a REAL attack on the live vLLM so the operator's actuator
- * SELECTION is visible right below in Live Theatre — no CLI. The console can't reach pod IPs, so it
- * shells kubectl: exec into the pod for the serving-stack call, label/annotate for a detector flag,
- * and temp-file + `apply` for a SecurityEvent (execText has no stdin — same path as workload_attack.go).
+ * POST /api/vllm/attack {action} runs one bounded serving-stack producer and, when that producer is
+ * verified, creates an exact correlated SecurityEvent. The endpoint reports only what it observes:
+ * a target-bound mechanism effect, a response-only signal, or an unsupported behavioral verdict.
+ * It does not infer attacker success or mitigation from temporal Pod/epoch changes.
  *
- * poison (adapter-rotate) and kvcache (kv-reset) fire PROACTIVELY under the baseline policy. The
- * served-model actuators below each SCOPE the policy to [rotate, X] + reactiveOnly and fire a matching
- * SecurityEvent, so X is the sole feasible candidate and the pick is attributable to the click. "reset"
- * clears everything and restores the baseline. The demo fixtures (guardrail sidecar + warm-pool stand-in
- * on the vllm pod/ns) must be standing — see build/test-harness/guardrail/*-deploy.sh. warm-swap and
- * model-shard-replace are DESTRUCTIVE (they retire the leader; the Deployment recreates it in minutes).
+ * The console reaches the serving stack through a bounded kubectl exec because it cannot reach Pod
+ * addresses directly. Every producer and stimulus is bracketed by the exact Pod UID. The legacy reset
+ * path remains a separately tracked restoration boundary and is not evidence for these observations.
  */
 
 package console
@@ -20,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -37,9 +33,6 @@ const vllmAttackNS = "vllm"
 // A scenario only plants the condition and fires a SecurityEvent whose rule type names the
 // attack VECTOR (model.AttackVectorFor*), the same contract workload_attack.go uses.
 
-// fireVllmEvent applies a Phoenix SecurityEvent CR (the detector stand-in) targeting the pod, so the
-// workload becomes actionable and the reactive pick is attributable. Labeled phorvex.ai/redteam=true so
-// "reset" can delete it. Mirrors workload_attack.go (execText has no stdin -> temp file + apply).
 // vllmRuleType maps a scenario's event name to the attack vector the brain steers on, so the
 // fired event lands as belief about WHICH surface was hit rather than as an opaque name.
 func vllmRuleType(evType string) string {
@@ -71,43 +64,6 @@ func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, a
 	writeJSON(w, 502, map[string]any{"error": cause.Error(), "verdict": phase + "-failed", "targetUid": targetUID, "serviceUid": serviceUID, "restoration": restoration})
 }
 
-func (s *Server) fireVllmEvent(pod, evType, desc, anomaly string) error {
-	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
-kind: SecurityEvent
-metadata:
-  name: redteam-vllm-%s
-  namespace: %s
-  labels:
-    phorvex.ai/redteam: "true"
-spec:
-  description: %q
-  targets: ["%s/%s"]
-  rule:
-    type: %q
-    threatLevel: "critical"
-    source: "redteam"
-  anomalyScore: %q
-`, strings.ToLower(evType), vllmAttackNS, desc, vllmAttackNS, pod, vllmRuleType(evType), anomaly)
-	f, ferr := os.CreateTemp("", "phorvex-vllm-se-*.yaml")
-	if ferr != nil {
-		return ferr
-	}
-	defer os.Remove(f.Name())
-	if _, ferr = f.WriteString(yaml); ferr == nil {
-		ferr = f.Sync()
-	}
-	if cerr := f.Close(); ferr == nil {
-		ferr = cerr
-	}
-	if ferr != nil {
-		return fmt.Errorf("write SecurityEvent manifest: %w", ferr)
-	}
-	if out, e := s.cfg.execText(10*time.Second, "kubectl", "-n", vllmAttackNS, "apply", "-f", f.Name()); e != nil {
-		return fmt.Errorf("apply SecurityEvent: %s", strings.TrimSpace(out))
-	}
-	return nil
-}
-
 func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
@@ -116,7 +72,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Action string `json:"action"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Action) == "" {
+		writeJSON(w, 400, map[string]string{"error": "a valid action is required"})
+		return
+	}
 
 	pod, err := s.cfg.execText(8*time.Second, "kubectl", "-n", vllmAttackNS, "get", "pod", "-l", "app=vllm", "-o", "jsonpath={.items[0].metadata.name}")
 	pod = strings.TrimSpace(pod)
@@ -131,9 +90,69 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		_, _ = s.cfg.execText(8*time.Second, "kubectl", append([]string{"-n", vllmAttackNS}, args...)...)
 	}
 
-	// snapshot the defense baseline BEFORE the attack lands (esp. the adapter epoch for poison) so a
-	// fast operator reaction is correctly attributed and not absorbed into the baseline.
+	target, err := s.readVLLMPod(pod)
+	if err != nil || target.Metadata.UID == "" {
+		writeJSON(w, 503, map[string]string{"error": "vLLM target identity is unavailable"})
+		return
+	}
+	targetUID := target.Metadata.UID
+	// Snapshot the baseline before any producer or detector stimulus. The exact UID comes from
+	// the strict Pod JSON read above; the legacy convenience probes supply only optional context.
 	base := s.snapshotBaseline(vllmAttackNS, pod)
+	base.uid = targetUID
+	base.epoch = stringMapValue(target.Metadata.Annotations, "phorvex.ai/adapter-epoch")
+	base.kvEpoch = stringMapValue(target.Metadata.Annotations, "phorvex.ai/kv-reset-epoch")
+	runBoundedProducer := func(producer func() error) (bool, error) {
+		before, readErr := s.readVLLMPod(pod)
+		if readErr != nil || before.Metadata.UID != targetUID {
+			return false, fmt.Errorf("target Pod identity changed before producer")
+		}
+		err := producer()
+		after, afterErr := s.readVLLMPod(pod)
+		if afterErr != nil || after.Metadata.UID != targetUID {
+			if err != nil {
+				return true, fmt.Errorf("%w; target Pod identity changed across producer", err)
+			}
+			return true, fmt.Errorf("target Pod identity changed across producer")
+		}
+		return true, err
+	}
+	createStimulus := func(evType, description, anomaly, adapter string) (*attackStimulusEvidence, error) {
+		before, readErr := s.readVLLMPod(pod)
+		if readErr != nil || before.Metadata.UID != targetUID {
+			return nil, fmt.Errorf("target Pod identity changed before detector stimulus")
+		}
+		stimulus, createErr := s.createCorrelatedVLLMEventWithAdapter(pod, targetUID, evType, description, anomaly, adapter)
+		after, afterErr := s.readVLLMPod(pod)
+		if afterErr != nil || after.Metadata.UID != targetUID {
+			if createErr != nil {
+				return stimulus, fmt.Errorf("%w; target Pod identity changed across detector stimulus", createErr)
+			}
+			return stimulus, fmt.Errorf("target Pod identity changed across detector stimulus")
+		}
+		return stimulus, createErr
+	}
+	setupFailure := func(action, phase string, candidate *attackStimulusEvidence, possibleEffect bool, cause error) {
+		restoration := "not-needed"
+		if possibleEffect {
+			restoration = "unavailable: exact attempted effect identity retained; reconciliation required"
+		}
+		s.writeVLLMSetupFailure(w, r, action, phase, targetUID, "", candidate, possibleEffect, restoration, cause)
+	}
+	startEffect := func(attack, action, evidenceLabel, expected, kind, before, limitation string, stimulus *attackStimulusEvidence) string {
+		stimulus.Limitation = limitation
+		base.stimulus = stimulus
+		base.outcomeClass = "behavioral-oracle-unsupported"
+		base.vllmEffect = &vllmEffectBaseline{kind: kind, before: before}
+		return s.startVLLMEffectRecord(vllmAttackNS, pod, attack, action, evidenceLabel, expected, base)
+	}
+	startUnsupported := func(attack, action, evidenceLabel, expected, limitation string, stimulus *attackStimulusEvidence) string {
+		stimulus.Limitation = limitation
+		base.stimulus = stimulus
+		base.outcomeClass = "behavioral-oracle-unsupported"
+		return s.startVLLMUnsupportedRecord(vllmAttackNS, pod, attack, action, evidenceLabel, expected, base)
+	}
+
 	if err := s.persistEffectIntent("/api/vllm/attack", actorOf(r), vllmAttackNS, body.Action); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "attack refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
 		return
@@ -141,34 +160,40 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 
 	switch body.Action {
 	case "poison":
-		// ATTACK: inject an unauthorized/poisoned LoRA adapter, then flag it (detector stand-in:
-		// Falco/registry-attestation). The brain mints adapter-integrity -> selects adapter-rotate.
-		if out, e := execIn(`curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/v1/load_lora_adapter -H 'Content-Type: application/json' -d '{"lora_name":"evil","lora_path":"/tmp/evil-lora"}'`); e != nil {
-			writeJSON(w, 502, map[string]string{"error": "load adapter failed: " + strings.TrimSpace(out)})
+		if stringMapValue(target.Metadata.Labels, "phorvex.ai/lora-enabled") != "true" {
+			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("target does not declare LoRA support"))
 			return
 		}
-		kctl("label", "pod", pod, "phorvex.ai/lora-enabled=true", "--overwrite")
-		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter=evil", "--overwrite")
-		if e := s.fireVllmEvent(pod, "AdapterPoisoning", "unauthorized LoRA adapter loaded into the serving process", "0.9"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		attempted, producerErr := runBoundedProducer(func() error { return loadVLLMAdapter(execIn, "evil", "/tmp/evil-lora") })
+		if producerErr != nil {
+			setupFailure(body.Action, "producer", nil, attempted, producerErr)
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false, base)
+		stimulus, eventErr := createStimulus("AdapterPoisoning", "verified unapproved LoRA adapter inventory entry", "0.9", "evil")
+		if eventErr != nil {
+			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
+			return
+		}
+		attackID := startEffect("Unapproved LoRA load observation", "poison", "adapter-effect-only", "adapter-rotate", "adapter-epoch", base.epoch, "adapter load and inventory were confirmed; no same-probe model behavior corruption or mitigation was measured", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
 			"attackId": attackID,
-			"message":  "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset). See the Report tab for the measured outcome."})
+			"message":  "An unapproved adapter load and exact detector stimulus were confirmed on " + pod + ". The console will report an exact adapter completion effect if observed; model behavior mitigation is not established."})
 	case "kvcache":
-		// ATTACK: prime a secret prefix into the shared prefix-cache. kv-reset (proactive hygiene)
-		// flushes it; the timing-oracle leak/close numbers are the CLI oracle.
-		_, _ = execIn(`curl -s -o /dev/null http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal","max_tokens":1}'`)
-		if e := s.fireVllmEvent(pod, "KVCacheOccupancy", "secret prefix primed into the shared prefix-cache (timing-oracle leak)", "0.9"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": "SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal", "max_tokens": 1}
+		attempted, producerErr := runBoundedProducer(func() error { return runVLLMCompletion(execIn, false, payload) })
+		if producerErr != nil {
+			setupFailure(body.Action, "producer", nil, attempted, producerErr)
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false, base)
+		stimulus, eventErr := createStimulus("KVCacheOccupancy", "bounded cache-priming request accepted; occupancy not independently measured", "0.9", "")
+		if eventErr != nil {
+			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
+			return
+		}
+		attackID := startEffect("KV cache reset-effect observation", "kvcache", "cache-effect-only", "kv-reset", "kv-reset-epoch", base.kvEpoch, "one completion was accepted; no cache timing leak or same-request hit-to-miss transition was measured", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kvcache",
 			"attackId": attackID,
-			"message":  "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
+			"message":  "A bounded completion and exact cache detector stimulus were accepted on " + pod + ". The console will report a protected reset-epoch effect if observed; no timing leak or eviction verdict is claimed."})
 
 	case "endpoint-rotate":
 		// This stages and measures the route mechanism. It does not execute an SSRF/model-extraction
@@ -252,57 +277,76 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"message":  "Guardrail runtime pgv1 and a unique detector signal were confirmed on " + pod + ". The console will report a fresh runtime variant effect if observed; no jailbreak bypass or mitigation verdict is claimed."})
 
 	case "request-drain":
-		// ATTACK: expensive-turn flood (denial-of-wallet). request-drain aborts the in-flight flood
-		// without restarting the pod. Flood is best-effort/background (evidence, not the selection driver).
-		_, _ = execIn(`for n in 1 2 3 4 5 6; do curl -s -o /dev/null --max-time 90 http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Write a very long detailed essay about the history of computing.","max_tokens":400}' & done; sleep 2`)
-		if e := s.fireVllmEvent(pod, "DenialOfWallet", "expensive-turn flood saturating the vLLM pod (denial-of-wallet)", "0.9"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		_, producerErr := runBoundedProducer(func() error { _, err := readVLLMModels(execIn); return err })
+		if producerErr != nil {
+			setupFailure(body.Action, "readiness", nil, false, producerErr)
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Denial-of-wallet flood", "request-drain", "OWASP LLM10", "request-drain", false, base)
+		stimulus, eventErr := createStimulus("DenialOfWallet", "synthetic request-drain detector signal; no untracked background requests launched", "0.9", "")
+		if eventErr != nil {
+			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
+			return
+		}
+		attackID := startUnsupported("Request-drain response observation", "request-drain", "response-only", "request-drain", "synthetic detector signal; no request admission, aborted-count, reopen, or benign continuity oracle is available in this console flow", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "request-drain",
 			"attackId": attackID,
-			"message":  "Expensive-request flood started + DenialOfWallet fired on " + pod + " — Phorvex drains/aborts the in-flight requests (request-drain) without restarting the pod. Watch the vllm tenant below."})
+			"message":  "An exact synthetic request-drain signal was accepted for " + pod + ". No background flood was launched and no request-abort or mitigation verdict is available."})
 
 	case "kv-migrate-invalidate":
-		// ATTACK: plant a distinctive long prefix (2nd send = cache HIT) — poisoned KV. kv-migrate-invalidate
-		// evicts the planted cache state locally without restarting the pod.
-		_, _ = execIn(`PFX='ZQX-DEMO stable system context block for the disaggregated serving rig padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding'; for n in 1 2; do curl -s -o /dev/null http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d "{\"model\":\"Qwen/Qwen2.5-7B-Instruct-AWQ\",\"messages\":[{\"role\":\"user\",\"content\":\"$PFX reply with OK\"}],\"max_tokens\":4}"; sleep 1; done`)
-		if e := s.fireVllmEvent(pod, "KVPoisoning", "poisoned KV migrated from a prefill worker (disaggregated serving)", "0.9"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		prefix := "ZQX-DEMO stable system context block for the disaggregated serving rig padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"
+		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "messages": []map[string]string{{"role": "user", "content": prefix + " reply with OK"}}, "max_tokens": 4}
+		attempted, producerErr := runBoundedProducer(func() error {
+			if err := runVLLMCompletion(execIn, true, payload); err != nil {
+				return err
+			}
+			return runVLLMCompletion(execIn, true, payload)
+		})
+		if producerErr != nil {
+			setupFailure(body.Action, "producer", nil, attempted, producerErr)
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Disaggregated-KV poisoning", "kv-migrate-invalidate", "CWE-208 / KV poisoning", "kv-migrate-invalidate", false, base)
+		stimulus, eventErr := createStimulus("KVPoisoning", "two identical bounded prefix requests accepted; cache hit and peer migration not independently measured", "0.9", "")
+		if eventErr != nil {
+			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
+			return
+		}
+		beforeKV := stringMapValue(target.Metadata.Annotations, "phorvex.ai/kv-migrate-epoch") + "|" + stringMapValue(target.Metadata.Annotations, "phorvex.ai/kv-local-effect-epoch")
+		attackID := startEffect("KV migration-effect observation", "kv-migrate-invalidate", "kv-effect-only", "kv-migrate-invalidate", "kv-migrate-epoch", beforeKV, "two identical completions were accepted; no cache-hit, peer-transfer, or same-request cold-after observation was measured", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kv-migrate-invalidate",
 			"attackId": attackID,
-			"message":  "Crafted prefix planted + KVPoisoning fired on " + pod + " — Phorvex invalidates the poisoned KV locally (kv-migrate-invalidate); the planted cache state is evicted, pod never restarts. Watch the vllm tenant below."})
+			"message":  "Two bounded prefix requests and an exact detector stimulus were accepted on " + pod + ". The console will report protected local/remote completion metadata if observed; cache eviction is not established."})
 
 	case "warm-swap":
-		// ATTACK: hostile co-tenant GPU pressure. warm-swap promotes the warm stand-in with zero cold-load
-		// and retires the leader. DESTRUCTIVE: retires the 7B leader (Deployment recreates it in minutes;
-		// serving continues via the smaller stand-in meanwhile). Start a long in-flight request as drain evidence.
-		_, _ = execIn(`curl -s -o /dev/null --max-time 180 http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","messages":[{"role":"user","content":"Count from 1 to 200, one number per line."}],"max_tokens":600}' & sleep 2`)
-		if e := s.fireVllmEvent(pod, "GPUEviction", "hostile co-tenant pressure on the shared GPU — evict without cold-load", "0.9"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		_, producerErr := runBoundedProducer(func() error { _, err := readVLLMModels(execIn); return err })
+		if producerErr != nil {
+			setupFailure(body.Action, "readiness", nil, false, producerErr)
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "GPU co-tenant eviction", "warm-swap", "GPU co-residency", "warm-swap", false, base)
+		stimulus, eventErr := createStimulus("GPUEviction", "synthetic warm-swap detector signal; no co-tenant pressure or untracked request launched", "0.9", "")
+		if eventErr != nil {
+			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
+			return
+		}
+		attackID := startUnsupported("Warm-swap response observation", "warm-swap", "response-only", "warm-swap", "synthetic detector signal; no GPU pressure, admitted old request, warm-leader/Service transition, or continuity oracle is available in this console flow", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "warm-swap",
 			"attackId": attackID,
-			"message":  "GPUEviction fired on " + pod + " — Phorvex promotes the warm stand-in with zero cold-load and retires the leader (warm-swap). DESTRUCTIVE: the 7B leader is retired (the Deployment recreates it over a few minutes); serving continues via the smaller stand-in meanwhile. Reset after the leader is back."})
+			"message":  "An exact synthetic warm-swap signal was accepted for " + pod + ". No GPU pressure, request continuity, warm promotion, or mitigation verdict is claimed."})
 
 	case "model-shard-replace":
-		// ATTACK: served-model weight tamper (fingerprint drift). model-shard-replace swaps in the known-good
-		// shard shadow with zero cold-load. DESTRUCTIVE (same as warm-swap: retires the leader). The shard
-		// labels are persisted on both Deployment templates, so no live-pod re-labeling is needed here.
-		if e := s.fireVllmEvent(pod, "ModelTampering", "served-model weight tamper indicated by fingerprint drift — replace the shard cleanly", "0.9"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		_, producerErr := runBoundedProducer(func() error { _, err := readVLLMModels(execIn); return err })
+		if producerErr != nil {
+			setupFailure(body.Action, "readiness", nil, false, producerErr)
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Model weight tamper / extraction", "model-shard-replace", "OWASP LLM05 / supply-chain", "model-shard-replace", false, base)
+		stimulus, eventErr := createStimulus("ModelTampering", "synthetic model-shard detector signal; no model bytes or behavior were modified", "0.9", "")
+		if eventErr != nil {
+			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
+			return
+		}
+		attackID := startUnsupported("Model-shard response observation", "model-shard-replace", "response-only", "model-shard-replace", "synthetic detector signal; no model tamper, known-good shard proof, cutover identity, or behavior oracle is available in this console flow", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "model-shard-replace",
 			"attackId": attackID,
-			"message":  "ModelTampering fired on " + pod + " — Phorvex swaps in the known-good shard shadow with zero cold-load (model-shard-replace). DESTRUCTIVE: the 7B leader is retired (recreated over a few minutes). Reset after the leader is back."})
+			"message":  "An exact synthetic model-shard signal was accepted for " + pod + ". No model tamper, known-good replacement, or mitigation verdict is claimed."})
 
 	case "reset":
 		// clear detector flags + fired events, unload the poisoned adapter, un-stage route/serving labels,
