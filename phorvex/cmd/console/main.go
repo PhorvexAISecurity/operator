@@ -67,11 +67,15 @@ func run() int {
 		auditClientCert string
 		auditClientKey  string
 		auditSourceCA   string
+		historyMaxBytes int64
+		historyMinFree  int64
 	)
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
 	flag.StringVar(&auditPath, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
 	flag.StringVar(&stateDir, "state-dir", "", "Writable console-owned durable state directory (independent of the decision audit).")
+	flag.Int64Var(&historyMaxBytes, "history-max-bytes", console.DefaultHistoryArchiveMaxBytes, "Maximum durable audit-history database size before imports pause.")
+	flag.Int64Var(&historyMinFree, "history-min-free-bytes", console.DefaultHistoryMinFreeBytes, "Minimum free bytes retained on the console state filesystem before imports pause.")
 	flag.StringVar(&auditSourceURL, "audit-source-url", "", "Optional mTLS manager audit source HTTPS origin.")
 	flag.StringVar(&auditServerDNS, "audit-source-server-dns", "", "[audit-source-url] exact server certificate DNS SAN.")
 	flag.StringVar(&auditClientCert, "audit-source-client-cert", "", "[audit-source-url] client leaf certificate file.")
@@ -82,6 +86,9 @@ func run() int {
 	flag.StringVar(&grantsPath, "auth-grants", "", "Path to the subject grant table (JSON). Overrides PHORVEX_CONSOLE_GRANTS.")
 	flag.StringVar(&origins, "trusted-origins", "", "Comma-separated exact browser origins allowed to drive the console. Overrides PHORVEX_CONSOLE_TRUSTED_ORIGINS.")
 	flag.Parse()
+	if historyMaxBytes <= 0 || historyMinFree <= 0 {
+		log.Fatalf("console history capacity configuration: history limits must be positive")
+	}
 
 	if root == "" {
 		if wd, err := os.Getwd(); err == nil {
@@ -92,6 +99,8 @@ func run() int {
 	if stateDir != "" {
 		cfg.StateDir = stateDir
 	}
+	cfg.HistoryArchiveMaxBytes = historyMaxBytes
+	cfg.HistoryMinFreeBytes = historyMinFree
 	cfg.Addr = addr
 	if auditPath != "" {
 		cfg.AuditPath = auditPath
@@ -111,6 +120,9 @@ func run() int {
 	}
 	if err := cfg.ValidateStateDir(); err != nil {
 		log.Fatalf("console state storage unavailable: %v", err)
+	}
+	if err := cfg.ValidateHistoryCapacity(); err != nil {
+		log.Fatalf("console history capacity configuration: %v", err)
 	}
 	for _, h := range strings.Split(metricsAllow, ",") {
 		if h = strings.TrimSpace(h); h != "" {

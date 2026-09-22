@@ -5,21 +5,31 @@
 package console
 
 import (
-	"github.com/phorvex/phorvex/internal/audittransport"
-	"k8s.io/client-go/rest"
+	"fmt"
+	"math"
 	"path/filepath"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/audittransport"
+	"k8s.io/client-go/rest"
 )
 
 // Config locates the Phorvex tree the console reads (read-only) and triggers.
 type Config struct {
-	Root        string                 // the Phorvex root (holds phorvex/ + build/test-harness/)
-	PhorvexBin  string                 // phorvex.exe (for --scan/--ablation/--native-demo/--audit-json)
-	HarnessBin  string                 // harness.exe (for -config <yaml>)
-	HarnessDir  string                 // build/test-harness (cwd for harness runs)
-	StateDir    string                 // writable console-owned state; never the manager decision audit
-	AuditPath   string                 // optional explicit audit JSONL (owner-view source)
-	AuditSource *audittransport.Client // remote mTLS source; nil keeps local-file mode
+	Root       string // the Phorvex root (holds phorvex/ + build/test-harness/)
+	PhorvexBin string // phorvex.exe (for --scan/--ablation/--native-demo/--audit-json)
+	HarnessBin string // harness.exe (for -config <yaml>)
+	HarnessDir string // build/test-harness (cwd for harness runs)
+	StateDir   string // writable console-owned state; never the manager decision audit
+	// HistoryArchiveMaxBytes and HistoryMinFreeBytes bound the append-only durable history
+	// importer. Existing records remain readable when either limit pauses new imports.
+	HistoryArchiveMaxBytes int64
+	HistoryMinFreeBytes    int64
+	// historyTransactionReserveBytes is a same-package test seam. Production uses the
+	// conservative default that covers one bounded import and bbolt allocation overhead.
+	historyTransactionReserveBytes int64
+	AuditPath                      string                 // optional explicit audit JSONL (owner-view source)
+	AuditSource                    *audittransport.Client // remote mTLS source; nil keeps local-file mode
 	// AuditSourceIdentity binds durable history to the configured endpoint. Production sets this
 	// to the remote origin and TLS server identity; it contains no credential material.
 	AuditSourceIdentity string
@@ -44,6 +54,45 @@ type Config struct {
 	BlindRotationDelay   time.Duration
 	// MutationAuditPath is a compatibility override for the mutation journal. Empty uses StateDir.
 	MutationAuditPath string
+}
+
+const (
+	DefaultHistoryArchiveMaxBytes         int64 = 2 << 30
+	DefaultHistoryMinFreeBytes            int64 = 512 << 20
+	defaultHistoryTransactionReserveBytes int64 = 64 << 20
+)
+
+func (c Config) historyCapacityLimits() (archiveMax, minFree, transactionReserve int64, err error) {
+	archiveMax, minFree = c.HistoryArchiveMaxBytes, c.HistoryMinFreeBytes
+	if archiveMax == 0 {
+		archiveMax = DefaultHistoryArchiveMaxBytes
+	}
+	if minFree == 0 {
+		minFree = DefaultHistoryMinFreeBytes
+	}
+	transactionReserve = c.historyTransactionReserveBytes
+	if transactionReserve == 0 {
+		transactionReserve = defaultHistoryTransactionReserveBytes
+	}
+	if transactionReserve <= 0 || transactionReserve > math.MaxInt64/2 {
+		return 0, 0, 0, fmt.Errorf("history transaction reserve %d is outside the supported range", transactionReserve)
+	}
+	if archiveMax < 2*transactionReserve {
+		return 0, 0, 0, fmt.Errorf("history archive maximum %d must be at least twice transaction reserve %d", archiveMax, transactionReserve)
+	}
+	if minFree < transactionReserve {
+		return 0, 0, 0, fmt.Errorf("history minimum free bytes %d must be at least transaction reserve %d", minFree, transactionReserve)
+	}
+	if minFree > math.MaxInt64-transactionReserve {
+		return 0, 0, 0, fmt.Errorf("history minimum free bytes %d plus transaction reserve %d exceeds the supported range", minFree, transactionReserve)
+	}
+	return archiveMax, minFree, transactionReserve, nil
+}
+
+// ValidateHistoryCapacity rejects unsafe importer limits before the console starts.
+func (c Config) ValidateHistoryCapacity() error {
+	_, _, _, err := c.historyCapacityLimits()
+	return err
 }
 
 func (c Config) now() time.Time {
@@ -80,12 +129,14 @@ func (c Config) runOutputPath(out string) string {
 func DefaultConfig(root string) Config {
 	hd := filepath.Join(root, "build", "test-harness")
 	return Config{
-		Root:       root,
-		PhorvexBin: filepath.Join(root, "phorvex", "bin", "phorvex.exe"),
-		HarnessBin: filepath.Join(hd, "bin", "harness.exe"),
-		HarnessDir: hd,
-		StateDir:   hd, // standalone compatibility; deployments must configure a dedicated mount
-		Addr:       ":8090",
-		Web:        filepath.Join(root, "dashboard-web", "out"),
+		Root:                   root,
+		PhorvexBin:             filepath.Join(root, "phorvex", "bin", "phorvex.exe"),
+		HarnessBin:             filepath.Join(hd, "bin", "harness.exe"),
+		HarnessDir:             hd,
+		StateDir:               hd, // standalone compatibility; deployments must configure a dedicated mount
+		HistoryArchiveMaxBytes: DefaultHistoryArchiveMaxBytes,
+		HistoryMinFreeBytes:    DefaultHistoryMinFreeBytes,
+		Addr:                   ":8090",
+		Web:                    filepath.Join(root, "dashboard-web", "out"),
 	}
 }

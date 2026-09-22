@@ -377,6 +377,8 @@ phorvex:
     # provisioning, backup/restore, retention of the PVC, and capacity monitoring.
     state:
       mountPath: /var/lib/phorvex-console
+      historyArchiveMaxBytes: "2147483648"
+      historyMinFreeBytes: "536870912"
       persistence:
         enabled: true
         existingClaim: ""

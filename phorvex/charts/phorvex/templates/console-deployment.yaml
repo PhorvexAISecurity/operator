@@ -56,6 +56,8 @@ spec:
         - -web={{ .Values.phorvex.console.web }}
         - -addr=:{{ .Values.phorvex.console.port }}
         - -state-dir={{ .Values.phorvex.console.state.mountPath }}
+        - -history-max-bytes={{ .Values.phorvex.console.state.historyArchiveMaxBytes }}
+        - -history-min-free-bytes={{ .Values.phorvex.console.state.historyMinFreeBytes }}
         {{- if .Values.phorvex.audit.enabled }}
         - -audit-source-url=https://{{ include "phorvex.fullname" . }}-audit-source.{{ .Release.Namespace }}.svc:{{ .Values.phorvex.console.auditTransport.port }}
         - -audit-source-server-dns={{ .Values.phorvex.console.auditTransport.serverDNSName }}

@@ -14,12 +14,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
@@ -69,19 +72,49 @@ type databaseCursor struct {
 }
 
 type historyStore struct {
-	db     *bolt.DB
-	cfg    Config
-	cancel context.CancelFunc
-	done   chan struct{}
-	mu     sync.RWMutex
-	status map[string]historySourceStatus
-	closed bool
-	bind   string
+	db                 *bolt.DB
+	cfg                Config
+	cancel             context.CancelFunc
+	done               chan struct{}
+	mu                 sync.RWMutex
+	status             map[string]historySourceStatus
+	closed             bool
+	bind               string
+	archiveMaxBytes    int64
+	minFreeBytes       int64
+	transactionReserve int64
+	filesystemUsage    func(string) (historyFilesystemUsage, error)
 }
 
 type historySourceStatus struct {
-	err   string
-	ready bool
+	err            string
+	ready          bool
+	capacityPaused bool
+}
+
+type historyFilesystemUsage struct {
+	availableBytes int64
+}
+
+type historyCapacityError struct {
+	reason string
+	detail string
+}
+
+func (e *historyCapacityError) Error() string {
+	return "durable history import paused by capacity guard: " + e.reason + " (" + e.detail + ")"
+}
+
+func readHistoryFilesystemUsage(path string) (historyFilesystemUsage, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return historyFilesystemUsage{}, err
+	}
+	blockSize, available := uint64(stat.Bsize), uint64(stat.Bavail)
+	if blockSize == 0 || available > math.MaxInt64/blockSize {
+		return historyFilesystemUsage{}, errors.New("filesystem availability is outside supported range")
+	}
+	return historyFilesystemUsage{availableBytes: int64(available * blockSize)}, nil
 }
 
 type historyGapMetaRecord struct {
@@ -91,26 +124,28 @@ type historyGapMetaRecord struct {
 }
 
 func openHistoryStore(cfg Config) (*historyStore, error) {
+	archiveMax, minFree, transactionReserve, err := cfg.historyCapacityLimits()
+	if err != nil {
+		return nil, err
+	}
 	path := filepath.Join(cfg.StateDir, "audit-history.db")
+	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+		usage, usageErr := readHistoryFilesystemUsage(cfg.StateDir)
+		if usageErr != nil {
+			return nil, &historyCapacityError{reason: "filesystem availability unavailable before database creation", detail: usageErr.Error()}
+		}
+		if usage.availableBytes < minFree+transactionReserve {
+			return nil, &historyCapacityError{reason: "filesystem free-space reserve reached before database creation", detail: fmt.Sprintf("available=%d minimum-free=%d transaction-reserve=%d", usage.availableBytes, minFree, transactionReserve)}
+		}
+	} else if statErr != nil {
+		return nil, statErr
+	}
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: 2 * time.Second, NoFreelistSync: false})
 	if err != nil {
 		return nil, err
 	}
-	if err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range [][]byte{historyRecords, historySeen, historyOffsets, historyGaps, historyGapMeta, historyIndex, historyActive} {
-			if _, e := tx.CreateBucketIfNotExists(name); e != nil {
-				return e
-			}
-		}
-		return nil
-	}); err != nil {
-		db.Close()
-		return nil, err
-	}
-	ctx, cancel := context.WithCancel(context.Background())
 	identity := cfg.AuditSourceIdentity
 	if cfg.AuditSource != nil && identity == "" {
-		cancel()
 		db.Close()
 		return nil, errors.New("remote audit source identity is required for durable history")
 	}
@@ -118,9 +153,63 @@ func openHistoryStore(cfg Config) (*historyStore, error) {
 		identity = "local:" + filepath.Clean(cfg.AuditPath)
 	}
 	identityHash := sha256.Sum256([]byte(identity))
-	h := &historyStore{db: db, cfg: cfg, bind: hex.EncodeToString(identityHash[:16]), cancel: cancel, done: make(chan struct{}), status: map[string]historySourceStatus{}}
+	h := &historyStore{db: db, cfg: cfg, bind: hex.EncodeToString(identityHash[:16]), status: map[string]historySourceStatus{},
+		archiveMaxBytes: archiveMax, minFreeBytes: minFree, transactionReserve: transactionReserve, filesystemUsage: readHistoryFilesystemUsage}
+	missingBuckets := false
+	if err = db.View(func(tx *bolt.Tx) error {
+		for _, name := range [][]byte{historyRecords, historySeen, historyOffsets, historyGaps, historyGapMeta, historyIndex, historyActive} {
+			if tx.Bucket(name) == nil {
+				missingBuckets = true
+			}
+		}
+		return nil
+	}); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if missingBuckets {
+		err = h.update(func(tx *bolt.Tx) error {
+			for _, name := range [][]byte{historyRecords, historySeen, historyOffsets, historyGaps, historyGapMeta, historyIndex, historyActive} {
+				if _, e := tx.CreateBucketIfNotExists(name); e != nil {
+					return e
+				}
+			}
+			return nil
+		})
+	}
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancel, h.done = cancel, make(chan struct{})
 	go h.ingestLoop(ctx)
 	return h, nil
+}
+
+func (h *historyStore) checkCapacity() error {
+	info, err := os.Stat(h.db.Path())
+	if err != nil {
+		return &historyCapacityError{reason: "database size unavailable", detail: err.Error()}
+	}
+	if info.Size() > h.archiveMaxBytes-h.transactionReserve {
+		return &historyCapacityError{reason: "archive byte ceiling reached", detail: fmt.Sprintf("database=%d maximum=%d transaction-reserve=%d", info.Size(), h.archiveMaxBytes, h.transactionReserve)}
+	}
+	usage, err := h.filesystemUsage(h.db.Path())
+	if err != nil {
+		return &historyCapacityError{reason: "filesystem availability unavailable", detail: err.Error()}
+	}
+	if usage.availableBytes < h.minFreeBytes+h.transactionReserve {
+		return &historyCapacityError{reason: "filesystem free-space reserve reached", detail: fmt.Sprintf("available=%d minimum-free=%d transaction-reserve=%d", usage.availableBytes, h.minFreeBytes, h.transactionReserve)}
+	}
+	return nil
+}
+
+func (h *historyStore) update(fn func(*bolt.Tx) error) error {
+	if err := h.checkCapacity(); err != nil {
+		return err
+	}
+	return h.db.Update(fn)
 }
 
 func (h *historyStore) Close() error {
@@ -143,6 +232,8 @@ func (h *historyStore) setStatus(source string, err error, ready bool) {
 		s.err = ""
 	} else {
 		s.err = err.Error()
+		var capacityErr *historyCapacityError
+		s.capacityPaused = errors.As(err, &capacityErr)
 	}
 	h.status[source] = s
 	h.mu.Unlock()
@@ -287,7 +378,7 @@ func (h *historyStore) noteMissingGenerations(source historySource) error {
 		present[seg.generation] = true
 	}
 	prefix := []byte(h.sourceID(source.id) + "\x00")
-	return h.db.Update(func(tx *bolt.Tx) error {
+	return h.update(func(tx *bolt.Tx) error {
 		active, offsets := tx.Bucket(historyActive), tx.Bucket(historyOffsets)
 		placeholder, err := json.Marshal(historyProgress{})
 		if err != nil {
@@ -463,7 +554,7 @@ func (h *historyStore) ingestSegment(ctx context.Context, source historySource, 
 	if err != nil {
 		return false, err
 	}
-	err = h.db.Update(func(tx *bolt.Tx) error {
+	err = h.update(func(tx *bolt.Tx) error {
 		seen, records, index := tx.Bucket(historySeen), tx.Bucket(historyRecords), tx.Bucket(historyIndex)
 		for _, item := range pending {
 			if seen.Get(item.identity[:]) != nil {
@@ -546,7 +637,7 @@ func verifyLocalHistoryBatch(source historySource, seg auditSegment, start uint6
 }
 
 func (h *historyStore) resetProgressAfterRewrite(key []byte, source, generation string, offset uint64, message string) error {
-	return h.db.Update(func(tx *bolt.Tx) error {
+	return h.update(func(tx *bolt.Tx) error {
 		if err := putHistoryGap(tx, source, generation, offset, message); err != nil {
 			return err
 		}
@@ -660,7 +751,10 @@ func (h *historyStore) serve(w http.ResponseWriter, r *http.Request) {
 		page.Partial = true
 		page.Notice += " Initial import is still running."
 	}
-	if status.err != "" {
+	if status.capacityPaused {
+		page.Partial = true
+		page.Notice += " Durable history import is paused by the capacity guard; existing records remain readable and durable source offsets are unchanged. Expand or archive console state, or apply reviewed capacity limits, and import will retry automatically."
+	} else if status.err != "" {
 		page.Partial = true
 		page.Notice += " The requested source is currently unavailable; import is incomplete."
 	}
