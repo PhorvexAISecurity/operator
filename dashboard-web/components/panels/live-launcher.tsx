@@ -80,7 +80,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     cancelPending(false); setFiring(""); setApp(ns); setMsg(""); setErr(mutatesDefaultContext ? "" : mutationScopeMessage); setVerdicts({}); setVerdictNotes({}); setRuns({}); setRunNotes({});
   };
 
-  // After a live fire, poll attack-results for ~60s to surface the actuator + outcome for THIS app.
+  // After a live fire, poll attack-results for ~120s (the backend observation window is 95s) to surface the actuator + outcome for THIS app.
   const pollVerdict = React.useCallback((key: string, recordId?: string) => {
     const request = generation.current;
     if (!recordId) {
@@ -92,19 +92,19 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     const tick = () => {
       if (request !== generation.current) return;
       tries++;
-      api.attackResults(lens).then((d) => {
+      api.attackResultsPage(lens, 1, { id: recordId, includeObservations: "true" }).then((d) => {
         if (request !== generation.current) return;
         const mine = (d.attacks || []).find((a) => a.id === recordId);
-        if (mine && (mine.outcome || mine.status === "done")) {
+        if (mine && (mine.outcome || mine.status === "done" || mine.status === "partial")) {
           setVerdicts((v) => ({ ...v, [key]: mine }));
           setVerdictNotes((v) => { const next = { ...v }; delete next[key]; return next; });
           return; // resolved
         }
-        if (tries < 20) schedule();
+        if (tries < 40) schedule();
         else setVerdictNotes((v) => ({ ...v, [key]: `No completed result was recorded for ${recordId} within the polling window.` }));
       }).catch(() => {
         if (request !== generation.current) return;
-        if (tries < 20) schedule();
+        if (tries < 40) schedule();
         else setVerdictNotes((v) => ({ ...v, [key]: `Could not confirm result ${recordId} within the polling window.` }));
       });
     };

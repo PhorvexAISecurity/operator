@@ -36,6 +36,9 @@ type CatalogItem struct {
 	Prereqs           []string `json:"prereqs"`
 }
 
+// Legacy harnesses used techniques; current harnesses separate declared from exercised.
+// Catalogue techniques describe declared applicability, never observed attack coverage.
+var currentListRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s+realism=\S+\s+benign=(?:true|false)\s+declared=\[([^\]]*)\]\s+exercised=\[[^\]]*\]\s+caps=\[([^\]]*)\]`)
 var listRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s+techniques=\[([^\]]*)\]\s+caps=\[([^\]]*)\]`)
 
 func productOf(name string) string {
@@ -61,12 +64,21 @@ func (c *Config) Catalog() []CatalogItem {
 	if err != nil {
 		return nil
 	}
-	hasRun := c.scenariosRun()
+	return parseCatalog(out, c.scenariosRun())
+}
+
+func parseCatalog(out []byte, hasRun map[string]bool) []CatalogItem {
 	var items []CatalogItem
 	sc := bufio.NewScanner(strings.NewReader(string(out)))
 	for sc.Scan() {
-		m := listRe.FindStringSubmatch(sc.Text())
+		m := currentListRe.FindStringSubmatch(sc.Text())
 		if m == nil {
+			m = listRe.FindStringSubmatch(sc.Text())
+		}
+		if m == nil {
+			if strings.Contains(sc.Text(), " R6=") {
+				return nil // Reject incomplete catalogues if a scenario format is unknown.
+			}
 			continue
 		}
 		prod := productOf(m[1])
@@ -78,6 +90,9 @@ func (c *Config) Catalog() []CatalogItem {
 			ExpectedActuators: meta.ExpectedActuators, MeaningfulWhen: meta.MeaningfulWhen,
 			RunnableNote: meta.RunnableNote, Prereqs: meta.Prereqs,
 		})
+	}
+	if sc.Err() != nil {
+		return nil
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Product != items[j].Product {

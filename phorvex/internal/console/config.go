@@ -25,6 +25,7 @@ type Config struct {
 	// importer. Existing records remain readable when either limit pauses new imports.
 	HistoryArchiveMaxBytes int64
 	HistoryMinFreeBytes    int64
+	HistoryRetentionDays   int // zero preserves append-only behavior; explicit configuration authorizes expiry
 	// historyTransactionReserveBytes is a same-package test seam. Production uses the
 	// conservative default that covers one bounded import and bbolt allocation overhead.
 	historyTransactionReserveBytes int64

@@ -136,6 +136,13 @@ func run() int {
 	}
 	cfg.HistoryArchiveMaxBytes = historyMaxBytes
 	cfg.HistoryMinFreeBytes = historyMinFree
+	if raw, present := os.LookupEnv("PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS"); present {
+		days, err := strconv.Atoi(raw)
+		if err != nil || days < 0 || days > 3650 || raw != strconv.Itoa(days) {
+			log.Fatal("history retention days must be a canonical integer in 0..3650")
+		}
+		cfg.HistoryRetentionDays = days
+	}
 	cfg.Addr = addr
 	if auditPath != "" {
 		cfg.AuditPath = auditPath

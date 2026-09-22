@@ -254,8 +254,8 @@ export const api = {
   version: (lens: Lens, signal?: AbortSignal) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens, signal),
   vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
-  attackResults: (lens: Lens) => get<{ attacks: AttackResult[] }>("/api/attack-results", lens),
-  attackResultsPage: (lens: Lens, limit: number, filters: { q?: string; id?: string } = {}, cursor?: string, signal?: AbortSignal) =>
+  attackResults: (lens: Lens, includeObservations = false) => get<{ attacks: AttackResult[] }>(`/api/attack-results${includeObservations ? "?includeObservations=true" : ""}`, lens),
+  attackResultsPage: (lens: Lens, limit: number, filters: { q?: string; id?: string; includeObservations?: string } = {}, cursor?: string, signal?: AbortSignal) =>
     get<{ attacks: AttackResult[]; page?: PageMeta }>(`/api/attack-results?${pageQuery(limit, filters, cursor)}`, lens, signal),
   // Per-app attack compatibility: which attacks THIS app's stack supports, which are armed to
   // fire now, and — when the harness binary is in the image — the catalogue filtered per app.
@@ -267,7 +267,7 @@ export const api = {
   // LIVE-ATTACK MONITORING — availability before/during/after each real attack + downtime $.
   attackMonitoring: (lens: Lens) =>
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),
-  attackMonitoringPage: (lens: Lens, limit: number, filters: { q?: string; id?: string } = {}, cursor?: string, signal?: AbortSignal) =>
+  attackMonitoringPage: (lens: Lens, limit: number, filters: { q?: string; id?: string; includeObservations?: string } = {}, cursor?: string, signal?: AbortSignal) =>
     get<AttackMonitoringResult & { page?: PageMeta }>(`/api/attack-monitoring?${pageQuery(limit, filters, cursor)}`, lens, signal),
   // three-arm availability: no-defense vs blind timer vs Phorvex, measured on the same app.
   // start a three-arm comparison for one app (disruptive, ~7 min) — the 3-way tab shows it live.

@@ -20,14 +20,16 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
   const [selectedId, setSelectedId] = React.useState("");
   const [q, setQ] = React.useState("");
   const pageSize = compact ? 3 : 20;
+  const resource = compact ? "attack-observations" : "attack-results";
+  const includeObservations = compact ? "true" : undefined;
   const normalizedQ = q.trim().toLowerCase();
   const pager = useServerPage<AttackResult>({
     resource: "attack-results", lens,
     key: `${lens}\u0000${normalizedQ}\u0000${pageSize}`,
-    network: { q: normalizedQ || undefined },
+    network: { q: normalizedQ || undefined, includeObservations },
     pageSize,
     pollMs: 4000,
-    fetchPage: (cursor, signal) => api.attackResultsPage(lens, pageSize, { q: normalizedQ || undefined }, cursor, signal).then((d) => ({ items: d.attacks || [], page: d.page })),
+    fetchPage: (cursor, signal) => api.attackResultsPage(lens, pageSize, { q: normalizedQ || undefined, includeObservations }, cursor, signal).then((d) => ({ items: d.attacks || [], page: d.page })),
     legacyFilter: (r) => !normalizedQ || `${r.id} ${r.service} ${r.namespace} ${r.attack}`.toLowerCase().includes(normalizedQ),
   });
   React.useEffect(() => {
@@ -44,8 +46,8 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
 
   const selectedOnPage = !!selectedId && pager.items.some((r) => r.id === selectedId);
   const needsExact = !!selectedId && (!selectedOnPage || pager.hasSnapshot || pager.page > 0);
-  const exactQuery = useExactRecord({ resource: "attack-results", context: target.context, id: selectedId, lens, enabled: needsExact,
-    fetcher: (signal) => api.attackResultsPage(lens, 1, { id: selectedId }, undefined, signal).then((d) => (d.attacks || []).find((r) => r.id === selectedId) || null),
+  const exactQuery = useExactRecord({ resource, context: target.context, id: selectedId, lens, enabled: needsExact,
+    fetcher: (signal) => api.attackResultsPage(lens, 1, { id: selectedId, includeObservations }, undefined, signal).then((d) => (d.attacks || []).find((r) => r.id === selectedId) || null),
     active: (record) => record.status === "running" });
   const exact = needsExact ? exactQuery.data || null : null;
   const exactMissing = needsExact && exactQuery.data === null;
@@ -69,7 +71,7 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
 
   return (
     <div className="space-y-3">
-      <div className="text-[11px] text-muted-foreground">Cluster-wide recorded attack history for this console; changing the selected target does not filter these rows.</div>
+      <div className="text-[11px] text-muted-foreground">Cluster-wide recorded attacks{compact ? " and mechanism observations" : ""} for this console; changing the selected target does not filter these rows.</div>
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all attacks by ID, service, namespace, or attack…" aria-label="Search attack results" />
       {pager.legacy && <div className="text-[11px] text-warning">Legacy/preview response: paging and search cover the full history returned by this fixture.</div>}
       {pager.error && <div className="text-[11px] text-danger">Page refresh failed: {pager.error} <button className="text-primary" onClick={pager.retry}>Retry</button></div>}
