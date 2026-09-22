@@ -32,7 +32,7 @@
       "sourceFile": "scenarios/c2_checkpoint_continuity.go",
       "measures": "Acknowledged synthetic progress, same owned volume, observed replacement and later durable acknowledgement.",
       "limits": "Unavailability is not corruption; no cross-node, paid-volume, HA or generic state-transfer claim.",
-      "sourceSHA256": "9767668b44f6ef34039f904b92af83ec512915e23be5fa3e2926804d0ef04953"
+      "sourceSHA256": "c7e8a1fa264fb14510e931540db55b9381d3740f90d88c67f724cf6a4f20d6e2"
     },
     {
       "id": "c2-voice-websocket-continuity",
@@ -73,6 +73,22 @@
       "measures": "Actual engine admission, one late-selected authenticated unfinished SSE anchor captured and aborted by the engine operation, all engine dispositions, explicit unattributed background snapshot IDs, two fresh empty-queue observations and reopen.",
       "limits": "Client attribution is limited to the exact anchor; queued requests without an SSE identity remain unattributed and fullCohortAttributed is false. Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
       "sourceSHA256": "77f4d6e1fb69a396df8c1dd423d7334a745ee90590901518f3fa1e70a07d103f"
+    },
+    {
+      "id": "c2-native-route-cutover",
+      "workloadBoundary": "native-service-selector-cutover",
+      "sourceFile": "scenarios/c2_native_route_cutover.go",
+      "measures": "Production NativeActuator route-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback.",
+      "limits": "Selector rekey only; no locator, credential, session, security-efficacy, universal-availability or installed-brain claim.",
+      "sourceSHA256": "6a28026d78b3759e6784bd1eca3b7e2275d8c3a4e33c3584ff9018a691b5d150"
+    },
+    {
+      "id": "c2-native-endpoint-cutover",
+      "workloadBoundary": "native-endpoint-selector-cutover",
+      "sourceFile": "scenarios/c2_native_route_cutover.go",
+      "measures": "Production NativeActuator endpoint-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback.",
+      "limits": "Selector rekey only; no locator, credential, session, security-efficacy, universal-availability or installed-brain claim.",
+      "sourceSHA256": "6a28026d78b3759e6784bd1eca3b7e2275d8c3a4e33c3584ff9018a691b5d150"
     }
   ],
   "profiles": [
@@ -347,6 +363,54 @@
         "gpuFunctionalFixture.mode": "direct"
       },
       "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "native-route-rotate",
+      "scenarioFilter": [
+        "c2-native-route-cutover"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-production-entrypoint-control",
+      "requiredFixtures": [
+        "externally provisioned owned two-Pod HTTP fixture",
+        "exact tenant/journal Namespace, Policy, Pod and Service identities",
+        "source-bound native-route-catalogue binary and private typed config",
+        "external exact-UID fixture cleanup supervisor"
+      ],
+      "requiredRelationships": [
+        "expectedNamespaceUID == nativeRouteFixture.namespaceUID"
+      ],
+      "requiredConfigValues": {
+        "nativeRouteFixture.action": "route-rotate"
+      },
+      "outputIsolation": "Fresh externally owned namespaces, operation ID, private receipt path and output directory for each profile invocation; never resume or share protected journals."
+    },
+    {
+      "id": "native-endpoint-rotate",
+      "scenarioFilter": [
+        "c2-native-endpoint-cutover"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-production-entrypoint-control",
+      "requiredFixtures": [
+        "externally provisioned owned two-Pod HTTP fixture",
+        "exact tenant/journal Namespace, Policy, Pod and Service identities",
+        "source-bound native-route-catalogue binary and private typed config",
+        "external exact-UID fixture cleanup supervisor"
+      ],
+      "requiredRelationships": [
+        "expectedNamespaceUID == nativeRouteFixture.namespaceUID"
+      ],
+      "requiredConfigValues": {
+        "nativeRouteFixture.action": "endpoint-rotate"
+      },
+      "outputIsolation": "Fresh externally owned namespaces, operation ID, private receipt path and output directory for each profile invocation; never resume or share protected journals."
     }
   ],
   "comparisonContract": {
