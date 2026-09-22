@@ -106,10 +106,12 @@ func TestObservationRunnerExcludesUnattributedNegative(t *testing.T) {
 	if base == nil || arm == nil {
 		t.Fatalf("missing rows: %+v", rows)
 	}
-	if !base.IsScored() || !base.OracleAchieved {
-		t.Fatalf("real positive control unavailable: %+v", *base)
+	baseValidity := base.MeasurementState()
+	if !base.OracleAchieved || base.ScenarioRealism != core.RealismUnassessed || baseValidity.Status != core.MeasurementValid || !baseValidity.AttackExecuted || !baseValidity.OracleObserved || base.IsScored() || !base.Skipped || !strings.Contains(base.SkipReason, "UNSCORED(realism)") {
+		t.Fatalf("raw positive observation was not retained as unassessed: %+v", *base)
 	}
-	if arm.OracleAchieved || arm.IsScored() || !arm.Skipped || arm.DisruptionVsOracle != 0 || arm.SecurityPerCost != 0 || arm.ROI != nil {
+	armValidity := arm.MeasurementState()
+	if arm.OracleAchieved || arm.ScenarioRealism != core.RealismUnassessed || armValidity.Status != core.MeasurementValid || !armValidity.AttackExecuted || !armValidity.OracleObserved || arm.IsScored() || !arm.Skipped || !strings.Contains(arm.SkipReason, "UNSCORED(realism)") || arm.DisruptionVsOracle != 0 || arm.SecurityPerCost != 0 || arm.ROI != nil || arm.Schwartau != nil || arm.MTDEffect != "" || arm.Reuse != nil {
 		t.Fatalf("unattributed false marker scored: %+v", *arm)
 	}
 	if arm.DefensiveActions != 0 {

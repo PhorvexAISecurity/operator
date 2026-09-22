@@ -250,7 +250,7 @@ type slowScenario struct {
 }
 
 func (s *slowScenario) Metadata() ScenarioMeta {
-	return ScenarioMeta{Name: "r1-slow", Category: CategoryClassicChain, R6ResponseTag: R6Partial}
+	return ScenarioMeta{Name: "r1-slow", Category: CategoryClassicChain, R6ResponseTag: R6Partial, Realism: RealismExecutable}
 }
 func (s *slowScenario) Setup(context.Context, *Env) error { return nil }
 func (s *slowScenario) Execute(_ context.Context, env *Env) (AttackResult, error) {

@@ -294,13 +294,20 @@ func TestM171RunnerEmitterDeliveryCannotRepairFixture(t *testing.T) {
 				t.Fatalf("rows=%d want 3", len(rows))
 			}
 			for _, row := range rows {
+				validity := row.MeasurementState()
+				if row.ScenarioRealism != core.RealismUnassessed || validity.Status != core.MeasurementValid || validity.Phase != core.PhaseComplete || !validity.AttackExecuted || !validity.OracleObserved || row.IsScored() || !row.Skipped || !strings.Contains(row.SkipReason, "UNSCORED(realism)") {
+					t.Fatalf("unassessed scenario did not retain a valid unscored raw observation: %+v", row)
+				}
+				if row.DisruptionVsOracle != 0 || row.SecurityPerCost != 0 || row.ROI != nil || row.Schwartau != nil || row.MTDEffect != "" || row.Reuse != nil {
+					t.Fatalf("unassessed scenario emitted security/economics credit: %+v", row)
+				}
 				if row.Defender == "m171-acting-defender" {
-					if row.OracleAchieved || !row.IsScored() || row.DisruptionVsOracle != 1 {
-						t.Fatalf("acting test defender did not earn credit for its measured action: %+v", row)
+					if row.OracleAchieved || row.DefensiveActions != 1 || !strings.Contains(row.ObservedState, "defender effect attributed=true") {
+						t.Fatalf("acting test defender's raw measured effect was lost: %+v", row)
 					}
 				} else {
-					if !row.OracleAchieved || !row.IsScored() || row.DisruptionVsOracle != 0 {
-						t.Fatalf("emitter/no-defense fixture changed or received credit: %+v", row)
+					if !row.OracleAchieved {
+						t.Fatalf("emitter/no-defense fixture changed: %+v", row)
 					}
 					if strings.Contains(row.ObservedState, "golden observed=true") {
 						t.Fatalf("fixture was repaired: %+v", row)
@@ -440,8 +447,8 @@ func TestM171RunnerEmitterDeliveryCannotRepairFixture(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, row := range failedRows {
-				if !row.OracleAchieved || !row.IsScored() || row.DisruptionVsOracle != 0 {
-					t.Fatalf("failed emitter changed scored fixture state: %+v", row)
+				if !row.OracleAchieved || row.IsScored() || !row.Skipped || !strings.Contains(row.SkipReason, "UNSCORED(realism)") || row.DisruptionVsOracle != 0 || row.SecurityPerCost != 0 || row.ROI != nil || row.Schwartau != nil || row.MTDEffect != "" || row.Reuse != nil {
+					t.Fatalf("failed emitter changed raw fixture state or received credit: %+v", row)
 				}
 				if row.Defender == "m171-emitter" && !strings.Contains(row.ObservedState, "event emitted=false") {
 					t.Fatalf("failed delivery not disclosed: %+v", row)
