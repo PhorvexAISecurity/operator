@@ -489,8 +489,8 @@ func validateNATSJetStreamFixture(c TargetConfig) error {
 	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-nats-jetstream-durability" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" {
 		return errors.New("config: natsJetStreamFixture requires one c2-nats-jetstream-durability trial with defenderFilter=[d-nomtd]")
 	}
-	if fixture.Mode != "no-action" && fixture.Mode != "member-restart" {
-		return errors.New("config: natsJetStreamFixture mode must be no-action or member-restart; direct-native and installed-dispatch use separately reviewed entries")
+	if fixture.Mode != "no-action" && fixture.Mode != "member-restart" && fixture.Mode != "quorum-pause" {
+		return errors.New("config: natsJetStreamFixture mode must be no-action, member-restart, or quorum-pause; direct-native and installed-dispatch use separately reviewed entries")
 	}
 	for label, value := range map[string]string{"storageClass": fixture.StorageClass, "nodeName": fixture.NodeName, "holderName": fixture.HolderName} {
 		if value == "" || len(validation.IsDNS1123Subdomain(value)) != 0 {

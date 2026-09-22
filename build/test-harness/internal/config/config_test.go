@@ -271,6 +271,14 @@ func TestNATSJetStreamFixtureRequiresExactIsolatedAuthority(t *testing.T) {
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	quorum := valid
+	quorumFixture := *valid.NATSJetStreamFixture
+	quorumFixture.PVs = append([]NATSJetStreamLocalPV(nil), valid.NATSJetStreamFixture.PVs...)
+	quorumFixture.Mode = "quorum-pause"
+	quorum.NATSJetStreamFixture = &quorumFixture
+	if err := quorum.Validate(); err != nil {
+		t.Fatalf("explicit quorum-pause mode rejected: %v", err)
+	}
 	for name, mutate := range map[string]func(*TargetConfig){
 		"multiple trials": func(c *TargetConfig) { c.TrialsPerArm = 2 },
 		"installed mode":  func(c *TargetConfig) { c.NATSJetStreamFixture.Mode = "installed-dispatch" },

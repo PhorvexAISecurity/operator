@@ -1,7 +1,7 @@
 # Workload catalogue v3 — development suite
 
 [`suite.json`](suite.json) selects seven implemented workload mechanisms through
-12 explicit profiles. This is a development foundation for brain evaluation;
+13 explicit profiles. This is a development foundation for brain evaluation;
 it is **not a completed live benchmark or a security-coverage certificate**.
 Source tests, direct backend effects, installed-manager attribution, application
 availability and security efficacy have separate acceptance records.
@@ -17,14 +17,13 @@ controllers or installs shared CRDs.
 | HTTP process state | `http-session-baseline-timer` | Synthetic session survives no action or is lost after independently observed replacement; a fresh session works. |
 | Durable checkpoint | `checkpoint-local-baseline-timer` | Acknowledged progress and later durable readback on an exact owned volume, including interruptions and unverified recovery. |
 | Voice transport | `voice-stream-baseline-timer` | Numbered synthetic WebSocket frames, end marker, established-session interruption and fresh-session recovery. |
-| NATS JetStream | `nats-no-action`, `nats-member-restart` | Actual publish/consumer acknowledgements and stored-message hashes around one non-client member child restart. |
+| NATS JetStream | `nats-no-action`, `nats-member-restart`, `nats-quorum-pause` | Actual publish/consumer acknowledgements and stored-message hashes around no action, one non-client restart, or bounded two-member quorum loss with same-ID reconciliation. |
 | Installed Phorvex | `manager-session-no-action`, `manager-session-blind-timer`, `manager-session-installed` | Matched process-state/request observations with a separately attributable installed decision, refusal or action. |
 | Ordinary GPU cache | `gpu-prefix-cache-reset-no-action`, `gpu-prefix-cache-reset-direct` | Actual inference/cache observations; direct logical reset, miss/repopulation and busy refusal. |
 | Ordinary GPU drain | `gpu-request-drain-no-action`, `gpu-request-drain-direct` | Actual engine admission/in-flight dispositions, fresh quiescence observations and explicit reopening. |
 
 Voice covers the transport and state boundary found in the running service; it
-does not make paid speech or LLM calls. NATS does not yet establish client/leader
-failover or quorum-loss behavior. GPU controls use ordinary hardware and real
+does not make paid speech or LLM calls. The NATS quorum profile retains a bounded single publish attempt while member 0 remains connected and members 1 and 2 are paused, then reconciles the exact message ID after recovery. It does not establish client or leader failover. GPU controls use ordinary hardware and real
 OPT-125m inference. They do not demonstrate MIG, physical memory erasure,
 cross-tenant isolation, voice draining or attacker mitigation.
 

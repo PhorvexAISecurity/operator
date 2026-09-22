@@ -7,8 +7,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -96,8 +100,146 @@ func TestNATSStorageClassRequiresExactUIDAndRetainContract(t *testing.T) {
 }
 
 func TestNATSSupervisorUsesPinnedImageAndChildRestartBoundary(t *testing.T) {
-	if !strings.Contains(natsImage, "@sha256:") || !strings.Contains(natsSupervisorScript, "wait \"$child\"") || !strings.Contains(natsSupervisorScript, "/control/restart") || !strings.Contains(natsSupervisorScript, "--store_dir /data/jetstream") {
+	if !strings.Contains(natsImage, "@sha256:") || !strings.Contains(natsSupervisorScript, "wait \"$child\"") || !strings.Contains(natsSupervisorScript, "/control/restart") || !strings.Contains(natsSupervisorScript, "--store_dir /data/jetstream") || !strings.Contains(natsSupervisorScript, "kill -STOP \"$child\"") || !strings.Contains(natsSupervisorScript, "\"$ticks\" -lt 90") || !strings.Contains(natsSupervisorScript, "kill -CONT \"$child\"") {
 		t.Fatal("NATS image or supervisor persistence/restart boundary differs")
+	}
+}
+
+func TestNATSSupervisorShellAcceptsExactAuthorityAndRefusesWrongStartTime(t *testing.T) {
+	control, data := filepath.Join(t.TempDir(), "control"), filepath.Join(t.TempDir(), "data")
+	script := strings.ReplaceAll(natsSupervisorScript, "/control", control)
+	script = strings.ReplaceAll(script, "/data", data)
+	lines := strings.Split(script, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "nats-server --name") {
+			lines[i] = "  sleep 30 &"
+		}
+	}
+	cmd := exec.Command("/bin/sh", "-ec", strings.Join(lines, "\n"))
+	cmd.Env = append(os.Environ(), "POD_NAME=c2-nats-js-1")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if raw, err := os.ReadFile(filepath.Join(control, "pid")); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil {
+				_ = syscall.Kill(pid, syscall.SIGCONT)
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+	waitFile := func(name string, match func(string) bool, window time.Duration) string {
+		t.Helper()
+		deadline := time.Now().Add(window)
+		for time.Now().Before(deadline) {
+			raw, err := os.ReadFile(filepath.Join(control, name))
+			if err == nil && match(strings.TrimSpace(string(raw))) {
+				return strings.TrimSpace(string(raw))
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatalf("supervisor receipt %s did not arrive", name)
+		return ""
+	}
+	waitFile("generation", func(value string) bool { return value == "1" }, 3*time.Second)
+	rawPID, err := os.ReadFile(filepath.Join(control, "pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(rawPID)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := strings.Fields(string(stat))
+	if len(fields) < 22 {
+		t.Fatal("child process stat is incomplete")
+	}
+	authority := natsProcessAuthority{PID: pid, StartTime: mustUint(t, fields[21]), Generation: 1}
+	nonce := "shell-control"
+	if err := os.WriteFile(filepath.Join(control, "quorum-request"), []byte(quorumControlLine("request", nonce, authority)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	wantPaused := quorumControlLine("paused", nonce, authority)
+	waitFile("quorum-paused", func(value string) bool { return value == wantPaused }, 3*time.Second)
+	stat, err = os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil || len(strings.Fields(string(stat))) < 3 || strings.Fields(string(stat))[2] != "T" {
+		t.Fatalf("exact child was not stopped: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(control, "quorum-resume"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	wantResumed := quorumControlLine("resumed", nonce, authority) + " requested"
+	waitFile("quorum-resumed", func(value string) bool { return value == wantResumed }, 3*time.Second)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(control, "quorum-request")); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(control, "quorum-request")); !os.IsNotExist(err) {
+		t.Fatalf("supervisor did not retire the accepted request: %v", err)
+	}
+
+	wrong := authority
+	wrong.StartTime++
+	if err := os.WriteFile(filepath.Join(control, "quorum-request"), []byte(quorumControlLine("request", "wrong", wrong)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	waitFile("quorum-refused", func(value string) bool { return strings.HasPrefix(value, "refused wrong ") }, 3*time.Second)
+	stat, err = os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil || strings.Fields(string(stat))[2] == "T" {
+		t.Fatalf("wrong start-time request signaled the child: %v", err)
+	}
+	deadline = time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(control, "quorum-request")); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(control, "quorum-request")); !os.IsNotExist(err) {
+		t.Fatalf("supervisor did not retire the refused request: %v", err)
+	}
+	automaticNonce := "automatic-control"
+	if err := os.WriteFile(filepath.Join(control, "quorum-request"), []byte(quorumControlLine("request", automaticNonce, authority)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	wantAutomaticPaused := quorumControlLine("paused", automaticNonce, authority)
+	waitFile("quorum-paused", func(value string) bool { return value == wantAutomaticPaused }, 3*time.Second)
+	wantAutomaticResumed := quorumControlLine("resumed", automaticNonce, authority) + " automatic"
+	waitFile("quorum-resumed", func(value string) bool { return value == wantAutomaticResumed }, 12*time.Second)
+	stat, err = os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil || strings.Fields(string(stat))[2] == "T" {
+		t.Fatalf("automatic deadline did not resume exact child: %v", err)
+	}
+	_ = syscall.Kill(pid, syscall.SIGTERM)
+}
+
+func mustUint(t *testing.T, value string) uint64 {
+	t.Helper()
+	result, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestNATSProcessAuthorityRequiresExactPIDStartAndGeneration(t *testing.T) {
+	got, err := parseNATSProcessAuthority("17 123456 2\n")
+	if err != nil || got.PID != 17 || got.StartTime != 123456 || got.Generation != 2 {
+		t.Fatalf("valid process authority rejected: %+v %v", got, err)
+	}
+	for _, raw := range []string{"17 0 2", "1 123 2", "17 123 0", "17 123", "17 wrong 2"} {
+		if _, err := parseNATSProcessAuthority(raw); err == nil {
+			t.Fatalf("invalid process authority accepted: %q", raw)
+		}
 	}
 }
 
