@@ -53,21 +53,22 @@ func main() {
 }
 
 func run(configPath, outputPath string) error {
+	return runWithBuildValidator(configPath, outputPath, validateBuild)
+}
+
+func runWithBuildValidator(configPath, outputPath string, buildValidator func(string) error) error {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	if err := validateBuild(cfg.Run.SourceRevision); err != nil {
+	if buildValidator == nil {
+		return errors.New("route catalogue build validator unavailable")
+	}
+	if err := buildValidator(cfg.Run.SourceRevision); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(outputPath) || filepath.Clean(outputPath) != outputPath {
-		return errors.New("route catalogue output must be a clean absolute path")
-	}
-	if _, err := os.Lstat(outputPath); !os.IsNotExist(err) {
-		if err == nil {
-			return errors.New("route catalogue output already exists")
-		}
-		return fmt.Errorf("route catalogue output authority: %w", err)
+	if err := validateOutputAuthority(outputPath); err != nil {
+		return err
 	}
 
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -121,6 +122,30 @@ func run(configPath, outputPath string) error {
 		return errors.Join(runErr, closeErr, journalErr, err)
 	}
 	return errors.Join(runErr, closeErr, journalErr)
+}
+
+func validateOutputAuthority(outputPath string) error {
+	if !filepath.IsAbs(outputPath) || filepath.Clean(outputPath) != outputPath {
+		return errors.New("route catalogue output must be a clean absolute path")
+	}
+	dir := filepath.Dir(outputPath)
+	info, err := os.Lstat(dir)
+	if err != nil || !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+		return errors.New("route catalogue output directory must exist and be private")
+	}
+	for label, path := range map[string]string{
+		"output":        outputPath,
+		"temporary":     outputPath + ".tmp",
+		"write journal": outputPath + ".writes.jsonl",
+	} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			if err == nil {
+				return fmt.Errorf("route catalogue %s already exists", label)
+			}
+			return fmt.Errorf("route catalogue %s authority: %w", label, err)
+		}
+	}
+	return nil
 }
 
 type writeJournal struct {
