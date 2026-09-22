@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -29,11 +30,13 @@ import (
 )
 
 type m106MemoryEvidence struct {
-	mu      sync.Mutex
-	bundles []EvidenceBundle
-	block   <-chan struct{}
-	entered chan<- struct{}
-	err     error
+	mu            sync.Mutex
+	bundles       []EvidenceBundle
+	block         <-chan struct{}
+	entered       chan<- struct{}
+	err           error
+	ignoreContext bool
+	calls         atomic.Int32
 }
 
 type m106StaticResolver struct{}
@@ -71,7 +74,40 @@ type m106Clock struct {
 func (c *m106Clock) Now() time.Time      { c.mu.Lock(); defer c.mu.Unlock(); return c.now }
 func (c *m106Clock) Set(value time.Time) { c.mu.Lock(); c.now = value; c.mu.Unlock() }
 
+func m106PreparedProducer(t *testing.T, store EvidenceStore) (*Producer, PrepareConfig, *m106Clock) {
+	t.Helper()
+	workload := model.PersistenceWorkloadScope{Namespace: "ns", OwnerKind: "Deployment", OwnerName: "app", OwnerUID: "owner"}
+	digest, err := workload.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Transport: m106RoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		session := r.URL.Query().Get("session")
+		target := "uid"
+		if session == "new" {
+			target = "new-uid"
+		}
+		body, _ := json.Marshal(SessionResponse{SchemaVersion: SessionResponseSchemaV1, SessionID: session, Challenge: r.URL.Query().Get("challenge"), Present: true, TargetUID: target, WorkloadScopeSHA256: digest})
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header), Request: r}, nil
+	}), Timeout: time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect refused") }}
+	clock := &m106Clock{now: time.Date(2026, 9, 21, 5, 0, 0, 0, time.UTC)}
+	producer, err := newProducer(client, store, m106StaticResolver{}, "epoch", clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer.waitUntil = func(ctx context.Context, deadline time.Time) bool { clock.Set(deadline); return ctx.Err() == nil }
+	config := PrepareConfig{Policy: model.PolicyEpoch{Namespace: "ns", Name: "p", UID: "u", Generation: 1}, Workload: workload,
+		TargetUID: "uid", TargetName: "pod", TargetTerminationGraceSeconds: 30,
+		Old:         SessionEndpoint{URL: "https://session.test/old", SessionID: "old", Challenge: "before", TargetUID: "uid", WorkloadScopeSHA256: digest},
+		Replacement: SessionEndpoint{URL: "https://session.test/new", SessionID: "new", Challenge: "after", WorkloadScopeSHA256: digest}}
+	if err := producer.Prepare(context.Background(), config); err != nil {
+		t.Fatal(err)
+	}
+	return producer, config, clock
+}
+
 func (s *m106MemoryEvidence) Put(ctx context.Context, bundle EvidenceBundle) error {
+	s.calls.Add(1)
 	if s.entered != nil {
 		select {
 		case s.entered <- struct{}{}:
@@ -79,10 +115,14 @@ func (s *m106MemoryEvidence) Put(ctx context.Context, bundle EvidenceBundle) err
 		}
 	}
 	if s.block != nil {
-		select {
-		case <-s.block:
-		case <-ctx.Done():
-			return ctx.Err()
+		if s.ignoreContext {
+			<-s.block
+		} else {
+			select {
+			case <-s.block:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 	if s.err != nil {
@@ -92,6 +132,64 @@ func (s *m106MemoryEvidence) Put(ctx context.Context, bundle EvidenceBundle) err
 	defer s.mu.Unlock()
 	s.bundles = append(s.bundles, bundle)
 	return nil
+}
+
+func TestPost25M106HungEvidenceStoreHasOneInFlightWrite(t *testing.T) {
+	block := make(chan struct{})
+	store := &m106MemoryEvidence{block: block, ignoreContext: true}
+	producer, err := newProducer(&http.Client{Transport: m106RoundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("unused") }), Timeout: time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect refused") }}, store, m106StaticResolver{}, "epoch", time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer producer.Close()
+	firstCtx, firstCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer firstCancel()
+	if err := producer.putEvidence(firstCtx, EvidenceBundle{}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("first write err=%v", err)
+	}
+	for i := 0; i < 4; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		err := producer.putEvidence(ctx, EvidenceBundle{})
+		cancel()
+		if err == nil || !strings.Contains(err.Error(), "in-flight") {
+			t.Fatalf("write %d was not refused: %v", i+2, err)
+		}
+	}
+	if got := store.calls.Load(); got != 1 {
+		t.Fatalf("hung store calls=%d want 1", got)
+	}
+	close(block)
+}
+
+func TestPost25M106CloseIsBoundedWhenEvidenceStoreIgnoresCancellation(t *testing.T) {
+	block := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	store := &m106MemoryEvidence{block: block, entered: entered, ignoreContext: true}
+	producer, _, clock := m106PreparedProducer(t, store)
+	policy := model.Policy{Namespace: "ns", PolicyName: "p", PolicyUID: "u", PolicyGeneration: 1}
+	view := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "pod", UID: "uid"}}
+	request := actuator.Request{PolicyName: "p", PolicyUID: "u", Namespace: "ns", Pod: "pod", TargetUID: "uid", Action: model.ActionRotate}
+	if !producer.RecordNativeRotate(policy, view, request, actuator.Result{Actuator: "native", Handler: "rotate", Emitted: true, MutationKind: "forward-only", ObjectsTouched: []string{"Pod/ns/pod"}}, clock.Now()) {
+		t.Fatal("prepared coherent operation was not queued")
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not enter evidence store")
+	}
+	done := make(chan struct{})
+	go func() { producer.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("producer Close waited for a non-cooperative evidence store")
+	}
+	close(block)
+	for _, delivery := range producer.Drain(4) {
+		if delivery.Observation != nil {
+			t.Fatalf("shutdown admitted evidence retained after cancellation: %+v", delivery)
+		}
+	}
 }
 
 func TestPost25M106MTLSOldSessionToRevokedOutcome(t *testing.T) {
@@ -469,6 +567,32 @@ func TestPost25M106ProbeRejectsInvalidUTF8BeforeJSONNormalization(t *testing.T) 
 	_, err = producer.probe(context.Background(), SessionEndpoint{URL: "https://session.test/old", SessionID: "old", Challenge: "challenge", TargetUID: "uid", WorkloadScopeSHA256: scopeDigest})
 	if err == nil || err.Error() != "synthetic session response is not valid UTF-8" {
 		t.Fatalf("invalid UTF-8 was normalized before refusal: %v", err)
+	}
+}
+
+func TestPost25M106ProbeRejectsOversizedAndDuplicateResponses(t *testing.T) {
+	workload := model.PersistenceWorkloadScope{Namespace: "ns", OwnerKind: "Deployment", OwnerName: "app", OwnerUID: "owner"}
+	digest, err := workload.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := `{"schemaVersion":"phorvex.synthetic-process-session-response.v1","sessionID":"old","challenge":"challenge","present":true,"targetUID":"uid","workloadScopeSHA256":"` + digest + `"}`
+	for _, tc := range []struct {
+		name string
+		body []byte
+	}{
+		{name: "oversized", body: bytes.Repeat([]byte("x"), maxHTTPBodyBytes+1)},
+		{name: "duplicate", body: []byte(strings.Replace(valid, `"present":true`, `"present":true,"present":false`, 1))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &http.Client{Transport: m106RoundTripFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(tc.body)), Header: make(http.Header), Request: r}, nil
+			})}
+			producer := &Producer{client: client}
+			if _, err := producer.probe(context.Background(), SessionEndpoint{URL: "https://session.test/old", SessionID: "old", Challenge: "challenge", TargetUID: "uid", WorkloadScopeSHA256: digest}); err == nil {
+				t.Fatal("malicious response was accepted")
+			}
+		})
 	}
 }
 

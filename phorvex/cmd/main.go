@@ -58,6 +58,7 @@ import (
 	"github.com/phorvex/phorvex/internal/physics"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/runner"
+	"github.com/phorvex/phorvex/internal/scopedoutcome"
 	"github.com/phorvex/phorvex/internal/startupauthz"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -177,6 +178,7 @@ func main() {
 		migReleaseTimeout                time.Duration
 		migExclusiveMaintenance          bool
 		maxRetainedQuarantines           int
+		scopedOutcomeConfig              string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -263,6 +265,7 @@ func main() {
 	flag.IntVar(&auditMaxBackups, "audit-max-backups", defaultAuditMaxBackups, "[audit-json] number of rotated segments to keep. Nominal budget is max-bytes*(backups+1); oversized records and pre-existing files can exceed it.")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
 	flag.IntVar(&maxRetainedQuarantines, "max-retained-quarantines-per-namespace", 1, fmt.Sprintf("Hard namespace-wide bound on retained or pending Phorvex quarantines (0 disables new quarantine, maximum %d).", actuator.MaxRetainedQuarantinesUpperBound))
+	flag.StringVar(&scopedOutcomeConfig, "scoped-outcome-config", "", "Absolute path to one strict, preregistered synthetic-session observer configuration. Empty keeps qualified live persistence outcomes unavailable.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -707,12 +710,43 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	scopedOutcomeProducer, scopedOutcomeErr := openConfiguredScopedOutcome(
+		context.Background(), scopedOutcomeConfig, mgr.GetAPIReader(), rmgr.Optimizer, rmgr.Actuator,
+	)
+	if scopedOutcomeErr != nil {
+		setupLog.Info("scoped outcome observer unavailable; continuing without qualified live persistence labels",
+			"reason", scopedoutcome.StartupErrorCode(scopedOutcomeErr))
+	} else if scopedOutcomeProducer != nil {
+		rmgr.ScopedOutcomeProducer = scopedOutcomeProducer
+		setupLog.Info("scoped outcome observer enabled", "source", scopedOutcomeProducer.Source())
+	}
 
 	setupLog.Info("starting phorvex", "baseInterval", baseInterval.String())
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := runWithScopedOutcomeClose(func() error { return mgr.Start(ctrl.SetupSignalHandler()) }, scopedOutcomeProducer); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func runWithScopedOutcomeClose(start func() error, producer *scopedoutcome.Producer) error {
+	if producer != nil {
+		defer producer.Close()
+	}
+	return start()
+}
+
+func openConfiguredScopedOutcome(ctx context.Context, path string, reader client.Reader, optimizer decision.Optimizer, activeActuator actuator.Actuator) (*scopedoutcome.Producer, error) {
+	if path == "" {
+		return nil, nil
+	}
+	if activeActuator == nil || actuator.RouteFor(actuator.Backend(activeActuator.Name()), model.ActionRotate) != actuator.BackendNative {
+		return nil, fmt.Errorf("configured scoped outcome observer requires a native rotate route")
+	}
+	engine, ok := optimizer.(*decision.CoverageEngine)
+	if !ok || engine.ScopedOutcomeProcessEpochID() == "" {
+		return nil, fmt.Errorf("configured scoped outcome observer requires the coverage engine")
+	}
+	return scopedoutcome.OpenStartupProducer(ctx, path, reader, engine.ScopedOutcomeProcessEpochID(), time.Now)
 }
 
 func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, metadataKey, firstURL, trivyPath string, scanTimeout, metadataTTL time.Duration, scopeNamespaces, scopeDigests, registryAuthFile, registryAuthRegistries string) error {

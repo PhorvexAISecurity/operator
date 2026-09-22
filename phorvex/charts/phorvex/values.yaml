@@ -182,6 +182,18 @@ phorvex:
   # cluster), so it must be part of desired state rather than a hand-patched env var.
   # The per-action repertoire of each backend is published in phorvex/docs/actuator-repertoire.md.
   actuator: ""
+  # Optional, reporting-only scoped outcome observation. Enabling this mounts
+  # one immutable startup config Secret, a separate mTLS Secret, and a
+  # dedicated existing PVC for private evidence. The startup.json contents
+  # retain the exact policy/workload/session preregistration and capacity.
+  scopedOutcome:
+    enabled: false
+    configSecretName: ""
+    tlsSecretName: ""
+    existingClaim: ""
+    configMountPath: /etc/phorvex-scoped-outcome/config
+    tlsMountPath: /etc/phorvex-scoped-outcome/tls
+    evidenceMountPath: /var/lib/phorvex-scoped-outcome
   # Managed tenant namespaces where the native/hybrid actuator may perform routine
   # namespaced mutations. Empty by default: the chart adds no workload-write privilege.
   # Each entry renders a namespaced Role/RoleBinding for pods, NetworkPolicies,
