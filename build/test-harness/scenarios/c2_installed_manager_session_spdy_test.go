@@ -101,6 +101,10 @@ func TestInstalledSessionActualPythonAcrossRealSPDYAndDeadline(t *testing.T) {
 		if err != nil || elapsed <= 23*time.Second || elapsed >= installedSessionExecTimeout || receipt.Status != "complete" || !receipt.AvailabilityPrefixValidated || len(got.Observations) < 30 || got.EndedAtUTC == "" || receipt.StdoutBytes == 0 || receipt.StdoutPrefixBase64 != "" {
 			t.Fatalf("real 18s Python/SPDY control differs: elapsed=%s got=%+v receipt=%+v err=%v", elapsed, got, receipt, err)
 		}
+		retained := marshalInstalledSessionSegmentReceipts([]installedSessionSegmentReceipt{receipt})
+		if segments, err := validateInstalledSessionSegmentReceiptEvidence([]byte(retained)); err != nil || len(segments) != 1 || segments[0].Status != "complete" {
+			t.Fatalf("complete v2 segment receipt is not independently valid: segments=%+v err=%v", segments, err)
+		}
 	})
 
 	t.Run("deadline-partial-output", func(t *testing.T) {

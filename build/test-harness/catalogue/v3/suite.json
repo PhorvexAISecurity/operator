@@ -56,7 +56,7 @@
       "sourceFile": "scenarios/c2_installed_manager_session.go",
       "measures": "Two CPU replicas, real process-local session, request observations, exact installed policy/target audit chain and independent effect.",
       "limits": "Attributable non-selection is valid; a dispatch acknowledgement is not completed effect or continuous availability.",
-      "sourceSHA256": "8290034954be2c52ad977eefd2e87b43533fa2fe45f1b990c97af9736bb4f6e1"
+      "sourceSHA256": "f197317dcf0163f07238d73ffacdf9dca2a2f6ca0c339bbbeb9a24d25bfd797e"
     },
     {
       "id": "c2-vllm-prefix-cache-reset",
