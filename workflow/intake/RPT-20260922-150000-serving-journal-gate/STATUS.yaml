@@ -1,0 +1,155 @@
+schema_version: 1
+intake_id: RPT-20260922-150000-serving-journal-gate
+kind: BUG
+title: Unresolved protected serving operation remains selectable
+state: DUPLICATE
+reporter: codex-lead
+approval_ref: operations/AUTONOMY.md
+created_at: '2026-09-22T15:25:11+00:00'
+updated_at: '2026-09-22T15:26:13+00:00'
+pins:
+  source_main_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  source_release: 0.4.146
+  deployed_image: 0.4.146
+  deployed_digest: sha256:34e0311835430d2b7fa9fa496dac89fc89dc7c158da6de03f9bbb420a485dae7
+  deployed_git_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  environment: dev-existing-cluster
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 38
+    overlap:
+    - absent
+    - after
+    - because
+    - before
+    - can
+    - cannot
+    - claim
+    - created
+    - does
+    - effect
+    - even
+    - evidence
+    - exclusion
+    - fix
+    - must
+    - not
+    - observed
+    - part
+    - read
+    - remains
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-136
+    score: 36
+    overlap:
+    - '200'
+    - absent
+    - action
+    - can
+    - client
+    - cluster
+    - console
+    - correction
+    - currently
+    - deployed
+    - evidence
+    - execute
+    - fix
+    - http
+    - main
+    - mutation
+    - not
+    - operator
+    - other
+    - port
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-140
+    score: 35
+    overlap:
+    - after
+    - because
+    - behavior
+    - can
+    - created
+    - decisions
+    - deleted
+    - does
+    - effect
+    - evidence
+    - 'false'
+    - fix
+    - guard
+    - manager
+    - must
+    - not
+    - old
+    - operator
+    - part
+    - read
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  determination: DUPLICATE
+  issue_id: M-064
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Deliver reviewed protected-serving M64 follow-up PR
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-22T15:25:43+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-22T15:25:44+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-22T15:25:44+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-22T15:25:44+00:00'
+  by: codex-lead
+  artifact: DEDUP.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: DUPLICATE
+  at: '2026-09-22T15:26:13+00:00'
+  by: codex-lead
+  artifact: DEDUP.md
+  note: null
+  approval_ref: null
+  forced: false
+revision: 5

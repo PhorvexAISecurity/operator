@@ -232,10 +232,13 @@ func TestUnknownActionsAreConservativelyUnsupported(t *testing.T) {
 // registry `dispatch` routes through, so it cannot claim a handler it does not have. The
 // noop sentinel and the declared-not-implemented `disable` are not support.
 func TestNativeSupportMatchesItsRegistry(t *testing.T) {
-	na := NewNativeActuator(fake.NewClientBuilder().WithScheme(newScheme(t)).Build())
+	c := fakeC()
+	na := NewNativeActuator(c)
+	na.SetBoundaryReader(c)
+	na.JournalNamespace = "operator"
 	na.SetServingSecurity(legacyServingSecurityForTest(t))
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable}, model.MutatingActions...) {
-		ok, why := na.SupportsAction(t.Context(), a, Target{})
+		ok, why := na.SupportsAction(t.Context(), a, Target{UID: "pod-uid"})
 		_, registered := HandlerRegistry.Get(string(a))
 		switch a {
 		case model.ActionNoop:
@@ -278,22 +281,26 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 // answer — never a union, never a fallback to the other backend because it happens to
 // support the action. Support and dispatch read one routing predicate.
 func TestHybridAsksTheRouteItWouldDispatchTo(t *testing.T) {
-	c := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
+	c := fakeC()
 	h := NewHybridActuator(c)
 	phoenix, native := NewPhoenixActuator(c), NewNativeActuator(c)
+	h.ConfigureNativeJournal(c, "operator")
+	native.SetBoundaryReader(c)
+	native.JournalNamespace = "operator"
 	h.SetServingSecurity(legacyServingSecurityForTest(t))
 	native.SetServingSecurity(legacyServingSecurityForTest(t))
 	ctx := t.Context()
 
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable}, model.MutatingActions...) {
-		gotOK, gotWhy := h.SupportsAction(ctx, a, Target{})
+		target := Target{UID: "pod-uid"}
+		gotOK, gotWhy := h.SupportsAction(ctx, a, target)
 		route := RouteFor(BackendHybrid, a)
 		var wantOK bool
 		var wantWhy string
 		if route == BackendPhoenix {
-			wantOK, wantWhy = phoenix.SupportsAction(ctx, a, Target{})
+			wantOK, wantWhy = phoenix.SupportsAction(ctx, a, target)
 		} else {
-			wantOK, wantWhy = native.SupportsAction(ctx, a, Target{})
+			wantOK, wantWhy = native.SupportsAction(ctx, a, target)
 		}
 		if gotOK != wantOK || gotWhy != wantWhy {
 			t.Fatalf("hybrid %s must answer as its %s route (%v,%q), got (%v,%q)", a, route, wantOK, wantWhy, gotOK, gotWhy)
@@ -308,7 +315,7 @@ func TestHybridAsksTheRouteItWouldDispatchTo(t *testing.T) {
 	}
 	// And an action phoenix rejects but native implements must still be routed to native,
 	// which is the whole reason hybrid exists.
-	if ok, why := h.SupportsAction(ctx, model.ActionKVReset, Target{}); !ok {
+	if ok, why := h.SupportsAction(ctx, model.ActionKVReset, Target{UID: "pod-uid"}); !ok {
 		t.Fatalf("hybrid must support kv-reset through its native route, got %q", why)
 	}
 	if RouteFor(BackendHybrid, model.ActionKVReset) != BackendNative {
