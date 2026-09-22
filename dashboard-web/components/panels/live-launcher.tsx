@@ -139,6 +139,10 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
   };
 
   const clearAttack = async (a: CompatEntry) => {
+    if (a.endpoint === "/api/vllm/attack") {
+      setErr("Reset is unavailable because this console does not retain durable per-run restoration authority.");
+      return;
+    }
     if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.compatible && entry.armed)) {
       setErr("Clear refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
       return;
@@ -148,9 +152,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     const request = generation.current;
     setFiring(a.id + ":clear"); setMsg(""); setErr("");
     try {
-      const r = a.endpoint === "/api/vllm/attack"
-        ? await api.vllmAttack("reset", lens)
-        : await api.workloadAttack(app, "clear", lens);
+      const r = await api.workloadAttack(app, "clear", lens);
       if (request !== generation.current) return;
       setMsg(r.message || "Cleared.");
     } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
@@ -295,9 +297,13 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                         <Button size="sm" variant={a.armed ? "primary" : "outline"} disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => fire(a)}>
                           {firing === a.id ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> firing…</> : <>Fire</>}
                         </Button>
-                        <Button size="sm" variant="ghost" disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => clearAttack(a)}>
-                          {firing === a.id + ":clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Clear</>}
-                        </Button>
+                        {a.endpoint === "/api/vllm/attack" ? (
+                          <span className="inline-flex items-center rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title="Reset is unavailable without durable per-run restoration authority">Reset unavailable</span>
+                        ) : (
+                          <Button size="sm" variant="ghost" disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => clearAttack(a)}>
+                            {firing === a.id + ":clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Clear</>}
+                          </Button>
+                        )}
                       </span>
                     </div>
                     <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>

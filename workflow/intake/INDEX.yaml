@@ -203,6 +203,13 @@ intakes:
     state: VERIFIED
     issue_id: null
     aliases: []
+  RPT-20260922-170733-console-vllm-reset-authority:
+    directory: intake/RPT-20260922-170733-console-vllm-reset-authority
+    kind: BUG
+    title: Console reset claims restoration without durable authority
+    state: REPORTED
+    issue_id: null
+    aliases: []
   RPT-20260922-150000-serving-journal-gate:
     directory: intake/RPT-20260922-150000-serving-journal-gate
     kind: BUG

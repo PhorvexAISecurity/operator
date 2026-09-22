@@ -64,6 +64,28 @@ func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, a
 	writeJSON(w, 502, map[string]any{"error": cause.Error(), "verdict": phase + "-failed", "targetUid": targetUID, "serviceUid": serviceUID, "restoration": restoration})
 }
 
+func (s *Server) refuseVLLMReset(w http.ResponseWriter, r *http.Request, targetUID string) {
+	const restoration = "not-attempted: durable per-run original/staged restoration authority is unavailable; reconciliation required"
+	cause := fmt.Errorf("reset refused: exact original runtime, Pod metadata and Service selector authority is unavailable")
+	if err := s.persistEffectIntent("/api/vllm/attack", actorOf(r), vllmAttackNS, "reset"); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": cause.Error() + "; refusal evidence persistence failed: " + err.Error(), "verdict": "unsafe-to-retry"})
+		return
+	}
+	if err := s.persistVLLMSetupFailure(actorOf(r), "reset", "authority", targetUID, "", nil, false, restoration, cause); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": cause.Error() + "; refusal evidence persistence failed: " + err.Error(), "verdict": "unsafe-to-retry"})
+		return
+	}
+	writeJSON(w, http.StatusConflict, map[string]any{
+		"ok":             false,
+		"action":         "reset",
+		"error":          cause.Error(),
+		"verdict":        "unsupported-restoration-authority",
+		"targetUid":      targetUID,
+		"restoration":    restoration,
+		"reconciliation": "inspect the exact retained run/effect evidence and reconcile owned state explicitly",
+	})
+}
+
 func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
@@ -86,9 +108,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	execIn := func(sh string) (string, error) {
 		return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "--", "sh", "-c", sh)
 	}
-	kctl := func(args ...string) {
-		_, _ = s.cfg.execText(8*time.Second, "kubectl", append([]string{"-n", vllmAttackNS}, args...)...)
-	}
 
 	target, err := s.readVLLMPod(pod)
 	if err != nil || target.Metadata.UID == "" {
@@ -96,6 +115,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	targetUID := target.Metadata.UID
+	if body.Action == "reset" {
+		s.refuseVLLMReset(w, r, targetUID)
+		return
+	}
 	// Snapshot the baseline before any producer or detector stimulus. The exact UID comes from
 	// the strict Pod JSON read above; the legacy convenience probes supply only optional context.
 	base := s.snapshotBaseline(vllmAttackNS, pod)
@@ -347,21 +370,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "model-shard-replace",
 			"attackId": attackID,
 			"message":  "An exact synthetic model-shard signal was accepted for " + pod + ". No model tamper, known-good replacement, or mitigation verdict is claimed."})
-
-	case "reset":
-		// clear detector flags + fired events, unload the poisoned adapter, un-stage route/serving labels,
-		// restitch the infer Service to the leader, and restore the demo baseline policy.
-		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter-")
-		kctl("label", "pod", pod, "phorvex.ai/lora-enabled-")
-		_, _ = execIn(`curl -s -o /dev/null -X POST http://localhost:8000/v1/unload_lora_adapter -H 'Content-Type: application/json' -d '{"lora_name":"evil"}'`)
-		// Correlated console events are cluster-scoped. Delete only this console's explicitly
-		// labeled events; a broad redteam selector can remove another tenant's evidence.
-		_, _ = s.cfg.execText(8*time.Second, "kubectl", "delete", "securityevent", "-l", "phorvex.ai/redteam=true,phorvex.ai/console-vllm=true", "--ignore-not-found")
-		kctl("label", "pod", pod, "phorvex.ai/route-key-", "phorvex.ai/serving-")
-		kctl("annotate", "pod", pod, "phorvex.ai/route-service-")
-		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/role":"leader"}}}`)
-		writeJSON(w, 200, map[string]any{"ok": true, "action": "reset",
-			"message": "Reset — detector flags + fired events cleared, poisoned adapter unloaded, route/serving labels un-staged. If a warm-swap/model-shard-replace ran, the Deployment is recreating the 7B leader (a few minutes)."})
 
 	default:
 		writeJSON(w, 400, map[string]string{"error": "unknown action (poison|kvcache|endpoint-rotate|guardrail-rotate|request-drain|kv-migrate-invalidate|warm-swap|model-shard-replace|reset)"})

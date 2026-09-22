@@ -241,7 +241,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     setAttacking(action); setAttackMsg("");
     clearLiveSelection(lens, sel.context);
     try {
-      if (action === "poison" || action === "kvcache" || action === "reset") {
+      if (action === "poison" || action === "kvcache") {
         const r = await api.vllmAttack(action as any, lens);
         if (request !== mutationGeneration.current || workload !== selWl) return;
         setAttackMsg(r.message + (r.attackId ? "" : " No attack record ID was returned; no exact result can be selected."));
@@ -363,9 +363,15 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                     <Lock className="h-3 w-3" /> {a.label} <span className="font-mono">→ {a.actuator}</span>
                   </span>
                 ))}
-                <Button size="sm" variant="ghost" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!attacking || !mutatesDefaultContext} onClick={() => fireAttack(curType.type === "model-server" ? "reset" : "clear")} className="gap-1.5 text-muted-foreground">
-                  {(attacking === "reset" || attacking === "clear") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} {curType.type === "model-server" ? "Reset" : "Clear attack"}
-                </Button>
+                {curType.type === "model-server" ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title="Reset is unavailable without durable per-run restoration authority">
+                    <Lock className="h-3 w-3" /> Reset unavailable
+                  </span>
+                ) : (
+                  <Button size="sm" variant="ghost" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!attacking || !mutatesDefaultContext} onClick={() => fireAttack("clear")} className="gap-1.5 text-muted-foreground">
+                    {attacking === "clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Clear attack
+                  </Button>
+                )}
               </div>
               {/* Compare all three defenders on THIS app with THIS attack — the result streams into
                   the Availability: 3-way tab while it runs. Kept as an explicit action because it

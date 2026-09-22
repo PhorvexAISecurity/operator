@@ -1,0 +1,245 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 8
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f59828e03a6e7c6e1755a89bba301f7d318ad90e4d7e77cbae9d0b38c8a8f23b
+    source_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+    at: '2026-09-22T17:12:28+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/baseline/root-reset-baseline.log
+    sha256: 83396f7360b4a8a6aed19c36a486d85c79609f03a8e52bb03520837578b0ef74
+    source_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+    at: '2026-09-22T17:18:50+00:00'
+  preflight:
+    result: PASS
+    by: console-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 697949e05ea319ff18d802c34d0842a8a0200fccf8e6343ba9a7c4255e069b66
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:28:03+00:00'
+  implementation:
+    result: PASS
+    by: console-worker
+    artifact: 04-diff.patch
+    sha256: 4a44bba0befe5f0afc51c86906c6f51db5c0e60a84c8a1f7d5facc2345dde201
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:28:03+00:00'
+  l0:
+    result: PASS
+    by: console-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 697949e05ea319ff18d802c34d0842a8a0200fccf8e6343ba9a7c4255e069b66
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:28:03+00:00'
+    inputs:
+    - dashboard-web
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: f396aa483e272d00c335cdf22352f0e25bf47f2e0de984c329ca7677738107dd
+  l1:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker/focused.log
+    sha256: f9d05ab9be06cef9164a1409dbfdf3acea9566df2252e9ef1a962dedde832728
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:28:03+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: fed95f230958d7ff08bd931f2d1fe96678c5800115b6fcfb2651938b0baffd82
+  l2:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker/focused.log
+    sha256: f9d05ab9be06cef9164a1409dbfdf3acea9566df2252e9ef1a962dedde832728
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:28:03+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: fed95f230958d7ff08bd931f2d1fe96678c5800115b6fcfb2651938b0baffd82
+  positive_control:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker/focused.log
+    sha256: f9d05ab9be06cef9164a1409dbfdf3acea9566df2252e9ef1a962dedde832728
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:28:03+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: fed95f230958d7ff08bd931f2d1fe96678c5800115b6fcfb2651938b0baffd82
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 96f6101cca6bedd55e4102ff79d8d835f600ec8e6133ad774f939cb8f7fd9a5f
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:30:13+00:00'
+    baseline_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b0f6b32383214e26498568cdb45924a9cfaab02577f7378267ce36b2479ff6c1
+    source_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+    at: '2026-09-22T17:30:13+00:00'
+    incident_sha256: 96f6101cca6bedd55e4102ff79d8d835f600ec8e6133ad774f939cb8f7fd9a5f
+fix_id: POST25-VLLM-RESET-AUTHORITY
+issues: []
+title: Refuse vLLM reset without durable restoration authority
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: console-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: post25-console-vllm-remaining
+  code_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+  deployed_image: 0.4.149
+  deployed_git_sha: 06f6dea36021c75971fc786b18ecbd04f145cfb8
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-console-vllm-reset
+  base_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+  head_sha: a61c754b4454e9e05d5497042831166208c6b8a2
+  stacked_on:
+  - POST25-VLLM-REMAINING-OUTCOMES
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T17:30:17+00:00'
+follow_up_to: RPT-20260922-170733-console-vllm-reset-authority
+configuration_history:
+- at: '2026-09-22T17:10:58+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-22T17:20:08+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-22T17:28:02+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T17:12:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T17:12:28+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T17:28:03+00:00'
+  by: console-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T17:28:05+00:00'
+  by: console-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T17:30:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T17:30:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-VLLM-RESET-AUTHORITY:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
