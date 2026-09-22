@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: phorvex-m106-scoped-outcome-v4-evidence
+  namespace: phorvex-system
+  labels:
+    app.kubernetes.io/part-of: phorvex-math-verification
+    phorvex.ai/test-family: m106
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2-csi
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,8 @@
+# Merge through the normal GitOps workflow after the bounded test.
+phorvex:
+  phorvex:
+    scopedOutcome:
+      enabled: false
+      configSecretName: ""
+      tlsSecretName: ""
+      existingClaim: ""

@@ -1,0 +1,70 @@
+{
+  "schema": "phorvex.m100.deployment-pin.v1",
+  "status": "FRESH_FIXTURE_VALID_CURRENT_TARGET",
+  "observedAt": "REPLACE_WITH_RFC3339_TIME",
+  "namespace": {
+    "name": "REPLACE_WITH_TARGET_NAMESPACE",
+    "uid": "REPLACE_WITH_NAMESPACE_UID"
+  },
+  "workload": {
+    "ownerChainExact": true,
+    "deployment": {
+      "name": "REPLACE_WITH_OWNER_NAME",
+      "uid": "REPLACE_WITH_OWNER_UID"
+    },
+    "target": {
+      "name": "REPLACE_WITH_TARGET_POD_NAME",
+      "namespace": "REPLACE_WITH_TARGET_NAMESPACE",
+      "uid": "REPLACE_WITH_TARGET_POD_UID",
+      "ready": true
+    }
+  },
+  "policy": {
+    "name": "REPLACE_WITH_POLICY_NAME",
+    "namespace": "REPLACE_WITH_TARGET_NAMESPACE",
+    "uid": "REPLACE_WITH_POLICY_UID",
+    "generation": 1,
+    "acceptedDryRun": true
+  },
+  "protectedProjection": {
+    "configMapName": "REPLACE_WITH_PROTECTED_CONFIGMAP_NAME",
+    "configMapUID": "REPLACE_WITH_CONFIGMAP_UID",
+    "configMapKey": "REPLACE_WITH_PROTECTED_CONFIGMAP_KEY",
+    "asset": "REPLACE_WITH_PROTECTED_ASSET",
+    "version": "REPLACE_WITH_PROTECTED_VERSION",
+    "property": "confidentiality",
+    "containerName": "REPLACE_WITH_TARGET_CONTAINER_NAME",
+    "volumeName": "REPLACE_WITH_TARGET_VOLUME_NAME",
+    "mountPath": "REPLACE_WITH_TARGET_MOUNT_PATH",
+    "projectedPath": "REPLACE_WITH_PROJECTED_FILE_PATH",
+    "expectedBytes": 1,
+    "expectedSHA256": "REPLACE_WITH_64_LOWERCASE_HEX"
+  },
+  "servingAuthority": {
+    "manifestURL": "REPLACE_WITH_MTLS_MANIFEST_URL",
+    "canaryURL": "REPLACE_WITH_MTLS_CANARY_URL",
+    "serverName": "REPLACE_WITH_MTLS_SERVER_NAME"
+  },
+  "observers": {
+    "ca": {
+      "secretName": "REPLACE_WITH_EXISTING_CA_SECRET_NAME",
+      "secretUID": "REPLACE_WITH_SECRET_UID",
+      "certNotAfter": "REPLACE_WITH_RFC3339_TIME"
+    },
+    "current": {
+      "secretName": "REPLACE_WITH_EXISTING_CURRENT_CLIENT_SECRET_NAME",
+      "secretUID": "REPLACE_WITH_SECRET_UID",
+      "certNotAfter": "REPLACE_WITH_RFC3339_TIME",
+      "evidenceID": "REPLACE_WITH_CURRENT_EVIDENCE_ID",
+      "ruleSHA256": "REPLACE_WITH_64_LOWERCASE_HEX"
+    },
+    "loss": {
+      "secretName": "REPLACE_WITH_EXISTING_LOSS_CLIENT_SECRET_NAME",
+      "secretUID": "REPLACE_WITH_SECRET_UID",
+      "certNotAfter": "REPLACE_WITH_RFC3339_TIME",
+      "evidenceID": "REPLACE_WITH_LOSS_EVIDENCE_ID",
+      "ruleVersion": "REPLACE_WITH_RULE_VERSION",
+      "ruleSHA256": "REPLACE_WITH_64_LOWERCASE_HEX"
+    }
+  }
+}

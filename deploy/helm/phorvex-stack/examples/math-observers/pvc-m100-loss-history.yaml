@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: phorvex-m100-loss-history-v2
+  namespace: phorvex-system
+  labels:
+    app.kubernetes.io/part-of: phorvex-math-verification
+    phorvex.ai/test-family: m100
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2-csi
+  resources:
+    requests:
+      storage: 1Gi

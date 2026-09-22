@@ -1,0 +1,48 @@
+# Reviewable M104 canary values. This file contains no credentials and is not
+# authorization to deploy. RUNTIME_FILL_FRESH_SECRET_NAME must name a newly
+# created, short-lived Docker config Secret whose UID is captured at launch.
+phorvex:
+  phorvex:
+    epss:
+      enabled: true
+      authoritative: true
+      configMapName: phorvex-epss-m104-canary
+      mountPath: /etc/phorvex
+      fileName: epss-cache.json
+      metadataFileName: epss-metadata.json
+      authoritativeTimeout: 5s
+      refreshInterval: 30s
+      create: true
+      data: "{}"
+      feed:
+        enabled: true
+        schedule: "17 3 * * *"
+        suspend: true
+        apply: true
+        allowPartial: false
+        scopeNamespaces:
+          - voice
+        scopeDigests:
+          - 753556437180.dkr.ecr.us-east-2.amazonaws.com/pipecat-voice@sha256:c9c598c406ed517eebf17f92a36863b39a15d9a7875cfcb2710f7b084dd539b8
+        metadataTTL: 30m
+        firstURL: https://api.first.org/data/v1/epss
+        trivyPath: /tools/trivy
+        scanTimeout: 10m
+        activeDeadlineSeconds: 1200
+        registryAuth:
+          enabled: true
+          secretName: RUNTIME_FILL_FRESH_SECRET_NAME
+          secretKey: config.json
+          registries:
+            - 753556437180.dkr.ecr.us-east-2.amazonaws.com
+        extraEnv:
+          - name: AWS_REGION
+            value: us-east-2
+        resources:
+          limits: {cpu: "2", memory: 2Gi}
+          requests: {cpu: 100m, memory: 256Mi}
+        tolerations:
+          - key: CriticalAddonsOnly
+            operator: Equal
+            value: "true"
+            effect: NoSchedule

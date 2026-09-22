@@ -1,0 +1,49 @@
+{
+  "acceptedPrerequisite": {
+    "freshIdentityAndRegistrySecretPinRequired": true,
+    "temporaryRegistrySecretDeleted": true,
+    "voiceReviewSHA256": "470e9c9a0f4e0d28cf30c2f02640cdb5964df03d640e6b2aeffa4f0a2aae228d",
+    "voiceReviewStatus": "PASS_ONE_EXACT_VOICE_DIGEST_AUTHENTICATED_DRY_RUN"
+  },
+  "claims": {
+    "authoritativeConsumerLiveVerified": false,
+    "credentialsIncluded": false,
+    "deploymentApplied": false,
+    "expiryLiveVerified": false
+  },
+  "completedAt": "2026-09-22T21:31:12.959835+00:00",
+  "files": {
+    "README.md": "710af1fd0f3b27906438061b76608332014464190db541279a69741d0a1c36a4",
+    "argocd-ignore-differences-m104.yaml": "9683f3f57769b2279e1d869f41ee97b55099ce3ba0a166017827831a53e1d577",
+    "values-m104-voice-canary.yaml": "61b34ce2055e744556edc3266380820e8b9cc05671ebcf6a77234fa39fd9982d"
+  },
+  "generatedAt": "2026-09-22T21:29:35.639104+00:00",
+  "renderValidation": {
+    "assertions": [
+      "dedicated ConfigMap",
+      "suspended CronJob",
+      "apply=true",
+      "allowPartial=false",
+      "voice-only namespace scope",
+      "exact one-digest scope",
+      "authoritative manager arguments",
+      "unresolved registry Secret placeholder retained"
+    ],
+    "documents": 59,
+    "helm": "v3.16.4",
+    "operatorRevision": "ec0b9b98daf27b4c31eaa9f94f8bc72a496a3768",
+    "renderSHA256": "ea9d8684e15706475df90dbf309e78f18cf9028902cfca6d7490a64377cd4d8c",
+    "status": "PASS"
+  },
+  "schema": "phorvex.m104.public-devops-handoff.v1",
+  "source": {
+    "operatorRevision": "ec0b9b98daf27b4c31eaa9f94f8bc72a496a3768",
+    "preparationPackage": "M104-CONSUMER-ADOPTION-PREP-20260922",
+    "reviewedRenderSHA256": "85487241e5958c6050b4a71bafe7cd2ca2260d404967e556916a8ce5fba6b075",
+    "sourceArgoSnippetSHA256": "9683f3f57769b2279e1d869f41ee97b55099ce3ba0a166017827831a53e1d577",
+    "sourceManifestSHA256": "624c305feb670852c7b9374c47768b74cde1ba09880c4b6e26a3b9c6d9a59af3",
+    "sourcePlanSHA256": "c412cb0f4700bd8ade221af9ecf140fd73bad96c830d362a47778fe8860c6f03",
+    "sourceValuesSHA256": "61b34ce2055e744556edc3266380820e8b9cc05671ebcf6a77234fa39fd9982d"
+  },
+  "status": "PUBLIC_REVIEW_ONLY_NOT_DEPLOYABLE"
+}

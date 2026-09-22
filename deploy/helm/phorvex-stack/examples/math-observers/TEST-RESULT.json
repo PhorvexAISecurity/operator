@@ -1,0 +1,40 @@
+{
+  "checks": [
+    {
+      "command": "python3 scripts/test_transfer_secret.py",
+      "status": "PASS",
+      "tests": 10
+    },
+    {
+      "command": "python3 scripts/verify_bundle.py --helm /opt/phorvex-tools/helm",
+      "result": {
+        "filesChecked": 22,
+        "m100ManagerTemplateBytes": 5873,
+        "m100ManagerTemplatesIdentical": true,
+        "m106DetectorCount": 6,
+        "status": "PASS"
+      },
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  ],
+  "claims": {
+    "clusterMutationPerformed": false,
+    "m106DestinationCreated": false,
+    "secretMaterialReadByTests": false
+  },
+  "finishedAt": "2026-09-22T21:26:42.644000+00:00",
+  "m100ManagerDeploymentBytes": 5873,
+  "m100ManagerDeploymentSHA256": "a400f86de2c7af0b0f06c96e729a13b65e77ea976f3c16a893e18281f8126918",
+  "schema": "phorvex.math-observer-devops-bundle.test-result.v1",
+  "sourceCommit": "7f0762b92368254129da0a14d1e07597ac6b756e",
+  "startedAt": "2026-09-22T21:26:37.252054+00:00",
+  "status": "PASS",
+  "toolchain": {
+    "helm": "v3.16.4+g7877b45",
+    "python": "3.14.4"
+  }
+}

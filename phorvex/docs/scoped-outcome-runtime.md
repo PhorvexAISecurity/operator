@@ -60,3 +60,9 @@ JSON. The chart mounts both Secrets read-only, mounts only the evidence PVC
 writable, and adds the scoped config flag. The configured JSON paths must agree
 with those mount paths. The evidence claim must not reuse audit or loss-history
 storage.
+
+A nonsecret, GitHub-ready rollout example and UID-pinned Kubernetes Secret transfer
+procedure are available in
+[`deploy/helm/phorvex-stack/examples/math-observers`](../../deploy/helm/phorvex-stack/examples/math-observers/README.md).
+The example remains disabled and cannot run until its exact fixture/session authority
+and private TLS/config transfer pin are freshly reviewed.
