@@ -43,7 +43,7 @@ type prefixServer struct {
 	hit               float64
 	active            int
 	resetCalls        int
-	streamDone        chan struct{}
+	streamDones       []chan struct{}
 	lastPrompt        string
 	successMetricMode string
 	requestPaths      []string
@@ -51,6 +51,11 @@ type prefixServer struct {
 	completedAtReset  []int
 	rejectPrimer      bool
 	blockPrimer       bool
+	finishStreamsFast bool
+	forceBusySuccess  bool
+	rejectStream      int
+	streamRequests    int
+	releaseStreams    bool
 }
 
 func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -68,10 +73,14 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		prompt, completed, hit, active, successMetricMode := s.prompt, s.completed, s.hit, s.active, s.successMetricMode
 		s.mu.Unlock()
+		running, waiting := 0, 0
+		if active > 0 {
+			running, waiting = 1, active-1
+		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		fmt.Fprintf(w, "vllm:gpu_prefix_cache_hit_rate{model_name=\"%s\"} %g\n", modelName, hit)
-		fmt.Fprintf(w, "vllm:num_requests_running{model_name=\"%s\"} %d\n", modelName, active)
-		fmt.Fprintf(w, "vllm:num_requests_waiting{model_name=\"%s\"} 0\n", modelName)
+		fmt.Fprintf(w, "vllm:num_requests_running{model_name=\"%s\"} %d\n", modelName, running)
+		fmt.Fprintf(w, "vllm:num_requests_waiting{model_name=\"%s\"} %d\n", modelName, waiting)
 		fmt.Fprintf(w, "vllm:gpu_cache_usage_perc{model_name=\"%s\"} 0.2\n", modelName)
 		fmt.Fprintf(w, "vllm:prompt_tokens_total{model_name=\"%s\"} %d\n", modelName, prompt)
 		switch {
@@ -88,13 +97,19 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.resetCalls++
 		s.completedAtReset = append(s.completedAtReset, s.completed)
 		success := s.active == 0
+		if s.active > 0 && s.forceBusySuccess {
+			success = true
+		}
 		if success {
 			s.hit = 0
 			s.lastPrompt = ""
 		}
-		if !success && s.streamDone != nil {
-			close(s.streamDone)
-			s.streamDone = nil
+		if s.active > 0 {
+			s.releaseStreams = true
+			for _, done := range s.streamDones {
+				close(done)
+			}
+			s.streamDones = nil
 		}
 		s.mu.Unlock()
 		jsonResponse(w, http.StatusOK, map[string]any{"success": success})
@@ -103,20 +118,34 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if streaming, _ := body["stream"].(bool); streaming {
 			s.mu.Lock()
-			s.active = 1
+			ordinal := s.streamRequests
+			s.streamRequests++
+			if s.rejectStream > 0 && ordinal == s.rejectStream-1 {
+				s.mu.Unlock()
+				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "stream-refused"})
+				return
+			}
+			if !s.finishStreamsFast {
+				s.active++
+			}
 			done := make(chan struct{})
-			s.streamDone = done
+			s.streamDones = append(s.streamDones, done)
+			released := s.releaseStreams
 			s.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "data: {\"id\":\"cmpl-prefix-stream\",\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", modelName)
+			fmt.Fprintf(w, "data: {\"id\":\"cmpl-prefix-stream-%d\",\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", ordinal, modelName)
 			w.(http.Flusher).Flush()
-			select {
-			case <-done:
-			case <-r.Context().Done():
+			if !s.finishStreamsFast && !released {
+				select {
+				case <-done:
+				case <-r.Context().Done():
+				}
 			}
 			s.mu.Lock()
-			s.active = 0
+			if !s.finishStreamsFast {
+				s.active--
+			}
 			s.completed++
 			s.mu.Unlock()
 			fmt.Fprint(w, "data: [DONE]\n\n")
@@ -149,6 +178,52 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, map[string]any{"id": "cmpl-test", "object": "text_completion", "created": 1, "model": modelName, "choices": []map[string]any{{"index": 0, "text": "x", "logprobs": nil, "finish_reason": "length", "stop_reason": nil, "prompt_logprobs": nil}}, "usage": map[string]any{"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11, "prompt_tokens_details": nil}})
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+func TestRunPrefixCohortRefusesUnestablishedAndContradictoryBusyControls(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		state *prefixServer
+	}{
+		{name: "fast cohort drains before active sample", state: &prefixServer{finishStreamsFast: true}},
+		{name: "partial admission", state: &prefixServer{rejectStream: 1}},
+		{name: "active reset acknowledged", state: &prefixServer{forceBusySuccess: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(tc.state.serve))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.sleep = func(context.Context, time.Duration) error { return nil }
+			receipt, err := client.RunPrefix(t.Context(), true)
+			if err == nil || receipt.Busy == nil || receipt.Busy.Cohort.Schema != "phorvex.gpu.stream-cohort.v2" || len(receipt.Busy.Cohort.Streams) != streamCohortSize {
+				t.Fatalf("receipt=%+v err=%v", receipt, err)
+			}
+			tc.state.mu.Lock()
+			resetCalls, active := tc.state.resetCalls, tc.state.active
+			tc.state.mu.Unlock()
+			wantCalls := 1
+			if tc.state.forceBusySuccess {
+				wantCalls = 2
+			}
+			for attempt := 0; active != 0 && attempt < 100; attempt++ {
+				time.Sleep(time.Millisecond)
+				tc.state.mu.Lock()
+				active = tc.state.active
+				tc.state.mu.Unlock()
+			}
+			if resetCalls != wantCalls || active != 0 {
+				t.Fatalf("resetCalls=%d want=%d active=%d", resetCalls, wantCalls, active)
+			}
+			for _, stream := range receipt.Busy.Cohort.Streams {
+				if stream.SubmittedAt == "" || !stream.Finished || stream.Termination == "running" || stream.Termination == "not-started" {
+					t.Fatalf("stream finalizer omitted actual terminal state: %+v", stream)
+				}
+			}
+		})
 	}
 }
 
@@ -186,7 +261,7 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 				t.Fatalf("HTTP prefix=%q want=%q", paths, wantPrefix)
 			}
 			if direct {
-				if receipt.Reset == nil || !receipt.Reset.Success || receipt.FirstMiss == nil || receipt.FirstMiss.Values["vllm:gpu_prefix_cache_hit_rate"] != 0 || receipt.Repopulated == nil || receipt.Busy == nil || receipt.Busy.Reset.Success || !receipt.Busy.StreamAccepted {
+				if receipt.Reset == nil || !receipt.Reset.Success || receipt.FirstMiss == nil || receipt.FirstMiss.Values["vllm:gpu_prefix_cache_hit_rate"] != 0 || receipt.Repopulated == nil || receipt.Busy == nil || receipt.Busy.Reset.Success || receipt.Busy.Cohort.Expected != streamCohortSize || len(receipt.Busy.Cohort.Streams) != streamCohortSize {
 					t.Fatalf("direct receipt incomplete: %+v", receipt)
 				}
 				if state.resetCalls != 2 {
@@ -195,8 +270,18 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 				if len(completedAtReset) != 2 || completedAtReset[0] != 3 {
 					t.Fatalf("first reset followed completed=%v; primer plus the same two measured requests must precede divergence", completedAtReset)
 				}
-				if len(receipt.CapabilityObservation.Body) == 0 || len(receipt.Reset.Observation.Body) == 0 || receipt.Populated.RawBody == "" || receipt.Busy.StreamRequestID == "" {
+				if len(receipt.CapabilityObservation.Body) == 0 || len(receipt.Reset.Observation.Body) == 0 || receipt.Populated.RawBody == "" || receipt.Busy.Cohort.Streams[0].RequestID == "" {
 					t.Fatalf("direct receipt omitted retained producer proof: %+v", receipt)
+				}
+				if !busyEstablished(receipt.Busy.ActiveMetrics.Values) || !idle(receipt.Busy.PreIdle.Values) {
+					t.Fatalf("direct receipt omitted idle/active cohort bracket: %+v", receipt.Busy)
+				}
+				seenIDs := map[string]bool{}
+				for _, stream := range receipt.Busy.Cohort.Streams {
+					if stream.SubmittedAt == "" || stream.AcceptedAt == "" || stream.RequestID == "" || stream.EventCount == 0 || !stream.Finished || !stream.SawDone || stream.Termination != "complete" || seenIDs[stream.RequestID] {
+						t.Fatalf("direct cohort lifecycle differs: %+v", stream)
+					}
+					seenIDs[stream.RequestID] = true
 				}
 			} else if receipt.Reset != nil || state.resetCalls != 0 || len(prompts) != 3 {
 				t.Fatalf("no-action executed reset or extra inference: reset=%+v calls=%d prompts=%q", receipt.Reset, state.resetCalls, prompts)
@@ -265,7 +350,7 @@ func TestRunPrefixRetainsColdStateAndRefusesFailedOrCancelledPrimer(t *testing.T
 	}
 }
 
-func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 string) map[string]any {
+func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 string, requestIDs []string) map[string]any {
 	observations := []any{}
 	if nonce1 != "" {
 		observations = append(observations, map[string]any{"nonce": nonce1, "sequence": "1", "queues": map[string]any{"0": map[string]any{"waiting": []string{}, "running": []string{}, "swapped": []string{}, "cached": []string{}}}, "hash": strings.Repeat("1", 64)})
@@ -279,7 +364,11 @@ func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 
 	} else if nonce1 != "" {
 		queryNonce = nonce1
 	}
-	body := map[string]any{"schema": "phorvex.drain.v1", "operation_id": opID, "operation_generation": generation, "attempt": 1, "owner_digest": drainOwnerDigest(testDrainOwner), "backend_incarnation_digest": strings.Repeat("d", 64), "revision": revision, "state": state, "admission": admission, "admission_generation": "1", "engine_boot_id": strings.Repeat("c", 32), "virtual_engine_ids": []int{0}, "engine_snapshot": map[string]any{"0": map[string]any{"waiting": []string{}, "running": []string{"cmpl-drain-stream-0"}, "swapped": []string{}, "cached": []string{}}}, "terminal_dispositions": map[string]string{"cmpl-drain-stream-0": "aborted"}, "proxy_snapshot": map[string]any{"before_engine_begin": map[string]int{"active": 1}, "after_engine_begin": map[string]int{"cancelled": 1, "remaining": 0}}, "observations": observations, "deadline": "2026-09-22T00:00:00Z", "cancellation_grace_deadline": "2026-09-22T00:00:30Z", "transition_reason": "none", "cancel_boundary_revision": "0", "last_transition": "2026-09-22T00:00:00Z", "query_nonce": queryNonce}
+	dispositions := map[string]string{}
+	for _, requestID := range requestIDs {
+		dispositions[requestID] = "aborted"
+	}
+	body := map[string]any{"schema": "phorvex.drain.v1", "operation_id": opID, "operation_generation": generation, "attempt": 1, "owner_digest": drainOwnerDigest(testDrainOwner), "backend_incarnation_digest": strings.Repeat("d", 64), "revision": revision, "state": state, "admission": admission, "admission_generation": "1", "engine_boot_id": strings.Repeat("c", 32), "virtual_engine_ids": []int{0}, "engine_snapshot": map[string]any{"0": map[string]any{"waiting": requestIDs[1:], "running": requestIDs[:1], "swapped": []string{}, "cached": []string{}}}, "terminal_dispositions": dispositions, "proxy_snapshot": map[string]any{"before_engine_begin": map[string]int{"active": len(requestIDs)}, "after_engine_begin": map[string]int{"cancelled": len(requestIDs), "remaining": 0}}, "observations": observations, "deadline": "2026-09-22T00:00:00Z", "cancellation_grace_deadline": "2026-09-22T00:00:30Z", "transition_reason": "none", "cancel_boundary_revision": "0", "last_transition": "2026-09-22T00:00:00Z", "query_nonce": queryNonce}
 	digest, err := drainDigest("phorvex-drain-status-v1", body)
 	if err != nil {
 		panic(err)
@@ -292,7 +381,9 @@ type drainServer struct {
 	mu                  sync.Mutex
 	active              int
 	closed              bool
-	streamDone          chan struct{}
+	streamDones         []chan struct{}
+	streamIDs           []string
+	snapshotIDs         []string
 	opID, generation    string
 	nonces              []string
 	reopenCalls         int
@@ -301,6 +392,7 @@ type drainServer struct {
 	omitDisposition     bool
 	loseCreateResponse  bool
 	loseReopenResponse  bool
+	wrongStreamIdentity bool
 }
 
 func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -325,8 +417,12 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
+		running, waiting := 0, 0
+		if active > 0 {
+			running, waiting = 1, active-1
+		}
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "vllm:gpu_prefix_cache_hit_rate{model_name=\"%s\"} 0\nvllm:num_requests_running{model_name=\"%s\"} %d\nvllm:num_requests_waiting{model_name=\"%s\"} 0\nvllm:gpu_cache_usage_perc{model_name=\"%s\"} 0.2\nvllm:prompt_tokens_total{model_name=\"%s\"} 1\nvllm:request_success_total{model_name=\"%s\",finished_reason=\"length\"} 1\n", modelName, modelName, active, modelName, modelName, modelName, modelName)
+		fmt.Fprintf(w, "vllm:gpu_prefix_cache_hit_rate{model_name=\"%s\"} 0\nvllm:num_requests_running{model_name=\"%s\"} %d\nvllm:num_requests_waiting{model_name=\"%s\"} %d\nvllm:gpu_cache_usage_perc{model_name=\"%s\"} 0.2\nvllm:prompt_tokens_total{model_name=\"%s\"} 1\nvllm:request_success_total{model_name=\"%s\",finished_reason=\"length\"} 1\n", modelName, modelName, running, modelName, waiting, modelName, modelName, modelName)
 	case r.URL.Path == "/v1/completions":
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
@@ -339,19 +435,25 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if streaming, _ := body["stream"].(bool); streaming {
 			s.mu.Lock()
-			s.active = 1
+			ordinal := s.active
+			s.active++
+			s.streamIDs = append(s.streamIDs, fmt.Sprintf("cmpl-drain-stream-%d-0", ordinal))
 			done := make(chan struct{})
-			s.streamDone = done
+			s.streamDones = append(s.streamDones, done)
 			s.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
-			fmt.Fprintf(w, "data: {\"id\":\"cmpl-drain-stream\",\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", modelName)
+			requestID := fmt.Sprintf("cmpl-drain-stream-%d", ordinal)
+			if s.wrongStreamIdentity && ordinal == 0 {
+				requestID = "cmpl-foreign-stream"
+			}
+			fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", requestID, modelName)
 			w.(http.Flusher).Flush()
 			select {
 			case <-done:
 			case <-r.Context().Done():
 			}
 			s.mu.Lock()
-			s.active = 0
+			s.active--
 			s.mu.Unlock()
 			return
 		}
@@ -363,11 +465,12 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.closed = true
 		s.opID = payload["operation_id"].(string)
 		s.generation = payload["operation_generation"].(string)
-		if s.streamDone != nil {
-			close(s.streamDone)
-			s.streamDone = nil
+		s.snapshotIDs = append([]string(nil), s.streamIDs...)
+		for _, done := range s.streamDones {
+			close(done)
 		}
-		body := operationBody(s.opID, s.generation, "DRAINING", "CLOSED", "2", "", "")
+		s.streamDones = nil
+		body := operationBody(s.opID, s.generation, "DRAINING", "CLOSED", "2", "", "", s.snapshotIDs)
 		if s.omitDisposition {
 			body["terminal_dispositions"] = map[string]string{}
 		}
@@ -383,7 +486,7 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.closed = false
 		s.reopenCalls++
-		body := operationBody(s.opID, s.generation, "OPENED", "OPEN", "6", "", "")
+		body := operationBody(s.opID, s.generation, "OPENED", "OPEN", "6", "", "", s.snapshotIDs)
 		s.mu.Unlock()
 		if s.loseReopenResponse {
 			w.Header().Set("Content-Type", "application/json")
@@ -409,7 +512,7 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		} else if len(s.nonces) >= 2 {
 			state = "QUIESCENT"
 		}
-		body := operationBody(s.opID, s.generation, state, admission, strconv.Itoa(2+len(s.nonces)), one, two)
+		body := operationBody(s.opID, s.generation, state, admission, strconv.Itoa(2+len(s.nonces)), one, two, s.snapshotIDs)
 		if s.omitDisposition {
 			body["terminal_dispositions"] = map[string]string{}
 		}
@@ -423,15 +526,15 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 	owner := testDrainOwner
 	for _, tc := range []struct {
-		name                                                                        string
-		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse bool
-		wantErr                                                                     bool
-		wantReopens                                                                 int
+		name                                                                                             string
+		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity bool
+		wantErr                                                                                          bool
+		wantReopens                                                                                      int
 	}{
-		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1},
+		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot identity mismatch", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse}
+			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity}
 			server := httptest.NewServer(http.HandlerFunc(state.serve))
 			defer server.Close()
 			client, err := New(server.URL, testToken, server.Client())
@@ -464,7 +567,7 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 			if active != 0 {
 				t.Fatalf("owned stream remained active after return: %d", active)
 			}
-			if !tc.wantErr && (receipt.SecondObservation == nil || len(receipt.SecondObservation.Observations) != 2 || receipt.PostInference == nil || receipt.Mode != "direct" || receipt.StreamRequestID != "cmpl-drain-stream" || len(receipt.FirstObservationSource.Body) == 0 || len(receipt.SecondObservationSource.Body) == 0 || len(receipt.ReopenObservation.Body) == 0 || len(receipt.RecoveredCapabilityObservation.Body) == 0) {
+			if !tc.wantErr && (receipt.SecondObservation == nil || len(receipt.SecondObservation.Observations) != 2 || receipt.PostInference == nil || receipt.Mode != "direct" || len(receipt.SnapshotBindings) < 2 || receipt.Cohort.Expected != streamCohortSize || len(receipt.FirstObservationSource.Body) == 0 || len(receipt.SecondObservationSource.Body) == 0 || len(receipt.ReopenObservation.Body) == 0 || len(receipt.RecoveredCapabilityObservation.Body) == 0) {
 				t.Fatalf("direct receipt incomplete: %+v", receipt)
 			}
 		})
@@ -472,6 +575,34 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 }
 
 func TestRetainedRealWireCorpusParsesAndBindsProducerDigests(t *testing.T) {
+	for _, control := range []struct {
+		name, file, sha string
+		wantBusy        bool
+		wantRunning     float64
+		wantWaiting     float64
+		wantCompleted   float64
+	}{
+		{name: "R71 fast request completed before scrape", file: "r71-fast-complete-metrics.txt", sha: "83f8eeee750b587fc8f8ac4b9a936ec9061b0633ee8feff349dc3c9400b49494", wantCompleted: 6},
+		{name: "v9 eight-request cohort retained active state", file: "v9-cohort-active-metrics.txt", sha: "c30583ff0b49cf9772d65289b8d3a0bf4a53c484de62c215277ff762f1a1dbaa", wantBusy: true, wantRunning: 1, wantWaiting: 6, wantCompleted: 5},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			raw, err := os.ReadFile("testdata/retained-wire/" + control.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != control.sha {
+				t.Fatalf("retained control hash differs: %s", got)
+			}
+			values, err := parseMetrics(raw)
+			if err != nil {
+				t.Fatalf("retained actual vLLM metrics rejected: %v", err)
+			}
+			if busyEstablished(values) != control.wantBusy || values["vllm:num_requests_running"] != control.wantRunning || values["vllm:num_requests_waiting"] != control.wantWaiting || values["vllm:request_success_total"] != control.wantCompleted {
+				t.Fatalf("retained control semantics differ: %+v", values)
+			}
+		})
+	}
+
 	coldRaw, err := os.ReadFile("testdata/retained-wire/cold-metrics.txt")
 	if err != nil {
 		t.Fatal(err)

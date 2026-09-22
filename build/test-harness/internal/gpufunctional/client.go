@@ -26,6 +26,7 @@ const (
 	MaxResponseBytes = 1 << 20
 	modelName        = "facebook/opt-125m"
 	primerPrompt     = "A short synthetic GPU metrics primer."
+	streamCohortSize = 8
 )
 
 var metricNames = []string{
@@ -508,11 +509,34 @@ type PrefixReceipt struct {
 }
 
 type BusyReceipt struct {
-	ActiveMetrics   Metrics `json:"activeMetrics"`
-	Reset           Reset   `json:"reset"`
-	StreamAccepted  bool    `json:"streamAccepted"`
-	StreamRequestID string  `json:"streamRequestID,omitempty"`
-	StreamFinished  bool    `json:"streamFinished"`
+	PreIdle       Metrics             `json:"preIdle"`
+	ActiveMetrics Metrics             `json:"activeMetrics"`
+	Reset         Reset               `json:"reset"`
+	Cohort        StreamCohortReceipt `json:"cohort"`
+}
+
+// StreamLifecycleReceipt retains the bounded producer lifecycle of one
+// synthetic request. RequestID is accepted only from a strict SSE event; a
+// locally submitted ordinal is never treated as an engine request identity.
+type StreamLifecycleReceipt struct {
+	Ordinal     int    `json:"ordinal"`
+	SubmittedAt string `json:"submittedAt"`
+	HTTPStatus  int    `json:"httpStatus"`
+	MediaType   string `json:"mediaType,omitempty"`
+	AcceptedAt  string `json:"acceptedAt,omitempty"`
+	RequestID   string `json:"requestID,omitempty"`
+	EventCount  int    `json:"eventCount"`
+	FinishedAt  string `json:"finishedAt,omitempty"`
+	Finished    bool   `json:"finished"`
+	SawDone     bool   `json:"sawDone"`
+	Termination string `json:"termination"`
+	Error       string `json:"error,omitempty"`
+}
+
+type StreamCohortReceipt struct {
+	Schema   string                   `json:"schema"`
+	Expected int                      `json:"expected"`
+	Streams  []StreamLifecycleReceipt `json:"streams"`
 }
 
 func (c *Client) RunPrefix(ctx context.Context, direct bool) (PrefixReceipt, error) {
@@ -614,31 +638,36 @@ func idle(v map[string]float64) bool {
 	return v["vllm:num_requests_running"] == 0 && v["vllm:num_requests_waiting"] == 0
 }
 
+func busyEstablished(v map[string]float64) bool {
+	running := v["vllm:num_requests_running"]
+	waiting := v["vllm:num_requests_waiting"]
+	return running >= 1 && waiting >= 1 && running+waiting >= 2
+}
+
 func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retErr error) {
-	stream := c.startStream(ctx)
-	defer func() { retErr = errors.Join(retErr, stream.stop()) }()
-	select {
-	case <-stream.accepted:
-		receipt.StreamAccepted = true
-		receipt.StreamRequestID = stream.identity()
-	case <-stream.finished:
-		return receipt, fmt.Errorf("busy request finished before operation: %w", stream.result())
-	case <-time.After(10 * time.Second):
-		return receipt, errors.New("busy request admission was not observed")
-	case <-ctx.Done():
-		return receipt, ctx.Err()
+	preIdle, err := c.waitMetrics(ctx, 5*time.Second, idle)
+	receipt.PreIdle = preIdle
+	if err != nil {
+		return receipt, err
 	}
-	active, err := c.waitMetrics(ctx, 5*time.Second, func(v map[string]float64) bool {
-		return v["vllm:num_requests_running"]+v["vllm:num_requests_waiting"] > 0
-	})
+	cohort := c.startStreamCohort(ctx, streamCohortSize)
+	defer func() {
+		retErr = errors.Join(retErr, cohort.stop())
+		receipt.Cohort = cohort.receipt()
+	}()
+	if err := cohort.waitSubmitted(ctx, 10*time.Second); err != nil {
+		return receipt, err
+	}
+	active, err := c.waitMetrics(ctx, 5*time.Second, busyEstablished)
 	receipt.ActiveMetrics = active
 	if err != nil {
 		return receipt, err
 	}
-	select {
-	case <-stream.finished:
-		return receipt, fmt.Errorf("busy control stream finished after active sample and before reset: %w", stream.result())
-	default:
+	if cohort.unfinished() < 2 {
+		return receipt, errors.New("busy cohort drained before reset authority was established")
+	}
+	if err := cohort.preActionFailure(); err != nil {
+		return receipt, err
 	}
 	reset, err := c.Reset(ctx)
 	receipt.Reset = reset
@@ -646,68 +675,191 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 		return receipt, err
 	}
 	if reset.Success {
-		select {
-		case <-stream.finished:
-			receipt.StreamFinished = true
-			return receipt, errors.New("busy control became inconclusive because the stream finished during reset")
-		default:
-			return receipt, errors.New("prefix reset acknowledged while correlated owned inference was active")
-		}
+		return receipt, errors.New("prefix reset acknowledged while the evidenced cohort was active")
 	}
-	select {
-	case <-stream.finished:
-		receipt.StreamFinished = true
-		return receipt, stream.result()
-	case <-time.After(30 * time.Second):
-		return receipt, errors.New("busy inference exceeded declared bound")
-	case <-ctx.Done():
-		return receipt, ctx.Err()
+	if err := cohort.waitFinished(ctx, 30*time.Second); err != nil {
+		return receipt, err
 	}
+	if err := cohort.requireCompleted(); err != nil {
+		return receipt, err
+	}
+	return receipt, nil
 }
 
 type streamExecution struct {
-	accepted    chan struct{}
+	submitted   chan struct{}
 	finished    chan struct{}
 	cancel      context.CancelFunc
 	mu          sync.Mutex
-	id          string
-	err         error
+	receipt     StreamLifecycleReceipt
 	joinTimeout time.Duration
 }
 
-func (c *Client) startStream(ctx context.Context) *streamExecution {
+func (c *Client) startStream(ctx context.Context, ordinal int) *streamExecution {
 	streamCtx, cancel := context.WithCancel(ctx)
-	run := &streamExecution{accepted: make(chan struct{}), finished: make(chan struct{}), cancel: cancel, joinTimeout: 2 * time.Second}
+	run := &streamExecution{submitted: make(chan struct{}), finished: make(chan struct{}), cancel: cancel, joinTimeout: 2 * time.Second}
+	run.receipt = StreamLifecycleReceipt{Ordinal: ordinal, Termination: "not-started"}
 	go func() {
 		err := c.stream(streamCtx, run)
 		run.mu.Lock()
-		run.err = err
+		run.receipt.Finished = true
+		run.receipt.FinishedAt = c.now().UTC().Format(time.RFC3339Nano)
+		switch {
+		case err == nil && run.receipt.SawDone:
+			run.receipt.Termination = "complete"
+		case errors.Is(err, context.Canceled):
+			run.receipt.Termination = "canceled"
+		default:
+			run.receipt.Termination = "error"
+		}
+		if err != nil {
+			run.receipt.Error = boundedError(err)
+		}
 		run.mu.Unlock()
 		close(run.finished)
 	}()
 	return run
 }
 
-func (s *streamExecution) identity() string {
+func (s *streamExecution) snapshot() StreamLifecycleReceipt {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.id
+	return s.receipt
 }
 
-func (s *streamExecution) result() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.err
+func boundedError(err error) string {
+	if err == nil {
+		return ""
+	}
+	value := err.Error()
+	if len(value) > 512 {
+		return value[:512]
+	}
+	return value
 }
 
 func (s *streamExecution) stop() error {
 	s.cancel()
+	return s.waitStopped(s.joinTimeout)
+}
+
+func (s *streamExecution) waitStopped(bound time.Duration) error {
+	if bound <= 0 {
+		bound = time.Nanosecond
+	}
 	select {
 	case <-s.finished:
 		return nil
-	case <-time.After(s.joinTimeout):
+	case <-time.After(bound):
+		s.mu.Lock()
+		s.receipt.Termination = "join-timeout"
+		s.receipt.Error = "owned inference stream did not stop within cleanup bound"
+		s.mu.Unlock()
 		return errors.New("owned inference stream did not stop within cleanup bound")
 	}
+}
+
+type streamCohort struct {
+	streams []*streamExecution
+}
+
+func (c *Client) startStreamCohort(ctx context.Context, count int) *streamCohort {
+	cohort := &streamCohort{streams: make([]*streamExecution, 0, count)}
+	for ordinal := 0; ordinal < count; ordinal++ {
+		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal))
+	}
+	return cohort
+}
+
+func (c *streamCohort) waitSubmitted(ctx context.Context, bound time.Duration) error {
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	for _, stream := range c.streams {
+		select {
+		case <-stream.submitted:
+		case <-deadline.C:
+			return errors.New("stream cohort submission bound expired")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (c *streamCohort) unfinished() int {
+	unfinished := 0
+	for _, stream := range c.streams {
+		select {
+		case <-stream.finished:
+		default:
+			unfinished++
+		}
+	}
+	return unfinished
+}
+
+func (c *streamCohort) preActionFailure() error {
+	for _, stream := range c.streams {
+		select {
+		case <-stream.finished:
+			receipt := stream.snapshot()
+			if receipt.Termination != "complete" {
+				return fmt.Errorf("stream %d failed before action: %s", receipt.Ordinal, receipt.Termination)
+			}
+		default:
+		}
+	}
+	return nil
+}
+
+func (c *streamCohort) waitFinished(ctx context.Context, bound time.Duration) error {
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	for _, stream := range c.streams {
+		select {
+		case <-stream.finished:
+		case <-deadline.C:
+			return errors.New("stream cohort exceeded declared terminal bound")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (c *streamCohort) requireCompleted() error {
+	seen := map[string]bool{}
+	for _, stream := range c.streams {
+		receipt := stream.snapshot()
+		if !receipt.Finished || receipt.Termination != "complete" || !receipt.SawDone || receipt.RequestID == "" || receipt.EventCount == 0 {
+			return fmt.Errorf("stream %d lacks a complete authenticated producer lifecycle", receipt.Ordinal)
+		}
+		if seen[receipt.RequestID] {
+			return errors.New("stream cohort producer request identity is duplicated")
+		}
+		seen[receipt.RequestID] = true
+	}
+	return nil
+}
+
+func (c *streamCohort) receipt() StreamCohortReceipt {
+	receipt := StreamCohortReceipt{Schema: "phorvex.gpu.stream-cohort.v2", Expected: len(c.streams), Streams: make([]StreamLifecycleReceipt, 0, len(c.streams))}
+	for _, stream := range c.streams {
+		receipt.Streams = append(receipt.Streams, stream.snapshot())
+	}
+	return receipt
+}
+
+func (c *streamCohort) stop() error {
+	for _, stream := range c.streams {
+		stream.cancel()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	var result error
+	for _, stream := range c.streams {
+		result = errors.Join(result, stream.waitStopped(time.Until(deadline)))
+	}
+	return result
 }
 
 func (c *Client) stream(ctx context.Context, run *streamExecution) error {
@@ -719,21 +871,35 @@ func (c *Client) stream(ctx context.Context, run *streamExecution) error {
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+	run.mu.Lock()
+	run.receipt.SubmittedAt = c.now().UTC().Format(time.RFC3339Nano)
+	run.receipt.Termination = "running"
+	run.mu.Unlock()
+	close(run.submitted)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	run.mu.Lock()
+	run.receipt.HTTPStatus = resp.StatusCode
+	run.receipt.MediaType = mediaType
+	run.mu.Unlock()
 	if resp.StatusCode != http.StatusOK || mediaType != "text/event-stream" {
 		return fmt.Errorf("busy stream HTTP %d media type %q", resp.StatusCode, mediaType)
 	}
 	scanner := bufio.NewScanner(io.LimitReader(resp.Body, MaxResponseBytes+1))
 	scanner.Buffer(make([]byte, 4096), 1<<16)
-	once := sync.Once{}
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") || line == "data: [DONE]" {
+		if line == "data: [DONE]" {
+			run.mu.Lock()
+			run.receipt.SawDone = true
+			run.mu.Unlock()
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
 		var event struct {
@@ -756,14 +922,29 @@ func (c *Client) stream(ctx context.Context, run *streamExecution) error {
 		if event.ID == "" || event.Object != "text_completion" || event.Created <= 0 || event.Model != modelName || len(event.Choices) != 1 || event.Choices[0].Index != 0 {
 			return errors.New("invalid busy stream event")
 		}
-		once.Do(func() {
-			run.mu.Lock()
-			run.id = event.ID
+		run.mu.Lock()
+		if run.receipt.RequestID != "" && run.receipt.RequestID != event.ID {
 			run.mu.Unlock()
-			close(run.accepted)
-		})
+			return errors.New("busy stream response identity changed")
+		}
+		first := run.receipt.RequestID == ""
+		run.receipt.RequestID = event.ID
+		run.receipt.EventCount++
+		if first {
+			run.receipt.AcceptedAt = c.now().UTC().Format(time.RFC3339Nano)
+		}
+		run.mu.Unlock()
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	run.mu.Lock()
+	sawDone := run.receipt.SawDone
+	run.mu.Unlock()
+	if !sawDone {
+		return errors.New("busy stream ended without terminal marker")
+	}
+	return nil
 }
 
 func randomHex16() (string, error) {

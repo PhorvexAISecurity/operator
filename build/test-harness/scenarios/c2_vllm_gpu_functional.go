@@ -30,7 +30,7 @@ import (
 const (
 	vllmPrefixScenario = "c2-vllm-prefix-cache-reset"
 	vllmDrainScenario  = "c2-vllm-request-drain"
-	vllmSuiteVersion   = "post25-vllm-functional-v1"
+	vllmSuiteVersion   = "post25-vllm-functional-v2"
 	vllmRunLabelKey    = "fixture.phorvex.ai/run"
 	vllmModelLabelKey  = "fixture.phorvex.ai/model-digest"
 )
@@ -54,11 +54,11 @@ type c2VLLMFunctional struct {
 func (s *c2VLLMFunctional) Metadata() core.ScenarioMeta {
 	name, mechanism, oracle := vllmPrefixScenario,
 		"real vLLM 0.7.3 OPT-125m prefix-cache protocol through an exact owned ordinary-GPU Pod port-forward; one distinct synthetic primer initializes lazy metrics before both arms run the same two-request population sequence",
-		"retains the cold metric exposition and primer completion, then establishes real prefix reuse from the same measured request count in both arms; direct mode additionally requires idle reset acknowledgement, first post-reset miss, later repopulation, and correlated busy refusal"
+		"retains the cold metric exposition and primer completion, then establishes real prefix reuse from the same measured request count in both arms; direct mode additionally requires idle reset acknowledgement, first post-reset miss, later repopulation, and an eight-request cohort with running and waiting work during the busy refusal"
 	if s.operation == "request-drain" {
 		name = vllmDrainScenario
-		mechanism = "real streaming vLLM 0.7.3 OPT-125m request plus operation-bound drain, exact dispositions, admission closure and explicit reopen"
-		oracle = "binds a live admitted stream to one operation generation; requires closed late admission, complete dispositions, two zero-queue observations, unchanged engine epoch, reopen, and successful recovery inference"
+		mechanism = "real eight-request streaming vLLM 0.7.3 OPT-125m cohort plus operation-bound drain, exact dispositions, admission closure and explicit reopen"
+		oracle = "binds every captured operation-snapshot request to an authenticated response identity from the submitted cohort; requires closed late admission, complete dispositions, two zero-queue observations, unchanged engine epoch, reopen, and successful recovery inference"
 	}
 	return core.ScenarioMeta{
 		Name: name, Category: core.CategoryR6Claimed,
@@ -457,9 +457,9 @@ func vllmStages(operation string, direct bool, receipt any) []string {
 		return append(stages, "observe bounded no-action functional state")
 	}
 	if operation == "prefix-cache-reset" {
-		return append(stages, "establish real prefix reuse", "send one direct idle prefix reset", "observe first miss then cache repopulation", "correlate busy reset refusal with live inference")
+		return append(stages, "establish real prefix reuse", "send one direct idle prefix reset", "observe first miss then cache repopulation", "correlate busy reset refusal with an eight-request running-and-waiting cohort")
 	}
-	return append(stages, "admit one real streaming request", "send one operation-bound direct drain", "observe admission closure and complete request dispositions", "observe two zero-queue snapshots", "reopen admission and prove recovery inference")
+	return append(stages, "submit an eight-request streaming cohort and retain running plus waiting evidence", "send one operation-bound direct drain", "join every captured snapshot identity to an authenticated cohort response and complete disposition", "observe two zero-queue snapshots", "reopen admission and prove recovery inference")
 }
 
 func validateVLLMEvidence(evidence map[string]string) error {

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -68,29 +69,34 @@ type LateAdmission struct {
 }
 
 type DrainReceipt struct {
-	Mode                           string          `json:"mode"`
-	Baseline                       Inference       `json:"baseline"`
-	Capability                     Capability      `json:"capability"`
-	CapabilityObservation          Observation     `json:"capabilityObservation"`
-	FirstIdle                      *Metrics        `json:"firstIdle,omitempty"`
-	SecondIdle                     *Metrics        `json:"secondIdle,omitempty"`
-	ActiveMetrics                  *Metrics        `json:"activeMetrics,omitempty"`
-	StreamAccepted                 bool            `json:"streamAccepted"`
-	StreamRequestID                string          `json:"streamRequestID,omitempty"`
-	StreamFinished                 bool            `json:"streamFinished"`
-	Create                         *DrainOperation `json:"create,omitempty"`
-	CreateObservation              *Observation    `json:"createObservation,omitempty"`
-	Late                           *LateAdmission  `json:"late,omitempty"`
-	FirstObservation               *DrainOperation `json:"firstObservation,omitempty"`
-	FirstObservationSource         *Observation    `json:"firstObservationSource,omitempty"`
-	SecondObservation              *DrainOperation `json:"secondObservation,omitempty"`
-	SecondObservationSource        *Observation    `json:"secondObservationSource,omitempty"`
-	Reopen                         *DrainOperation `json:"reopen,omitempty"`
-	ReopenObservation              *Observation    `json:"reopenObservation,omitempty"`
-	CleanupObservations            []Observation   `json:"cleanupObservations,omitempty"`
-	RecoveredCapability            *Capability     `json:"recoveredCapability,omitempty"`
-	RecoveredCapabilityObservation *Observation    `json:"recoveredCapabilityObservation,omitempty"`
-	PostInference                  *Inference      `json:"postInference,omitempty"`
+	Mode                           string                 `json:"mode"`
+	Baseline                       Inference              `json:"baseline"`
+	Capability                     Capability             `json:"capability"`
+	CapabilityObservation          Observation            `json:"capabilityObservation"`
+	FirstIdle                      *Metrics               `json:"firstIdle,omitempty"`
+	SecondIdle                     *Metrics               `json:"secondIdle,omitempty"`
+	ActiveMetrics                  *Metrics               `json:"activeMetrics,omitempty"`
+	Cohort                         StreamCohortReceipt    `json:"cohort"`
+	SnapshotBindings               []DrainSnapshotBinding `json:"snapshotBindings,omitempty"`
+	Create                         *DrainOperation        `json:"create,omitempty"`
+	CreateObservation              *Observation           `json:"createObservation,omitempty"`
+	Late                           *LateAdmission         `json:"late,omitempty"`
+	FirstObservation               *DrainOperation        `json:"firstObservation,omitempty"`
+	FirstObservationSource         *Observation           `json:"firstObservationSource,omitempty"`
+	SecondObservation              *DrainOperation        `json:"secondObservation,omitempty"`
+	SecondObservationSource        *Observation           `json:"secondObservationSource,omitempty"`
+	Reopen                         *DrainOperation        `json:"reopen,omitempty"`
+	ReopenObservation              *Observation           `json:"reopenObservation,omitempty"`
+	CleanupObservations            []Observation          `json:"cleanupObservations,omitempty"`
+	RecoveredCapability            *Capability            `json:"recoveredCapability,omitempty"`
+	RecoveredCapabilityObservation *Observation           `json:"recoveredCapabilityObservation,omitempty"`
+	PostInference                  *Inference             `json:"postInference,omitempty"`
+}
+
+type DrainSnapshotBinding struct {
+	SnapshotRequestID string `json:"snapshotRequestID"`
+	StreamOrdinal     int    `json:"streamOrdinal"`
+	ProducerRequestID string `json:"producerRequestID"`
 }
 
 type createOperation struct {
@@ -145,30 +151,36 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if owner.NamespaceUID == "" || owner.PodUID != capability.PodUID || owner.ServiceUID == "" || owner.Tenant == "" || owner.PolicyUID == "" {
 		return receipt, errors.New("drain owner does not bind current capability and fixture identities")
 	}
-	stream := c.startStream(ctx)
-	defer func() { retErr = errors.Join(retErr, stream.stop()) }()
-	select {
-	case <-stream.accepted:
-		receipt.StreamAccepted = true
-		receipt.StreamRequestID = stream.identity()
-	case <-stream.finished:
-		return receipt, fmt.Errorf("owned stream finished before drain: %w", stream.result())
-	case <-time.After(10 * time.Second):
-		return receipt, errors.New("owned stream first-token admission was not observed")
-	case <-ctx.Done():
-		return receipt, ctx.Err()
+	preIdle, err := c.waitMetrics(ctx, 5*time.Second, idle)
+	receipt.FirstIdle = &preIdle
+	if err != nil {
+		return receipt, err
 	}
-	active, err := c.waitMetrics(ctx, 5*time.Second, func(v map[string]float64) bool {
-		return v["vllm:num_requests_running"]+v["vllm:num_requests_waiting"] > 0
-	})
+	cohort := c.startStreamCohort(ctx, streamCohortSize)
+	cohortFinalized := false
+	finalizeCohort := func() error {
+		if cohortFinalized {
+			return nil
+		}
+		cohortFinalized = true
+		err := cohort.stop()
+		receipt.Cohort = cohort.receipt()
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, finalizeCohort()) }()
+	if err := cohort.waitSubmitted(ctx, 10*time.Second); err != nil {
+		return receipt, err
+	}
+	active, err := c.waitMetrics(ctx, 5*time.Second, busyEstablished)
 	receipt.ActiveMetrics = &active
 	if err != nil {
 		return receipt, err
 	}
-	select {
-	case <-stream.finished:
-		return receipt, fmt.Errorf("owned stream finished before operation create: %w", stream.result())
-	default:
+	if cohort.unfinished() < 2 {
+		return receipt, errors.New("drain cohort finished before operation authority was established")
+	}
+	if err := cohort.preActionFailure(); err != nil {
+		return receipt, err
 	}
 	generation, err := strconv.ParseUint(capability.NextOperationGeneration, 10, 64)
 	if err != nil || generation == 0 {
@@ -185,6 +197,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 		if !rollbackNeeded || !operationAttempted {
 			return
 		}
+		retErr = errors.Join(retErr, finalizeCohort())
 		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		reopened, observations, rollbackErr := c.reconcileAndReopen(rollbackCtx, payload, capability)
@@ -203,21 +216,19 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err := validateDrainIdentity(created, payload, capability, "DRAINING", "CLOSED"); err != nil {
 		return receipt, err
 	}
-	if !snapshotContainsExactAdmittedRequest(created.EngineSnapshot, receipt.StreamRequestID) {
-		return receipt, errors.New("drain snapshot does not bind the admitted owned stream request")
-	}
 	late, err := c.lateAdmission(ctx)
 	receipt.Late = &late
 	if err != nil {
 		return receipt, err
 	}
-	select {
-	case <-stream.finished:
-		receipt.StreamFinished = true
-	case <-time.After(15 * time.Second):
-		return receipt, errors.New("owned stream did not terminate within drain bound")
-	case <-ctx.Done():
-		return receipt, ctx.Err()
+	if err := cohort.waitFinished(ctx, 15*time.Second); err != nil {
+		return receipt, err
+	}
+	receipt.Cohort = cohort.receipt()
+	bindings, err := validateDrainSnapshotCohort(created.EngineSnapshot, receipt.Cohort)
+	receipt.SnapshotBindings = bindings
+	if err != nil {
+		return receipt, err
 	}
 	firstNonce, err := randomHex16()
 	if err != nil {
@@ -519,21 +530,46 @@ func validateTerminalSequence(created, first, second DrainOperation, firstNonce,
 	return nil
 }
 
-func snapshotContainsExactAdmittedRequest(snapshot map[string]DrainQueue, requestID string) bool {
-	if requestID == "" || len(snapshot) != 1 {
-		return false
+func validateDrainSnapshotCohort(snapshot map[string]DrainQueue, cohort StreamCohortReceipt) ([]DrainSnapshotBinding, error) {
+	if cohort.Schema != "phorvex.gpu.stream-cohort.v2" || cohort.Expected != streamCohortSize || len(cohort.Streams) != cohort.Expected || len(snapshot) != 1 {
+		return nil, errors.New("drain cohort or engine snapshot shape differs")
 	}
-	wantEngineID := requestID + "-0"
-	for _, queue := range snapshot {
-		for _, ids := range [][]string{queue.Waiting, queue.Running, queue.Swapped, queue.Cached} {
-			for _, id := range ids {
-				if id == requestID || id == wantEngineID {
-					return true
-				}
-			}
+	producer := map[string]StreamLifecycleReceipt{}
+	for _, stream := range cohort.Streams {
+		if stream.RequestID == "" || stream.AcceptedAt == "" || stream.EventCount == 0 || !stream.Finished || stream.FinishedAt == "" || stream.Termination == "running" || stream.Termination == "not-started" || stream.Termination == "join-timeout" {
+			continue
+		}
+		if _, exists := producer[stream.RequestID]; exists {
+			return nil, errors.New("drain cohort producer request identity is duplicated")
+		}
+		producer[stream.RequestID] = stream
+	}
+	var snapshotIDs []string
+	for _, queues := range snapshot {
+		for _, ids := range [][]string{queues.Waiting, queues.Running, queues.Swapped, queues.Cached} {
+			snapshotIDs = append(snapshotIDs, ids...)
 		}
 	}
-	return false
+	if len(snapshotIDs) == 0 {
+		return nil, errors.New("drain snapshot contains no admitted cohort request")
+	}
+	slices.Sort(snapshotIDs)
+	bindings := make([]DrainSnapshotBinding, 0, len(snapshotIDs))
+	seenProducer := map[string]bool{}
+	for _, snapshotID := range snapshotIDs {
+		producerID := snapshotID
+		stream, ok := producer[producerID]
+		if !ok && strings.HasSuffix(snapshotID, "-0") {
+			producerID = strings.TrimSuffix(snapshotID, "-0")
+			stream, ok = producer[producerID]
+		}
+		if !ok || seenProducer[producerID] {
+			return bindings, fmt.Errorf("drain snapshot request %q lacks a unique authenticated cohort response identity", snapshotID)
+		}
+		seenProducer[producerID] = true
+		bindings = append(bindings, DrainSnapshotBinding{SnapshotRequestID: snapshotID, StreamOrdinal: stream.Ordinal, ProducerRequestID: producerID})
+	}
+	return bindings, nil
 }
 
 func validateDrainReceiptDigest(operation DrainOperation) error {

@@ -182,6 +182,23 @@
         "transition_reason",
         "virtual_engine_ids"
       ]
+    },
+    {
+      "file": "r71-fast-complete-metrics.txt",
+      "source": "catalogue/gpu-functional-live-prep-v5/output/prefix-direct/run/harness/metrics.jsonl receiptJSON.busy.activeMetrics.rawBody",
+      "source_sha256": "68e7a1097d22d22d585af593465b77e05177931ddbfae799b4df762778465b5f",
+      "body_sha256": "83f8eeee750b587fc8f8ac4b9a936ec9061b0633ee8feff349dc3c9400b49494",
+      "bytes": 22205,
+      "condition": "R71 invalid control: one 128-token stream had completed before this scrape; no busy reset was sent"
+    },
+    {
+      "file": "v9-cohort-active-metrics.txt",
+      "source": "backend/gpu-reset-live-v9/108-archive-multiprocess-024-busy-active-9.body.json",
+      "source_sha256": "fa27d9819bc757810b9d1ae095292be72867e7bd2d30f8f6de2285527f7afab5",
+      "source_summary_sha256": "d6787d6659b2e9d7583b49796e9564526ed78a8f5a07cfc82117e9815948b915",
+      "body_sha256": "c30583ff0b49cf9772d65289b8d3a0bf4a53c484de62c215277ff762f1a1dbaa",
+      "bytes": 22209,
+      "condition": "historical actual-producer eight-request cohort active scrape; not fresh live evidence"
     }
   ]
 }
