@@ -210,6 +210,11 @@ phorvex:
       - mcp
       - document-store
       - ci-reports
+      # Codex verification tenants for the two outstanding behavioural tests (M100 loss
+      # history, M106 scoped outcomes). Their PhorvexPolicies exist on the cluster; without
+      # the namespaced Role the startup preflight refuses to start the operator at all.
+      - phorvex-verify-m100-loss-history-v2
+      - phorvex-verify-m106-scoped-outcome-v4
     epss:
       enabled: true
       configMapName: phorvex-epss
