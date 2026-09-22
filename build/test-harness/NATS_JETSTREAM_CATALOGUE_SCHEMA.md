@@ -45,8 +45,10 @@ identities, A and B PubAcks, delivery ACKs, independent stored-message reads,
 replica state, one action attempt/completion, old/new child process identity,
 unchanged storage identity and recovery duration. Availability during the
 restart is explicitly unobserved; the result proves protocol restoration after
-the boundary. A quorum-loss publication timeout is retained as unknown commit status. After
-recovery the probe permits one same-ID publication only when its full request
+the boundary. A quorum-loss publication timeout is retained as unknown commit status. Both
+the initial X publication and its same-ID reconciliation explicitly disable the
+nats.go no-responder retry loop, so each receipt attempt is one wire publication.
+After recovery the probe permits one same-ID publication only when its full request
 timeout still fits before the configured two-minute deduplication window expires,
 measured from the first attempt's earliest start. It validates the real PubAck
 and stored bytes and requires exactly A/X/Y contiguous stream state. It never

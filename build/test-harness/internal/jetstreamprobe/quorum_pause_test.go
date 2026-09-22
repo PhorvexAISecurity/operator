@@ -3,6 +3,7 @@ package jetstreamprobe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,11 +11,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 
 	server "github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const quorumHelperEnv = "PHORVEX_NATS_QUORUM_HELPER"
@@ -127,6 +131,53 @@ func processStartTicks(t *testing.T, pid int) uint64 {
 		t.Fatalf("invalid process start ticks for pid %d: %v", pid, err)
 	}
 	return value
+}
+
+func TestQuorumPublicationsDisableSDKNoResponderRetries(t *testing.T) {
+	srv := startServer(t)
+	cfg := testConfig(srv.ClientURL())
+	responder, err := nats.Connect(cfg.URL, nats.MaxReconnects(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(responder.Close)
+	client, err := nats.Connect(cfg.URL, nats.MaxReconnects(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	js, err := jetstream.New(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := &Probe{cfg: cfg, nc: client, js: js}
+	var requests atomic.Int32
+	sub, err := responder.Subscribe(cfg.Subject, func(request *nats.Msg) {
+		requests.Add(1)
+		reply := &nats.Msg{Subject: request.Reply, Header: nats.Header{}}
+		reply.Header.Set("Status", "503")
+		reply.Header.Set("Description", "No Responders")
+		_ = responder.PublishMsg(reply)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
+	if err := responder.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	x := Message{ID: "one-send-x", Payload: []byte("one-send-payload-x")}
+	attempt := probe.publishAttempt(t.Context(), x)
+	if attempt.AttemptCount != 1 || attempt.Acknowledged || attempt.ErrorClass != "no-responders" || requests.Load() != 1 {
+		t.Fatalf("one-send X receipt=%+v wire requests=%d", attempt, requests.Load())
+	}
+	if _, err := probe.publishReconcile(t.Context(), x, 1); !errors.Is(err, jetstream.ErrNoStreamResponse) {
+		t.Fatalf("one-send reconciliation error=%v", err)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("two logical operations emitted %d wire publications, want exactly 2", got)
+	}
 }
 
 func TestRealThreeProcessClusterReconcilesAmbiguousPublicationAfterQuorumPause(t *testing.T) {

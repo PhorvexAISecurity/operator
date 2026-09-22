@@ -708,7 +708,7 @@ func (p *Probe) publishAttempt(ctx context.Context, message Message) (receipt Pu
 	msg.Header.Set(messageIDHeader, message.ID)
 	msg.Data = append([]byte(nil), message.Payload...)
 	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
-	ack, err := p.js.PublishMsg(reqCtx, msg)
+	ack, err := p.js.PublishMsg(reqCtx, msg, jetstream.WithRetryAttempts(0))
 	cancel()
 	if err != nil {
 		receipt.ErrorClass, receipt.Error = classifyObservationError(err), boundedError(err)
@@ -743,7 +743,7 @@ func (p *Probe) publishReconcile(ctx context.Context, message Message, sequence 
 	msg.Data = append([]byte(nil), message.Payload...)
 	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
 	defer cancel()
-	ack, err := p.js.PublishMsg(reqCtx, msg)
+	ack, err := p.js.PublishMsg(reqCtx, msg, jetstream.WithRetryAttempts(0))
 	if err != nil {
 		return PubAckReceipt{}, fmt.Errorf("same-ID reconcile %q: %w", message.ID, err)
 	}
@@ -761,7 +761,7 @@ func classifyObservationError(err error) string {
 		return "timeout-unknown"
 	case errors.Is(err, context.Canceled):
 		return "canceled-unknown"
-	case errors.Is(err, nats.ErrNoResponders):
+	case errors.Is(err, nats.ErrNoResponders), errors.Is(err, jetstream.ErrNoStreamResponse):
 		return "no-responders"
 	default:
 		return "transport-or-server-error"
