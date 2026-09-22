@@ -102,7 +102,7 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.150" # ci:console-tag
+        tag: "0.4.151" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
       # Milad authorized a 30-day retention window on 2026-09-22.
