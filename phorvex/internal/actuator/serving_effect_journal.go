@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +30,10 @@ const (
 	servingSlotMaxBytes   = 16 << 20
 	servingInventoryPage  = 64
 	metadataPatchAttempts = 3
+	// Capability evaluation is part of one decision tick. A stalled API read may
+	// exclude this action, but it must not consume the unbounded lifetime of the
+	// parent tick or turn a journal uncertainty into an eligibility grant.
+	protectedServingCapabilityTimeout = time.Second
 )
 
 func effectDomain(action model.Action) string {
@@ -268,6 +273,35 @@ func pendingProtectedServingReceipt(ctx context.Context, ec EnactCtx, req Reques
 		return true, err
 	}
 	return r.Phase != "terminal-full" && r.Phase != "terminal-partial" && r.Phase != "rolled-back", nil
+}
+
+// protectedServingCapability classifies the exact journal slot that a protected
+// serving action would use before the action reaches scoring. A nonterminal record
+// represents a write whose outcome may be unknown; selecting the action again cannot
+// make that write safe to repeat. Malformed or unreadable slots fail closed for the
+// same reason. The dispatch path independently repeats this check so a record created
+// after capability evaluation still cannot be replayed.
+func protectedServingCapability(ctx context.Context, reader client.Reader, journalNamespace, targetUID string, action model.Action) (bool, string) {
+	if !protectedServingAction(action) {
+		return true, ""
+	}
+	domain := effectDomain(action)
+	if reader == nil || journalNamespace == "" || targetUID == "" {
+		return false, fmt.Sprintf("protected-serving-journal: exact %s slot authority is unavailable", domain)
+	}
+	readCtx, cancel := context.WithTimeout(ctx, protectedServingCapabilityTimeout)
+	defer cancel()
+	cm, r, err := servingReceiptGet(readCtx, EnactCtx{Reader: reader, JournalNamespace: journalNamespace}, targetUID, action)
+	if apierrors.IsNotFound(err) {
+		return true, ""
+	}
+	if err != nil {
+		return false, fmt.Sprintf("protected-serving-journal: exact %s slot is unreadable or invalid", domain)
+	}
+	if terminalServingPhase(r.Phase) {
+		return true, ""
+	}
+	return false, fmt.Sprintf("protected-serving-journal: unresolved %s operation in phase %s at %s", domain, r.Phase, cm.Name)
 }
 
 func servingSlotAdmission(ctx context.Context, ec EnactCtx) error {

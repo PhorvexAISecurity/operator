@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -27,6 +29,8 @@ func nativeWitness() Witness {
 	native := actuator.NewNativeActuator(nil)
 	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	native.SetServingSecurity(legacy)
+	native.SetBoundaryReader(fake.NewClientBuilder().Build())
+	native.JournalNamespace = "operator"
 	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, native)
 }
 
@@ -105,7 +109,7 @@ func TestConfigPredicatesStillPrecedeTheBackend(t *testing.T) {
 		t.Fatalf("the config predicate must win, got %q", why)
 	}
 	// With the fixtures present, the backend is what decides.
-	ready := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "served", ServingDeclared: true, ServingEndpointReady: true}}
+	ready := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "served", UID: "served-uid", ServingDeclared: true, ServingEndpointReady: true}}
 	if ok, _ := nativeWitness().Capable(ready, model.ActionKVReset); !ok {
 		t.Fatal("native must support a fully configured kv-reset target")
 	}
@@ -119,7 +123,7 @@ func TestConfigPredicatesStillPrecedeTheBackend(t *testing.T) {
 // TestAbsentBackendEstablishesNothing: an unwired backend is not an affirmative answer.
 func TestAbsentBackendEstablishesNothing(t *testing.T) {
 	w := BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, nil)
-	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p", HasGPU: true, ServingEndpointReady: true}}
+	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p", UID: "p-uid", HasGPU: true, ServingEndpointReady: true}}
 	for _, a := range []model.Action{model.ActionRotate, model.ActionKVReset, model.ActionIdentityRotate} {
 		ok, why := w.Capable(v, a)
 		if ok {
@@ -135,7 +139,7 @@ func TestAbsentBackendEstablishesNothing(t *testing.T) {
 // rejection in its existing capability class with the same detail the status renders, so a
 // decision record and the condition cannot disagree.
 func TestEligibleAttributesTheBackendExclusion(t *testing.T) {
-	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p", HasGPU: true, ServingEndpointReady: true}}
+	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p", UID: "p-uid", HasGPU: true, ServingEndpointReady: true}}
 	got := phoenixWitness().Eligible(v, model.ActionKVReset, []string{"cover-key"})
 	if got == nil || !got.Excluded {
 		t.Fatalf("kv-reset on phoenix must be excluded, got %+v", got)

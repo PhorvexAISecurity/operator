@@ -1,0 +1,271 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 7468e4f36c20ae5b71e936706241d620bc7450a5e1055dd111c8b9851b68c669
+    source_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+    at: '2026-09-22T15:11:43+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+  preflight:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/preflight/receipt-r2.json
+    sha256: 6ab5c4dce4a04996325499522877b2e9508f2ab6c48912efc96911caa2180f59
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:31:23+00:00'
+  implementation:
+    result: PASS
+    by: serving-worker
+    artifact: 04-diff.patch
+    sha256: 25c17f9f90754ee10fe2ce2969515fb6143123a2a0e90b5fbb8908777ec286ee
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:31:23+00:00'
+  red:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/baseline/baseline.log
+    sha256: 725a752d22f1e83b52f54717fef08a5e657c9f3276a2ec79a5033ae5a919d32b
+    source_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+    at: '2026-09-22T15:31:23+00:00'
+  l0:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/affected-vet.log
+    sha256: 0095c7aeac2959ddc21942a678973981b55b3e11d279e967713e2fe2bc193284
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:31:23+00:00'
+    inputs:
+    - phorvex/cmd
+    - phorvex/internal/actionset
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/runner
+    inputs_sha256: 09ece1930fde12d2312c2ecb6d75cb345c59258bb5222be75b03336f490ea8f5
+  l1:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/affected-tests.log
+    sha256: 372a748c1d97eeb3ec56a836267c68c5e909da5a5c77b6a4b1876fe2e56e0654
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:31:23+00:00'
+    inputs:
+    - phorvex/cmd
+    - phorvex/internal/actionset
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/runner
+    inputs_sha256: 09ece1930fde12d2312c2ecb6d75cb345c59258bb5222be75b03336f490ea8f5
+  l2:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/preflight/receipt-r2.json
+    sha256: 6ab5c4dce4a04996325499522877b2e9508f2ab6c48912efc96911caa2180f59
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:31:23+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    inputs_sha256: 54ea001296c04efa04b08c24b111c48e9bfefb14dc3d76b74db464bcd1386a13
+  positive_control:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/affected-tests.log
+    sha256: 372a748c1d97eeb3ec56a836267c68c5e909da5a5c77b6a4b1876fe2e56e0654
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:31:23+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    inputs_sha256: 1479803f18e8a5afe6a539750845f4bfba9b3b9ebe3127563930563f33118fb8
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 9c3c0b32ce9e2e1350fd377e9d65dfc1848920219d787fc8ebcd342573730a9a
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:35:06+00:00'
+    baseline_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 6029996245a8be88b69f1f7d25ddb5f357c514be97f295a916db42344126aa2c
+    source_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+    at: '2026-09-22T15:35:06+00:00'
+    incident_sha256: 9c3c0b32ce9e2e1350fd377e9d65dfc1848920219d787fc8ebcd342573730a9a
+fix_id: POST25-SERVING-JOURNAL-GATE
+issues:
+- M-064
+title: Exclude unresolved protected serving operations before scoring
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: serving-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  deployed_image: 0.4.146
+  deployed_git_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-serving-journal-gate
+  base_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  head_sha: b1fec8c7ccd2af8f028e7374f5fe0ab1fc7aacf6
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Installed vLLM empty200 cannot confirm KV reset; versioned compatible confirmation
+  remains required.
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T15:35:09+00:00'
+configuration_history:
+- at: '2026-09-22T15:11:04+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - residuals
+  - roles
+  - verification
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T15:11:05+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T15:11:42+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-22T15:31:23+00:00'
+  by: serving-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T15:11:29+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T15:11:43+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T15:31:23+00:00'
+  by: serving-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T15:31:25+00:00'
+  by: serving-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T15:35:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T15:35:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 7468e4f36c20ae5b71e936706241d620bc7450a5e1055dd111c8b9851b68c669
+  source_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  at: '2026-09-22T15:11:19+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+  approval_ref: operations/AUTONOMY.md
+handoff:
+  id: POST25-SERVING-JOURNAL-GATE:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
