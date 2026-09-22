@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,9 +44,19 @@ type prefixServer struct {
 	active            int
 	resetCalls        int
 	streamDone        chan struct{}
+	lastPrompt        string
+	successMetricMode string
+	requestPaths      []string
+	completionPrompts []string
+	completedAtReset  []int
+	rejectPrimer      bool
+	blockPrimer       bool
 }
 
 func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.requestPaths = append(s.requestPaths, r.URL.Path)
+	s.mu.Unlock()
 	if r.URL.Path != "/metrics" && r.Header.Get("Authorization") != "Bearer "+testToken {
 		jsonResponse(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
 		return
@@ -55,7 +66,7 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, capabilityBody())
 	case "/metrics":
 		s.mu.Lock()
-		prompt, completed, hit, active := s.prompt, s.completed, s.hit, s.active
+		prompt, completed, hit, active, successMetricMode := s.prompt, s.completed, s.hit, s.active, s.successMetricMode
 		s.mu.Unlock()
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		fmt.Fprintf(w, "vllm:gpu_prefix_cache_hit_rate{model_name=\"%s\"} %g\n", modelName, hit)
@@ -63,13 +74,23 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "vllm:num_requests_waiting{model_name=\"%s\"} 0\n", modelName)
 		fmt.Fprintf(w, "vllm:gpu_cache_usage_perc{model_name=\"%s\"} 0.2\n", modelName)
 		fmt.Fprintf(w, "vllm:prompt_tokens_total{model_name=\"%s\"} %d\n", modelName, prompt)
-		fmt.Fprintf(w, "vllm:request_success_total{finished_reason=\"length\",model_name=\"%s\"} %d\n", modelName, completed)
+		switch {
+		case successMetricMode == "always-absent" || completed == 0:
+		case successMetricMode == "malformed":
+			fmt.Fprintln(w, "vllm:request_success_total 1")
+		case successMetricMode == "foreign":
+			fmt.Fprintln(w, "vllm:request_success_total{finished_reason=\"length\",model_name=\"foreign/model\"} 1")
+		default:
+			fmt.Fprintf(w, "vllm:request_success_total{finished_reason=\"length\",model_name=\"%s\"} %d\n", modelName, completed)
+		}
 	case "/reset_prefix_cache":
 		s.mu.Lock()
 		s.resetCalls++
+		s.completedAtReset = append(s.completedAtReset, s.completed)
 		success := s.active == 0
 		if success {
 			s.hit = 0
+			s.lastPrompt = ""
 		}
 		if !success && s.streamDone != nil {
 			close(s.streamDone)
@@ -101,14 +122,29 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, "data: [DONE]\n\n")
 			return
 		}
+		prompt, _ := body["prompt"].(string)
+		s.mu.Lock()
+		s.completionPrompts = append(s.completionPrompts, prompt)
+		isPrimer := len(s.completionPrompts) == 1
+		rejectPrimer, blockPrimer := s.rejectPrimer && isPrimer, s.blockPrimer && isPrimer
+		s.mu.Unlock()
+		if blockPrimer {
+			<-r.Context().Done()
+			return
+		}
+		if rejectPrimer {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]any{"error": "primer-refused"})
+			return
+		}
 		s.mu.Lock()
 		s.prompt += 10
 		s.completed++
-		if s.completed%2 == 0 {
+		if prompt == s.lastPrompt {
 			s.hit = .5
 		} else {
 			s.hit = 0
 		}
+		s.lastPrompt = prompt
 		s.mu.Unlock()
 		jsonResponse(w, http.StatusOK, map[string]any{"id": "cmpl-test", "object": "text_completion", "created": 1, "model": modelName, "choices": []map[string]any{{"index": 0, "text": "x", "logprobs": nil, "finish_reason": "length", "stop_reason": nil, "prompt_logprobs": nil}}, "usage": map[string]any{"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11, "prompt_tokens_details": nil}})
 	default:
@@ -131,8 +167,23 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if receipt.EngineBootID != strings.Repeat("c", 32) || receipt.Populated.Values["vllm:gpu_prefix_cache_hit_rate"] <= 0 {
+			if receipt.EngineBootID != strings.Repeat("c", 32) || receipt.Primer.ID == "" || receipt.Cold.RequestSuccessMetricPresent ||
+				!receipt.Baseline.RequestSuccessMetricPresent || receipt.Baseline.Values["vllm:request_success_total"] != 1 ||
+				receipt.Populated.Values["vllm:request_success_total"] != 3 || receipt.Populated.Values["vllm:gpu_prefix_cache_hit_rate"] <= 0 {
 				t.Fatalf("receipt=%+v", receipt)
+			}
+			state.mu.Lock()
+			prompts := append([]string(nil), state.completionPrompts...)
+			paths := append([]string(nil), state.requestPaths...)
+			completedAtReset := append([]int(nil), state.completedAtReset...)
+			state.mu.Unlock()
+			measuredPrompt := strings.TrimSpace(strings.Repeat("one two three four five six seven eight ", 20))
+			if len(prompts) < 3 || prompts[0] != primerPrompt || prompts[1] != measuredPrompt || prompts[2] != measuredPrompt || prompts[0] == prompts[1] {
+				t.Fatalf("primer/measured prompt sequence=%q", prompts)
+			}
+			wantPrefix := []string{"/v1/drain/capability", "/metrics", "/v1/completions", "/metrics", "/v1/completions", "/v1/completions", "/metrics"}
+			if len(paths) < len(wantPrefix) || !slices.Equal(paths[:len(wantPrefix)], wantPrefix) {
+				t.Fatalf("HTTP prefix=%q want=%q", paths, wantPrefix)
 			}
 			if direct {
 				if receipt.Reset == nil || !receipt.Reset.Success || receipt.FirstMiss == nil || receipt.FirstMiss.Values["vllm:gpu_prefix_cache_hit_rate"] != 0 || receipt.Repopulated == nil || receipt.Busy == nil || receipt.Busy.Reset.Success || !receipt.Busy.StreamAccepted {
@@ -141,11 +192,74 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 				if state.resetCalls != 2 {
 					t.Fatalf("reset calls=%d want 2", state.resetCalls)
 				}
+				if len(completedAtReset) != 2 || completedAtReset[0] != 3 {
+					t.Fatalf("first reset followed completed=%v; primer plus the same two measured requests must precede divergence", completedAtReset)
+				}
 				if len(receipt.CapabilityObservation.Body) == 0 || len(receipt.Reset.Observation.Body) == 0 || receipt.Populated.RawBody == "" || receipt.Busy.StreamRequestID == "" {
 					t.Fatalf("direct receipt omitted retained producer proof: %+v", receipt)
 				}
-			} else if receipt.Reset != nil || state.resetCalls != 0 {
-				t.Fatalf("no-action executed reset: %+v calls=%d", receipt.Reset, state.resetCalls)
+			} else if receipt.Reset != nil || state.resetCalls != 0 || len(prompts) != 3 {
+				t.Fatalf("no-action executed reset or extra inference: reset=%+v calls=%d prompts=%q", receipt.Reset, state.resetCalls, prompts)
+			}
+		})
+	}
+}
+
+func TestRunPrefixRequiresStrictSuccessMetricAfterPrimer(t *testing.T) {
+	for _, mode := range []string{"always-absent", "malformed", "foreign"} {
+		t.Run(mode, func(t *testing.T) {
+			state := &prefixServer{successMetricMode: mode}
+			server := httptest.NewServer(http.HandlerFunc(state.serve))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.sleep = func(context.Context, time.Duration) error { return nil }
+			receipt, err := client.RunPrefix(t.Context(), false)
+			if err == nil || receipt.Primer.ID == "" || receipt.Baseline.RawBody == "" || receipt.First.ID != "" {
+				t.Fatalf("mode=%s receipt=%+v err=%v", mode, receipt, err)
+			}
+			state.mu.Lock()
+			defer state.mu.Unlock()
+			if state.resetCalls != 0 || len(state.completionPrompts) != 1 || state.completionPrompts[0] != primerPrompt {
+				t.Fatalf("mode=%s resets=%d prompts=%q", mode, state.resetCalls, state.completionPrompts)
+			}
+		})
+	}
+}
+
+func TestRunPrefixRetainsColdStateAndRefusesFailedOrCancelledPrimer(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		state  *prefixServer
+		ctx    func(*testing.T) (context.Context, context.CancelFunc)
+		status int
+	}{
+		{name: "bad-response", state: &prefixServer{rejectPrimer: true}, ctx: func(*testing.T) (context.Context, context.CancelFunc) {
+			return context.WithCancel(context.Background())
+		}, status: http.StatusServiceUnavailable},
+		{name: "cancelled", state: &prefixServer{blockPrimer: true}, ctx: func(*testing.T) (context.Context, context.CancelFunc) {
+			return context.WithTimeout(context.Background(), 50*time.Millisecond)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(tc.state.serve))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := tc.ctx(t)
+			defer cancel()
+			receipt, err := client.RunPrefix(ctx, false)
+			if err == nil || receipt.Cold.RawBody == "" || receipt.Cold.RequestSuccessMetricPresent || receipt.Primer.Observation.Path != "/v1/completions" || receipt.Primer.Observation.Status != tc.status || receipt.Baseline.RawBody != "" || receipt.First.ID != "" {
+				t.Fatalf("receipt=%+v err=%v", receipt, err)
+			}
+			tc.state.mu.Lock()
+			defer tc.state.mu.Unlock()
+			if tc.state.resetCalls != 0 || len(tc.state.completionPrompts) != 1 || tc.state.completionPrompts[0] != primerPrompt {
+				t.Fatalf("resets=%d prompts=%q", tc.state.resetCalls, tc.state.completionPrompts)
 			}
 		})
 	}
@@ -358,6 +472,21 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 }
 
 func TestRetainedRealWireCorpusParsesAndBindsProducerDigests(t *testing.T) {
+	coldRaw, err := os.ReadFile("testdata/retained-wire/cold-metrics.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(coldRaw)); got != "f3b9b115fe8cdf45c91bf8d21b3720b67434cbc7e4194e2da1fc38ec02921765" {
+		t.Fatalf("retained cold metrics corpus hash differs: %s", got)
+	}
+	coldValues, successPresent, err := parseMetricsMode(coldRaw, false)
+	if err != nil || successPresent || !idle(coldValues) || coldValues["vllm:prompt_tokens_total"] != 0 {
+		t.Fatalf("actual cold vLLM 0.7.3 metrics rejected: present=%v values=%+v err=%v", successPresent, coldValues, err)
+	}
+	if _, err := parseMetrics(coldRaw); err == nil || !strings.Contains(err.Error(), "request success metric is absent") {
+		t.Fatalf("strict post-primer parser accepted actual cold metrics: %v", err)
+	}
+
 	metricsRaw, err := os.ReadFile("testdata/retained-wire/populated-metrics.txt")
 	if err != nil {
 		t.Fatal(err)
@@ -371,6 +500,19 @@ func TestRetainedRealWireCorpusParsesAndBindsProducerDigests(t *testing.T) {
 	}
 	if values["vllm:gpu_prefix_cache_hit_rate"] != .5 || values["vllm:request_success_total"] != 2 {
 		t.Fatalf("actual metrics values differ: %+v", values)
+	}
+	for _, corrupt := range []string{
+		"vllm:request_success_total{finished_reason=\"stop\",model_name=\"foreign/model\"} NaN\n",
+		"vllm:request_success_total{finished_reason=\"length\",model_name=\"facebook/opt-125m\"} 9\n",
+		"vllm:prompt_tokens_total{model_name=\"facebook/opt-125m\"} NaN\n",
+	} {
+		mixed := append(append([]byte(nil), metricsRaw...), []byte(corrupt)...)
+		if _, err := parseMetrics(mixed); err == nil {
+			t.Fatalf("strict parser accepted mixed valid/invalid target series %q", corrupt)
+		}
+		if _, _, err := parseMetricsMode(mixed, false); err == nil {
+			t.Fatalf("cold parser accepted mixed valid/invalid target series %q", corrupt)
+		}
 	}
 	modelFirst := strings.Replace(string(metricsRaw), `{finished_reason="length",model_name="facebook/opt-125m"}`, `{model_name="facebook/opt-125m",finished_reason="length"}`, 1)
 	if _, err := parseMetrics([]byte(modelFirst)); err != nil {
