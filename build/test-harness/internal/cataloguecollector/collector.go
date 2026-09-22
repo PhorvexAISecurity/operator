@@ -87,12 +87,13 @@ type RunResult struct {
 }
 
 type TrialResult struct {
-	Scenario   string   `json:"scenario"`
-	Defender   string   `json:"defender"`
-	Trial      int      `json:"trial"`
-	AnchorOnly bool     `json:"anchorOnly"`
-	Status     string   `json:"status"`
-	Reasons    []string `json:"reasons,omitempty"`
+	Scenario         string                   `json:"scenario"`
+	Defender         string                   `json:"defender"`
+	Trial            int                      `json:"trial"`
+	AnchorOnly       bool                     `json:"anchorOnly"`
+	Status           string                   `json:"status"`
+	Reasons          []string                 `json:"reasons,omitempty"`
+	InstalledSession *InstalledSessionSummary `json:"installedSession,omitempty"`
 }
 
 type InstalledSessionSummary struct {
@@ -302,7 +303,15 @@ func Collect(indexPath string) (Report, error) {
 				}
 				seenTrials[key] = true
 				tr := TrialResult{Scenario: m.Scenario, Defender: m.Defender, Trial: m.Trial, AnchorOnly: isAnchor, Status: string(m.MeasurementState().Status), Reasons: append([]string(nil), m.MeasurementState().Reasons...)}
-				if err := functionalRowError(m); err == nil {
+				rowErr := functionalRowError(m)
+				if rowErr == nil && strings.HasPrefix(rec.ProfileID, "manager-session-") {
+					summary, err := decodeInstalled(m)
+					if err != nil {
+						return Report{}, fmt.Errorf("record %s installed %s row evidence: %w", rec.ID, map[bool]string{true: "anchor", false: "requested"}[isAnchor], err)
+					}
+					tr.InstalledSession = &summary
+				}
+				if rowErr == nil {
 					rr.ValidTrials++
 					if isAnchor {
 						rr.AnchorValidTrials++
@@ -316,7 +325,7 @@ func Collect(indexPath string) (Report, error) {
 					} else {
 						rr.RequestedInvalidTrials++
 					}
-					rr.FailureReasons = append(rr.FailureReasons, err.Error())
+					rr.FailureReasons = append(rr.FailureReasons, rowErr.Error())
 				}
 				rr.Trials = append(rr.Trials, tr)
 				if !isAnchor {
@@ -330,11 +339,15 @@ func Collect(indexPath string) (Report, error) {
 				if rr.RequestedInvalidTrials > 0 {
 					rr.MeasurementStatus = "INVALID"
 				} else {
-					summary, err := decodeInstalled(requestedRows[0])
-					if err != nil {
-						return Report{}, fmt.Errorf("record %s installed evidence: %w", rec.ID, err)
+					for i := range rr.Trials {
+						if !rr.Trials[i].AnchorOnly {
+							rr.InstalledSession = rr.Trials[i].InstalledSession
+							break
+						}
 					}
-					rr.InstalledSession = &summary
+					if rr.InstalledSession == nil {
+						return Report{}, fmt.Errorf("record %s requested installed summary missing", rec.ID)
+					}
 					rr.MeasurementStatus = "DECODED_FUNCTIONAL"
 					if rr.AnchorInvalidTrials > 0 {
 						rr.MeasurementStatus = "DECODED_FUNCTIONAL_WITH_INVALID_ANCHOR"

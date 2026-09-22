@@ -77,6 +77,35 @@ func TestCollectRound67KeepsForcedInvalidAnchorSeparateFromRequestedTimer(t *tes
 	}
 }
 
+func TestCollectDoesNotTrustValidAnchorFlagsWithoutDecodingEvidence(t *testing.T) {
+	dir, rec := fixtureIndex(t)
+	var anchor map[string]any
+	if err := json.Unmarshal(metricBytes(t, dir), &anchor); err != nil {
+		t.Fatal(err)
+	}
+	anchor["anchorOnly"] = true
+	e := anchor["benchmarkEvidence"].(map[string]any)
+	e["availability.observation.000"] = `{"atUTC":"2026-09-22T05:40:14.880949Z","known":true,"category":"application-response","httpStatus":404,"podUID":"00a140c7-0484-4c47-90d5-29b13d316a00"}`
+	r67 := mustRead(t, filepath.Join(testdataDir(t), "round67/metrics.sanitized.jsonl"))
+	lines := strings.Split(strings.TrimSpace(string(r67)), "\n")
+	var requested map[string]any
+	if err := json.Unmarshal([]byte(lines[1]), &requested); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := json.Marshal(anchor)
+	q, _ := json.Marshal(requested)
+	combined := append(append(a, '\n'), append(q, '\n')...)
+	if err := os.WriteFile(filepath.Join(dir, "corrupt-anchor.jsonl"), combined, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rec.ProfileID = "manager-session-blind-timer"
+	rec.MetricsFile = "corrupt-anchor.jsonl"
+	rec.MetricsSHA256 = sumTest(combined)
+	if _, err := Collect(writeIndex(t, dir, []RunRecord{rec})); err == nil || !strings.Contains(err.Error(), "anchor row evidence") {
+		t.Fatalf("valid-flag corrupt anchor err=%v", err)
+	}
+}
+
 func TestCollectKeepsMissingAndUnsupportedProfilesVisible(t *testing.T) {
 	dir, available := fixtureIndex(t)
 	missing := available
