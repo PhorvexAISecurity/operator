@@ -269,6 +269,17 @@ func TestRenderedManagerIdentityDrivesBootAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	minimalPolicy := createPolicy("tenant-minimal", "minimal", v1alpha1.ActionRotate)
+	if bootErr := waitBoot(minimalReader, minimalReviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator-minimal"}, false, "/pods/eviction:create"); bootErr == nil || !strings.Contains(bootErr.Error(), "denied") {
+		t.Fatalf("missing exact Eviction subresource grant was not denied: %v", bootErr)
+	}
+	minimalRole := &rbacv1.Role{}
+	if err := admin.Get(ctx, client.ObjectKey{Namespace: "tenant-minimal", Name: "minimal-rotate"}, minimalRole); err != nil {
+		t.Fatal(err)
+	}
+	minimalRole.Rules = append(minimalRole.Rules, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"pods/eviction"}, Verbs: []string{"create"}})
+	if err := admin.Update(ctx, minimalRole); err != nil {
+		t.Fatal(err)
+	}
 	waitBoot(minimalReader, minimalReviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator-minimal"}, true, "")
 	deletePolicy(minimalPolicy)
 

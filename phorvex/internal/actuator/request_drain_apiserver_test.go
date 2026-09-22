@@ -3,10 +3,13 @@ package actuator
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -24,16 +27,101 @@ import (
 )
 
 type m040DrainHTTP struct {
-	mu       sync.Mutex
-	abort    chan struct{}
-	active   int
-	aborted  bool
-	entered  chan struct{}
-	enterOne sync.Once
+	mu                 sync.Mutex
+	abort              chan struct{}
+	active             int
+	aborted            bool
+	entered            chan struct{}
+	enterOne           sync.Once
+	podUID             string
+	bearer             string
+	status             drainV11StatusResponse
+	capabilityRequests int
+	createRequests     int
+	statusRequests     int
+	reopenRequests     int
 }
 
 func newM040DrainHTTP() *m040DrainHTTP {
-	return &m040DrainHTTP{abort: make(chan struct{}), entered: make(chan struct{})}
+	return &m040DrainHTTP{abort: make(chan struct{}), entered: make(chan struct{}), bearer: "m040-trusted-token"}
+}
+
+func m040NonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var candidates []string
+	for _, iface := range interfaces {
+		addresses, err := iface.Addrs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, address := range addresses {
+			ip, _, err := net.ParseCIDR(address.String())
+			if err == nil && ip.To4() != nil && ip.IsGlobalUnicast() && !ip.IsLoopback() {
+				candidates = append(candidates, ip.String())
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		t.Fatal("actual TLS producer requires a non-loopback IPv4 address accepted by EndpointSlice")
+	}
+	sort.Strings(candidates)
+	return candidates[0]
+}
+
+func m040SignDrainStatus(status *drainV11StatusResponse) error {
+	body := map[string]any{
+		"schema": status.Schema, "operation_id": status.OperationID,
+		"operation_generation": status.OperationGeneration, "attempt": status.Attempt,
+		"owner_digest": status.OwnerDigest, "backend_incarnation_digest": status.BackendIncarnationDigest,
+		"revision": status.Revision, "state": status.State, "admission": status.Admission,
+		"admission_generation": status.AdmissionGeneration, "engine_boot_id": status.EngineBootID,
+		"virtual_engine_ids": status.VirtualEngineIDs,
+		"engine_snapshot":    status.EngineSnapshot, "terminal_dispositions": status.TerminalDispositions,
+		"proxy_snapshot": status.ProxySnapshot, "observations": status.Observations,
+		"deadline": status.Deadline, "cancellation_grace_deadline": status.CancellationGraceDeadline,
+		"transition_reason": status.TransitionReason, "cancel_boundary_revision": status.CancelBoundaryRevision,
+		"last_transition": status.LastTransition, "query_nonce": status.QueryNonce,
+	}
+	var err error
+	status.ReceiptSHA256, err = drainV11Digest("phorvex-drain-status-v1", body)
+	return err
+}
+
+func m040DrainStatus(request drainV11CreateRequest, state, admission, revision string, nonce *string) (drainV11StatusResponse, error) {
+	ownerDigest, err := drainV11OwnerDigest(request.Owner)
+	if err != nil {
+		return drainV11StatusResponse{}, err
+	}
+	zero := drainV11Queues{Waiting: []string{}, Running: []string{}, Swapped: []string{}, Cached: []string{}}
+	status := drainV11StatusResponse{
+		Schema: drainV11Schema, OperationID: request.OperationID, OperationGeneration: request.OperationGeneration,
+		Attempt: request.Attempt, OwnerDigest: ownerDigest, BackendIncarnationDigest: strings.Repeat("2", 64),
+		Revision: revision, State: state, Admission: admission, AdmissionGeneration: request.OperationGeneration,
+		EngineBootID: strings.Repeat("3", 32), VirtualEngineIDs: []int{0},
+		EngineSnapshot:       map[string]drainV11Queues{"0": {Waiting: []string{"request-a"}, Running: []string{}, Swapped: []string{}, Cached: []string{}}},
+		TerminalDispositions: map[string]string{"request-a": "aborted"},
+		ProxySnapshot: map[string]json.RawMessage{
+			"before_engine_begin": json.RawMessage(`{"active":1}`),
+			"after_engine_begin":  json.RawMessage(`{"cancelled":1,"remaining":0}`),
+		},
+		Observations: []drainV11Observation{
+			{Nonce: strings.Repeat("4", 32), Sequence: "10", Queues: map[string]drainV11Queues{"0": zero}, Hash: strings.Repeat("a", 64)},
+			{Nonce: strings.Repeat("5", 32), Sequence: "11", Queues: map[string]drainV11Queues{"0": zero}, Hash: strings.Repeat("b", 64)},
+		},
+		Deadline: request.Deadline, TransitionReason: "none", CancelBoundaryRevision: "0",
+		LastTransition: "2026-09-22T00:00:00Z", QueryNonce: nonce,
+	}
+	deadline, err := time.Parse(time.RFC3339Nano, request.Deadline)
+	if err != nil {
+		return drainV11StatusResponse{}, err
+	}
+	status.CancellationGraceDeadline = drainV11Time(deadline.Add(drainV11CancelGrace))
+	err = m040SignDrainStatus(&status)
+	return status, err
 }
 
 func (s *m040DrainHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -52,21 +140,102 @@ func (s *m040DrainHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.active--
 		s.mu.Unlock()
-	case defaultDrainPath:
+	case defaultDrainPath + "/capability":
+		if r.Method != http.MethodGet || r.Header.Get("Authorization") != "Bearer "+s.bearer {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		s.mu.Lock()
+		s.capabilityRequests++
+		podUID := s.podUID
+		s.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(drainV11CapabilityResponse{
+			Schema: drainV11Schema, Capability: drainV11Capability, PodUID: podUID,
+			LedgerID: strings.Repeat("1", 32), ProxyBootID: strings.Repeat("2", 32), EngineBootID: strings.Repeat("3", 32),
+			IncarnationDigest: strings.Repeat("2", 64), ProxySource: "m040-proxy-source", EngineSource: "m040-engine-source",
+			EngineMode: "v0-frontend-multiprocessing", VirtualEngineIDs: []int{0}, GenerationHighWater: "0",
+			NextOperationGeneration: "1", Admission: "OPEN",
+		})
+	case defaultDrainPath + "/operations":
+		if r.Method != http.MethodPost || r.Header.Get("Authorization") != "Bearer "+s.bearer {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		var request drainV11CreateRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.Schema != drainV11Schema ||
+			request.Mode != "abort-and-quiesce" || request.Owner.PodUID != s.podUID ||
+			request.ExpectedIncarnationDigest != strings.Repeat("2", 64) {
+			http.Error(w, "invalid operation", http.StatusBadRequest)
+			return
+		}
+		status, err := m040DrainStatus(request, "QUIESCENT", "CLOSED", "3", nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		s.mu.Lock()
 		aborted := s.active
 		if aborted > 0 && !s.aborted {
 			close(s.abort)
 			s.aborted = true
 		}
+		s.createRequests++
+		s.status = status
 		s.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]int{"aborted": aborted})
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(status)
 	case "/benign":
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("available"))
 	default:
-		http.NotFound(w, r)
+		prefix := defaultDrainPath + "/operations/"
+		if !strings.HasPrefix(r.URL.Path, prefix) || r.Header.Get("Authorization") != "Bearer "+s.bearer {
+			http.NotFound(w, r)
+			return
+		}
+		s.mu.Lock()
+		status := s.status
+		s.mu.Unlock()
+		base := prefix + status.OperationGeneration + "/" + status.OperationID
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == base:
+			nonce := r.URL.Query().Get("observation_nonce")
+			if nonce == "" {
+				http.Error(w, "missing observation nonce", http.StatusBadRequest)
+				return
+			}
+			status.QueryNonce = &nonce
+			if err := m040SignDrainStatus(&status); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.mu.Lock()
+			s.statusRequests++
+			s.mu.Unlock()
+		case r.Method == http.MethodPost && r.URL.Path == base+"/reopen":
+			var intent drainV11IntentRequest
+			if err := json.NewDecoder(r.Body).Decode(&intent); err != nil || intent.OwnerDigest != status.OwnerDigest ||
+				intent.ExpectedIncarnationDigest != status.BackendIncarnationDigest || intent.ExpectedRevision != status.Revision {
+				http.Error(w, "invalid reopen intent", http.StatusBadRequest)
+				return
+			}
+			status.State, status.Admission, status.Revision, status.QueryNonce = "OPENED", "OPEN", "4", nil
+			if err := m040SignDrainStatus(&status); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.mu.Lock()
+			s.reopenRequests++
+			s.status = status
+			s.mu.Unlock()
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(status)
 	}
 }
 
@@ -123,17 +292,20 @@ func startM040EndpointController(ctx context.Context, c client.Client, podKey, s
 	return done
 }
 
-func createM040APIObjects(t *testing.T, ctx context.Context, c client.Client, namespace, name, address string) (*v1alpha1.PhorvexPolicy, *corev1.Pod, *corev1.Service, *discoveryv1.EndpointSlice) {
+func createM040APIObjects(t *testing.T, ctx context.Context, c client.Client, namespace, name, address string, port int) (*v1alpha1.PhorvexPolicy, *corev1.Pod, *corev1.Service, *discoveryv1.EndpointSlice) {
 	t.Helper()
 	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRequestDrain)}}}}
 	if err := c.Create(ctx, pol); err != nil {
 		t.Fatal(err)
 	}
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, Labels: map[string]string{"app": name, labelServing: "standby"}, Annotations: map[string]string{annoRouteService: name, annoServingPort: "1"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "fixture", Image: "unused:test"}}}}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, Labels: map[string]string{"app": name, labelServing: "standby"}, Annotations: map[string]string{annoRouteService: name, annoServingPort: strconv.Itoa(port), annoDrainProxySource: "m040-proxy-source", annoDrainEngineSource: "m040-engine-source"}}, Spec: corev1.PodSpec{ServiceAccountName: "model-sa", Containers: []corev1.Container{{Name: "guardrail", Image: "unused:test"}, {Name: "vllm", Image: "unused:test"}}}}
 	if err := c.Create(ctx, pod); err != nil {
 		t.Fatal(err)
 	}
 	pod.Status.PodIP = address
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "guardrail", ContainerID: "containerd://guardrail", Ready: true}, {Name: "vllm", ContainerID: "containerd://vllm", Ready: true}}
 	if err := c.Status().Update(ctx, pod); err != nil {
 		t.Fatal(err)
 	}
@@ -180,22 +352,44 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 	}
 
 	t.Run("native-producer-confirms-abort-and-restoration", func(t *testing.T) {
-		const address = "10.23.0.9"
 		stack := newM040DrainHTTP()
-		server := httptest.NewServer(stack)
+		listener, err := net.Listen("tcp4", "0.0.0.0:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		server := httptest.NewUnstartedServer(stack)
+		server.Listener = listener
+		server.StartTLS()
 		defer server.Close()
 		longCtx, cancelLong := context.WithCancel(ctx)
 		defer cancelLong()
-		destination := strings.TrimPrefix(server.URL, "http://")
-		transport := &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, network, destination)
-		}}
-		defer transport.CloseIdleConnections()
-		oldVLLM := pkgVLLM
-		pkgVLLM = &httpVLLM{hc: &http.Client{Transport: transport, Timeout: 3 * time.Second}}
-		defer func() { pkgVLLM = oldVLLM }()
-
-		pol, pod, _, slice := createM040APIObjects(t, ctx, c, "m040-lifecycle", "infer", address)
+		address := m040NonLoopbackIPv4(t)
+		port := server.Listener.Addr().(*net.TCPAddr).Port
+		serverURL := "https://" + net.JoinHostPort(address, strconv.Itoa(port))
+		pol, pod, _, slice := createM040APIObjects(t, ctx, c, "m040-lifecycle", "infer", address, port)
+		stack.mu.Lock()
+		stack.podUID = string(pod.UID)
+		stack.mu.Unlock()
+		certificate := server.Certificate()
+		serverName := address
+		if len(certificate.DNSNames) != 0 {
+			serverName = certificate.DNSNames[0]
+		}
+		userTransport := server.Client().Transport.(*http.Transport).Clone()
+		userTransport.Proxy = nil
+		userTransport.TLSClientConfig = userTransport.TLSClientConfig.Clone()
+		userTransport.TLSClientConfig.ServerName = serverName
+		defer userTransport.CloseIdleConnections()
+		userClient := &http.Client{Transport: userTransport, Timeout: 5 * time.Second}
+		caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw})
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: "m040-serving"}, Data: map[string][]byte{"bearer": []byte(stack.bearer), "ca.crt": caPEM}}
+		if err := c.Create(ctx, secret); err != nil {
+			t.Fatal(err)
+		}
+		security := writeServingSecurityConfig(t, ServingSecuritySecureRequired, "operator", []ServingSecurityBinding{{
+			Namespace: pod.Namespace, PolicyName: pol.Name, PolicyUID: string(pol.UID), ServiceAccount: pod.Spec.ServiceAccountName,
+			ProfileID: "m040-v11", SecretName: secret.Name, BearerKey: "bearer", CAKey: "ca.crt", ServerName: serverName,
+		}})
 		controllerCtx, stopController := context.WithCancel(ctx)
 		controllerDone := startM040EndpointController(controllerCtx, c, client.ObjectKeyFromObject(pod), client.ObjectKeyFromObject(slice), address)
 		defer func() {
@@ -207,14 +401,12 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 
 		longDone := make(chan int, 1)
 		go func() {
-			request, requestErr := http.NewRequestWithContext(longCtx, http.MethodGet, server.URL+"/hold", nil)
+			request, requestErr := http.NewRequestWithContext(longCtx, http.MethodGet, serverURL+"/hold", nil)
 			if requestErr != nil {
 				longDone <- 0
 				return
 			}
-			longClient := server.Client()
-			longClient.Timeout = 5 * time.Second
-			resp, requestErr := longClient.Do(request)
+			resp, requestErr := userClient.Do(request)
 			if requestErr != nil {
 				longDone <- 0
 				return
@@ -228,10 +420,25 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 			t.Fatal("long-lived request did not enter serving fixture")
 		}
 
+		request := Request{Tenant: "tenant", Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionRequestDrain, PolicyName: pol.Name, PolicyUID: string(pol.UID)}
+		legacy := NewNativeActuator(c)
+		legacy.Reader, legacy.JournalNamespace = c, "operator"
+		legacy.SetServingSecurity(legacyServingSecurityForTest(t))
+		legacyResult, legacyErr := legacy.Actuate(ctx, request)
+		if legacyErr == nil || legacyResult.Emitted || !strings.Contains(legacyErr.Error(), "operation-bound v11 requires secure serving credentials") {
+			t.Fatalf("legacy request-drain was not refused before effect: result=%+v err=%v", legacyResult, legacyErr)
+		}
+		stack.mu.Lock()
+		legacyRequests := stack.capabilityRequests + stack.createRequests + stack.statusRequests + stack.reopenRequests
+		stack.mu.Unlock()
+		if legacyRequests != 0 {
+			t.Fatalf("legacy refusal reached operation producer %d time(s)", legacyRequests)
+		}
+
 		native := NewNativeActuator(c)
 		native.Reader, native.JournalNamespace = c, "operator"
-		native.SetServingSecurity(legacyServingSecurityForTest(t))
-		result, enactErr := native.Actuate(ctx, Request{Tenant: "tenant", Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionRequestDrain, PolicyName: pol.Name, PolicyUID: string(pol.UID)})
+		native.SetServingSecurity(security)
+		result, enactErr := native.Actuate(ctx, request)
 		if enactErr != nil || !result.Emitted || !strings.Contains(result.Note, "1 in-flight aborted") {
 			t.Fatalf("native request-drain result=%+v err=%v", result, enactErr)
 		}
@@ -250,13 +457,20 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 		if current.Labels[labelServing] != "standby" || current.Labels[labelDrainEpoch] == "" {
 			t.Fatalf("exact serving state not restored: %v", current.Labels)
 		}
-		if response, err := server.Client().Get(server.URL + "/benign"); err != nil {
+		if response, err := userClient.Get(serverURL + "/benign"); err != nil {
 			t.Fatalf("benign request after restoration: %v", err)
 		} else {
 			response.Body.Close()
 			if response.StatusCode != http.StatusOK {
 				t.Fatalf("benign request status=%d", response.StatusCode)
 			}
+		}
+		stack.mu.Lock()
+		capabilityRequests, createRequests := stack.capabilityRequests, stack.createRequests
+		statusRequests, reopenRequests := stack.statusRequests, stack.reopenRequests
+		stack.mu.Unlock()
+		if capabilityRequests != 1 || createRequests != 1 || statusRequests != 2 || reopenRequests != 1 {
+			t.Fatalf("operation producer calls capability/create/status/reopen=%d/%d/%d/%d", capabilityRequests, createRequests, statusRequests, reopenRequests)
 		}
 		var receipts corev1.ConfigMapList
 		if err := c.List(ctx, &receipts, client.InNamespace("operator"), client.MatchingLabels{journalLabel: "v1"}); err != nil || len(receipts.Items) != 0 {
@@ -266,7 +480,7 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 
 	t.Run("restart-restores-without-replaying-http-abort", func(t *testing.T) {
 		const address = "10.23.0.10"
-		pol, pod, svc, slice := createM040APIObjects(t, ctx, c, "m040-recovery", "infer", address)
+		pol, pod, svc, slice := createM040APIObjects(t, ctx, c, "m040-recovery", "infer", address, 1)
 		r := operationReceipt{Version: requestDrainReceiptVersion, Kind: "request-drain", Phase: "stack-confirmed", PolicyNamespace: pod.Namespace, PolicyName: pol.Name, PolicyUID: string(pol.UID), TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels), OperationToken: "00112233445566778899aabbccddeeff", ServiceName: svc.Name, ServiceUID: string(svc.UID), ServiceSelector: copyLabels(svc.Spec.Selector), PriorServingPresent: true, PriorServingValue: "standby", EndpointAddresses: []string{address}, EndpointConfigSHA256: drainEndpointConfigDigest(pod), Aborted: 1}
 		ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", DrainObservationTimeout: 2 * time.Second, DrainObservationInterval: 10 * time.Millisecond}
 		if _, err := journalWrite(ctx, ec, r); err != nil {
