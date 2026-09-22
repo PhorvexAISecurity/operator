@@ -57,33 +57,50 @@ type Report struct {
 }
 
 type RunResult struct {
-	ID                      string                   `json:"id"`
-	ProfileID               string                   `json:"profileID"`
-	SuiteFile               string                   `json:"suiteFile"`
-	SuiteRevision           string                   `json:"suiteRevision"`
-	SuiteSHA256             string                   `json:"suiteSHA256"`
-	SourceRevision          string                   `json:"sourceRevision"`
-	HarnessSHA256           string                   `json:"harnessSHA256"`
-	ConfigSHA256            string                   `json:"configSHA256"`
-	MetricsFile             string                   `json:"metricsFile"`
-	MetricsSHA256           string                   `json:"metricsSHA256"`
-	WorkloadSchedule        string                   `json:"workloadSchedule"`
-	State                   string                   `json:"state"`
-	MeasurementStatus       string                   `json:"measurementStatus"`
-	FailureReasons          []string                 `json:"failureReasons,omitempty"`
-	ExternalReviewState     string                   `json:"externalReviewState"`
-	ExternalReviewReference string                   `json:"externalReviewReference"`
-	TrialDenominator        int                      `json:"trialDenominator"`
-	ValidTrials             int                      `json:"validTrials"`
-	InvalidTrials           int                      `json:"invalidTrials"`
-	InstalledSession        *InstalledSessionSummary `json:"installedSession,omitempty"`
+	ID                        string                   `json:"id"`
+	ProfileID                 string                   `json:"profileID"`
+	SuiteFile                 string                   `json:"suiteFile"`
+	SuiteRevision             string                   `json:"suiteRevision"`
+	SuiteSHA256               string                   `json:"suiteSHA256"`
+	SourceRevision            string                   `json:"sourceRevision"`
+	HarnessSHA256             string                   `json:"harnessSHA256"`
+	ConfigSHA256              string                   `json:"configSHA256"`
+	MetricsFile               string                   `json:"metricsFile"`
+	MetricsSHA256             string                   `json:"metricsSHA256"`
+	WorkloadSchedule          string                   `json:"workloadSchedule"`
+	State                     string                   `json:"state"`
+	MeasurementStatus         string                   `json:"measurementStatus"`
+	FailureReasons            []string                 `json:"failureReasons,omitempty"`
+	ExternalReviewState       string                   `json:"externalReviewState"`
+	ExternalReviewReference   string                   `json:"externalReviewReference"`
+	TrialDenominator          int                      `json:"trialDenominator"`
+	RequestedTrialDenominator int                      `json:"requestedTrialDenominator"`
+	AnchorTrialDenominator    int                      `json:"anchorTrialDenominator"`
+	ValidTrials               int                      `json:"validTrials"`
+	InvalidTrials             int                      `json:"invalidTrials"`
+	RequestedValidTrials      int                      `json:"requestedValidTrials"`
+	RequestedInvalidTrials    int                      `json:"requestedInvalidTrials"`
+	AnchorValidTrials         int                      `json:"anchorValidTrials"`
+	AnchorInvalidTrials       int                      `json:"anchorInvalidTrials"`
+	Trials                    []TrialResult            `json:"trials"`
+	InstalledSession          *InstalledSessionSummary `json:"installedSession,omitempty"`
+}
+
+type TrialResult struct {
+	Scenario   string   `json:"scenario"`
+	Defender   string   `json:"defender"`
+	Trial      int      `json:"trial"`
+	AnchorOnly bool     `json:"anchorOnly"`
+	Status     string   `json:"status"`
+	Reasons    []string `json:"reasons,omitempty"`
 }
 
 type InstalledSessionSummary struct {
 	SampleDenominator                 int            `json:"sampleDenominator"`
 	KnownApplicationResponse          int            `json:"knownApplicationResponses"`
 	SessionPresentHTTP200             int            `json:"sessionPresentHTTP200"`
-	PeerWithoutSessionHTTP404         int            `json:"peerWithoutSessionHTTP404"`
+	NoSessionHTTP404                  int            `json:"noSessionHTTP404"`
+	NoSessionHTTP404ByPodUID          map[string]int `json:"noSessionHTTP404ByPodUID"`
 	Unknown                           int            `json:"unknown"`
 	UnknownCategoryCounts             map[string]int `json:"unknownCategoryCounts"`
 	UnknownErrorClassCounts           map[string]int `json:"unknownErrorClassCounts"`
@@ -175,9 +192,11 @@ func Collect(indexPath string) (Report, error) {
 		"Known HTTP 404 is an application response without the session, not a successful session read.",
 		"Sampling gaps are unobserved time; no continuous availability claim.",
 		"External review state is supplied input and is not issued by this collector.",
+		"Source, harness, and configuration hashes are supplied provenance pins; referenced file hashes are checked, but binary lineage is not independently established.",
 	}}
 	ids := map[string]bool{}
 	usedMetrics := map[string]string{}
+	usedMetricDigests := map[string]string{}
 	type suiteCacheEntry struct {
 		raw      []byte
 		parsed   suite
@@ -233,7 +252,12 @@ func Collect(indexPath string) (Report, error) {
 		if !ok {
 			return Report{}, fmt.Errorf("record %s unknown profile %q", rec.ID, rec.ProfileID)
 		}
-		rr := RunResult{ID: rec.ID, ProfileID: rec.ProfileID, SuiteFile: rec.SuiteFile, SuiteRevision: cached.parsed.Revision, SuiteSHA256: rec.SuiteSHA256, SourceRevision: rec.SourceRevision, HarnessSHA256: rec.HarnessSHA256, ConfigSHA256: rec.ConfigSHA256, MetricsFile: rec.MetricsFile, MetricsSHA256: rec.MetricsSHA256, WorkloadSchedule: rec.WorkloadSchedule, State: rec.State, ExternalReviewState: rec.ExternalReviewState, ExternalReviewReference: rec.ExternalReviewReference, TrialDenominator: p.trials * len(p.defenders)}
+		requestedDenominator := p.trials * len(p.defenders) * len(p.scenarios)
+		anchorDenominator := 0
+		if !p.defenders["d-nomtd"] {
+			anchorDenominator = p.trials * len(p.scenarios)
+		}
+		rr := RunResult{ID: rec.ID, ProfileID: rec.ProfileID, SuiteFile: rec.SuiteFile, SuiteRevision: cached.parsed.Revision, SuiteSHA256: rec.SuiteSHA256, SourceRevision: rec.SourceRevision, HarnessSHA256: rec.HarnessSHA256, ConfigSHA256: rec.ConfigSHA256, MetricsFile: rec.MetricsFile, MetricsSHA256: rec.MetricsSHA256, WorkloadSchedule: rec.WorkloadSchedule, State: rec.State, ExternalReviewState: rec.ExternalReviewState, ExternalReviewReference: rec.ExternalReviewReference, TrialDenominator: requestedDenominator + anchorDenominator, RequestedTrialDenominator: requestedDenominator, AnchorTrialDenominator: anchorDenominator}
 		if rec.State != "available" {
 			rr.MeasurementStatus = strings.ToUpper(rec.State)
 			rr.FailureReasons = []string{rec.FailureReason}
@@ -243,14 +267,18 @@ func Collect(indexPath string) (Report, error) {
 			if err != nil {
 				return Report{}, err
 			}
-			if prev, exists := usedMetrics[metricsPath]; exists && prev != rec.ProfileID {
-				return Report{}, fmt.Errorf("metrics file reused by conflicting profiles %s and %s", prev, rec.ProfileID)
+			if prev, exists := usedMetrics[metricsPath]; exists {
+				return Report{}, fmt.Errorf("metrics file reused by records %s and %s", prev, rec.ID)
 			}
-			usedMetrics[metricsPath] = rec.ProfileID
+			usedMetrics[metricsPath] = rec.ID
 			raw, err := readHashed(metricsPath, rec.MetricsSHA256)
 			if err != nil {
 				return Report{}, fmt.Errorf("record %s metrics: %w", rec.ID, err)
 			}
+			if prev, exists := usedMetricDigests[rec.MetricsSHA256]; exists {
+				return Report{}, fmt.Errorf("metrics evidence digest reused by records %s and %s", prev, rec.ID)
+			}
+			usedMetricDigests[rec.MetricsSHA256] = rec.ID
 			rows, err := decodeMetrics(raw)
 			if err != nil {
 				return Report{}, fmt.Errorf("record %s metrics: %w", rec.ID, err)
@@ -258,30 +286,59 @@ func Collect(indexPath string) (Report, error) {
 			if len(rows) != rr.TrialDenominator {
 				return Report{}, fmt.Errorf("record %s rows=%d want %d", rec.ID, len(rows), rr.TrialDenominator)
 			}
+			requestedRows := make([]core.Metric, 0, requestedDenominator)
+			seenTrials := map[string]bool{}
 			for _, m := range rows {
-				if !p.scenarios[m.Scenario] || !p.defenders[m.Defender] {
+				isAnchor := m.AnchorOnly && m.Defender == "d-nomtd" && !p.defenders["d-nomtd"]
+				if !p.scenarios[m.Scenario] || (!p.defenders[m.Defender] && !isAnchor) || m.Trial < 0 || m.Trial >= p.trials {
 					return Report{}, fmt.Errorf("record %s contains unselected %s/%s", rec.ID, m.Scenario, m.Defender)
 				}
+				if p.defenders[m.Defender] && m.AnchorOnly {
+					return Report{}, fmt.Errorf("record %s marks requested arm as anchor", rec.ID)
+				}
+				key := fmt.Sprintf("%s\x00%s\x00%d\x00%t", m.Scenario, m.Defender, m.Trial, isAnchor)
+				if seenTrials[key] {
+					return Report{}, fmt.Errorf("record %s contains duplicate trial identity", rec.ID)
+				}
+				seenTrials[key] = true
+				tr := TrialResult{Scenario: m.Scenario, Defender: m.Defender, Trial: m.Trial, AnchorOnly: isAnchor, Status: string(m.MeasurementState().Status), Reasons: append([]string(nil), m.MeasurementState().Reasons...)}
 				if err := functionalRowError(m); err == nil {
 					rr.ValidTrials++
+					if isAnchor {
+						rr.AnchorValidTrials++
+					} else {
+						rr.RequestedValidTrials++
+					}
 				} else {
 					rr.InvalidTrials++
+					if isAnchor {
+						rr.AnchorInvalidTrials++
+					} else {
+						rr.RequestedInvalidTrials++
+					}
 					rr.FailureReasons = append(rr.FailureReasons, err.Error())
+				}
+				rr.Trials = append(rr.Trials, tr)
+				if !isAnchor {
+					requestedRows = append(requestedRows, m)
 				}
 			}
 			if strings.HasPrefix(rec.ProfileID, "manager-session-") {
-				if len(rows) != 1 {
-					return Report{}, fmt.Errorf("record %s installed profile must contain one row", rec.ID)
+				if len(requestedRows) != requestedDenominator {
+					return Report{}, fmt.Errorf("record %s installed profile requested rows=%d want %d", rec.ID, len(requestedRows), requestedDenominator)
 				}
-				if rr.InvalidTrials > 0 {
+				if rr.RequestedInvalidTrials > 0 {
 					rr.MeasurementStatus = "INVALID"
 				} else {
-					summary, err := decodeInstalled(rows[0])
+					summary, err := decodeInstalled(requestedRows[0])
 					if err != nil {
 						return Report{}, fmt.Errorf("record %s installed evidence: %w", rec.ID, err)
 					}
 					rr.InstalledSession = &summary
 					rr.MeasurementStatus = "DECODED_FUNCTIONAL"
+					if rr.AnchorInvalidTrials > 0 {
+						rr.MeasurementStatus = "DECODED_FUNCTIONAL_WITH_INVALID_ANCHOR"
+					}
 				}
 			} else {
 				if rr.InvalidTrials > 0 {
@@ -465,7 +522,7 @@ func decodeInstalled(m core.Metric) (InstalledSessionSummary, error) {
 	if err != nil {
 		return InstalledSessionSummary{}, err
 	}
-	out := InstalledSessionSummary{PodUIDCounts: map[string]int{}, UnknownCategoryCounts: map[string]int{}, UnknownErrorClassCounts: map[string]int{}, SegmentCount: len(receipt.Segments), OriginalPodUID: e["original.podUID"], PeerPodUID: e["peer.podUID"], ReplacementPodUID: e["replacement.podUID"], CoordinationUsed: e["coordination.used"] == "true", CoordinationDisposition: e["coordination.disposition"], CoordinationAttributionComplete: e["coordination.attributionComplete"] == "true", CoordinationTargetUID: e["coordination.targetUID"], CoordinationTargetResourceVersion: e["coordination.targetResourceVersion"], CoordinationRequestedGraceSeconds: grace, PolicyName: e["availabilityPolicy.name"], PolicyUID: e["availabilityPolicy.uid"], PolicyInitialMinimum: initialMinimum, PolicyEligibleMinimum: eligibleMinimum, EffectStatus: e["effect.status"], EffectAttribution: e["effect.attribution"], DefensiveActions: m.DefensiveActions, FalseDefensiveActions: m.FalseDefensiveActions, ContinuousAvailability: false}
+	out := InstalledSessionSummary{PodUIDCounts: map[string]int{}, NoSessionHTTP404ByPodUID: map[string]int{}, UnknownCategoryCounts: map[string]int{}, UnknownErrorClassCounts: map[string]int{}, SegmentCount: len(receipt.Segments), OriginalPodUID: e["original.podUID"], PeerPodUID: e["peer.podUID"], ReplacementPodUID: e["replacement.podUID"], CoordinationUsed: e["coordination.used"] == "true", CoordinationDisposition: e["coordination.disposition"], CoordinationAttributionComplete: e["coordination.attributionComplete"] == "true", CoordinationTargetUID: e["coordination.targetUID"], CoordinationTargetResourceVersion: e["coordination.targetResourceVersion"], CoordinationRequestedGraceSeconds: grace, PolicyName: e["availabilityPolicy.name"], PolicyUID: e["availabilityPolicy.uid"], PolicyInitialMinimum: initialMinimum, PolicyEligibleMinimum: eligibleMinimum, EffectStatus: e["effect.status"], EffectAttribution: e["effect.attribution"], DefensiveActions: m.DefensiveActions, FalseDefensiveActions: m.FalseDefensiveActions, ContinuousAvailability: false}
 	if out.OriginalPodUID == "" || out.PeerPodUID == "" || out.OriginalPodUID == out.PeerPodUID || out.PolicyName == "" || out.PolicyUID == "" || out.EffectStatus == "" {
 		return out, errors.New("installed policy, Pod identity, or effect disposition missing")
 	}
@@ -474,8 +531,10 @@ func decodeInstalled(m core.Metric) (InstalledSessionSummary, error) {
 	}
 	flat := []observation{}
 	var first, last time.Time
+	var priorObservation time.Time
 	cadence := -1
 	declaredMillis := 0
+	serviceURL, sessionID := "", ""
 	for i, s := range receipt.Segments {
 		if s.Segment != i || s.Status != "complete" || !s.PrefixValidated || s.ExitCode != 0 || s.StdoutBytes <= 0 || !isHash(s.StdoutSHA) || s.StderrBytes != 0 || !isHash(s.StderrSHA) {
 			return out, fmt.Errorf("segment %d incomplete or malformed", i)
@@ -486,8 +545,11 @@ func decodeInstalled(m core.Metric) (InstalledSessionSummary, error) {
 		}
 		if cadence < 0 {
 			cadence = a.CadenceMillis
+			serviceURL, sessionID = a.ServiceURL, a.SessionID
 		} else if cadence != a.CadenceMillis {
 			return out, errors.New("segment cadence differs")
+		} else if a.ServiceURL != serviceURL || a.SessionID != sessionID {
+			return out, errors.New("segment service URL or session ID differs")
 		}
 		declaredMillis += a.DurationMillis
 		start, er1 := time.Parse(time.RFC3339Nano, a.Started)
@@ -507,9 +569,10 @@ func decodeInstalled(m core.Metric) (InstalledSessionSummary, error) {
 		out.SampledWindowSeconds += end.Sub(start).Seconds()
 		for _, o := range a.Observations {
 			at, er := time.Parse(time.RFC3339Nano, o.At)
-			if er != nil || at.Before(start) || at.After(end) {
+			if er != nil || at.Before(start) || at.After(end) || !priorObservation.IsZero() && !at.After(priorObservation) {
 				return out, errors.New("observation timestamp outside segment")
 			}
+			priorObservation = at
 			if o.Known {
 				if o.Category != "application-response" || (o.HTTPStatus != 200 && o.HTTPStatus != 404) || o.PodUID == "" || o.ErrorClass != "" {
 					return out, errors.New("known observation invalid")
@@ -522,7 +585,8 @@ func decodeInstalled(m core.Metric) (InstalledSessionSummary, error) {
 				if o.HTTPStatus == 200 {
 					out.SessionPresentHTTP200++
 				} else {
-					out.PeerWithoutSessionHTTP404++
+					out.NoSessionHTTP404++
+					out.NoSessionHTTP404ByPodUID[o.PodUID]++
 				}
 			} else {
 				if o.Category == "" || o.HTTPStatus != 0 || o.PodUID != "" || o.ErrorClass == "" {
@@ -669,11 +733,11 @@ func Markdown(r Report) string {
 			s = x.InstalledSession.SampleDenominator
 			k = x.InstalledSession.KnownApplicationResponse
 			p = x.InstalledSession.SessionPresentHTTP200
-			n = x.InstalledSession.PeerWithoutSessionHTTP404
+			n = x.InstalledSession.NoSessionHTTP404
 			u = x.InstalledSession.Unknown
 		}
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d | %d (%d known) | %d | %d | %d |\n", x.ID, x.ProfileID, x.State, x.MeasurementStatus, x.TrialDenominator, s, k, p, n, u)
 	}
-	b.WriteString("\nKnown 404 responses are not session successes. Inter-segment time is unobserved; the report makes no continuous-availability, security, ROI, attacker-mitigation, installed-action, or campaign-PASS claim.\n")
+	b.WriteString("\nKnown 404 responses are not session successes. Inter-segment time is unobserved; the report makes no continuous-availability, security, ROI, attacker-mitigation, installed-action, or campaign-PASS claim. Source, harness, and configuration hashes are supplied pins, not independently established binary lineage.\n")
 	return b.String()
 }

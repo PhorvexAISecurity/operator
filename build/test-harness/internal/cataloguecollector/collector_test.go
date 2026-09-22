@@ -2,11 +2,14 @@ package cataloguecollector
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -30,7 +33,7 @@ func TestCollectRound64InstalledSessionEvidence(t *testing.T) {
 		t.Fatalf("run: %+v", run)
 	}
 	s := run.InstalledSession
-	if s == nil || s.SampleDenominator != 180 || s.KnownApplicationResponse != 180 || s.SessionPresentHTTP200 != 91 || s.PeerWithoutSessionHTTP404 != 89 || s.Unknown != 0 || s.SegmentCount != 5 || s.DefensiveActions != 0 || s.FalseDefensiveActions != -1 || s.ContinuousAvailability {
+	if s == nil || s.SampleDenominator != 180 || s.KnownApplicationResponse != 180 || s.SessionPresentHTTP200 != 91 || s.NoSessionHTTP404 != 89 || s.NoSessionHTTP404ByPodUID[s.PeerPodUID] != 89 || s.Unknown != 0 || s.SegmentCount != 5 || s.DefensiveActions != 0 || s.FalseDefensiveActions != -1 || s.ContinuousAvailability {
 		t.Fatalf("round64 summary: %+v", s)
 	}
 	if len(s.InterSegmentGapSeconds) != 4 || !close(s.SampledWindowSeconds, 90.000535, .001) || !close(s.ElapsedSpanSeconds, 113.092033, .001) {
@@ -54,6 +57,23 @@ func TestCollectRound64InstalledSessionEvidence(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Fatalf("markdown missing %q: %s", want, md)
 		}
+	}
+}
+
+func TestCollectRound67KeepsForcedInvalidAnchorSeparateFromRequestedTimer(t *testing.T) {
+	dir, rec := fixtureIndex(t)
+	copyFile(t, filepath.Join(testdataDir(t), "round67/metrics.sanitized.jsonl"), filepath.Join(dir, "timer.jsonl"))
+	rec.ID = "round67-timer"
+	rec.ProfileID = "manager-session-blind-timer"
+	rec.MetricsFile = "timer.jsonl"
+	rec.MetricsSHA256 = sumTest(mustRead(t, filepath.Join(dir, "timer.jsonl")))
+	report, err := Collect(writeIndex(t, dir, []RunRecord{rec}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := report.Runs[0]
+	if run.TrialDenominator != 2 || run.RequestedTrialDenominator != 1 || run.AnchorTrialDenominator != 1 || run.RequestedValidTrials != 1 || run.RequestedInvalidTrials != 0 || run.AnchorValidTrials != 0 || run.AnchorInvalidTrials != 1 || run.MeasurementStatus != "DECODED_FUNCTIONAL_WITH_INVALID_ANCHOR" || run.InstalledSession == nil || len(run.Trials) != 2 || !run.Trials[0].AnchorOnly || run.Trials[1].AnchorOnly {
+		t.Fatalf("round67 separation: %+v", run)
 	}
 }
 
@@ -127,6 +147,17 @@ func TestCollectRejectsCorruptOrAmbiguousInputs(t *testing.T) {
 				e["availability.observation.000"] = `{"atUTC":"2026-09-22T05:40:14.880949Z","known":true,"category":"application-response","httpStatus":404,"podUID":"00a140c7-0484-4c47-90d5-29b13d316a00"}`
 			})
 		}},
+		{"segment-session-switch", func(t *testing.T, d string, r *RunRecord) {
+			mutateReceipt(t, d, r, func(receipt map[string]any) {
+				receipt["segments"].([]any)[1].(map[string]any)["availability"].(map[string]any)["sessionID"] = "switched"
+			})
+		}},
+		{"duplicate-observation-time", func(t *testing.T, d string, r *RunRecord) {
+			mutateReceipt(t, d, r, func(receipt map[string]any) {
+				obs := receipt["segments"].([]any)[0].(map[string]any)["availability"].(map[string]any)["observations"].([]any)
+				obs[1].(map[string]any)["atUTC"] = obs[0].(map[string]any)["atUTC"]
+			})
+		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,12 +184,20 @@ func TestCollectRejectsDuplicateKeysAndConflictingMetricReuse(t *testing.T) {
 	second := rec
 	second.ID = "conflict"
 	second.ProfileID = "nats-no-action"
-	if _, err := Collect(writeIndex(t, dir, []RunRecord{rec, second})); err == nil || !strings.Contains(err.Error(), "reused by conflicting profiles") {
+	if _, err := Collect(writeIndex(t, dir, []RunRecord{rec, second})); err == nil || !strings.Contains(err.Error(), "metrics file reused") {
 		t.Fatalf("reuse err=%v", err)
 	}
 	dir, rec = fixtureIndex(t)
 	if _, err := Collect(writeIndex(t, dir, []RunRecord{rec, rec})); err == nil || !strings.Contains(err.Error(), "duplicate or empty record id") {
 		t.Fatalf("duplicate id err=%v", err)
+	}
+	dir, rec = fixtureIndex(t)
+	copyFile(t, filepath.Join(dir, "metrics.jsonl"), filepath.Join(dir, "duplicate.jsonl"))
+	second = rec
+	second.ID = "duplicate-evidence"
+	second.MetricsFile = "duplicate.jsonl"
+	if _, err := Collect(writeIndex(t, dir, []RunRecord{rec, second})); err == nil || !strings.Contains(err.Error(), "evidence digest reused") {
+		t.Fatalf("digest reuse err=%v", err)
 	}
 }
 
@@ -209,6 +248,43 @@ func mutateMetric(t *testing.T, dir string, r *RunRecord, f func(map[string]any)
 }
 func mutateEvidence(t *testing.T, dir string, r *RunRecord, f func(map[string]any)) {
 	mutateMetric(t, dir, r, func(x map[string]any) { f(x["benchmarkEvidence"].(map[string]any)) })
+}
+func mutateReceipt(t *testing.T, dir string, r *RunRecord, f func(map[string]any)) {
+	t.Helper()
+	mutateMetric(t, dir, r, func(x map[string]any) {
+		e := x["benchmarkEvidence"].(map[string]any)
+		chunks, err := strconv.Atoi(e["availability.segmentReceiptChunks"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var encoded string
+		for i := 0; i < chunks; i++ {
+			encoded += e[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)].(string)
+		}
+		raw, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var receipt map[string]any
+		if err := json.Unmarshal(raw, &receipt); err != nil {
+			t.Fatal(err)
+		}
+		f(receipt)
+		raw, _ = json.Marshal(receipt)
+		e["availability.segmentReceiptsBytes"] = strconv.Itoa(len(raw))
+		e["availability.segmentReceiptsSHA256"] = sumTest(raw)
+		encoded = base64.StdEncoding.EncodeToString(raw)
+		for i := 0; i < chunks; i++ {
+			delete(e, fmt.Sprintf("availability.segmentReceiptChunk.%03d", i))
+		}
+		e["availability.segmentReceiptChunks"] = "1"
+		e["availability.segmentReceiptChunk.000"] = encoded
+	})
+}
+func testdataDir(t *testing.T) string {
+	t.Helper()
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(file), "testdata")
 }
 func copyFile(t *testing.T, src, dst string) {
 	t.Helper()

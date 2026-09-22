@@ -135,7 +135,7 @@ The example is deliberately opaque and reports
 measurement. The first decoded family is the three `manager-session-*`
 profiles. Its decoder reconstructs the retained base64 segment receipt, checks
 its hashes and flattened observations, and reports HTTP 200 session presence,
-HTTP 404 peer responses, typed unknowns, Pod identities, action/effect fields,
+HTTP 404 no-session responses with per-Pod counts, typed unknowns, Pod identities, action/effect fields,
 and every inter-segment gap separately. A 404 is not counted as a successful
 session read, and sampled windows are not described as continuous availability.
 
@@ -144,5 +144,8 @@ the trial denominator. `available` files with a wrong hash, duplicate JSON key,
 unknown profile, selection mismatch, conflicting profile reuse, partial receipt,
 or inconsistent flattened evidence are rejected. External review state and
 reference are copied as supplied metadata; the collector does not grant live
-acceptance. Reports always state `COMPARISON_NOT_ESTABLISHED` until a separately
-reviewed comparison contract is implemented.
+acceptance. Source, harness, and configuration hashes are supplied pins too;
+the collector checks referenced suite and metrics bytes but does not
+independently establish binary lineage. Reports always state
+`COMPARISON_NOT_ESTABLISHED` until a separately reviewed comparison contract is
+implemented.
