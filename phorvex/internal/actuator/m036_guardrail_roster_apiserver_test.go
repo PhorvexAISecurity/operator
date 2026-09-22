@@ -153,6 +153,11 @@ func TestM036RealAPITLSOrderedGuardrailRosterLifecycle(t *testing.T) {
 			if err := apiClient.Get(ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
 				t.Fatal(err)
 			}
+			target := Target{Namespace: pod.Namespace, Pod: pod.Name, UID: string(pod.UID), Labels: copyLabels(pod.Labels),
+				PolicyName: f.policy.Name, PolicyUID: string(f.policy.UID), ServiceAccount: normalizeServiceAccount(pod.Spec.ServiceAccountName)}
+			if ok, why := f.native.SupportsAction(ctx, model.ActionGuardrailRotate, target); !ok {
+				t.Fatalf("cycle %d coherent terminal capability support=(%v,%q)", i, ok, why)
+			}
 			prior := strings.TrimSpace(pod.Annotations[annoGuardrailVariant])
 			req := f.request(t, "m036-three-"+strconv.Itoa(i))
 			result, err := f.native.Actuate(ctx, req)
@@ -198,8 +203,18 @@ func TestM036RealAPITLSOrderedGuardrailRosterLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.setRoster(t, "", "v1,,v2")
+		f.setRoster(t, "v2", "v1,,v2")
 		calls := receiver.calls.Load()
+		driftedPod := &corev1.Pod{}
+		if err := apiClient.Get(ctx, client.ObjectKeyFromObject(f.pod), driftedPod); err != nil {
+			t.Fatal(err)
+		}
+		driftedTarget := Target{Namespace: driftedPod.Namespace, Pod: driftedPod.Name, UID: string(driftedPod.UID), Labels: copyLabels(driftedPod.Labels),
+			PolicyName: f.policy.Name, PolicyUID: string(f.policy.UID), ServiceAccount: normalizeServiceAccount(driftedPod.Spec.ServiceAccountName)}
+		if ok, why := f.native.SupportsAction(ctx, model.ActionGuardrailRotate, driftedTarget); ok || !strings.Contains(why, "terminal guardrail-variant-v1 authority or expected state drifted") {
+			t.Fatalf("drifted terminal capability support=(%v,%q), want preselection exclusion", ok, why)
+		}
+		f.setRoster(t, "v1", "v1,,v2")
 		reconciled, err := f.native.Actuate(ctx, lastReq)
 		if err != nil || reconciled.NoEffect != NoEffectReconciled || reconciled.Emitted || receiver.calls.Load() != calls {
 			t.Fatalf("terminal same operation did not reconcile malformed current roster: result=%+v calls=%d/%d err=%v", reconciled, receiver.calls.Load(), calls, err)
@@ -228,12 +243,21 @@ func TestM036RealAPITLSOrderedGuardrailRosterLifecycle(t *testing.T) {
 		}
 	})
 
-	t.Run("two-member-alternates", func(t *testing.T) {
-		f := newM036APIFixture(t, ctx, apiClient, receiver, server, "two", "v1", "v1,v2")
+	t.Run("two-member-pgv2-to-pgv1", func(t *testing.T) {
+		f := newM036APIFixture(t, ctx, apiClient, receiver, server, "two", "pgv2", "pgv2,pgv1")
 		before := len(receiver.observedVariants())
 		var lastReq Request
 		var rollbackRef string
-		for i, want := range []string{"v2", "v1"} {
+		for i, want := range []string{"pgv1", "pgv2", "pgv1"} {
+			pod := &corev1.Pod{}
+			if err := apiClient.Get(ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
+				t.Fatal(err)
+			}
+			target := Target{Namespace: pod.Namespace, Pod: pod.Name, UID: string(pod.UID), Labels: copyLabels(pod.Labels),
+				PolicyName: f.policy.Name, PolicyUID: string(f.policy.UID), ServiceAccount: normalizeServiceAccount(pod.Spec.ServiceAccountName)}
+			if ok, why := f.native.SupportsAction(ctx, model.ActionGuardrailRotate, target); !ok {
+				t.Fatalf("two-member cycle %d coherent terminal capability support=(%v,%q)", i, ok, why)
+			}
 			lastReq = f.request(t, "m036-two-"+strconv.Itoa(i))
 			result, err := f.native.Actuate(ctx, lastReq)
 			if err != nil || !result.Emitted {
@@ -245,10 +269,10 @@ func TestM036RealAPITLSOrderedGuardrailRosterLifecycle(t *testing.T) {
 				t.Fatalf("two-member cycle %d receipt=%+v", i, receipt)
 			}
 		}
-		if got := strings.Join(receiver.observedVariants()[before:], ","); got != "v2,v1" {
+		if got := strings.Join(receiver.observedVariants()[before:], ","); got != "pgv1,pgv2,pgv1" {
 			t.Fatalf("two-member payload sequence=%q", got)
 		}
-		f.setRoster(t, "", "v1,v3")
+		f.setRoster(t, "", "pgv1,pgv3")
 		calls := receiver.calls.Load()
 		if err := f.native.Rollback(ctx, lastReq, rollbackRef); err == nil || receiver.calls.Load() != calls {
 			t.Fatalf("rollback used a substitute predecessor: calls=%d/%d err=%v", receiver.calls.Load(), calls, err)

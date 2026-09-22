@@ -1,0 +1,39 @@
+schema_version: 1
+intake_id: RPT-20260922-192000-guardrail-terminal-high-water
+kind: INCIDENT
+title: Guardrail baseline conflicts with terminal serving journal high-water
+state: REPORTED
+reporter: owner
+approval_ref: root-message-2026-09-22-guardrail-urgent-fix
+created_at: '2026-09-22T19:24:38+00:00'
+updated_at: '2026-09-22T19:24:38+00:00'
+pins:
+  source_main_sha: ac0e25fa2f74
+  source_release: 0.4.151
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.149
+  deployed_digest: null
+  deployed_git_sha: 06f6dea36021c75971fc786b18ecbd04f145cfb8
+  environment: post25 live retained evidence; source-only repair
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: root
+  coordinator: root
+next_action:
+  owner: investigator
+  action: Triage the report and pin its environment.
+transitions: []

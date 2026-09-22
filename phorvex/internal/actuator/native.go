@@ -80,7 +80,7 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if ok, why := n.servingSecurity.supports(a, t); !ok {
 		return false, why
 	}
-	if ok, why := protectedServingCapability(ctx, n.Reader, n.JournalNamespace, t.UID, a); !ok {
+	if ok, why := protectedServingCapability(ctx, n.Reader, n.JournalNamespace, t, a, n.servingSecurity); !ok {
 		return false, why
 	}
 	// Transport is checked before its dependent allocation evidence.

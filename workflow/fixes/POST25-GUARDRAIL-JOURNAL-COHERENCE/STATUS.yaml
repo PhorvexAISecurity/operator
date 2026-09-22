@@ -1,0 +1,261 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 7c1f78b6e9050a6fd96d9e2c7c8115e50bcef896807271b6de4296ff9b26f19e
+    source_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+    at: '2026-09-22T19:46:24+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: evidence/lead-decision-clarification.md
+    rationale: Existing owner-delegated fix-design authority; lead clarification after
+      actual runner inspection, not a new owner instruction or evidence waiver
+  red:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/incident.md
+    sha256: 33cabd41b93c4ca531f592c813e330a0376983ad27fdad8b4e16fdfee1116c60
+    source_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+    at: '2026-09-22T20:16:18+00:00'
+  preflight:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: cecf25e60deb497f7a799c333abc179059c5fd2ddcd5e77f0e47196af29558c4
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+  implementation:
+    result: PASS
+    by: serving-worker
+    artifact: 04-diff.patch
+    sha256: 881ac7e065f7eedfdf3c8f9c3593f957daf9daa03ccd1dda1cdc45fb4bc28840
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+  l0:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: cecf25e60deb497f7a799c333abc179059c5fd2ddcd5e77f0e47196af29558c4
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: b2b8dd655c430889d26faa4e258f92e10622084f8841be2e16d4d775fdb3abda
+  l1:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/focused-tests.log
+    sha256: 15d6807a2d2a764b8cd53a6e3ceaa259c2146087e5109a1cc2798f8c3eef0bdf
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/actuator
+    - phorvex/internal/console
+    - phorvex/internal/recon
+    inputs_sha256: 6fe8488eb7f1b3e220657c0ec87f7e2ebb873089468394878e189c1d796efc4c
+  l2:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/real-api-tls.log
+    sha256: 7d2f13a1b2c40372dcc574198015ef1d9d4f2b4db4eea66195225dcd1f529bc7
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - phorvex/config/crd/bases
+    - phorvex/internal/actuator
+    inputs_sha256: 4857a4b225aac31ec8b47f4a8cecfb035f7783b52d1fe7a2b864b551c2dca35f
+  positive_control:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/real-api-tls.log
+    sha256: 7d2f13a1b2c40372dcc574198015ef1d9d4f2b4db4eea66195225dcd1f529bc7
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - phorvex/config/crd/bases
+    - phorvex/internal/actuator
+    inputs_sha256: 4857a4b225aac31ec8b47f4a8cecfb035f7783b52d1fe7a2b864b551c2dca35f
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 33cabd41b93c4ca531f592c813e330a0376983ad27fdad8b4e16fdfee1116c60
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:17:48+00:00'
+    baseline_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 56e094c5cb4a8096da016305efd347275a518a8266b2241e0ed91b56d29ba8d4
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:17:48+00:00'
+    incident_sha256: 33cabd41b93c4ca531f592c813e330a0376983ad27fdad8b4e16fdfee1116c60
+fix_id: POST25-GUARDRAIL-JOURNAL-COHERENCE
+issues: []
+title: Keep guardrail console baselines coherent with protected terminal receipts
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: serving-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+  deployed_image: manager0.4.149;console0.4.151
+  deployed_git_sha: 06f6dea36021c75971fc786b18ecbd04f145cfb8
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-guardrail-coherence
+  base_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+  head_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T20:17:52+00:00'
+follow_up_to: M64
+configuration_history:
+- at: '2026-09-22T19:28:23+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T20:01:08+00:00'
+  by: serving-worker
+  fields:
+  - implementation
+  approval_ref: workflow/fixes/POST25-GUARDRAIL-JOURNAL-COHERENCE/03-decision.md
+- at: '2026-09-22T20:16:25+00:00'
+  by: serving-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T19:28:24+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T19:28:26+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T20:16:26+00:00'
+  by: serving-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T20:16:28+00:00'
+  by: serving-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T20:17:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T20:17:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 46b44d89b4e89225111442c20ed07dc64d43f5ee64764cc35f3d7a537c6faf89
+  source_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+  at: '2026-09-22T19:28:26+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+handoff:
+  id: POST25-GUARDRAIL-JOURNAL-COHERENCE:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
