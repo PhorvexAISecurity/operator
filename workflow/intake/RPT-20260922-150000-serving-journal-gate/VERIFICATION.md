@@ -16,4 +16,3 @@ Run the affected `actuator`, `capability`, `actionset`, `runner`, and `cmd` test
 ## Result
 
 `PASS` independently reproduced by codex-lead: exact baseline production-file overlay30a1 returned true and retained blocked KV in actionset; absent/terminal/differentUID positives passed. Finalb1fec8c7 passes actuator/capability/actionset/runner suites. Exact independent logs and incident are retained in fix evidence/baseline/lead-baseline.log, evidence/p3/lead-affected-tests.log and evidence/incident.md. No deployed repair result is claimed.
-

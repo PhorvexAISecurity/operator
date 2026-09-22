@@ -14,4 +14,3 @@ M-064 owns crash-safe serving-effect receipts, effect-domain slots, terminal pha
 
 - Existing issue: M-064
 - Rationale: this is the missing selection-side consumer of the same protected receipt authority and domain model. The fix leaves M-064 dispatch and recovery semantics intact.
-

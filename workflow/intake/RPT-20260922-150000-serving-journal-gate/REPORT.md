@@ -24,4 +24,3 @@ Source baseline: deployed `9409389467504720b5f0eaa19b91bed7a4793e51`; implementa
 - Lead verdict: `LEAD-LATEST-VERDICT.json`
 - Port/contract correction: `PORT-AND-CONTRACT-CORRECTION.md`
 - Source repair receipt: `KV-PROTECTED-JOURNAL-GATE-IMPLEMENTATION.json`
-
