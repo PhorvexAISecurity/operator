@@ -142,6 +142,29 @@ type TargetConfig struct {
 	// provisioned, supervisor-owned ordinary-GPU vLLM fixture. The harness never
 	// creates or deletes GPU capacity and never accepts an arbitrary serving URL.
 	GPUFunctionalFixture *GPUFunctionalFixtureConfig `json:"gpuFunctionalFixture,omitempty"`
+
+	// NativeRouteFixture hands one externally owned, fully pinned route fixture
+	// to the narrow native-route-catalogue binary. The harness never accepts an
+	// arbitrary command or action through this boundary.
+	NativeRouteFixture *NativeRouteFixtureConfig `json:"nativeRouteFixture,omitempty"`
+}
+
+type NativeRouteFixtureConfig struct {
+	Action              string `json:"action"`
+	NamespaceUID        string `json:"namespaceUID"`
+	JournalNamespaceUID string `json:"journalNamespaceUID"`
+	PolicyUID           string `json:"policyUID"`
+	PolicyGeneration    int64  `json:"policyGeneration"`
+	TargetUID           string `json:"targetUID"`
+	PeerUID             string `json:"peerUID"`
+	ServiceUID          string `json:"serviceUID"`
+	OperationID         string `json:"operationID"`
+	SourceRevision      string `json:"sourceRevision"`
+	AdapterBinary       string `json:"adapterBinary"`
+	AdapterBinarySHA256 string `json:"adapterBinarySHA256"`
+	AdapterConfig       string `json:"adapterConfig"`
+	AdapterConfigSHA256 string `json:"adapterConfigSHA256"`
+	ReceiptPath         string `json:"receiptPath"`
 }
 
 type GPUFunctionalFixtureConfig struct {
@@ -377,7 +400,10 @@ func (c TargetConfig) Validate() error {
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
-		return validateInstalledManagerFixture(c)
+		if err := validateInstalledManagerFixture(c); err != nil {
+			return err
+		}
+		return validateNativeRouteFixture(c)
 	}
 	if strings.TrimSpace(c.BenignCheckpointStorageClass) == "" {
 		return errors.New("config: benignCheckpointStorageClass is required for benign checkpoint local fixture")
@@ -403,7 +429,52 @@ func (c TargetConfig) Validate() error {
 	if err := validateGPUFunctionalFixture(c); err != nil {
 		return err
 	}
-	return validateInstalledManagerFixture(c)
+	if err := validateInstalledManagerFixture(c); err != nil {
+		return err
+	}
+	return validateNativeRouteFixture(c)
+}
+
+func validateNativeRouteFixture(c TargetConfig) error {
+	fixture := c.NativeRouteFixture
+	if fixture == nil {
+		return nil
+	}
+	wantScenario := map[string]string{
+		"route-rotate":    "c2-native-route-cutover",
+		"endpoint-rotate": "c2-native-endpoint-cutover",
+	}[fixture.Action]
+	if wantScenario == "" {
+		return errors.New("config: nativeRouteFixture action must be route-rotate or endpoint-rotate")
+	}
+	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != wantScenario || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" {
+		return fmt.Errorf("config: nativeRouteFixture requires one %s trial with defenderFilter=[d-nomtd]", wantScenario)
+	}
+	if c.ExpectedNamespaceUID == "" || c.ExpectedNamespaceUID != fixture.NamespaceUID || !kubernetesUIDPattern.MatchString(fixture.NamespaceUID) {
+		return errors.New("config: nativeRouteFixture requires expectedNamespaceUID equal to its exact namespaceUID")
+	}
+	hex40 := regexp.MustCompile(`^[0-9a-f]{40}$`)
+	hex64 := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	if !hex40.MatchString(fixture.SourceRevision) || !hex64.MatchString(fixture.AdapterBinarySHA256) || !hex64.MatchString(fixture.AdapterConfigSHA256) {
+		return errors.New("config: nativeRouteFixture source and artifact hashes are invalid")
+	}
+	for label, value := range map[string]string{"journalNamespaceUID": fixture.JournalNamespaceUID, "policyUID": fixture.PolicyUID, "targetUID": fixture.TargetUID, "peerUID": fixture.PeerUID, "serviceUID": fixture.ServiceUID} {
+		if !kubernetesUIDPattern.MatchString(value) {
+			return fmt.Errorf("config: nativeRouteFixture %s must be an exact lowercase Kubernetes UUID", label)
+		}
+	}
+	if fixture.PolicyGeneration < 1 || !hex64.MatchString(fixture.OperationID) || fixture.TargetUID == fixture.PeerUID {
+		return errors.New("config: nativeRouteFixture generation, operation ID, or Pod identities are invalid")
+	}
+	for label, path := range map[string]string{"adapterBinary": fixture.AdapterBinary, "adapterConfig": fixture.AdapterConfig, "receiptPath": fixture.ReceiptPath} {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+			return fmt.Errorf("config: nativeRouteFixture %s must be a clean absolute path", label)
+		}
+	}
+	if fixture.AdapterBinary == fixture.AdapterConfig || fixture.AdapterBinary == fixture.ReceiptPath || fixture.AdapterConfig == fixture.ReceiptPath {
+		return errors.New("config: nativeRouteFixture artifact paths must be distinct")
+	}
+	return nil
 }
 
 func validateGPUFunctionalFixture(c TargetConfig) error {
