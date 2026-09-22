@@ -1,0 +1,39 @@
+schema_version: 1
+intake_id: RPT-20260922-170733-console-vllm-reset-authority
+kind: BUG
+title: Console reset claims restoration without durable authority
+state: REPORTED
+reporter: console-worker
+approval_ref: operations/AUTONOMY.md
+created_at: '2026-09-22T17:07:58+00:00'
+updated_at: '2026-09-22T17:07:58+00:00'
+pins:
+  source_main_sha: 06f6dea3
+  source_release: 0.4.148
+  deployed_image: 0.4.148
+  deployed_digest: null
+  deployed_git_sha: bd8876c97c08a3a677d8fd25f47afaf9323a5845
+  environment: post25-live
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: console-worker
+  coordinator: codex-lead
+next_action:
+  owner: investigator
+  action: Triage the report and pin its environment.
+transitions: []
