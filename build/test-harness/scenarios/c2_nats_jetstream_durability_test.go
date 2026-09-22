@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -186,11 +188,129 @@ func TestNATSWorkloadBuilderCreatesOnlyPinnedThreeMemberFixture(t *testing.T) {
 	if container.Image != natsImage || !strings.Contains(strings.Join(container.Command, " "), natsSupervisorScript) || sts.Spec.Template.Spec.NodeSelector["kubernetes.io/hostname"] != fixture.NodeName {
 		t.Fatalf("container/node contract=%+v", container)
 	}
+	if container.ReadinessProbe == nil || container.ReadinessProbe.HTTPGet == nil || container.ReadinessProbe.HTTPGet.Path != "/healthz?js-server-only=true" || container.ReadinessProbe.HTTPGet.Port.IntValue() != natsMonitorPort {
+		t.Fatalf("NATS readiness probe does not bind JetStream metadata readiness: %+v", container.ReadinessProbe)
+	}
 	for _, name := range []string{natsHeadlessService, natsClientService} {
 		if _, err := client.CoreV1().Services("sandbox").Get(context.Background(), name, metav1.GetOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
+}
+
+func reserveNATSHealthTestPort(t *testing.T, used map[int]bool) int {
+	t.Helper()
+	for {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := listener.Addr().(*net.TCPAddr).Port
+		if err := listener.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if !used[port] {
+			used[port] = true
+			return port
+		}
+	}
+}
+
+func startNATSHealthTestServer(t *testing.T, name, clusterName string, routePort, monitorPort int, routePorts []int) *server.Server {
+	t.Helper()
+	routes := make([]*url.URL, 0, len(routePorts)-1)
+	for _, port := range routePorts {
+		if port == routePort {
+			continue
+		}
+		route, err := url.Parse(fmt.Sprintf("nats-route://127.0.0.1:%d", port))
+		if err != nil {
+			t.Fatal(err)
+		}
+		routes = append(routes, route)
+	}
+	opts := &server.Options{
+		ServerName:         name,
+		Host:               "127.0.0.1",
+		Port:               -1,
+		HTTPHost:           "127.0.0.1",
+		HTTPPort:           monitorPort,
+		NoLog:              true,
+		NoSigs:             true,
+		JetStream:          true,
+		JetStreamMaxMemory: 32 << 20,
+		JetStreamMaxStore:  64 << 20,
+		StoreDir:           filepath.Join(t.TempDir(), "jetstream"),
+		Cluster: server.ClusterOpts{
+			Name:           clusterName,
+			Host:           "127.0.0.1",
+			Port:           routePort,
+			ConnectRetries: 10,
+			PoolSize:       1,
+		},
+		Routes: routes,
+	}
+	srv, err := server.NewServer(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go srv.Start()
+	if !srv.ReadyForConnections(5 * time.Second) {
+		srv.Shutdown()
+		t.Fatalf("%s did not start", name)
+	}
+	t.Cleanup(srv.Shutdown)
+	return srv
+}
+
+func natsHealthStatus(t *testing.T, monitorPort int, query string) int {
+	t.Helper()
+	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz?%s", monitorPort, query))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if _, err := io.Copy(io.Discard, response.Body); err != nil {
+		t.Fatal(err)
+	}
+	return response.StatusCode
+}
+
+func TestNATSReadinessWaitsForJetStreamMetadataFormation(t *testing.T) {
+	const clusterName = "post25-readiness-control"
+	usedPorts := map[int]bool{}
+	routePorts := []int{reserveNATSHealthTestPort(t, usedPorts), reserveNATSHealthTestPort(t, usedPorts), reserveNATSHealthTestPort(t, usedPorts)}
+	monitorPorts := []int{reserveNATSHealthTestPort(t, usedPorts), reserveNATSHealthTestPort(t, usedPorts), reserveNATSHealthTestPort(t, usedPorts)}
+	servers := []*server.Server{startNATSHealthTestServer(t, "fixture-nats-0", clusterName, routePorts[0], monitorPorts[0], routePorts)}
+
+	// This is the exact false-ready interval seen by the former fixture probe:
+	// JetStream is enabled, but no metadata quorum or leader exists yet.
+	if got := natsHealthStatus(t, monitorPorts[0], "js-enabled-only=true"); got != http.StatusOK {
+		t.Fatalf("JetStream-enabled health status=%d, want 200", got)
+	}
+	if got := natsHealthStatus(t, monitorPorts[0], "js-server-only=true"); got != http.StatusServiceUnavailable {
+		t.Fatalf("metadata-aware health status before formation=%d, want 503", got)
+	}
+
+	for ordinal := 1; ordinal < 3; ordinal++ {
+		servers = append(servers, startNATSHealthTestServer(t, fmt.Sprintf("fixture-nats-%d", ordinal), clusterName, routePorts[ordinal], monitorPorts[ordinal], routePorts))
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		leaders := 0
+		leaderPeers := 0
+		for _, srv := range servers {
+			if srv.JetStreamIsLeader() {
+				leaders++
+				leaderPeers = len(srv.JetStreamClusterPeers())
+			}
+		}
+		if leaders == 1 && leaderPeers == 3 && natsHealthStatus(t, monitorPorts[0], "js-server-only=true") == http.StatusOK {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("metadata-aware health did not become ready after the three-member cluster formed")
 }
 
 func TestNATSMemberContractBindsOwnerImageProcessAndMountedClaim(t *testing.T) {

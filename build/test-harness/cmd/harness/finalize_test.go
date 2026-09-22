@@ -25,6 +25,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	ktest "k8s.io/client-go/testing"
 
@@ -66,16 +67,24 @@ type countingFactory struct {
 	hangClose bool
 	// localFixture preserves the externally owned checkpoint holder and namespace.
 	localFixture bool
-	logger       *quietLogger
-	kube         *fake.Clientset
+	// natsFixture preserves the externally owned NATS holder and namespace.
+	natsFixture bool
+	logger      *quietLogger
+	kube        *fake.Clientset
 }
 
 func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 	f.built++
 	objects := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "sandbox-uid"}}}
-	if f.localFixture {
+	if f.localFixture || f.natsFixture {
+		holderName := "checkpoint-local-holder"
+		holderUID := types.UID("external-holder")
+		if f.natsFixture {
+			holderName = "nats-local-holder"
+			holderUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+		}
 		objects = append(objects,
-			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "checkpoint-local-holder", Namespace: "sandbox", UID: "external-holder", Labels: map[string]string{"fixture.phorvex.ai/external-owner": "checkpoint-local-holder"}}},
+			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: holderName, Namespace: "sandbox", UID: holderUID, Labels: map[string]string{"fixture.phorvex.ai/external-owner": holderName}}},
 			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generic-residue", Namespace: "sandbox", UID: "generic-owned", Labels: map[string]string{core.OwnedLabelKey: core.OwnedLabelValue}}},
 		)
 	}
@@ -85,6 +94,24 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 	f.logger = logger
 	cfg := config.WithDollarDefaults(config.TargetConfig{Namespace: "sandbox", Context: "kind-test", OwnedAck: true})
 	cfg.BenignCheckpointLocalFixture = f.localFixture
+	if f.natsFixture {
+		cfg.TrialsPerArm = 1
+		cfg.ScenarioFilter = []string{"c2-nats-jetstream-durability"}
+		cfg.DefenderFilter = []string{"d-nomtd"}
+		cfg.NATSJetStreamFixture = &config.NATSJetStreamFixtureConfig{
+			Mode: "no-action", StorageClass: "nats-local", StorageClassUID: "99999999-9999-4999-8999-999999999999",
+			NodeName: "reviewed-node", NodeUID: "11111111-2222-4333-8444-555555555555", HolderName: "nats-local-holder",
+			HolderUID: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", Nonce: "post25-nats-local-r1",
+			PVs: []config.NATSJetStreamLocalPV{
+				{Name: "nats-pv-0", UID: "00000000-0000-4000-8000-000000000001", Slot: 0, PathSHA256: strings.Repeat("a", 64)},
+				{Name: "nats-pv-1", UID: "00000000-0000-4000-8000-000000000002", Slot: 1, PathSHA256: strings.Repeat("b", 64)},
+				{Name: "nats-pv-2", UID: "00000000-0000-4000-8000-000000000003", Slot: 2, PathSHA256: strings.Repeat("c", 64)},
+			},
+		}
+		if err := cfg.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("test NATS config is invalid: %w", err)
+		}
+	}
 	env := &core.Env{
 		Kube:   kube,
 		Config: cfg,
@@ -108,6 +135,40 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 		return nil
 	}
 	return env, closer, nil
+}
+
+func TestFinalTeardownPreservesValidatedExternalNATSFixture(t *testing.T) {
+	f := &countingFactory{natsFixture: true}
+	if err := finalTeardown(context.Background(), f.build, t.TempDir()); err != nil {
+		t.Fatalf("NATS final teardown failed: %v", err)
+	}
+	if _, err := f.kube.CoreV1().Namespaces().Get(context.Background(), "sandbox", metav1.GetOptions{}); err != nil {
+		t.Fatalf("NATS collector namespace was not preserved: %v", err)
+	}
+	holder, err := f.kube.CoreV1().Pods("sandbox").Get(context.Background(), "nats-local-holder", metav1.GetOptions{})
+	if err != nil || holder.UID != "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" {
+		t.Fatalf("external NATS holder was not preserved exactly: holder=%v err=%v", holder, err)
+	}
+	if _, err := f.kube.CoreV1().Pods("sandbox").Get(context.Background(), "generic-residue", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("generic-owned residue survived NATS final cleanup: %v", err)
+	}
+	var exactUIDDelete bool
+	for _, action := range f.kube.Actions() {
+		deleteAction, ok := action.(ktest.DeleteAction)
+		if !ok || action.GetResource().Resource != "pods" || deleteAction.GetName() != "generic-residue" {
+			continue
+		}
+		preconditions := deleteAction.GetDeleteOptions().Preconditions
+		exactUIDDelete = preconditions != nil && preconditions.UID != nil && *preconditions.UID == "generic-owned"
+	}
+	if !exactUIDDelete {
+		t.Fatal("generic cleanup did not use the create-response Pod UID precondition")
+	}
+	for _, action := range f.kube.Actions() {
+		if action.GetVerb() == "delete" && action.GetResource().Resource == "namespaces" {
+			t.Fatal("NATS final teardown deleted its externally collected namespace")
+		}
+	}
 }
 
 func TestFinalTeardownPreservesExternalCheckpointFixtureOnlyWhenConfigured(t *testing.T) {
