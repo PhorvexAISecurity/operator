@@ -73,7 +73,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [actionFilter, setActionFilter] = React.useState("");  // "" = all actuator types
   const [query, setQuery] = React.useState("");                // pod / namespace text search
   const [actuatedOnly, setActuatedOnly] = React.useState(false);
-  const [showNoop, setShowNoop] = React.useState(false);
+  const [showNoop, setShowNoop] = React.useState(true);
   const owner = lens === "owner";
   const { tenant, tenants, tenantListPartial, setTenant } = useOwnerTenant(lens);
   const sel = useSelectedTarget(); // SCOPE the live stream to the selected provider (EKS vs vCluster)
@@ -207,9 +207,21 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const actuated = events.filter(({ event }) => event.actuated).length;
   const loading = !result && !error && (!owner || !!tenant);
   const refreshing = busyKey === requestKey;
+  const historyStatusTone = traceUnavailable || loading || frozen
+    ? "text-muted-foreground"
+    : error
+      ? "text-danger"
+      : result?.partial
+        ? "text-warning"
+        : page === 0 && result
+          ? "text-success"
+          : "text-muted-foreground";
   const actions = Array.from(new Set(["noop", "rotate", "quarantine", "kv-reset", "adapter-rotate", ...retainedEvents.map(({ event }) => event.action).filter(Boolean)])).sort();
   const latest = () => { setPageCache([]); setNavigation({ scope: "", cursors: [""], frozen: false }); setReloadKey((k) => k + 1); };
-  const newer = () => setNavigation({ scope: scopeKey, cursors: cursors.slice(0, -1), frozen: true });
+  const newer = () => {
+    const nextCursors = cursors.slice(0, -1);
+    setNavigation({ scope: scopeKey, cursors: nextCursors, frozen: nextCursors.length > 1 });
+  };
   const older = () => { if (result?.nextCursor) setNavigation({ scope: scopeKey, cursors: [...cursors, result.nextCursor], frozen: true }); };
   const clearTraceSelection = () => {
     setTraceRun("");
@@ -298,8 +310,8 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       <PageHead title="Live Operations" sub="Search retained decision history by workload, action or actual actuation. Latest results refresh every 5 seconds; older pages stay paused. Expand a decision for reasoning and record-time claim provenance. Large decisionTrace payloads are omitted from this summary view." />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 rounded-md border border-border bg-panel/60 px-3 py-1.5 text-[12px]">
-          <Radio className={cn("h-3.5 w-3.5", !traceUnavailable && !error && page === 0 ? "text-success" : "text-muted-foreground")} />
-          <span>{traceUnavailable ? "Selection unavailable" : error ? "Refresh failed" : frozen ? "History paused" : refreshing ? "Refreshing latest…" : "Latest · refresh every 5s"}</span>
+          <Radio data-testid="history-status-icon" className={cn("h-3.5 w-3.5", historyStatusTone)} />
+          <span>{traceUnavailable ? "Selection unavailable" : error ? "Refresh failed" : result?.partial ? (frozen ? "History incomplete · browsing paused" : "History incomplete · checking every 5s") : frozen ? "History paused · retained page" : refreshing ? "Refreshing latest…" : "Latest · refresh every 5s"}</span>
         </div>
         {!traceUnavailable && <div className="text-[12px] text-muted-foreground">{events.length} on this page · {actuated} actuated</div>}
         {owner && tenants.length > 0 && (
@@ -393,11 +405,11 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       {/* FILTER BAR — by actuator type + free-text pod/namespace search */}
       <div className="flex flex-wrap items-center gap-2">
         {!traceUnavailable && <Button variant={actuatedOnly ? "primary" : "outline"} size="sm" aria-pressed={actuatedOnly} onClick={() => setActuatedOnly((v) => !v)}>Actuated only</Button>}
-        {!traceUnavailable && <Button variant={showNoop ? "primary" : "outline"} size="sm" aria-pressed={showNoop} onClick={() => {
+        {!traceUnavailable && <Button variant={!showNoop ? "primary" : "outline"} size="sm" aria-pressed={!showNoop} onClick={() => {
           const next = !showNoop;
           if (!next && actionFilter === "noop") setActionFilter("");
           setShowNoop(next);
-        }}>{showNoop ? "Showing no-op" : "Show no-op"}</Button>}
+        }}>{showNoop ? "Hide no-op" : "No-op hidden"}</Button>}
         {!traceUnavailable && <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
           <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-muted-foreground">actuator</span>
@@ -451,6 +463,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             </div>
           )}
           {traceUnavailable && <div role="alert" className="rounded-md border border-warning/30 p-3 text-sm text-warning">The selected run is not available for this exact target. No all-history fallback is shown. <button onClick={clearTraceSelection} className="underline">Clear selection</button></div>}
+          {!traceUnavailable && result?.partial && <div role="alert" className="rounded-md border border-warning/40 bg-warning/[0.08] p-3 text-sm text-warning"><span className="font-medium">Decision history is incomplete.</span> {result.notice || "The backend returned only a partial retained-history result."} Successful refreshes do not confirm that new decisions are being ingested.</div>}
           {!traceUnavailable && <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionLabel>Decision history {owner ? "(owner projection)" : "(summary)"}</SectionLabel>
             <Pagination page={page} hasOlder={!!result?.nextCursor} onNewer={newer} onOlder={older} onLatest={latest} />
@@ -459,7 +472,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
           <div className="space-y-2">
             {!traceUnavailable && events.map(({ id, event: e }) => owner ? <OwnerCard key={`${scopeKey}:${id}`} e={e} /> : <DecisionCard key={`${scopeKey}:${id}`} e={e} attack={attackOf(e.time || e.Time)} />)}
           </div>
-          {!traceUnavailable && result && <div role="status" className={cn("text-[11px] leading-relaxed", result.partial ? "text-warning" : "text-muted-foreground")}>{result.notice}</div>}
+          {!traceUnavailable && result && !result.partial && result.notice && <div role="status" className="text-[11px] leading-relaxed text-muted-foreground">{result.notice}</div>}
           {!traceUnavailable && !!result?.nextCursor && <div className="flex justify-center pt-1"><Pagination page={page} hasOlder onNewer={newer} onOlder={older} onLatest={latest} /></div>}
         </section>
     </div>

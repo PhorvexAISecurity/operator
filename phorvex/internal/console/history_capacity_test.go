@@ -221,6 +221,90 @@ func TestHistoryCapacityExistingArchiveReadableAndMetadataFailClosed(t *testing.
 	if len(page.Events) != 1 || !page.Partial {
 		t.Fatalf("over-budget archive unreadable: %+v", page)
 	}
+	databaseSize, err := os.Stat(s.history.db.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, body := getHistory(t, s, url.Values{"lens": {"operator"}}, 200)
+	wantCapacity := fmt.Sprintf("archive byte ceiling reached (database=%d maximum=%d transaction-reserve=%d)", databaseSize.Size(), s.history.archiveMaxBytes, s.history.transactionReserve)
+	if len(page.Events) != 1 || !strings.Contains(body, wantCapacity) {
+		t.Fatalf("capacity diagnostics omitted bounded sizes: %s", body)
+	}
+}
+
+func TestHistoryCapacityAlreadyOverLimitResumesWithoutDeletingOrSkipping(t *testing.T) {
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.jsonl")
+	cfg := capacityTestConfig(dir, auditPath)
+	s := testHistoryStore(t, cfg)
+	s.history.filesystemUsage = func(string) (historyFilesystemUsage, error) {
+		return historyFilesystemUsage{availableBytes: 1 << 30}, nil
+	}
+	writeHistory(t, auditPath, testDurableRecord(1))
+	importHistoryNow(s)
+	pausedProgress := singleHistoryProgress(t, s.history)
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	over := cfg
+	over.HistoryArchiveMaxBytes = 2 * over.historyTransactionReserveBytes
+	s = testHistoryStore(t, over)
+	writeHistory(t, auditPath, testDurableRecord(2))
+	importHistoryNow(s)
+	if got := historyRecordCount(t, s.history); got != 1 {
+		t.Fatalf("over-limit reopen changed durable record count: %d", got)
+	}
+	if progress := singleHistoryProgress(t, s.history); progress != pausedProgress {
+		t.Fatalf("over-limit reopen changed offset: before=%+v after=%+v", pausedProgress, progress)
+	}
+	page, _ := getHistory(t, s, url.Values{"lens": {"operator"}}, 200)
+	if len(page.Events) != 1 || !page.Partial {
+		t.Fatalf("over-limit persisted archive is not readable: %+v", page)
+	}
+	databaseSize, err := os.Stat(s.history.db.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// An operator-approved higher ceiling reopens the same append-only database and resumes
+	// from its durable offset. It does not reset the archive, delete evidence, or skip backlog.
+	recovered := cfg
+	recovered.HistoryArchiveMaxBytes = databaseSize.Size() + 4*recovered.historyTransactionReserveBytes
+	s = testHistoryStore(t, recovered)
+	s.history.filesystemUsage = func(string) (historyFilesystemUsage, error) {
+		return historyFilesystemUsage{availableBytes: 1 << 30}, nil
+	}
+	importHistoryNow(s)
+	if got := historyRecordCount(t, s.history); got != 2 {
+		t.Fatalf("approved recovery imported %d records, want preserved record plus backlog", got)
+	}
+	restoredProgress := singleHistoryProgress(t, s.history)
+	if restoredProgress.Offset <= pausedProgress.Offset || !restoredProgress.Complete {
+		t.Fatalf("recovery did not resume from preserved offset: paused=%+v restored=%+v", pausedProgress, restoredProgress)
+	}
+	page, _ = getHistory(t, s, url.Values{"lens": {"operator"}}, 200)
+	if len(page.Events) != 2 || page.Partial || !s.history.statusFor("default").ready {
+		t.Fatalf("recovered archive is not complete and readable: page=%+v status=%+v", page, s.history.statusFor("default"))
+	}
+}
+
+func TestHistoryCapacityNoticeDoesNotExposeFilesystemErrors(t *testing.T) {
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.jsonl")
+	s := testHistoryStore(t, capacityTestConfig(dir, auditPath))
+	writeHistory(t, auditPath, testDurableRecord(1))
+	s.history.filesystemUsage = func(string) (historyFilesystemUsage, error) {
+		return historyFilesystemUsage{}, errors.New("statfs /secret/host/path: denied")
+	}
+	importHistoryNow(s)
+	_, body := getHistory(t, s, url.Values{"lens": {"operator"}}, 200)
+	if !strings.Contains(body, "filesystem availability unavailable") || strings.Contains(body, "/secret/host/path") {
+		t.Fatalf("capacity notice missing safe reason or exposed host detail: %s", body)
+	}
 }
 
 func TestHistoryCapacityBboltGrowthFitsTransactionReserve(t *testing.T) {
