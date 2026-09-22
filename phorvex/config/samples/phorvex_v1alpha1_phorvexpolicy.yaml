@@ -13,6 +13,11 @@ spec:
     matchLabels:
       app: nim-inference
   objective:
+    # Opt in to the fixed disruption coefficient. This dimensionless value
+    # requires workload-specific tuning; it is not a monetary savings claim.
+    disruptionAversion: "0.6"
+    # Initial seed for the separate adaptive legacy count-pressure state. It
+    # is not the permanent cost penalty used by fixed-coefficient scoring.
     lambda: "0.6"
     costWeights:
       normSparsity: "0.4"

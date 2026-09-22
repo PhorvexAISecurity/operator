@@ -114,6 +114,15 @@ ordinary selection only when netGain > 0
 The two coefficients are never added. Runtime lambda continues to learn in fixed
 mode, but it does not price the fixed-mode objective.
 
+Existing policies stay in adaptive legacy mode until they explicitly set
+`objective.disruptionAversion`. Migration is therefore opt-in: choose and tune
+the fixed dimensionless coefficient for the workload, retain `objective.lambda`
+only as the initial seed for the separately reported adaptive count-pressure
+state, and compare traces before enabling actuation. `lambdaRuntimeLegacy` (and
+its `lambdaRuntime` compatibility alias) may validly reach zero; zero is a real
+adaptive state rather than missing data. Neither coefficient is denominated in
+money, so a fixed-coefficient result does not establish cost savings or ROI.
+
 The existing M99 trusted protected-outcome comparator remains a distinct hard
 containment ordering and can select a certified full-containing move with a
 non-positive ordinary objective gain. Such a record names the M99 comparator
