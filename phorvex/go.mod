@@ -23,6 +23,7 @@ require (
 	github.com/google/cel-go v0.23.2
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_model v0.6.1
+	golang.org/x/sys v0.40.0
 	google.golang.org/grpc v1.72.2
 	k8s.io/apiextensions-apiserver v0.33.0
 	k8s.io/kubelet v0.34.0
@@ -72,7 +73,6 @@ require (
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/term v0.34.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/time v0.9.0 // indirect

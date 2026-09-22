@@ -46,6 +46,18 @@ func TestAuditRetentionChartDefaultsAndOverrides(t *testing.T) {
 	}
 }
 
+func TestAuditRetentionChartUsesOnRootMismatchForManagerFSGroup(t *testing.T) {
+	out, err := renderAuditChart(t)
+	if err != nil {
+		t.Fatalf("helm template: %v\n%s", err, out)
+	}
+	fsGroup := strings.Index(out, "fsGroup: 65532")
+	policy := strings.Index(out, "fsGroupChangePolicy: OnRootMismatch")
+	if fsGroup < 0 || policy < fsGroup || policy-fsGroup > 512 {
+		t.Fatalf("manager pod does not preserve its fsGroup while avoiding recursive rewrites:\n%s", out)
+	}
+}
+
 func TestAuditRetentionChartRejectsInvalidBudgets(t *testing.T) {
 	for _, tc := range []struct {
 		name string

@@ -52,3 +52,32 @@ segments explicitly. Do not retain secret-bearing payloads in tracked evidence;
 apply the review's data-handling rules to the private export. Keep the exported
 directory until review completes instead of relying on files that continue to
 rotate in place.
+
+## Parameter material permissions across restarts
+
+The manager stores decision parameter manifests and policy overrides in the
+process-owned sibling directory `<audit path>.parameters`. Its steady-state
+contract is mode `0700` for that root and its two known kind directories, and
+mode `0600` for retained documents and crash-left temporary files.
+
+Kubernetes can widen existing volume contents to group mode while applying a
+Pod `fsGroup`. On startup the manager accepts only the exact process-owned
+`02770`/`0660` shape produced by that operation, `02700` on a newly created
+directory that inherited setgid from the audit volume, or the already-private
+modes. It validates the fixed hierarchy, names, object types, link counts, size
+bounds, JSON, and content-addressed document digests through no-follow
+descriptors, then restores `0700`/`0600` on those same descriptors. It does not
+chmod the audit volume or any unrelated path. Unexpected content makes the
+parameter store unavailable and decision rows report that retention failure; it
+is never silently deleted or regenerated.
+
+The chart sets `fsGroupChangePolicy: OnRootMismatch` on the manager Pod as a
+preventive best effort. Its effect depends on the volume root mode and whether
+the CSI driver delegates ownership changes, so startup descriptor validation and
+recovery remain the correctness boundary. After an upgrade, verify the manager
+starts without a parameter-store initialization error, all three directories
+and all retained files have the steady-state modes and manager UID/GID, existing
+material remains readable at its original digest, and a newly written decision
+can retain and read a new parameter set. Treat any missing, altered, or
+unavailable material as a failed verification rather than repairing the live
+volume manually.

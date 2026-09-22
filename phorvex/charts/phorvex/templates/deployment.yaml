@@ -31,6 +31,9 @@ spec:
         # Containers run as non-root; fsGroup makes configured durable volumes
         # group-writable and lets the manager read its 0440 webhook key.
         fsGroup: 65532
+        # Avoid recursively widening process-private parameter material after
+        # the manager has restored it to 0700/0600 at startup.
+        fsGroupChangePolicy: OnRootMismatch
         {{- end }}
       containers:
       - name: manager

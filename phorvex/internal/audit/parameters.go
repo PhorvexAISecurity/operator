@@ -47,19 +47,10 @@ func NewParameterMaterialStore(auditPath string) (*ParameterMaterialStore, error
 		return nil, err
 	}
 	s := &ParameterMaterialStore{root: abs + ".parameters", maxDocs: MaxParameterMaterialDocuments, writeAll: writeParameterBytes}
-	for _, dir := range []string{s.root, filepath.Join(s.root, ParameterMaterialManifest), filepath.Join(s.root, ParameterMaterialPolicyOverrides)} {
-		if err := ensurePrivateMaterialDir(dir); err != nil {
-			return nil, err
-		}
+	if err := preparePrivateMaterialStore(s.root); err != nil {
+		return nil, fmt.Errorf("prepare parameter material store: %w", err)
 	}
 	return s, nil
-}
-
-func ensurePrivateMaterialDir(path string) error {
-	if err := os.MkdirAll(path, 0700); err != nil {
-		return err
-	}
-	return validatePrivateMaterialDir(path)
 }
 
 func validatePrivateMaterialDir(path string) error {
