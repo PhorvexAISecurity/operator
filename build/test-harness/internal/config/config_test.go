@@ -385,3 +385,20 @@ func TestInstalledManagerFixtureAcceptsActualTaggedRuntimeAndImmutableImageID(t 
 		})
 	}
 }
+
+func TestExpectedNamespaceUIDValidation(t *testing.T) {
+	valid := TargetConfig{Context: "kind", Namespace: "sandbox", OwnedAck: true, TrialsPerArm: 1, ExpectedNamespaceUID: "11111111-2222-4333-8444-555555555555"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid expected namespace UID rejected: %v", err)
+	}
+	valid.ExpectedNamespaceUID = ""
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("unset expected namespace UID broke compatibility: %v", err)
+	}
+	for _, bad := range []string{"namespace-uid", "11111111-2222-4333-8444-55555555555A", " 11111111-2222-4333-8444-555555555555"} {
+		valid.ExpectedNamespaceUID = bad
+		if err := valid.Validate(); err == nil {
+			t.Fatalf("invalid expected namespace UID %q accepted", bad)
+		}
+	}
+}

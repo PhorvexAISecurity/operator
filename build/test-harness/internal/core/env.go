@@ -256,6 +256,10 @@ func (e *Env) bindNamespaceUID(ns *corev1.Namespace) error {
 	if ns == nil || ns.Name != e.Config.Namespace || ns.UID == "" {
 		return fmt.Errorf("sandbox namespace %q has no authoritative UID", e.Config.Namespace)
 	}
+	if expected := types.UID(e.Config.ExpectedNamespaceUID); expected != "" && ns.UID != expected {
+		return fmt.Errorf("sandbox namespace %q UID %q differs from configured expectedNamespaceUID %q",
+			e.Config.Namespace, ns.UID, expected)
+	}
 	if e.namespaceUID != "" && e.namespaceUID != ns.UID {
 		return fmt.Errorf("sandbox namespace %q was replaced: captured UID %q, current UID %q",
 			e.Config.Namespace, e.namespaceUID, ns.UID)

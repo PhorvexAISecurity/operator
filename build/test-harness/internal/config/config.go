@@ -37,6 +37,11 @@ type TargetConfig struct {
 	// object is confined here; the sandbox guard refuses objects elsewhere.
 	Namespace string `json:"namespace"`
 
+	// ExpectedNamespaceUID optionally binds an externally created sandbox to one
+	// exact Kubernetes incarnation. Empty preserves the ordinary harness-owned
+	// create path. A set value is checked before any scenario mutation.
+	ExpectedNamespaceUID string `json:"expectedNamespaceUID,omitempty"`
+
 	// OwnedAck is the REQUIRED owned/authorized acknowledgement. The harness
 	// refuses to run if this is not exactly true.
 	OwnedAck bool `json:"ownedAck"`
@@ -316,6 +321,9 @@ func (c TargetConfig) Validate() error {
 	}
 	if strings.TrimSpace(c.Namespace) == "" {
 		return errors.New("config: namespace is required (the sandbox namespace all attack behavior is confined to)")
+	}
+	if c.ExpectedNamespaceUID != "" && !kubernetesUIDPattern.MatchString(c.ExpectedNamespaceUID) {
+		return errors.New("config: expectedNamespaceUID must be an exact lowercase Kubernetes UUID when set")
 	}
 	if c.TrialsPerArm < 1 {
 		return fmt.Errorf("config: trialsPerArm must be >= 1, got %d", c.TrialsPerArm)
