@@ -469,30 +469,31 @@ func bindInstalledSessionTargetRoute(ctx context.Context, env *core.Env, podName
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return nil, err
 	}
-	deadline := time.Now().Add(bound)
+	bindCtx, cancel := context.WithTimeout(ctx, bound)
+	defer cancel()
 	for {
-		current, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+		current, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(bindCtx, podName, metav1.GetOptions{})
 		if err != nil || current == nil || current.UID != podUID {
 			return nil, errors.Join(err, errors.New("installed session route target identity changed before bind"))
 		}
 		if current.Labels[installedSessionTargetRoute] != "" {
 			return nil, errors.New("installed session route target was already selected")
 		}
-		if _, _, err := validateInstalledSessionPod(ctx, env, current, deploymentUID); err != nil {
+		if _, _, err := validateInstalledSessionPod(bindCtx, env, current, deploymentUID); err != nil {
 			return nil, err
 		}
 		requestRV := current.ResourceVersion
 		candidate := current.DeepCopy()
 		candidate.Labels[installedSessionTargetRoute] = routeValue
+		if err := bindCtx.Err(); err != nil {
+			return nil, fmt.Errorf("installed session route bind expired before mutation: %w", err)
+		}
 		env.Log.Command(fmt.Sprintf("kubectl label pod %s -n %s %s=%s --resource-version=%s", podName, env.Config.Namespace, installedSessionTargetRoute, routeValue, requestRV))
-		updated, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Update(ctx, candidate, metav1.UpdateOptions{})
+		updated, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Update(bindCtx, candidate, metav1.UpdateOptions{})
 		if apierrors.IsConflict(err) {
-			if time.Now().After(deadline) {
-				return nil, errors.New("installed session route bind conflict retry bound expired")
-			}
 			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
+			case <-bindCtx.Done():
+				return nil, fmt.Errorf("installed session route bind conflict retry bound expired: %w", bindCtx.Err())
 			case <-time.After(50 * time.Millisecond):
 				continue
 			}
@@ -502,10 +503,10 @@ func bindInstalledSessionTargetRoute(ctx context.Context, env *core.Env, podName
 		}
 		check := updated.DeepCopy()
 		delete(check.Labels, installedSessionTargetRoute)
-		if _, _, err := validateInstalledSessionPod(ctx, env, check, deploymentUID); err != nil {
+		if _, _, err := validateInstalledSessionPod(bindCtx, env, check, deploymentUID); err != nil {
 			return nil, err
 		}
-		if err := validateInstalledSessionExclusiveRoute(ctx, env, podName, podUID, peerUID, deploymentUID, routeValue); err != nil {
+		if err := validateInstalledSessionExclusiveRoute(bindCtx, env, podName, podUID, peerUID, deploymentUID, routeValue); err != nil {
 			return nil, err
 		}
 		return updated, nil

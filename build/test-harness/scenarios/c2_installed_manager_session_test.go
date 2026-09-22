@@ -113,6 +113,57 @@ func TestInstalledSessionRouteBindRefusesPrelabelAndUnchangedResponseRV(t *testi
 	})
 }
 
+func TestInstalledSessionRouteBindBoundsEveryAPICallAndRefusesLateMutation(t *testing.T) {
+	t.Run("real HTTP cancellation", func(t *testing.T) {
+		var updates atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPut {
+				updates.Add(1)
+			}
+			<-r.Context().Done()
+		}))
+		defer server.Close()
+		client, err := kubernetes.NewForConfig(&rest.Config{Host: server.URL, Timeout: time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		env := fixtureObservationEnv()
+		env.Kube = client
+		started := time.Now()
+		_, err = bindInstalledSessionTargetRoute(context.Background(), env, "target", "target-uid", "peer-uid", "deployment-uid", "trial-0", 50*time.Millisecond)
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("bounded HTTP call err=%v", err)
+		}
+		if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+			t.Fatalf("bounded HTTP call took %s", elapsed)
+		}
+		if updates.Load() != 0 {
+			t.Fatalf("updates=%d want0", updates.Load())
+		}
+	})
+
+	t.Run("expired after validation", func(t *testing.T) {
+		env, targetUID, peerUID, deploymentUID := installedRouteFixture(t)
+		client := env.Kube.(*fake.Clientset)
+		var updates atomic.Int32
+		client.PrependReactor("update", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+			updates.Add(1)
+			return true, nil, errors.New("unexpected update")
+		})
+		client.PrependReactor("get", "replicasets", func(k8stesting.Action) (bool, runtime.Object, error) {
+			time.Sleep(40 * time.Millisecond)
+			return false, nil, nil
+		})
+		_, err := bindInstalledSessionTargetRoute(context.Background(), env, "target", targetUID, peerUID, deploymentUID, "trial-0", 10*time.Millisecond)
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expired validation err=%v", err)
+		}
+		if updates.Load() != 0 {
+			t.Fatalf("updates=%d want0", updates.Load())
+		}
+	})
+}
+
 func installedRouteFixture(t *testing.T) (*core.Env, types.UID, types.UID, types.UID) {
 	t.Helper()
 	controller := true
