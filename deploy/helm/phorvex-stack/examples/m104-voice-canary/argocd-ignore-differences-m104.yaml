@@ -1,0 +1,13 @@
+# Append this entry to spec.ignoreDifferences for the canary interval. Keep all
+# existing entries. Remove it only after the legacy manager configuration and
+# original shared feed have been re-verified.
+- group: ""
+  kind: ConfigMap
+  name: phorvex-epss-m104-canary
+  namespace: phorvex-system
+  jsonPointers:
+    - /data
+    - /metadata/annotations/phorvex.ai~1epss-last-success
+    - /metadata/annotations/phorvex.ai~1epss-entries
+    - /metadata/annotations/phorvex.ai~1epss-images-scanned
+    - /metadata/annotations/phorvex.ai~1epss-images-failed
