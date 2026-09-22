@@ -105,10 +105,10 @@ phorvex:
         tag: "0.4.151" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
-      # Milad authorized a 30-day retention window on 2026-09-22.
-      # Compress retained records; keep the existing finite ceiling and filesystem reserve.
+      # Incident recovery: keep the console available while startup migration is redesigned.
+      # The approved 30-day retention remains pending; preserve the existing archive and reader.
       state:
-        historyRetentionDays: 30
+        historyRetentionDays: 0
         historyArchiveMaxBytes: "6442450944"
         historyMinFreeBytes: "536870912"
         persistence:
