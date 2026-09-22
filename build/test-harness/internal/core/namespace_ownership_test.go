@@ -71,6 +71,24 @@ func TestEnsureNamespaceRequiresExpectedUIDBeforeScenarioMutation(t *testing.T) 
 	}
 }
 
+func TestEnsureNamespaceRefusesMissingExpectedUIDWithoutCreate(t *testing.T) {
+	kube := fake.NewSimpleClientset()
+	env := &Env{
+		Kube:   kube,
+		Config: config.TargetConfig{Namespace: "sandbox", ExpectedNamespaceUID: "11111111-2222-4333-8444-555555555555"},
+		Log:    &nopLogger{}, Guard: refusingGuard{allow: "sandbox"},
+	}
+	err := env.EnsureNamespace(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "expectedNamespaceUID") || !strings.Contains(err.Error(), "absent") {
+		t.Fatalf("missing pinned namespace was not refused: %v", err)
+	}
+	for _, action := range kube.Actions() {
+		if action.GetVerb() != "get" {
+			t.Fatalf("missing pinned namespace caused mutation: %#v", action)
+		}
+	}
+}
+
 func TestEnsureNamespaceAcceptsExpectedUIDAndUnsetCompatibility(t *testing.T) {
 	uid := "11111111-2222-4333-8444-555555555555"
 	for _, expected := range []string{uid, ""} {

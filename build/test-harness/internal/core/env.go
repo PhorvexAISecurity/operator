@@ -231,6 +231,10 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
+	if e.Config.ExpectedNamespaceUID != "" {
+		return fmt.Errorf("sandbox namespace %q expectedNamespaceUID %q is absent; refusing to create or adopt a replacement",
+			e.Config.Namespace, e.Config.ExpectedNamespaceUID)
+	}
 	if e.namespaceUID != "" {
 		return fmt.Errorf("sandbox namespace %q original UID %q disappeared; refusing to create or adopt a replacement",
 			e.Config.Namespace, e.namespaceUID)
