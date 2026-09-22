@@ -43,13 +43,14 @@ func TestM093CapabilityUsesOnlyObservedIdentityAndImmutableConfig(t *testing.T) 
 	}})
 	native := actuator.NewNativeActuator(api)
 	native.Reader = api
+	native.JournalNamespace = "operator"
 	native.SetServingSecurity(m093CapabilityConfig(t))
 	target := actuator.Target{Namespace: "tenant", Pod: "model-0", UID: "pod-uid", PolicyName: "policy", PolicyUID: "policy-uid", ServiceAccount: "model-sa"}
 	if ok, why := native.SupportsAction(t.Context(), model.ActionKVReset, target); !ok || why != "" {
 		t.Fatalf("exact configured capability=%v why=%q", ok, why)
 	}
-	if reads != 0 {
-		t.Fatalf("counterfactual capability spent %d API reads", reads)
+	if reads != 1 {
+		t.Fatalf("exact protected capability spent %d API reads, want one bounded journal read", reads)
 	}
 	target.ServiceAccount = "other"
 	if ok, why := native.SupportsAction(t.Context(), model.ActionKVReset, target); ok || !strings.Contains(why, "exact trusted workload binding") {
@@ -58,7 +59,7 @@ func TestM093CapabilityUsesOnlyObservedIdentityAndImmutableConfig(t *testing.T) 
 	if ok, why := native.SupportsAction(t.Context(), model.ActionRouteRotate, actuator.Target{}); !ok || why != "" {
 		t.Fatalf("Kubernetes-only route inherited serving credential requirement: ok=%v why=%q", ok, why)
 	}
-	if reads != 0 {
-		t.Fatalf("capability mismatch spent %d API reads", reads)
+	if reads != 1 {
+		t.Fatalf("identity mismatch or Kubernetes-only action spent an additional protected-journal read: %d", reads)
 	}
 }

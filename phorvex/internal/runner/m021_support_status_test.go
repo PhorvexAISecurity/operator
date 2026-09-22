@@ -43,7 +43,10 @@ func phoenixBackend() actuator.Actuator {
 	return actuator.NewPhoenixActuator(fake.NewClientBuilder().Build())
 }
 func nativeBackend() actuator.Actuator {
-	native := actuator.NewNativeActuator(fake.NewClientBuilder().Build())
+	c := fake.NewClientBuilder().Build()
+	native := actuator.NewNativeActuator(c)
+	native.SetBoundaryReader(c)
+	native.JournalNamespace = "operator"
 	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	native.SetServingSecurity(legacy)
 	return native
@@ -72,7 +75,7 @@ func settle(m *Manager, e *policyEntry, run func() capabilityReport) actionsSupp
 // action unsupported and names the backend and the reason.
 func TestBackendRejectionReachesTheCondition(t *testing.T) {
 	backend := phoenixBackend()
-	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
+	pod := model.Pod{Namespace: "ns", Name: "vllm-0", UID: "vllm-0-uid", HasGPU: true, ServingEndpointReady: true}
 	views := []*model.WorkloadView{{Pod: pod}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 
@@ -146,7 +149,7 @@ func TestNonAIActionsConsultTheBackend(t *testing.T) {
 // TestMixedPolicyCannotClaimAllSupported: a supported action must not mask a rejected one.
 func TestMixedPolicyCannotClaimAllSupported(t *testing.T) {
 	backend := phoenixBackend()
-	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
+	pod := model.Pod{Namespace: "ns", Name: "vllm-0", UID: "vllm-0-uid", HasGPU: true, ServingEndpointReady: true}
 	views := []*model.WorkloadView{{Pod: pod}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{
 		model.ActionQuarantine: true, // phoenix enacts this
@@ -176,7 +179,7 @@ func TestMixedPolicyCannotClaimAllSupported(t *testing.T) {
 // now appended as an insecure compatibility advisory rather than being hidden.
 func TestSupportedActionsRemainSupported(t *testing.T) {
 	backend := nativeBackend()
-	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
+	pod := model.Pod{Namespace: "ns", Name: "vllm-0", UID: "vllm-0-uid", HasGPU: true, ServingEndpointReady: true}
 	pod.Ready = true
 	pod.RouteService = "app-route"
 	pod.Labels = map[string]string{"app": "web", "phorvex.ai/route-key": "old"}
@@ -277,7 +280,7 @@ func TestEmptyFleetDisclosesAbsentObservation(t *testing.T) {
 // TestBackendGapDebouncesLikeAnyOther: a backend rejection is a capability loss like any
 // other — it debounces, and it recovers cleanly when the backend changes.
 func TestBackendGapDebouncesLikeAnyOther(t *testing.T) {
-	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
+	pod := model.Pod{Namespace: "ns", Name: "vllm-0", UID: "vllm-0-uid", HasGPU: true, ServingEndpointReady: true}
 	views := []*model.WorkloadView{{Pod: pod}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	m, entry := newEntryManager(t, "debounce")
@@ -450,7 +453,10 @@ func (r *recordingBackend) SupportsAction(_ context.Context, a model.Action, _ a
 }
 
 func TestM093ExplicitLegacyModeIsVisibleInActionsSupported(t *testing.T) {
-	native := actuator.NewNativeActuator(fake.NewClientBuilder().Build())
+	c := fake.NewClientBuilder().Build()
+	native := actuator.NewNativeActuator(c)
+	native.SetBoundaryReader(c)
+	native.JournalNamespace = "operator"
 	legacy, err := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	if err != nil {
 		t.Fatal(err)
