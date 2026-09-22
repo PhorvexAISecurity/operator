@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -18,11 +18,80 @@ checks:
     approval_ref: evidence/lead-decision-clarification.md
     rationale: Existing owner-delegated fix-design authority; lead clarification after
       actual runner inspection, not a new owner instruction or evidence waiver
+  red:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/incident.md
+    sha256: 33cabd41b93c4ca531f592c813e330a0376983ad27fdad8b4e16fdfee1116c60
+    source_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+    at: '2026-09-22T20:16:18+00:00'
+  preflight:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: cecf25e60deb497f7a799c333abc179059c5fd2ddcd5e77f0e47196af29558c4
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+  implementation:
+    result: PASS
+    by: serving-worker
+    artifact: 04-diff.patch
+    sha256: 881ac7e065f7eedfdf3c8f9c3593f957daf9daa03ccd1dda1cdc45fb4bc28840
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+  l0:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: cecf25e60deb497f7a799c333abc179059c5fd2ddcd5e77f0e47196af29558c4
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: b2b8dd655c430889d26faa4e258f92e10622084f8841be2e16d4d775fdb3abda
+  l1:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/focused-tests.log
+    sha256: 15d6807a2d2a764b8cd53a6e3ceaa259c2146087e5109a1cc2798f8c3eef0bdf
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/actuator
+    - phorvex/internal/console
+    - phorvex/internal/recon
+    inputs_sha256: 6fe8488eb7f1b3e220657c0ec87f7e2ebb873089468394878e189c1d796efc4c
+  l2:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/real-api-tls.log
+    sha256: 7d2f13a1b2c40372dcc574198015ef1d9d4f2b4db4eea66195225dcd1f529bc7
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - phorvex/config/crd/bases
+    - phorvex/internal/actuator
+    inputs_sha256: 4857a4b225aac31ec8b47f4a8cecfb035f7783b52d1fe7a2b864b551c2dca35f
+  positive_control:
+    result: PASS
+    by: serving-worker
+    artifact: evidence/worker/real-api-tls.log
+    sha256: 7d2f13a1b2c40372dcc574198015ef1d9d4f2b4db4eea66195225dcd1f529bc7
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:16:25+00:00'
+    inputs:
+    - phorvex/config/crd/bases
+    - phorvex/internal/actuator
+    inputs_sha256: 4857a4b225aac31ec8b47f4a8cecfb035f7783b52d1fe7a2b864b551c2dca35f
 fix_id: POST25-GUARDRAIL-JOURNAL-COHERENCE
 issues: []
 title: Keep guardrail console baselines coherent with protected terminal receipts
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -68,12 +137,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -83,10 +152,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: serving-worker
-  action: Implement bounded coherent baseline, terminal drift admission and definite
-    pre-send refusal; submit reviewed tests
-updated_at: '2026-09-22T20:01:08+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-22T20:16:30+00:00'
 follow_up_to: M64
 configuration_history:
 - at: '2026-09-22T19:28:23+00:00'
@@ -103,6 +172,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: workflow/fixes/POST25-GUARDRAIL-JOURNAL-COHERENCE/03-decision.md
+- at: '2026-09-22T20:16:25+00:00'
+  by: serving-worker
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -120,6 +194,22 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T20:16:26+00:00'
+  by: serving-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T20:16:28+00:00'
+  by: serving-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -130,3 +220,10 @@ check_history:
   at: '2026-09-22T19:28:26+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: operations/AUTONOMY.md
+handoff:
+  id: POST25-GUARDRAIL-JOURNAL-COHERENCE:8:submit
+  from: serving-worker
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8
