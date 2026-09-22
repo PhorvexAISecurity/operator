@@ -57,8 +57,21 @@ type vScenario struct {
 	teardowns int
 }
 
+type realismVScenario struct {
+	*vScenario
+	realism ScenarioRealism
+}
+
+func (s realismVScenario) Metadata() ScenarioMeta {
+	meta := s.vScenario.Metadata()
+	meta.Realism = s.realism
+	return meta
+}
+
 func (s *vScenario) Metadata() ScenarioMeta {
-	return ScenarioMeta{Name: s.name, Category: CategoryClassicChain, R6ResponseTag: R6Partial, BenignControl: s.benign, CapabilityRequirements: s.caps}
+	// This deterministic plugin exists to exercise the valid scoring path. Tests
+	// for unassessed, marker and unsupported realism wrap it and override Realism.
+	return ScenarioMeta{Name: s.name, Category: CategoryClassicChain, R6ResponseTag: R6Partial, BenignControl: s.benign, Realism: RealismExecutable, CapabilityRequirements: s.caps}
 }
 
 func (s *vScenario) hits(env *Env) bool { return s.failOn == "" || env.DefenderName == s.failOn }
@@ -483,7 +496,14 @@ func TestValidityScoresOnlyAgainstAnObservedUsableControl(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t, RunnerOptions{TrialsPerArm: 1})
-			sc := &vScenario{name: "v-scn", oracleFalseOn: "d-arm", oracleFalseTrial: -1}
+			sc := &vScenario{name: "v-scn", oracleFalseOn: "d-arm", oracleFalseTrial: -1, evidence: map[string]string{
+				EvSplitOracle:          SplitPersistence,
+				EvInRequestAchieved:    "true",
+				EvPersistenceDisrupted: "true",
+				EvNeutralized:          "false",
+				EvReplaySuccess:        "1",
+				EvReplayAttempts:       "2",
+			}}
 			base := &vDefender{name: "d-base", baseline: !tc.noBaseline}
 			if tc.mutate != nil {
 				tc.mutate(sc, base)
@@ -508,8 +528,8 @@ func TestValidityScoresOnlyAgainstAnObservedUsableControl(t *testing.T) {
 				t.Errorf("baseline.usable = %v, want %v", v.Baseline.Usable, tc.wantUsable)
 			}
 			if tc.wantScored {
-				if m.DisruptionVsOracle != 1 {
-					t.Errorf("a genuine observed disruption must score 1, got %v", m.DisruptionVsOracle)
+				if m.DisruptionVsOracle != 1 || m.Reuse == nil || m.MTDEffect == "" {
+					t.Errorf("a genuine observed disruption lost derived claims: %+v", m)
 				}
 				if v.Baseline.Defender != "d-base" || !v.Baseline.Observed {
 					t.Errorf("baseline identity not stored: %+v", v.Baseline)
@@ -520,8 +540,8 @@ func TestValidityScoresOnlyAgainstAnObservedUsableControl(t *testing.T) {
 			if m.DisruptionVsOracle != 0 {
 				t.Errorf("unanchored comparison scored disruption=%v; want 0", m.DisruptionVsOracle)
 			}
-			if m.ROI != nil {
-				t.Errorf("unanchored comparison derived an ROI: %+v", *m.ROI)
+			if m.ROI != nil || m.Schwartau != nil || m.Reuse != nil || m.MTDEffect != "" {
+				t.Errorf("unanchored comparison retained a derived claim: %+v", m)
 			}
 			if v.UnscoredReason == "" || v.Baseline.Reason == "" {
 				t.Errorf("no missing-control reason recorded: %+v", v)
@@ -605,6 +625,109 @@ func TestBenignControlRetainsFunctionalEvidenceWithoutSecurityOrEconomicsClaim(t
 	}
 	if evidence, ok := exported["benchmarkEvidence"].(map[string]any); !ok || evidence["availabilityFailures"] != "6" {
 		t.Fatalf("exported benign row lost bounded availability evidence: %#v", exported["benchmarkEvidence"])
+	}
+}
+
+func TestRawScoringRequiresExplicitExecutableNonBenignRealism(t *testing.T) {
+	evidence := map[string]string{
+		EvSplitOracle:          SplitPersistence,
+		EvTriggerAttribution:   TriggerHarnessInjected,
+		EvInRequestAchieved:    "true",
+		EvPersistenceAchieved:  "false",
+		EvPersistenceDisrupted: "true",
+		EvNeutralized:          "false",
+		EvReplaySuccess:        "1",
+		EvReplayAttempts:       "3",
+	}
+	cases := []struct {
+		name       string
+		realism    ScenarioRealism
+		wantStored ScenarioRealism
+		wantScored bool
+	}{
+		{name: "legacy-empty", realism: "", wantStored: RealismUnassessed},
+		{name: "unassessed", realism: RealismUnassessed, wantStored: RealismUnassessed},
+		{name: "marker", realism: RealismMarkerSimulation, wantStored: RealismMarkerSimulation},
+		{name: "unsupported", realism: ScenarioRealism("future-unknown"), wantStored: ScenarioRealism("future-unknown")},
+		{name: "executable", realism: RealismExecutable, wantStored: RealismExecutable, wantScored: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, RunnerOptions{TrialsPerArm: 1})
+			RegisterScenario(realismVScenario{vScenario: &vScenario{name: "raw-realism", oracleFalseOn: "d-arm", oracleFalseTrial: -1, evidence: evidence}, realism: tc.realism})
+			register(&vDefender{name: "d-nomtd", baseline: true})
+			register(&vDefender{name: "d-arm", interval: 30, actions: []float64{1}})
+
+			metrics, err := h.runner.Run(context.Background())
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			got := row(t, metrics, "d-arm", 0)
+			validity := got.MeasurementState()
+			if got.ScenarioRealism != tc.wantStored || validity.Status != MeasurementValid || validity.Phase != PhaseComplete || !validity.AttackExecuted || !validity.OracleObserved || !validity.CostObserved || got.ObservedState != "measured" || got.DefensiveActions != 1 {
+				t.Fatalf("raw observation changed: realism=%q metric=%+v validity=%+v", got.ScenarioRealism, got, validity)
+			}
+			if got.SplitOracle != SplitPersistence || got.TriggerAttribution != TriggerHarnessInjected || !got.InRequestAchieved {
+				t.Fatalf("raw split-oracle evidence was lost: %+v", got)
+			}
+
+			raw, err := os.ReadFile(h.writer.Path())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var exported map[string]any
+			for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+				var candidate map[string]any
+				if err := json.Unmarshal([]byte(line), &candidate); err != nil {
+					t.Fatal(err)
+				}
+				if candidate["defender"] == "d-arm" {
+					exported = candidate
+				}
+			}
+			if exported == nil {
+				t.Fatal("defended JSONL row missing")
+			}
+			wireValidity, ok := exported["validity"].(map[string]any)
+			if !ok {
+				t.Fatalf("JSONL validity missing: %#v", exported)
+			}
+
+			if tc.wantScored {
+				if !got.IsScored() || got.Skipped || got.DisruptionVsOracle != 1 || got.SecurityPerCost != 1 || got.ROI == nil || got.Schwartau == nil || got.MTDEffect != MTDBoundsOnly || got.Reuse == nil || wireValidity["scored"] != true {
+					t.Fatalf("executable positive scoring control changed: metric=%+v validity=%+v", got, validity)
+				}
+				return
+			}
+
+			if got.IsScored() || !got.Skipped || !strings.Contains(got.SkipReason, "UNSCORED(realism)") || got.DisruptionVsOracle != 0 || got.SecurityPerCost != 0 || got.ROI != nil || got.Schwartau != nil || got.MTDEffect != "" || got.Reuse != nil || validity.Baseline.Required || validity.Baseline.Usable {
+				t.Fatalf("non-executable row retained a security/economics claim: metric=%+v validity=%+v", got, validity)
+			}
+			if wireValidity["scored"] != false || exported["skipped"] != true || exported["disruptionVsOracle"] != float64(0) || exported["securityPerCost"] != float64(0) {
+				t.Fatalf("JSONL compatibility scoring boundary differs: %#v", exported)
+			}
+			for _, forbidden := range []string{"roi", "schwartau", "mtdEffect", "reuse"} {
+				if _, exists := exported[forbidden]; exists {
+					t.Fatalf("excluded JSONL row contains %q: %#v", forbidden, exported[forbidden])
+				}
+			}
+		})
+	}
+}
+
+func TestUnassessedNegativeControlRetainsMeasuredFalseActionCount(t *testing.T) {
+	h := newHarness(t, RunnerOptions{TrialsPerArm: 1, RunNegativeControl: true})
+	RegisterScenario(realismVScenario{vScenario: &vScenario{name: "raw-realism-negative", oracleFalseTrial: -1}, realism: RealismUnassessed})
+	register(&vDefender{name: "d-nomtd", baseline: true})
+	register(&vDefender{name: "d-arm", interval: 30, actions: []float64{1}})
+	metrics, err := h.runner.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	negative := row(t, metrics, "d-arm", 1)
+	validity := negative.MeasurementState()
+	if validity.Kind != TrialNegativeControl || validity.Status != MeasurementValid || validity.Scored || !validity.CostObserved || negative.FalseDefensiveActions != 0 || negative.ROI != nil || negative.Schwartau != nil || negative.MTDEffect != "" || negative.Reuse != nil {
+		t.Fatalf("unassessed negative-control observation changed: metric=%+v validity=%+v", negative, validity)
 	}
 }
 
@@ -857,7 +980,14 @@ func TestValidityCleanupOwedByEveryEnteredPhase(t *testing.T) {
 func TestValidityRetainsEveryCleanupFailureAndStopsTheRun(t *testing.T) {
 	h := newHarness(t, RunnerOptions{TrialsPerArm: 3})
 	h.closeErr = true
-	sc := &vScenario{name: "v-scn", teardownErr: true, oracleFalseTrial: -1}
+	sc := &vScenario{name: "v-scn", teardownErr: true, oracleFalseTrial: -1, evidence: map[string]string{
+		EvSplitOracle:          SplitPersistence,
+		EvInRequestAchieved:    "true",
+		EvPersistenceDisrupted: "true",
+		EvNeutralized:          "false",
+		EvReplaySuccess:        "1",
+		EvReplayAttempts:       "2",
+	}}
 	RegisterScenario(sc)
 	base := register(&vDefender{name: "d-base", baseline: true, stopErr: true, teardownErr: true})
 	_ = base
@@ -881,8 +1011,24 @@ func TestValidityRetainsEveryCleanupFailureAndStopsTheRun(t *testing.T) {
 	if v.Status != MeasurementInvalid || v.Scored {
 		t.Errorf("a cleanup-failed trial must be invalid and unscored, got %q scored=%v", v.Status, v.Scored)
 	}
-	if m.DisruptionVsOracle != 0 || m.SecurityPerCost != 0 || m.ROI != nil || m.Schwartau != nil {
+	if m.SplitOracle != SplitPersistence || !m.InRequestAchieved {
+		t.Errorf("cleanup failure discarded raw split-oracle evidence: %+v", m)
+	}
+	if m.DisruptionVsOracle != 0 || m.SecurityPerCost != 0 || m.ROI != nil || m.Schwartau != nil || m.Reuse != nil || m.MTDEffect != "" {
 		t.Errorf("stale favorable derived values survived a cleanup failure: %+v", m)
+	}
+	raw, readErr := os.ReadFile(h.writer.Path())
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	var exported map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(raw))), &exported); err != nil {
+		t.Fatalf("decode cleanup-failed JSONL: %v", err)
+	}
+	for _, forbidden := range []string{"roi", "schwartau", "reuse", "mtdEffect"} {
+		if _, exists := exported[forbidden]; exists {
+			t.Errorf("cleanup-failed JSONL retained derived field %q: %#v", forbidden, exported[forbidden])
+		}
 	}
 	out := h.runner.Outcome()
 	if !out.Aborted || out.Complete || len(out.Barriers) == 0 {
