@@ -103,6 +103,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if cfg.InstalledManagerFixture != nil && (negControl || adaptive) {
 		return errors.New("installedManagerFixture requires -negative-control=false and -adaptive=false before Kubernetes clients are built")
 	}
+	if cfg.GPUFunctionalFixture != nil && (negControl || adaptive) {
+		return errors.New("gpuFunctionalFixture requires -negative-control=false and -adaptive=false before Kubernetes clients are built")
+	}
 	// 1) Build clients PINNED to the configured context.
 	clients, err := kube.Build(cfg.Kubeconfig, cfg.Context)
 	if err != nil {
@@ -368,7 +371,7 @@ func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) 
 	}
 	fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
 	defer fcancel()
-	deleteNamespace := !env.Config.BenignCheckpointLocalFixture && env.Config.NATSJetStreamFixture == nil
+	deleteNamespace := !env.Config.BenignCheckpointLocalFixture && env.Config.NATSJetStreamFixture == nil && env.Config.GPUFunctionalFixture == nil
 	cleanupErr := env.CleanupOwned(fctx, deleteNamespace)
 	if cleanupErr == nil && !deleteNamespace {
 		env.Log.Logf("cleanup: verified supported generic-owned residue absent; preserving exact external fixture holder and namespace for collector handoff")

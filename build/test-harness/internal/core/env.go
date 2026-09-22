@@ -231,6 +231,10 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
+	if e.Config.ExpectedNamespaceUID != "" {
+		return fmt.Errorf("sandbox namespace %q expectedNamespaceUID %q is absent; refusing to create or adopt a replacement",
+			e.Config.Namespace, e.Config.ExpectedNamespaceUID)
+	}
 	if e.namespaceUID != "" {
 		return fmt.Errorf("sandbox namespace %q original UID %q disappeared; refusing to create or adopt a replacement",
 			e.Config.Namespace, e.namespaceUID)
@@ -255,6 +259,10 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 func (e *Env) bindNamespaceUID(ns *corev1.Namespace) error {
 	if ns == nil || ns.Name != e.Config.Namespace || ns.UID == "" {
 		return fmt.Errorf("sandbox namespace %q has no authoritative UID", e.Config.Namespace)
+	}
+	if expected := types.UID(e.Config.ExpectedNamespaceUID); expected != "" && ns.UID != expected {
+		return fmt.Errorf("sandbox namespace %q UID %q differs from configured expectedNamespaceUID %q",
+			e.Config.Namespace, ns.UID, expected)
 	}
 	if e.namespaceUID != "" && e.namespaceUID != ns.UID {
 		return fmt.Errorf("sandbox namespace %q was replaced: captured UID %q, current UID %q",

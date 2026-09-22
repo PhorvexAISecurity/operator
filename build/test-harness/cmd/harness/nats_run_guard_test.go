@@ -39,3 +39,22 @@ func TestNATSOneUseFixtureArmGuardPrecedesKubernetesClientBuild(t *testing.T) {
 		t.Fatalf("nil fixture was incorrectly subject to one-use guard: %v", err)
 	}
 }
+
+func TestGPUOneUseFixtureArmGuardPrecedesKubernetesClientBuild(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist-kubeconfig")
+	cfg := config.TargetConfig{Kubeconfig: missing, Context: "missing-context", GPUFunctionalFixture: &config.GPUFunctionalFixtureConfig{}}
+	for _, tc := range []struct {
+		name               string
+		negative, adaptive bool
+	}{
+		{name: "negative control", negative: true},
+		{name: "adaptive arm", adaptive: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := run(context.Background(), cfg, false, tc.negative, tc.adaptive, false)
+			if err == nil || !strings.Contains(err.Error(), "gpuFunctionalFixture requires") || strings.Contains(err.Error(), missing) {
+				t.Fatalf("GPU fixture guard did not refuse before client build: %v", err)
+			}
+		})
+	}
+}

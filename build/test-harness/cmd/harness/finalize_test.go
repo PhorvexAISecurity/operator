@@ -69,19 +69,32 @@ type countingFactory struct {
 	localFixture bool
 	// natsFixture preserves the externally owned NATS holder and namespace.
 	natsFixture bool
-	logger      *quietLogger
-	kube        *fake.Clientset
+	// gpuFixture preserves the externally owned GPU workload and namespace.
+	gpuFixture bool
+	// replacementNamespace makes the observed namespace differ from the pinned
+	// external GPU namespace before final teardown builds its Env.
+	replacementNamespace bool
+	logger               *quietLogger
+	kube                 *fake.Clientset
 }
 
 func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 	f.built++
-	objects := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "sandbox-uid"}}}
-	if f.localFixture || f.natsFixture {
+	namespaceUID := types.UID("11111111-2222-4333-8444-555555555555")
+	if f.replacementNamespace {
+		namespaceUID = "99999999-9999-4999-8999-999999999999"
+	}
+	objects := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: namespaceUID}}}
+	if f.localFixture || f.natsFixture || f.gpuFixture {
 		holderName := "checkpoint-local-holder"
 		holderUID := types.UID("external-holder")
 		if f.natsFixture {
 			holderName = "nats-local-holder"
 			holderUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+		}
+		if f.gpuFixture {
+			holderName = "gpu-model"
+			holderUID = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"
 		}
 		objects = append(objects,
 			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: holderName, Namespace: "sandbox", UID: holderUID, Labels: map[string]string{"fixture.phorvex.ai/external-owner": holderName}}},
@@ -94,6 +107,10 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 	f.logger = logger
 	cfg := config.WithDollarDefaults(config.TargetConfig{Namespace: "sandbox", Context: "kind-test", OwnedAck: true})
 	cfg.BenignCheckpointLocalFixture = f.localFixture
+	if f.gpuFixture {
+		cfg.ExpectedNamespaceUID = "11111111-2222-4333-8444-555555555555"
+		cfg.GPUFunctionalFixture = &config.GPUFunctionalFixtureConfig{NamespaceUID: cfg.ExpectedNamespaceUID}
+	}
 	if f.natsFixture {
 		cfg.TrialsPerArm = 1
 		cfg.ScenarioFilter = []string{"c2-nats-jetstream-durability"}
@@ -135,6 +152,36 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 		return nil
 	}
 	return env, closer, nil
+}
+
+func TestFinalTeardownRefusesReplacementOfPinnedExternalGPUNamespace(t *testing.T) {
+	f := &countingFactory{gpuFixture: true, replacementNamespace: true}
+	err := finalTeardown(context.Background(), f.build, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "expectedNamespaceUID") {
+		t.Fatalf("replacement namespace was accepted by final teardown: %v", err)
+	}
+	for _, action := range f.kube.Actions() {
+		if action.GetVerb() != "get" {
+			t.Fatalf("replacement refusal issued mutation: %#v", action)
+		}
+	}
+}
+
+func TestFinalTeardownPreservesExternalGPUFixture(t *testing.T) {
+	f := &countingFactory{gpuFixture: true}
+	if err := finalTeardown(context.Background(), f.build, t.TempDir()); err != nil {
+		t.Fatalf("GPU final teardown failed: %v", err)
+	}
+	if _, err := f.kube.CoreV1().Namespaces().Get(context.Background(), "sandbox", metav1.GetOptions{}); err != nil {
+		t.Fatalf("GPU supervisor namespace was not preserved: %v", err)
+	}
+	pod, err := f.kube.CoreV1().Pods("sandbox").Get(context.Background(), "gpu-model", metav1.GetOptions{})
+	if err != nil || pod.UID != "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff" {
+		t.Fatalf("external GPU workload was not preserved exactly: pod=%v err=%v", pod, err)
+	}
+	if _, err := f.kube.CoreV1().Pods("sandbox").Get(context.Background(), "generic-residue", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("generic-owned residue survived GPU final cleanup: %v", err)
+	}
 }
 
 func TestFinalTeardownPreservesValidatedExternalNATSFixture(t *testing.T) {

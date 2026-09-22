@@ -296,6 +296,57 @@ func TestNATSJetStreamFixtureRequiresExactIsolatedAuthority(t *testing.T) {
 	}
 }
 
+func TestGPUFunctionalFixtureRequiresExactSingleFunctionalArm(t *testing.T) {
+	fixture := &GPUFunctionalFixtureConfig{
+		Operation: "request-drain", Mode: "direct",
+		NamespaceUID: "00000000-0000-4000-8000-000000000001", RunLabel: "gpu-functional-r1",
+		NodeName: "gpu-node", NodeUID: "00000000-0000-4000-8000-000000000002",
+		PodName: "vllm-0", PodUID: "00000000-0000-4000-8000-000000000003",
+		OwnerKind: "StatefulSet", OwnerName: "vllm", OwnerUID: "00000000-0000-4000-8000-000000000004",
+		ServiceName: "vllm", ServiceUID: "00000000-0000-4000-8000-000000000005",
+		ContainerName: "vllm", Image: "registry.example/vllm@sha256:" + strings.Repeat("a", 64),
+		ImageID: "containerd://sha256:" + strings.Repeat("b", 64), StartedAt: "2026-09-22T01:02:03.123456789Z",
+		Port: 8000, Model: "facebook/opt-125m", ModelDigest: "sha256:" + strings.Repeat("c", 64),
+		EngineSourceSHA256: strings.Repeat("d", 64), ProxySourceGitSHA: strings.Repeat("e", 40), BearerTokenFile: "/private/gpu-token",
+	}
+	valid := TargetConfig{Context: "eks", Namespace: "gpu-owned", ExpectedNamespaceUID: fixture.NamespaceUID, OwnedAck: true, TrialsPerArm: 1, ScenarioFilter: []string{"c2-vllm-request-drain"}, DefenderFilter: []string{"d-nomtd"}, GPUFunctionalFixture: fixture}
+	if err := valid.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	actualPlainImageID := valid
+	actualPlainFixture := *fixture
+	actualPlainFixture.ImageID = "docker.io/vllm/vllm-openai@sha256:" + strings.Repeat("b", 64)
+	actualPlainImageID.GPUFunctionalFixture = &actualPlainFixture
+	if err := actualPlainImageID.Validate(); err != nil {
+		t.Fatalf("actual canonical plain repo imageID rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*TargetConfig){
+		"wrong scenario":          func(c *TargetConfig) { c.ScenarioFilter[0] = "c2-vllm-prefix-cache-reset" },
+		"wrong defender":          func(c *TargetConfig) { c.DefenderFilter[0] = "d-phorvex-installed" },
+		"multiple trials":         func(c *TargetConfig) { c.TrialsPerArm = 2 },
+		"installed mode":          func(c *TargetConfig) { c.GPUFunctionalFixture.Mode = "installed" },
+		"mutable image":           func(c *TargetConfig) { c.GPUFunctionalFixture.Image = "registry.example/vllm:latest" },
+		"partial image id":        func(c *TargetConfig) { c.GPUFunctionalFixture.ImageID = "sha256:" + strings.Repeat("b", 64) },
+		"partial model digest":    func(c *TargetConfig) { c.GPUFunctionalFixture.ModelDigest = strings.Repeat("c", 64) },
+		"relative token":          func(c *TargetConfig) { c.GPUFunctionalFixture.BearerTokenFile = "gpu-token" },
+		"wrong port":              func(c *TargetConfig) { c.GPUFunctionalFixture.Port = 8001 },
+		"missing namespace pin":   func(c *TargetConfig) { c.ExpectedNamespaceUID = "" },
+		"different namespace pin": func(c *TargetConfig) { c.ExpectedNamespaceUID = "99999999-9999-4999-8999-999999999999" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			copyFixture := *fixture
+			candidate.GPUFunctionalFixture = &copyFixture
+			candidate.ScenarioFilter = append([]string(nil), valid.ScenarioFilter...)
+			candidate.DefenderFilter = append([]string(nil), valid.DefenderFilter...)
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid GPU functional fixture accepted")
+			}
+		})
+	}
+}
+
 func TestInstalledManagerFixtureAcceptsActualTaggedRuntimeAndImmutableImageID(t *testing.T) {
 	fixture := &InstalledManagerFixtureConfig{
 		ManagerNamespace: "phorvex-system", ManagerServiceAccount: "phorvex-phorvex-manager", FixtureNonce: "installed-r1", AuthorizationDenyNamespace: "installed-r1-unowned", DeploymentName: "phorvex-phorvex", DeploymentUID: "11111111-2222-4333-8444-555555555555",
@@ -334,5 +385,22 @@ func TestInstalledManagerFixtureAcceptsActualTaggedRuntimeAndImmutableImageID(t 
 				t.Fatal("invalid installed manager fixture accepted")
 			}
 		})
+	}
+}
+
+func TestExpectedNamespaceUIDValidation(t *testing.T) {
+	valid := TargetConfig{Context: "kind", Namespace: "sandbox", OwnedAck: true, TrialsPerArm: 1, ExpectedNamespaceUID: "11111111-2222-4333-8444-555555555555"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid expected namespace UID rejected: %v", err)
+	}
+	valid.ExpectedNamespaceUID = ""
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("unset expected namespace UID broke compatibility: %v", err)
+	}
+	for _, bad := range []string{"namespace-uid", "11111111-2222-4333-8444-55555555555A", " 11111111-2222-4333-8444-555555555555"} {
+		valid.ExpectedNamespaceUID = bad
+		if err := valid.Validate(); err == nil {
+			t.Fatalf("invalid expected namespace UID %q accepted", bad)
+		}
 	}
 }

@@ -1,0 +1,1 @@
+{"id":"cmpl-3b36c8fd2baf4b76bcba2e86b56f65f0","object":"text_completion","created":1789932123,"model":"facebook/opt-125m","choices":[{"index":0,"text":" one","logprobs":null,"finish_reason":"length","stop_reason":null,"prompt_logprobs":null}],"usage":{"prompt_tokens":161,"total_tokens":162,"completion_tokens":1,"prompt_tokens_details":null}}
