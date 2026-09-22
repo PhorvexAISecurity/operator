@@ -56,12 +56,43 @@ mkdir -p /control /data/jetstream
 while true; do
   generation=$((generation+1))
   rc=0
-  rm -f /control/restart
+  rm -f /control/restart /control/quorum-request /control/quorum-request.tmp /control/quorum-armed /control/quorum-paused /control/quorum-resume /control/quorum-resumed /control/quorum-refused
   nats-server --name "$POD_NAME" --jetstream --store_dir /data/jetstream --port 4222 --http_port 8222 --cluster_name post25-nats-js --cluster nats://0.0.0.0:6222 --routes nats://c2-nats-js-0.c2-nats-js-headless:6222,nats://c2-nats-js-1.c2-nats-js-headless:6222,nats://c2-nats-js-2.c2-nats-js-headless:6222 &
   child=$!
   printf '%s\n' "$child" > /control/pid
   printf '%s\n' "$generation" > /control/generation
+  (
+    while kill -0 "$child" 2>/dev/null; do
+      if [ -f /control/quorum-request ]; then
+        IFS=' ' read -r request_kind request_nonce want_pid want_start want_generation extra < /control/quorum-request
+        actual_start="$(awk '{print $22}' "/proc/$child/stat" 2>/dev/null || true)"
+        if [ "$request_kind" != request ] || [ -n "${extra:-}" ] || [ "$want_pid" != "$child" ] || [ "$want_start" != "$actual_start" ] || [ "$want_generation" != "$generation" ]; then
+          printf 'refused %s %s %s %s\n' "$request_nonce" "$child" "$actual_start" "$generation" > /control/quorum-refused
+          rm -f /control/quorum-request
+          continue
+        fi
+        rm -f /control/quorum-refused /control/quorum-resume /control/quorum-resumed
+        printf 'armed %s %s %s %s\n' "$request_nonce" "$child" "$actual_start" "$generation" > /control/quorum-armed
+        kill -STOP "$child"
+        printf 'paused %s %s %s %s\n' "$request_nonce" "$child" "$actual_start" "$generation" > /control/quorum-paused
+        ticks=0
+        resume_kind=automatic
+        while [ "$ticks" -lt 90 ]; do
+          if [ -f /control/quorum-resume ]; then resume_kind=requested; break; fi
+          sleep 0.1
+          ticks=$((ticks+1))
+        done
+        kill -CONT "$child" 2>/dev/null || true
+        printf 'resumed %s %s %s %s %s\n' "$request_nonce" "$child" "$actual_start" "$generation" "$resume_kind" > /control/quorum-resumed
+        rm -f /control/quorum-request /control/quorum-resume
+      fi
+      sleep 0.05
+    done
+  ) &
+  watcher=$!
   wait "$child" || rc=$?
+  kill "$watcher" 2>/dev/null || true
+  kill -CONT "$child" 2>/dev/null || true
   if [ -f /control/restart ]; then continue; fi
   exit "${rc:-0}"
 done`
@@ -86,16 +117,23 @@ type c2NATSJetStreamDurability struct {
 	probe                                  *jetstreamprobe.Probe
 	receipt                                *jetstreamprobe.RestartOracleReceipt
 	noActionReceipt                        *jetstreamprobe.NoActionOracleReceipt
+	quorumReceipt                          *jetstreamprobe.QuorumOracleReceipt
 	baseline                               map[string]string
 	portStop                               chan struct{}
 	portDone                               chan error
 }
 
+type natsProcessAuthority struct {
+	PID        int
+	StartTime  uint64
+	Generation uint64
+}
+
 func (s *c2NATSJetStreamDurability) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{Name: natsDurabilityScenario, Category: core.CategoryR6Claimed, Source: "Post25 NATS 2.10.29 JetStream durability catalogue", R6ResponseTag: core.R6Partial, BenignControl: true, Realism: core.RealismExecutable,
-		Mechanism:          "fresh owned three-member NATS 2.10.29 file-backed JetStream fixture; official nats.go PubAck/consumer ACK/stored-message protocol and exact child-process restart boundary",
+		Mechanism:          "fresh owned three-member NATS 2.10.29 file-backed JetStream fixture; official nats.go PubAck/consumer ACK/stored-message protocol with exact child restart or bounded two-member process pause",
 		ClaimLimits:        "functional state/availability benchmark; no CVE, detection, containment, NetworkPolicy enforcement, node/zone/disk failure, installed dispatch, security efficacy, or monetary claim",
-		OracleDescription:  "requires exact three-member stream and consumer replication, A acknowledgement and independent storage, unchanged Pod/PVC/PV/store identity across one child restart, replica recovery, then B at the exact next sequence with no unexpected redelivery",
+		OracleDescription:  "requires exact three-member stream and consumer replication; modes retain acknowledged storage across no action, one child restart, or bounded quorum loss with same-ID ambiguous-publication reconciliation",
 		CleanupDescription: "close the probe and delete only create-response StatefulSet, Services and PVC UIDs; externally owned Retain PVs, holder and StorageClass are never deleted",
 		R6Justification:    "Supplies a real protocol and state oracle for later matched actuator and brain comparisons while keeping resilience separate from security outcome."}
 }
@@ -496,6 +534,293 @@ func (s *c2NATSJetStreamDurability) restartMember(ctx context.Context, env *core
 	return boundary, nil
 }
 
+func readNATSProcessAuthority(ctx context.Context, env *core.Env, pod string) (natsProcessAuthority, error) {
+	result := env.Exec(ctx, pod, "nats", []string{"/bin/sh", "-ec", `pid="$(cat /control/pid)"; generation="$(cat /control/generation)"; kill -0 "$pid"; start="$(awk '{print $22}' "/proc/$pid/stat")"; printf '%s %s %s\n' "$pid" "$start" "$generation"`})
+	if result.Err != nil || result.ExitCode != 0 {
+		return natsProcessAuthority{}, fmt.Errorf("read NATS process authority for %s: exit=%d err=%v stderr=%s", pod, result.ExitCode, result.Err, result.Stderr)
+	}
+	return parseNATSProcessAuthority(result.Stdout)
+}
+
+func parseNATSProcessAuthority(raw string) (natsProcessAuthority, error) {
+	fields := strings.Fields(raw)
+	if len(fields) != 3 {
+		return natsProcessAuthority{}, errors.New("NATS process authority must contain exact pid/start/generation")
+	}
+	pid, err := strconv.Atoi(fields[0])
+	if err != nil || pid <= 1 {
+		return natsProcessAuthority{}, errors.New("NATS process PID is invalid")
+	}
+	start, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil || start == 0 {
+		return natsProcessAuthority{}, errors.New("NATS process start time is invalid")
+	}
+	generation, err := strconv.ParseUint(fields[2], 10, 64)
+	if err != nil || generation == 0 {
+		return natsProcessAuthority{}, errors.New("NATS process generation is invalid")
+	}
+	return natsProcessAuthority{PID: pid, StartTime: start, Generation: generation}, nil
+}
+
+func quorumControlLine(kind, nonce string, authority natsProcessAuthority) string {
+	return fmt.Sprintf("%s %s %d %d %d", kind, nonce, authority.PID, authority.StartTime, authority.Generation)
+}
+
+func (s *c2NATSJetStreamDurability) pauseQuorum(ctx context.Context, env *core.Env, observe jetstreamprobe.QuorumObservation) (boundary jetstreamprobe.QuorumPauseReceipt, observation jetstreamprobe.QuorumObservationReceipt, resultErr error) {
+	const maximumPause = 10 * time.Second
+	boundary = jetstreamprobe.QuorumPauseReceipt{ConnectedMember: s.connectedMember, MaximumPauseNanos: int64(maximumPause)}
+	if observe == nil || s.connectedMember != natsFixtureName+"-0" {
+		return boundary, observation, errors.New("quorum pause requires the exact member-0 client and observation")
+	}
+	fixture := env.Config.NATSJetStreamFixture
+	if fixture == nil {
+		return boundary, observation, errors.New("quorum fixture authority missing")
+	}
+
+	// Bind both member/process authorities before either child is signaled. This
+	// prevents the first watchdog from consuming its bounded pause while the
+	// second member is still being discovered through the live API.
+	type preparedMember struct {
+		ordinal   int
+		authority natsProcessAuthority
+	}
+	prepared := make([]preparedMember, 0, 2)
+	for _, ordinal := range []int{1, 2} {
+		podName := fmt.Sprintf("%s-%d", natsFixtureName, ordinal)
+		uid := s.pods[podName]
+		if uid == "" {
+			return boundary, observation, fmt.Errorf("pause Pod UID missing for %s", podName)
+		}
+		_, before, volume, err := s.validateCurrentMember(ctx, env, fixture, ordinal, uid, s.serverIDs[podName])
+		if err != nil {
+			return boundary, observation, err
+		}
+		authority, err := readNATSProcessAuthority(ctx, env, podName)
+		if err != nil {
+			return boundary, observation, err
+		}
+		prepared = append(prepared, preparedMember{ordinal: ordinal, authority: authority})
+		boundary.Members = append(boundary.Members, jetstreamprobe.PausedMemberReceipt{
+			Member:                 podName,
+			ServerIDBefore:         before.ServerID,
+			PID:                    authority.PID,
+			PIDStartTimeTicks:      authority.StartTime,
+			Generation:             authority.Generation,
+			WorkloadUIDBefore:      string(uid),
+			VolumeUIDBefore:        volume,
+			StorePathHashBefore:    s.storage[ordinal].PathHash,
+			ResumeArmedBeforePause: true,
+		})
+	}
+
+	nonce := fixture.Nonce + "-quorum"
+	type pauseResult struct {
+		index     int
+		attempted bool
+		sent      bool
+		confirmed bool
+		pausedAt  string
+		err       error
+	}
+	pauseResults := make(chan pauseResult, len(prepared))
+	pauseCtx, pauseCancel := context.WithTimeout(ctx, 4*time.Second)
+	for i, member := range prepared {
+		go func(index int, value preparedMember) {
+			podName := boundary.Members[index].Member
+			command := fmt.Sprintf("umask 077; rm -f /control/quorum-armed /control/quorum-paused /control/quorum-resume /control/quorum-resumed /control/quorum-refused; printf '%%s\\n' %s > /control/quorum-request.tmp; mv /control/quorum-request.tmp /control/quorum-request", shellQuote(quorumControlLine("request", nonce, value.authority)))
+			action := env.Exec(pauseCtx, podName, "nats", []string{"/bin/sh", "-ec", command})
+			if action.Err != nil || action.ExitCode != 0 {
+				pauseResults <- pauseResult{index: index, attempted: true, err: fmt.Errorf("arm quorum pause for %s: exit=%d err=%v", podName, action.ExitCode, action.Err)}
+				return
+			}
+			result := pauseResult{index: index, attempted: true, sent: true}
+			want := quorumControlLine("paused", nonce, value.authority)
+			if err := waitNATSControlReceipt(pauseCtx, env, podName, "/control/quorum-paused", want, 3*time.Second); err != nil {
+				result.err = err
+				pauseResults <- result
+				return
+			}
+			result.confirmed = true
+			result.pausedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			pauseResults <- result
+		}(i, member)
+	}
+	for range prepared {
+		result := <-pauseResults
+		boundary.Members[result.index].PauseAttempted = result.attempted
+		boundary.Members[result.index].PauseSent = result.sent
+		boundary.Members[result.index].PauseConfirmed = result.confirmed
+		boundary.Members[result.index].PausedAtUTC = result.pausedAt
+		resultErr = errors.Join(resultErr, result.err)
+	}
+	pauseCancel()
+
+	if resultErr == nil && len(boundary.Members) == 2 {
+		observation, resultErr = observe(ctx)
+	}
+
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	type stoppedResult struct {
+		index int
+		at    string
+		err   error
+	}
+	stoppedResults := make(chan stoppedResult, len(boundary.Members))
+	stoppedCount := 0
+	for i := range boundary.Members {
+		member := boundary.Members[i]
+		if !member.PauseConfirmed {
+			continue
+		}
+		stoppedCount++
+		go func(index int, value jetstreamprobe.PausedMemberReceipt) {
+			authority := natsProcessAuthority{PID: value.PID, StartTime: value.PIDStartTimeTicks, Generation: value.Generation}
+			err := confirmNATSProcessStopped(cleanupCtx, env, value.Member, authority)
+			stoppedResults <- stoppedResult{index: index, at: time.Now().UTC().Format(time.RFC3339Nano), err: err}
+		}(i, member)
+	}
+	for range stoppedCount {
+		result := <-stoppedResults
+		if result.err == nil {
+			boundary.Members[result.index].StillPausedAtUTC = result.at
+		}
+		resultErr = errors.Join(resultErr, result.err)
+	}
+
+	// Issue both explicit resume requests before waiting for either receipt or
+	// performing the more expensive Kubernetes/storage identity reads.
+	type resumeResult struct {
+		index     int
+		requested bool
+		err       error
+	}
+	resumeRequests := make(chan resumeResult, len(boundary.Members))
+	resumeCount := 0
+	for i := range boundary.Members {
+		member := boundary.Members[i]
+		if !member.PauseSent {
+			continue
+		}
+		resumeCount++
+		go func(index int, podName string) {
+			resume := env.Exec(cleanupCtx, podName, "nats", []string{"/bin/sh", "-ec", "umask 077; : > /control/quorum-resume"})
+			if resume.Err != nil || resume.ExitCode != 0 {
+				resumeRequests <- resumeResult{index: index, err: fmt.Errorf("request quorum resume for %s: exit=%d err=%v", podName, resume.ExitCode, resume.Err)}
+				return
+			}
+			resumeRequests <- resumeResult{index: index, requested: true}
+		}(i, member.Member)
+	}
+	for range resumeCount {
+		result := <-resumeRequests
+		boundary.Members[result.index].ResumeRequested = result.requested
+		resultErr = errors.Join(resultErr, result.err)
+	}
+
+	type resumedResult struct {
+		index int
+		at    string
+		err   error
+	}
+	resumedResults := make(chan resumedResult, len(boundary.Members))
+	resumedCount := 0
+	for i := range boundary.Members {
+		member := boundary.Members[i]
+		if !member.ResumeRequested {
+			continue
+		}
+		resumedCount++
+		go func(index int, value jetstreamprobe.PausedMemberReceipt) {
+			authority := natsProcessAuthority{PID: value.PID, StartTime: value.PIDStartTimeTicks, Generation: value.Generation}
+			want := quorumControlLine("resumed", nonce, authority) + " requested"
+			err := waitNATSControlReceipt(cleanupCtx, env, value.Member, "/control/quorum-resumed", want, 12*time.Second)
+			resumedResults <- resumedResult{index: index, at: time.Now().UTC().Format(time.RFC3339Nano), err: err}
+		}(i, member)
+	}
+	for range resumedCount {
+		result := <-resumedResults
+		if result.err == nil {
+			boundary.Members[result.index].ResumedAtUTC = result.at
+		}
+		resultErr = errors.Join(resultErr, result.err)
+	}
+
+	for i := range boundary.Members {
+		member := &boundary.Members[i]
+		if member.ResumedAtUTC == "" {
+			continue
+		}
+		authority := natsProcessAuthority{PID: member.PID, StartTime: member.PIDStartTimeTicks, Generation: member.Generation}
+		ordinal := prepared[i].ordinal
+		uid := s.pods[member.Member]
+		_, after, afterVolume, err := s.validateCurrentMember(cleanupCtx, env, fixture, ordinal, uid, member.ServerIDBefore)
+		if err != nil {
+			resultErr = errors.Join(resultErr, err)
+			continue
+		}
+		afterAuthority, err := readNATSProcessAuthority(cleanupCtx, env, member.Member)
+		if err != nil || afterAuthority != authority {
+			resultErr = errors.Join(resultErr, fmt.Errorf("NATS member %s process identity changed across pause: before=%+v after=%+v err=%v", member.Member, authority, afterAuthority, err))
+			continue
+		}
+		member.ServerIDAfter = after.ServerID
+		member.WorkloadUIDAfter = string(uid)
+		member.VolumeUIDAfter = afterVolume
+		member.StorePathHashAfter = s.storage[ordinal].PathHash
+		member.ResumeConfirmed = true
+	}
+
+	if len(boundary.Members) == 2 {
+		first, firstErr := time.Parse(time.RFC3339Nano, boundary.Members[0].PausedAtUTC)
+		second, secondErr := time.Parse(time.RFC3339Nano, boundary.Members[1].PausedAtUTC)
+		firstEnd, firstEndErr := time.Parse(time.RFC3339Nano, boundary.Members[0].StillPausedAtUTC)
+		secondEnd, secondEndErr := time.Parse(time.RFC3339Nano, boundary.Members[1].StillPausedAtUTC)
+		if firstErr == nil && secondErr == nil && firstEndErr == nil && secondEndErr == nil {
+			if second.After(first) {
+				first = second
+			}
+			if secondEnd.Before(firstEnd) {
+				firstEnd = secondEnd
+			}
+			boundary.ObservedPauseNanos = firstEnd.Sub(first).Nanoseconds()
+		}
+	}
+	return boundary, observation, resultErr
+}
+
+func confirmNATSProcessStopped(ctx context.Context, env *core.Env, pod string, authority natsProcessAuthority) error {
+	command := fmt.Sprintf(`pid="$(cat /control/pid)"; generation="$(cat /control/generation)"; start="$(awk '{print $22}' "/proc/$pid/stat")"; state="$(awk '{print $3}' "/proc/$pid/stat")"; [ "$pid" = %s ] && [ "$start" = %s ] && [ "$generation" = %s ] && [ "$state" = T ]`, shellQuote(strconv.Itoa(authority.PID)), shellQuote(strconv.FormatUint(authority.StartTime, 10)), shellQuote(strconv.FormatUint(authority.Generation, 10)))
+	result := env.Exec(ctx, pod, "nats", []string{"/bin/sh", "-ec", command})
+	if result.Err != nil || result.ExitCode != 0 {
+		return fmt.Errorf("NATS process %s was not the exact stopped child through the observation: exit=%d err=%v stderr=%s", pod, result.ExitCode, result.Err, result.Stderr)
+	}
+	return nil
+}
+
+func waitNATSControlReceipt(ctx context.Context, env *core.Env, pod, path, want string, window time.Duration) error {
+	deadline, cancel := context.WithTimeout(ctx, window)
+	defer cancel()
+	for {
+		got := env.Exec(deadline, pod, "nats", []string{"/bin/sh", "-ec", "cat " + shellQuote(path)})
+		value := strings.TrimSpace(got.Stdout)
+		if got.Err == nil && got.ExitCode == 0 && value == want {
+			return nil
+		}
+		refused := env.Exec(deadline, pod, "nats", []string{"/bin/sh", "-ec", "cat /control/quorum-refused"})
+		if refused.Err == nil && refused.ExitCode == 0 {
+			return fmt.Errorf("NATS supervisor refused pause authority for %s: %s", pod, strings.TrimSpace(refused.Stdout))
+		}
+		select {
+		case <-deadline.Done():
+			return fmt.Errorf("NATS control receipt %s for %s did not match %q: %w", path, pod, want, deadline.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
+func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
+
 func (s *c2NATSJetStreamDurability) requireStorageBinding(ctx context.Context, env *core.Env, fixture *config.NATSJetStreamFixtureConfig, storage natsStorageIdentity) (string, error) {
 	pvc, err := env.Kube.CoreV1().PersistentVolumeClaims(env.Config.Namespace).Get(ctx, storage.PVCName, metav1.GetOptions{})
 	if err != nil || pvc.UID != storage.PVCUID || pvc.DeletionTimestamp != nil || pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != fixture.StorageClass || pvc.Spec.VolumeName != storage.PVName || pvc.Status.Phase != corev1.ClaimBound || pvc.Labels["fixture.phorvex.ai/nonce"] != fixture.Nonce {
@@ -548,6 +873,41 @@ func (s *c2NATSJetStreamDurability) Execute(ctx context.Context, env *core.Env) 
 		result, evidenceErr := natsBenchmarkResult(noActionStages(receipt), evidence)
 		return result, errors.Join(err, marshalErr, evidenceErr)
 	}
+	if s.mode == "quorum-pause" {
+		x := jetstreamprobe.Message{ID: env.Config.NATSJetStreamFixture.Nonce + "-x", Payload: []byte("synthetic-nats-quorum-ambiguous-x")}
+		y := jetstreamprobe.Message{ID: env.Config.NATSJetStreamFixture.Nonce + "-y", Payload: []byte("synthetic-nats-quorum-recovered-y")}
+		receipt, err := s.probe.RunQuorumOracle(ctx, a, x, y, func(callCtx context.Context, observe jetstreamprobe.QuorumObservation) (jetstreamprobe.QuorumPauseReceipt, jetstreamprobe.QuorumObservationReceipt, error) {
+			return s.pauseQuorum(callCtx, env, observe)
+		}, 45*time.Second)
+		s.quorumReceipt = &receipt
+		raw, marshalErr := json.Marshal(receipt)
+		pauseAttemptCount, pauseSentCount, pauseConfirmedCount, resumeConfirmedCount := 0, 0, 0, 0
+		for _, member := range receipt.Pause.Members {
+			if member.PauseAttempted {
+				pauseAttemptCount++
+			}
+			if member.PauseSent {
+				pauseSentCount++
+			}
+			if member.PauseConfirmed {
+				pauseConfirmedCount++
+			}
+			if member.ResumeConfirmed {
+				resumeConfirmedCount++
+			}
+		}
+		for key, value := range map[string]string{"securityOutcome": "not-measured", "availabilityOutcome": "connected-transport-reachable-jetstream-publication-status-retained", "clientFailoverOutcome": "not-measured", "leaderFailoverOutcome": "not-measured", "stateOutcome": "acknowledged-A-retained-X-reconciled-same-ID-and-Y-contiguous", "oracleStatus": "complete", "oracleReceiptJSON": string(raw), "quorumReceiptSHA256": fmt.Sprintf("%x", sha256.Sum256(raw)), "messageASequence": strconv.FormatUint(receipt.MessageA.Sequence, 10), "messageXSequence": strconv.FormatUint(receipt.ReconciledX.Sequence, 10), "messageYSequence": strconv.FormatUint(receipt.MessageY.Sequence, 10), "duringPausePublishErrorClass": receipt.DuringPause.Publish.ErrorClass, "duringPausePublishAcknowledged": strconv.FormatBool(receipt.DuringPause.Publish.Acknowledged), "duringPausePingReachable": strconv.FormatBool(receipt.DuringPause.Ping.Reachable), "actionAttempted": strconv.FormatBool(pauseAttemptCount > 0), "actionCompleted": strconv.FormatBool(pauseConfirmedCount == 2 && resumeConfirmedCount == 2), "actionCount": strconv.Itoa(pauseConfirmedCount), "pauseAttemptCount": strconv.Itoa(pauseAttemptCount), "pauseSentCount": strconv.Itoa(pauseSentCount), "pauseConfirmedCount": strconv.Itoa(pauseConfirmedCount), "resumeConfirmedCount": strconv.Itoa(resumeConfirmedCount), "quorumPauseObservedNanos": strconv.FormatInt(receipt.Pause.ObservedPauseNanos, 10), "replicaRecoveryElapsedNanos": strconv.FormatInt(receipt.RecoveryElapsedNanos, 10), "elapsedMillis": strconv.FormatInt(time.Since(started).Milliseconds(), 10)} {
+			evidence[key] = value
+		}
+		if err != nil {
+			evidence["oracleStatus"] = "incomplete"
+			evidence["availabilityOutcome"] = "incomplete"
+			evidence["stateOutcome"] = "partial-receipt-retained"
+		}
+		s.baseline = evidence
+		result, evidenceErr := natsBenchmarkResult(quorumStages(receipt), evidence)
+		return result, errors.Join(err, marshalErr, evidenceErr)
+	}
 	receipt, err := s.probe.RunRestartOracle(ctx, a, b, func(callCtx context.Context) (jetstreamprobe.RestartBoundaryReceipt, error) {
 		return s.restartMember(callCtx, env, 2)
 	}, 45*time.Second)
@@ -574,7 +934,11 @@ func (s *c2NATSJetStreamDurability) Execute(ctx context.Context, env *core.Env) 
 
 func (s *c2NATSJetStreamDurability) identityEvidence(env *core.Env) map[string]string {
 	revision, modified := harnessVCSIdentity()
-	out := map[string]string{"suiteVersion": natsDurabilitySuite, "mode": s.mode, "fixtureImage": natsImage, "fixtureNATSVersion": "2.10.29", "probeLibrary": "github.com/nats-io/nats.go@v1.47.0", "fixtureNonce": env.Config.NATSJetStreamFixture.Nonce, "nodeName": env.Config.NATSJetStreamFixture.NodeName, "nodeUID": env.Config.NATSJetStreamFixture.NodeUID, "storageClass": env.Config.NATSJetStreamFixture.StorageClass, "storageClassUID": env.Config.NATSJetStreamFixture.StorageClassUID, "connectedMember": s.connectedMember, "restartScope": "exact-non-client-member-c2-nats-js-2", "natsReconnectPolicy": "MaxReconnects(0)", "harnessVCSRevision": revision, "harnessVCSModified": modified, "installedDispatchProven": "false", "directNativeActuatorProven": "false", "cveOutcome": "not-measured", "costObservation": "resource-requests-only", "cpuRequestMillicores": "75", "memoryRequestBytes": "100663296"}
+	suiteVersion := natsDurabilitySuite
+	if s.mode == "quorum-pause" {
+		suiteVersion = "post25-nats-jetstream-quorum-v1"
+	}
+	out := map[string]string{"suiteVersion": suiteVersion, "mode": s.mode, "fixtureImage": natsImage, "fixtureNATSVersion": "2.10.29", "probeLibrary": "github.com/nats-io/nats.go@v1.47.0", "fixtureNonce": env.Config.NATSJetStreamFixture.Nonce, "nodeName": env.Config.NATSJetStreamFixture.NodeName, "nodeUID": env.Config.NATSJetStreamFixture.NodeUID, "storageClass": env.Config.NATSJetStreamFixture.StorageClass, "storageClassUID": env.Config.NATSJetStreamFixture.StorageClassUID, "connectedMember": s.connectedMember, "restartScope": "exact-non-client-member-c2-nats-js-2", "quorumPauseScope": "exact-non-client-members-c2-nats-js-1-and-2", "natsReconnectPolicy": "MaxReconnects(0)", "harnessVCSRevision": revision, "harnessVCSModified": modified, "installedDispatchProven": "false", "directNativeActuatorProven": "false", "cveOutcome": "not-measured", "costObservation": "resource-requests-only", "cpuRequestMillicores": "75", "memoryRequestBytes": "100663296"}
 	for ordinal := range 3 {
 		name := fmt.Sprintf("%s-%d", natsFixtureName, ordinal)
 		out[fmt.Sprintf("pod%dUID", ordinal)] = string(s.pods[name])
@@ -685,6 +1049,35 @@ func restartStages(receipt jetstreamprobe.RestartOracleReceipt) []string {
 	return stages
 }
 
+func quorumStages(receipt jetstreamprobe.QuorumOracleReceipt) []string {
+	stages := []string{}
+	if len(receipt.Baseline.Stream.Members) == 3 && len(receipt.Baseline.Consumer.Members) == 3 {
+		stages = append(stages, "establish exact three-replica JetStream protocol state")
+	}
+	if receipt.MessageA.Sequence != 0 && receipt.StoredABefore.StreamSequence == receipt.MessageA.Sequence {
+		stages = append(stages, "publish, acknowledge, and independently read synthetic message A")
+	}
+	if len(receipt.Pause.Members) > 0 {
+		stages = append(stages, "attempt bounded pauses of exact non-client fixture members")
+	}
+	if receipt.Pause.ObservationCalls == 1 {
+		stages = append(stages, "retain one publication attempt and basic transport ping during quorum loss")
+	}
+	if len(receipt.Recovered.Stream.Members) == 3 && len(receipt.Recovered.Consumer.Members) == 3 {
+		stages = append(stages, "confirm exact replica recovery")
+	}
+	if receipt.ReconciledX.Sequence != 0 && receipt.StoredX.StreamSequence == receipt.ReconciledX.Sequence {
+		stages = append(stages, "reconcile synthetic message X by the same message ID and stored bytes")
+	}
+	if receipt.MessageY.Sequence != 0 && receipt.StoredY.StreamSequence == receipt.MessageY.Sequence {
+		stages = append(stages, "publish, acknowledge, and independently read contiguous synthetic message Y")
+	}
+	if receipt.FinalState.Messages == 3 {
+		stages = append(stages, "confirm exact final stream and consumer state")
+	}
+	return stages
+}
+
 func validateNATSBenchmarkEvidence(evidence map[string]string) error {
 	if len(evidence) == 0 || len(evidence) > natsEvidenceMaxItems {
 		return fmt.Errorf("NATS benchmark evidence item count %d exceeds bound", len(evidence))
@@ -703,12 +1096,15 @@ func validateNATSBenchmarkEvidence(evidence map[string]string) error {
 }
 
 func (s *c2NATSJetStreamDurability) SuccessOracle(context.Context, *core.Env) (core.OracleResult, error) {
-	if s.receipt == nil && s.noActionReceipt == nil {
+	if s.receipt == nil && s.noActionReceipt == nil && s.quorumReceipt == nil {
 		return core.OracleResult{}, errors.New("NATS protocol receipt missing")
 	}
 	state := "functional NATS no-action control: acknowledged A and B retained exact contiguous state; security outcome not measured"
 	if s.receipt != nil {
 		state = "functional NATS durability control: exact stored A survived one child restart and acknowledged B used the next stream sequence; security outcome not measured"
+	}
+	if s.quorumReceipt != nil {
+		state = "functional NATS quorum control: exact stored A survived bounded quorum loss, X was reconciled only by its same message ID, and acknowledged Y completed contiguous state; security outcome not measured"
 	}
 	return core.OracleResult{Achieved: true, ObservedState: state, Evidence: s.baseline}, nil
 }

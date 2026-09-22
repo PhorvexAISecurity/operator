@@ -1,6 +1,6 @@
 {
   "schema": "phorvex.catalogue-suite.v1",
-  "revision": "3.0.0-development.1",
+  "revision": "3.0.0-development.2",
   "status": "DEVELOPMENT_NOT_ACCEPTED_BENCHMARK_FREEZE",
   "purpose": "Workload-derived functional evaluation foundation for later brain regression comparisons. This manifest selects existing registered implementations; it is not an executable harness config.",
   "implementationStatus": "Source implementation requires its reviewed source commit and tests; consult campaign records for independent live acceptance.",
@@ -46,9 +46,9 @@
       "id": "c2-nats-jetstream-durability",
       "workloadBoundary": "message-durability",
       "sourceFile": "scenarios/c2_nats_jetstream_durability.go",
-      "measures": "Real PubAck, consumer ACK and independently retrieved message hashes across no action or one non-client member child restart.",
-      "limits": "No client/leader failover, quorum-loss, native rotation or installed-manager claim.",
-      "sourceSHA256": "cd9117a613b12c7bfc466e62128888d069134f4f652ab6244f896955f0034785"
+      "measures": "Real PubAck, consumer ACK and independently retrieved message hashes across no action, one non-client member restart, or bounded two-member quorum loss with same-ID publication reconciliation.",
+      "limits": "No client or leader failover, native rotation, installed-manager, security-efficacy or physical disk/power-failure claim.",
+      "sourceSHA256": "ffd219694c3875dd85424d17a94310c268334e503b6d5c80288d32b18b5c30d0"
     },
     {
       "id": "c2-installed-manager-session",
@@ -169,6 +169,27 @@
       ],
       "requiredConfigValues": {
         "natsJetStreamFixture.mode": "member-restart"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "nats-quorum-pause",
+      "scenarioFilter": [
+        "c2-nats-jetstream-durability"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "owned three-member NATS fixture",
+        "exact three local PV identities",
+        "automatic-resume child-process supervisor",
+        "external storage cleanup supervisor"
+      ],
+      "requiredConfigValues": {
+        "natsJetStreamFixture.mode": "quorum-pause"
       },
       "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
     },

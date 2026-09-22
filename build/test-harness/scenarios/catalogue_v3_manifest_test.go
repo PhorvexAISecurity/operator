@@ -116,6 +116,7 @@ func TestCatalogueV3ManifestMatchesRegisteredSourceAndExplicitProfiles(t *testin
 	seenProfiles := map[string]bool{}
 	selectedEntries := map[string]bool{}
 	gpuModes := map[string]map[string]bool{}
+	natsModes := map[string]bool{}
 	for _, profile := range manifest.Profiles {
 		if profile.ID == "" || seenProfiles[profile.ID] || len(profile.ScenarioFilter) != 1 || !entryIDs[profile.ScenarioFilter[0]] || len(profile.DefenderFilter) == 0 || profile.TrialsPerArm < 1 || profile.ExecutionKind == "" || len(profile.RequiredFixtures) == 0 || profile.OutputIsolation == "" {
 			t.Fatalf("profile differs from maintained selection contract: %+v", profile)
@@ -152,6 +153,20 @@ func TestCatalogueV3ManifestMatchesRegisteredSourceAndExplicitProfiles(t *testin
 			}
 			gpuModes[wantScenario][mode] = true
 		}
+		if strings.HasPrefix(profile.ID, "nats-") {
+			if profile.ExecutionKind != "direct-protocol-control" || profile.TrialsPerArm != 1 || !slices.Equal(profile.DefenderFilter, []string{"d-nomtd"}) || profile.ScenarioFilter[0] != natsDurabilityScenario {
+				t.Fatalf("NATS profile lacks direct protocol boundary: %+v", profile)
+			}
+			var mode string
+			if err := json.Unmarshal(profile.RequiredConfigValues["natsJetStreamFixture.mode"], &mode); err != nil {
+				t.Fatalf("NATS profile %s mode is not a string: %v", profile.ID, err)
+			}
+			wantID := map[string]string{"no-action": "nats-no-action", "member-restart": "nats-member-restart", "quorum-pause": "nats-quorum-pause"}[mode]
+			if wantID == "" || profile.ID != wantID || natsModes[mode] {
+				t.Fatalf("NATS profile %s mode %q is duplicated or mismatched", profile.ID, mode)
+			}
+			natsModes[mode] = true
+		}
 	}
 	for entry := range entryIDs {
 		if !selectedEntries[entry] {
@@ -161,6 +176,11 @@ func TestCatalogueV3ManifestMatchesRegisteredSourceAndExplicitProfiles(t *testin
 	for _, scenario := range []string{vllmPrefixScenario, vllmDrainScenario} {
 		if !gpuModes[scenario]["no-action"] || !gpuModes[scenario]["direct"] {
 			t.Fatalf("GPU scenario %s lacks separate no-action and direct functional profiles", scenario)
+		}
+	}
+	for _, mode := range []string{"no-action", "member-restart", "quorum-pause"} {
+		if !natsModes[mode] {
+			t.Fatalf("NATS catalogue lacks explicit %s profile", mode)
 		}
 	}
 }

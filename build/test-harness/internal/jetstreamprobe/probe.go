@@ -141,6 +141,87 @@ type NoActionOracleReceipt struct {
 	FinalState StateReceipt       `json:"finalState"`
 }
 
+type PublishAttemptReceipt struct {
+	StartedAtUTC  string         `json:"startedAtUTC"`
+	FinishedAtUTC string         `json:"finishedAtUTC"`
+	AttemptCount  int            `json:"attemptCount"`
+	MessageID     string         `json:"messageID"`
+	PayloadHash   string         `json:"payloadSHA256"`
+	Acknowledged  bool           `json:"acknowledged"`
+	Ack           *PubAckReceipt `json:"ack,omitempty"`
+	ErrorClass    string         `json:"errorClass,omitempty"`
+	Error         string         `json:"error,omitempty"`
+}
+
+type PingReceipt struct {
+	StartedAtUTC  string `json:"startedAtUTC"`
+	FinishedAtUTC string `json:"finishedAtUTC"`
+	Reachable     bool   `json:"reachable"`
+	ErrorClass    string `json:"errorClass,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
+type QuorumObservationReceipt struct {
+	Publish PublishAttemptReceipt `json:"publish"`
+	Ping    PingReceipt           `json:"ping"`
+}
+
+type PausedMemberReceipt struct {
+	Member                 string `json:"member"`
+	ServerIDBefore         string `json:"serverIDBefore"`
+	ServerIDAfter          string `json:"serverIDAfter"`
+	PID                    int    `json:"pid"`
+	PIDStartTimeTicks      uint64 `json:"pidStartTimeTicks"`
+	Generation             uint64 `json:"generation"`
+	WorkloadUIDBefore      string `json:"workloadUIDBefore"`
+	WorkloadUIDAfter       string `json:"workloadUIDAfter"`
+	VolumeUIDBefore        string `json:"volumeUIDBefore"`
+	VolumeUIDAfter         string `json:"volumeUIDAfter"`
+	StorePathHashBefore    string `json:"storePathHashBefore"`
+	StorePathHashAfter     string `json:"storePathHashAfter"`
+	ResumeArmedBeforePause bool   `json:"resumeArmedBeforePause"`
+	PauseAttempted         bool   `json:"pauseAttempted"`
+	PauseSent              bool   `json:"pauseSent"`
+	PauseConfirmed         bool   `json:"pauseConfirmed"`
+	PausedAtUTC            string `json:"pausedAtUTC"`
+	StillPausedAtUTC       string `json:"stillPausedAtUTC"`
+	ResumeRequested        bool   `json:"resumeRequested"`
+	ResumeConfirmed        bool   `json:"resumeConfirmed"`
+	ResumedAtUTC           string `json:"resumedAtUTC"`
+}
+
+type QuorumPauseReceipt struct {
+	ConnectedMember          string                `json:"connectedMember"`
+	Members                  []PausedMemberReceipt `json:"members"`
+	MaximumPauseNanos        int64                 `json:"maximumPauseNanos"`
+	ObservedPauseNanos       int64                 `json:"observedPauseNanos"`
+	ObservationStartedAtUTC  string                `json:"observationStartedAtUTC"`
+	ObservationFinishedAtUTC string                `json:"observationFinishedAtUTC"`
+	ObservationCalls         int                   `json:"observationCalls"`
+}
+
+type QuorumOracleReceipt struct {
+	Baseline             ReplicationReceipt       `json:"baseline"`
+	MessageA             PubAckReceipt            `json:"messageA"`
+	DeliveryA            DeliveryReceipt          `json:"deliveryA"`
+	StoredABefore        StoredReceipt            `json:"storedABefore"`
+	Pause                QuorumPauseReceipt       `json:"pause"`
+	DuringPause          QuorumObservationReceipt `json:"duringPause"`
+	Recovered            ReplicationReceipt       `json:"recovered"`
+	RecoveryElapsedNanos int64                    `json:"recoveryElapsedNanos"`
+	StoredAAfter         StoredReceipt            `json:"storedAAfter"`
+	ReconciledX          PubAckReceipt            `json:"reconciledX"`
+	StoredX              StoredReceipt            `json:"storedX"`
+	DeliveryX            DeliveryReceipt          `json:"deliveryX"`
+	MessageY             PubAckReceipt            `json:"messageY"`
+	StoredY              StoredReceipt            `json:"storedY"`
+	DeliveryY            DeliveryReceipt          `json:"deliveryY"`
+	FinalState           StateReceipt             `json:"finalState"`
+}
+
+type QuorumObservation func(context.Context) (QuorumObservationReceipt, error)
+type PauseQuorum func(context.Context, QuorumObservation) (QuorumPauseReceipt, QuorumObservationReceipt, error)
+
 type RestartMember func(context.Context) (RestartBoundaryReceipt, error)
 
 type Probe struct {
@@ -504,6 +585,274 @@ func (p *Probe) RunNoActionOracle(ctx context.Context, messageA, messageB Messag
 	return receipt, nil
 }
 
+// RunQuorumOracle retains the one-send publication made while two non-client
+// members are paused, then reconciles only that exact message ID after replica
+// recovery. A request timeout is an unknown commit status, never a rejection.
+func (p *Probe) RunQuorumOracle(ctx context.Context, messageA, messageX, messageY Message, pause PauseQuorum, window time.Duration) (QuorumOracleReceipt, error) {
+	receipt := QuorumOracleReceipt{}
+	if pause == nil || messageA.ID == "" || messageX.ID == "" || messageY.ID == "" || messageA.ID == messageX.ID || messageA.ID == messageY.ID || messageX.ID == messageY.ID {
+		return receipt, errors.New("three distinct messages and a quorum-pause boundary are required")
+	}
+	baseline, err := p.WaitCurrentReplicas(ctx, window)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.Baseline = baseline
+	ackA, err := p.Publish(ctx, messageA, false, 0)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.MessageA = ackA
+	receipt.DeliveryA, err = p.ConsumeAndAck(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return receipt, err
+	}
+	receipt.StoredABefore, err = p.GetStored(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+
+	observationCalls := 0
+	observe := func(observeCtx context.Context) (QuorumObservationReceipt, error) {
+		observationCalls++
+		if observationCalls != 1 {
+			return QuorumObservationReceipt{}, errors.New("quorum observation may run exactly once")
+		}
+		return p.observeQuorumLoss(observeCtx, messageX), nil
+	}
+	pauseReceipt, observation, pauseErr := pause(ctx, observe)
+	pauseReceipt.ObservationCalls = observationCalls
+	pauseReceipt.ObservationStartedAtUTC = observation.Publish.StartedAtUTC
+	pauseReceipt.ObservationFinishedAtUTC = observation.Ping.FinishedAtUTC
+	receipt.Pause, receipt.DuringPause = pauseReceipt, observation
+	if pauseErr != nil {
+		return receipt, fmt.Errorf("pause exact non-client members: %w", pauseErr)
+	}
+	if err := validateQuorumPauseBoundary(pauseReceipt, baseline); err != nil {
+		return receipt, err
+	}
+	if err := validateQuorumObservation(observation, messageX); err != nil {
+		return receipt, err
+	}
+	recoveryStarted := time.Now()
+	recovered, err := p.WaitCurrentReplicas(ctx, window)
+	receipt.RecoveryElapsedNanos = time.Since(recoveryStarted).Nanoseconds()
+	if err != nil {
+		return receipt, err
+	}
+	receipt.Recovered = recovered
+	if baseline.Stream.Cluster != recovered.Stream.Cluster || baseline.Consumer.Cluster != recovered.Consumer.Cluster || !sameClusterMembers(baseline.Stream, recovered.Stream) || !sameClusterMembers(baseline.Consumer, recovered.Consumer) || !sameClusterMembers(recovered.Stream, recovered.Consumer) {
+		return receipt, errors.New("replication cluster identity changed across quorum pause")
+	}
+	receipt.StoredAAfter, err = p.GetStored(ctx, messageA, ackA.Sequence)
+	if err != nil {
+		return receipt, fmt.Errorf("read message A after quorum recovery: %w", err)
+	}
+	attemptStarted, parseErr := time.Parse(time.RFC3339Nano, observation.Publish.StartedAtUTC)
+	if parseErr != nil || !canFinishWithinDuplicateWindow(time.Now(), attemptStarted, p.cfg.DuplicateWindow, p.cfg.RequestTimeout) {
+		return receipt, errors.New("same-ID reconciliation cannot begin outside the duplicate window")
+	}
+	reconciled, err := p.publishReconcile(ctx, messageX, ackA.Sequence+1)
+	if err != nil {
+		return receipt, err
+	}
+	if observation.Publish.Acknowledged && observation.Publish.Ack != nil && (!reconciled.Duplicate || reconciled.Sequence != observation.Publish.Ack.Sequence) {
+		return receipt, errors.New("same-ID reconciliation differs from the earlier acknowledged publication")
+	}
+	receipt.ReconciledX = reconciled
+	receipt.StoredX, err = p.GetStored(ctx, messageX, reconciled.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.DeliveryX, err = p.ConsumeAndAck(ctx, messageX, reconciled.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return receipt, err
+	}
+	receipt.MessageY, err = p.Publish(ctx, messageY, false, reconciled.Sequence+1)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.StoredY, err = p.GetStored(ctx, messageY, receipt.MessageY.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.DeliveryY, err = p.ConsumeAndAck(ctx, messageY, receipt.MessageY.Sequence)
+	if err != nil {
+		return receipt, err
+	}
+	if err := p.RequireNoSameConsumerRedelivery(ctx); err != nil {
+		return receipt, err
+	}
+	receipt.FinalState, err = p.waitExactStateCount(ctx, window, ackA.Sequence, receipt.MessageY.Sequence, 3)
+	return receipt, err
+}
+
+func (p *Probe) observeQuorumLoss(ctx context.Context, message Message) QuorumObservationReceipt {
+	return QuorumObservationReceipt{Publish: p.publishAttempt(ctx, message), Ping: p.ping(ctx)}
+}
+
+func (p *Probe) publishAttempt(ctx context.Context, message Message) (receipt PublishAttemptReceipt) {
+	receipt = PublishAttemptReceipt{StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano), AttemptCount: 1, MessageID: message.ID, PayloadHash: hash(message.Payload)}
+	defer func() { receipt.FinishedAtUTC = time.Now().UTC().Format(time.RFC3339Nano) }()
+	if message.ID == "" || len(message.Payload) == 0 {
+		receipt.ErrorClass, receipt.Error = "invalid", "message ID and payload are required"
+		return receipt
+	}
+	msg := nats.NewMsg(p.cfg.Subject)
+	msg.Header.Set(messageIDHeader, message.ID)
+	msg.Data = append([]byte(nil), message.Payload...)
+	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
+	ack, err := p.js.PublishMsg(reqCtx, msg)
+	cancel()
+	if err != nil {
+		receipt.ErrorClass, receipt.Error = classifyObservationError(err), boundedError(err)
+		return receipt
+	}
+	if err := validatePubAck(ack, p.cfg.Stream, false, 0); err != nil {
+		receipt.ErrorClass, receipt.Error = "invalid-ack", boundedError(err)
+		return receipt
+	}
+	value := PubAckReceipt{Stream: ack.Stream, Sequence: ack.Sequence, Duplicate: ack.Duplicate, MessageID: message.ID, PayloadHash: hash(message.Payload)}
+	receipt.Acknowledged, receipt.Ack = true, &value
+	return receipt
+}
+
+func (p *Probe) ping(ctx context.Context) PingReceipt {
+	receipt := PingReceipt{StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano)}
+	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
+	err := p.nc.FlushWithContext(reqCtx)
+	cancel()
+	receipt.FinishedAtUTC = time.Now().UTC().Format(time.RFC3339Nano)
+	if err != nil {
+		receipt.ErrorClass, receipt.Error = classifyObservationError(err), boundedError(err)
+		return receipt
+	}
+	receipt.Reachable = true
+	return receipt
+}
+
+func (p *Probe) publishReconcile(ctx context.Context, message Message, sequence uint64) (PubAckReceipt, error) {
+	msg := nats.NewMsg(p.cfg.Subject)
+	msg.Header.Set(messageIDHeader, message.ID)
+	msg.Data = append([]byte(nil), message.Payload...)
+	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
+	defer cancel()
+	ack, err := p.js.PublishMsg(reqCtx, msg)
+	if err != nil {
+		return PubAckReceipt{}, fmt.Errorf("same-ID reconcile %q: %w", message.ID, err)
+	}
+	if ack == nil || ack.Stream != p.cfg.Stream || ack.Sequence != sequence {
+		return PubAckReceipt{}, fmt.Errorf("same-ID reconcile PubAck differs: got %+v want stream=%q sequence=%d", ack, p.cfg.Stream, sequence)
+	}
+	return PubAckReceipt{Stream: ack.Stream, Sequence: ack.Sequence, Duplicate: ack.Duplicate, MessageID: message.ID, PayloadHash: hash(message.Payload)}, nil
+}
+
+func classifyObservationError(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, nats.ErrTimeout):
+		return "timeout-unknown"
+	case errors.Is(err, context.Canceled):
+		return "canceled-unknown"
+	case errors.Is(err, nats.ErrNoResponders):
+		return "no-responders"
+	default:
+		return "transport-or-server-error"
+	}
+}
+
+func boundedError(err error) string {
+	value := err.Error()
+	if len(value) > 512 {
+		return value[:512]
+	}
+	return value
+}
+
+func validateQuorumObservation(receipt QuorumObservationReceipt, message Message) error {
+	if receipt.Publish.AttemptCount != 1 || receipt.Publish.MessageID != message.ID || receipt.Publish.PayloadHash != hash(message.Payload) || receipt.Publish.StartedAtUTC == "" || receipt.Publish.FinishedAtUTC == "" {
+		return errors.New("quorum-loss publication attempt identity/count is incomplete")
+	}
+	if receipt.Publish.Acknowledged != (receipt.Publish.Ack != nil) || receipt.Publish.Acknowledged == (receipt.Publish.ErrorClass != "") {
+		return errors.New("quorum-loss publication acknowledgement/error state is contradictory")
+	}
+	publishStart, startErr := time.Parse(time.RFC3339Nano, receipt.Publish.StartedAtUTC)
+	publishFinish, finishErr := time.Parse(time.RFC3339Nano, receipt.Publish.FinishedAtUTC)
+	pingStart, pingStartErr := time.Parse(time.RFC3339Nano, receipt.Ping.StartedAtUTC)
+	pingFinish, pingFinishErr := time.Parse(time.RFC3339Nano, receipt.Ping.FinishedAtUTC)
+	if startErr != nil || finishErr != nil || pingStartErr != nil || pingFinishErr != nil || publishFinish.Before(publishStart) || pingFinish.Before(pingStart) {
+		return errors.New("quorum-loss observation timestamps are invalid")
+	}
+	if receipt.Publish.Ack != nil && (receipt.Publish.Ack.Stream == "" || receipt.Publish.Ack.Sequence == 0 || receipt.Publish.Ack.MessageID != message.ID || receipt.Publish.Ack.PayloadHash != hash(message.Payload)) {
+		return errors.New("quorum-loss publication acknowledgement identity differs")
+	}
+	if !receipt.Ping.Reachable || receipt.Ping.ErrorClass != "" || receipt.Ping.StartedAtUTC == "" || receipt.Ping.FinishedAtUTC == "" {
+		return errors.New("connected NATS transport was not proven reachable during quorum loss")
+	}
+	return nil
+}
+
+func canFinishWithinDuplicateWindow(now, attemptStarted time.Time, window, reconcileTimeout time.Duration) bool {
+	return !attemptStarted.After(now) && reconcileTimeout > 0 && now.Add(reconcileTimeout).Before(attemptStarted.Add(window))
+}
+
+func validateQuorumPauseBoundary(receipt QuorumPauseReceipt, baseline ReplicationReceipt) error {
+	if receipt.ConnectedMember == "" || receipt.MaximumPauseNanos <= 0 || receipt.MaximumPauseNanos > int64(10*time.Second) || receipt.ObservedPauseNanos <= 0 || receipt.ObservedPauseNanos > receipt.MaximumPauseNanos+int64(2*time.Second) || receipt.ObservationCalls != 1 || len(receipt.Members) != 2 {
+		return errors.New("quorum pause timing, membership, or observation count differs")
+	}
+	if !clusterHasMember(baseline.Stream, receipt.ConnectedMember) || !sameClusterMembers(baseline.Stream, baseline.Consumer) {
+		return errors.New("connected member or baseline member set differs")
+	}
+	seen := map[string]bool{receipt.ConnectedMember: true}
+	observationStart, startErr := time.Parse(time.RFC3339Nano, receiptObservationStart(receipt))
+	observationEnd, endErr := time.Parse(time.RFC3339Nano, receiptObservationEnd(receipt))
+	if startErr != nil || endErr != nil || observationEnd.Before(observationStart) {
+		return errors.New("quorum pause observation timestamps are invalid")
+	}
+	var overlapStart, overlapEnd time.Time
+	for _, member := range receipt.Members {
+		if member.Member == "" || seen[member.Member] || !clusterHasMember(baseline.Stream, member.Member) || member.ServerIDBefore == "" || member.ServerIDBefore != member.ServerIDAfter || member.PID <= 1 || member.PIDStartTimeTicks == 0 || member.Generation == 0 || member.WorkloadUIDBefore == "" || member.WorkloadUIDBefore != member.WorkloadUIDAfter || member.VolumeUIDBefore == "" || member.VolumeUIDBefore != member.VolumeUIDAfter || member.StorePathHashBefore == "" || member.StorePathHashBefore != member.StorePathHashAfter || !member.ResumeArmedBeforePause || !member.PauseAttempted || !member.PauseSent || !member.PauseConfirmed || !member.ResumeRequested || !member.ResumeConfirmed {
+			return fmt.Errorf("paused member boundary differs: %+v", member)
+		}
+		paused, pausedErr := time.Parse(time.RFC3339Nano, member.PausedAtUTC)
+		stillPaused, stillErr := time.Parse(time.RFC3339Nano, member.StillPausedAtUTC)
+		resumed, resumedErr := time.Parse(time.RFC3339Nano, member.ResumedAtUTC)
+		if pausedErr != nil || stillErr != nil || resumedErr != nil || paused.After(observationStart) || stillPaused.Before(observationEnd) || resumed.Before(stillPaused) || resumed.Sub(paused) > time.Duration(receipt.MaximumPauseNanos) {
+			return fmt.Errorf("paused member did not cover the exact observation window: %+v", member)
+		}
+		if overlapStart.IsZero() || paused.After(overlapStart) {
+			overlapStart = paused
+		}
+		if overlapEnd.IsZero() || stillPaused.Before(overlapEnd) {
+			overlapEnd = stillPaused
+		}
+		seen[member.Member] = true
+	}
+	if len(seen) != 3 {
+		return errors.New("quorum pause did not bind the exact three-member set")
+	}
+	if overlapEnd.Sub(overlapStart).Nanoseconds() != receipt.ObservedPauseNanos || receipt.ObservedPauseNanos <= 0 {
+		return errors.New("quorum pause overlap duration differs from member receipts")
+	}
+	return nil
+}
+
+// These fields are filled by the pause callback from the actual producer
+// receipt passed back to RunQuorumOracle before validation.
+func receiptObservationStart(receipt QuorumPauseReceipt) string {
+	return receipt.ObservationStartedAtUTC
+}
+func receiptObservationEnd(receipt QuorumPauseReceipt) string {
+	return receipt.ObservationFinishedAtUTC
+}
+
 func clusterHasMember(receipt ClusterReceipt, name string) bool {
 	for _, member := range receipt.Members {
 		if member.Name == name {
@@ -542,6 +891,10 @@ func validateRestartBoundary(receipt RestartBoundaryReceipt) error {
 }
 
 func (p *Probe) waitExactState(ctx context.Context, window time.Duration, first, last uint64) (StateReceipt, error) {
+	return p.waitExactStateCount(ctx, window, first, last, 2)
+}
+
+func (p *Probe) waitExactStateCount(ctx context.Context, window time.Duration, first, last, messages uint64) (StateReceipt, error) {
 	deadline, cancel := context.WithTimeout(ctx, window)
 	defer cancel()
 	ticker := time.NewTicker(20 * time.Millisecond)
@@ -550,7 +903,7 @@ func (p *Probe) waitExactState(ctx context.Context, window time.Duration, first,
 	var lastErr error
 	for {
 		state, lastErr = p.State(deadline)
-		if lastErr == nil && state.Messages == 2 && state.FirstSequence == first && state.LastSequence == last && state.AckFloor >= last && state.AckPending == 0 && state.ConsumerPending == 0 && state.ConsumerRedelivered == 0 {
+		if lastErr == nil && state.Messages == messages && state.FirstSequence == first && state.LastSequence == last && state.AckFloor >= last && state.AckPending == 0 && state.ConsumerPending == 0 && state.ConsumerRedelivered == 0 {
 			return state, nil
 		}
 		select {
