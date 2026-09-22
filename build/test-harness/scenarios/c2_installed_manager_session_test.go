@@ -2,18 +2,29 @@ package scenarios
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/defenders"
+	"github.com/r6security/phoenix-test-harness/internal/core"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func TestInstalledSessionMetadataIsBoundedBenignAndSourcePinned(t *testing.T) {
@@ -46,15 +57,15 @@ func TestInstalledSessionActualSamplingLoopRetainsFailuresAfterSixteenAttempts(t
 		_, _ = w.Write([]byte(`{"podUID":"pod-live","id":"session-live","present":true}`))
 	}))
 	defer server.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "python3", "-B", "-c", installedSessionAvailabilitySource, server.URL, "session-live", "2.000", "0.100")
+	command := exec.CommandContext(ctx, "python3", "-B", "-c", installedSessionAvailabilitySource, server.URL, "session-live", "9.200", "0.500")
 	raw, err := command.Output()
 	if err != nil {
 		t.Fatalf("actual availability producer: %v", err)
 	}
-	var receipt installedSessionAvailability
-	if err := json.Unmarshal(raw, &receipt); err != nil {
+	receipt, err := parseInstalledSessionAvailability(raw, server.URL, "session-live", 9200*time.Millisecond)
+	if err != nil {
 		t.Fatalf("decode actual producer receipt: %v\n%s", err, raw)
 	}
 	if len(receipt.Observations) <= 16 {
@@ -85,6 +96,313 @@ func TestInstalledSessionActualSamplingLoopRetainsFailuresAfterSixteenAttempts(t
 	if knownNotFound == 0 {
 		t.Fatal("ordinary HTTP 404 application response was not retained distinctly from transport failure")
 	}
+}
+
+func TestInstalledSessionActualSamplerBoundsResolverAndSlowResponse(t *testing.T) {
+	validServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"podUID":"pod-live","id":"session-live","present":true}`))
+	}))
+	defer validServer.Close()
+
+	t.Run("resolver", func(t *testing.T) {
+		const delayedResolver = `import socket,time
+_installed_real_getaddrinfo=socket.getaddrinfo
+def _installed_slow_getaddrinfo(*args,**kwargs):
+    time.sleep(2)
+    return _installed_real_getaddrinfo(*args,**kwargs)
+socket.getaddrinfo=_installed_slow_getaddrinfo
+`
+		receipt, elapsed := runInstalledSessionPython(t, delayedResolver+installedSessionAvailabilitySource, validServer.URL, 400*time.Millisecond)
+		if elapsed >= 1500*time.Millisecond || len(receipt.Observations) != 1 || receipt.Observations[0].Known || receipt.Observations[0].Category != "sampling-deadline" {
+			t.Fatalf("resolver was not bounded and retained: elapsed=%s receipt=%+v", elapsed, receipt)
+		}
+	})
+
+	t.Run("slow-response", func(t *testing.T) {
+		slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			select {
+			case <-request.Context().Done():
+			case <-time.After(2 * time.Second):
+				_, _ = w.Write([]byte(`{"podUID":"pod-live","id":"session-live","present":true}`))
+			}
+		}))
+		defer slowServer.Close()
+		receipt, elapsed := runInstalledSessionPython(t, installedSessionAvailabilitySource, slowServer.URL, 400*time.Millisecond)
+		if elapsed >= 1500*time.Millisecond || len(receipt.Observations) != 1 || receipt.Observations[0].Known || receipt.Observations[0].Category != "sampling-deadline" {
+			t.Fatalf("slow response was not bounded and retained: elapsed=%s receipt=%+v", elapsed, receipt)
+		}
+	})
+}
+
+func TestInstalledSessionPartialStreamRetainsOnlyValidatedPrefix(t *testing.T) {
+	started := time.Now().UTC().Format(time.RFC3339Nano)
+	header, _ := json.Marshal(map[string]any{"type": "header", "version": 1, "serviceURL": "http://service", "sessionID": "session-live", "durationMillis": 1000, "cadenceMillis": 500, "startedAtUTC": started})
+	observation, _ := json.Marshal(map[string]any{"type": "observation", "observation": installedSessionAvailabilityObservation{AtUTC: started, Known: false, Category: "transport-unavailable"}})
+	raw := append(append(append([]byte{}, header...), '\n'), observation...)
+	raw = append(raw, '\n')
+	raw = append(raw, []byte(`{"type":"observation","observation":`)...)
+	receipt, err := parseInstalledSessionAvailability(raw, "http://service", "session-live", time.Second)
+	if err == nil || len(receipt.Observations) != 1 || !installedSessionAvailabilityPrefixValid(receipt, "http://service", "session-live", time.Second) {
+		t.Fatalf("validated partial prefix lost or accepted as complete: receipt=%+v err=%v", receipt, err)
+	}
+	segment := installedSessionSegmentReceipt{Segment: 2, Status: "exec-failed", Availability: receipt, AvailabilityPrefixValidated: true, StdoutBytes: len(raw), StdoutSHA256: "full-hash", ExitCode: -1, ExecErrorCategory: "deadline", ParseError: err.Error()}
+	installedSessionRetainFailureBytes(&segment, string(raw), "bounded diagnostic")
+	encoded := marshalInstalledSessionSegmentReceipts([]installedSessionSegmentReceipt{segment})
+	if !json.Valid([]byte(encoded)) || segment.StdoutPrefixBytes != len(raw) || segment.StdoutTruncated || segment.StdoutPrefixBase64 == "" || segment.StderrPrefixBase64 == "" {
+		t.Fatalf("partial bytes were not reconstructably retained: segment=%+v encoded=%s", segment, encoded)
+	}
+}
+
+func TestInstalledSessionFailedSegmentIsRetainedButNotTrustedByAggregate(t *testing.T) {
+	env := fixtureObservationEnv()
+	env.ScenarioName, env.Trial = installedSessionScenario, 0
+	producer := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: sessionProducer, Namespace: env.Config.Namespace, UID: "producer-live-uid", Labels: env.OwnedLabels(map[string]string{"app": sessionProducer})},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "producer", Image: sessionPythonImage, Command: []string{"python3", "-c", "import time; time.sleep(3600)"}}}},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
+	}
+	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(context.Background(), producer, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	serviceURL := "http://" + installedSessionSharedService + ":" + strconv.Itoa(sessionPort)
+	started := time.Now().UTC().Format(time.RFC3339Nano)
+	header, _ := json.Marshal(map[string]any{"type": "header", "version": 1, "serviceURL": serviceURL, "sessionID": "session-live", "durationMillis": int(installedSessionSegment.Milliseconds()), "cadenceMillis": int(installedSessionSamplePeriod.Milliseconds()), "startedAtUTC": started})
+	observation, _ := json.Marshal(map[string]any{"type": "observation", "observation": installedSessionAvailabilityObservation{AtUTC: started, Known: false, Category: "request-deadline"}})
+	partial := string(header) + "\n" + string(observation) + "\n"
+	core.SetTimedExecer(func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, time.Duration, []string) core.ExecResult {
+		return core.ExecResult{Stdout: partial, Stderr: "bounded producer diagnostic", ExitCode: -1, Err: context.DeadlineExceeded}
+	})
+	t.Cleanup(func() { core.SetTimedExecer(nil) })
+	aggregate, retained, err := runInstalledSessionAvailability(context.Background(), env, producer.UID, "session-live")
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) || len(aggregate.Observations) != 0 || aggregate.StartedAtUTC != "" || !json.Valid([]byte(retained)) {
+		t.Fatalf("failed prefix became trusted aggregate evidence: aggregate=%+v retained=%s err=%v", aggregate, retained, err)
+	}
+	var evidence struct {
+		SchemaVersion string                           `json:"schemaVersion"`
+		Segments      []installedSessionSegmentReceipt `json:"segments"`
+	}
+	if err := json.Unmarshal([]byte(retained), &evidence); err != nil || evidence.SchemaVersion != "phorvex.installed-session-availability.v2" || len(evidence.Segments) != 1 {
+		t.Fatalf("decode failed segment evidence: evidence=%+v err=%v", evidence, err)
+	}
+	segment := evidence.Segments[0]
+	decoded, decodeErr := base64.StdEncoding.DecodeString(segment.StdoutPrefixBase64)
+	if decodeErr != nil || string(decoded) != partial || segment.Status != "exec-failed" || !segment.AvailabilityPrefixValidated || len(segment.Availability.Observations) != 1 || segment.StderrPrefixBase64 == "" || segment.ExecErrorCategory != "deadline" {
+		t.Fatalf("failed segment evidence incomplete: segment=%+v decodeErr=%v", segment, decodeErr)
+	}
+	created := time.Now().UTC().Add(-2 * installedSessionMinimumPodAge)
+	scenario := &c2InstalledManagerSession{
+		deploymentUID: "deployment", pdbUID: "pdb", pdbRV: "10", replicaSetUID: "replicaset", originalUID: "original", peerUID: "peer",
+		originalCreatedAt: created.Format(time.RFC3339Nano), originalAgeReadyAt: created.Add(installedSessionMinimumPodAge).Format(time.RFC3339Nano),
+		availability: aggregate, availabilityRaw: retained, effectStatus: "not-observed",
+	}
+	if err := scenario.updateInstalledSessionBenchmarkEvidence("availability-invalid", "not-observed", false, "", "", ""); err != nil {
+		t.Fatalf("export failed partial segment receipt: %v", err)
+	}
+	chunkCount, _ := strconv.Atoi(scenario.benchmarkEvidence["availability.segmentReceiptChunks"])
+	var reconstructed strings.Builder
+	for i := 0; i < chunkCount; i++ {
+		reconstructed.WriteString(scenario.benchmarkEvidence[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)])
+	}
+	reconstructedRaw, decodeErr := base64.StdEncoding.DecodeString(reconstructed.String())
+	if decodeErr != nil || string(reconstructedRaw) != retained || scenario.benchmarkEvidence["availability.segmentReceiptsSchema"] != "phorvex.installed-session-availability.v2" || scenario.benchmarkEvidence["availability.segmentReceiptsEncoding"] != "base64" || scenario.benchmarkEvidence["availability.segmentReceiptsBytes"] != strconv.Itoa(len(retained)) {
+		t.Fatalf("exported partial receipt is not reconstructable: evidence=%+v", scenario.benchmarkEvidence)
+	}
+	metricPath := filepath.Join(t.TempDir(), "metrics.jsonl")
+	writer, writerErr := core.NewMetricWriter(metricPath)
+	if writerErr != nil {
+		t.Fatal(writerErr)
+	}
+	if err := writer.Write(core.Metric{Scenario: installedSessionScenario, Defender: "d-nomtd", Trial: 0, ScenarioBenignControl: true, BenchmarkEvidence: scenario.benchmarkEvidence}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	metricRaw, readErr := os.ReadFile(metricPath)
+	var exported core.Metric
+	if readErr != nil || json.Unmarshal(metricRaw, &exported) != nil || validateInstalledSessionBenchmarkEvidence(exported.BenchmarkEvidence) != nil {
+		t.Fatalf("partial evidence did not survive actual metric JSONL: readErr=%v raw=%s", readErr, metricRaw)
+	}
+	reconstructed.Reset()
+	exportedChunks, _ := strconv.Atoi(exported.BenchmarkEvidence["availability.segmentReceiptChunks"])
+	for i := 0; i < exportedChunks; i++ {
+		reconstructed.WriteString(exported.BenchmarkEvidence[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)])
+	}
+	reconstructedRaw, decodeErr = base64.StdEncoding.DecodeString(reconstructed.String())
+	if decodeErr != nil || string(reconstructedRaw) != retained {
+		t.Fatal("metric JSONL changed partial segment receipt bytes")
+	}
+	corrupt := maps.Clone(scenario.benchmarkEvidence)
+	corrupt["availability.segmentReceiptChunk.000"] += "x"
+	if validateInstalledSessionBenchmarkEvidence(corrupt) == nil {
+		t.Fatal("corrupted retained segment receipt accepted")
+	}
+}
+
+func TestInstalledSessionFailureByteRetentionIsExplicitlyCapped(t *testing.T) {
+	stdout, stderr := strings.Repeat("o", installedSessionStdoutPrefixMax+17), strings.Repeat("e", installedSessionStderrPrefixMax+19)
+	segment := installedSessionSegmentReceipt{StdoutBytes: len(stdout), StderrBytes: len(stderr), StdoutSHA256: "stdout-full-hash", StderrSHA256: "stderr-full-hash"}
+	installedSessionRetainFailureBytes(&segment, stdout, stderr)
+	stdoutPrefix, stdoutErr := base64.StdEncoding.DecodeString(segment.StdoutPrefixBase64)
+	stderrPrefix, stderrErr := base64.StdEncoding.DecodeString(segment.StderrPrefixBase64)
+	if stdoutErr != nil || stderrErr != nil || len(stdoutPrefix) != installedSessionStdoutPrefixMax || len(stderrPrefix) != installedSessionStderrPrefixMax || !segment.StdoutTruncated || !segment.StderrTruncated || segment.StdoutBytes != len(stdout) || segment.StderrBytes != len(stderr) || segment.StdoutSHA256 != "stdout-full-hash" || segment.StderrSHA256 != "stderr-full-hash" {
+		t.Fatalf("failure byte cap/hash contract differs: segment=%+v stdoutErr=%v stderrErr=%v", segment, stdoutErr, stderrErr)
+	}
+}
+
+func TestInstalledSessionCompleteAndLateFailureReceiptsReachMetricsJSONL(t *testing.T) {
+	serviceURL, sessionID := "http://"+installedSessionSharedService+":"+strconv.Itoa(sessionPort), "session-live"
+	base := time.Now().UTC().Add(-10 * time.Minute)
+	complete := make([]installedSessionSegmentReceipt, 0, 5)
+	for i := 0; i < 5; i++ {
+		started, ended := base.Add(time.Duration(i)*installedSessionSegment), base.Add(time.Duration(i+1)*installedSessionSegment)
+		availability := installedSessionAvailability{Version: 1, ServiceURL: serviceURL, SessionID: sessionID, DurationMillis: int(installedSessionSegment.Milliseconds()), CadenceMillis: int(installedSessionSamplePeriod.Milliseconds()), StartedAtUTC: started.Format(time.RFC3339Nano), EndedAtUTC: ended.Format(time.RFC3339Nano), Observations: []installedSessionAvailabilityObservation{{AtUTC: started.Format(time.RFC3339Nano), Known: true, Category: "application-response", HTTPStatus: 200, PodUID: "pod-live"}}}
+		stdout := []byte(fmt.Sprintf("complete-segment-%d", i))
+		complete = append(complete, installedSessionSegmentReceipt{Segment: i, Status: "complete", Availability: availability, AvailabilityPrefixValidated: true, StdoutBytes: len(stdout), StdoutSHA256: fmt.Sprintf("%x", sha256.Sum256(stdout)), StderrSHA256: fmt.Sprintf("%x", sha256.Sum256(nil)), ExitCode: 0})
+	}
+
+	t.Run("five-complete", func(t *testing.T) {
+		raw := marshalInstalledSessionSegmentReceipts(complete)
+		aggregate := installedSessionAvailability{Version: 1, ServiceURL: serviceURL, SessionID: sessionID, DurationMillis: int(installedSessionWindow.Milliseconds()), CadenceMillis: int(installedSessionSamplePeriod.Milliseconds()), SegmentCount: 5, StartedAtUTC: complete[0].Availability.StartedAtUTC, EndedAtUTC: complete[4].Availability.EndedAtUTC}
+		for _, segment := range complete {
+			aggregate.Observations = append(aggregate.Observations, segment.Availability.Observations...)
+		}
+		scenario := installedSessionEvidenceScenario(base, aggregate, raw)
+		if err := scenario.updateInstalledSessionBenchmarkEvidence("execute-complete", "not-observed", false, "", "", ""); err != nil {
+			t.Fatal(err)
+		}
+		assertInstalledSessionMetricReceipt(t, scenario.benchmarkEvidence, raw)
+		conflicting := maps.Clone(scenario.benchmarkEvidence)
+		var observation installedSessionAvailabilityObservation
+		if err := json.Unmarshal([]byte(conflicting["availability.observation.000"]), &observation); err != nil {
+			t.Fatal(err)
+		}
+		observation.PodUID = "different-valid-pod"
+		changed, _ := json.Marshal(observation)
+		conflicting["availability.observation.000"] = string(changed)
+		if validateInstalledSessionBenchmarkEvidence(conflicting) == nil {
+			t.Fatal("aggregate observation conflicting with completed segment receipt accepted")
+		}
+	})
+
+	t.Run("late-failure", func(t *testing.T) {
+		segments := append([]installedSessionSegmentReceipt(nil), complete[:4]...)
+		started := base.Add(4 * installedSessionSegment).Format(time.RFC3339Nano)
+		header, _ := json.Marshal(map[string]any{"type": "header", "version": 1, "serviceURL": serviceURL, "sessionID": sessionID, "durationMillis": int(installedSessionSegment.Milliseconds()), "cadenceMillis": int(installedSessionSamplePeriod.Milliseconds()), "startedAtUTC": started})
+		observation, _ := json.Marshal(map[string]any{"type": "observation", "observation": installedSessionAvailabilityObservation{AtUTC: started, Known: false, Category: "request-deadline"}})
+		partial := string(header) + "\n" + string(observation) + "\n"
+		availability, parseErr := parseInstalledSessionAvailability([]byte(partial), serviceURL, sessionID, installedSessionSegment)
+		stdoutSum, stderrSum := sha256.Sum256([]byte(partial)), sha256.Sum256(nil)
+		failed := installedSessionSegmentReceipt{Segment: 4, Status: "exec-failed", Availability: availability, AvailabilityPrefixValidated: true, StdoutBytes: len(partial), StdoutSHA256: fmt.Sprintf("%x", stdoutSum), StderrSHA256: fmt.Sprintf("%x", stderrSum), ExitCode: -1, ExecErrorCategory: "deadline", ExecError: "exec stream: context deadline exceeded", ParseError: parseErr.Error()}
+		installedSessionRetainFailureBytes(&failed, partial, "")
+		segments = append(segments, failed)
+		raw := marshalInstalledSessionSegmentReceipts(segments)
+		aggregate := installedSessionAvailability{Version: 1, ServiceURL: serviceURL, SessionID: sessionID, DurationMillis: int(installedSessionWindow.Milliseconds()), CadenceMillis: int(installedSessionSamplePeriod.Milliseconds()), SegmentCount: 5, StartedAtUTC: complete[0].Availability.StartedAtUTC, EndedAtUTC: complete[3].Availability.EndedAtUTC}
+		for _, segment := range complete[:4] {
+			aggregate.Observations = append(aggregate.Observations, segment.Availability.Observations...)
+		}
+		scenario := installedSessionEvidenceScenario(base, aggregate, raw)
+		if err := scenario.updateInstalledSessionBenchmarkEvidence("availability-invalid", "not-observed", false, "", "", ""); err != nil {
+			t.Fatal(err)
+		}
+		assertInstalledSessionMetricReceipt(t, scenario.benchmarkEvidence, raw)
+	})
+}
+
+func installedSessionEvidenceScenario(base time.Time, availability installedSessionAvailability, raw string) *c2InstalledManagerSession {
+	return &c2InstalledManagerSession{
+		deploymentUID: "deployment", pdbUID: "pdb", pdbRV: "10", replicaSetUID: "replicaset", originalUID: "original", peerUID: "peer",
+		originalCreatedAt: base.Add(-2 * installedSessionMinimumPodAge).Format(time.RFC3339Nano), originalAgeReadyAt: base.Add(-installedSessionMinimumPodAge).Format(time.RFC3339Nano),
+		availability: availability, availabilityRaw: raw, effectStatus: "not-observed",
+	}
+}
+
+func assertInstalledSessionMetricReceipt(t *testing.T, evidence map[string]string, want string) {
+	t.Helper()
+	metricPath := filepath.Join(t.TempDir(), "metrics.jsonl")
+	writer, err := core.NewMetricWriter(metricPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Write(core.Metric{Scenario: installedSessionScenario, Defender: "d-nomtd", Trial: 0, ScenarioBenignControl: true, BenchmarkEvidence: evidence}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(metricPath)
+	var metric core.Metric
+	if err != nil || json.Unmarshal(raw, &metric) != nil || validateInstalledSessionBenchmarkEvidence(metric.BenchmarkEvidence) != nil {
+		t.Fatalf("metric JSONL receipt invalid: err=%v raw=%s", err, raw)
+	}
+	chunks, _ := strconv.Atoi(metric.BenchmarkEvidence["availability.segmentReceiptChunks"])
+	var reconstructed strings.Builder
+	for i := 0; i < chunks; i++ {
+		reconstructed.WriteString(metric.BenchmarkEvidence[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)])
+	}
+	reconstructedRaw, decodeErr := base64.StdEncoding.DecodeString(reconstructed.String())
+	if decodeErr != nil || string(reconstructedRaw) != want {
+		t.Fatal("metric JSONL segment receipt bytes differ")
+	}
+}
+
+func TestInstalledSessionReceiptChunksPreserveUnicodeAcrossMetricsJSONL(t *testing.T) {
+	want := strings.Repeat("a", installedSessionEvidenceChunkMax-1) + "雪 diagnostics"
+	chunks := installedSessionReceiptChunks(want)
+	if len(chunks) < 2 {
+		t.Fatal("test input did not cross an evidence chunk boundary")
+	}
+	evidence := map[string]string{
+		"availability.segmentReceiptsEncoding": "base64",
+		"availability.segmentReceiptsBytes":    strconv.Itoa(len(want)),
+		"availability.segmentReceiptChunks":    strconv.Itoa(len(chunks)),
+	}
+	for i, chunk := range chunks {
+		evidence[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)] = chunk
+	}
+	metricPath := filepath.Join(t.TempDir(), "metrics.jsonl")
+	writer, err := core.NewMetricWriter(metricPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Write(core.Metric{Scenario: installedSessionScenario, Defender: "d-nomtd", Trial: 0, ScenarioBenignControl: true, BenchmarkEvidence: evidence}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(metricPath)
+	var metric core.Metric
+	if err != nil || json.Unmarshal(raw, &metric) != nil {
+		t.Fatalf("metric JSONL decode failed: err=%v raw=%s", err, raw)
+	}
+	var encoded strings.Builder
+	for i := range chunks {
+		encoded.WriteString(metric.BenchmarkEvidence[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)])
+	}
+	got, err := base64.StdEncoding.DecodeString(encoded.String())
+	if err != nil || string(got) != want {
+		t.Fatalf("unicode diagnostic bytes changed across metric JSONL: err=%v", err)
+	}
+}
+
+func runInstalledSessionPython(t *testing.T, source, baseURL string, duration time.Duration) (installedSessionAvailability, time.Duration) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	started := time.Now()
+	command := exec.CommandContext(ctx, "python3", "-B", "-c", source, baseURL, "session-live", strconv.FormatFloat(duration.Seconds(), 'f', 3, 64), strconv.FormatFloat(installedSessionSamplePeriod.Seconds(), 'f', 3, 64))
+	raw, err := command.Output()
+	elapsed := time.Since(started)
+	if err != nil {
+		t.Fatalf("actual bounded sampler: elapsed=%s err=%v", elapsed, err)
+	}
+	receipt, err := parseInstalledSessionAvailability(raw, baseURL, "session-live", duration)
+	if err != nil {
+		t.Fatalf("decode bounded sampler: elapsed=%s err=%v raw=%s", elapsed, err, raw)
+	}
+	return receipt, elapsed
 }
 
 func TestInstalledSessionWarmupRequiresSameReadyTargetToReachAntiOverAge(t *testing.T) {

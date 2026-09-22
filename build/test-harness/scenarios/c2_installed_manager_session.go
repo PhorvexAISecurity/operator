@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/defenders"
@@ -28,33 +30,39 @@ import (
 func init() { core.RegisterScenario(&c2InstalledManagerSession{}) }
 
 const (
-	installedSessionScenario        = "c2-installed-manager-session"
-	installedSessionApp             = "c2-installed-session"
-	installedSessionDeployment      = "c2-installed-session"
-	installedSessionTargetService   = "c2-installed-session-target"
-	installedSessionSharedService   = "c2-installed-session-shared"
-	installedSessionPDB             = "c2-installed-session"
-	installedSessionTargetRoute     = "fixture.phorvex.ai/session-target"
-	installedSessionWindow          = 90 * time.Second
-	installedSessionSegment         = 18 * time.Second
-	installedSessionCoordination    = 80 * time.Second
-	installedSessionSamplePeriod    = 500 * time.Millisecond
-	installedSessionExecTimeout     = 23 * time.Second
-	installedSessionSampleLimit     = 200
-	installedSessionReceiptMaxBytes = 96 * 1024
-	installedSessionGraceSeconds    = int64(30)
-	installedSessionMinimumPodAge   = 90 * time.Second
-	installedSessionAgeWaitBound    = 105 * time.Second
+	installedSessionScenario         = "c2-installed-manager-session"
+	installedSessionApp              = "c2-installed-session"
+	installedSessionDeployment       = "c2-installed-session"
+	installedSessionTargetService    = "c2-installed-session-target"
+	installedSessionSharedService    = "c2-installed-session-shared"
+	installedSessionPDB              = "c2-installed-session"
+	installedSessionTargetRoute      = "fixture.phorvex.ai/session-target"
+	installedSessionWindow           = 90 * time.Second
+	installedSessionSegment          = 18 * time.Second
+	installedSessionCoordination     = 80 * time.Second
+	installedSessionSamplePeriod     = 500 * time.Millisecond
+	installedSessionExecTimeout      = 30 * time.Second
+	installedSessionSampleLimit      = 200
+	installedSessionReceiptMaxBytes  = 96 * 1024
+	installedSessionEvidenceChunkMax = 32 * 1024
+	installedSessionStdoutPrefixMax  = 16 * 1024
+	installedSessionStderrPrefixMax  = 4 * 1024
+	installedSessionGraceSeconds     = int64(30)
+	installedSessionMinimumPodAge    = 90 * time.Second
+	installedSessionAgeWaitBound     = 105 * time.Second
 )
 
 // installedSessionAvailabilitySource makes read-only application requests for
 // the entire declared observation window. It emits one typed item per attempt,
 // including failures, and never exports exception text or response bodies.
-const installedSessionAvailabilitySource = `import datetime, json, signal, sys, time, urllib.error, urllib.parse, urllib.request
+const installedSessionAvailabilitySource = `import datetime, json, signal, socket, sys, time, urllib.error, urllib.parse, urllib.request
 base, session_id, duration_text, cadence_text = sys.argv[1:]
 duration, cadence = float(duration_text), float(cadence_text)
 if not 0 < duration <= 20 or not 0.1 <= cadence <= 2: raise ValueError("invalid availability bounds")
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+def emit(value):
+    sys.stdout.write(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
 def strict_object(pairs):
     out = {}
     for key, value in pairs:
@@ -63,14 +71,29 @@ def strict_object(pairs):
     return out
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, file_pointer, code, message, headers, new_url): return None
+class AttemptDeadline(TimeoutError): pass
+def deadline_reached(signum, frame): raise AttemptDeadline("request deadline reached")
+def failure_category(error, deadline_category):
+    reason = getattr(error, "reason", None)
+    if isinstance(error, AttemptDeadline): return deadline_category
+    if isinstance(error, socket.gaierror) or isinstance(reason, socket.gaierror): return "dns-failure"
+    if isinstance(error, (TimeoutError, socket.timeout)) or isinstance(reason, (TimeoutError, socket.timeout)): return deadline_category
+    return "transport-unavailable"
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 url = base + "/session?" + urllib.parse.urlencode({"id": session_id})
 started = now(); deadline = time.monotonic() + duration; observations = []
+emit({"type":"header","version":1,"serviceURL":base,"sessionID":session_id,"durationMillis":round(duration*1000),"cadenceMillis":round(cadence*1000),"startedAtUTC":started})
+signal.signal(signal.SIGALRM, deadline_reached)
 while True:
+    remaining = deadline-time.monotonic()
+    if remaining <= 0: break
     attempt = {"atUTC": now(), "known": False, "category": "transport-unavailable", "httpStatus": 0, "podUID": ""}
-    response = None
+    response = None; failure = None
+    request_budget = min(2.0, remaining)
+    deadline_category = "sampling-deadline" if remaining <= 2.0 else "request-deadline"
+    signal.setitimer(signal.ITIMER_REAL, request_budget)
     try:
-        try: response = opener.open(urllib.request.Request(url, method="GET"), timeout=min(2.0, max(0.1, deadline-time.monotonic())))
+        try: response = opener.open(urllib.request.Request(url, method="GET"), timeout=request_budget)
         except urllib.error.HTTPError as error: response = error
         raw = response.read(1025)
         attempt["httpStatus"] = response.status
@@ -82,14 +105,23 @@ while True:
                 valid = type(parsed) is dict and set(parsed) == {"podUID", "id", "present"} and type(parsed["podUID"]) is str and parsed["podUID"] and parsed["id"] == session_id and type(parsed["present"]) is bool and response.status in (200, 404) and (response.status == 200) == parsed["present"]
                 if valid: attempt.update({"known": True, "category": "application-response", "podUID": parsed["podUID"]})
                 else: attempt["category"] = "invalid-response"
+            except AttemptDeadline: raise
             except Exception: attempt["category"] = "invalid-response"
-    except Exception:
-        pass
+    except Exception as error:
+        failure = error
+    finally:
+        if response is not None:
+            try: response.close()
+            except Exception as error:
+                if failure is None: failure = error
+        signal.setitimer(signal.ITIMER_REAL, 0)
+    if failure is not None: attempt["category"] = failure_category(failure, deadline_category)
     observations.append(attempt)
+    emit({"type":"observation","observation":attempt})
     remaining = deadline-time.monotonic()
     if remaining <= 0: break
     time.sleep(min(cadence, remaining))
-sys.stdout.write(json.dumps({"version":1,"serviceURL":base,"sessionID":session_id,"durationMillis":round(duration*1000),"cadenceMillis":round(cadence*1000),"startedAtUTC":started,"endedAtUTC":now(),"observations":observations}, sort_keys=True, separators=(",", ":")))
+emit({"type":"summary","endedAtUTC":now(),"observationCount":len(observations)})
 `
 
 type installedSessionAvailabilityObservation struct {
@@ -110,6 +142,27 @@ type installedSessionAvailability struct {
 	StartedAtUTC   string                                    `json:"startedAtUTC"`
 	EndedAtUTC     string                                    `json:"endedAtUTC"`
 	Observations   []installedSessionAvailabilityObservation `json:"observations"`
+}
+
+type installedSessionSegmentReceipt struct {
+	Segment                     int                          `json:"segment"`
+	Status                      string                       `json:"status"`
+	Availability                installedSessionAvailability `json:"availability"`
+	AvailabilityPrefixValidated bool                         `json:"availabilityPrefixValidated"`
+	StdoutBytes                 int                          `json:"stdoutBytes"`
+	StdoutSHA256                string                       `json:"stdoutSHA256"`
+	StdoutPrefixBase64          string                       `json:"stdoutPrefixBase64,omitempty"`
+	StdoutPrefixBytes           int                          `json:"stdoutPrefixBytes,omitempty"`
+	StdoutTruncated             bool                         `json:"stdoutTruncated,omitempty"`
+	StderrBytes                 int                          `json:"stderrBytes"`
+	StderrSHA256                string                       `json:"stderrSHA256"`
+	StderrPrefixBase64          string                       `json:"stderrPrefixBase64,omitempty"`
+	StderrPrefixBytes           int                          `json:"stderrPrefixBytes,omitempty"`
+	StderrTruncated             bool                         `json:"stderrTruncated,omitempty"`
+	ExitCode                    int                          `json:"exitCode"`
+	ExecErrorCategory           string                       `json:"execErrorCategory,omitempty"`
+	ExecError                   string                       `json:"execError,omitempty"`
+	ParseError                  string                       `json:"parseError,omitempty"`
 }
 
 type c2InstalledManagerSession struct {
@@ -481,12 +534,10 @@ func waitInstalledSessionTargetAge(ctx context.Context, env *core.Env, podName s
 func runInstalledSessionAvailability(ctx context.Context, env *core.Env, expectedProducerUID types.UID, sessionID string) (installedSessionAvailability, string, error) {
 	serviceURL := fmt.Sprintf("http://%s:%d", installedSessionSharedService, sessionPort)
 	aggregate := installedSessionAvailability{Version: 1, ServiceURL: serviceURL, SessionID: sessionID, DurationMillis: int(installedSessionWindow.Milliseconds()), CadenceMillis: int(installedSessionSamplePeriod.Milliseconds()), SegmentCount: int(installedSessionWindow / installedSessionSegment)}
-	var segmentReceipts []json.RawMessage
+	segmentReceipts := make([]installedSessionSegmentReceipt, 0, aggregate.SegmentCount)
 	for segment := 0; segment < aggregate.SegmentCount; segment++ {
-		part, raw, err := runInstalledSessionAvailabilitySegment(ctx, env, expectedProducerUID, sessionID, installedSessionSegment)
-		if len(raw) > 0 {
-			segmentReceipts = append(segmentReceipts, json.RawMessage(raw))
-		}
+		part, receipt, err := runInstalledSessionAvailabilitySegmentAtURL(ctx, env, expectedProducerUID, sessionID, serviceURL, installedSessionSegment, installedSessionExecTimeout, segment)
+		segmentReceipts = append(segmentReceipts, receipt)
 		if err != nil {
 			return aggregate, marshalInstalledSessionSegmentReceipts(segmentReceipts), fmt.Errorf("installed availability segment %d: %w", segment, err)
 		}
@@ -506,37 +557,123 @@ func runInstalledSessionAvailability(ctx context.Context, env *core.Env, expecte
 	return aggregate, raw, nil
 }
 
-func runInstalledSessionAvailabilitySegment(ctx context.Context, env *core.Env, expectedProducerUID types.UID, sessionID string, duration time.Duration) (installedSessionAvailability, string, error) {
-	var out installedSessionAvailability
-	producer, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, sessionProducer, metav1.GetOptions{})
-	if err != nil || validateSessionProducer(env, producer, expectedProducerUID) != nil {
-		return out, "", errors.New("installed availability producer identity invalid before exec")
-	}
+func runInstalledSessionAvailabilitySegment(ctx context.Context, env *core.Env, expectedProducerUID types.UID, sessionID string, duration time.Duration) (installedSessionAvailability, installedSessionSegmentReceipt, error) {
 	serviceURL := fmt.Sprintf("http://%s:%d", installedSessionSharedService, sessionPort)
-	command := []string{"python3", "-B", "-c", installedSessionAvailabilitySource, serviceURL, sessionID, strconv.FormatFloat(duration.Seconds(), 'f', 3, 64), strconv.FormatFloat(installedSessionSamplePeriod.Seconds(), 'f', 3, 64)}
-	result := env.ExecWithTimeout(ctx, sessionProducer, "producer", installedSessionExecTimeout, command)
-	raw := result.Stdout
-	if len(raw) > installedSessionReceiptMaxBytes {
-		return out, "", fmt.Errorf("installed availability receipt exceeded %d bytes", installedSessionReceiptMaxBytes)
-	}
-	sum := sha256.Sum256([]byte(raw))
-	env.Log.Logf("installed-manager availability-receipt bytes=%d sha256=%x exit=%d", len(raw), sum, result.ExitCode)
-	producerAfter, afterErr := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, sessionProducer, metav1.GetOptions{})
-	if afterErr != nil || validateSessionProducer(env, producerAfter, expectedProducerUID) != nil {
-		return out, raw, errors.New("installed availability producer identity invalid after exec")
-	}
-	if result.Err != nil || result.ExitCode != 0 {
-		return out, raw, fmt.Errorf("installed availability producer failed: exit=%d", result.ExitCode)
-	}
-	out, err = parseInstalledSessionAvailability([]byte(raw), serviceURL, sessionID, duration)
-	return out, raw, err
+	return runInstalledSessionAvailabilitySegmentAtURL(ctx, env, expectedProducerUID, sessionID, serviceURL, duration, installedSessionExecTimeout, 0)
 }
 
-func marshalInstalledSessionSegmentReceipts(receipts []json.RawMessage) string {
-	raw, _ := json.Marshal(struct {
-		SchemaVersion string            `json:"schemaVersion"`
-		Segments      []json.RawMessage `json:"segments"`
-	}{SchemaVersion: "phorvex.installed-session-availability.v1", Segments: receipts})
+func runInstalledSessionAvailabilitySegmentAtURL(ctx context.Context, env *core.Env, expectedProducerUID types.UID, sessionID, serviceURL string, duration, execTimeout time.Duration, segment int) (installedSessionAvailability, installedSessionSegmentReceipt, error) {
+	var out installedSessionAvailability
+	emptySum := fmt.Sprintf("%x", sha256.Sum256(nil))
+	receipt := installedSessionSegmentReceipt{Segment: segment, Status: "not-started", ExitCode: -1, StdoutSHA256: emptySum, StderrSHA256: emptySum}
+	producer, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, sessionProducer, metav1.GetOptions{})
+	if err != nil || validateSessionProducer(env, producer, expectedProducerUID) != nil {
+		receipt.Status = "producer-identity-invalid"
+		return out, receipt, errors.New("installed availability producer identity invalid before exec")
+	}
+	command := []string{"python3", "-B", "-c", installedSessionAvailabilitySource, serviceURL, sessionID, strconv.FormatFloat(duration.Seconds(), 'f', 3, 64), strconv.FormatFloat(installedSessionSamplePeriod.Seconds(), 'f', 3, 64)}
+	result := env.ExecWithTimeout(ctx, sessionProducer, "producer", execTimeout, command)
+	raw := result.Stdout
+	stdoutSum, stderrSum := sha256.Sum256([]byte(raw)), sha256.Sum256([]byte(result.Stderr))
+	receipt.StdoutBytes, receipt.StdoutSHA256 = len(raw), fmt.Sprintf("%x", stdoutSum)
+	receipt.StderrBytes, receipt.StderrSHA256 = len(result.Stderr), fmt.Sprintf("%x", stderrSum)
+	receipt.ExitCode = result.ExitCode
+	if len(raw) > installedSessionReceiptMaxBytes {
+		receipt.Status = "output-too-large"
+		installedSessionRetainFailureBytes(&receipt, raw, result.Stderr)
+		return out, receipt, fmt.Errorf("installed availability receipt exceeded %d bytes", installedSessionReceiptMaxBytes)
+	}
+	env.Log.Logf("installed-manager availability-receipt bytes=%d sha256=%x stderrBytes=%d stderrSHA256=%x exit=%d errorCategory=%s", len(raw), stdoutSum, len(result.Stderr), stderrSum, result.ExitCode, installedSessionExecErrorCategory(result))
+	out, parseErr := parseInstalledSessionAvailability([]byte(raw), serviceURL, sessionID, duration)
+	receipt.Availability = out
+	receipt.AvailabilityPrefixValidated = installedSessionAvailabilityPrefixValid(out, serviceURL, sessionID, duration)
+	if parseErr != nil {
+		receipt.ParseError = installedSessionSafeDiagnostic(parseErr)
+	}
+	producerAfter, afterErr := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, sessionProducer, metav1.GetOptions{})
+	if afterErr != nil || validateSessionProducer(env, producerAfter, expectedProducerUID) != nil {
+		receipt.Status = "producer-identity-invalid"
+		installedSessionRetainFailureBytes(&receipt, raw, result.Stderr)
+		return out, receipt, errors.Join(parseErr, errors.New("installed availability producer identity invalid after exec"))
+	}
+	var execErr error
+	if result.Err != nil {
+		receipt.ExecErrorCategory = installedSessionExecErrorCategory(result)
+		receipt.ExecError = installedSessionSafeDiagnostic(result.Err)
+		execErr = fmt.Errorf("installed availability producer failed: exit=%d category=%s: %w", result.ExitCode, receipt.ExecErrorCategory, result.Err)
+	} else if result.ExitCode != 0 {
+		receipt.ExecErrorCategory = "producer-exit"
+		execErr = fmt.Errorf("installed availability producer failed: exit=%d category=%s", result.ExitCode, receipt.ExecErrorCategory)
+	}
+	if execErr != nil {
+		receipt.Status = "exec-failed"
+		installedSessionRetainFailureBytes(&receipt, raw, result.Stderr)
+		if parseErr != nil {
+			return out, receipt, errors.Join(execErr, fmt.Errorf("installed availability partial output: %w", parseErr))
+		}
+		return out, receipt, execErr
+	}
+	if parseErr != nil {
+		receipt.Status = "invalid-output"
+		installedSessionRetainFailureBytes(&receipt, raw, result.Stderr)
+		return out, receipt, parseErr
+	}
+	receipt.Status = "complete"
+	return out, receipt, nil
+}
+
+func installedSessionRetainFailureBytes(receipt *installedSessionSegmentReceipt, stdout, stderr string) {
+	stdoutPrefix, stderrPrefix := []byte(stdout), []byte(stderr)
+	if len(stdoutPrefix) > installedSessionStdoutPrefixMax {
+		stdoutPrefix, receipt.StdoutTruncated = stdoutPrefix[:installedSessionStdoutPrefixMax], true
+	}
+	if len(stderrPrefix) > installedSessionStderrPrefixMax {
+		stderrPrefix, receipt.StderrTruncated = stderrPrefix[:installedSessionStderrPrefixMax], true
+	}
+	receipt.StdoutPrefixBytes, receipt.StderrPrefixBytes = len(stdoutPrefix), len(stderrPrefix)
+	receipt.StdoutPrefixBase64, receipt.StderrPrefixBase64 = base64.StdEncoding.EncodeToString(stdoutPrefix), base64.StdEncoding.EncodeToString(stderrPrefix)
+}
+
+func installedSessionExecErrorCategory(result core.ExecResult) string {
+	switch {
+	case errors.Is(result.Err, context.DeadlineExceeded):
+		return "deadline"
+	case errors.Is(result.Err, context.Canceled):
+		return "cancelled"
+	case result.Err != nil:
+		return "stream-error"
+	case result.ExitCode != 0:
+		return "producer-exit"
+	default:
+		return "none"
+	}
+}
+
+func installedSessionSafeDiagnostic(err error) string {
+	if err == nil {
+		return ""
+	}
+	value := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, err.Error())
+	runes := []rune(value)
+	if len(runes) > 512 {
+		value = string(runes[:512])
+	}
+	return value
+}
+
+func marshalInstalledSessionSegmentReceipts(receipts []installedSessionSegmentReceipt) string {
+	raw, err := json.Marshal(struct {
+		SchemaVersion string                           `json:"schemaVersion"`
+		Segments      []installedSessionSegmentReceipt `json:"segments"`
+	}{SchemaVersion: "phorvex.installed-session-availability.v2", Segments: receipts})
+	if err != nil {
+		return `{"schemaVersion":"phorvex.installed-session-availability.v2","segments":[],"marshalStatus":"invalid"}`
+	}
 	return string(raw)
 }
 
@@ -545,44 +682,241 @@ func parseInstalledSessionAvailability(raw []byte, serviceURL, sessionID string,
 	if len(raw) == 0 || len(raw) > installedSessionReceiptMaxBytes {
 		return out, errors.New("installed availability receipt size invalid")
 	}
-	if err := rejectDuplicateJSONFields(raw); err != nil {
-		return out, fmt.Errorf("installed availability receipt duplicates: %w", err)
+	lines := bytes.Split(raw, []byte("\n"))
+	if len(lines) > installedSessionSampleLimit+3 {
+		return out, errors.New("installed availability event count exceeded bound")
+	}
+	complete := len(lines) > 1 && len(lines[len(lines)-1]) == 0
+	if complete {
+		lines = lines[:len(lines)-1]
+	} else {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return out, errors.New("installed availability receipt has no complete event")
+	}
+	headerSeen, summarySeen := false, false
+	for i, line := range lines {
+		if len(line) == 0 {
+			return out, fmt.Errorf("installed availability event %d empty", i)
+		}
+		if err := rejectDuplicateJSONFields(line); err != nil {
+			return out, fmt.Errorf("installed availability event %d duplicates: %w", i, err)
+		}
+		var envelope struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(line, &envelope); err != nil {
+			return out, fmt.Errorf("installed availability event %d malformed: %w", i, err)
+		}
+		switch envelope.Type {
+		case "header":
+			if i != 0 || headerSeen || summarySeen {
+				return out, errors.New("installed availability header order invalid")
+			}
+			var header struct {
+				Type           string `json:"type"`
+				Version        int    `json:"version"`
+				ServiceURL     string `json:"serviceURL"`
+				SessionID      string `json:"sessionID"`
+				DurationMillis int    `json:"durationMillis"`
+				CadenceMillis  int    `json:"cadenceMillis"`
+				StartedAtUTC   string `json:"startedAtUTC"`
+			}
+			if err := decodeInstalledSessionEvent(line, &header); err != nil {
+				return out, fmt.Errorf("decode installed availability header: %w", err)
+			}
+			candidate := installedSessionAvailability{Version: header.Version, ServiceURL: header.ServiceURL, SessionID: header.SessionID, DurationMillis: header.DurationMillis, CadenceMillis: header.CadenceMillis, StartedAtUTC: header.StartedAtUTC}
+			if err := validateInstalledSessionAvailabilityHeader(candidate, serviceURL, sessionID, duration); err != nil {
+				return out, err
+			}
+			out = candidate
+			headerSeen = true
+		case "observation":
+			if !headerSeen || summarySeen {
+				return out, errors.New("installed availability observation order invalid")
+			}
+			var event struct {
+				Type        string                                  `json:"type"`
+				Observation installedSessionAvailabilityObservation `json:"observation"`
+			}
+			if err := decodeInstalledSessionEvent(line, &event); err != nil {
+				return out, fmt.Errorf("decode installed availability observation: %w", err)
+			}
+			previous := out.StartedAtUTC
+			if len(out.Observations) > 0 {
+				previous = out.Observations[len(out.Observations)-1].AtUTC
+			}
+			if err := validateInstalledSessionAvailabilityObservation(event.Observation, out.StartedAtUTC, previous, ""); err != nil {
+				return out, fmt.Errorf("installed availability observation %d invalid: %w", len(out.Observations), err)
+			}
+			out.Observations = append(out.Observations, event.Observation)
+		case "summary":
+			if !headerSeen || summarySeen || i != len(lines)-1 {
+				return out, errors.New("installed availability summary order invalid")
+			}
+			var summary struct {
+				Type             string `json:"type"`
+				EndedAtUTC       string `json:"endedAtUTC"`
+				ObservationCount int    `json:"observationCount"`
+			}
+			if err := decodeInstalledSessionEvent(line, &summary); err != nil {
+				return out, fmt.Errorf("decode installed availability summary: %w", err)
+			}
+			if summary.ObservationCount != len(out.Observations) {
+				return out, errors.New("installed availability summary count differs")
+			}
+			out.EndedAtUTC, summarySeen = summary.EndedAtUTC, true
+		default:
+			return out, fmt.Errorf("installed availability event %d type invalid", i)
+		}
+	}
+	if !complete || !summarySeen {
+		return out, errors.New("installed availability receipt incomplete")
+	}
+	if err := validateInstalledSessionAvailability(out, serviceURL, sessionID, duration); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+func decodeInstalledSessionEvent(raw []byte, out any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(out); err != nil {
+		return err
+	}
+	return ensureJSONEOF(dec)
+}
+
+func validateInstalledSessionAvailability(out installedSessionAvailability, serviceURL, sessionID string, duration time.Duration) error {
+	if err := validateInstalledSessionAvailabilityHeader(out, serviceURL, sessionID, duration); err != nil {
+		return err
+	}
+	if len(out.Observations) < 1 || len(out.Observations) > installedSessionSampleLimit {
+		return errors.New("installed availability observation count differs")
+	}
+	started, _ := time.Parse(time.RFC3339Nano, out.StartedAtUTC)
+	ended, err := time.Parse(time.RFC3339Nano, out.EndedAtUTC)
+	if err != nil || ended.Before(started) || ended.Sub(started) < duration || ended.Sub(started) > duration+5*time.Second {
+		return errors.New("installed availability receipt window invalid")
+	}
+	previous := out.StartedAtUTC
+	for i, observation := range out.Observations {
+		if err := validateInstalledSessionAvailabilityObservation(observation, out.StartedAtUTC, previous, out.EndedAtUTC); err != nil {
+			return fmt.Errorf("installed availability observation %d invalid: %w", i, err)
+		}
+		previous = observation.AtUTC
+	}
+	return nil
+}
+
+func validateInstalledSessionAvailabilityHeader(out installedSessionAvailability, serviceURL, sessionID string, duration time.Duration) error {
+	if out.Version != 1 || out.ServiceURL != serviceURL || out.SessionID != sessionID || out.DurationMillis != int(duration.Milliseconds()) || out.CadenceMillis != int(installedSessionSamplePeriod.Milliseconds()) || out.SegmentCount != 0 {
+		return errors.New("installed availability receipt identity/bounds differ")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, out.StartedAtUTC); err != nil {
+		return errors.New("installed availability start timestamp invalid")
+	}
+	return nil
+}
+
+func validateInstalledSessionAvailabilityObservation(observation installedSessionAvailabilityObservation, startedAt, previousAt, endedAt string) error {
+	started, startErr := time.Parse(time.RFC3339Nano, startedAt)
+	previous, previousErr := time.Parse(time.RFC3339Nano, previousAt)
+	at, parseErr := time.Parse(time.RFC3339Nano, observation.AtUTC)
+	if startErr != nil || previousErr != nil || parseErr != nil || at.Before(previous) || at.Before(started) {
+		return errors.New("timestamp invalid")
+	}
+	if endedAt != "" {
+		ended, err := time.Parse(time.RFC3339Nano, endedAt)
+		if err != nil || at.After(ended) {
+			return errors.New("timestamp exceeds summary")
+		}
+	}
+	if observation.Known {
+		if observation.Category != "application-response" || observation.PodUID == "" || !installedOneOf(strconv.Itoa(observation.HTTPStatus), "200", "404") {
+			return errors.New("known shape invalid")
+		}
+	} else if observation.PodUID != "" || !installedOneOf(observation.Category, "transport-unavailable", "invalid-response", "response-too-large", "request-deadline", "sampling-deadline", "dns-failure") || observation.HTTPStatus < 0 || observation.HTTPStatus > 599 {
+		return errors.New("unknown shape invalid")
+	}
+	return nil
+}
+
+func installedSessionAvailabilityPrefixValid(out installedSessionAvailability, serviceURL, sessionID string, duration time.Duration) bool {
+	if validateInstalledSessionAvailabilityHeader(out, serviceURL, sessionID, duration) != nil {
+		return false
+	}
+	previous := out.StartedAtUTC
+	for _, observation := range out.Observations {
+		if validateInstalledSessionAvailabilityObservation(observation, out.StartedAtUTC, previous, "") != nil {
+			return false
+		}
+		previous = observation.AtUTC
+	}
+	return true
+}
+
+func validateInstalledSessionSegmentReceiptEvidence(raw []byte) ([]installedSessionSegmentReceipt, error) {
+	if len(raw) == 0 || len(raw) > installedSessionReceiptMaxBytes || rejectDuplicateJSONFields(raw) != nil {
+		return nil, errors.New("installed session segment receipt JSON invalid")
+	}
+	var evidence struct {
+		SchemaVersion string                           `json:"schemaVersion"`
+		Segments      []installedSessionSegmentReceipt `json:"segments"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&out); err != nil {
-		return out, fmt.Errorf("decode installed availability receipt: %w", err)
+	if err := dec.Decode(&evidence); err != nil || ensureJSONEOF(dec) != nil || evidence.SchemaVersion != "phorvex.installed-session-availability.v2" || len(evidence.Segments) < 1 || len(evidence.Segments) > int(installedSessionWindow/installedSessionSegment) {
+		return nil, errors.New("installed session segment receipt schema invalid")
 	}
-	if err := ensureJSONEOF(dec); err != nil {
-		return out, err
-	}
-	if out.Version != 1 || out.ServiceURL != serviceURL || out.SessionID != sessionID || out.DurationMillis != int(duration.Milliseconds()) || out.CadenceMillis != int(installedSessionSamplePeriod.Milliseconds()) || out.SegmentCount != 0 || len(out.Observations) < 1 || len(out.Observations) > installedSessionSampleLimit {
-		return out, errors.New("installed availability receipt identity/bounds differ")
-	}
-	started, err := time.Parse(time.RFC3339Nano, out.StartedAtUTC)
-	if err != nil {
-		return out, errors.New("installed availability start timestamp invalid")
-	}
-	ended, err := time.Parse(time.RFC3339Nano, out.EndedAtUTC)
-	if err != nil || ended.Before(started) || ended.Sub(started) < duration || ended.Sub(started) > duration+5*time.Second {
-		return out, errors.New("installed availability receipt window invalid")
-	}
-	previous := started
-	for i, observation := range out.Observations {
-		at, parseErr := time.Parse(time.RFC3339Nano, observation.AtUTC)
-		if parseErr != nil || at.Before(previous) || at.Before(started) || at.After(ended) {
-			return out, fmt.Errorf("installed availability observation %d timestamp invalid", i)
+	for i, segment := range evidence.Segments {
+		if segment.Segment != i || !installedOneOf(segment.Status, "complete", "producer-identity-invalid", "output-too-large", "exec-failed", "invalid-output") || segment.StdoutBytes < 0 || segment.StderrBytes < 0 || !isLowerHexSHA256(segment.StdoutSHA256) || !isLowerHexSHA256(segment.StderrSHA256) || segment.StdoutPrefixBytes < 0 || segment.StderrPrefixBytes < 0 || segment.StdoutPrefixBytes > installedSessionStdoutPrefixMax || segment.StderrPrefixBytes > installedSessionStderrPrefixMax {
+			return nil, fmt.Errorf("installed session segment receipt %d identity/bounds invalid", i)
 		}
-		previous = at
-		if observation.Known {
-			if observation.Category != "application-response" || observation.PodUID == "" || !installedOneOf(strconv.Itoa(observation.HTTPStatus), "200", "404") {
-				return out, fmt.Errorf("installed availability observation %d known shape invalid", i)
+		prefixValid := installedSessionAvailabilityPrefixValid(segment.Availability, segment.Availability.ServiceURL, segment.Availability.SessionID, installedSessionSegment)
+		if segment.AvailabilityPrefixValidated != prefixValid {
+			return nil, fmt.Errorf("installed session segment receipt %d prefix trust differs", i)
+		}
+		if segment.Status == "complete" {
+			if segment.ExitCode != 0 || segment.ExecErrorCategory != "" || segment.ExecError != "" || segment.ParseError != "" || segment.StdoutPrefixBytes != 0 || segment.StderrPrefixBytes != 0 || segment.StdoutPrefixBase64 != "" || segment.StderrPrefixBase64 != "" || segment.StdoutTruncated || segment.StderrTruncated || !segment.AvailabilityPrefixValidated || validateInstalledSessionAvailability(segment.Availability, segment.Availability.ServiceURL, segment.Availability.SessionID, installedSessionSegment) != nil {
+				return nil, fmt.Errorf("installed session complete segment receipt %d invalid", i)
 			}
-		} else if observation.PodUID != "" || !installedOneOf(observation.Category, "transport-unavailable", "invalid-response", "response-too-large") || observation.HTTPStatus < 0 || observation.HTTPStatus > 599 {
-			return out, fmt.Errorf("installed availability observation %d unknown shape invalid", i)
+		} else {
+			if validateErr := validateInstalledSessionFailurePrefix(segment.StdoutPrefixBase64, segment.StdoutPrefixBytes, segment.StdoutBytes, segment.StdoutTruncated, installedSessionStdoutPrefixMax, segment.StdoutSHA256); validateErr != nil {
+				return nil, fmt.Errorf("installed session segment receipt %d stdout: %w", i, validateErr)
+			}
+			if validateErr := validateInstalledSessionFailurePrefix(segment.StderrPrefixBase64, segment.StderrPrefixBytes, segment.StderrBytes, segment.StderrTruncated, installedSessionStderrPrefixMax, segment.StderrSHA256); validateErr != nil {
+				return nil, fmt.Errorf("installed session segment receipt %d stderr: %w", i, validateErr)
+			}
+			if len(segment.ExecError) > 512 || len(segment.ParseError) > 512 {
+				return nil, fmt.Errorf("installed session failed segment receipt %d diagnostic exceeds bound", i)
+			}
 		}
 	}
-	return out, nil
+	return evidence.Segments, nil
+}
+
+func validateInstalledSessionFailurePrefix(encoded string, prefixBytes, totalBytes int, truncated bool, limit int, fullSHA256 string) error {
+	prefix, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(prefix) != prefixBytes || prefixBytes > totalBytes || prefixBytes > limit || truncated != (totalBytes > limit) {
+		return errors.New("retained byte bounds invalid")
+	}
+	wantPrefixBytes := totalBytes
+	if wantPrefixBytes > limit {
+		wantPrefixBytes = limit
+	}
+	if prefixBytes != wantPrefixBytes {
+		return errors.New("retained byte prefix incomplete")
+	}
+	if !truncated {
+		sum := sha256.Sum256(prefix)
+		if fullSHA256 != fmt.Sprintf("%x", sum) {
+			return errors.New("untruncated byte hash differs")
+		}
+	}
+	return nil
 }
 
 func (s *c2InstalledManagerSession) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {
@@ -868,68 +1202,86 @@ func installedAvailabilityCounts(availability installedSessionAvailability) (kno
 	return known, unknown
 }
 
+func installedSessionReceiptChunks(raw string) []string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(raw))
+	chunks := make([]string, 0, (len(encoded)+installedSessionEvidenceChunkMax-1)/installedSessionEvidenceChunkMax)
+	for start := 0; start < len(encoded); start += installedSessionEvidenceChunkMax {
+		end := min(start+installedSessionEvidenceChunkMax, len(encoded))
+		chunks = append(chunks, encoded[start:end])
+	}
+	return chunks
+}
+
 func (s *c2InstalledManagerSession) updateInstalledSessionBenchmarkEvidence(phase, oracleStatus string, achieved bool, attribution, observedUID, absenceAt string) error {
 	known, unknown := installedAvailabilityCounts(s.availability)
-	rawHash := ""
+	rawHash, rawSchema, rawEncoding := "", "", ""
+	rawChunks := []string{}
 	if s.availabilityRaw != "" {
 		sum := sha256.Sum256([]byte(s.availabilityRaw))
 		rawHash = fmt.Sprintf("%x", sum)
+		rawSchema = "phorvex.installed-session-availability.v2"
+		rawEncoding = "base64"
+		rawChunks = installedSessionReceiptChunks(s.availabilityRaw)
 	}
 	evidence := map[string]string{
-		"schema":                             "phorvex.installed-session-benchmark-evidence.v1",
-		"suite":                              "post25-installed-manager-session.v1",
-		"phase":                              phase,
-		"oracle.status":                      oracleStatus,
-		"oracle.achieved":                    strconv.FormatBool(achieved),
-		"claimScope":                         "benign-process-state-and-availability-only",
-		"fixture.image":                      sessionPythonImage,
-		"source.serverSHA256":                sessionServerSourceSHA256(),
-		"source.availabilitySHA256":          installedSessionAvailabilitySourceSHA256(),
-		"deployment.uid":                     string(s.deploymentUID),
-		"availabilityPolicy.name":            installedSessionPDB,
-		"availabilityPolicy.uid":             string(s.pdbUID),
-		"availabilityPolicy.initialRV":       s.pdbRV,
-		"availabilityPolicy.eligibleRV":      s.coordination.AvailabilityPolicyResourceVersion,
-		"availabilityPolicy.initialMinimum":  "2",
-		"availabilityPolicy.eligibleMinimum": "1",
-		"replicaSet.uid":                     string(s.replicaSetUID),
-		"original.podUID":                    string(s.originalUID),
-		"original.createdAtUTC":              s.originalCreatedAt,
-		"original.ageReadyAtUTC":             s.originalAgeReadyAt,
-		"original.minimumAgeSeconds":         strconv.FormatInt(int64(installedSessionMinimumPodAge/time.Second), 10),
-		"peer.podUID":                        string(s.peerUID),
-		"replacement.podUID":                 string(s.replacementUID),
-		"original.absent":                    strconv.FormatBool(s.originalAbsent),
-		"original.absenceObservedAt":         absenceAt,
-		"oldSession.present":                 strconv.FormatBool(s.oldSessionPresent),
-		"freshState.proven":                  strconv.FormatBool(s.freshStateProven),
-		"effect.status":                      s.effectStatus,
-		"effect.attribution":                 attribution,
-		"effect.observedPodUID":              observedUID,
-		"availability.windowMillis":          strconv.FormatInt(installedSessionWindow.Milliseconds(), 10),
-		"availability.cadenceMillis":         strconv.FormatInt(installedSessionSamplePeriod.Milliseconds(), 10),
-		"availability.segmentCount":          strconv.Itoa(s.availability.SegmentCount),
-		"availability.startedAtUTC":          s.availability.StartedAtUTC,
-		"availability.endedAtUTC":            s.availability.EndedAtUTC,
-		"availability.attempts":              strconv.Itoa(len(s.availability.Observations)),
-		"availability.known":                 strconv.Itoa(known),
-		"availability.unknown":               strconv.Itoa(unknown),
-		"availability.segmentReceiptsSHA256": rawHash,
-		"coordination.used":                  strconv.FormatBool(s.coordinationUsed),
-		"coordination.schema":                s.coordination.SchemaVersion,
-		"coordination.coordinator":           s.coordination.Coordinator,
-		"coordination.startedAtUTC":          s.coordination.StartedAtUTC,
-		"coordination.endedAtUTC":            s.coordination.EndedAtUTC,
-		"coordination.disposition":           s.coordination.Disposition,
-		"coordination.attributionComplete":   strconv.FormatBool(s.coordination.AttributionComplete),
-		"coordination.targetUID":             s.coordination.TargetUID,
-		"coordination.targetResourceVersion": s.coordination.TargetResourceVersion,
-		"coordination.requestedGraceSeconds": strconv.FormatInt(s.coordination.RequestedGraceSeconds, 10),
-		"coordination.actionAtUTC":           s.coordination.ActionAtUTC,
-		"coordination.controlReceipt":        s.coordination.ControlReceiptJSON,
-		"coordination.eligibleReceipt":       s.coordination.EligibleReceiptJSON,
-		"coordination.authorizationReceipt":  s.coordination.AuthorizationReceiptJSON,
-		"availability.observationCount":      strconv.Itoa(len(s.availability.Observations)),
+		"schema":                               "phorvex.installed-session-benchmark-evidence.v1",
+		"suite":                                "post25-installed-manager-session.v1",
+		"phase":                                phase,
+		"oracle.status":                        oracleStatus,
+		"oracle.achieved":                      strconv.FormatBool(achieved),
+		"claimScope":                           "benign-process-state-and-availability-only",
+		"fixture.image":                        sessionPythonImage,
+		"source.serverSHA256":                  sessionServerSourceSHA256(),
+		"source.availabilitySHA256":            installedSessionAvailabilitySourceSHA256(),
+		"deployment.uid":                       string(s.deploymentUID),
+		"availabilityPolicy.name":              installedSessionPDB,
+		"availabilityPolicy.uid":               string(s.pdbUID),
+		"availabilityPolicy.initialRV":         s.pdbRV,
+		"availabilityPolicy.eligibleRV":        s.coordination.AvailabilityPolicyResourceVersion,
+		"availabilityPolicy.initialMinimum":    "2",
+		"availabilityPolicy.eligibleMinimum":   "1",
+		"replicaSet.uid":                       string(s.replicaSetUID),
+		"original.podUID":                      string(s.originalUID),
+		"original.createdAtUTC":                s.originalCreatedAt,
+		"original.ageReadyAtUTC":               s.originalAgeReadyAt,
+		"original.minimumAgeSeconds":           strconv.FormatInt(int64(installedSessionMinimumPodAge/time.Second), 10),
+		"peer.podUID":                          string(s.peerUID),
+		"replacement.podUID":                   string(s.replacementUID),
+		"original.absent":                      strconv.FormatBool(s.originalAbsent),
+		"original.absenceObservedAt":           absenceAt,
+		"oldSession.present":                   strconv.FormatBool(s.oldSessionPresent),
+		"freshState.proven":                    strconv.FormatBool(s.freshStateProven),
+		"effect.status":                        s.effectStatus,
+		"effect.attribution":                   attribution,
+		"effect.observedPodUID":                observedUID,
+		"availability.windowMillis":            strconv.FormatInt(installedSessionWindow.Milliseconds(), 10),
+		"availability.cadenceMillis":           strconv.FormatInt(installedSessionSamplePeriod.Milliseconds(), 10),
+		"availability.segmentCount":            strconv.Itoa(s.availability.SegmentCount),
+		"availability.startedAtUTC":            s.availability.StartedAtUTC,
+		"availability.endedAtUTC":              s.availability.EndedAtUTC,
+		"availability.attempts":                strconv.Itoa(len(s.availability.Observations)),
+		"availability.known":                   strconv.Itoa(known),
+		"availability.unknown":                 strconv.Itoa(unknown),
+		"availability.segmentReceiptsSchema":   rawSchema,
+		"availability.segmentReceiptsEncoding": rawEncoding,
+		"availability.segmentReceiptsBytes":    strconv.Itoa(len(s.availabilityRaw)),
+		"availability.segmentReceiptsSHA256":   rawHash,
+		"availability.segmentReceiptChunks":    strconv.Itoa(len(rawChunks)),
+		"coordination.used":                    strconv.FormatBool(s.coordinationUsed),
+		"coordination.schema":                  s.coordination.SchemaVersion,
+		"coordination.coordinator":             s.coordination.Coordinator,
+		"coordination.startedAtUTC":            s.coordination.StartedAtUTC,
+		"coordination.endedAtUTC":              s.coordination.EndedAtUTC,
+		"coordination.disposition":             s.coordination.Disposition,
+		"coordination.attributionComplete":     strconv.FormatBool(s.coordination.AttributionComplete),
+		"coordination.targetUID":               s.coordination.TargetUID,
+		"coordination.targetResourceVersion":   s.coordination.TargetResourceVersion,
+		"coordination.requestedGraceSeconds":   strconv.FormatInt(s.coordination.RequestedGraceSeconds, 10),
+		"coordination.actionAtUTC":             s.coordination.ActionAtUTC,
+		"coordination.controlReceipt":          s.coordination.ControlReceiptJSON,
+		"coordination.eligibleReceipt":         s.coordination.EligibleReceiptJSON,
+		"coordination.authorizationReceipt":    s.coordination.AuthorizationReceiptJSON,
+		"availability.observationCount":        strconv.Itoa(len(s.availability.Observations)),
 	}
 	for i, observation := range s.availability.Observations {
 		raw, err := json.Marshal(observation)
@@ -937,6 +1289,9 @@ func (s *c2InstalledManagerSession) updateInstalledSessionBenchmarkEvidence(phas
 			return err
 		}
 		evidence[fmt.Sprintf("availability.observation.%03d", i)] = string(raw)
+	}
+	for i, chunk := range rawChunks {
+		evidence[fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)] = chunk
 	}
 	if s.benchmarkEvidence == nil {
 		s.benchmarkEvidence = map[string]string{}
@@ -949,7 +1304,7 @@ func (s *c2InstalledManagerSession) updateInstalledSessionBenchmarkEvidence(phas
 }
 
 func validateInstalledSessionBenchmarkEvidence(evidence map[string]string) error {
-	if len(evidence) > 256 {
+	if len(evidence) > 260 {
 		return fmt.Errorf("installed session benchmark evidence has %d fields", len(evidence))
 	}
 	total := 0
@@ -959,10 +1314,10 @@ func validateInstalledSessionBenchmarkEvidence(evidence map[string]string) error
 		}
 		total += len(key) + len(value)
 	}
-	if total > 128*1024 {
+	if total > 256*1024 {
 		return fmt.Errorf("installed session benchmark evidence exceeds byte bound: %d", total)
 	}
-	required := []string{"schema", "suite", "phase", "oracle.status", "oracle.achieved", "claimScope", "fixture.image", "source.serverSHA256", "source.availabilitySHA256", "deployment.uid", "availabilityPolicy.name", "availabilityPolicy.uid", "availabilityPolicy.initialRV", "availabilityPolicy.eligibleRV", "availabilityPolicy.initialMinimum", "availabilityPolicy.eligibleMinimum", "replicaSet.uid", "original.podUID", "original.createdAtUTC", "original.ageReadyAtUTC", "original.minimumAgeSeconds", "peer.podUID", "replacement.podUID", "original.absent", "original.absenceObservedAt", "oldSession.present", "freshState.proven", "effect.status", "effect.attribution", "effect.observedPodUID", "availability.windowMillis", "availability.cadenceMillis", "availability.segmentCount", "availability.startedAtUTC", "availability.endedAtUTC", "availability.attempts", "availability.known", "availability.unknown", "availability.segmentReceiptsSHA256", "availability.observationCount", "coordination.used", "coordination.schema", "coordination.coordinator", "coordination.startedAtUTC", "coordination.endedAtUTC", "coordination.disposition", "coordination.attributionComplete", "coordination.targetUID", "coordination.targetResourceVersion", "coordination.requestedGraceSeconds", "coordination.actionAtUTC", "coordination.controlReceipt", "coordination.eligibleReceipt", "coordination.authorizationReceipt"}
+	required := []string{"schema", "suite", "phase", "oracle.status", "oracle.achieved", "claimScope", "fixture.image", "source.serverSHA256", "source.availabilitySHA256", "deployment.uid", "availabilityPolicy.name", "availabilityPolicy.uid", "availabilityPolicy.initialRV", "availabilityPolicy.eligibleRV", "availabilityPolicy.initialMinimum", "availabilityPolicy.eligibleMinimum", "replicaSet.uid", "original.podUID", "original.createdAtUTC", "original.ageReadyAtUTC", "original.minimumAgeSeconds", "peer.podUID", "replacement.podUID", "original.absent", "original.absenceObservedAt", "oldSession.present", "freshState.proven", "effect.status", "effect.attribution", "effect.observedPodUID", "availability.windowMillis", "availability.cadenceMillis", "availability.segmentCount", "availability.startedAtUTC", "availability.endedAtUTC", "availability.attempts", "availability.known", "availability.unknown", "availability.segmentReceiptsSchema", "availability.segmentReceiptsEncoding", "availability.segmentReceiptsBytes", "availability.segmentReceiptsSHA256", "availability.segmentReceiptChunks", "availability.observationCount", "coordination.used", "coordination.schema", "coordination.coordinator", "coordination.startedAtUTC", "coordination.endedAtUTC", "coordination.disposition", "coordination.attributionComplete", "coordination.targetUID", "coordination.targetResourceVersion", "coordination.requestedGraceSeconds", "coordination.actionAtUTC", "coordination.controlReceipt", "coordination.eligibleReceipt", "coordination.authorizationReceipt"}
 	allowed := make(map[string]bool, len(required)+installedSessionSampleLimit)
 	for _, key := range required {
 		allowed[key] = true
@@ -996,6 +1351,7 @@ func validateInstalledSessionBenchmarkEvidence(evidence map[string]string) error
 		return errors.New("installed session benchmark evidence known/unknown counts differ")
 	}
 	retainedKnown := 0
+	retainedObservations := make([]installedSessionAvailabilityObservation, 0, attempts)
 	for i := 0; i < attempts; i++ {
 		key := fmt.Sprintf("availability.observation.%03d", i)
 		allowed[key] = true
@@ -1017,12 +1373,84 @@ func validateInstalledSessionBenchmarkEvidence(evidence map[string]string) error
 			if observation.Category != "application-response" || observation.PodUID == "" || !installedOneOf(strconv.Itoa(observation.HTTPStatus), "200", "404") {
 				return fmt.Errorf("installed session benchmark evidence %s known shape invalid", key)
 			}
-		} else if observation.PodUID != "" || !installedOneOf(observation.Category, "transport-unavailable", "invalid-response", "response-too-large") {
+		} else if observation.PodUID != "" || !installedOneOf(observation.Category, "transport-unavailable", "invalid-response", "response-too-large", "request-deadline", "sampling-deadline", "dns-failure") {
 			return fmt.Errorf("installed session benchmark evidence %s unknown shape invalid", key)
 		}
+		retainedObservations = append(retainedObservations, observation)
 	}
 	if retainedKnown != known {
 		return errors.New("installed session benchmark evidence retained known count differs")
+	}
+	receiptBytes, bytesErr := strconv.Atoi(evidence["availability.segmentReceiptsBytes"])
+	receiptChunks, chunksErr := strconv.Atoi(evidence["availability.segmentReceiptChunks"])
+	maxEncodedBytes := base64.StdEncoding.EncodedLen(installedSessionReceiptMaxBytes)
+	maxReceiptChunks := (maxEncodedBytes + installedSessionEvidenceChunkMax - 1) / installedSessionEvidenceChunkMax
+	if bytesErr != nil || chunksErr != nil || receiptBytes < 0 || receiptBytes > installedSessionReceiptMaxBytes || receiptChunks < 0 || receiptChunks > maxReceiptChunks {
+		return errors.New("installed session segment receipt bounds invalid")
+	}
+	var retainedReceipts strings.Builder
+	for i := 0; i < receiptChunks; i++ {
+		key := fmt.Sprintf("availability.segmentReceiptChunk.%03d", i)
+		allowed[key] = true
+		chunk, ok := evidence[key]
+		if !ok || chunk == "" || len(chunk) > installedSessionEvidenceChunkMax {
+			return fmt.Errorf("installed session segment receipt chunk %d invalid", i)
+		}
+		retainedReceipts.WriteString(chunk)
+	}
+	retainedEncoded := retainedReceipts.String()
+	var retainedRaw []byte
+	if receiptBytes == 0 {
+		if receiptChunks != 0 || retainedEncoded != "" || evidence["availability.segmentReceiptsSchema"] != "" || evidence["availability.segmentReceiptsEncoding"] != "" || evidence["availability.segmentReceiptsSHA256"] != "" {
+			return errors.New("installed session empty segment receipt metadata differs")
+		}
+	} else {
+		if evidence["availability.segmentReceiptsEncoding"] != "base64" {
+			return errors.New("installed session segment receipt encoding differs")
+		}
+		var decodeErr error
+		retainedRaw, decodeErr = base64.StdEncoding.DecodeString(retainedEncoded)
+		if decodeErr != nil || len(retainedRaw) != receiptBytes {
+			return errors.New("installed session segment receipt byte count or encoding differs")
+		}
+		sum := sha256.Sum256(retainedRaw)
+		if evidence["availability.segmentReceiptsSchema"] != "phorvex.installed-session-availability.v2" || evidence["availability.segmentReceiptsSHA256"] != fmt.Sprintf("%x", sum) {
+			return errors.New("installed session segment receipt source hash differs")
+		}
+		segments, err := validateInstalledSessionSegmentReceiptEvidence(retainedRaw)
+		if err != nil {
+			return err
+		}
+		if evidence["phase"] == "availability-invalid" {
+			if segments[len(segments)-1].Status == "complete" {
+				return errors.New("installed session invalid availability phase has only complete receipts")
+			}
+		} else if len(segments) != int(installedSessionWindow/installedSessionSegment) || slices.ContainsFunc(segments, func(segment installedSessionSegmentReceipt) bool { return segment.Status != "complete" }) {
+			return errors.New("installed session completed phase has incomplete segment receipts")
+		}
+		trustedObservations := make([]installedSessionAvailabilityObservation, 0, attempts)
+		for _, segment := range segments {
+			if segment.Status == "complete" {
+				trustedObservations = append(trustedObservations, segment.Availability.Observations...)
+			}
+		}
+		if !slices.Equal(trustedObservations, retainedObservations) {
+			return errors.New("installed session aggregate observations differ from completed segment receipts")
+		}
+		if evidence["availability.segmentCount"] != strconv.Itoa(int(installedSessionWindow/installedSessionSegment)) {
+			return errors.New("installed session aggregate segment count differs")
+		}
+		if len(trustedObservations) > 0 {
+			firstComplete, lastComplete := segments[0], segments[0]
+			for _, segment := range segments {
+				if segment.Status == "complete" {
+					lastComplete = segment
+				}
+			}
+			if evidence["availability.startedAtUTC"] != firstComplete.Availability.StartedAtUTC || evidence["availability.endedAtUTC"] != lastComplete.Availability.EndedAtUTC {
+				return errors.New("installed session aggregate interval differs from completed segment receipts")
+			}
+		}
 	}
 	for key := range evidence {
 		if !allowed[key] {
