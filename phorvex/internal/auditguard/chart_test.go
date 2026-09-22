@@ -249,6 +249,48 @@ func TestAuditVolumeGuardNarrowManifestAndOrdering(t *testing.T) {
 	}
 }
 
+func TestConsoleHistoryCapacityUsesChartFirstCompatibleEnvironment(t *testing.T) {
+	docs := enabled(t, "phorvex", "phorvex-system", "--set", "phorvex.console.enabled=true,phorvex.console.auditTransport.serverSecretName=server,phorvex.console.auditTransport.clientSecretName=client,phorvex.console.auditTransport.serverDNSName=server.test,phorvex.console.auditTransport.clientDNSName=client.test")
+	var consoleContainer object
+	for _, doc := range docs {
+		if doc["kind"] != "Deployment" {
+			continue
+		}
+		spec := doc["spec"].(object)["template"].(object)["spec"].(object)
+		for _, raw := range spec["containers"].([]any) {
+			container := raw.(object)
+			if container["name"] != "console" {
+				continue
+			}
+			environment, _ := container["env"].([]any)
+			for _, rawEnv := range environment {
+				if rawEnv.(object)["name"] == "PHORVEX_CONSOLE_HISTORY_MAX_BYTES" {
+					consoleContainer = container
+				}
+			}
+		}
+	}
+	if consoleContainer == nil {
+		t.Fatal("rendered console container unavailable")
+	}
+	for _, raw := range consoleContainer["args"].([]any) {
+		if strings.HasPrefix(raw.(string), "-history-") {
+			t.Fatalf("chart-first rollout sent a new history CLI flag to an older image: %q", raw)
+		}
+	}
+	environment := map[string]string{}
+	for _, raw := range consoleContainer["env"].([]any) {
+		entry := raw.(object)
+		name, _ := entry["name"].(string)
+		value, _ := entry["value"].(string)
+		environment[name] = value
+	}
+	if environment["PHORVEX_CONSOLE_HISTORY_MAX_BYTES"] != "2147483648" ||
+		environment["PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES"] != "536870912" {
+		t.Fatalf("rendered history capacity environment = %#v", environment)
+	}
+}
+
 func TestAuditVolumeGuardCEL(t *testing.T) {
 	docs := enabled(t, "phorvex", "phorvex-system", "--set", "phorvex.console.enabled=true,phorvex.console.auditTransport.serverSecretName=server,phorvex.console.auditTransport.clientSecretName=client,phorvex.console.auditTransport.serverDNSName=server.test,phorvex.console.auditTransport.clientDNSName=client.test")
 	policy, original := resource(t, docs, "ValidatingAdmissionPolicy", true), deploymentPod(t, docs)

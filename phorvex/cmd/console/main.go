@@ -35,11 +35,13 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -52,7 +54,40 @@ func main() {
 	os.Exit(run())
 }
 
+const (
+	historyMaxBytesEnv = "PHORVEX_CONSOLE_HISTORY_MAX_BYTES"
+	historyMinFreeEnv  = "PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES"
+)
+
+func historyCapacityDefaults(lookup func(string) (string, bool)) (int64, int64, error) {
+	read := func(name string, fallback int64) (int64, error) {
+		raw, ok := lookup(name)
+		if !ok {
+			return fallback, nil
+		}
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value <= 0 || raw != strconv.FormatInt(value, 10) {
+			return 0, fmt.Errorf("%s must be a positive canonical decimal integer", name)
+		}
+		return value, nil
+	}
+	maximum, err := read(historyMaxBytesEnv, console.DefaultHistoryArchiveMaxBytes)
+	if err != nil {
+		return 0, 0, err
+	}
+	minimumFree, err := read(historyMinFreeEnv, console.DefaultHistoryMinFreeBytes)
+	if err != nil {
+		return 0, 0, err
+	}
+	return maximum, minimumFree, nil
+}
+
 func run() int {
+	historyMaxDefault, historyMinFreeDefault, err := historyCapacityDefaults(os.LookupEnv)
+	if err != nil {
+		log.Printf("console history capacity configuration: %v", err)
+		return 2
+	}
 	var (
 		root            string
 		addr            string
@@ -74,8 +109,8 @@ func run() int {
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
 	flag.StringVar(&auditPath, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
 	flag.StringVar(&stateDir, "state-dir", "", "Writable console-owned durable state directory (independent of the decision audit).")
-	flag.Int64Var(&historyMaxBytes, "history-max-bytes", console.DefaultHistoryArchiveMaxBytes, "Maximum durable audit-history database size before imports pause.")
-	flag.Int64Var(&historyMinFree, "history-min-free-bytes", console.DefaultHistoryMinFreeBytes, "Minimum free bytes retained on the console state filesystem before imports pause.")
+	flag.Int64Var(&historyMaxBytes, "history-max-bytes", historyMaxDefault, "Maximum durable audit-history database size before imports pause.")
+	flag.Int64Var(&historyMinFree, "history-min-free-bytes", historyMinFreeDefault, "Minimum free bytes retained on the console state filesystem before imports pause.")
 	flag.StringVar(&auditSourceURL, "audit-source-url", "", "Optional mTLS manager audit source HTTPS origin.")
 	flag.StringVar(&auditServerDNS, "audit-source-server-dns", "", "[audit-source-url] exact server certificate DNS SAN.")
 	flag.StringVar(&auditClientCert, "audit-source-client-cert", "", "[audit-source-url] client leaf certificate file.")

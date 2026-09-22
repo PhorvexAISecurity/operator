@@ -56,8 +56,6 @@ spec:
         - -web={{ .Values.phorvex.console.web }}
         - -addr=:{{ .Values.phorvex.console.port }}
         - -state-dir={{ .Values.phorvex.console.state.mountPath }}
-        - -history-max-bytes={{ .Values.phorvex.console.state.historyArchiveMaxBytes }}
-        - -history-min-free-bytes={{ .Values.phorvex.console.state.historyMinFreeBytes }}
         {{- if .Values.phorvex.audit.enabled }}
         - -audit-source-url=https://{{ include "phorvex.fullname" . }}-audit-source.{{ .Release.Namespace }}.svc:{{ .Values.phorvex.console.auditTransport.port }}
         - -audit-source-server-dns={{ .Values.phorvex.console.auditTransport.serverDNSName }}
@@ -77,8 +75,14 @@ spec:
         # still authenticates callers, but authorizes NOBODY — the fail-closed rollout state.
         - -auth-grants={{ .Values.phorvex.console.auth.grants.mountPath }}/{{ .Values.phorvex.console.auth.grants.fileName }}
         {{- end }}
-        {{- if or .Values.phorvex.prometheusUrl .Values.phorvex.console.auth.alb.signerArn .Values.phorvex.console.auth.oidc.issuer .Values.phorvex.console.auth.trustedOrigins }}
         env:
+        # Environment defaults keep chart-first rollouts compatible with older console images,
+        # which ignore unknown environment variables. New binaries still allow explicit CLI
+        # flags to override these defaults outside this chart.
+        - name: PHORVEX_CONSOLE_HISTORY_MAX_BYTES
+          value: {{ .Values.phorvex.console.state.historyArchiveMaxBytes | quote }}
+        - name: PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES
+          value: {{ .Values.phorvex.console.state.historyMinFreeBytes | quote }}
         {{- if .Values.phorvex.prometheusUrl }}
         # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
         # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
@@ -127,7 +131,6 @@ spec:
         # there is no wildcard, and an unlisted origin gets no CORS grant either.
         - name: PHORVEX_CONSOLE_TRUSTED_ORIGINS
           value: {{ join "," .Values.phorvex.console.auth.trustedOrigins | quote }}
-        {{- end }}
         {{- end }}
         ports:
         - name: http
