@@ -1,0 +1,28 @@
+{
+  "files": {
+    "PROVENANCE.json": "998ddee7a31b97ee23ca58f1b61d3eba81b5039812ca6d1715d7dbc0e467a6e6",
+    "README.md": "f5ff70dfe41d56f9f84224eb0c040f7802a7e280043921211276dac7a952019a",
+    "TEST-RESULT.json": "96ce57a0f903f465f9b518b88b074367e57e0af93eeadd95bbdc17f8c86d11c2",
+    "m100-deployment-pin.example.json": "31b168365c0d75769651c66c25b50ebf650be8701cc17aecb0933fce11cf2d0a",
+    "m100-deployment-pin.json": "d747d0bc480dc8f219a110af4eb8e06f262e096e76966bdd31d894178c538446",
+    "pvc-m100-loss-history.yaml": "76c3dee492494e2d5d6088d928371eab1d52799a6ef0f0e31c93b83cef73b51a",
+    "pvc-m106-scoped-outcome.yaml": "f3682311e2f063fa948f7b921924f1e3d792dd4711328949d0339e0f15cc6384",
+    "rbac-m106-fixture.yaml": "3ac5f8fe954bb817c0bc6ec18efdbd8826a85432d08261bc7c6a7919fa3be93a",
+    "scripts/render_m100_values.py": "b2e433d20b7e5ec6d56a8d59151e4b3c766514abb57f27dc624783d00cb1bc1e",
+    "scripts/test_transfer_secret.py": "2b9efaf4eb4394a429440b28af79ae7c0cc3f6bd041ef3a68ce2788ab2c28dd4",
+    "scripts/transfer_secret.py": "319ab1d97b2e8ba3f939aaec6851924dfa1bf6d0e18316aebb30653d40761be3",
+    "scripts/verify_bundle.py": "df825e957d79801f0a7caed4d78981e0b0c021475bef2b86abe40a1687db8525",
+    "secure-transfer-pin.example.json": "29abe11df6ba8e9b4f279431b52acd867a0432c0d221247b53722e8adffc0289",
+    "secure-transfer-pin.json": "d4acb4a68040a6e28b4b47e112d2b49227af555199595f65962e31e62804cb73",
+    "values-m100-disable.yaml": "8f1f07a5b39981c9988eea17c543b808909148c220f985fd7a834e9180011229",
+    "values-m100-phase-a-current.example.yaml": "744c8feb3fd2c9d6b9472722b6aa60a61fa7a15f4836dbad8aac0867d2344f47",
+    "values-m100-phase-a-current.json": "238624d64a21a4d6a0851d606fae97dcbf1e4245b3b936bf7bdc96bb1702fa0b",
+    "values-m100-phase-b-loss.example.yaml": "7a4d050f69832c8b5953e0d08cf3eecc0fca7d75505e6ce96064ee59e119d27f",
+    "values-m100-phase-b-loss.json": "e1f4e1bad97afe7558dbe43d24c3da89ba2c905a03254cb4c6eaab410376a126",
+    "values-m106-disable.yaml": "41887047f3cdb0eb9ba871fad66127fd653177b67693140a8e49dae78daf38b0",
+    "values-m106.yaml": "7698a026d3f5b6afbc19043785f65de8fa9f8fa68215f21888c95c80c25292f4"
+  },
+  "generatedAt": "2026-09-22T21:26:42.645229+00:00",
+  "schema": "phorvex.math-observer-devops-bundle.manifest.v1",
+  "sourceCommit": "7f0762b92368254129da0a14d1e07597ac6b756e"
+}

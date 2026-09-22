@@ -1,0 +1,65 @@
+{
+  "schema": "phorvex.secure-secret-transfer.v1",
+  "startupAuthority": {
+    "policy": {
+      "generation": 1,
+      "name": "m106-session-target",
+      "namespace": "phorvex-verify-m106-scoped-outcome-v4",
+      "uid": "02a5b4f4-a941-4776-bce0-1a5c9c93116e"
+    },
+    "policyMode": "active",
+    "targetLabels": {
+      "fixture.phorvex.ai/m106-target": "post25-m106-scoped-outcome-v4"
+    },
+    "targetName": "m106-session-target-67b9cfbf88-m8sbl",
+    "targetTerminationGraceSeconds": 30,
+    "targetUID": "b2c2d7b0-5d63-4b22-b544-35f39037e8ea",
+    "workload": {
+      "namespace": "phorvex-verify-m106-scoped-outcome-v4",
+      "ownerKind": "Deployment",
+      "ownerName": "m106-session-target",
+      "ownerUID": "d67c03e9-ad03-4b2b-b941-976b0ec65c97"
+    }
+  },
+  "transfers": [
+    {
+      "dataSHA256": {
+        "startup.json": "85e7cf87c9654237b2b0f79b65072f44d351a85395479328518cacd4d06bdee7"
+      },
+      "destination": {
+        "name": "phorvex-m106-scoped-outcome-v4",
+        "namespace": "phorvex-system",
+        "namespaceUID": "78040910-4e59-46f8-94eb-f140314fa1d1"
+      },
+      "source": {
+        "expiresAt": "2026-09-23T18:00:00Z",
+        "name": "phorvex-m106-config-transfer-v5",
+        "namespace": "phorvex-verify-m106-scoped-outcome-v4",
+        "namespaceUID": "91312ad5-d348-469a-84c7-cddfb999dde3",
+        "uid": "37371f37-4315-41d3-aebc-75a21e9efd47"
+      },
+      "type": "Opaque"
+    },
+    {
+      "certificateNotAfter": "2026-09-24T21:04:34Z",
+      "dataSHA256": {
+        "ca.crt": "e1e4087195f53badd24230b6160b41c07c85f18dfc03823cec57f41517a999d9",
+        "tls.crt": "7627fbd78088b25a9a7eea68325cca2af0d5f622d417ba8b49079e18acc5875e",
+        "tls.key": "595734c2d1fbf4f3317117194ca3a48e44dfeec456d2ff91419984ccd71d77c9"
+      },
+      "destination": {
+        "name": "phorvex-m106-scoped-outcome-v4-tls",
+        "namespace": "phorvex-system",
+        "namespaceUID": "78040910-4e59-46f8-94eb-f140314fa1d1"
+      },
+      "source": {
+        "expiresAt": "2026-09-23T18:00:00Z",
+        "name": "phorvex-m106-tls-transfer-v5",
+        "namespace": "phorvex-verify-m106-scoped-outcome-v4",
+        "namespaceUID": "91312ad5-d348-469a-84c7-cddfb999dde3",
+        "uid": "ee35237c-58fc-4c70-ab6a-2a7fec183a9f"
+      },
+      "type": "Opaque"
+    }
+  ]
+}

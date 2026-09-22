@@ -1,0 +1,65 @@
+{
+  "schema": "phorvex.secure-secret-transfer.v1",
+  "startupAuthority": {
+    "policy": {
+      "generation": 1,
+      "name": "REPLACE_WITH_POLICY_NAME",
+      "namespace": "REPLACE_WITH_NAMESPACE",
+      "uid": "REPLACE_WITH_POLICY_UID"
+    },
+    "policyMode": "active",
+    "targetLabels": {
+      "fixture.phorvex.ai/m106-target": "REPLACE_WITH_TARGET_MARKER"
+    },
+    "targetName": "REPLACE_WITH_TARGET_NAME",
+    "targetTerminationGraceSeconds": 30,
+    "targetUID": "REPLACE_WITH_TARGET_UID",
+    "workload": {
+      "namespace": "REPLACE_WITH_NAMESPACE",
+      "ownerKind": "Deployment",
+      "ownerName": "REPLACE_WITH_DEPLOYMENT_NAME",
+      "ownerUID": "REPLACE_WITH_DEPLOYMENT_UID"
+    }
+  },
+  "transfers": [
+    {
+      "dataSHA256": {
+        "startup.json": "REPLACE_WITH_64_LOWERCASE_HEX"
+      },
+      "destination": {
+        "name": "phorvex-m106-scoped-outcome-v4",
+        "namespace": "phorvex-system",
+        "namespaceUID": "REPLACE_WITH_API_ASSIGNED_NAMESPACE_UID"
+      },
+      "source": {
+        "expiresAt": "REPLACE_WITH_RFC3339_EXPIRY",
+        "name": "phorvex-m106-config-transfer-v5",
+        "namespace": "phorvex-verify-m106-scoped-outcome-v4",
+        "namespaceUID": "REPLACE_WITH_API_ASSIGNED_NAMESPACE_UID",
+        "uid": "REPLACE_WITH_API_ASSIGNED_UID"
+      },
+      "type": "Opaque"
+    },
+    {
+      "certificateNotAfter": "REPLACE_WITH_RFC3339_CERTIFICATE_NOT_AFTER",
+      "dataSHA256": {
+        "ca.crt": "REPLACE_WITH_64_LOWERCASE_HEX",
+        "tls.crt": "REPLACE_WITH_64_LOWERCASE_HEX",
+        "tls.key": "REPLACE_WITH_64_LOWERCASE_HEX"
+      },
+      "destination": {
+        "name": "phorvex-m106-scoped-outcome-v4-tls",
+        "namespace": "phorvex-system",
+        "namespaceUID": "REPLACE_WITH_API_ASSIGNED_NAMESPACE_UID"
+      },
+      "source": {
+        "expiresAt": "REPLACE_WITH_RFC3339_EXPIRY",
+        "name": "phorvex-m106-tls-transfer-v5",
+        "namespace": "phorvex-verify-m106-scoped-outcome-v4",
+        "namespaceUID": "REPLACE_WITH_API_ASSIGNED_NAMESPACE_UID",
+        "uid": "REPLACE_WITH_API_ASSIGNED_UID"
+      },
+      "type": "Opaque"
+    }
+  ]
+}

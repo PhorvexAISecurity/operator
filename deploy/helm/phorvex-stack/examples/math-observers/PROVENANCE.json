@@ -1,0 +1,33 @@
+{
+  "chartInputs": {
+    "deploy/helm/phorvex-stack/values-eks.yaml": "b31f39a31b4ab99fa680ef5e0d35d6ce98adebadd7dea390ad146fe2a5fabf29",
+    "deploy/helm/phorvex-stack/values.yaml": "f906f524ba95cc71ca43c8cf5c1b95abcda075a033cc8eade1a7df613b6b535b",
+    "phorvex/charts/phorvex/templates/current-inventory-observer.yaml": "a1367a1dc5a133562231e48813dbc541322481731e9b6dfbf8e25eb858742507",
+    "phorvex/charts/phorvex/templates/deployment.yaml": "0a7ac32a403b7b1334bbbfb0f3c288224bc1af0a88975782904013f1cedcabb2",
+    "phorvex/charts/phorvex/templates/loss-observer.yaml": "4311f012f7b806a0ef888b8b468b0fc648b218f4f944b1f8e6d6813115f5a221",
+    "phorvex/charts/phorvex/values.yaml": "822449235ff3ff7b2356c592768d046b1204df0e3db6d7bc39172056a7fa1b85"
+  },
+  "claims": {
+    "clusterMutationPerformedByBundleAuthor": false,
+    "fixturesAutoEnabled": false,
+    "m106DestinationsCreated": false,
+    "secretBytesInGit": false
+  },
+  "generatedAt": "2026-09-22T21:22:57.223461+00:00",
+  "inputs": {
+    "m100DeploymentPinSHA256": "d747d0bc480dc8f219a110af4eb8e06f262e096e76966bdd31d894178c538446",
+    "m100PreparationManifestSHA256": "fb3baf8213b00b47a6a0ef4e9622532c00fd28d6cceae401d0cc2b6b696225b9",
+    "m106FreshRenderReceiptSHA256": "a74261f1ffd0f4e7d01608e3d9830d566b1654efff27db28cc76d039a5b28c2c",
+    "m106PublicTransferPinSHA256": "d4acb4a68040a6e28b4b47e112d2b49227af555199595f65962e31e62804cb73",
+    "m106TransferStagingReceiptSHA256": "e3136415b25af919bb9074df19f8f5ffe470ebb087ce9cf556899dcf40ff9307"
+  },
+  "schema": "phorvex.math-observer-devops-bundle.provenance.v1",
+  "source": {
+    "baseCommit": "7f0762b92368254129da0a14d1e07597ac6b756e",
+    "chart": "deploy/helm/phorvex-stack",
+    "valuesLayers": [
+      "values.yaml",
+      "values-eks.yaml"
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "phorvex": {
+    "phorvex": {
+      "lossHistory": {
+        "currentInventory": {
+          "enabled": true,
+          "observer": {
+            "caSecretName": "phorvex-m100-observer-ca-v2",
+            "clientSecretName": "phorvex-m100-current-client-v2",
+            "configMapKey": "payload",
+            "configMapName": "m100-protected-data",
+            "containerName": "server",
+            "enabled": true,
+            "evidenceID": "post25-m100-current-v2",
+            "manifestURL": "https://m100-protected-server.phorvex-verify-m100-loss-history-v2.svc:8443/manifest",
+            "mountPath": "/protected",
+            "policyName": "m100-protected-server",
+            "policyNamespace": "phorvex-verify-m100-loss-history-v2",
+            "projectedPath": "payload",
+            "protectedAsset": "synthetic-m100-record",
+            "protectedProperty": "confidentiality",
+            "protectedVersion": "m100-v1",
+            "ruleSHA256": "40b5d3090bfbe4825f0552a60a63848622a8bac386488a03b3af28c70ca74654",
+            "serverName": "m100-protected-server.phorvex-verify-m100-loss-history-v2.svc",
+            "targetName": "m100-protected-server-5f4d68bc78-qrtrk",
+            "targetNamespace": "phorvex-verify-m100-loss-history-v2",
+            "targetUID": "ab46d282-14a8-4223-ba72-0e7279952c8c",
+            "timeout": "10s",
+            "ttl": "5m",
+            "volumeName": "protected-data"
+          },
+          "trustedObservers": []
+        },
+        "enabled": true,
+        "existingClaim": "phorvex-m100-loss-history-v2",
+        "mountPath": "/var/lib/phorvex-loss-history",
+        "observer": {
+          "caSecretName": "phorvex-m100-observer-ca-v2",
+          "canaryURL": "https://m100-protected-server.phorvex-verify-m100-loss-history-v2.svc:8443/canary",
+          "clientSecretName": "phorvex-m100-loss-client-v2",
+          "enabled": false,
+          "evidenceID": "post25-m100-loss-v2",
+          "expectedBytes": 36,
+          "expectedSHA256": "86f962d09c0c19f1d157c986fd5cfb879e68afcef0a9bd34c76034a6e10c710d",
+          "policyName": "m100-protected-server",
+          "policyNamespace": "phorvex-verify-m100-loss-history-v2",
+          "protectedAsset": "synthetic-m100-record",
+          "protectedProperty": "confidentiality",
+          "protectedVersion": "m100-v1",
+          "ruleSHA256": "a424e50545ac67bdf80e80a3751d4129925c71bee0181c2ea0ba08ed7ae82969",
+          "ruleVersion": "post25-m100-completed-disclosure-v1",
+          "serverName": "m100-protected-server.phorvex-verify-m100-loss-history-v2.svc",
+          "targetName": "m100-protected-server-5f4d68bc78-qrtrk",
+          "targetNamespace": "phorvex-verify-m100-loss-history-v2",
+          "targetUID": "ab46d282-14a8-4223-ba72-0e7279952c8c",
+          "timeout": "10s"
+        },
+        "trustedObservers": [
+          "phorvex-system/phorvex-phorvex-loss-observer"
+        ]
+      }
+    }
+  }
+}

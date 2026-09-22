@@ -1,0 +1,20 @@
+# Merge after CURRENT values.yaml and values-eks.yaml. The list is intentionally the
+# current public values-eks allowlist plus the one reviewed fixture detector. Rebase and
+# revalidate if values-eks changes; Helm list replacement must not drop an identity.
+phorvex:
+  phorvex:
+    actuator: hybrid
+    trustedDetectors:
+      - vllm/detector-kv-canary
+      - vllm/detector-adapter-inv
+      - phorvex-system/operator-controller-manager
+      - phorvex-system/phorvex-phorvex-console
+      - phorvex-verify-m106-scoped-outcome-v4/m106-scoped-detector
+    scopedOutcome:
+      enabled: true
+      configSecretName: phorvex-m106-scoped-outcome-v4
+      tlsSecretName: phorvex-m106-scoped-outcome-v4-tls
+      existingClaim: phorvex-m106-scoped-outcome-v4-evidence
+      configMountPath: /etc/phorvex-scoped-outcome/config
+      tlsMountPath: /etc/phorvex-scoped-outcome/tls
+      evidenceMountPath: /var/lib/phorvex-scoped-outcome

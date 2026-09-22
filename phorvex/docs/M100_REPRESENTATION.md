@@ -13,3 +13,7 @@ Snapshots are detached, canonical and credential-redacted. Credential-bearing we
 The owner API exposes only allowlisted status/scope summaries, with no engine weights, fact keys or raw evidence. `representationPresent` says a report exists, not that a coverage fraction is measurable. Dispatch remains unconfirmed. The existing legacy `AttackPrevented`/`SLOKept` behavior belongs to the independent PR139/M14 correction; this representation does not endorse those fields as measured effects.
 
 For the full contract, source binding, T01–T16 test matrix, synthetic examples, and open review/deployment boundaries, see [the M100 conformance submission](../../reports/m100-representation-209/CONFORMANCE_REPORT.md). No deployment or mathematical approval is implied by these documents.
+
+The bounded, disabled-by-default deployment examples for authenticated current inventory
+and completed-loss history are documented in
+[`deploy/helm/phorvex-stack/examples/math-observers`](../../deploy/helm/phorvex-stack/examples/math-observers/README.md).

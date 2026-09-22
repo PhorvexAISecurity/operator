@@ -1,0 +1,36 @@
+# Merge after values.yaml and values-eks.yaml. Resolve every placeholder first.
+# Phase B disables a new current observation, retains its exact trusted creator, and
+# enables the loss observer. The resulting manager Pod template must equal Phase A.
+phorvex:
+  phorvex:
+    lossHistory:
+      enabled: true
+      mountPath: /var/lib/phorvex-loss-history
+      existingClaim: phorvex-m100-loss-history-v2
+      trustedObservers: []
+      observer:
+        enabled: true
+        targetNamespace: "REPLACE_WITH_TARGET_NAMESPACE"
+        targetName: "REPLACE_WITH_TARGET_POD_NAME"
+        targetUID: "REPLACE_WITH_TARGET_POD_UID"
+        policyNamespace: "REPLACE_WITH_TARGET_NAMESPACE"
+        policyName: "REPLACE_WITH_POLICY_NAME"
+        canaryURL: "REPLACE_WITH_MTLS_CANARY_URL"
+        serverName: "REPLACE_WITH_MTLS_SERVER_NAME"
+        caSecretName: "REPLACE_WITH_EXISTING_CA_SECRET_NAME"
+        clientSecretName: "REPLACE_WITH_EXISTING_LOSS_CLIENT_SECRET_NAME"
+        protectedAsset: "REPLACE_WITH_PROTECTED_ASSET"
+        protectedVersion: "REPLACE_WITH_PROTECTED_VERSION"
+        protectedProperty: confidentiality
+        evidenceID: "REPLACE_WITH_LOSS_EVIDENCE_ID"
+        ruleVersion: "REPLACE_WITH_RULE_VERSION"
+        ruleSHA256: "REPLACE_WITH_LOSS_RULE_SHA256"
+        expectedBytes: REPLACE_WITH_EXPECTED_BYTES
+        expectedSHA256: "REPLACE_WITH_EXPECTED_SHA256"
+        timeout: 10s
+      currentInventory:
+        enabled: true
+        trustedObservers:
+          - phorvex-system/phorvex-phorvex-current-inventory-observer
+        observer:
+          enabled: false

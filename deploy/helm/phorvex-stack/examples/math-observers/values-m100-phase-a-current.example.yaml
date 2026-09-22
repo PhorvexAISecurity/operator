@@ -1,0 +1,40 @@
+# Merge after values.yaml and values-eks.yaml. Resolve every placeholder first.
+# Phase A enables the current-inventory observer and pretrusts the Phase B observer,
+# keeping the manager Pod template stable between A and B.
+phorvex:
+  phorvex:
+    lossHistory:
+      enabled: true
+      mountPath: /var/lib/phorvex-loss-history
+      existingClaim: phorvex-m100-loss-history-v2
+      trustedObservers:
+        - phorvex-system/phorvex-phorvex-loss-observer
+      observer:
+        enabled: false
+      currentInventory:
+        enabled: true
+        trustedObservers: []
+        observer:
+          enabled: true
+          targetNamespace: "REPLACE_WITH_TARGET_NAMESPACE"
+          targetName: "REPLACE_WITH_TARGET_POD_NAME"
+          targetUID: "REPLACE_WITH_TARGET_POD_UID"
+          policyNamespace: "REPLACE_WITH_TARGET_NAMESPACE"
+          policyName: "REPLACE_WITH_POLICY_NAME"
+          manifestURL: "REPLACE_WITH_MTLS_MANIFEST_URL"
+          serverName: "REPLACE_WITH_MTLS_SERVER_NAME"
+          caSecretName: "REPLACE_WITH_EXISTING_CA_SECRET_NAME"
+          clientSecretName: "REPLACE_WITH_EXISTING_CURRENT_CLIENT_SECRET_NAME"
+          configMapName: "REPLACE_WITH_PROTECTED_CONFIGMAP_NAME"
+          configMapKey: "REPLACE_WITH_PROTECTED_CONFIGMAP_KEY"
+          volumeName: "REPLACE_WITH_TARGET_VOLUME_NAME"
+          containerName: "REPLACE_WITH_TARGET_CONTAINER_NAME"
+          mountPath: "REPLACE_WITH_TARGET_MOUNT_PATH"
+          projectedPath: "REPLACE_WITH_PROJECTED_FILE_PATH"
+          protectedAsset: "REPLACE_WITH_PROTECTED_ASSET"
+          protectedVersion: "REPLACE_WITH_PROTECTED_VERSION"
+          protectedProperty: confidentiality
+          evidenceID: "REPLACE_WITH_CURRENT_EVIDENCE_ID"
+          ruleSHA256: "REPLACE_WITH_CURRENT_RULE_SHA256"
+          ttl: 5m
+          timeout: 10s

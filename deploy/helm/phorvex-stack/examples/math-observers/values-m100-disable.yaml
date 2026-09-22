@@ -1,0 +1,13 @@
+# Merge through the normal GitOps workflow after evidence retention is complete.
+phorvex:
+  phorvex:
+    lossHistory:
+      enabled: false
+      trustedObservers: []
+      observer:
+        enabled: false
+      currentInventory:
+        enabled: false
+        trustedObservers: []
+        observer:
+          enabled: false
