@@ -156,33 +156,71 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"message":  "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
 
 	case "endpoint-rotate":
-		// ATTACK: attacker pins the serving route (route-key=ep-old) for model-extraction/SSRF.
-		// endpoint-rotate re-keys the pod AND restitches the Service selector — the route follows the
-		// pod (zero downtime) while the attacker's pinned identity goes stale. minAvail:2 prunes rotate.
-		kctl("label", "pod", pod, "phorvex.ai/route-key=ep-old", "--overwrite")
-		kctl("annotate", "pod", pod, "phorvex.ai/route-service=vllm-infer", "--overwrite")
-		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/route-key":"ep-old"}}}`)
-		if e := s.fireVllmEvent(pod, "EndpointPinning", "attacker pinned the vLLM serving route (route-key=ep-old) for model extraction / SSRF", "0.95"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		// This stages and measures the route mechanism. It does not execute an SSRF/model-extraction
+		// attack and therefore cannot produce a behavioral DEFENDED/LANDED verdict.
+		authority, setupErr := s.prepareEndpointEffect(pod, base.uid)
+		if setupErr != nil {
+			writeJSON(w, 502, map[string]string{"error": setupErr.Error(), "verdict": "setup-failed"})
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Inference-endpoint pinning", "endpoint-rotate", "SSRF / model-extraction", "endpoint-rotate", false, base)
+		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "EndpointPinning", "synthetic endpoint-route signal for an in-place route-effect observation", "0.95")
+		if eventErr != nil {
+			restoreErr := s.restoreEndpointSetup(authority)
+			message := eventErr.Error()
+			if restoreErr != nil {
+				message += "; exact endpoint setup restoration required: " + restoreErr.Error()
+			} else {
+				message += "; endpoint setup restored"
+			}
+			writeJSON(w, 502, map[string]string{"error": message, "verdict": "stimulus-failed"})
+			return
+		}
+		stimulus.Limitation = "synthetic route signal; no SSRF, model-extraction, locator-revocation or session-revocation attack was executed"
+		base.stimulus = stimulus
+		base.vllmEffect = &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceUID: authority.serviceUID}
+		base.outcomeClass = "behavioral-oracle-unsupported"
+		attackID := s.startVLLMEffectRecord(vllmAttackNS, pod, "Endpoint route-effect observation", "endpoint-rotate", "route-effect-only", "endpoint-rotate", base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "endpoint-rotate",
 			"attackId": attackID,
-			"message":  "Endpoint pinned on " + pod + " — Phorvex re-keys the route + restitches the Service (endpoint-rotate); the route follows the pod with zero downtime. Watch the vllm tenant below; Reset restores the route."})
+			"message":  "Endpoint route setup and a unique detector signal were accepted for " + pod + ". The console will report an exact route-key/Service/EndpointSlice effect if observed; this does not establish SSRF or model-extraction mitigation."})
 
 	case "guardrail-rotate":
-		// ATTACK: a many-shot jailbreak that the ACTIVE guardrail variant misses. Set active=pgv1 (the
-		// weak one) so guardrail-rotate visibly swaps to pgv2 and the same probe is then blocked.
-		_, _ = execIn(`curl -s -o /dev/null -X POST http://localhost:8000/v1/guardrail/reload -H 'Content-Type: application/json' -d '{"variant":"pgv1"}'`)
-		if e := s.fireVllmEvent(pod, "GuardrailBypass", "many-shot jailbreak bypasses the active safety-guardrail variant", "0.95"); e != nil {
-			writeJSON(w, 502, map[string]string{"error": e.Error()})
+		// The currently calibrated harmless probes do not distinguish pgv1 from pgv2. Configure an
+		// exact runtime stimulus variant and measure only a fresh state transition; do not manufacture
+		// a jailbreak or mitigation verdict from that mechanism-level observation.
+		before, setupErr := s.prepareGuardrailEffect(pod, base.uid, execIn)
+		if setupErr != nil {
+			message := setupErr.Error()
+			if before.Active != "" {
+				if restoreErr := s.restoreGuardrailEffect(pod, base.uid, execIn, before); restoreErr != nil {
+					message += "; exact guardrail runtime restoration required: " + restoreErr.Error()
+				} else {
+					message += "; guardrail runtime restored"
+				}
+			}
+			writeJSON(w, 502, map[string]string{"error": message, "verdict": "setup-failed"})
 			return
 		}
-		attackID := s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Guardrail bypass (jailbreak)", "guardrail-rotate", "OWASP LLM01 / ASI01", "guardrail-rotate", false, base)
+		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "GuardrailBypass", "synthetic guardrail signal for an in-place runtime-state observation", "0.95")
+		if eventErr != nil {
+			restoreErr := s.restoreGuardrailEffect(pod, base.uid, execIn, before)
+			message := eventErr.Error()
+			if restoreErr != nil {
+				message += "; exact guardrail runtime restoration required: " + restoreErr.Error()
+			} else {
+				message += "; guardrail runtime restored"
+			}
+			writeJSON(w, 502, map[string]string{"error": message, "verdict": "stimulus-failed"})
+			return
+		}
+		stimulus.Limitation = "synthetic guardrail signal; no preregistered pgv1-pass to pgv2-block behavioral probe was available"
+		base.stimulus = stimulus
+		base.vllmEffect = &vllmEffectBaseline{kind: "guardrail-runtime-state", before: "pgv1"}
+		base.outcomeClass = "behavioral-oracle-unsupported"
+		attackID := s.startVLLMEffectRecord(vllmAttackNS, pod, "Guardrail runtime-effect observation", "guardrail-rotate", "filter-effect-only", "guardrail-rotate", base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "guardrail-rotate",
 			"attackId": attackID,
-			"message":  "Guardrail set to the weak variant + GuardrailBypass fired on " + pod + " — Phorvex hot-swaps the guardrail variant (guardrail-rotate); the same jailbreak is then blocked, pod never restarts. Watch the vllm tenant below."})
+			"message":  "Guardrail runtime pgv1 and a unique detector signal were confirmed on " + pod + ". The console will report a fresh runtime variant effect if observed; no jailbreak bypass or mitigation verdict is claimed."})
 
 	case "request-drain":
 		// ATTACK: expensive-turn flood (denial-of-wallet). request-drain aborts the in-flight flood

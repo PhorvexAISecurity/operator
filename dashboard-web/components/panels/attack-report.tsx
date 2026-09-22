@@ -118,6 +118,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
   const partial = r.status === "partial";
   const defended = r.outcome === "DEFENDED";
   const landed = r.outcome === "LANDED";
+  const effectOnly = !defended && !landed && r.effectEvidence?.observed === true;
   const confirmed = defended || landed;
   const cinfo = containmentInfo(r);
   return (
@@ -130,7 +131,8 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
             : partial ? <Badge variant="pending">PARTIAL RECORD</Badge>
             : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> RESPONSE RECORDED</Badge>
               : landed ? <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> LANDED</Badge>
-                : <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> UNCONFIRMED</Badge>}
+                : effectOnly ? <Badge variant="modeled">EFFECT OBSERVED · OUTCOME UNVERIFIED</Badge>
+                  : <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> UNCONFIRMED</Badge>}
           <span className="font-mono text-[12px] font-medium text-foreground">{r.service}</span>
           <span className="text-[12px] text-muted-foreground">· {r.attack}</span>
           <span className="font-mono text-[10px] text-muted-foreground" title={r.id}>attack {r.id}</span>
@@ -139,12 +141,21 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         </div>
 
         <ClaimScopeNote claim={r.claim} />
+        {(r.stimulusEvidence || r.effectEvidence) && (
+          <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
+            <div className="font-medium text-warning">Mechanism evidence</div>
+            {r.stimulusEvidence && <div className="mt-1 text-muted-foreground">unique stimulus <span className="font-mono text-foreground/85">{r.stimulusEvidence.eventName}</span> · target UID {r.stimulusEvidence.targetUid.slice(0, 12)}… · behavioral attack executed: {r.stimulusEvidence.behavioralExecuted ? "yes" : "no"}</div>}
+            {r.effectEvidence && <div className="mt-1 text-muted-foreground">fresh exact-target effect: <span className="font-mono text-foreground/85">{r.effectEvidence.before || "—"} → {r.effectEvidence.after || "—"}</span> · correlation {r.effectEvidence.correlation}</div>}
+            <div className="mt-1 text-warning/90">{r.effectEvidence?.limitation || r.stimulusEvidence?.limitation}</div>
+          </div>
+        )}
         {/* actuator line */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
-          <span className="text-muted-foreground">Phorvex →
+          <span className="text-muted-foreground">{effectOnly ? "observed effect signature →" : "Phorvex →"}
             <span className={cn("ml-1 font-mono font-semibold", defended ? "text-success" : "text-foreground")}>{r.phorvexAction || "—"}</span>
           </span>
           {!r.phorvexAction && <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{r.expectedActuator || "—"}</span> (not observed)</span>}
+          {effectOnly && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.effectEvidence?.seconds}s</span> · controller attribution remains temporal</span>}
           {defended && r.timeToDefendSec > 0 && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.timeToDefendSec}s</span></span>}
           <span className="text-muted-foreground">target pod <span className="font-mono text-[11px] text-foreground/80">{r.pod?.split("-").slice(-1)[0]}</span></span>
           {!running && confirmed && cinfo.line && <span className={cinfo.cls}>{cinfo.line}</span>}
