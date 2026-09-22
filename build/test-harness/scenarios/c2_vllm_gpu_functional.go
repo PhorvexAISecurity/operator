@@ -30,7 +30,7 @@ import (
 const (
 	vllmPrefixScenario = "c2-vllm-prefix-cache-reset"
 	vllmDrainScenario  = "c2-vllm-request-drain"
-	vllmSuiteVersion   = "post25-vllm-functional-v1"
+	vllmSuiteVersion   = "post25-vllm-functional-v3"
 	vllmRunLabelKey    = "fixture.phorvex.ai/run"
 	vllmModelLabelKey  = "fixture.phorvex.ai/model-digest"
 )
@@ -54,11 +54,12 @@ type c2VLLMFunctional struct {
 func (s *c2VLLMFunctional) Metadata() core.ScenarioMeta {
 	name, mechanism, oracle := vllmPrefixScenario,
 		"real vLLM 0.7.3 OPT-125m prefix-cache protocol through an exact owned ordinary-GPU Pod port-forward; one distinct synthetic primer initializes lazy metrics before both arms run the same two-request population sequence",
-		"retains the cold metric exposition and primer completion, then establishes real prefix reuse from the same measured request count in both arms; direct mode additionally requires idle reset acknowledgement, first post-reset miss, later repopulation, and correlated busy refusal"
+		"retains the cold metric exposition and primer completion, then establishes real prefix reuse from the same measured request count in both arms; direct mode additionally requires idle reset acknowledgement, first post-reset miss, later repopulation, and an eight-request cohort with running and waiting work during the busy refusal"
 	if s.operation == "request-drain" {
 		name = vllmDrainScenario
-		mechanism = "real streaming vLLM 0.7.3 OPT-125m request plus operation-bound drain, exact dispositions, admission closure and explicit reopen"
-		oracle = "binds a live admitted stream to one operation generation; requires closed late admission, complete dispositions, two zero-queue observations, unchanged engine epoch, reopen, and successful recovery inference"
+		mechanism = "real eight-request streaming vLLM 0.7.3 OPT-125m cohort plus operation-bound drain, exact dispositions, admission closure and explicit reopen"
+		mechanism = "real eight-request streaming vLLM 0.7.3 OPT-125m pressure cohort plus one late-selected authenticated unfinished SSE anchor and operation-bound drain"
+		oracle = "requires the exact late-selected anchor in the engine snapshot with aborted disposition in both terminal observations; retains every background client outcome and unattributed snapshot ID without claiming full cohort attribution; also requires closed late admission, complete engine dispositions, two zero-queue observations, unchanged engine epoch, reopen, and successful recovery inference"
 	}
 	return core.ScenarioMeta{
 		Name: name, Category: core.CategoryR6Claimed,
@@ -394,6 +395,28 @@ func (s *c2VLLMFunctional) Execute(ctx context.Context, env *core.Env) (core.Att
 		"podUID": fixture.PodUID, "serviceUID": fixture.ServiceUID, "ownerUID": fixture.OwnerUID, "nodeUID": fixture.NodeUID,
 		"engineBootID": s.capability.EngineBootID, "engineSourceSHA256": fixture.EngineSourceSHA256, "modelDigest": fixture.ModelDigest,
 	}
+	if prefix, ok := s.receipt.(gpufunctional.PrefixReceipt); ok {
+		if prefix.Busy != nil {
+			s.evidence["prefixBusyNormalCompletionCount"] = strconv.Itoa(int(prefix.Busy.PostCohort.Values["vllm:request_success_total"] - prefix.Busy.PreIdle.Values["vllm:request_success_total"]))
+			s.evidence["prefixPostCohortIdle"] = strconv.FormatBool(prefix.Busy.PostCohort.Values["vllm:num_requests_running"] == 0 && prefix.Busy.PostCohort.Values["vllm:num_requests_waiting"] == 0)
+		} else {
+			s.evidence["prefixBusyNormalCompletionCount"] = "not-applicable"
+			s.evidence["prefixPostCohortIdle"] = "not-applicable"
+		}
+	}
+	if drain, ok := s.receipt.(gpufunctional.DrainReceipt); ok {
+		attributionScope := drain.AttributionScope
+		if attributionScope == "" {
+			attributionScope = "not-applicable-no-action"
+		}
+		s.evidence["drainAttributionScope"] = attributionScope
+		s.evidence["drainUnattributedSnapshotCount"] = strconv.Itoa(len(drain.UnattributedSnapshotIDs))
+		s.evidence["drainFullCohortAttributed"] = strconv.FormatBool(drain.FullCohortAttributed)
+		if drain.Anchor != nil {
+			s.evidence["drainAnchorProducerRequestID"] = drain.Anchor.ProducerRequestID
+			s.evidence["drainAnchorEngineRequestID"] = drain.Anchor.EngineRequestID
+		}
+	}
 	if evidenceErr := validateVLLMEvidence(s.evidence); evidenceErr != nil {
 		err = errors.Join(err, evidenceErr)
 	}
@@ -457,13 +480,13 @@ func vllmStages(operation string, direct bool, receipt any) []string {
 		return append(stages, "observe bounded no-action functional state")
 	}
 	if operation == "prefix-cache-reset" {
-		return append(stages, "establish real prefix reuse", "send one direct idle prefix reset", "observe first miss then cache repopulation", "correlate busy reset refusal with live inference")
+		return append(stages, "establish real prefix reuse", "send one direct idle prefix reset", "observe first miss then cache repopulation", "correlate busy reset refusal with an eight-request running-and-waiting cohort", "join eight exact length completions to final idle metrics and the normal-completion counter")
 	}
-	return append(stages, "admit one real streaming request", "send one operation-bound direct drain", "observe admission closure and complete request dispositions", "observe two zero-queue snapshots", "reopen admission and prove recovery inference")
+	return append(stages, "submit an eight-request streaming pressure cohort and retain running plus waiting evidence", "select one authenticated unfinished SSE anchor immediately before create", "send one operation-bound direct drain", "bind the exact anchor to an aborted engine disposition while retaining unattributed snapshot IDs and all client outcomes", "observe two zero-queue snapshots", "reopen admission and prove recovery inference")
 }
 
 func validateVLLMEvidence(evidence map[string]string) error {
-	if len(evidence) > 40 {
+	if len(evidence) > 48 {
 		return errors.New("GPU functional evidence item count exceeds bound")
 	}
 	total := 0

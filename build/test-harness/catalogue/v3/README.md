@@ -1,7 +1,7 @@
 # Workload catalogue v3 — development suite
 
-[`suite.json`](suite.json) selects seven implemented workload mechanisms through
-13 explicit profiles. This is a development foundation for brain evaluation;
+[`suite.json`](suite.json) selects nine implemented workload mechanisms through
+15 explicit profiles. This is a development foundation for brain evaluation;
 it is **not a completed live benchmark or a security-coverage certificate**.
 Source tests, direct backend effects, installed-manager attribution, application
 availability and security efficacy have separate acceptance records.
@@ -19,13 +19,20 @@ controllers or installs shared CRDs.
 | Voice transport | `voice-stream-baseline-timer` | Numbered synthetic WebSocket frames, end marker, established-session interruption and fresh-session recovery. |
 | NATS JetStream | `nats-no-action`, `nats-member-restart`, `nats-quorum-pause` | Actual publish/consumer acknowledgements and stored-message hashes around no action, one non-client restart, or bounded two-member quorum loss with same-ID reconciliation. |
 | Installed Phorvex | `manager-session-no-action`, `manager-session-blind-timer`, `manager-session-installed` | Matched process-state/request observations with a separately attributable installed decision, refusal or action. |
-| Ordinary GPU cache | `gpu-prefix-cache-reset-no-action`, `gpu-prefix-cache-reset-direct` | Actual inference/cache observations; direct logical reset, miss/repopulation and busy refusal. |
-| Ordinary GPU drain | `gpu-request-drain-no-action`, `gpu-request-drain-direct` | Actual engine admission/in-flight dispositions, fresh quiescence observations and explicit reopening. |
+| Ordinary GPU cache | `gpu-prefix-cache-reset-no-action`, `gpu-prefix-cache-reset-direct` | Actual inference/cache observations; direct logical reset, miss/repopulation and busy refusal, followed by eight exact normal-length completions and an idle metrics sample. |
+| Ordinary GPU drain | `gpu-request-drain-no-action`, `gpu-request-drain-direct` | Actual engine admission, one late-selected authenticated unfinished SSE anchor bound to an aborted engine request, explicit unknown background IDs, fresh quiescence observations and reopening. |
+| Native route rotation | `native-route-rotate` | Production `NativeActuator` route-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback. |
+| Native endpoint rotation | `native-endpoint-rotate` | Production `NativeActuator` endpoint-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback. |
 
 Voice covers the transport and state boundary found in the running service; it
 does not make paid speech or LLM calls. The NATS quorum profile retains a bounded single publish attempt while member 0 remains connected and members 1 and 2 are paused, then reconciles the exact message ID after recovery. It does not establish client or leader failover. GPU controls use ordinary hardware and real
 OPT-125m inference. They do not demonstrate MIG, physical memory erasure,
 cross-tenant isolation, voice draining or attacker mitigation.
+The drain control does not attribute every queued client to an engine request:
+queued requests can be aborted before vLLM emits an SSE ID. It retains all
+eight client lifecycles and every engine disposition, but claims only the exact
+pre-observed anchor. `fullCohortAttributed` remains false whenever any snapshot
+ID lacks client attribution.
 
 ## Running a reviewed profile
 

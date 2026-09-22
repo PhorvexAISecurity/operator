@@ -62,17 +62,17 @@
       "id": "c2-vllm-prefix-cache-reset",
       "workloadBoundary": "ordinary-gpu-cache",
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
-      "measures": "Cold metrics and an explicit primer completion; the same two-request prefix population in both arms; direct idle reset, miss/repopulation and busy refusal.",
-      "limits": "Logical reset only; no physical erasure, poisoning mitigation, cross-tenant isolation or installed selection claim.",
-      "sourceSHA256": "8f630dbe01d10d50c13ecc5196e97e2de9c4167cb7d0471daf36a5d7bf0666a7"
+      "measures": "Cold metrics and an explicit primer completion; the same two-request prefix population in both arms; direct idle reset, miss/repopulation and busy refusal bracketed by eight exact normal-length completions and final idle metrics.",
+      "limits": "Logical reset only; the post-cohort counter is fixture-local protocol evidence, not a comparative performance result. No physical erasure, poisoning mitigation, cross-tenant isolation or installed selection claim.",
+      "sourceSHA256": "77f4d6e1fb69a396df8c1dd423d7334a745ee90590901518f3fa1e70a07d103f"
     },
     {
       "id": "c2-vllm-request-drain",
       "workloadBoundary": "ordinary-gpu-admission",
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
-      "measures": "Actual engine admission, owned in-flight request dispositions, two fresh empty-queue observations and explicit reopen.",
-      "limits": "Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
-      "sourceSHA256": "8f630dbe01d10d50c13ecc5196e97e2de9c4167cb7d0471daf36a5d7bf0666a7"
+      "measures": "Actual engine admission, one late-selected authenticated unfinished SSE anchor captured and aborted by the engine operation, all engine dispositions, explicit unattributed background snapshot IDs, two fresh empty-queue observations and reopen.",
+      "limits": "Client attribution is limited to the exact anchor; queued requests without an SSE identity remain unattributed and fullCohortAttributed is false. Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
+      "sourceSHA256": "77f4d6e1fb69a396df8c1dd423d7334a745ee90590901518f3fa1e70a07d103f"
     },
     {
       "id": "c2-native-route-cutover",
