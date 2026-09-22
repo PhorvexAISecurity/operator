@@ -45,16 +45,22 @@ type vllmSetupFailureRecord struct {
 	Action      string `json:"action"`
 	TargetUID   string `json:"targetUid"`
 	ServiceUID  string `json:"serviceUid,omitempty"`
+	EventName   string `json:"eventName,omitempty"`
+	Correlation string `json:"correlation,omitempty"`
 	Mutated     bool   `json:"mutated"`
 	Restoration string `json:"restoration"`
 	Error       string `json:"error"`
 }
 
-func (s *Server) persistVLLMSetupFailure(actor, action, phase, targetUID, serviceUID string, mutated bool, restoration string, cause error) error {
+func (s *Server) persistVLLMSetupFailure(actor, action, phase, targetUID, serviceUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error) error {
 	if targetUID == "" || cause == nil {
 		return fmt.Errorf("vLLM setup failure identity or cause is unavailable")
 	}
 	record := vllmSetupFailureRecord{Kind: "phorvex.console.vllm.setup", Phase: phase, Time: s.cfg.now().UTC().Format(time.RFC3339Nano), Endpoint: "/api/vllm/attack", Actor: actor, Namespace: vllmAttackNS, Action: action, TargetUID: targetUID, ServiceUID: serviceUID, Mutated: mutated, Restoration: restoration, Error: cause.Error()}
+	if candidate != nil {
+		record.EventName = candidate.EventName
+		record.Correlation = candidate.Correlation
+	}
 	b, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode vLLM setup failure: %w", err)

@@ -56,7 +56,7 @@ func vllmRuleType(evType string) string {
 	return evType
 }
 
-func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, action, phase, targetUID, serviceUID string, mutated bool, restoration string, cause error) {
+func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, action, phase, targetUID, serviceUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error) {
 	if restoration == "" {
 		if mutated {
 			restoration = "required"
@@ -64,7 +64,7 @@ func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, a
 			restoration = "not-needed"
 		}
 	}
-	if err := s.persistVLLMSetupFailure(actorOf(r), action, phase, targetUID, serviceUID, mutated, restoration, cause); err != nil {
+	if err := s.persistVLLMSetupFailure(actorOf(r), action, phase, targetUID, serviceUID, candidate, mutated, restoration, cause); err != nil {
 		writeJSON(w, 503, map[string]string{"error": cause.Error() + "; failure evidence persistence failed: " + err.Error(), "verdict": "unsafe-to-retry"})
 		return
 	}
@@ -180,7 +180,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 				serviceUID, restoration = authority.serviceUID, authority.restoration
 				mutated = authority.podStaged || authority.serviceStaged
 			}
-			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, serviceUID, mutated, restoration, setupErr)
+			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, serviceUID, nil, mutated, restoration, setupErr)
 			return
 		}
 		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "EndpointPinning", "synthetic endpoint-route signal for an in-place route-effect observation", "0.95")
@@ -194,7 +194,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			} else {
 				message += "; endpoint setup restored"
 			}
-			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, authority.serviceUID, true, restoration, fmt.Errorf("%s", message))
+			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, authority.serviceUID, stimulus, true, restoration, fmt.Errorf("%s", message))
 			return
 		}
 		stimulus.Limitation = "synthetic route signal; no SSRF, model-extraction, locator-revocation or session-revocation attack was executed"
@@ -215,7 +215,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			restoration, mutated := "not-needed", false
 			if authority != nil {
 				restoration = authority.restoration
-				mutated = authority.runtimeStaged || authority.metadataStaged
+				mutated = authority.runtimeAttempted || authority.metadataStaged
 				if mutated && restoration == "" {
 					if restoreErr := s.restoreGuardrailEffect(authority, execIn); restoreErr != nil {
 						restoration = "required: " + restoreErr.Error()
@@ -225,7 +225,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, "", mutated, restoration, setupErr)
+			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, "", nil, mutated, restoration, setupErr)
 			return
 		}
 		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "GuardrailBypass", "synthetic guardrail signal for an in-place runtime-state observation", "0.95")
@@ -239,7 +239,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			} else {
 				message += "; guardrail runtime restored"
 			}
-			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, "", true, restoration, fmt.Errorf("%s", message))
+			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, "", stimulus, true, restoration, fmt.Errorf("%s", message))
 			return
 		}
 		stimulus.Limitation = "synthetic guardrail signal; no preregistered pgv1-pass to pgv2-block behavioral probe was available"

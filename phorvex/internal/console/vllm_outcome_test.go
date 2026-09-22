@@ -18,7 +18,8 @@ func TestVLLMSetupFailurePersistsRestorationDispositionAndRefusesUnsafeRetry(t *
 	dir := t.TempDir()
 	s := &Server{cfg: Config{StateDir: dir, Now: func() time.Time { return time.Date(2026, 9, 22, 15, 0, 0, 0, time.UTC) }}}
 	cause := errors.New("metadata synchronization failed")
-	if err := s.persistVLLMSetupFailure("operator", "endpoint-rotate", "setup", "pod-uid", "service-uid", true, "restored", cause); err != nil {
+	candidate := &attackStimulusEvidence{EventName: "redteam-vllm-endpointpinning-candidate", Correlation: "candidate-correlation"}
+	if err := s.persistVLLMSetupFailure("operator", "endpoint-rotate", "setup", "pod-uid", "service-uid", candidate, true, "restored", cause); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(s.cfg.statePath("effect-intents.jsonl"))
@@ -34,14 +35,14 @@ func TestVLLMSetupFailurePersistsRestorationDispositionAndRefusesUnsafeRetry(t *
 	if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
 		t.Fatal(err)
 	}
-	if record.TargetUID != "pod-uid" || record.ServiceUID != "service-uid" || !record.Mutated || record.Restoration != "restored" || record.Error != cause.Error() {
+	if record.TargetUID != "pod-uid" || record.ServiceUID != "service-uid" || record.EventName != candidate.EventName || record.Correlation != candidate.Correlation || !record.Mutated || record.Restoration != "restored" || record.Error != cause.Error() {
 		t.Fatalf("durable setup failure mismatch: %+v", record)
 	}
 
 	unsafe := &Server{cfg: Config{Now: s.cfg.Now}}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/vllm/attack", nil)
-	unsafe.writeVLLMSetupFailure(w, r, "guardrail-rotate", "setup", "pod-uid", "", true, "required", cause)
+	unsafe.writeVLLMSetupFailure(w, r, "guardrail-rotate", "setup", "pod-uid", "", nil, true, "required", cause)
 	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "unsafe-to-retry") {
 		t.Fatalf("persistence failure did not surface unsafe retry: code=%d body=%s", w.Code, w.Body.String())
 	}
@@ -276,6 +277,13 @@ func TestCreateCorrelatedVLLMEventRequiresExactAPIAcknowledgement(t *testing.T) 
 		t.Fatalf("evidence=%+v err=%v", evidence, err)
 	}
 	s.cfg.Exec = func(_ time.Duration, _ string, args ...string) (string, error) {
+		return "request timed out after server may have accepted it", errors.New("timeout")
+	}
+	candidate, err := s.createCorrelatedVLLMEvent("vllm-0", "pod-uid", "GuardrailBypass", "signal", "0.95")
+	if err == nil || candidate == nil || candidate.Observed || candidate.EventName == "" || candidate.Correlation == "" || !strings.Contains(err.Error(), candidate.EventName) || !strings.Contains(err.Error(), "outcome unknown") {
+		t.Fatalf("unknown create outcome lost reconciliation identity: candidate=%+v err=%v", candidate, err)
+	}
+	s.cfg.Exec = func(_ time.Duration, _ string, args ...string) (string, error) {
 		return `{"metadata":{"name":"foreign","uid":"foreign-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"wrong","phorvex.ai/console-vllm":"true"}},"spec":{"targets":["vllm/foreign"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
 	}
 	if _, err := s.createCorrelatedVLLMEvent("vllm-0", "pod-uid", "GuardrailBypass", "signal", "0.95"); err == nil || !strings.Contains(err.Error(), "requires reconciliation") {
@@ -405,5 +413,56 @@ func TestGuardrailMetadataPatchFailureRestoresRuntime(t *testing.T) {
 	defer mu.Unlock()
 	if active != "pgv2" {
 		t.Fatalf("runtime left mutated after metadata patch failure: %s", active)
+	}
+}
+
+func TestGuardrailAppliedThenFailedAcknowledgementRemainsUnresolved(t *testing.T) {
+	active := "pgv2"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			active = "pgv1"
+			http.Error(w, "response failed after apply", http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "active": active})
+	}))
+	defer server.Close()
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {
+		if strings.Contains(strings.Join(args, " "), "get pod vllm-0") {
+			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","resourceVersion":"19","annotations":{"phorvex.ai/guardrail-variant":"pgv2"}}}`, nil
+		}
+		return "", errors.New("unexpected kubectl")
+	}}}
+	authority, err := s.prepareGuardrailEffect("vllm-0", "pod-uid", actualGuardrailExec(t, server.URL))
+	if err == nil || authority == nil || !authority.runtimeAttempted || authority.runtimeStaged || !strings.Contains(authority.restoration, "required") || active != "pgv1" {
+		t.Fatalf("unknown applied write was misclassified: authority=%+v active=%s err=%v", authority, active, err)
+	}
+}
+
+func TestGuardrailRestorationRefusesConcurrentRuntimeChange(t *testing.T) {
+	active, posts := "pgv3", 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts++
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			active = body["variant"]
+			_ = json.NewEncoder(w).Encode(map[string]any{"active": active, "applied": true})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "active": active})
+	}))
+	defer server.Close()
+	annotations := map[string]string{"phorvex.ai/guardrail-variant": "pgv2"}
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {
+		if strings.Contains(strings.Join(args, " "), "get pod vllm-0") {
+			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","resourceVersion":"19","annotations":{"phorvex.ai/guardrail-variant":"pgv2"}}}`, nil
+		}
+		return "", errors.New("unexpected kubectl")
+	}}}
+	authority := &guardrailSetupAuthority{pod: "vllm-0", targetUID: "pod-uid", originalRuntime: guardrailState{Ready: true, Active: "pgv2"}, originalAnnotations: &annotations, runtimeAttempted: true, runtimeStaged: true}
+	err := s.restoreGuardrailEffect(authority, actualGuardrailExec(t, server.URL))
+	if err == nil || posts != 0 || active != "pgv3" {
+		t.Fatalf("concurrent runtime was overwritten: posts=%d active=%s err=%v", posts, active, err)
 	}
 }

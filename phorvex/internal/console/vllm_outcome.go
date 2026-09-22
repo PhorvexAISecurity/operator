@@ -38,6 +38,7 @@ func (s *Server) createCorrelatedVLLMEvent(pod, targetUID, evType, desc, anomaly
 	correlation := fmt.Sprintf("%x-%x", s.cfg.now().UnixNano(), sequence)
 	name := "redteam-vllm-" + strings.ToLower(evType) + "-" + correlation
 	ruleType := vllmRuleType(evType)
+	candidate := &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: false, TargetUID: targetUID, EventName: name, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "SecurityEvent create outcome is unknown and requires exact reconciliation"}
 	manifest := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
 metadata:
@@ -74,16 +75,16 @@ spec:
 	}
 	out, err := s.cfg.execText(10*time.Second, "kubectl", "create", "-f", f.Name(), "-o", "json")
 	if err != nil {
-		return nil, fmt.Errorf("create SecurityEvent: %w (%s)", err, strings.TrimSpace(out))
+		return candidate, fmt.Errorf("create SecurityEvent %q correlation %q outcome unknown: %w (%s)", name, correlation, err, strings.TrimSpace(out))
 	}
 	var event vllmSecurityEvent
 	if err := json.Unmarshal([]byte(out), &event); err != nil {
-		return nil, fmt.Errorf("created SecurityEvent reply is malformed; exact resource %q requires reconciliation: %w", name, err)
+		return candidate, fmt.Errorf("created SecurityEvent reply is malformed; exact resource %q correlation %q requires reconciliation: %w", name, correlation, err)
 	}
 	if event.Metadata.Name != name || event.Metadata.Namespace != "" || event.Metadata.UID == "" || event.Metadata.CreationTimestamp == "" ||
 		event.Metadata.Labels["phorvex.ai/attack-correlation"] != correlation || event.Metadata.Labels["phorvex.ai/console-vllm"] != "true" || len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != vllmAttackNS+"/"+pod ||
 		event.Spec.Rule.Type != ruleType || event.Spec.Rule.Source != "redteam" {
-		return nil, fmt.Errorf("created SecurityEvent reply is incomplete or mismatched; exact resource %q requires reconciliation", name)
+		return candidate, fmt.Errorf("created SecurityEvent reply is incomplete or mismatched; exact resource %q correlation %q requires reconciliation", name, correlation)
 	}
 	return &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: true, TargetUID: targetUID, EventName: name, EventUID: event.Metadata.UID, EventCreatedAt: event.Metadata.CreationTimestamp, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "detector stimulus is not a demonstrated exploit"}, nil
 }
@@ -246,6 +247,7 @@ type guardrailSetupAuthority struct {
 	originalRuntime     guardrailState
 	originalAnnotations *map[string]string
 	stagedAnnotations   *map[string]string
+	runtimeAttempted    bool
 	runtimeStaged       bool
 	metadataStaged      bool
 	restoration         string
@@ -444,7 +446,9 @@ func (s *Server) prepareGuardrailEffect(podName, targetUID string, execIn func(s
 		return nil, fmt.Errorf("read guardrail setup baseline: %w", err)
 	}
 	authority := &guardrailSetupAuthority{pod: podName, targetUID: targetUID, originalRuntime: before, originalAnnotations: copyOptionalStringMap(pod.Metadata.Annotations)}
+	authority.runtimeAttempted = true
 	if _, err := reloadGuardrail(execIn, "pgv1"); err != nil {
+		authority.restoration = "required: guardrail runtime write outcome is unknown"
 		return authority, fmt.Errorf("set guardrail stimulus variant: %w", err)
 	}
 	authority.runtimeStaged = true
@@ -495,6 +499,16 @@ func (s *Server) restoreGuardrailEffect(authority *guardrailSetupAuthority, exec
 	if authority.originalRuntime.Active == "" {
 		return fmt.Errorf("original guardrail runtime state is unavailable")
 	}
+	if authority.runtimeAttempted && !authority.runtimeStaged {
+		return fmt.Errorf("guardrail runtime write outcome is unknown; refusing automatic restoration")
+	}
+	if authority.runtimeStaged {
+		currentRuntime, runtimeErr := readGuardrailState(execIn)
+		postRuntimePod, podErr := s.readVLLMPod(authority.pod)
+		if runtimeErr != nil || podErr != nil || postRuntimePod.Metadata.UID != authority.targetUID || currentRuntime.Active != "pgv1" {
+			return fmt.Errorf("guardrail runtime no longer matches the exact staged state; refusing restoration")
+		}
+	}
 	if authority.metadataStaged {
 		if !stringMapsEqual(pod.Metadata.Annotations, authority.stagedAnnotations) {
 			return fmt.Errorf("guardrail Pod annotations changed; refusing restoration")
@@ -507,6 +521,11 @@ func (s *Server) restoreGuardrailEffect(authority *guardrailSetupAuthority, exec
 		return fmt.Errorf("guardrail Pod annotations changed before restoration")
 	}
 	if authority.runtimeStaged {
+		currentRuntime, runtimeErr := readGuardrailState(execIn)
+		preRestorePod, podErr := s.readVLLMPod(authority.pod)
+		if runtimeErr != nil || podErr != nil || preRestorePod.Metadata.UID != authority.targetUID || currentRuntime.Active != "pgv1" {
+			return fmt.Errorf("guardrail runtime changed before compensation; refusing restoration")
+		}
 		if _, err := reloadGuardrail(execIn, authority.originalRuntime.Active); err != nil {
 			return err
 		}
