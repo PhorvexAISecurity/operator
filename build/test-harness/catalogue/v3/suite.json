@@ -1,0 +1,371 @@
+{
+  "schema": "phorvex.catalogue-suite.v1",
+  "revision": "3.0.0-development.1",
+  "status": "DEVELOPMENT_NOT_ACCEPTED_BENCHMARK_FREEZE",
+  "purpose": "Workload-derived functional evaluation foundation for later brain regression comparisons. This manifest selects existing registered implementations; it is not an executable harness config.",
+  "implementationStatus": "Source implementation requires its reviewed source commit and tests; consult campaign records for independent live acceptance.",
+  "globalRules": {
+    "negativeControl": false,
+    "adaptive": false,
+    "resume": false,
+    "allowedScenarioClass": "executable-mechanism",
+    "benignControl": true,
+    "securityEfficacy": "NOT_MEASURED",
+    "monetaryROI": "NOT_MEASURED",
+    "defaultSelection": "NONE",
+    "extraControllerOrCRDInstall": false,
+    "legacyDefenderExcluded": "d-phorvex",
+    "unavailableFixture": "Retain UNAVAILABLE/SKIPPED with reason; never count as a successful measurement."
+  },
+  "entries": [
+    {
+      "id": "c2-ephemeral-session-rotation",
+      "workloadBoundary": "http-process-state",
+      "sourceFile": "scenarios/c2_ephemeral_session_rotation.go",
+      "measures": "Actual HTTP process-local state before/after Pod replacement; new-state positive control.",
+      "limits": "No credential revocation, security efficacy, native dispatch or durable external-state claim.",
+      "sourceSHA256": "d62624b748b9b0ee4c6e438a74772247a08ffee438ce1fc58a9c0ec727b33add"
+    },
+    {
+      "id": "c2-checkpoint-continuity",
+      "workloadBoundary": "durable-checkpoint",
+      "sourceFile": "scenarios/c2_checkpoint_continuity.go",
+      "measures": "Acknowledged synthetic progress, same owned volume, observed replacement and later durable acknowledgement.",
+      "limits": "Unavailability is not corruption; no cross-node, paid-volume, HA or generic state-transfer claim.",
+      "sourceSHA256": "9767668b44f6ef34039f904b92af83ec512915e23be5fa3e2926804d0ef04953"
+    },
+    {
+      "id": "c2-voice-websocket-continuity",
+      "workloadBoundary": "voice-stream",
+      "sourceFile": "scenarios/c2_voice_websocket_continuity.go",
+      "measures": "Real WebSocket numbered synthetic media, explicit end marker, interruption, shared-route observations and replacement recovery.",
+      "limits": "No paid provider calls, speech quality, model semantics, installed dispatch or generic voice drain claim.",
+      "sourceSHA256": "91fb1b4b4831ded19a91d3495f73363d74015d9c1518420a27aa9c1d4010d210"
+    },
+    {
+      "id": "c2-nats-jetstream-durability",
+      "workloadBoundary": "message-durability",
+      "sourceFile": "scenarios/c2_nats_jetstream_durability.go",
+      "measures": "Real PubAck, consumer ACK and independently retrieved message hashes across no action or one non-client member child restart.",
+      "limits": "No client/leader failover, quorum-loss, native rotation or installed-manager claim.",
+      "sourceSHA256": "cd9117a613b12c7bfc466e62128888d069134f4f652ab6244f896955f0034785"
+    },
+    {
+      "id": "c2-installed-manager-session",
+      "workloadBoundary": "decision-dispatch-session-effect",
+      "sourceFile": "scenarios/c2_installed_manager_session.go",
+      "measures": "Two CPU replicas, real process-local session, request observations, exact installed policy/target audit chain and independent effect.",
+      "limits": "Attributable non-selection is valid; a dispatch acknowledgement is not completed effect or continuous availability.",
+      "sourceSHA256": "bfaf4ae7547ab7cc95a4c7c8c8889d398383b661c44030e3755efd219ba63fe8"
+    },
+    {
+      "id": "c2-vllm-prefix-cache-reset",
+      "workloadBoundary": "ordinary-gpu-cache",
+      "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
+      "measures": "Actual inference and prefix-cache metrics; direct idle reset, miss/repopulation and busy refusal.",
+      "limits": "Logical reset only; no physical erasure, poisoning mitigation, cross-tenant isolation or installed selection claim.",
+      "sourceSHA256": "d0b3fb31220f123a54832c88f00cb05256594bea9f09259825400fa937ac9a12"
+    },
+    {
+      "id": "c2-vllm-request-drain",
+      "workloadBoundary": "ordinary-gpu-admission",
+      "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
+      "measures": "Actual engine admission, owned in-flight request dispositions, two fresh empty-queue observations and explicit reopen.",
+      "limits": "Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
+      "sourceSHA256": "d0b3fb31220f123a54832c88f00cb05256594bea9f09259825400fa937ac9a12"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "http-session-baseline-timer",
+      "scenarioFilter": [
+        "c2-ephemeral-session-rotation"
+      ],
+      "defenderFilter": [
+        "d-nomtd",
+        "d-r6blindtimer"
+      ],
+      "trialsPerArm": 3,
+      "executionKind": "harness-comparison",
+      "requiredFixtures": [
+        "owned CPU namespace"
+      ],
+      "requiredConfigValues": {},
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "checkpoint-local-baseline-timer",
+      "scenarioFilter": [
+        "c2-checkpoint-continuity"
+      ],
+      "defenderFilter": [
+        "d-nomtd",
+        "d-r6blindtimer"
+      ],
+      "trialsPerArm": 3,
+      "executionKind": "harness-comparison",
+      "requiredFixtures": [
+        "owned six-slot local storage holder",
+        "exact existing node and StorageClass identities",
+        "external storage cleanup supervisor"
+      ],
+      "requiredConfigValues": {
+        "benignCheckpointLocalFixture": true
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "voice-stream-baseline-timer",
+      "scenarioFilter": [
+        "c2-voice-websocket-continuity"
+      ],
+      "defenderFilter": [
+        "d-nomtd",
+        "d-r6blindtimer"
+      ],
+      "trialsPerArm": 3,
+      "executionKind": "harness-comparison",
+      "requiredFixtures": [
+        "owned CPU namespace",
+        "capacity for target and peer replicas"
+      ],
+      "requiredConfigValues": {},
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "nats-no-action",
+      "scenarioFilter": [
+        "c2-nats-jetstream-durability"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "owned three-member NATS fixture",
+        "exact three local PV identities",
+        "external storage cleanup supervisor"
+      ],
+      "requiredConfigValues": {
+        "natsJetStreamFixture.mode": "no-action"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "nats-member-restart",
+      "scenarioFilter": [
+        "c2-nats-jetstream-durability"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "owned three-member NATS fixture",
+        "exact three local PV identities",
+        "external storage cleanup supervisor"
+      ],
+      "requiredConfigValues": {
+        "natsJetStreamFixture.mode": "member-restart"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "manager-session-no-action",
+      "scenarioFilter": [
+        "c2-installed-manager-session"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "matched-harness-control",
+      "requiredFixtures": [
+        "owned CPU namespace",
+        "two-replica process-state fixture and PDB"
+      ],
+      "requiredConfigValues": {},
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "manager-session-blind-timer",
+      "scenarioFilter": [
+        "c2-installed-manager-session"
+      ],
+      "defenderFilter": [
+        "d-r6blindtimer"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "matched-harness-control",
+      "requiredFixtures": [
+        "owned CPU namespace",
+        "two-replica process-state fixture and PDB"
+      ],
+      "requiredConfigValues": {},
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "manager-session-installed",
+      "scenarioFilter": [
+        "c2-installed-manager-session"
+      ],
+      "defenderFilter": [
+        "d-phorvex-installed"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "installed-manager-comparison",
+      "requiredFixtures": [
+        "owned CPU namespace",
+        "two-replica process-state fixture and PDB",
+        "exact installed manager source/digest/incarnation and policy CRD",
+        "authenticated audit reader with retained parameter material",
+        "namespace-scoped manager authorization; denial control",
+        "one bounded target policy and current availability controls"
+      ],
+      "requiredConfigValues": {},
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "gpu-prefix-cache-reset-no-action",
+      "scenarioFilter": [
+        "c2-vllm-prefix-cache-reset"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "externally provisioned supervisor-owned ordinary-GPU fixture with actual OPT-125m inference",
+        "exact namespace/node/controller/Pod/Service/engine and source identities",
+        "private bearer file",
+        "external fixture supervisor and cleanup"
+      ],
+      "requiredRelationships": [
+        "expectedNamespaceUID == gpuFunctionalFixture.namespaceUID"
+      ],
+      "requiredConfigValues": {
+        "gpuFunctionalFixture.operation": "prefix-cache-reset",
+        "gpuFunctionalFixture.mode": "no-action"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "gpu-prefix-cache-reset-direct",
+      "scenarioFilter": [
+        "c2-vllm-prefix-cache-reset"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "externally provisioned supervisor-owned ordinary-GPU fixture with actual OPT-125m inference",
+        "exact namespace/node/controller/Pod/Service/engine and source identities",
+        "private bearer file",
+        "external fixture supervisor and cleanup"
+      ],
+      "requiredRelationships": [
+        "expectedNamespaceUID == gpuFunctionalFixture.namespaceUID"
+      ],
+      "requiredConfigValues": {
+        "gpuFunctionalFixture.operation": "prefix-cache-reset",
+        "gpuFunctionalFixture.mode": "direct"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "gpu-request-drain-no-action",
+      "scenarioFilter": [
+        "c2-vllm-request-drain"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "externally provisioned supervisor-owned ordinary-GPU fixture with actual OPT-125m inference",
+        "exact namespace/node/controller/Pod/Service/engine and source identities",
+        "private bearer file",
+        "external fixture supervisor and cleanup"
+      ],
+      "requiredRelationships": [
+        "expectedNamespaceUID == gpuFunctionalFixture.namespaceUID"
+      ],
+      "requiredConfigValues": {
+        "gpuFunctionalFixture.operation": "request-drain",
+        "gpuFunctionalFixture.mode": "no-action"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    },
+    {
+      "id": "gpu-request-drain-direct",
+      "scenarioFilter": [
+        "c2-vllm-request-drain"
+      ],
+      "defenderFilter": [
+        "d-nomtd"
+      ],
+      "trialsPerArm": 1,
+      "executionKind": "direct-protocol-control",
+      "requiredFixtures": [
+        "externally provisioned supervisor-owned ordinary-GPU fixture with actual OPT-125m inference",
+        "exact namespace/node/controller/Pod/Service/engine and source identities",
+        "private bearer file",
+        "external fixture supervisor and cleanup"
+      ],
+      "requiredRelationships": [
+        "expectedNamespaceUID == gpuFunctionalFixture.namespaceUID"
+      ],
+      "requiredConfigValues": {
+        "gpuFunctionalFixture.operation": "request-drain",
+        "gpuFunctionalFixture.mode": "direct"
+      },
+      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
+    }
+  ],
+  "comparisonContract": {
+    "groupBy": [
+      "suite revision and manifest hash",
+      "exact source and binary hashes",
+      "profile ID and explicit fixture mode",
+      "fixture/configuration/load schedule/seed",
+      "manager image/source where involved"
+    ],
+    "prohibitedPooling": [
+      "direct and no-action rows sharing defender d-nomtd",
+      "different source or fixture modes",
+      "legacy marker/unassessed rows with executable controls",
+      "failed or incomplete trials silently removed from denominators"
+    ],
+    "matchedConditionsRequired": [
+      "offered workload",
+      "warmup and observation horizon",
+      "fixture replica/resource/storage configuration",
+      "same outcome definitions",
+      "declared mutation difference only"
+    ],
+    "gpuComparisonLimit": "The GPU profiles are functional protocol controls. Different request counts or horizons cannot establish comparative availability, latency, cost or brain improvement.",
+    "uncertainty": "Initial bounded controls do not establish performance significance. Retain each repetition, failures and missing observations; predeclare meaningful repetition count from observed variance and report uncertainty before a brain-regression verdict."
+  },
+  "excludedCapabilities": [
+    {
+      "capability": "MIG",
+      "reason": "Required hardware unavailable; no hardware-backed PASS."
+    },
+    {
+      "capability": "current live network quarantine",
+      "reason": "Current enforcement backend is disabled; policy creation is not packet enforcement."
+    },
+    {
+      "capability": "legacy marker and unassessed scenarios",
+      "reason": "Remain visible in full inventory but are not included in this curated workload suite or demonstrated security coverage."
+    }
+  ],
+  "liveStatusAuthority": "workflow/campaigns/2026-09-20-post25-live/catalogue/SCOPE-AND-COVERAGE.md and exact per-round reviewed evidence; this source manifest grants no live PASS.",
+  "sourceHashSemantics": "sourceSHA256 is SHA-256 of the exact scenario source-file bytes relative to build/test-harness; full reviewed commit, module-tree and binary pins remain required for dependency closure."
+}
