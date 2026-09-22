@@ -50,6 +50,7 @@ const (
 	installedSessionGraceSeconds     = int64(30)
 	installedSessionMinimumPodAge    = 90 * time.Second
 	installedSessionAgeWaitBound     = 105 * time.Second
+	installedSessionRouteBindBound   = 5 * time.Second
 )
 
 // installedSessionAvailabilitySource makes read-only application requests for
@@ -302,14 +303,9 @@ func (s *c2InstalledManagerSession) Setup(ctx context.Context, env *core.Env) er
 	}
 	s.replicaSetName, s.replicaSetUID = rsName, rsUID
 	original := pods[0].DeepCopy()
-	if original.ResourceVersion == "" {
-		return errors.New("installed session target has no resourceVersion")
-	}
-	original.Labels[installedSessionTargetRoute] = s.targetRouteValue
-	env.Log.Command(fmt.Sprintf("kubectl label pod %s -n %s %s=%s --resource-version=%s", original.Name, env.Config.Namespace, installedSessionTargetRoute, s.targetRouteValue, original.ResourceVersion))
-	updated, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Update(ctx, original, metav1.UpdateOptions{})
-	if err != nil || updated == nil || updated.UID != original.UID || updated.ResourceVersion == "" {
-		return errors.Join(err, errors.New("bind exact installed session target route returned a different identity"))
+	updated, err := bindInstalledSessionTargetRoute(ctx, env, original.Name, original.UID, pods[1].UID, s.deploymentUID, s.targetRouteValue, installedSessionRouteBindBound)
+	if err != nil {
+		return err
 	}
 	s.originalName, s.originalUID, s.originalRV = updated.Name, updated.UID, updated.ResourceVersion
 	s.originalCreatedAt = updated.CreationTimestamp.UTC().Format(time.RFC3339Nano)
@@ -464,6 +460,90 @@ func validateInstalledSessionPod(ctx context.Context, env *core.Env, pod *corev1
 		}
 	}
 	return "", "", errors.New("installed session ReplicaSet is not owned by exact Deployment")
+}
+
+func bindInstalledSessionTargetRoute(ctx context.Context, env *core.Env, podName string, podUID, peerUID, deploymentUID types.UID, routeValue string, bound time.Duration) (*corev1.Pod, error) {
+	if podName == "" || podUID == "" || peerUID == "" || podUID == peerUID || deploymentUID == "" || routeValue == "" || bound <= 0 {
+		return nil, errors.New("installed session route bind authority is incomplete")
+	}
+	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(bound)
+	for {
+		current, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil || current == nil || current.UID != podUID {
+			return nil, errors.Join(err, errors.New("installed session route target identity changed before bind"))
+		}
+		if current.Labels[installedSessionTargetRoute] != "" {
+			return nil, errors.New("installed session route target was already selected")
+		}
+		if _, _, err := validateInstalledSessionPod(ctx, env, current, deploymentUID); err != nil {
+			return nil, err
+		}
+		requestRV := current.ResourceVersion
+		candidate := current.DeepCopy()
+		candidate.Labels[installedSessionTargetRoute] = routeValue
+		env.Log.Command(fmt.Sprintf("kubectl label pod %s -n %s %s=%s --resource-version=%s", podName, env.Config.Namespace, installedSessionTargetRoute, routeValue, requestRV))
+		updated, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Update(ctx, candidate, metav1.UpdateOptions{})
+		if apierrors.IsConflict(err) {
+			if time.Now().After(deadline) {
+				return nil, errors.New("installed session route bind conflict retry bound expired")
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(50 * time.Millisecond):
+				continue
+			}
+		}
+		if err != nil || updated == nil || updated.UID != podUID || updated.ResourceVersion == "" || updated.ResourceVersion == requestRV || updated.Labels[installedSessionTargetRoute] != routeValue {
+			return nil, errors.Join(err, errors.New("bind exact installed session target route returned a different identity or resourceVersion"))
+		}
+		check := updated.DeepCopy()
+		delete(check.Labels, installedSessionTargetRoute)
+		if _, _, err := validateInstalledSessionPod(ctx, env, check, deploymentUID); err != nil {
+			return nil, err
+		}
+		if err := validateInstalledSessionExclusiveRoute(ctx, env, podName, podUID, peerUID, deploymentUID, routeValue); err != nil {
+			return nil, err
+		}
+		return updated, nil
+	}
+}
+
+func validateInstalledSessionExclusiveRoute(ctx context.Context, env *core.Env, targetName string, targetUID, peerUID, deploymentUID types.UID, routeValue string) error {
+	pods, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + installedSessionApp})
+	if err != nil || len(pods.Items) != 2 {
+		return errors.Join(err, errors.New("installed session route membership is not exactly two Pods"))
+	}
+	seenTarget, seenPeer := false, false
+	for i := range pods.Items {
+		pod := pods.Items[i].DeepCopy()
+		route := pod.Labels[installedSessionTargetRoute]
+		delete(pod.Labels, installedSessionTargetRoute)
+		if _, _, err := validateInstalledSessionPod(ctx, env, pod, deploymentUID); err != nil {
+			return err
+		}
+		switch pod.UID {
+		case targetUID:
+			if pod.Name != targetName || route != routeValue || seenTarget {
+				return errors.New("installed session exact target route differs")
+			}
+			seenTarget = true
+		case peerUID:
+			if route != "" || seenPeer {
+				return errors.New("installed session peer unexpectedly selected")
+			}
+			seenPeer = true
+		default:
+			return errors.New("installed session route membership contains an unknown Pod UID")
+		}
+	}
+	if !seenTarget || !seenPeer {
+		return errors.New("installed session exact target or peer route missing")
+	}
+	return nil
 }
 
 func waitInstalledSessionTargetEndpoint(ctx context.Context, env *core.Env, serviceUID types.UID, podName string, podUID types.UID, timeout time.Duration) error {
@@ -1125,11 +1205,9 @@ func (s *c2InstalledManagerSession) SuccessOracle(ctx context.Context, env *core
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return core.OracleResult{Evidence: baseEvidence}, err
 	}
-	replacement.Labels[installedSessionTargetRoute] = s.targetRouteValue
-	env.Log.Command(fmt.Sprintf("kubectl label pod %s -n %s %s=%s --resource-version=%s", replacement.Name, env.Config.Namespace, installedSessionTargetRoute, s.targetRouteValue, replacement.ResourceVersion))
-	replacement, err = env.Kube.CoreV1().Pods(env.Config.Namespace).Update(ctx, replacement, metav1.UpdateOptions{})
-	if err != nil || replacement == nil || replacement.UID == "" {
-		return core.OracleResult{Evidence: baseEvidence}, errors.Join(err, errors.New("bind installed session replacement route returned no identity"))
+	replacement, err = bindInstalledSessionTargetRoute(ctx, env, replacement.Name, replacement.UID, s.peerUID, s.deploymentUID, s.targetRouteValue, installedSessionRouteBindBound)
+	if err != nil {
+		return core.OracleResult{Evidence: baseEvidence}, err
 	}
 	s.replacementUID = replacement.UID
 	if err := waitInstalledSessionTargetEndpoint(ctx, env, s.targetServiceUID, replacement.Name, replacement.UID, 20*time.Second); err != nil {

@@ -21,11 +21,117 @@ import (
 
 	"github.com/r6security/phoenix-test-harness/defenders"
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	k8stesting "k8s.io/client-go/testing"
 )
+
+func TestInstalledSessionRouteBindRetriesOnlyConflictWithExactIdentity(t *testing.T) {
+	env, targetUID, peerUID, deploymentUID := installedRouteFixture(t)
+	client := env.Kube.(*fake.Clientset)
+	var updates atomic.Int32
+	client.PrependReactor("update", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		candidate := action.(k8stesting.UpdateAction).GetObject().(*corev1.Pod).DeepCopy()
+		call := updates.Add(1)
+		if call == 1 {
+			current, err := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("pods"), env.Config.Namespace, candidate.Name)
+			if err != nil {
+				return true, nil, err
+			}
+			advanced := current.(*corev1.Pod).DeepCopy()
+			advanced.ResourceVersion = "2"
+			if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("pods"), advanced, env.Config.Namespace); err != nil {
+				return true, nil, err
+			}
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Group: "", Resource: "pods"}, candidate.Name, errors.New("status resourceVersion advanced"))
+		}
+		candidate.ResourceVersion = "3"
+		if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("pods"), candidate, env.Config.Namespace); err != nil {
+			return true, nil, err
+		}
+		return true, candidate, nil
+	})
+	got, err := bindInstalledSessionTargetRoute(context.Background(), env, "target", targetUID, peerUID, deploymentUID, "trial-0", time.Second)
+	if err != nil || got.UID != targetUID || got.ResourceVersion != "3" || got.Labels[installedSessionTargetRoute] != "trial-0" || updates.Load() != 2 {
+		t.Fatalf("conflict retry result=%+v updates=%d err=%v", got, updates.Load(), err)
+	}
+	peer, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(context.Background(), "peer", metav1.GetOptions{})
+	if err != nil || peer.Labels[installedSessionTargetRoute] != "" {
+		t.Fatalf("peer changed: %+v err=%v", peer, err)
+	}
+}
+
+func TestInstalledSessionRouteBindRefusesReplacementAfterConflict(t *testing.T) {
+	env, targetUID, peerUID, deploymentUID := installedRouteFixture(t)
+	client := env.Kube.(*fake.Clientset)
+	var updates atomic.Int32
+	client.PrependReactor("update", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		candidate := action.(k8stesting.UpdateAction).GetObject().(*corev1.Pod)
+		updates.Add(1)
+		replacement := candidate.DeepCopy()
+		replacement.UID = "replacement-uid"
+		replacement.ResourceVersion = "2"
+		delete(replacement.Labels, installedSessionTargetRoute)
+		if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("pods"), replacement, env.Config.Namespace); err != nil {
+			return true, nil, err
+		}
+		return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "pods"}, candidate.Name, errors.New("status resourceVersion advanced"))
+	})
+	if _, err := bindInstalledSessionTargetRoute(context.Background(), env, "target", targetUID, peerUID, deploymentUID, "trial-0", time.Second); err == nil || !strings.Contains(err.Error(), "identity changed") {
+		t.Fatalf("replacement err=%v", err)
+	}
+	if updates.Load() != 1 {
+		t.Fatalf("updates=%d want1", updates.Load())
+	}
+}
+
+func TestInstalledSessionRouteBindRefusesPrelabelAndUnchangedResponseRV(t *testing.T) {
+	t.Run("prelabel", func(t *testing.T) {
+		env, targetUID, peerUID, deploymentUID := installedRouteFixture(t)
+		client := env.Kube.(*fake.Clientset)
+		pod, _ := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("pods"), env.Config.Namespace, "target")
+		changed := pod.(*corev1.Pod).DeepCopy()
+		changed.Labels[installedSessionTargetRoute] = "foreign"
+		_ = client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("pods"), changed, env.Config.Namespace)
+		if _, err := bindInstalledSessionTargetRoute(context.Background(), env, "target", targetUID, peerUID, deploymentUID, "trial-0", time.Second); err == nil || !strings.Contains(err.Error(), "already selected") {
+			t.Fatalf("prelabel err=%v", err)
+		}
+	})
+	t.Run("unchanged-rv", func(t *testing.T) {
+		env, targetUID, peerUID, deploymentUID := installedRouteFixture(t)
+		if _, err := bindInstalledSessionTargetRoute(context.Background(), env, "target", targetUID, peerUID, deploymentUID, "trial-0", time.Second); err == nil || !strings.Contains(err.Error(), "resourceVersion") {
+			t.Fatalf("unchanged RV err=%v", err)
+		}
+	})
+}
+
+func installedRouteFixture(t *testing.T) (*core.Env, types.UID, types.UID, types.UID) {
+	t.Helper()
+	controller := true
+	depUID := types.UID("deployment-uid")
+	rsUID := types.UID("replicaset-uid")
+	targetUID := types.UID("target-uid")
+	peerUID := types.UID("peer-uid")
+	env := fixtureObservationEnv()
+	env.ScenarioName = installedSessionScenario
+	env.DefenderName = "d-nomtd"
+	labels := env.OwnedLabels(map[string]string{"app": installedSessionApp})
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: installedSessionDeployment, Namespace: env.Config.Namespace, UID: depUID}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "installed-rs", Namespace: env.Config.Namespace, UID: rsUID, OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: installedSessionDeployment, UID: depUID, Controller: &controller}}}}
+	pod := func(name string, uid types.UID) *corev1.Pod {
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: env.Config.Namespace, UID: uid, ResourceVersion: "1", Labels: maps.Clone(labels), Annotations: map[string]string{"r6th.io/session-source-sha256": sessionServerSourceSHA256()}, OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: rs.Name, UID: rsUID, Controller: &controller}}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "session", Image: sessionPythonImage, Command: []string{"python3", "-B", "-c", sessionServerSource}}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
+	}
+	env.Kube = fake.NewSimpleClientset(dep, rs, pod("target", targetUID), pod("peer", peerUID))
+	return env, targetUID, peerUID, depUID
+}
 
 func TestInstalledSessionMetadataIsBoundedBenignAndSourcePinned(t *testing.T) {
 	meta := (&c2InstalledManagerSession{}).Metadata()
