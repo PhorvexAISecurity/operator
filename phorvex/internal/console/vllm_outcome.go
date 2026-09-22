@@ -3,12 +3,15 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 var vllmEventSequence atomic.Uint64
@@ -20,6 +23,7 @@ type vllmSecurityEvent struct {
 		UID               string            `json:"uid"`
 		CreationTimestamp string            `json:"creationTimestamp"`
 		Labels            map[string]string `json:"labels"`
+		Annotations       map[string]string `json:"annotations"`
 	} `json:"metadata"`
 	Spec struct {
 		Targets []string `json:"targets"`
@@ -31,19 +35,30 @@ type vllmSecurityEvent struct {
 }
 
 func (s *Server) createCorrelatedVLLMEvent(pod, targetUID, evType, desc, anomaly string) (*attackStimulusEvidence, error) {
+	return s.createCorrelatedVLLMEventWithAdapter(pod, targetUID, evType, desc, anomaly, "")
+}
+
+func (s *Server) createCorrelatedVLLMEventWithAdapter(pod, targetUID, evType, desc, anomaly, adapter string) (*attackStimulusEvidence, error) {
 	if targetUID == "" {
 		return nil, fmt.Errorf("target Pod UID is unavailable")
+	}
+	if adapter != "" && (!validVLLMIdentity(adapter) || vllmRuleType(evType) != model.AttackVectorAdapter) {
+		return nil, fmt.Errorf("adapter event identity is invalid")
 	}
 	sequence := vllmEventSequence.Add(1)
 	correlation := fmt.Sprintf("%x-%x", s.cfg.now().UnixNano(), sequence)
 	name := "redteam-vllm-" + strings.ToLower(evType) + "-" + correlation
 	ruleType := vllmRuleType(evType)
 	candidate := &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: false, TargetUID: targetUID, EventName: name, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "SecurityEvent create outcome is unknown and requires exact reconciliation"}
+	annotations := ""
+	if adapter != "" {
+		annotations = fmt.Sprintf("  annotations:\n    phorvex.ai/adapter-name: %q\n    phorvex.ai/target-pod-uid: %q\n", adapter, targetUID)
+	}
 	manifest := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
 metadata:
   name: %s
-  labels:
+%s  labels:
     phorvex.ai/redteam: "true"
     phorvex.ai/console-vllm: "true"
     phorvex.ai/attack-correlation: %q
@@ -55,7 +70,7 @@ spec:
     threatLevel: "critical"
     source: "redteam"
   anomalyScore: %q
-`, name, correlation, desc, vllmAttackNS, pod, ruleType, anomaly)
+`, name, annotations, correlation, desc, vllmAttackNS, pod, ruleType, anomaly)
 	f, err := os.CreateTemp("", "phorvex-vllm-event-*.yaml")
 	if err != nil {
 		return nil, err
@@ -86,6 +101,9 @@ spec:
 		event.Spec.Rule.Type != ruleType || event.Spec.Rule.Source != "redteam" {
 		return candidate, fmt.Errorf("created SecurityEvent reply is incomplete or mismatched; exact resource %q correlation %q requires reconciliation", name, correlation)
 	}
+	if adapter != "" && (event.Metadata.Annotations["phorvex.ai/adapter-name"] != adapter || event.Metadata.Annotations["phorvex.ai/target-pod-uid"] != targetUID) {
+		return candidate, fmt.Errorf("created adapter SecurityEvent reply is incomplete or mismatched; exact resource %q correlation %q requires reconciliation", name, correlation)
+	}
 	return &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: true, TargetUID: targetUID, EventName: name, EventUID: event.Metadata.UID, EventCreatedAt: event.Metadata.CreationTimestamp, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "detector stimulus is not a demonstrated exploit"}, nil
 }
 
@@ -109,40 +127,181 @@ type vllmHTTPResponse struct {
 	Body   []byte
 }
 
-// vllmHTTP executes the real serving-stack HTTP producer from the target Pod. Markers isolate
-// stdout from kubectl's default-container warnings, and every caller validates status and schema.
-func vllmHTTP(execIn func(string) (string, error), method, path, body string) (vllmHTTPResponse, error) {
-	if method != http.MethodGet && method != http.MethodPost {
-		return vllmHTTPResponse{}, fmt.Errorf("unsupported HTTP method %q", method)
+const vllmHTTPMaxBytes = 64 << 10
+
+func validVLLMIdentity(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
 	}
-	if !strings.HasPrefix(path, "/v1/guardrail/") || strings.ContainsAny(path, "' \t\r\n") {
-		return vllmHTTPResponse{}, fmt.Errorf("unsupported guardrail path %q", path)
+	for _, r := range value {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-') {
+			return false
+		}
 	}
-	if strings.Contains(body, "'") {
-		return vllmHTTPResponse{}, fmt.Errorf("guardrail request body is not shell-safe")
+	return true
+}
+
+func validVLLMModelID(value string) bool {
+	if strings.TrimSpace(value) != value || value == "" || len(value) > 512 {
+		return false
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func boundedVLLMHTTP(execIn func(string) (string, error), method, path, body, purpose string, allowed map[string]bool) (vllmHTTPResponse, error) {
+	if (method != http.MethodGet && method != http.MethodPost) || !allowed[method+" "+path] {
+		return vllmHTTPResponse{}, fmt.Errorf("unsupported %s request %q %q", purpose, method, path)
+	}
+	if strings.ContainsAny(path, "' \t\r\n") || strings.Contains(body, "'") {
+		return vllmHTTPResponse{}, fmt.Errorf("%s request is not shell-safe", purpose)
 	}
 	data := ""
 	if body != "" {
 		data = " -H 'Content-Type: application/json' --data-binary '" + body + "'"
 	}
 	const begin, status = "__PHORVEX_HTTP_BEGIN__", "__PHORVEX_HTTP_STATUS__"
-	cmd := "printf '" + begin + "\\n'; curl --silent --show-error --max-time 10 -X " + method + data +
+	cmd := "printf '" + begin + "\\n'; curl --silent --show-error --max-time 15 --max-filesize " + strconv.Itoa(vllmHTTPMaxBytes) + " -X " + method + data +
 		" -w '\\n" + status + "%{http_code}\\n' '" + vllmGuardrailURL + path + "'"
 	out, err := execIn(cmd)
 	if err != nil {
-		return vllmHTTPResponse{}, fmt.Errorf("guardrail HTTP command: %w (%s)", err, strings.TrimSpace(out))
+		return vllmHTTPResponse{}, fmt.Errorf("%s HTTP command: %w (%s)", purpose, err, strings.TrimSpace(out))
 	}
 	start := strings.LastIndex(out, begin+"\n")
 	end := strings.LastIndex(out, "\n"+status)
 	if start < 0 || end < start {
-		return vllmHTTPResponse{}, fmt.Errorf("guardrail HTTP response framing unavailable")
+		return vllmHTTPResponse{}, fmt.Errorf("%s HTTP response framing unavailable", purpose)
+	}
+	bodyBytes := []byte(out[start+len(begin)+1 : end])
+	if len(bodyBytes) > vllmHTTPMaxBytes {
+		return vllmHTTPResponse{}, fmt.Errorf("%s HTTP response exceeds %d bytes", purpose, vllmHTTPMaxBytes)
 	}
 	codeText := strings.TrimSpace(out[end+1+len(status):])
 	code, err := strconv.Atoi(codeText)
 	if err != nil || code < 100 || code > 599 {
-		return vllmHTTPResponse{}, fmt.Errorf("guardrail HTTP status is invalid")
+		return vllmHTTPResponse{}, fmt.Errorf("%s HTTP status is invalid", purpose)
 	}
-	return vllmHTTPResponse{Status: code, Body: []byte(out[start+len(begin)+1 : end])}, nil
+	return vllmHTTPResponse{Status: code, Body: bodyBytes}, nil
+}
+
+// vllmHTTP executes the real serving-stack HTTP producer from the target Pod. Markers isolate
+// stdout from kubectl's default-container warnings, and every caller validates status and schema.
+func vllmHTTP(execIn func(string) (string, error), method, path, body string) (vllmHTTPResponse, error) {
+	allowed := map[string]bool{http.MethodGet + " /v1/guardrail/state": true, http.MethodPost + " /v1/guardrail/reload": true}
+	return boundedVLLMHTTP(execIn, method, path, body, "guardrail", allowed)
+}
+
+func vllmWorkloadHTTP(execIn func(string) (string, error), method, path, body string) (vllmHTTPResponse, error) {
+	allowed := map[string]bool{
+		http.MethodGet + " /v1/models":             true,
+		http.MethodPost + " /v1/load_lora_adapter": true,
+		http.MethodPost + " /v1/completions":       true,
+		http.MethodPost + " /v1/chat/completions":  true,
+	}
+	return boundedVLLMHTTP(execIn, method, path, body, "vLLM workload", allowed)
+}
+
+func decodeOneJSON(data []byte, dst any) error {
+	if len(data) == 0 || len(data) > vllmHTTPMaxBytes {
+		return fmt.Errorf("response size must be 1..%d bytes", vllmHTTPMaxBytes)
+	}
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("response contains trailing JSON")
+		}
+		return fmt.Errorf("response has invalid trailing data: %w", err)
+	}
+	return nil
+}
+
+func loadVLLMAdapter(execIn func(string) (string, error), name, source string) error {
+	if !validVLLMIdentity(name) || source == "" || strings.ContainsAny(source, "'\r\n") {
+		return fmt.Errorf("adapter identity or source is invalid")
+	}
+	payload, _ := json.Marshal(map[string]string{"lora_name": name, "lora_path": source})
+	response, err := vllmWorkloadHTTP(execIn, http.MethodPost, "/v1/load_lora_adapter", string(payload))
+	if err != nil {
+		return err
+	}
+	if response.Status != http.StatusOK {
+		return fmt.Errorf("load adapter returned HTTP %d", response.Status)
+	}
+	models, err := readVLLMModels(execIn)
+	if err != nil {
+		return err
+	}
+	for _, model := range models {
+		if model == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("adapter inventory does not contain %q", name)
+}
+
+func readVLLMModels(execIn func(string) (string, error)) ([]string, error) {
+	response, err := vllmWorkloadHTTP(execIn, http.MethodGet, "/v1/models", "")
+	if err != nil {
+		return nil, err
+	}
+	if response.Status != http.StatusOK {
+		return nil, fmt.Errorf("model inventory returned HTTP %d", response.Status)
+	}
+	var inventory struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := decodeOneJSON(response.Body, &inventory); err != nil {
+		return nil, fmt.Errorf("model inventory is malformed: %w", err)
+	}
+	if len(inventory.Data) == 0 {
+		return nil, fmt.Errorf("model inventory is empty")
+	}
+	models := make([]string, 0, len(inventory.Data))
+	seen := map[string]bool{}
+	for _, item := range inventory.Data {
+		if !validVLLMModelID(item.ID) || seen[item.ID] {
+			return nil, fmt.Errorf("model inventory contains an invalid or duplicate identity")
+		}
+		seen[item.ID] = true
+		models = append(models, item.ID)
+	}
+	return models, nil
+}
+
+func runVLLMCompletion(execIn func(string) (string, error), chat bool, payload any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	path := "/v1/completions"
+	if chat {
+		path = "/v1/chat/completions"
+	}
+	response, err := vllmWorkloadHTTP(execIn, http.MethodPost, path, string(body))
+	if err != nil {
+		return err
+	}
+	if response.Status != http.StatusOK {
+		return fmt.Errorf("completion returned HTTP %d", response.Status)
+	}
+	var completion struct {
+		ID      string            `json:"id"`
+		Choices []json.RawMessage `json:"choices"`
+	}
+	if err := decodeOneJSON(response.Body, &completion); err != nil || completion.ID == "" || len(completion.Choices) == 0 {
+		return fmt.Errorf("completion acknowledgement is malformed")
+	}
+	return nil
 }
 
 func readGuardrailState(execIn func(string) (string, error)) (guardrailState, error) {
@@ -627,6 +786,42 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 		return nil, err
 	}
 	switch r.vllmEffect.kind {
+	case "adapter-epoch":
+		afterAnnotation := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/adapter-epoch")
+		afterLabel := stringMapValue(pod.Metadata.Labels, "phorvex.ai/adapter-epoch")
+		if afterAnnotation == "" || afterAnnotation == r.vllmEffect.before {
+			return nil, nil
+		}
+		if afterAnnotation != afterLabel || afterAnnotation != r.StimulusEvidence.EventUID {
+			return nil, fmt.Errorf("adapter epoch is not bound to the exact stimulus event")
+		}
+		postPod, err := s.readVLLMPod(r.Pod)
+		if err != nil || postPod.Metadata.UID != r.TargetUID || stringMapValue(postPod.Metadata.Annotations, "phorvex.ai/adapter-epoch") != afterAnnotation || stringMapValue(postPod.Metadata.Labels, "phorvex.ai/adapter-epoch") != afterLabel {
+			return nil, fmt.Errorf("target identity or adapter epoch changed across observation")
+		}
+		return &attackEffectEvidence{Kind: r.vllmEffect.kind, Observed: true, ObservedAt: s.cfg.now().UTC().Format(time.RFC3339Nano), TargetUID: r.TargetUID, Before: r.vllmEffect.before, After: afterAnnotation, Correlation: "exact-security-event-uid-and-target", Limitation: "adapter removal/completion metadata is an in-place mechanism effect; no same-probe model behavior mitigation was measured"}, nil
+	case "kv-reset-epoch":
+		after := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/kv-reset-epoch")
+		if after == "" || after == r.vllmEffect.before {
+			return nil, nil
+		}
+		postPod, err := s.readVLLMPod(r.Pod)
+		if err != nil || postPod.Metadata.UID != r.TargetUID || stringMapValue(postPod.Metadata.Annotations, "phorvex.ai/kv-reset-epoch") != after {
+			return nil, fmt.Errorf("target identity or KV reset epoch changed across observation")
+		}
+		return &attackEffectEvidence{Kind: r.vllmEffect.kind, Observed: true, ObservedAt: s.cfg.now().UTC().Format(time.RFC3339Nano), TargetUID: r.TargetUID, Before: r.vllmEffect.before, After: after, Correlation: "temporal-event-and-exact-target", Limitation: "protected reset epoch is an in-place mechanism effect; no same-request cache hit/miss change was measured"}, nil
+	case "kv-migrate-epoch":
+		afterMigrate := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/kv-migrate-epoch")
+		afterLocal := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/kv-local-effect-epoch")
+		after := afterMigrate + "|" + afterLocal
+		if after == "|" || after == r.vllmEffect.before {
+			return nil, nil
+		}
+		postPod, err := s.readVLLMPod(r.Pod)
+		if err != nil || postPod.Metadata.UID != r.TargetUID || stringMapValue(postPod.Metadata.Annotations, "phorvex.ai/kv-migrate-epoch")+"|"+stringMapValue(postPod.Metadata.Annotations, "phorvex.ai/kv-local-effect-epoch") != after {
+			return nil, fmt.Errorf("target identity or KV migration epoch changed across observation")
+		}
+		return &attackEffectEvidence{Kind: r.vllmEffect.kind, Observed: true, ObservedAt: s.cfg.now().UTC().Format(time.RFC3339Nano), TargetUID: r.TargetUID, Before: r.vllmEffect.before, After: after, Correlation: "temporal-event-and-exact-target", Limitation: "local/remote completion metadata is a mechanism effect and may represent a partial remote outcome; no same-request cache eviction was measured"}, nil
 	case "guardrail-runtime-state":
 		execIn := func(sh string) (string, error) {
 			return s.cfg.execText(20*time.Second, "kubectl", "-n", r.Namespace, "exec", r.Pod, "--", "sh", "-c", sh)
@@ -683,6 +878,10 @@ func (s *Server) validateVLLMEvent(r *attackRecord) error {
 		event.Metadata.CreationTimestamp != r.StimulusEvidence.EventCreatedAt || event.Metadata.Labels["phorvex.ai/attack-correlation"] != r.StimulusEvidence.Correlation || event.Metadata.Labels["phorvex.ai/console-vllm"] != "true" ||
 		len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != r.Namespace+"/"+r.Pod || event.Spec.Rule.Type != r.StimulusEvidence.EventRule || event.Spec.Rule.Source != "redteam" {
 		return fmt.Errorf("correlated SecurityEvent identity or target changed")
+	}
+	if r.vllmEffect != nil && r.vllmEffect.kind == "adapter-epoch" &&
+		(event.Metadata.Annotations["phorvex.ai/adapter-name"] != "evil" || event.Metadata.Annotations["phorvex.ai/target-pod-uid"] != r.TargetUID) {
+		return fmt.Errorf("correlated adapter SecurityEvent identity changed")
 	}
 	return nil
 }

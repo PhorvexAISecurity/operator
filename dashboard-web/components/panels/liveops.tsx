@@ -54,8 +54,8 @@ function wlType(images: string[]): { type: string; label: string } {
 function attacksFor(type: string, armed: boolean): WlAttack[] {
   switch (type) {
     case "model-server": return [
-      { id: "kvcache", label: "Prefix-cache occupancy oracle (CWE-208)", actuator: "kv-reset", runnable: true },
-      { id: "poison", label: "Poisoned LoRA injection (OWASP LLM05 / AML.T0018)", actuator: "adapter-rotate", runnable: true },
+      { id: "kvcache", label: "KV reset-effect observation (CWE-208)", actuator: "kv-reset", runnable: true },
+      { id: "poison", label: "Unapproved LoRA load observation (OWASP LLM05 / AML.T0018)", actuator: "adapter-rotate", runnable: true },
     ];
     case "gpu-inference": return [{ id: "foothold", label: "Container-escape foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
     case "llm-proxy": return [{ id: "foothold", label: "RCE / credential foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
