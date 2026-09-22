@@ -13,7 +13,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func TestHistoryRetentionMigrationPreservesRecentOffsetsAndCursorSequence(t *testing.T) {
+func TestHistoryExplicitCompactionPreservesRecentOffsetsAndCursorSequence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "audit.jsonl")
 	now := time.Date(2026, 9, 22, 18, 0, 0, 0, time.UTC)
@@ -36,6 +36,9 @@ func TestHistoryRetentionMigrationPreservesRecentOffsetsAndCursorSequence(t *tes
 	stat, _ := os.Stat(filepath.Join(dir, "audit-history.db"))
 	before := stat.Size()
 	cfg.HistoryRetentionDays = 30
+	if err := prepareHistoryStorage(cfg); err != nil {
+		t.Fatal(err)
+	}
 	s = testHistoryStore(t, cfg)
 	if got := historyRecordCount(t, s.history); got != 2 {
 		t.Fatalf("retained records=%d", got)

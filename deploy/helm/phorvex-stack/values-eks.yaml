@@ -105,8 +105,8 @@ phorvex:
         tag: "0.4.151" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
-      # Incident recovery: keep the console available while startup migration is redesigned.
-      # The approved 30-day retention remains pending; preserve the existing archive and reader.
+      # Retention is activated atomically with the compatible console image at release time.
+      # Expiry/compression runs in bounded batches; archive and filesystem limits still apply.
       state:
         historyRetentionDays: 0
         historyArchiveMaxBytes: "6442450944"
