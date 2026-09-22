@@ -179,3 +179,9 @@ func (t *timerEngine) actions() []float64 {
 	copy(out, t.rotations)
 	return out
 }
+
+func (t *timerEngine) recordAction(at time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rotations = append(t.rotations, float64(at.UnixNano())/float64(time.Second))
+}

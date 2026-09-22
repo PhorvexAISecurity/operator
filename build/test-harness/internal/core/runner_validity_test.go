@@ -30,6 +30,8 @@ import (
 // control on the baseline arm and a broken arm elsewhere.
 type vScenario struct {
 	name string
+	// benign marks an executable functional control rather than an attack.
+	benign bool
 	// failOn selects the arm that experiences the fault ("" = every arm).
 	failOn      string
 	setupErr    bool
@@ -56,7 +58,7 @@ type vScenario struct {
 }
 
 func (s *vScenario) Metadata() ScenarioMeta {
-	return ScenarioMeta{Name: s.name, Category: CategoryClassicChain, R6ResponseTag: R6Partial, CapabilityRequirements: s.caps}
+	return ScenarioMeta{Name: s.name, Category: CategoryClassicChain, R6ResponseTag: R6Partial, BenignControl: s.benign, CapabilityRequirements: s.caps}
 }
 
 func (s *vScenario) hits(env *Env) bool { return s.failOn == "" || env.DefenderName == s.failOn }
@@ -532,6 +534,77 @@ func TestValidityScoresOnlyAgainstAnObservedUsableControl(t *testing.T) {
 				t.Errorf("raw attack observation was discarded: observed=%v state=%q", v.OracleObserved, m.ObservedState)
 			}
 		})
+	}
+}
+
+func TestBenignControlRetainsFunctionalEvidenceWithoutSecurityOrEconomicsClaim(t *testing.T) {
+	h := newHarness(t, RunnerOptions{TrialsPerArm: 1})
+	RegisterScenario(&vScenario{
+		name:              "c2-voice-websocket-continuity",
+		benign:            true,
+		oracleFalseOn:     "d-timer",
+		oracleFalseTrial:  -1,
+		benchmarkEvidence: map[string]string{"protocol": "websocket", "availabilityAttempts": "20", "availabilityFailures": "6"},
+	})
+	register(&vDefender{name: "d-nomtd", baseline: true})
+	register(&vDefender{name: "d-timer", interval: 30, actions: []float64{1}})
+
+	metrics, err := h.runner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := row(t, metrics, "d-timer", 0)
+	v := got.MeasurementState()
+	if v.Status != MeasurementValid || v.Phase != PhaseComplete || !v.AttackExecuted || !v.OracleObserved || !v.CostObserved {
+		t.Fatalf("functional observation lost validity/lifecycle evidence: %+v", v)
+	}
+	if v.Scored || got.IsScored() || !got.Skipped || !strings.Contains(v.UnscoredReason, "benign functional-effect control") {
+		t.Fatalf("benign row retained a security-scoring claim: validity=%+v skipped=%v reason=%q", v, got.Skipped, got.SkipReason)
+	}
+	if got.OracleAchieved || got.ObservedState != "measured" || got.BenchmarkEvidence["availabilityAttempts"] != "20" || got.DefensiveActions != 1 {
+		t.Fatalf("functional protocol/availability/effect evidence was not retained: %+v", got)
+	}
+	if got.DisruptionVsOracle != 0 || got.SecurityPerCost != 0 || got.ROI != nil || got.Schwartau != nil || got.MTDEffect != "" {
+		t.Fatalf("benign control emitted attack/security/economics values: disruption=%v spc=%v roi=%+v schwartau=%+v mtd=%q",
+			got.DisruptionVsOracle, got.SecurityPerCost, got.ROI, got.Schwartau, got.MTDEffect)
+	}
+	if v.Baseline.Required || v.Baseline.Usable {
+		t.Fatalf("benign control claimed an attack positive-control comparison: %+v", v.Baseline)
+	}
+
+	raw, err := os.ReadFile(h.writer.Path())
+	if err != nil {
+		t.Fatalf("read metrics JSONL: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	var exported map[string]any
+	for _, line := range lines {
+		var candidate map[string]any
+		if err := json.Unmarshal([]byte(line), &candidate); err != nil {
+			t.Fatalf("decode metrics JSONL row: %v", err)
+		}
+		if candidate["defender"] == "d-timer" {
+			exported = candidate
+			break
+		}
+	}
+	if exported == nil {
+		t.Fatal("timer row missing from metrics JSONL")
+	}
+	validity, ok := exported["validity"].(map[string]any)
+	if !ok || validity["scored"] != false {
+		t.Fatalf("exported benign validity still claims scoring: %#v", exported["validity"])
+	}
+	if exported["securityPerCost"] != float64(0) {
+		t.Fatalf("exported benign securityPerCost = %#v, want zero", exported["securityPerCost"])
+	}
+	for _, forbidden := range []string{"roi", "schwartau", "mtdEffect"} {
+		if _, exists := exported[forbidden]; exists {
+			t.Fatalf("exported benign row contains %q: %#v", forbidden, exported[forbidden])
+		}
+	}
+	if evidence, ok := exported["benchmarkEvidence"].(map[string]any); !ok || evidence["availabilityFailures"] != "6" {
+		t.Fatalf("exported benign row lost bounded availability evidence: %#v", exported["benchmarkEvidence"])
 	}
 }
 

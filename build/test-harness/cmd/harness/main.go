@@ -100,6 +100,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if cfg.NATSJetStreamFixture != nil && (negControl || adaptive) {
 		return errors.New("natsJetStreamFixture requires -negative-control=false and -adaptive=false before Kubernetes clients are built")
 	}
+	if cfg.InstalledManagerFixture != nil && (negControl || adaptive) {
+		return errors.New("installedManagerFixture requires -negative-control=false and -adaptive=false before Kubernetes clients are built")
+	}
 	// 1) Build clients PINNED to the configured context.
 	clients, err := kube.Build(cfg.Kubeconfig, cfg.Context)
 	if err != nil {

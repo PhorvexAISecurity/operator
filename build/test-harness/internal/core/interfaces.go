@@ -224,3 +224,71 @@ type DefenseEffectReceipt struct {
 type DefenseEffectObserver interface {
 	DefensiveEffectReceipt(ctx context.Context, env *Env) (DefenseEffectReceipt, error)
 }
+
+// TargetedActionRequest is the exact live object and finite observation window
+// offered by a benign scenario after its application state has been established.
+// Coordinators must re-read and bind every identity before adding the target
+// label or sending an action. The label belongs only on the named live object,
+// never on its controller template.
+type TargetedActionRequest struct {
+	Objective                         string
+	Namespace                         string
+	TargetKind                        string
+	TargetName                        string
+	TargetUID                         string
+	TargetResourceVersion             string
+	OwnerKind                         string
+	OwnerName                         string
+	OwnerUID                          string
+	TargetLabelKey                    string
+	TargetLabelValue                  string
+	RequestedGraceSeconds             int64
+	AvailabilityPolicyName            string
+	AvailabilityPolicyUID             string
+	AvailabilityPolicyResourceVersion string
+	AvailabilitySelectorKey           string
+	AvailabilitySelectorValue         string
+	InitialMinAvailable               int
+	EligibleMinAvailable              int
+	SessionEstablishedUTC             string
+	DeadlineUTC                       string
+}
+
+// TargetedActionResult retains the coordinator's bounded, sanitized receipts.
+// A complete non-selection or refusal is data and returns no error. ReceiptJSON
+// values are strict coordinator-owned schemas; they must exclude raw rationale,
+// model inputs, credentials, and workload payloads. The scenario preserves them
+// verbatim so independent decision/dispatch attribution is not inferred from an
+// application effect.
+type TargetedActionResult struct {
+	SchemaVersion                     string
+	Coordinator                       string
+	StartedAtUTC                      string
+	EndedAtUTC                        string
+	Disposition                       string
+	AttributionComplete               bool
+	TargetName                        string
+	TargetUID                         string
+	TargetResourceVersion             string
+	RequestedGraceSeconds             int64
+	AvailabilityPolicyResourceVersion string
+	ActionAtUTC                       string
+	ControlReceiptJSON                string
+	EligibleReceiptJSON               string
+	AuthorizationReceiptJSON          string
+}
+
+// TargetedActionCoordinator is an optional scenario-to-defender handshake. It
+// starts only after the scenario has established application state. Absence of
+// this interface means the scenario observes a no-action arm for the same fixed
+// window. Implementations may legitimately return a complete no-op result.
+type TargetedActionCoordinator interface {
+	CoordinateTargetedAction(ctx context.Context, env *Env, request TargetedActionRequest) (TargetedActionResult, error)
+}
+
+// TargetedActionScenario marks a scenario that performs the optional handshake.
+// Coordinators use it to avoid starting a legacy broad action loop before the
+// scenario has established and identified one exact target.
+type TargetedActionScenario interface {
+	UsesTargetedActionCoordination() bool
+}

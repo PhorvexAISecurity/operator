@@ -960,7 +960,12 @@ func (t *trialRun) finalize() Metric {
 	// Resolve the control identity for EVERY row that would need one, so an
 	// invalid or unanchored row still records which control it required and what
 	// was observed of it.
-	usable := t.resolveBaseline(t.spec.kind != TrialNegativeControl)
+	// Benign controls execute a real stimulus and retain their functional
+	// oracle, availability and defender-action observations, but they are not
+	// attacks.  They therefore need no attack positive-control comparison and
+	// must never enter the security/economics scoring path.
+	benignControl := m.ScenarioBenignControl
+	usable := t.resolveBaseline(t.spec.kind != TrialNegativeControl && !benignControl)
 
 	switch {
 	case v.Status != MeasurementValid:
@@ -982,6 +987,16 @@ func (t *trialRun) finalize() Metric {
 			m.FalseDefensiveActions = -1
 			t.env.Log.Logf("negative control result: false defensive moves UNOBSERVED (no usable DefenseObserver)")
 		}
+	case benignControl:
+		v.Phase = PhaseComplete
+		v.Note(PhaseComplete, "benign-control: attackExecuted records the generic scenario-stimulus lifecycle; it is not an attack claim")
+		v.Baseline.Reason = "benign functional-effect control: no attack positive-control comparison is required"
+		v.Scored = false
+		v.UnscoredReason = "benign functional-effect control is excluded from attack, security and economics scoring"
+		m.Skipped = true
+		m.SkipReason = "UNSCORED(benign-control): " + v.UnscoredReason
+		t.env.Log.Logf("benign control result: oracleAchieved=%v dwell=%.1fs actions=%d (functional observations retained; security/economics excluded)",
+			m.OracleAchieved, m.AttackerDwellSeconds, m.DefensiveActions)
 	default:
 		v.Phase = PhaseComplete
 		if requiresAttributedNegativeObservation(t.spec.scenario.Metadata().Name) && !m.OracleAchieved && !t.attributedNegativeObservation() {

@@ -802,8 +802,15 @@ func performSessionRequest(ctx context.Context, env *core.Env, method, id string
 }
 
 func performSessionBatch(ctx context.Context, env *core.Env, operations []sessionBatchOperation, expectedProducerUID types.UID) (sessionBatchResult, error) {
+	return performSessionBatchToService(ctx, env, sessionService, operations, expectedProducerUID)
+}
+
+func performSessionBatchToService(ctx context.Context, env *core.Env, serviceName string, operations []sessionBatchOperation, expectedProducerUID types.UID) (sessionBatchResult, error) {
 	var out sessionBatchResult
-	url := fmt.Sprintf("http://%s:%d", sessionService, sessionPort)
+	if serviceName == "" || len(serviceName) > 63 {
+		return out, errors.New("session HTTP batch service name invalid")
+	}
+	url := fmt.Sprintf("http://%s:%d", serviceName, sessionPort)
 	execTimeout, producerBudget := sessionBatchExecTimeout, sessionBatchHTTPBudget
 	if callerDeadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(callerDeadline)

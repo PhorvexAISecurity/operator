@@ -295,3 +295,44 @@ func TestNATSJetStreamFixtureRequiresExactIsolatedAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestInstalledManagerFixtureAcceptsActualTaggedRuntimeAndImmutableImageID(t *testing.T) {
+	fixture := &InstalledManagerFixtureConfig{
+		ManagerNamespace: "phorvex-system", ManagerServiceAccount: "phorvex-phorvex-manager", FixtureNonce: "installed-r1", AuthorizationDenyNamespace: "installed-r1-unowned", DeploymentName: "phorvex-phorvex", DeploymentUID: "11111111-2222-4333-8444-555555555555",
+		ReplicaSetName: "phorvex-phorvex-7699c6dd69", ReplicaSetUID: "22222222-3333-4444-8555-666666666666",
+		PodName: "phorvex-phorvex-7699c6dd69-k4j2n", PodUID: "33333333-4444-4555-8666-777777777777", ContainerName: "manager",
+		Image:     "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.144",
+		ImageID:   "docker-pullable://753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:" + strings.Repeat("4", 64),
+		StartedAt: "2026-09-21T22:35:00Z", RestartCount: 0, OCIRevision: "60aabe2a", ExpectedBrainImage: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.144",
+		TraceSchema: "phorvex.decision-trace.v6", PolicyCRDUID: "44444444-5555-4666-8777-888888888888", PolicyCRDResourceVersion: "150500",
+		ObserverBinary: "/private/installed-audit-observer", ObserverBinarySHA256: strings.Repeat("a", 64), AuditURL: "https://127.0.0.1:18445",
+		AuditServerName: "phorvex-stack-phorvex-audit-source.phorvex-system.svc", AuditCAFile: "/private/ca.crt", AuditClientCertFile: "/private/tls.crt", AuditClientKeyFile: "/private/tls.key",
+		ParameterManifestID: "phorvex-production-decision-parameters", ParameterManifestHash: "sha256:" + strings.Repeat("b", 64), ObservationTimeoutSeconds: 15, ObservationMaxBytes: 16 << 20, ObservationMaxRows: 512,
+	}
+	valid := TargetConfig{Context: "eks", Namespace: "owned-fixture", OwnedAck: true, TrialsPerArm: 1, ScenarioFilter: []string{"c2-installed-manager-session"}, DefenderFilter: []string{"d-phorvex-installed"}, InstalledManagerFixture: fixture}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("actual tagged manager/imageID shape rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*InstalledManagerFixtureConfig){
+		"mutable image id": func(f *InstalledManagerFixtureConfig) { f.ImageID = "docker://sha256:latest" },
+		"invented digest brain": func(f *InstalledManagerFixtureConfig) {
+			f.ExpectedBrainImage = f.Image + "@sha256:" + strings.Repeat("4", 64)
+		},
+		"wrong trace":                  func(f *InstalledManagerFixtureConfig) { f.TraceSchema = "phorvex.decision-trace.v5" },
+		"unbounded observer":           func(f *InstalledManagerFixtureConfig) { f.ObservationTimeoutSeconds = 31 },
+		"too-small source budget":      func(f *InstalledManagerFixtureConfig) { f.ObservationMaxBytes = 7_169_228 },
+		"unbounded source budget":      func(f *InstalledManagerFixtureConfig) { f.ObservationMaxBytes = 64<<20 + 1 },
+		"unbounded source rows":        func(f *InstalledManagerFixtureConfig) { f.ObservationMaxRows = 1025 },
+		"same authorization namespace": func(f *InstalledManagerFixtureConfig) { f.AuthorizationDenyNamespace = "owned-fixture" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			copyFixture := *fixture
+			candidate.InstalledManagerFixture = &copyFixture
+			mutate(&copyFixture)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid installed manager fixture accepted")
+			}
+		})
+	}
+}

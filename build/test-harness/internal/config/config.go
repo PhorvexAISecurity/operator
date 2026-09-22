@@ -9,9 +9,12 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
@@ -124,6 +127,11 @@ type TargetConfig struct {
 	// authority for the isolated c2-nats-jetstream-durability scenario. Nil
 	// keeps the scenario unavailable and creates no NATS or storage objects.
 	NATSJetStreamFixture *NATSJetStreamFixtureConfig `json:"natsJetStreamFixture,omitempty"`
+
+	// InstalledManagerFixture attaches one catalogue arm to an already installed
+	// manager and its existing authenticated audit API. It is a complete runtime
+	// pin; nil keeps the arm unavailable and causes no manager/CRD mutation.
+	InstalledManagerFixture *InstalledManagerFixtureConfig `json:"installedManagerFixture,omitempty"`
 }
 
 type NATSJetStreamLocalPV struct {
@@ -143,6 +151,41 @@ type NATSJetStreamFixtureConfig struct {
 	HolderUID       string                 `json:"holderUID"`
 	Nonce           string                 `json:"nonce"`
 	PVs             []NATSJetStreamLocalPV `json:"pvs"`
+}
+
+type InstalledManagerFixtureConfig struct {
+	ManagerNamespace           string `json:"managerNamespace"`
+	ManagerServiceAccount      string `json:"managerServiceAccount"`
+	FixtureNonce               string `json:"fixtureNonce"`
+	AuthorizationDenyNamespace string `json:"authorizationDenyNamespace"`
+	DeploymentName             string `json:"deploymentName"`
+	DeploymentUID              string `json:"deploymentUID"`
+	ReplicaSetName             string `json:"replicaSetName"`
+	ReplicaSetUID              string `json:"replicaSetUID"`
+	PodName                    string `json:"podName"`
+	PodUID                     string `json:"podUID"`
+	ContainerName              string `json:"containerName"`
+	Image                      string `json:"image"`
+	ImageID                    string `json:"imageID"`
+	StartedAt                  string `json:"startedAt"`
+	RestartCount               int32  `json:"restartCount"`
+	OCIRevision                string `json:"ociRevision"`
+	ExpectedBrainImage         string `json:"expectedBrainImage"`
+	TraceSchema                string `json:"traceSchema"`
+	PolicyCRDUID               string `json:"policyCRDUID"`
+	PolicyCRDResourceVersion   string `json:"policyCRDResourceVersion"`
+	ObserverBinary             string `json:"observerBinary"`
+	ObserverBinarySHA256       string `json:"observerBinarySHA256"`
+	AuditURL                   string `json:"auditURL"`
+	AuditServerName            string `json:"auditServerName"`
+	AuditCAFile                string `json:"auditCAFile"`
+	AuditClientCertFile        string `json:"auditClientCertFile"`
+	AuditClientKeyFile         string `json:"auditClientKeyFile"`
+	ParameterManifestID        string `json:"parameterManifestID"`
+	ParameterManifestHash      string `json:"parameterManifestHash"`
+	ObservationTimeoutSeconds  int    `json:"observationTimeoutSeconds"`
+	ObservationMaxBytes        int64  `json:"observationMaxBytes"`
+	ObservationMaxRows         int    `json:"observationMaxRows"`
 }
 
 // DefaultCredentialObservationWindowSeconds is the observation interval applied
@@ -288,7 +331,10 @@ func (c TargetConfig) Validate() error {
 				return errors.New("config: benign checkpoint local identity fields require benignCheckpointLocalFixture=true")
 			}
 		}
-		return validateNATSJetStreamFixture(c)
+		if err := validateNATSJetStreamFixture(c); err != nil {
+			return err
+		}
+		return validateInstalledManagerFixture(c)
 	}
 	if strings.TrimSpace(c.BenignCheckpointStorageClass) == "" {
 		return errors.New("config: benignCheckpointStorageClass is required for benign checkpoint local fixture")
@@ -308,7 +354,10 @@ func (c TargetConfig) Validate() error {
 	if value := c.BenignCheckpointLocalNonce; strings.TrimSpace(value) != value || value == "" || len(value) > 63 || len(validation.IsValidLabelValue(value)) != 0 {
 		return errors.New("config: benignCheckpointLocalNonce must be a nonempty label-safe value of at most 63 bytes")
 	}
-	return validateNATSJetStreamFixture(c)
+	if err := validateNATSJetStreamFixture(c); err != nil {
+		return err
+	}
+	return validateInstalledManagerFixture(c)
 }
 
 func validateNATSJetStreamFixture(c TargetConfig) error {
@@ -343,6 +392,90 @@ func validateNATSJetStreamFixture(c TargetConfig) error {
 			return errors.New("config: natsJetStreamFixture PV name/UID/slot/path hash authority is invalid or duplicated")
 		}
 		names[pv.Name], uids[pv.UID], slots[pv.Slot] = true, true, true
+	}
+	return nil
+}
+
+func validateInstalledManagerFixture(c TargetConfig) error {
+	fixture := c.InstalledManagerFixture
+	if fixture == nil {
+		return nil
+	}
+	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-installed-manager-session" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-phorvex-installed" {
+		return errors.New("config: installedManagerFixture requires one c2-installed-manager-session trial with defenderFilter=[d-phorvex-installed]")
+	}
+	for label, value := range map[string]string{
+		"managerNamespace": fixture.ManagerNamespace, "managerServiceAccount": fixture.ManagerServiceAccount, "deploymentName": fixture.DeploymentName,
+		"replicaSetName": fixture.ReplicaSetName, "podName": fixture.PodName, "containerName": fixture.ContainerName,
+		"auditServerName": fixture.AuditServerName,
+	} {
+		if value == "" || len(validation.IsDNS1123Subdomain(value)) != 0 {
+			return fmt.Errorf("config: installedManagerFixture %s must be an exact DNS subdomain", label)
+		}
+	}
+	if fixture.FixtureNonce == "" || len(validation.IsDNS1123Label(fixture.FixtureNonce)) != 0 {
+		return errors.New("config: installedManagerFixture fixtureNonce must be an exact DNS label")
+	}
+	if fixture.AuthorizationDenyNamespace == "" || fixture.AuthorizationDenyNamespace == c.Namespace || len(validation.IsDNS1123Subdomain(fixture.AuthorizationDenyNamespace)) != 0 {
+		return errors.New("config: installedManagerFixture authorizationDenyNamespace must be a distinct exact DNS namespace")
+	}
+	for label, value := range map[string]string{
+		"deploymentUID": fixture.DeploymentUID, "replicaSetUID": fixture.ReplicaSetUID,
+		"podUID": fixture.PodUID, "policyCRDUID": fixture.PolicyCRDUID,
+	} {
+		if !kubernetesUIDPattern.MatchString(value) {
+			return fmt.Errorf("config: installedManagerFixture %s must be an exact lowercase Kubernetes UUID", label)
+		}
+	}
+	if fixture.RestartCount < 0 {
+		return errors.New("config: installedManagerFixture restartCount must be non-negative")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, fixture.StartedAt); err != nil {
+		return errors.New("config: installedManagerFixture startedAt must be RFC3339Nano")
+	}
+	digest := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	imageID := regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
+	if fixture.Image == "" || strings.TrimSpace(fixture.Image) != fixture.Image || !imageID.MatchString(fixture.ImageID) {
+		return errors.New("config: installedManagerFixture image must be exact and imageID must carry an immutable SHA-256 digest")
+	}
+	if fixture.ExpectedBrainImage != fixture.Image {
+		return errors.New("config: installedManagerFixture expectedBrainImage must equal the exact observed manager spec image")
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{7,64}$`).MatchString(fixture.OCIRevision) {
+		return errors.New("config: installedManagerFixture ociRevision must be a lowercase hexadecimal revision")
+	}
+	if fixture.TraceSchema != "phorvex.decision-trace.v6" {
+		return errors.New("config: installedManagerFixture traceSchema must be phorvex.decision-trace.v6")
+	}
+	if fixture.PolicyCRDResourceVersion == "" || len(fixture.PolicyCRDResourceVersion) > 128 {
+		return errors.New("config: installedManagerFixture policyCRDResourceVersion is required and bounded")
+	}
+	if fixture.ParameterManifestID == "" || len(fixture.ParameterManifestID) > 253 || !digest.MatchString(fixture.ParameterManifestHash) {
+		return errors.New("config: installedManagerFixture parameter manifest identity/hash invalid")
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(fixture.ObserverBinarySHA256) {
+		return errors.New("config: installedManagerFixture observerBinarySHA256 must be an exact lowercase SHA-256")
+	}
+	for label, value := range map[string]string{
+		"observerBinary": fixture.ObserverBinary, "auditCAFile": fixture.AuditCAFile,
+		"auditClientCertFile": fixture.AuditClientCertFile, "auditClientKeyFile": fixture.AuditClientKeyFile,
+	} {
+		if value == "" || !filepath.IsAbs(value) {
+			return fmt.Errorf("config: installedManagerFixture %s must be an absolute private path", label)
+		}
+	}
+	auditURL, err := url.Parse(fixture.AuditURL)
+	if err != nil || auditURL.Scheme != "https" || auditURL.Host == "" || auditURL.User != nil || auditURL.Path != "" || auditURL.RawQuery != "" || auditURL.Fragment != "" {
+		return errors.New("config: installedManagerFixture auditURL must be a bare HTTPS origin")
+	}
+	if fixture.ObservationTimeoutSeconds < 5 || fixture.ObservationTimeoutSeconds > 30 {
+		return errors.New("config: installedManagerFixture observationTimeoutSeconds must be in [5,30]")
+	}
+	if fixture.ObservationMaxBytes < 8<<20 || fixture.ObservationMaxBytes > 64<<20 {
+		return errors.New("config: installedManagerFixture observationMaxBytes must be explicitly set in [8MiB,64MiB]")
+	}
+	if fixture.ObservationMaxRows < 64 || fixture.ObservationMaxRows > 1024 {
+		return errors.New("config: installedManagerFixture observationMaxRows must be explicitly set in [64,1024]")
 	}
 	return nil
 }
