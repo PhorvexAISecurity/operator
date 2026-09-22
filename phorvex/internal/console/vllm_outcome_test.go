@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,6 +13,39 @@ import (
 	"testing"
 	"time"
 )
+
+func TestVLLMSetupFailurePersistsRestorationDispositionAndRefusesUnsafeRetry(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{cfg: Config{StateDir: dir, Now: func() time.Time { return time.Date(2026, 9, 22, 15, 0, 0, 0, time.UTC) }}}
+	cause := errors.New("metadata synchronization failed")
+	if err := s.persistVLLMSetupFailure("operator", "endpoint-rotate", "setup", "pod-uid", "service-uid", true, "restored", cause); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(s.cfg.statePath("effect-intents.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	if !scanner.Scan() {
+		t.Fatalf("missing durable setup failure: %v", scanner.Err())
+	}
+	var record vllmSetupFailureRecord
+	if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.TargetUID != "pod-uid" || record.ServiceUID != "service-uid" || !record.Mutated || record.Restoration != "restored" || record.Error != cause.Error() {
+		t.Fatalf("durable setup failure mismatch: %+v", record)
+	}
+
+	unsafe := &Server{cfg: Config{Now: s.cfg.Now}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/vllm/attack", nil)
+	unsafe.writeVLLMSetupFailure(w, r, "guardrail-rotate", "setup", "pod-uid", "", true, "required", cause)
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "unsafe-to-retry") {
+		t.Fatalf("persistence failure did not surface unsafe retry: code=%d body=%s", w.Code, w.Body.String())
+	}
+}
 
 func actualGuardrailExec(t *testing.T, serverURL string) func(string) (string, error) {
 	t.Helper()
@@ -89,9 +123,9 @@ func vllmEffectExec(t *testing.T, serverURL string, activePodUID string) func(ti
 			command := args[len(args)-1]
 			return actualGuardrailExec(t, serverURL)(command)
 		case strings.Contains(joined, "get pod vllm-0 -o json"):
-			return `{"metadata":{"name":"vllm-0","uid":"` + activePodUID + `","labels":{"phorvex.ai/route-key":"ep-new"},"annotations":{"phorvex.ai/route-service":"vllm-infer"}}}`, nil
+			return `{"metadata":{"name":"vllm-0","uid":"` + activePodUID + `","resourceVersion":"11","labels":{"phorvex.ai/route-key":"ep-new"},"annotations":{"phorvex.ai/route-service":"vllm-infer"}}}`, nil
 		case strings.Contains(joined, "get securityevent event-1 -o json"):
-			return `{"metadata":{"name":"event-1","namespace":"vllm","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"corr"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
+			return `{"metadata":{"name":"event-1","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"corr","phorvex.ai/console-vllm":"true"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
 		case strings.Contains(joined, "get deploy") || strings.Contains(joined, "get statefulset"):
 			return "1|1", nil
 		default:
@@ -182,15 +216,49 @@ func TestGuardrailEffectCompletingAfterDeadlineIsNotCredited(t *testing.T) {
 	}
 }
 
+func TestGuardrailEffectRefusesPodReplacementAcrossHTTPReadback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "active": "pgv2"})
+	}))
+	defer server.Close()
+	podReads := 0
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case bin == "kubectl" && strings.Contains(joined, " exec "):
+			return actualGuardrailExec(t, server.URL)(args[len(args)-1])
+		case bin == "kubectl" && strings.Contains(joined, "get pod vllm-0 -o json"):
+			podReads++
+			uid := "pod-uid"
+			if podReads > 1 {
+				uid = "replacement-uid"
+			}
+			return `{"metadata":{"name":"vllm-0","uid":"` + uid + `","resourceVersion":"1"}}`, nil
+		case bin == "kubectl" && strings.Contains(joined, "get securityevent event-1 -o json"):
+			return `{"metadata":{"name":"event-1","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"corr","phorvex.ai/console-vllm":"true"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
+		default:
+			return "", errors.New("unexpected command: " + joined)
+		}
+	}}}
+	r := &attackRecord{Namespace: "vllm", Pod: "vllm-0", TargetUID: "pod-uid", StimulusEvidence: testStimulus(), vllmEffect: &vllmEffectBaseline{kind: "guardrail-runtime-state", before: "pgv1"}}
+	effect, err := s.observeVLLMInPlaceEffect(r)
+	if err == nil || effect != nil || !strings.Contains(err.Error(), "across guardrail observation") {
+		t.Fatalf("replacement effect=%+v err=%v", effect, err)
+	}
+}
+
 func TestCreateCorrelatedVLLMEventRequiresExactAPIAcknowledgement(t *testing.T) {
 	now := time.Date(2026, 9, 22, 14, 0, 0, 0, time.UTC)
 	s := &Server{cfg: Config{Now: func() time.Time { return now }, Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
-		if bin != "kubectl" || !strings.Contains(strings.Join(args, " "), " create ") {
+		if bin != "kubectl" || !strings.Contains(strings.Join(args, " "), "create -f") {
 			return "", errors.New("unexpected command")
 		}
-		manifest, err := os.ReadFile(args[4])
+		manifest, err := os.ReadFile(args[2])
 		if err != nil {
 			return "", err
+		}
+		if strings.Contains(string(manifest), "\n  namespace:") {
+			return "", errors.New("cluster-scoped SecurityEvent contained metadata.namespace")
 		}
 		name, correlation := "", ""
 		for _, line := range strings.Split(string(manifest), "\n") {
@@ -201,14 +269,14 @@ func TestCreateCorrelatedVLLMEventRequiresExactAPIAcknowledgement(t *testing.T) 
 				correlation = strings.Trim(strings.TrimSpace(strings.SplitN(line, ":", 2)[1]), `"`)
 			}
 		}
-		return `{"metadata":{"name":"` + name + `","namespace":"vllm","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"` + correlation + `"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
+		return `{"metadata":{"name":"` + name + `","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"` + correlation + `","phorvex.ai/console-vllm":"true"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
 	}}}
 	evidence, err := s.createCorrelatedVLLMEvent("vllm-0", "pod-uid", "GuardrailBypass", "signal", "0.95")
 	if err != nil || !evidence.Observed || evidence.EventUID != "event-uid" || evidence.BehavioralExecuted {
 		t.Fatalf("evidence=%+v err=%v", evidence, err)
 	}
 	s.cfg.Exec = func(_ time.Duration, _ string, args ...string) (string, error) {
-		return `{"metadata":{"name":"foreign","namespace":"vllm","uid":"foreign-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"wrong"}},"spec":{"targets":["vllm/foreign"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
+		return `{"metadata":{"name":"foreign","uid":"foreign-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"wrong","phorvex.ai/console-vllm":"true"}},"spec":{"targets":["vllm/foreign"],"rule":{"type":"phorvex.attack.guardrail","source":"redteam"}}}`, nil
 	}
 	if _, err := s.createCorrelatedVLLMEvent("vllm-0", "pod-uid", "GuardrailBypass", "signal", "0.95"); err == nil || !strings.Contains(err.Error(), "requires reconciliation") {
 		t.Fatalf("foreign API acknowledgement accepted: %v", err)
@@ -225,7 +293,7 @@ func TestEndpointRouteEffectRetainsUnsupportedBehavioralVerdict(t *testing.T) {
 		case strings.Contains(joined, "get pod vllm-0 -o json"):
 			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","labels":{"phorvex.ai/route-key":"ep-new"},"annotations":{"phorvex.ai/route-service":"vllm-infer"}}}`, nil
 		case strings.Contains(joined, "get securityevent event-1 -o json"):
-			return `{"metadata":{"name":"event-1","namespace":"vllm","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"corr"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"EndpointPinning","source":"redteam"}}}`, nil
+			return `{"metadata":{"name":"event-1","uid":"event-uid","creationTimestamp":"2026-09-22T14:00:00Z","labels":{"phorvex.ai/attack-correlation":"corr","phorvex.ai/console-vllm":"true"}},"spec":{"targets":["vllm/vllm-0"],"rule":{"type":"EndpointPinning","source":"redteam"}}}`, nil
 		case strings.Contains(joined, "get service vllm-infer -o json"):
 			return `{"metadata":{"name":"vllm-infer","uid":"service-uid"},"spec":{"selector":{"app":"vllm","phorvex.ai/route-key":"ep-new"}}}`, nil
 		case strings.Contains(joined, "get endpointslice"):
@@ -251,8 +319,8 @@ func TestEndpointRouteEffectRetainsUnsupportedBehavioralVerdict(t *testing.T) {
 	}
 }
 
-func TestEndpointSetupRestorationUsesExactCapturedAuthority(t *testing.T) {
-	var writes []string
+func TestEndpointSetupRestorationRefusesConcurrentMetadataChange(t *testing.T) {
+	writes := 0
 	s := &Server{cfg: Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
 		if bin != "kubectl" {
 			return "", errors.New("unexpected binary")
@@ -260,22 +328,82 @@ func TestEndpointSetupRestorationUsesExactCapturedAuthority(t *testing.T) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "get pod vllm-0 -o json"):
-			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","labels":{"phorvex.ai/route-key":"ep-old"},"annotations":{"phorvex.ai/route-service":"vllm-infer"}}}`, nil
+			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","resourceVersion":"12","labels":{"app":"vllm","foreign":"changed"},"annotations":{"phorvex.ai/route-service":"vllm-infer"}}}`, nil
 		case strings.Contains(joined, "get service vllm-infer -o json"):
-			return `{"metadata":{"name":"vllm-infer","uid":"service-uid"},"spec":{"selector":{"app":"vllm","phorvex.ai/route-key":"ep-old"}}}`, nil
+			return `{"metadata":{"name":"vllm-infer","uid":"service-uid","resourceVersion":"22"},"spec":{"selector":{"app":"vllm","phorvex.ai/route-key":"ep-old"}}}`, nil
 		default:
-			writes = append(writes, joined)
-			return "restored", nil
+			writes++
+			return "", nil
 		}
 	}}}
-	authority := &endpointSetupAuthority{pod: "vllm-0", targetUID: "pod-uid", serviceUID: "service-uid", oldSelector: map[string]string{"app": "vllm", "phorvex.ai/role": "leader"}}
-	if err := s.restoreEndpointSetup(authority); err != nil {
+	originalLabels := map[string]string{"app": "vllm"}
+	stagedLabels := map[string]string{"app": "vllm", "phorvex.ai/route-key": "ep-old"}
+	annotations := map[string]string{"phorvex.ai/route-service": "vllm-infer"}
+	selector := map[string]string{"app": "vllm", "phorvex.ai/route-key": "ep-old"}
+	authority := &endpointSetupAuthority{pod: "vllm-0", targetUID: "pod-uid", serviceUID: "service-uid", originalLabels: &originalLabels, stagedLabels: &stagedLabels, originalAnnotations: &annotations, stagedAnnotations: &annotations, originalSelector: &selector, stagedSelector: &selector, podStaged: true, serviceStaged: true}
+	if err := s.restoreEndpointSetup(authority); err == nil || !strings.Contains(err.Error(), "metadata changed") {
+		t.Fatalf("concurrent metadata change accepted: %v", err)
+	}
+	if writes != 0 {
+		t.Fatalf("restoration wrote after authority conflict: %d", writes)
+	}
+}
+
+func TestExactJSONPatchBindsUIDResourceVersionAndAbsentMap(t *testing.T) {
+	var command string
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {
+		command = strings.Join(args, " ")
+		return "patched", nil
+	}}}
+	after := map[string]string{"phorvex.ai/guardrail-variant": "pgv1"}
+	if err := s.exactJSONPatch("pod", "vllm-0", "pod-uid", "17", replaceOptionalMapPatch("/metadata/annotations", nil, &after)...); err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(writes, "\n")
-	for _, required := range []string{"phorvex.ai/route-key-", "phorvex.ai/route-service-", `"phorvex.ai/role":"leader"`, `"phorvex.ai/route-key":null`} {
-		if !strings.Contains(joined, required) {
-			t.Fatalf("restoration omitted %q:\n%s", required, joined)
+	for _, required := range []string{`"path":"/metadata/uid","value":"pod-uid"`, `"path":"/metadata/resourceVersion","value":"17"`, `"op":"add","path":"/metadata/annotations"`} {
+		if !strings.Contains(command, required) {
+			t.Fatalf("exact patch omitted %q: %s", required, command)
 		}
+	}
+}
+
+func TestGuardrailMetadataPatchFailureRestoresRuntime(t *testing.T) {
+	var mu sync.Mutex
+	active := "pgv2"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "active": active})
+		case http.MethodPost:
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			active = body["variant"]
+			_ = json.NewEncoder(w).Encode(map[string]any{"active": active, "applied": true})
+		}
+	}))
+	defer server.Close()
+	execIn := actualGuardrailExec(t, server.URL)
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
+		joined := strings.Join(args, " ")
+		if bin != "kubectl" {
+			return "", errors.New("unexpected binary")
+		}
+		if strings.Contains(joined, "get pod vllm-0 -o json") {
+			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","resourceVersion":"19","annotations":{"phorvex.ai/guardrail-variant":"pgv2"}}}`, nil
+		}
+		if strings.Contains(joined, "patch pod vllm-0") {
+			return "conflict", errors.New("conflict")
+		}
+		return "", errors.New("unexpected command: " + joined)
+	}}}
+	authority, err := s.prepareGuardrailEffect("vllm-0", "pod-uid", execIn)
+	if err == nil || authority == nil || authority.restoration != "restored" {
+		t.Fatalf("authority=%+v err=%v", authority, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if active != "pgv2" {
+		t.Fatalf("runtime left mutated after metadata patch failure: %s", active)
 	}
 }

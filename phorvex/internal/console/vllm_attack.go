@@ -56,6 +56,21 @@ func vllmRuleType(evType string) string {
 	return evType
 }
 
+func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, action, phase, targetUID, serviceUID string, mutated bool, restoration string, cause error) {
+	if restoration == "" {
+		if mutated {
+			restoration = "required"
+		} else {
+			restoration = "not-needed"
+		}
+	}
+	if err := s.persistVLLMSetupFailure(actorOf(r), action, phase, targetUID, serviceUID, mutated, restoration, cause); err != nil {
+		writeJSON(w, 503, map[string]string{"error": cause.Error() + "; failure evidence persistence failed: " + err.Error(), "verdict": "unsafe-to-retry"})
+		return
+	}
+	writeJSON(w, 502, map[string]any{"error": cause.Error(), "verdict": phase + "-failed", "targetUid": targetUID, "serviceUid": serviceUID, "restoration": restoration})
+}
+
 func (s *Server) fireVllmEvent(pod, evType, desc, anomaly string) error {
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
@@ -160,19 +175,26 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// attack and therefore cannot produce a behavioral DEFENDED/LANDED verdict.
 		authority, setupErr := s.prepareEndpointEffect(pod, base.uid)
 		if setupErr != nil {
-			writeJSON(w, 502, map[string]string{"error": setupErr.Error(), "verdict": "setup-failed"})
+			serviceUID, restoration, mutated := "", "not-needed", false
+			if authority != nil {
+				serviceUID, restoration = authority.serviceUID, authority.restoration
+				mutated = authority.podStaged || authority.serviceStaged
+			}
+			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, serviceUID, mutated, restoration, setupErr)
 			return
 		}
 		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "EndpointPinning", "synthetic endpoint-route signal for an in-place route-effect observation", "0.95")
 		if eventErr != nil {
 			restoreErr := s.restoreEndpointSetup(authority)
 			message := eventErr.Error()
+			restoration := "restored"
 			if restoreErr != nil {
 				message += "; exact endpoint setup restoration required: " + restoreErr.Error()
+				restoration = "required: " + restoreErr.Error()
 			} else {
 				message += "; endpoint setup restored"
 			}
-			writeJSON(w, 502, map[string]string{"error": message, "verdict": "stimulus-failed"})
+			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, authority.serviceUID, true, restoration, fmt.Errorf("%s", message))
 			return
 		}
 		stimulus.Limitation = "synthetic route signal; no SSRF, model-extraction, locator-revocation or session-revocation attack was executed"
@@ -188,29 +210,36 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// The currently calibrated harmless probes do not distinguish pgv1 from pgv2. Configure an
 		// exact runtime stimulus variant and measure only a fresh state transition; do not manufacture
 		// a jailbreak or mitigation verdict from that mechanism-level observation.
-		before, setupErr := s.prepareGuardrailEffect(pod, base.uid, execIn)
+		authority, setupErr := s.prepareGuardrailEffect(pod, base.uid, execIn)
 		if setupErr != nil {
-			message := setupErr.Error()
-			if before.Active != "" {
-				if restoreErr := s.restoreGuardrailEffect(pod, base.uid, execIn, before); restoreErr != nil {
-					message += "; exact guardrail runtime restoration required: " + restoreErr.Error()
-				} else {
-					message += "; guardrail runtime restored"
+			restoration, mutated := "not-needed", false
+			if authority != nil {
+				restoration = authority.restoration
+				mutated = authority.runtimeStaged || authority.metadataStaged
+				if mutated && restoration == "" {
+					if restoreErr := s.restoreGuardrailEffect(authority, execIn); restoreErr != nil {
+						restoration = "required: " + restoreErr.Error()
+						setupErr = fmt.Errorf("%w; exact guardrail restoration required: %v", setupErr, restoreErr)
+					} else {
+						restoration = "restored"
+					}
 				}
 			}
-			writeJSON(w, 502, map[string]string{"error": message, "verdict": "setup-failed"})
+			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, "", mutated, restoration, setupErr)
 			return
 		}
 		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "GuardrailBypass", "synthetic guardrail signal for an in-place runtime-state observation", "0.95")
 		if eventErr != nil {
-			restoreErr := s.restoreGuardrailEffect(pod, base.uid, execIn, before)
+			restoreErr := s.restoreGuardrailEffect(authority, execIn)
 			message := eventErr.Error()
+			restoration := "restored"
 			if restoreErr != nil {
 				message += "; exact guardrail runtime restoration required: " + restoreErr.Error()
+				restoration = "required: " + restoreErr.Error()
 			} else {
 				message += "; guardrail runtime restored"
 			}
-			writeJSON(w, 502, map[string]string{"error": message, "verdict": "stimulus-failed"})
+			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, "", true, restoration, fmt.Errorf("%s", message))
 			return
 		}
 		stimulus.Limitation = "synthetic guardrail signal; no preregistered pgv1-pass to pgv2-block behavioral probe was available"
@@ -281,7 +310,9 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter-")
 		kctl("label", "pod", pod, "phorvex.ai/lora-enabled-")
 		_, _ = execIn(`curl -s -o /dev/null -X POST http://localhost:8000/v1/unload_lora_adapter -H 'Content-Type: application/json' -d '{"lora_name":"evil"}'`)
-		kctl("delete", "securityevent", "-l", "phorvex.ai/redteam=true", "--ignore-not-found")
+		// Correlated console events are cluster-scoped. Delete only this console's explicitly
+		// labeled events; a broad redteam selector can remove another tenant's evidence.
+		_, _ = s.cfg.execText(8*time.Second, "kubectl", "delete", "securityevent", "-l", "phorvex.ai/redteam=true,phorvex.ai/console-vllm=true", "--ignore-not-found")
 		kctl("label", "pod", pod, "phorvex.ai/route-key-", "phorvex.ai/serving-")
 		kctl("annotate", "pod", pod, "phorvex.ai/route-service-")
 		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/role":"leader"}}}`)
