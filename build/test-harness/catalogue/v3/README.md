@@ -132,17 +132,36 @@ go run ./cmd/catalogue-collector \
 
 The example is deliberately opaque and reports
 `UNSUPPORTED_MEASUREMENT_SCHEMA`; it demonstrates retention without inventing a
-measurement. The first decoded family is the three `manager-session-*`
-profiles. Its decoder reconstructs the retained base64 segment receipt, checks
+measurement. The decoded families are the three `manager-session-*` profiles
+and the `nats-no-action`, `nats-member-restart`, and `nats-quorum-pause`
+profiles. The manager-session decoder reconstructs the retained base64 segment receipt, checks
 its hashes and flattened observations, and reports HTTP 200 session presence,
 HTTP 404 no-session responses with per-Pod counts, typed unknowns, Pod identities, action/effect fields,
 and every inter-segment gap separately. A 404 is not counted as a successful
 session read, and sampled windows are not described as continuous availability.
 
+The NATS decoder requires an explicit `natsIdentity` authority in each run-index
+record. It binds the retained receipt to the supplied mode, nonce, node, three
+Pod/PVC/PV/store identities, storage class, connected member, and initial server
+identities. It then checks the raw receipt digest, three-replica stream and
+consumer state, PubAck and consumer ACK sequences, stored payload hashes,
+single-delivery/no-redelivery state, and source-described action counts.
+Restart receipts must retain workload, volume, and store identity across one
+changed child process. Quorum receipts must bind both paused members and their
+nanosecond observation bracket, keep an initially acknowledged publication
+separate from a timeout-unknown publication, reconcile only the same message ID,
+and end with exact A/X/Y sequences 1/2/3. Unknown is not reported as loss. These
+identities remain supplied run-index pins; the collector checks consistency but
+does not claim independent live resolution.
+
 An index may declare a run `missing` or `failed` with a reason, which keeps it in
 the trial denominator. `available` files with a wrong hash, duplicate JSON key,
 unknown profile, selection mismatch, conflicting profile reuse, partial receipt,
-or inconsistent flattened evidence are rejected. External review state and
+inconsistent flattened evidence, NATS identity/protocol disagreement, or
+replayed metrics bytes are rejected. A benign row qualifies only with the exact
+unscored disposition and no security or financial derivation; older scored NATS
+rows remain visible as invalid even when their raw protocol receipt can be
+reconstructed. External review state and
 reference are copied as supplied metadata; the collector does not grant live
 acceptance. Source, harness, and configuration hashes are supplied pins too;
 the collector checks referenced suite and metrics bytes but does not

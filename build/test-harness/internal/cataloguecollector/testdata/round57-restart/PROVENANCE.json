@@ -1,0 +1,10 @@
+{
+  "schema": "phorvex.catalogue-test-fixture-provenance.v1",
+  "source": "round57-restart retained real-producer metrics.jsonl",
+  "originalSHA256": "da6a4395d7af655d6e0dfd9d4e43ac42c30a9b371372f07e97db5b179d7fe581",
+  "copiedSHA256": "da6a4395d7af655d6e0dfd9d4e43ac42c30a9b371372f07e97db5b179d7fe581",
+  "sanitization": [],
+  "reviewReference": "workflow review/NATS-V3-LEAD-LAUNCH/TWO-ARM-REVIEW.json",
+  "claimLimits": "Raw retained functional evidence; review state is supplied, comparisons remain NOT_ESTABLISHED, and no security, monetary, installed-actuator, or brain claim is derived.",
+  "reviewSHA256": "87fc93a51135c22accccb02779db5bee1063d528195715bf8dee8fe4f2568cf9"
+}
