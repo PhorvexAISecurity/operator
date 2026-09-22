@@ -670,7 +670,7 @@ Severity: HIGH/MEDIUM · Tier: 3 · Fixes: none
 
 ### M-106 · C3 — the belief calibrator and the cost calibrator are epistemically incoherent · **OPEN** · `ECONOMICS`
 
-Severity: MEDIUM · Tier: 3 · Fixes: POST25-M106, POST25-M106-SCOPED-OUTCOMES
+Severity: MEDIUM · Tier: 3 · Fixes: POST25-M106, POST25-M106-RUNTIME-WIRING, POST25-M106-SCOPED-OUTCOMES
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · belief

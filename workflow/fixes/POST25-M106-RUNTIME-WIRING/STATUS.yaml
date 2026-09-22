@@ -1,0 +1,392 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 25
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a8400aa8357f888a29b1f74ddf3b70dea64249bae240033927ee57aa9e97532a
+    source_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+    at: '2026-09-22T12:43:23+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+  implementation:
+    result: PASS
+    by: math-worker
+    artifact: 04-diff.patch
+    sha256: bf525389061e74476cb6480e17569e58cad38feb429f9dddb535148a8aef0d8d
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:38:11+00:00'
+  l0:
+    result: PASS
+    by: math-worker
+    artifact: evidence/worker/exact-f8cbe9f5.log
+    sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:38:11+00:00'
+    inputs:
+    - phorvex/internal/scopedoutcome
+    inputs_sha256: 47d400aba75adf3bea7076382e362f8ab82b900beffb5a36f577f686452011c2
+  l1:
+    result: PASS
+    by: math-worker
+    artifact: evidence/worker/exact-f8cbe9f5.log
+    sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:38:11+00:00'
+    inputs:
+    - phorvex/cmd
+    - phorvex/internal/runner
+    - phorvex/internal/scopedoutcome
+    inputs_sha256: a9d5dfbf1ce36874cd8ec31ae6c2af7e4b9a1a3779641636085dc24033c1fb4f
+  l2:
+    result: PASS
+    by: math-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: f1692a7c4885000e8e64bb93c1e99689d999099e8591c9e3d935cd1cb0c71592
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:38:11+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    inputs_sha256: 9fdf9209e768e1e9e60fdefe69f6ccfe4a2fd045f238c2a8e722b48ec8a210b2
+  positive_control:
+    result: PASS
+    by: math-worker
+    artifact: evidence/worker/exact-f8cbe9f5.log
+    sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:38:11+00:00'
+    inputs:
+    - phorvex/internal/scopedoutcome
+    inputs_sha256: 47d400aba75adf3bea7076382e362f8ab82b900beffb5a36f577f686452011c2
+  red:
+    result: PASS
+    by: math-worker
+    artifact: evidence/baseline/BASELINE.json
+    sha256: 5f45c3977372435c2a75f8985ad867b3ca0863c7f8f434a4da22cd73ccc6bd6d
+    source_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+    at: '2026-09-22T12:51:01+00:00'
+  preflight:
+    result: PASS
+    by: math-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: f1692a7c4885000e8e64bb93c1e99689d999099e8591c9e3d935cd1cb0c71592
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:38:11+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 0e9205f32ac1951924e36395a5488bd11b72154ed98b55cbefac8253295f5ac3
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:43:25+00:00'
+    baseline_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 35f4f24f2023222f45cd4d67fc4ac85b904926cfdb102fbc78be75bd0a75ec62
+    source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+    at: '2026-09-22T13:43:25+00:00'
+    incident_sha256: 0e9205f32ac1951924e36395a5488bd11b72154ed98b55cbefac8253295f5ac3
+fix_id: POST25-M106-RUNTIME-WIRING
+issues:
+- M-106
+title: Wire scoped outcome observer into production runtime
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: math-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  deployed_image: 0.4.146
+  deployed_git_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-m106-runtime-wiring
+  base_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  head_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T13:43:29+00:00'
+follow_up_to: POST25-M106
+configuration_history:
+- at: '2026-09-22T12:40:29+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T12:42:43+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T12:43:13+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T12:45:19+00:00'
+  by: math-worker
+  fields:
+  - implementation
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T13:36:21+00:00'
+  by: math-worker
+  fields:
+  - implementation
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T13:38:11+00:00'
+  by: math-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T12:41:50+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T12:43:30+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T12:45:45+00:00'
+  by: math-worker
+  artifact: 04-diff.patch
+  note: null
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T13:38:11+00:00'
+  by: math-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T13:43:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T13:43:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: a8400aa8357f888a29b1f74ddf3b70dea64249bae240033927ee57aa9e97532a
+  source_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  at: '2026-09-22T12:42:02+00:00'
+  contract_sha256: 23156f984707c19cca4a8e2102df2173de485e8a2bd294cd1c7e4553442ab181
+  approval_ref: operations/AUTONOMY.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: a8400aa8357f888a29b1f74ddf3b70dea64249bae240033927ee57aa9e97532a
+  source_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  at: '2026-09-22T12:42:53+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+  approval_ref: operations/AUTONOMY.md
+- check: implementation
+  result: PASS
+  by: math-worker
+  artifact: 04-diff.patch
+  sha256: 8185aa8ba088eb05ce3cb17441873f00f86f61b4ad32d96cb15e867f3f65d2b9
+  source_sha: a7c161826e323bf97dfb52fb7278244d6713daa0
+  at: '2026-09-22T12:45:45+00:00'
+- check: l0
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-a7c16182.log
+  sha256: 8f9230395860f4b25f4c38048d20c904517c9354f8623641ab869a0c86327103
+  source_sha: a7c161826e323bf97dfb52fb7278244d6713daa0
+  at: '2026-09-22T12:49:43+00:00'
+  inputs:
+  - phorvex/cmd
+  - phorvex/internal/runner
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 2e64a4168ac9c01a2741d12808e0c8e66de720750ea07f7a74c67fe74ba8e198
+- check: l1
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-a7c16182.log
+  sha256: 8f9230395860f4b25f4c38048d20c904517c9354f8623641ab869a0c86327103
+  source_sha: a7c161826e323bf97dfb52fb7278244d6713daa0
+  at: '2026-09-22T12:49:43+00:00'
+  inputs:
+  - phorvex/cmd
+  - phorvex/internal/runner
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 2e64a4168ac9c01a2741d12808e0c8e66de720750ea07f7a74c67fe74ba8e198
+- check: l2
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-a7c16182.log
+  sha256: 8f9230395860f4b25f4c38048d20c904517c9354f8623641ab869a0c86327103
+  source_sha: a7c161826e323bf97dfb52fb7278244d6713daa0
+  at: '2026-09-22T12:49:44+00:00'
+  inputs:
+  - phorvex/cmd
+  - phorvex/internal/runner
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 2e64a4168ac9c01a2741d12808e0c8e66de720750ea07f7a74c67fe74ba8e198
+- check: positive_control
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-a7c16182.log
+  sha256: 8f9230395860f4b25f4c38048d20c904517c9354f8623641ab869a0c86327103
+  source_sha: a7c161826e323bf97dfb52fb7278244d6713daa0
+  at: '2026-09-22T12:49:44+00:00'
+  inputs:
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 61da73a116b1d636c396da960b7f59d7185ea72af8a97edfc15096af1b0bae75
+- check: preflight
+  result: PASS
+  by: math-worker
+  artifact: evidence/preflight/receipt.json
+  sha256: f1692a7c4885000e8e64bb93c1e99689d999099e8591c9e3d935cd1cb0c71592
+  source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  at: '2026-09-22T13:37:30+00:00'
+- check: implementation
+  result: PASS
+  by: math-worker
+  artifact: 04-diff.patch
+  sha256: bf525389061e74476cb6480e17569e58cad38feb429f9dddb535148a8aef0d8d
+  source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  at: '2026-09-22T13:36:49+00:00'
+- check: l0
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-f8cbe9f5.log
+  sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+  source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  at: '2026-09-22T13:36:49+00:00'
+  inputs:
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 47d400aba75adf3bea7076382e362f8ab82b900beffb5a36f577f686452011c2
+- check: l1
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-f8cbe9f5.log
+  sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+  source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  at: '2026-09-22T13:37:22+00:00'
+  inputs:
+  - phorvex/cmd
+  - phorvex/internal/runner
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: a9d5dfbf1ce36874cd8ec31ae6c2af7e4b9a1a3779641636085dc24033c1fb4f
+- check: l2
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-f8cbe9f5.log
+  sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+  source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  at: '2026-09-22T13:37:22+00:00'
+  inputs:
+  - deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz
+  - phorvex/charts/phorvex
+  - phorvex/cmd
+  - phorvex/internal/runner
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 8c026a74202a7b0caf9aff75df6acd5145d0106e740b4fe1214a033609e58c3c
+- check: positive_control
+  result: PASS
+  by: math-worker
+  artifact: evidence/worker/exact-f8cbe9f5.log
+  sha256: f6c61e4aa3f60d48d120055c489fe9926585130c9e8e88422b1f978ef380ddcc
+  source_sha: f8cbe9f5b60250f65ab17fb69816567ddbdf7a72
+  at: '2026-09-22T13:37:22+00:00'
+  inputs:
+  - phorvex/internal/scopedoutcome
+  inputs_sha256: 47d400aba75adf3bea7076382e362f8ab82b900beffb5a36f577f686452011c2
+handoff:
+  id: POST25-M106-RUNTIME-WIRING:25:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 25
