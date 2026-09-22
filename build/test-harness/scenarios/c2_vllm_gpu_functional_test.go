@@ -55,7 +55,7 @@ func gpuFixtureObjects(t *testing.T) (*core.Env, *config.GPUFunctionalFixtureCon
 	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "vllm-1", Namespace: "sandbox", Labels: map[string]string{discoveryv1.LabelServiceName: fixture.ServiceName}}, Endpoints: []discoveryv1.Endpoint{{TargetRef: &corev1.ObjectReference{Kind: "Pod", Name: fixture.PodName, UID: types.UID(fixture.PodUID)}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}}}}
 	objects := []runtime.Object{ns, node, owner, pod, svc, slice}
 	kube := k8sfake.NewSimpleClientset(objects...)
-	env := &core.Env{Kube: kube, Config: config.TargetConfig{Namespace: "sandbox", GPUFunctionalFixture: fixture}, Guard: gpuFixtureGuard{}, Log: &gpuFixtureLog{}}
+	env := &core.Env{Kube: kube, Config: config.TargetConfig{Namespace: "sandbox", ExpectedNamespaceUID: fixture.NamespaceUID, GPUFunctionalFixture: fixture}, Guard: gpuFixtureGuard{}, Log: &gpuFixtureLog{}}
 	if err := env.EnsureNamespace(t.Context()); err != nil {
 		t.Fatal(err)
 	}

@@ -309,7 +309,7 @@ func TestGPUFunctionalFixtureRequiresExactSingleFunctionalArm(t *testing.T) {
 		Port: 8000, Model: "facebook/opt-125m", ModelDigest: "sha256:" + strings.Repeat("c", 64),
 		EngineSourceSHA256: strings.Repeat("d", 64), ProxySourceGitSHA: strings.Repeat("e", 40), BearerTokenFile: "/private/gpu-token",
 	}
-	valid := TargetConfig{Context: "eks", Namespace: "gpu-owned", OwnedAck: true, TrialsPerArm: 1, ScenarioFilter: []string{"c2-vllm-request-drain"}, DefenderFilter: []string{"d-nomtd"}, GPUFunctionalFixture: fixture}
+	valid := TargetConfig{Context: "eks", Namespace: "gpu-owned", ExpectedNamespaceUID: fixture.NamespaceUID, OwnedAck: true, TrialsPerArm: 1, ScenarioFilter: []string{"c2-vllm-request-drain"}, DefenderFilter: []string{"d-nomtd"}, GPUFunctionalFixture: fixture}
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -321,15 +321,17 @@ func TestGPUFunctionalFixtureRequiresExactSingleFunctionalArm(t *testing.T) {
 		t.Fatalf("actual canonical plain repo imageID rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*TargetConfig){
-		"wrong scenario":       func(c *TargetConfig) { c.ScenarioFilter[0] = "c2-vllm-prefix-cache-reset" },
-		"wrong defender":       func(c *TargetConfig) { c.DefenderFilter[0] = "d-phorvex-installed" },
-		"multiple trials":      func(c *TargetConfig) { c.TrialsPerArm = 2 },
-		"installed mode":       func(c *TargetConfig) { c.GPUFunctionalFixture.Mode = "installed" },
-		"mutable image":        func(c *TargetConfig) { c.GPUFunctionalFixture.Image = "registry.example/vllm:latest" },
-		"partial image id":     func(c *TargetConfig) { c.GPUFunctionalFixture.ImageID = "sha256:" + strings.Repeat("b", 64) },
-		"partial model digest": func(c *TargetConfig) { c.GPUFunctionalFixture.ModelDigest = strings.Repeat("c", 64) },
-		"relative token":       func(c *TargetConfig) { c.GPUFunctionalFixture.BearerTokenFile = "gpu-token" },
-		"wrong port":           func(c *TargetConfig) { c.GPUFunctionalFixture.Port = 8001 },
+		"wrong scenario":          func(c *TargetConfig) { c.ScenarioFilter[0] = "c2-vllm-prefix-cache-reset" },
+		"wrong defender":          func(c *TargetConfig) { c.DefenderFilter[0] = "d-phorvex-installed" },
+		"multiple trials":         func(c *TargetConfig) { c.TrialsPerArm = 2 },
+		"installed mode":          func(c *TargetConfig) { c.GPUFunctionalFixture.Mode = "installed" },
+		"mutable image":           func(c *TargetConfig) { c.GPUFunctionalFixture.Image = "registry.example/vllm:latest" },
+		"partial image id":        func(c *TargetConfig) { c.GPUFunctionalFixture.ImageID = "sha256:" + strings.Repeat("b", 64) },
+		"partial model digest":    func(c *TargetConfig) { c.GPUFunctionalFixture.ModelDigest = strings.Repeat("c", 64) },
+		"relative token":          func(c *TargetConfig) { c.GPUFunctionalFixture.BearerTokenFile = "gpu-token" },
+		"wrong port":              func(c *TargetConfig) { c.GPUFunctionalFixture.Port = 8001 },
+		"missing namespace pin":   func(c *TargetConfig) { c.ExpectedNamespaceUID = "" },
+		"different namespace pin": func(c *TargetConfig) { c.ExpectedNamespaceUID = "99999999-9999-4999-8999-999999999999" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid

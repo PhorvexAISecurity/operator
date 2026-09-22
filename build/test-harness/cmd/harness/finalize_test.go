@@ -71,13 +71,20 @@ type countingFactory struct {
 	natsFixture bool
 	// gpuFixture preserves the externally owned GPU workload and namespace.
 	gpuFixture bool
-	logger     *quietLogger
-	kube       *fake.Clientset
+	// replacementNamespace makes the observed namespace differ from the pinned
+	// external GPU namespace before final teardown builds its Env.
+	replacementNamespace bool
+	logger               *quietLogger
+	kube                 *fake.Clientset
 }
 
 func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 	f.built++
-	objects := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "sandbox-uid"}}}
+	namespaceUID := types.UID("11111111-2222-4333-8444-555555555555")
+	if f.replacementNamespace {
+		namespaceUID = "99999999-9999-4999-8999-999999999999"
+	}
+	objects := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: namespaceUID}}}
 	if f.localFixture || f.natsFixture || f.gpuFixture {
 		holderName := "checkpoint-local-holder"
 		holderUID := types.UID("external-holder")
@@ -101,7 +108,8 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 	cfg := config.WithDollarDefaults(config.TargetConfig{Namespace: "sandbox", Context: "kind-test", OwnedAck: true})
 	cfg.BenignCheckpointLocalFixture = f.localFixture
 	if f.gpuFixture {
-		cfg.GPUFunctionalFixture = &config.GPUFunctionalFixtureConfig{}
+		cfg.ExpectedNamespaceUID = "11111111-2222-4333-8444-555555555555"
+		cfg.GPUFunctionalFixture = &config.GPUFunctionalFixtureConfig{NamespaceUID: cfg.ExpectedNamespaceUID}
 	}
 	if f.natsFixture {
 		cfg.TrialsPerArm = 1
@@ -144,6 +152,19 @@ func (f *countingFactory) build(scenario, defender string, trial int, _ int64, _
 		return nil
 	}
 	return env, closer, nil
+}
+
+func TestFinalTeardownRefusesReplacementOfPinnedExternalGPUNamespace(t *testing.T) {
+	f := &countingFactory{gpuFixture: true, replacementNamespace: true}
+	err := finalTeardown(context.Background(), f.build, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "expectedNamespaceUID") {
+		t.Fatalf("replacement namespace was accepted by final teardown: %v", err)
+	}
+	for _, action := range f.kube.Actions() {
+		if action.GetVerb() != "get" {
+			t.Fatalf("replacement refusal issued mutation: %#v", action)
+		}
+	}
 }
 
 func TestFinalTeardownPreservesExternalGPUFixture(t *testing.T) {

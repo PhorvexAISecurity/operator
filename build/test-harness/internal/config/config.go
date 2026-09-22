@@ -421,6 +421,9 @@ func validateGPUFunctionalFixture(c TargetConfig) error {
 	if fixture.Mode != "no-action" && fixture.Mode != "direct" {
 		return errors.New("config: gpuFunctionalFixture mode must be no-action or direct")
 	}
+	if c.ExpectedNamespaceUID == "" || c.ExpectedNamespaceUID != fixture.NamespaceUID {
+		return errors.New("config: gpuFunctionalFixture requires expectedNamespaceUID equal to its exact namespaceUID")
+	}
 	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != wantScenario || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" {
 		return fmt.Errorf("config: gpuFunctionalFixture requires one %s trial with defenderFilter=[d-nomtd]", wantScenario)
 	}
