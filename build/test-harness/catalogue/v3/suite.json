@@ -32,7 +32,7 @@
       "sourceFile": "scenarios/c2_checkpoint_continuity.go",
       "measures": "Acknowledged synthetic progress, same owned volume, observed replacement and later durable acknowledgement.",
       "limits": "Unavailability is not corruption; no cross-node, paid-volume, HA or generic state-transfer claim.",
-      "sourceSHA256": "d1fdef19d8ace0c73737fa77011bf05719fa21808651ba9230a8d8db98bfab16"
+      "sourceSHA256": "c7e8a1fa264fb14510e931540db55b9381d3740f90d88c67f724cf6a4f20d6e2"
     },
     {
       "id": "c2-voice-websocket-continuity",

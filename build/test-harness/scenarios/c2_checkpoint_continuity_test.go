@@ -555,6 +555,27 @@ func TestCheckpointObservationParentCancellationIsNotWindowCensorship(t *testing
 	}
 }
 
+func TestCheckpointObservationDeadlinePreservesKnownIntegrityAndIndependentTimeout(t *testing.T) {
+	parent := context.Background()
+	expired, cancel := context.WithDeadline(context.WithValue(parent, checkpointObservationDeadlineKey{}, checkpointObservationDeadline{parent: parent}), time.Now().Add(-time.Second))
+	defer cancel()
+	integrity := hardCheckpointObservation("checkpoint-identity-or-checksum", checkpointReceipt{}, errors.New("observed checksum mismatch"))
+	if got := normalizeCheckpointObservationDeadline(expired, checkpointReceipt{}, integrity); observationClass(got) != checkpointHardIntegrity {
+		t.Fatalf("observed integrity failure erased by deadline: %v class=%s", got, observationClass(got))
+	}
+	unavailable := unavailableCheckpointObservation("http-unavailable", http.StatusServiceUnavailable, checkpointReceipt{}, errors.New("HTTP status 503"))
+	if got := normalizeCheckpointObservationDeadline(expired, checkpointReceipt{}, unavailable); observationClass(got) != checkpointApplicationUnavailable {
+		t.Fatalf("observed application outage erased by deadline: %v class=%s", got, observationClass(got))
+	}
+
+	active, activeCancel := context.WithDeadline(context.WithValue(parent, checkpointObservationDeadlineKey{}, checkpointObservationDeadline{parent: parent}), time.Now().Add(time.Second))
+	defer activeCancel()
+	requestTimeout := measurementCheckpointObservation("exec-transport", checkpointReceipt{}, context.DeadlineExceeded)
+	if got := normalizeCheckpointObservationDeadline(active, checkpointReceipt{}, requestTimeout); observationClass(got) != checkpointMeasurementError {
+		t.Fatalf("per-request timeout became observation-window expiry while window active: %v class=%s", got, observationClass(got))
+	}
+}
+
 func TestCheckpointObservationDeadlineCancelsRealSPDYAndRetainsPartialReceipt(t *testing.T) {
 	producerUID := types.UID("producer-owned")
 	partialStdout := "200\neyJib290U2VxdWVuY2UiOj"

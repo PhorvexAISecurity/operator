@@ -952,10 +952,14 @@ func normalizeCheckpointObservationDeadline(ctx context.Context, receipt checkpo
 		return nil
 	}
 	boundary, ok := ctx.Value(checkpointObservationDeadlineKey{}).(checkpointObservationDeadline)
-	if !ok || boundary.parent == nil || boundary.parent.Err() != nil {
+	if !ok || boundary.parent == nil || boundary.parent.Err() != nil || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return err
 	}
-	if !errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(err, context.DeadlineExceeded) {
+	var observed *checkpointObservationError
+	if !errors.As(err, &observed) || observed.Class != checkpointMeasurementError && observed.Class != checkpointApplicationUnavailable {
+		return err
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		return err
 	}
 	return censoredCheckpointObservation(receipt, err)
