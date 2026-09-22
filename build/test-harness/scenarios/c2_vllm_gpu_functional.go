@@ -148,15 +148,15 @@ func (s *c2VLLMFunctional) validateFixture(ctx context.Context, env *core.Env, f
 	if err != nil {
 		return fmt.Errorf("read GPU fixture node: %w", err)
 	}
-	if string(node.UID) != fixture.NodeUID || !checkpointNodeReady(node) {
-		return errors.New("GPU fixture node identity/readiness differs")
-	}
 	pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, fixture.PodName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 	if string(pod.UID) != fixture.PodUID || pod.DeletionTimestamp != nil || pod.Spec.NodeName != fixture.NodeName || !podReady(pod) || pod.Labels[vllmRunLabelKey] != fixture.RunLabel || pod.Annotations[vllmModelLabelKey] != fixture.ModelDigest || pod.Labels[core.OwnedLabelKey] == core.OwnedLabelValue {
 		return errors.New("GPU fixture Pod identity, readiness, node, run/model binding or external ownership differs")
+	}
+	if err := validateGPUNode(node, pod, fixture); err != nil {
+		return err
 	}
 	if !exactControllerOwner(pod.OwnerReferences, fixture.OwnerKind, fixture.OwnerName, types.UID(fixture.OwnerUID)) {
 		return errors.New("GPU fixture Pod controller owner differs")
@@ -192,6 +192,43 @@ func (s *c2VLLMFunctional) validateFixture(ctx context.Context, env *core.Env, f
 		return errors.New("GPU fixture Service selector is not single-Pod exact")
 	}
 	return validateGPUEndpoint(ctx, env, fixture, pod.UID)
+}
+
+func validateGPUNode(node *corev1.Node, pod *corev1.Pod, fixture *config.GPUFunctionalFixtureConfig) error {
+	if node == nil || pod == nil || node.Name != fixture.NodeName || string(node.UID) != fixture.NodeUID || node.DeletionTimestamp != nil || node.Spec.Unschedulable {
+		return errors.New("GPU fixture node identity/readiness differs")
+	}
+	ready := false
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			ready = condition.Status == corev1.ConditionTrue
+			break
+		}
+	}
+	allocatable := node.Status.Allocatable[corev1.ResourceName("nvidia.com/gpu")]
+	if !ready || allocatable.Cmp(resource.MustParse("1")) < 0 {
+		return errors.New("GPU fixture node is not Ready or lacks one allocatable GPU")
+	}
+	if len(node.Spec.Taints) == 0 {
+		return nil
+	}
+	if len(node.Spec.Taints) != 1 {
+		return errors.New("GPU fixture node has foreign or additional taints")
+	}
+	taint := node.Spec.Taints[0]
+	if taint.Key != "nvidia.com/gpu" || taint.Value != "true" || taint.Effect != corev1.TaintEffectNoSchedule {
+		return errors.New("GPU fixture node taint differs from the exact dedicated-GPU taint")
+	}
+	matched := 0
+	for _, toleration := range pod.Spec.Tolerations {
+		if toleration.Key == taint.Key && toleration.Value == taint.Value && toleration.Effect == taint.Effect && (toleration.Operator == "" || toleration.Operator == corev1.TolerationOpEqual) && toleration.TolerationSeconds == nil {
+			matched++
+		}
+	}
+	if matched != 1 {
+		return errors.New("GPU fixture Pod lacks one exact dedicated-GPU taint toleration")
+	}
+	return nil
 }
 
 func exactControllerOwner(refs []metav1.OwnerReference, kind, name string, uid types.UID) bool {

@@ -64,7 +64,7 @@
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
       "measures": "Actual inference and prefix-cache metrics; direct idle reset, miss/repopulation and busy refusal.",
       "limits": "Logical reset only; no physical erasure, poisoning mitigation, cross-tenant isolation or installed selection claim.",
-      "sourceSHA256": "d0b3fb31220f123a54832c88f00cb05256594bea9f09259825400fa937ac9a12"
+      "sourceSHA256": "87f3c63fe12f6e60ad12a9c481a654224f6f4125240f31570b78ccf20b6a7560"
     },
     {
       "id": "c2-vllm-request-drain",
@@ -72,7 +72,7 @@
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
       "measures": "Actual engine admission, owned in-flight request dispositions, two fresh empty-queue observations and explicit reopen.",
       "limits": "Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
-      "sourceSHA256": "d0b3fb31220f123a54832c88f00cb05256594bea9f09259825400fa937ac9a12"
+      "sourceSHA256": "87f3c63fe12f6e60ad12a9c481a654224f6f4125240f31570b78ccf20b6a7560"
     }
   ],
   "profiles": [

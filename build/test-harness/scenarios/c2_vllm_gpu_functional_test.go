@@ -36,6 +36,7 @@ func gpuFixtureObjects(t *testing.T) (*core.Env, *config.GPUFunctionalFixtureCon
 	t.Helper()
 	started := metav1.NewTime(time.Date(2026, 9, 22, 1, 2, 3, 123456789, time.UTC))
 	controller, ready := true, true
+	defaultTolerationSeconds := int64(300)
 	fixture := &config.GPUFunctionalFixtureConfig{
 		Operation: "prefix-cache-reset", Mode: "direct", NamespaceUID: "00000000-0000-4000-8000-000000000001", RunLabel: "gpu-r1",
 		NodeName: "gpu-node", NodeUID: "00000000-0000-4000-8000-000000000002", PodName: "vllm-0", PodUID: "00000000-0000-4000-8000-000000000003",
@@ -44,12 +45,17 @@ func gpuFixtureObjects(t *testing.T) (*core.Env, *config.GPUFunctionalFixtureCon
 		Port: 8000, Model: "facebook/opt-125m", ModelDigest: "sha256:" + strings.Repeat("c", 64), EngineSourceSHA256: strings.Repeat("d", 64), BearerTokenFile: "/private/token",
 	}
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: types.UID(fixture.NamespaceUID)}}
-	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: fixture.NodeName, UID: types.UID(fixture.NodeUID)}, Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: fixture.NodeName, UID: types.UID(fixture.NodeUID)}, Spec: corev1.NodeSpec{Taints: []corev1.Taint{{Key: "nvidia.com/gpu", Value: "true", Effect: corev1.TaintEffectNoSchedule}}}, Status: corev1.NodeStatus{Allocatable: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("8")}, Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
 	owner := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: fixture.OwnerName, Namespace: "sandbox", UID: types.UID(fixture.OwnerUID), Labels: map[string]string{vllmRunLabelKey: fixture.RunLabel}}}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: fixture.PodName, Namespace: "sandbox", UID: types.UID(fixture.PodUID), Labels: map[string]string{vllmRunLabelKey: fixture.RunLabel, "app": "vllm"}, Annotations: map[string]string{vllmModelLabelKey: fixture.ModelDigest}, OwnerReferences: []metav1.OwnerReference{{Kind: fixture.OwnerKind, Name: fixture.OwnerName, UID: types.UID(fixture.OwnerUID), Controller: &controller}}},
-		Spec:       corev1.PodSpec{NodeName: fixture.NodeName, Containers: []corev1.Container{{Name: fixture.ContainerName, Image: fixture.Image, Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("1")}}}}},
-		Status:     corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: fixture.ContainerName, Image: fixture.Image, ImageID: fixture.ImageID, Ready: true, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: started}}}}},
+		Spec: corev1.PodSpec{NodeName: fixture.NodeName, Tolerations: []corev1.Toleration{
+			{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpEqual, Value: "true", Effect: corev1.TaintEffectNoSchedule},
+			{Key: "node.kubernetes.io/not-ready", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoExecute, TolerationSeconds: &defaultTolerationSeconds},
+			{Key: "node.kubernetes.io/unreachable", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoExecute, TolerationSeconds: &defaultTolerationSeconds},
+			{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+		}, Containers: []corev1.Container{{Name: fixture.ContainerName, Image: fixture.Image, Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("1")}}}}},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: fixture.ContainerName, Image: fixture.Image, ImageID: fixture.ImageID, Ready: true, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: started}}}}},
 	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: fixture.ServiceName, Namespace: "sandbox", UID: types.UID(fixture.ServiceUID), Labels: map[string]string{vllmRunLabelKey: fixture.RunLabel}}, Spec: corev1.ServiceSpec{Selector: map[string]string{vllmRunLabelKey: fixture.RunLabel, "app": "vllm"}, Ports: []corev1.ServicePort{{Port: 8000, TargetPort: intstr.FromInt(8000)}}}}
 	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "vllm-1", Namespace: "sandbox", Labels: map[string]string{discoveryv1.LabelServiceName: fixture.ServiceName}}, Endpoints: []discoveryv1.Endpoint{{TargetRef: &corev1.ObjectReference{Kind: "Pod", Name: fixture.PodName, UID: types.UID(fixture.PodUID)}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}}}}
@@ -105,6 +111,66 @@ func TestVLLMGPUFixtureExactIdentityBoundary(t *testing.T) {
 				t.Fatal("fixture drift accepted")
 			}
 		})
+	}
+}
+
+func TestVLLMGPUNodeAcceptsRetainedDedicatedTaintShapeAndRejectsDrift(t *testing.T) {
+	env, fixture, _ := gpuFixtureObjects(t)
+	scenario := &c2VLLMFunctional{operation: "prefix-cache-reset"}
+	if err := scenario.validateFixture(t.Context(), env, fixture); err != nil {
+		t.Fatalf("retained dedicated GPU node/Pod shape rejected: %v", err)
+	}
+	if err := scenario.Teardown(t.Context(), env); err != nil {
+		t.Fatalf("teardown rejected unchanged retained GPU node/Pod shape: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*corev1.Node, *corev1.Pod)
+	}{
+		{"unschedulable", func(n *corev1.Node, _ *corev1.Pod) { n.Spec.Unschedulable = true }},
+		{"not ready", func(n *corev1.Node, _ *corev1.Pod) { n.Status.Conditions[0].Status = corev1.ConditionFalse }},
+		{"insufficient GPU", func(n *corev1.Node, _ *corev1.Pod) { n.Status.Allocatable["nvidia.com/gpu"] = resource.MustParse("0") }},
+		{"foreign taint", func(n *corev1.Node, _ *corev1.Pod) {
+			n.Spec.Taints = []corev1.Taint{{Key: "foreign", Effect: corev1.TaintEffectNoSchedule}}
+		}},
+		{"additional taint", func(n *corev1.Node, _ *corev1.Pod) {
+			n.Spec.Taints = append(n.Spec.Taints, corev1.Taint{Key: "foreign", Effect: corev1.TaintEffectNoSchedule})
+		}},
+		{"missing toleration", func(_ *corev1.Node, p *corev1.Pod) { p.Spec.Tolerations = nil }},
+		{"wrong toleration value", func(_ *corev1.Node, p *corev1.Pod) { p.Spec.Tolerations[0].Value = "false" }},
+		{"broad exists toleration", func(_ *corev1.Node, p *corev1.Pod) {
+			p.Spec.Tolerations[0] = corev1.Toleration{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			caseEnv, caseFixture, _ := gpuFixtureObjects(t)
+			kube := caseEnv.Kube.(*k8sfake.Clientset)
+			node, _ := kube.CoreV1().Nodes().Get(t.Context(), caseFixture.NodeName, metav1.GetOptions{})
+			pod, _ := kube.CoreV1().Pods("sandbox").Get(t.Context(), caseFixture.PodName, metav1.GetOptions{})
+			tc.mutate(node, pod)
+			_, _ = kube.CoreV1().Nodes().Update(t.Context(), node, metav1.UpdateOptions{})
+			_, _ = kube.CoreV1().Pods("sandbox").Update(t.Context(), pod, metav1.UpdateOptions{})
+			if err := scenario.validateFixture(t.Context(), caseEnv, caseFixture); err == nil {
+				t.Fatal("GPU node/toleration drift accepted during setup validation")
+			}
+			if err := scenario.Teardown(t.Context(), caseEnv); err == nil {
+				t.Fatal("GPU node/toleration drift accepted during teardown validation")
+			}
+		})
+	}
+}
+
+func TestVLLMGPUNodeWithoutTaintsRemainsEligible(t *testing.T) {
+	env, fixture, _ := gpuFixtureObjects(t)
+	kube := env.Kube.(*k8sfake.Clientset)
+	node, _ := kube.CoreV1().Nodes().Get(t.Context(), fixture.NodeName, metav1.GetOptions{})
+	pod, _ := kube.CoreV1().Pods("sandbox").Get(t.Context(), fixture.PodName, metav1.GetOptions{})
+	node.Spec.Taints, pod.Spec.Tolerations = nil, nil
+	_, _ = kube.CoreV1().Nodes().Update(t.Context(), node, metav1.UpdateOptions{})
+	_, _ = kube.CoreV1().Pods("sandbox").Update(t.Context(), pod, metav1.UpdateOptions{})
+	if err := (&c2VLLMFunctional{operation: "prefix-cache-reset"}).validateFixture(t.Context(), env, fixture); err != nil {
+		t.Fatalf("untainted eligible GPU node rejected: %v", err)
 	}
 }
 
