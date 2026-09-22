@@ -49,6 +49,8 @@ type prefixServer struct {
 	requestPaths      []string
 	completionPrompts []string
 	completedAtReset  []int
+	rejectPrimer      bool
+	blockPrimer       bool
 }
 
 func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -123,6 +125,18 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		prompt, _ := body["prompt"].(string)
 		s.mu.Lock()
 		s.completionPrompts = append(s.completionPrompts, prompt)
+		isPrimer := len(s.completionPrompts) == 1
+		rejectPrimer, blockPrimer := s.rejectPrimer && isPrimer, s.blockPrimer && isPrimer
+		s.mu.Unlock()
+		if blockPrimer {
+			<-r.Context().Done()
+			return
+		}
+		if rejectPrimer {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]any{"error": "primer-refused"})
+			return
+		}
+		s.mu.Lock()
 		s.prompt += 10
 		s.completed++
 		if prompt == s.lastPrompt {
@@ -210,6 +224,42 @@ func TestRunPrefixRequiresStrictSuccessMetricAfterPrimer(t *testing.T) {
 			defer state.mu.Unlock()
 			if state.resetCalls != 0 || len(state.completionPrompts) != 1 || state.completionPrompts[0] != primerPrompt {
 				t.Fatalf("mode=%s resets=%d prompts=%q", mode, state.resetCalls, state.completionPrompts)
+			}
+		})
+	}
+}
+
+func TestRunPrefixRetainsColdStateAndRefusesFailedOrCancelledPrimer(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		state  *prefixServer
+		ctx    func(*testing.T) (context.Context, context.CancelFunc)
+		status int
+	}{
+		{name: "bad-response", state: &prefixServer{rejectPrimer: true}, ctx: func(*testing.T) (context.Context, context.CancelFunc) {
+			return context.WithCancel(context.Background())
+		}, status: http.StatusServiceUnavailable},
+		{name: "cancelled", state: &prefixServer{blockPrimer: true}, ctx: func(*testing.T) (context.Context, context.CancelFunc) {
+			return context.WithTimeout(context.Background(), 50*time.Millisecond)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(tc.state.serve))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := tc.ctx(t)
+			defer cancel()
+			receipt, err := client.RunPrefix(ctx, false)
+			if err == nil || receipt.Cold.RawBody == "" || receipt.Cold.RequestSuccessMetricPresent || receipt.Primer.Observation.Path != "/v1/completions" || receipt.Primer.Observation.Status != tc.status || receipt.Baseline.RawBody != "" || receipt.First.ID != "" {
+				t.Fatalf("receipt=%+v err=%v", receipt, err)
+			}
+			tc.state.mu.Lock()
+			defer tc.state.mu.Unlock()
+			if tc.state.resetCalls != 0 || len(tc.state.completionPrompts) != 1 || tc.state.completionPrompts[0] != primerPrompt {
+				t.Fatalf("resets=%d prompts=%q", tc.state.resetCalls, tc.state.completionPrompts)
 			}
 		})
 	}
@@ -450,6 +500,19 @@ func TestRetainedRealWireCorpusParsesAndBindsProducerDigests(t *testing.T) {
 	}
 	if values["vllm:gpu_prefix_cache_hit_rate"] != .5 || values["vllm:request_success_total"] != 2 {
 		t.Fatalf("actual metrics values differ: %+v", values)
+	}
+	for _, corrupt := range []string{
+		"vllm:request_success_total{finished_reason=\"stop\",model_name=\"foreign/model\"} NaN\n",
+		"vllm:request_success_total{finished_reason=\"length\",model_name=\"facebook/opt-125m\"} 9\n",
+		"vllm:prompt_tokens_total{model_name=\"facebook/opt-125m\"} NaN\n",
+	} {
+		mixed := append(append([]byte(nil), metricsRaw...), []byte(corrupt)...)
+		if _, err := parseMetrics(mixed); err == nil {
+			t.Fatalf("strict parser accepted mixed valid/invalid target series %q", corrupt)
+		}
+		if _, _, err := parseMetricsMode(mixed, false); err == nil {
+			t.Fatalf("cold parser accepted mixed valid/invalid target series %q", corrupt)
+		}
 	}
 	modelFirst := strings.Replace(string(metricsRaw), `{finished_reason="length",model_name="facebook/opt-125m"}`, `{model_name="facebook/opt-125m",finished_reason="length"}`, 1)
 	if _, err := parseMetrics([]byte(modelFirst)); err != nil {

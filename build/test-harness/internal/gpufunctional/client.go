@@ -381,31 +381,39 @@ func parseMetricsMode(raw []byte, requireRequestSuccess bool) (map[string]float6
 	text := string(raw)
 	values := map[string]float64{}
 	for _, name := range metricNames {
-		pattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `(\{[^\n]*\})?\s+([-+0-9.eE]+)$`)
-		matches := pattern.FindAllStringSubmatch(text, -1)
-		labels, labelErr := parseMetricLabels(singleMetricLabels(matches))
-		if len(matches) != 1 || labelErr != nil || len(labels) != 1 || labels["model_name"] != modelName {
+		lines := metricSampleLines(text, name)
+		if len(lines) != 1 {
 			return nil, false, fmt.Errorf("metric %s did not have one exact model series", name)
 		}
-		value, err := strconv.ParseFloat(matches[0][2], 64)
+		match := regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `(\{[^\n]*\})?[ \t]+(\S+)$`).FindStringSubmatch(lines[0])
+		if match == nil {
+			return nil, false, fmt.Errorf("metric %s is malformed", name)
+		}
+		labels, labelErr := parseMetricLabels(match[1])
+		if labelErr != nil || len(labels) != 1 || labels["model_name"] != modelName {
+			return nil, false, fmt.Errorf("metric %s did not have one exact model series", name)
+		}
+		value, err := strconv.ParseFloat(match[2], 64)
 		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
 			return nil, false, fmt.Errorf("metric %s is non-finite", name)
 		}
 		values[name] = value
 	}
-	completedPattern := regexp.MustCompile(`(?m)^vllm:request_success_total(\{[^\n]*\})\s+([-+0-9.eE]+)$`)
-	matches := completedPattern.FindAllStringSubmatch(text, -1)
-	if len(matches) == 0 {
-		if regexp.MustCompile(`(?m)^vllm:request_success_total(?:\{|\s)`).MatchString(text) {
-			return nil, false, errors.New("request success metric is malformed")
-		}
+	const completedName = "vllm:request_success_total"
+	completedLines := metricSampleLines(text, completedName)
+	if len(completedLines) == 0 {
 		if requireRequestSuccess {
 			return nil, false, errors.New("request success metric is absent")
 		}
 		return values, false, nil
 	}
 	seen := map[string]bool{}
-	for _, match := range matches {
+	completedPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(completedName) + `(\{[^\n]*\})[ \t]+(\S+)$`)
+	for _, line := range completedLines {
+		match := completedPattern.FindStringSubmatch(line)
+		if match == nil {
+			return nil, false, errors.New("request success metric is malformed")
+		}
 		labels, err := parseMetricLabels(match[1])
 		if err != nil || len(labels) != 2 || labels["model_name"] != modelName || labels["finished_reason"] == "" {
 			return nil, false, errors.New("request success metric has unexpected labels")
@@ -424,11 +432,17 @@ func parseMetricsMode(raw []byte, requireRequestSuccess bool) (map[string]float6
 	return values, true, nil
 }
 
-func singleMetricLabels(matches [][]string) string {
-	if len(matches) != 1 {
-		return ""
+func metricSampleLines(text, name string) []string {
+	var matches []string
+	for _, line := range strings.Split(text, "\n") {
+		if !strings.HasPrefix(line, name) {
+			continue
+		}
+		if len(line) == len(name) || line[len(name)] == '{' || line[len(name)] == ' ' || line[len(name)] == '\t' {
+			matches = append(matches, line)
+		}
 	}
-	return matches[0][1]
+	return matches
 }
 
 func parseMetricLabels(raw string) (map[string]string, error) {
