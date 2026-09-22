@@ -7,7 +7,7 @@ metadata:
     {{- include "phorvex.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  {{- if or (and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled) .Values.phorvex.lossHistory.enabled }}
+  {{- if or (and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled) .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled }}
   # A ReadWriteOnce volume can only be attached to one node at a time, so a RollingUpdate
   # would deadlock: the new pod cannot mount the PVC until the old pod releases it, and the
   # old pod is not terminated until the new one is Ready.
@@ -27,7 +27,7 @@ spec:
       serviceAccountName: {{ include "phorvex.serviceAccountName" . }}
       securityContext:
         runAsNonRoot: true
-        {{- if or .Values.phorvex.audit.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.lossHistory.enabled }}
+        {{- if or .Values.phorvex.audit.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled }}
         # Containers run as non-root; fsGroup makes configured durable volumes
         # group-writable and lets the manager read its 0440 webhook key.
         fsGroup: 65532
@@ -215,6 +215,24 @@ spec:
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true
         {{- end }}
+        {{- if .Values.phorvex.scopedOutcome.enabled }}
+        {{- $configSecret := required "phorvex.scopedOutcome.configSecretName required" .Values.phorvex.scopedOutcome.configSecretName }}
+        {{- $tlsSecret := required "phorvex.scopedOutcome.tlsSecretName required" .Values.phorvex.scopedOutcome.tlsSecretName }}
+        {{- $evidenceClaim := required "phorvex.scopedOutcome.existingClaim required" .Values.phorvex.scopedOutcome.existingClaim }}
+        {{- $configMount := required "phorvex.scopedOutcome.configMountPath required" .Values.phorvex.scopedOutcome.configMountPath }}
+        {{- $tlsMount := required "phorvex.scopedOutcome.tlsMountPath required" .Values.phorvex.scopedOutcome.tlsMountPath }}
+        {{- $evidenceMount := required "phorvex.scopedOutcome.evidenceMountPath required" .Values.phorvex.scopedOutcome.evidenceMountPath }}
+        {{- if or (not (hasPrefix "/" $configMount)) (not (hasPrefix "/" $tlsMount)) (not (hasPrefix "/" $evidenceMount)) (eq $configMount $tlsMount) (eq $configMount $evidenceMount) (eq $tlsMount $evidenceMount) }}
+        {{- fail "phorvex.scopedOutcome mount paths must be distinct absolute paths" }}
+        {{- end }}
+        {{- if and .Values.phorvex.lossHistory.enabled (eq $evidenceClaim .Values.phorvex.lossHistory.existingClaim) }}
+        {{- fail "phorvex.scopedOutcome.existingClaim must be dedicated from lossHistory" }}
+        {{- end }}
+        {{- if and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled (eq $evidenceClaim (printf "%s-audit" (include "phorvex.fullname" .))) }}
+        {{- fail "phorvex.scopedOutcome.existingClaim must be dedicated from audit persistence" }}
+        {{- end }}
+        - --scoped-outcome-config={{ $configMount }}/startup.json
+        {{- end }}
         {{- with .Values.phorvex.extraArgs }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -265,7 +283,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -312,8 +330,18 @@ spec:
         - name: loss-history
           mountPath: {{ .Values.phorvex.lossHistory.mountPath }}
         {{- end }}
+        {{- if .Values.phorvex.scopedOutcome.enabled }}
+        - name: scoped-outcome-config
+          mountPath: {{ .Values.phorvex.scopedOutcome.configMountPath }}
+          readOnly: true
+        - name: scoped-outcome-tls
+          mountPath: {{ .Values.phorvex.scopedOutcome.tlsMountPath }}
+          readOnly: true
+        - name: scoped-outcome-evidence
+          mountPath: {{ .Values.phorvex.scopedOutcome.evidenceMountPath }}
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled }}
+        {{- end }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -362,6 +390,20 @@ spec:
       - name: loss-history
         persistentVolumeClaim:
           claimName: {{ .Values.phorvex.lossHistory.existingClaim }}
+      {{- end }}
+      {{- if .Values.phorvex.scopedOutcome.enabled }}
+      - name: scoped-outcome-config
+        secret:
+          secretName: {{ .Values.phorvex.scopedOutcome.configSecretName }}
+          items:
+          - key: startup.json
+            path: startup.json
+      - name: scoped-outcome-tls
+        secret:
+          secretName: {{ .Values.phorvex.scopedOutcome.tlsSecretName }}
+      - name: scoped-outcome-evidence
+        persistentVolumeClaim:
+          claimName: {{ .Values.phorvex.scopedOutcome.existingClaim }}
       {{- end }}
       {{- if .Values.phorvex.calibration.enabled }}
       - name: calibration-evidence

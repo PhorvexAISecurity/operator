@@ -12,12 +12,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
@@ -109,25 +112,7 @@ func TestPost25M106StartupPreregistersExactMTLSSessionAndCloses(t *testing.T) {
 	config.Prepare.Old.URL = server.URL
 	config.Prepare.Replacement.URL = server.URL
 
-	controller := true
-	replicas := int32(1)
-	deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "app", UID: "owner-uid"}, Spec: appsv1.DeploymentSpec{
-		Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "fixture"}},
-	}}
-	replicaSet := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "app-rs", UID: "rs-uid",
-		OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "Deployment", Name: deployment.Name, UID: deployment.UID, Controller: &controller}}},
-		Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "fixture"}}}}
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "old", UID: "old-uid", Labels: map[string]string{"app": "fixture"},
-		OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: replicaSet.Name, UID: replicaSet.UID, Controller: &controller}}},
-		Spec: corev1.PodSpec{TerminationGracePeriodSeconds: &config.Prepare.TargetTerminationGraceSeconds}}
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "policy", UID: "policy-uid", Generation: 1}}
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, v1alpha1.AddToScheme} {
-		if err := add(scheme); err != nil {
-			t.Fatal(err)
-		}
-	}
-	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(deployment, replicaSet, pod, policy).Build()
+	reader := validStartupReader(t, config)
 	path := filepath.Join(dir, "startup.json")
 	writeStartupJSON(t, path, config)
 	producer, err := OpenStartupProducer(t.Context(), path, reader, "process-epoch", nil)
@@ -139,6 +124,64 @@ func TestPost25M106StartupPreregistersExactMTLSSessionAndCloses(t *testing.T) {
 	if info, err := os.Stat(config.EvidenceDirectory); err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
 		t.Fatalf("private evidence directory was not established: info=%v err=%v", info, err)
 	}
+}
+
+func TestPost25M106StartupRejectsForeignServerRedirectAndAbsentClient(t *testing.T) {
+	dir := t.TempDir()
+	base := validStartupConfig(t, dir)
+	ca, caKey, roots := m106CA(t)
+	clientCertificate := m106Leaf(t, ca, caKey, "observer.test", x509.ExtKeyUsageClientAuth)
+	base.CAFile, base.ClientCertFile, base.ClientKeyFile = writeStartupTLS(t, dir, ca, clientCertificate.Certificate, clientCertificate.PrivateKey.(*ecdsa.PrivateKey))
+	if client, err := NewMTLSClient(roots, tls.Certificate{}, "session.test", time.Second); err == nil || client != nil {
+		t.Fatalf("absent client certificate was accepted: client=%v err=%v", client, err)
+	}
+
+	otherCA, otherKey, _ := m106CA(t)
+	foreign := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	foreign.TLS = &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{m106Leaf(t, otherCA, otherKey, "session.test", x509.ExtKeyUsageServerAuth)}}
+	foreign.StartTLS()
+	t.Cleanup(foreign.Close)
+	foreignConfig := base
+	foreignConfig.Prepare.Old.URL, foreignConfig.Prepare.Replacement.URL = foreign.URL, foreign.URL
+	foreignPath := filepath.Join(dir, "foreign.json")
+	writeStartupJSON(t, foreignPath, foreignConfig)
+	if producer, err := OpenStartupProducer(t.Context(), foreignPath, validStartupReader(t, foreignConfig), "epoch", nil); producer != nil || StartupErrorCode(err) != "preregistration-refused" {
+		t.Fatalf("foreign server was not refused: producer=%v err=%v", producer, err)
+	}
+
+	serverCertificate := m106Leaf(t, ca, caKey, "session.test", x509.ExtKeyUsageServerAuth)
+	var destinationHits atomic.Int32
+	destination := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { destinationHits.Add(1) }))
+	t.Cleanup(destination.Close)
+	redirect := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, destination.URL, http.StatusFound) }))
+	redirect.TLS = &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{serverCertificate}, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: roots}
+	redirect.StartTLS()
+	t.Cleanup(redirect.Close)
+	redirectConfig := base
+	redirectConfig.Prepare.Old.URL, redirectConfig.Prepare.Replacement.URL = redirect.URL, redirect.URL
+	redirectConfig.EvidenceDirectory = filepath.Join(dir, "redirect-evidence")
+	redirectPath := filepath.Join(dir, "redirect.json")
+	writeStartupJSON(t, redirectPath, redirectConfig)
+	if producer, err := OpenStartupProducer(t.Context(), redirectPath, validStartupReader(t, redirectConfig), "epoch", nil); producer != nil || StartupErrorCode(err) != "preregistration-refused" || destinationHits.Load() != 0 {
+		t.Fatalf("redirect crossed exact endpoint boundary: producer=%v err=%v destinationHits=%d", producer, err, destinationHits.Load())
+	}
+}
+
+func validStartupReader(t *testing.T, config StartupConfig) client.Client {
+	t.Helper()
+	controller := true
+	replicas := int32(1)
+	deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "app", UID: "owner-uid"}, Spec: appsv1.DeploymentSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "fixture"}}}}
+	replicaSet := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "app-rs", UID: "rs-uid", OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "Deployment", Name: deployment.Name, UID: deployment.UID, Controller: &controller}}}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "fixture"}}}}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "old", UID: "old-uid", Labels: map[string]string{"app": "fixture"}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: replicaSet.Name, UID: replicaSet.UID, Controller: &controller}}}, Spec: corev1.PodSpec{TerminationGracePeriodSeconds: &config.Prepare.TargetTerminationGraceSeconds}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "fixture", Name: "policy", UID: "policy-uid", Generation: 1}}
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, v1alpha1.AddToScheme} {
+		if err := add(scheme); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(deployment, replicaSet, pod, policy).Build()
 }
 
 func validStartupConfig(t *testing.T, dir string) StartupConfig {

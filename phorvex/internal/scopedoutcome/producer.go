@@ -122,6 +122,7 @@ type Producer struct {
 	results        chan model.ScopedOutcomeDelivery
 	stop           chan struct{}
 	done           chan struct{}
+	evidenceSlot   chan struct{}
 
 	mu         sync.RWMutex
 	prepared   map[string]preparedSession // exact old target UID
@@ -163,7 +164,8 @@ func newProducer(client *http.Client, store EvidenceStore, resolver BindingResol
 		ctx: workerCtx, cancel: workerCancel,
 		jobs: make(chan trial, defaultQueueCapacity), results: make(chan model.ScopedOutcomeDelivery, defaultResultCapacity),
 		stop: make(chan struct{}), done: make(chan struct{}), prepared: map[string]preparedSession{},
-		bindings: map[string]model.PersistenceOperationBinding{}, allowed: map[string]authorizedObservation{},
+		evidenceSlot: make(chan struct{}, 1),
+		bindings:     map[string]model.PersistenceOperationBinding{}, allowed: map[string]authorizedObservation{},
 		overflow: map[string]model.ScopedOutcomeDelivery{},
 	}
 	p.waitUntil = func(ctx context.Context, deadline time.Time) bool {
@@ -440,7 +442,7 @@ func (p *Producer) observe(job trial) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(p.ctx, 5*time.Second)
-	err = p.store.Put(ctx, bundle)
+	err = p.putEvidence(ctx, bundle)
 	cancel()
 	if err != nil {
 		p.offerUnavailable(job.binding.Policy, "scoped outcome evidence retention failed")
@@ -462,6 +464,31 @@ func (p *Producer) observe(job trial) {
 	p.mu.Unlock()
 	copy := observation
 	p.offer(model.ScopedOutcomeDelivery{Policy: observation.Policy, Observation: &copy})
+}
+
+// putEvidence keeps producer shutdown bounded even when an EvidenceStore
+// implementation fails to honor context cancellation. The buffered result
+// channel lets a late Put return without retaining the producer worker.
+func (p *Producer) putEvidence(ctx context.Context, bundle EvidenceBundle) error {
+	select {
+	case p.evidenceSlot <- struct{}{}:
+	default:
+		return errors.New("scoped outcome evidence store still has an in-flight write")
+	}
+	result := make(chan error, 1)
+	go func() {
+		defer func() { <-p.evidenceSlot }()
+		result <- p.store.Put(ctx, bundle)
+	}()
+	select {
+	case err := <-result:
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 type probeResult struct {

@@ -49,4 +49,14 @@ rotate route is native; a Phoenix-only runtime refuses the observer.
 Raw session responses and action receipts are written only to the private
 evidence directory. They are never added to logs or decision audit notes. The
 producer closes when the manager exits; shutdown cancels outstanding probes
-before returning.
+before returning. A non-cooperative evidence write cannot block shutdown or
+authorize an observation, and at most one such write may remain in flight.
+
+The supported Helm chart keeps this runtime disabled by default. To opt in,
+set `phorvex.scopedOutcome.enabled=true` together with distinct config and TLS
+Secret names and a dedicated existing evidence PVC. The config Secret supplies
+`startup.json`; the TLS Secret supplies the exact filenames referenced by that
+JSON. The chart mounts both Secrets read-only, mounts only the evidence PVC
+writable, and adds the scoped config flag. The configured JSON paths must agree
+with those mount paths. The evidence claim must not reuse audit or loss-history
+storage.

@@ -2,6 +2,7 @@ package scopedoutcome
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -131,36 +133,29 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 		}}
 	server.StartTLS()
 	t.Cleanup(server.Close)
-	httpClient, err := NewMTLSClient(roots, clientCert, "session.test", time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
 	clock := &m106Clock{now: time.Now().UTC()}
 	engine := decision.NewCoverageEngine()
 	epoch := model.PolicyEpoch{Namespace: namespace, Name: policy.Name, UID: string(policy.UID), Generation: policy.Generation}
 	if err := engine.SetOwnerEpoch(epoch, true); err != nil {
 		t.Fatal(err)
 	}
-	store := &m106MemoryEvidence{}
-	producer, err := New(httpClient, store, KubernetesBindingResolver{Reader: apiClient, Timeout: time.Second}, engine.ScopedOutcomeProcessEpochID(), clock.Now)
+	prepare := PrepareConfig{Policy: epoch, Workload: workload, TargetName: oldPod.Name, TargetUID: string(oldPod.UID), TargetTerminationGraceSeconds: grace,
+		Old:         SessionEndpoint{URL: server.URL, SessionID: "old-session", Challenge: "before", TargetUID: string(oldPod.UID), WorkloadScopeSHA256: scopeDigest},
+		Replacement: SessionEndpoint{URL: server.URL, SessionID: "replacement-session", Challenge: "after", WorkloadScopeSHA256: scopeDigest}}
+	startupDir := t.TempDir()
+	caFile, certFile, keyFile := writeStartupTLS(t, startupDir, ca, clientCert.Certificate, clientCert.PrivateKey.(*ecdsa.PrivateKey))
+	evidenceDir := filepath.Join(startupDir, "evidence")
+	startup := StartupConfig{SchemaVersion: StartupConfigSchemaV1, Prepare: prepare, CAFile: caFile, ClientCertFile: certFile,
+		ClientKeyFile: keyFile, ServerName: "session.test", EvidenceDirectory: evidenceDir, EvidenceMaxItems: 8,
+		EvidenceMaxBytes: 1 << 20, HTTPTimeout: "2s", AuthorityTimeout: "1s"}
+	startupPath := filepath.Join(startupDir, "startup.json")
+	writeStartupJSON(t, startupPath, startup)
+	producer, err := OpenStartupProducer(ctx, startupPath, apiClient, engine.ScopedOutcomeProcessEpochID(), clock.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(producer.Close)
 	producer.waitUntil = func(ctx context.Context, deadline time.Time) bool { clock.Set(deadline); return ctx.Err() == nil }
-	prepare := PrepareConfig{Policy: epoch, Workload: workload, TargetName: oldPod.Name, TargetUID: string(oldPod.UID), TargetTerminationGraceSeconds: grace,
-		Old:         SessionEndpoint{URL: server.URL, SessionID: "old-session", Challenge: "before", TargetUID: string(oldPod.UID), WorkloadScopeSHA256: scopeDigest},
-		Replacement: SessionEndpoint{URL: server.URL, SessionID: "replacement-session", Challenge: "after", WorkloadScopeSHA256: scopeDigest}}
-	if held, err := producer.CheckNoOperation(ctx, prepare.Old); err != nil || !held || len(producer.Drain(1)) != 0 {
-		t.Fatalf("no-operation positive became a sample or failed: held=%t err=%v", held, err)
-	}
-	// The no-operation control advances only this fixture clock through its
-	// independent horizon. Start the subsequent rotate trial from current wall
-	// time so its API-server creation and dispatch timestamps share one epoch.
-	clock.Set(time.Now().UTC())
-	if err := producer.Prepare(ctx, prepare); err != nil {
-		t.Fatal(err)
-	}
 	// This Ready peer appears after Prepare but before the acknowledged action.
 	// It was absent from the UID snapshot, so the server creation timestamp is
 	// the independent boundary that prevents it from becoming a replacement.
@@ -173,12 +168,17 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 	if err := apiClient.Status().Update(ctx, interloperPod); err != nil {
 		t.Fatal(err)
 	}
-	native := actuator.NewNativeActuator(apiClient)
-	native.SetBoundaryReader(apiClient)
+	hybrid := actuator.NewHybridActuator(apiClient)
+	hybrid.ConfigureNativeJournal(apiClient, namespace)
+	prep := hybrid.PrepareRoutes(ctx, actuator.TenantTarget{Tenant: namespace, Namespace: namespace, PolicyName: policy.Name,
+		PolicyUID: string(policy.UID), Generation: policy.Generation, MatchLabels: labels, EnabledActions: map[model.Action]bool{model.ActionRotate: true}})
+	if err := prep.ForAction(model.ActionRotate); err != nil {
+		t.Fatal(err)
+	}
 	request := actuator.Request{Tenant: namespace, Namespace: namespace, Pod: oldPod.Name, TargetUID: string(oldPod.UID),
 		PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: grace,
 		Action: model.ActionRotate, TickID: "m106-api-tick"}
-	result, err := native.Actuate(ctx, request)
+	result, err := hybrid.Actuate(ctx, request)
 	if err != nil || !result.Emitted || result.Actuator != "native" || result.Handler != string(model.ActionRotate) {
 		t.Fatalf("actual Native receipt was not coherent: result=%+v err=%v", result, err)
 	}
@@ -217,6 +217,18 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 	}
 	if len(deliveries) != 1 || deliveries[0].Observation == nil {
 		t.Fatalf("scoped producer delivery=%+v", deliveries)
+	}
+	entries, err := os.ReadDir(evidenceDir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("durable evidence files=%d err=%v", len(entries), err)
+	}
+	evidenceRaw, err := os.ReadFile(filepath.Join(evidenceDir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence EvidenceBundle
+	if err := json.Unmarshal(evidenceRaw, &evidence); err != nil || evidence.EvidenceID != deliveries[0].Observation.EvidenceID {
+		t.Fatalf("durable startup evidence did not bind delivery: evidence=%+v err=%v", evidence, err)
 	}
 	engine.PersistenceAuthority = producer
 	engine.Now = func() time.Time { return clock.Now() }
