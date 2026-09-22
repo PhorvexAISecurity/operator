@@ -965,7 +965,8 @@ func (t *trialRun) finalize() Metric {
 	// attacks.  They therefore need no attack positive-control comparison and
 	// must never enter the security/economics scoring path.
 	benignControl := m.ScenarioBenignControl
-	usable := t.resolveBaseline(t.spec.kind != TrialNegativeControl && !benignControl)
+	executableAttack := m.ScenarioRealism == RealismExecutable && !benignControl
+	usable := t.resolveBaseline(t.spec.kind != TrialNegativeControl && executableAttack)
 
 	switch {
 	case v.Status != MeasurementValid:
@@ -997,6 +998,16 @@ func (t *trialRun) finalize() Metric {
 		m.SkipReason = "UNSCORED(benign-control): " + v.UnscoredReason
 		t.env.Log.Logf("benign control result: oracleAchieved=%v dwell=%.1fs actions=%d (functional observations retained; security/economics excluded)",
 			m.OracleAchieved, m.AttackerDwellSeconds, m.DefensiveActions)
+	case !executableAttack:
+		v.Phase = PhaseComplete
+		v.Baseline.Reason = fmt.Sprintf("scenario realism %q is excluded from attack, security and economics scoring", m.ScenarioRealism)
+		v.Note(PhaseComplete, v.Baseline.Reason)
+		v.Scored = false
+		v.UnscoredReason = v.Baseline.Reason
+		m.Skipped = true
+		m.SkipReason = "UNSCORED(realism): " + v.UnscoredReason
+		t.env.Log.Logf("non-executable scenario result: realism=%q oracleAchieved=%v dwell=%.1fs actions=%d (raw observations retained; security/economics excluded)",
+			m.ScenarioRealism, m.OracleAchieved, m.AttackerDwellSeconds, m.DefensiveActions)
 	default:
 		v.Phase = PhaseComplete
 		if requiresAttributedNegativeObservation(t.spec.scenario.Metadata().Name) && !m.OracleAchieved && !t.attributedNegativeObservation() {
@@ -1020,6 +1031,7 @@ func (t *trialRun) finalize() Metric {
 		}
 		v.Scored = true
 		m.DisruptionVsOracle = disruption(v.Baseline.OracleAchieved, m.OracleAchieved)
+		t.deriveReplayEvidence()
 		if v.CostObserved {
 			m.SecurityPerCost = securityPerCost(m.DisruptionVsOracle, t.actCount)
 			m.EvidenceRetention = evidenceRetention(t.actCount, t.or)
@@ -1212,8 +1224,20 @@ func (t *trialRun) liftOracleEvidence() {
 	if v, ok := get(EvOwaspIDs); ok && v != "" {
 		m.OwaspIDs = splitCSV(v)
 	}
-	// Attack-reusability replay COUNTS are raw observations (the static-baseline
-	// anchoring is filled by the report layer across arms).
+	// Replay counts are intentionally not lifted here. Reuse is a derived attack
+	// claim and is emitted only after the row passes the executable-realism and
+	// positive-control scoring gates; see deriveReplayEvidence.
+}
+
+func (t *trialRun) deriveReplayEvidence() {
+	m, ev := &t.m, t.or.Evidence
+	get := func(k string) (string, bool) {
+		if ev == nil {
+			return "", false
+		}
+		v, ok := ev[k]
+		return v, ok
+	}
 	if rs, ok := get(EvReplaySuccess); ok {
 		attempts := 0
 		if a, ok2 := get(EvReplayAttempts); ok2 {
