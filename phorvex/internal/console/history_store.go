@@ -90,6 +90,7 @@ type historySourceStatus struct {
 	err            string
 	ready          bool
 	capacityPaused bool
+	capacityNotice string
 }
 
 type historyFilesystemUsage struct {
@@ -103,6 +104,17 @@ type historyCapacityError struct {
 
 func (e *historyCapacityError) Error() string {
 	return "durable history import paused by capacity guard: " + e.reason + " (" + e.detail + ")"
+}
+
+func (e *historyCapacityError) notice() string {
+	switch e.reason {
+	case "archive byte ceiling reached", "filesystem free-space reserve reached":
+		return e.reason + " (" + e.detail + ")"
+	default:
+		// Filesystem and stat errors can contain host paths. The authenticated API needs the
+		// actionable class of failure, but never its environment-specific error text.
+		return e.reason
+	}
 }
 
 func readHistoryFilesystemUsage(path string) (historyFilesystemUsage, error) {
@@ -234,6 +246,9 @@ func (h *historyStore) setStatus(source string, err error, ready bool) {
 		s.err = err.Error()
 		var capacityErr *historyCapacityError
 		s.capacityPaused = errors.As(err, &capacityErr)
+		if s.capacityPaused {
+			s.capacityNotice = capacityErr.notice()
+		}
 	}
 	h.status[source] = s
 	h.mu.Unlock()
@@ -753,7 +768,7 @@ func (h *historyStore) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if status.capacityPaused {
 		page.Partial = true
-		page.Notice += " Durable history import is paused by the capacity guard; existing records remain readable and durable source offsets are unchanged. Expand or archive console state, or apply reviewed capacity limits, and import will retry automatically."
+		page.Notice += " Durable history import is paused by the capacity guard: " + status.capacityNotice + ". Existing records remain readable and durable source offsets are unchanged. Expand or archive console state, or apply reviewed capacity limits, and import will retry automatically."
 	} else if status.err != "" {
 		page.Partial = true
 		page.Notice += " The requested source is currently unavailable; import is incomplete."

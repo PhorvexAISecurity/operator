@@ -105,6 +105,14 @@ phorvex:
         tag: "0.4.149" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
+      # Recovery ceiling for the existing 10 GiB console-state PVC. This is deliberately
+      # finite: the append-only archive still pauses before consuming the filesystem reserve,
+      # and a retention/archive decision is required before this ceiling is raised again.
+      state:
+        historyArchiveMaxBytes: "6442450944"
+        historyMinFreeBytes: "536870912"
+        persistence:
+          size: 10Gi
       # ── console identity and authorization (M-136) ────────────────────────
       # The ALB below already forces Cognito login, but until this fix the POD accepted whatever
       # the request asserted: a self-declared `X-Phorvex-Lens: operator` header reached the
