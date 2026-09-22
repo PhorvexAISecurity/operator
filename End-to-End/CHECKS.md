@@ -100,7 +100,7 @@ Status answers "did the contract hold". Coverage answers "over how much".
 
 | Check | Inputs | Assumption | If an input is absent |
 |:--|:--|:--|:--|
-| `F01` | `feasible`, `infeasibleWhy`, `invariants.law_reason_prefixes` | Every rejection names a law or the RBAC gate; prefixes are the literal strings in `internal/feasibility/*.go` | No rejection in the window: SKIP `not-applicable`. An unmapped reason FAILs rather than being tolerated |
+| `F01` | `feasible`, `infeasibleWhy`, `invariants.law_reason_prefixes`, `invariants.reason_fullmatch_patterns` | Every rejection names a law or reviewed capability gate; parameterized PDB reasons and exact capacity gates use anchored producer-shape patterns | No rejection in the window: SKIP `not-applicable`. An unmapped or malformed reason FAILs rather than being tolerated |
 | `F02` | `actuated`, `feasible` | Fail-closed also holds at the issue boundary | No actuation: SKIP `not-applicable` |
 | `F03` | pod `ownerReferences[0].kind`, `spec.volumes[].persistentVolumeClaim`, `record.action/selected/actuated` | Mirrors `ingest/kube.go:406` | A rotate target whose stateful status was **not observed** is reported as unobserved (WARN, `partial`), never as stateless. No stateful pod at all: SKIP `not-applicable` — passing on an empty set is the green-board-built-on-nothing failure |
 
