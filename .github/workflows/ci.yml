@@ -129,10 +129,13 @@ jobs:
             exit 0
           fi
           F=deploy/helm/phorvex-stack/values-eks.yaml
-          # The commit that last changed a component's pinned tag is its last release.
-          # A component that was never released, or a rewritten history, compares
-          # against the root commit — i.e. it is built.
-          base_for() { git log -1 --format=%H -G"tag: \"[0-9.]*\" *# ci:$1" HEAD -- "$F" 2>/dev/null || true; }
+          # The commit where CI last re-tagged a component is its last release. ONLY
+          # phorvex-ci[bot] commits count: a hand-written "release:" pin (v0.4.150-152
+          # were committed by a person pointing at manually built images) proves nothing
+          # about what shipped — treating it as a boundary hid PR #312 from the build.
+          # A component never released by CI, or a rewritten history, compares against
+          # the root commit — i.e. it is built.
+          base_for() { git log -1 --format=%H --author='phorvex-ci\[bot\]' -G"tag: \"[0-9.]*\" *# ci:$1" HEAD -- "$F" 2>/dev/null || true; }
           root=$(git rev-list --max-parents=0 HEAD | tail -1)
           changed() { # $1=base $2..=paths ; prints true/false
             local base=$1; shift
