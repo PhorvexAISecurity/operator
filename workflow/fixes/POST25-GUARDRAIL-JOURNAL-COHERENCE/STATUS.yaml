@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -87,11 +87,27 @@ checks:
     - phorvex/config/crd/bases
     - phorvex/internal/actuator
     inputs_sha256: 4857a4b225aac31ec8b47f4a8cecfb035f7783b52d1fe7a2b864b551c2dca35f
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 33cabd41b93c4ca531f592c813e330a0376983ad27fdad8b4e16fdfee1116c60
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:17:48+00:00'
+    baseline_sha: ac0e25fa2f745d45fad937d26d66287ba7b190e0
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 56e094c5cb4a8096da016305efd347275a518a8266b2241e0ed91b56d29ba8d4
+    source_sha: 0e1be74a368a666a61d7b56d45d129b4885eb805
+    at: '2026-09-22T20:17:48+00:00'
+    incident_sha256: 33cabd41b93c4ca531f592c813e330a0376983ad27fdad8b4e16fdfee1116c60
 fix_id: POST25-GUARDRAIL-JOURNAL-COHERENCE
 issues: []
 title: Keep guardrail console baselines coherent with protected terminal receipts
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +152,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +168,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-22T20:16:30+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T20:17:52+00:00'
 follow_up_to: M64
 configuration_history:
 - at: '2026-09-22T19:28:23+00:00'
@@ -210,6 +226,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T20:17:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T20:17:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -221,9 +253,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: operations/AUTONOMY.md
 handoff:
-  id: POST25-GUARDRAIL-JOURNAL-COHERENCE:8:submit
-  from: serving-worker
+  id: POST25-GUARDRAIL-JOURNAL-COHERENCE:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9
