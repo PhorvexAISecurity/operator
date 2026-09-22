@@ -292,7 +292,17 @@ func runVLLMCompletion(execIn func(string) (string, error), chat bool, payload a
 		return err
 	}
 	if response.Status != http.StatusOK {
-		return fmt.Errorf("completion returned HTTP %d", response.Status)
+		if response.Status == http.StatusForbidden {
+			var refusal struct {
+				Error struct {
+					Type string `json:"type"`
+				} `json:"error"`
+			}
+			if decodeOneJSON(response.Body, &refusal) == nil && refusal.Error.Type == "guardrail_blocked" {
+				return fmt.Errorf("completion blocked by the guardrail (HTTP 403); the KV observation was not started")
+			}
+		}
+		return fmt.Errorf("completion returned HTTP %d; the KV observation was not started", response.Status)
 	}
 	var completion struct {
 		ID      string            `json:"id"`

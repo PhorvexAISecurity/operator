@@ -50,10 +50,10 @@ var liveAttackCatalogue = []LiveAttack{
 		"vllm-serving", "Checks an unapproved adapter load and reports exact adapter mechanism evidence; no model-behavior mitigation is implied."},
 	{"kvcache", "KV reset-effect observation", "/api/vllm/attack", "CWE-208", "kv-reset",
 		"vllm-serving", "Sends a bounded repeated-prefix precursor and reports exact reset metadata; no timing leak or eviction verdict is implied."},
-	{"endpoint-rotate", "Inference-endpoint pinning", "/api/vllm/attack", "SSRF / model-extraction", "endpoint-rotate",
-		"vllm-serving", "Pins the serving route; Phorvex re-keys and restitches the Service."},
-	{"guardrail-rotate", "Guardrail bypass (jailbreak)", "/api/vllm/attack", "OWASP LLM01 / ASI01", "guardrail-rotate",
-		"vllm-serving", "A many-shot jailbreak the active guardrail misses; Phorvex hot-swaps the guardrail variant."},
+	{"endpoint-rotate", "Endpoint route-effect observation", "/api/vllm/attack", "SSRF / model-extraction", "endpoint-rotate",
+		"vllm-serving", "Stages an exact route signal and observes route-key/Service effects; SSRF and model-extraction mitigation are not established."},
+	{"guardrail-rotate", "Guardrail runtime-effect observation", "/api/vllm/attack", "OWASP LLM01 / ASI01", "guardrail-rotate",
+		"vllm-serving", "Stages an exact guardrail signal and observes a runtime variant transition; jailbreak execution or mitigation is not established."},
 	{"request-drain", "Request-drain response observation", "/api/vllm/attack", "OWASP LLM10", "request-drain",
 		"vllm-serving", "Emits an exact synthetic drain signal; request admission, abort and benign continuity remain unsupported in this console flow."},
 	{"kv-migrate-invalidate", "KV migration-effect observation", "/api/vllm/attack", "CWE-208", "kv-migrate-invalidate",
@@ -201,7 +201,7 @@ func compatibleLive(st appStack) []compatEntry {
 			}
 		case "any-workload":
 			e.Compatible = st.Workload
-			e.Armed = st.Armed // governed by a policy (or the static allowlist) => fireable
+			e.Armed = st.Armed    // governed by a policy (or the static allowlist) => fireable
 			e.Expected = "rotate" // refined below for stateful apps
 			if st.Stateful {
 				e.Expected = "quarantine"
@@ -328,7 +328,7 @@ func (s *Server) workloadAttacks(w http.ResponseWriter, r *http.Request) {
 		resp["catalog"] = catalogue
 	} else {
 		resp["catalog"] = []any{}
-		resp["catalogNote"] = "the harness binary is not present in this console image, so the scenario catalogue cannot be enumerated"
+		resp["catalogNote"] = "The scenario catalogue could not be read from the harness. Its executable, output format, or execution may be unavailable."
 	}
 	writeJSON(w, 200, resp)
 }

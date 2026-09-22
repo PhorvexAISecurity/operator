@@ -84,6 +84,7 @@ type historyStore struct {
 	minFreeBytes       int64
 	transactionReserve int64
 	filesystemUsage    func(string) (historyFilesystemUsage, error)
+	pruneAfter         []byte
 }
 
 type historySourceStatus struct {
@@ -138,6 +139,12 @@ type historyGapMetaRecord struct {
 func openHistoryStore(cfg Config) (*historyStore, error) {
 	archiveMax, minFree, transactionReserve, err := cfg.historyCapacityLimits()
 	if err != nil {
+		return nil, err
+	}
+	if cfg.HistoryRetentionDays < 0 || cfg.HistoryRetentionDays > 3650 {
+		return nil, errors.New("history retention must be 0..3650 days")
+	}
+	if err := prepareHistoryStorage(cfg); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(cfg.StateDir, "audit-history.db")
@@ -347,6 +354,11 @@ func sortAuditOldestFirst(segs []auditSegment) {
 func (h *historyStore) sourceID(id string) string { return h.bind + "\x00" + id }
 
 func (h *historyStore) ingestOnce(ctx context.Context) {
+	if err := h.pruneExpiredHistory(); err != nil {
+		h.setStatus("default", err, false)
+		h.setStatus("vcluster", err, false)
+		return
+	}
 	for _, source := range h.sources(ctx) {
 		if source.err != nil {
 			h.setStatus(source.id, source.err, false)
@@ -543,7 +555,7 @@ func (h *historyStore) ingestSegment(ctx context.Context, source historySource, 
 			line = nil
 			continue
 		}
-		if rec.Kind != "phorvex.decision" {
+		if rec.Kind != "phorvex.decision" || (h.cfg.HistoryRetentionDays > 0 && !rec.Time.IsZero() && rec.Time.Before(h.cfg.now().Add(-time.Duration(h.cfg.HistoryRetentionDays)*24*time.Hour))) {
 			line = nil
 			continue
 		}
@@ -552,6 +564,12 @@ func (h *historyStore) ingestSegment(ctx context.Context, source historySource, 
 		env, err := json.Marshal(storedHistoryRecord{Source: sourceID, ID: id, Record: line})
 		if err != nil {
 			return false, err
+		}
+		if h.cfg.HistoryRetentionDays > 0 {
+			env, err = encodeHistoryValue(env)
+			if err != nil {
+				return false, err
+			}
 		}
 		pending = append(pending, pendingRecord{identity: identity, env: env})
 		line = nil
@@ -756,7 +774,7 @@ func (h *historyStore) serve(w http.ResponseWriter, r *http.Request) {
 		sourceName = "vcluster"
 	}
 	sourceID := h.sourceID(sourceName)
-	key, _ := json.Marshal([]string{sourceID, q.Get("context"), lens, tenant, q.Get("action"), actuated, search, q.Get("from"), q.Get("to"), strconv.FormatBool(includeNoop)})
+	key, _ := json.Marshal([]string{strconv.Itoa(h.cfg.HistoryRetentionDays), sourceID, q.Get("context"), lens, tenant, q.Get("action"), actuated, search, q.Get("from"), q.Get("to"), strconv.FormatBool(includeNoop)})
 	hash := sha256.Sum256(key)
 	scope := hex.EncodeToString(hash[:])
 	page := historyPage{Events: []historyItem{}, Projection: "summary (decisionTrace omitted); scalar evidence, reasoning and claim provenance retained"}
@@ -765,6 +783,9 @@ func (h *historyStore) serve(w http.ResponseWriter, r *http.Request) {
 	if !status.ready && status.err == "" {
 		page.Partial = true
 		page.Notice += " Initial import is still running."
+	}
+	if h.cfg.HistoryRetentionDays > 0 {
+		page.Notice += fmt.Sprintf(" Retention is %d days; older decision records are removed automatically.", h.cfg.HistoryRetentionDays)
 	}
 	if status.capacityPaused {
 		page.Partial = true
@@ -826,7 +847,10 @@ func (h *historyStore) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			seqKey := make([]byte, 8)
 			binary.BigEndian.PutUint64(seqKey, seq)
-			v := bucket.Get(seqKey)
+			v, decodeErr := decodeHistoryValue(bucket.Get(seqKey))
+			if decodeErr != nil {
+				return decodeErr
+			}
 			page.ScannedBytes += int64(len(v))
 			if page.ScannedBytes > historyScanBytes {
 				page.Partial = true

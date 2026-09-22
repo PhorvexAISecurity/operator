@@ -83,6 +83,8 @@ spec:
           value: {{ .Values.phorvex.console.state.historyArchiveMaxBytes | quote }}
         - name: PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES
           value: {{ .Values.phorvex.console.state.historyMinFreeBytes | quote }}
+        - name: PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS
+          value: {{ .Values.phorvex.console.state.historyRetentionDays | default 0 | quote }}
         {{- if .Values.phorvex.prometheusUrl }}
         # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
         # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
@@ -135,6 +137,11 @@ spec:
         ports:
         - name: http
           containerPort: {{ .Values.phorvex.console.port }}
+        # One-time bounded archive migration completes before HTTP starts.
+        startupProbe:
+          httpGet: { path: /api/health, port: http }
+          periodSeconds: 5
+          failureThreshold: 180
         readinessProbe:
           httpGet: { path: /, port: http }
           initialDelaySeconds: 3

@@ -290,18 +290,25 @@ func attackSnapshots(p *Principal) []*attackRecord {
 	return out
 }
 
-func realAttackSnapshots(p *Principal) []*attackRecord {
+// Live views opt into the two console observation kinds. Experiment-only signals
+// and unknown evidence kinds remain excluded, as do observations in default reports.
+func visibleAttackRecord(rec *attackRecord, observations bool) bool {
+	return rec.EvidenceKind == "" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus"))
+}
+
+func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
+	observations := len(includeObservations) > 0 && includeObservations[0]
 	all := attackSnapshots(p)
 	out := make([]*attackRecord, 0, len(all))
 	for _, rec := range all {
-		if rec.EvidenceKind == "" {
+		if visibleAttackRecord(rec, observations) {
 			out = append(out, rec)
 		}
 	}
 	return out
 }
 
-func pagedRealAttackSnapshots(endpoint string, p *Principal, pg collectionPaging, search, exactID string) ([]*attackRecord, collectionPage, error) {
+func pagedRealAttackSnapshots(endpoint string, p *Principal, pg collectionPaging, search, exactID string, includeObservations ...bool) ([]*attackRecord, collectionPage, error) {
 	attackMu.Lock()
 	defer attackMu.Unlock()
 	snapshot := len(attackList)
@@ -322,7 +329,7 @@ func pagedRealAttackSnapshots(endpoint string, p *Principal, pg collectionPaging
 	matching := make([]*attackRecord, 0, snapshot)
 	for i := snapshot - 1; i >= 0; i-- {
 		rec := attackList[i]
-		if rec.EvidenceKind != "" || (!p.TenantWildcard() && !p.AllowsTenant(rec.Namespace)) {
+		if !visibleAttackRecord(rec, len(includeObservations) > 0 && includeObservations[0]) || (!p.TenantWildcard() && !p.AllowsTenant(rec.Namespace)) {
 			continue
 		}
 		if exactID != "" && rec.ID != exactID {
@@ -1153,13 +1160,22 @@ func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r)
 	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	exactID := strings.TrimSpace(r.URL.Query().Get("id"))
-	pg, err := collectionPagingFromRequest(r, "/api/attack-results", p, map[string]string{"id": exactID, "q": search})
+	observations := r.URL.Query().Get("includeObservations")
+	if observations != "" && observations != "true" && observations != "false" {
+		writeJSON(w, 400, map[string]string{"error": "includeObservations must be true or false"})
+		return
+	}
+	filters := map[string]string{"id": exactID, "q": search}
+	if observations == "true" {
+		filters["includeObservations"] = "true"
+	}
+	pg, err := collectionPagingFromRequest(r, "/api/attack-results", p, filters)
 	if err != nil {
 		writeCollectionPagingError(w, err)
 		return
 	}
 	if pg.Enabled {
-		out, page, err := pagedRealAttackSnapshots("/api/attack-results", p, pg, search, exactID)
+		out, page, err := pagedRealAttackSnapshots("/api/attack-results", p, pg, search, exactID, observations == "true")
 		if err != nil {
 			writeCollectionPagingError(w, err)
 			return
@@ -1169,7 +1185,7 @@ func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
 	}
 	// Synthetic detector signals support the dedicated three-arm comparison, but
 	// they are not exploits and therefore do not belong in the global attack report.
-	out := realAttackSnapshots(p)
+	out := realAttackSnapshots(p, observations == "true")
 	writeJSON(w, 200, map[string]any{"attacks": out})
 }
 

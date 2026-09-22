@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
-import { api, Lens, LiveHistoryPage, RunStatus } from "@/lib/api";
+import { api, Lens, LiveHistoryPage, RunStatus, VllmAttackAction } from "@/lib/api";
 import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { useOwnerTenant } from "@/lib/owner";
 import { useSelectedTarget } from "@/lib/provider-store";
@@ -51,7 +51,7 @@ function wlType(images: string[]): { type: string; label: string } {
 // signals (kv-reset / adapter-rotate). The other reactiveOnly-armed demo workloads fire a REAL foothold
 // detector signal (a SecurityEvent) → the brain rotates the attacked pod (or quarantines a stateful one).
 // `armed` namespaces stay CALM until attacked, so the response is a clean, attributable reaction.
-function attacksFor(type: string, armed: boolean): WlAttack[] {
+function comparisonAttacksFor(type: string, armed: boolean): WlAttack[] {
   switch (type) {
     case "model-server": return [
       { id: "kvcache", label: "KV reset-effect observation (CWE-208)", actuator: "kv-reset", runnable: true },
@@ -237,12 +237,17 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       setAttackMsg(mutationScopeMessage);
       return;
     }
+    const entry = compatibleAttacks.find((a) => a.id === (action === "clear" ? "foothold" : action));
+    if (!entry?.armed || compatibilityQuery.error || compatibilityQuery.isFetching || compatibilityQuery.data?.namespace !== curWl?.ns) {
+      setAttackMsg("Attack compatibility is unavailable or this action is not armed for the selected app.");
+      return;
+    }
     const request = mutationGeneration.current;
     setAttacking(action); setAttackMsg("");
     clearLiveSelection(lens, sel.context);
     try {
-      if (action === "poison" || action === "kvcache") {
-        const r = await api.vllmAttack(action as any, lens);
+      if (entry.endpoint === "/api/vllm/attack") {
+        const r = await api.vllmAttack(action as VllmAttackAction, lens);
         if (request !== mutationGeneration.current || workload !== selWl) return;
         setAttackMsg(r.message + (r.attackId ? "" : " No attack record ID was returned; no exact result can be selected."));
         setActionFilter("");
@@ -304,6 +309,11 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   // reactiveOnly-armed namespaces: calm until attacked, so a fired foothold is a clean attributable reaction.
   const ARMED = ["voice", "nats"];
   const armed = !!curWl && ARMED.includes(curWl.ns);
+  const compatibilityQuery = useApiRead({ lens, resource: "workload-attacks", parameters: { namespace: curWl?.ns || "", context: sel.context },
+    fetcher: (signal) => api.workloadAttacks(curWl!.ns, lens, signal), staleTime: 30_000,
+    enabled: !owner && !!curWl && mutatesDefaultContext });
+  const compatibleAttacks = compatibilityQuery.data?.namespace === curWl?.ns ? (compatibilityQuery.data?.live || []).filter((a) => a.compatible) : [];
+  const attackControlsDisabled = !queryScope.ready || lens !== "operator" || !!targetQuery.error || !!workloadQuery.error || !!compatibilityQuery.error || compatibilityQuery.isFetching || !!attacking || !mutatesDefaultContext;
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -353,14 +363,14 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             <div className="space-y-1.5">
               <div className="text-[11px] text-muted-foreground">2 · meaningful attacks for this workload:</div>
               <div className="flex flex-wrap items-center gap-2">
-                {attacksFor(curType.type, armed).map((a) => a.runnable ? (
-                  <Button key={a.id} size="sm" variant="outline" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!attacking || !mutatesDefaultContext} onClick={() => fireAttack(a.id as any)} className="gap-1.5" title={a.label}>
+                {compatibleAttacks.map((a) => a.armed ? (
+                  <Button key={a.id} size="sm" variant="outline" disabled={attackControlsDisabled} onClick={() => fireAttack(a.id)} className="gap-1.5" title={a.description}>
                     {attacking === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldOff className="h-3.5 w-3.5 text-danger" />}
-                    {a.label.split(" (")[0]} <span className="text-muted-foreground">→ {a.actuator}</span>
+                    {a.name} <span className="text-muted-foreground">→ {a.expectedActuator}</span>
                   </Button>
                 ) : (
-                  <span key={a.id} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title={a.note}>
-                    <Lock className="h-3 w-3" /> {a.label} <span className="font-mono">→ {a.actuator}</span>
+                  <span key={a.id} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title={a.reason}>
+                    <Lock className="h-3 w-3" /> {a.name} <span className="font-mono">→ {a.expectedActuator}</span>
                   </span>
                 ))}
                 {curType.type === "model-server" ? (
@@ -368,7 +378,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                     <Lock className="h-3 w-3" /> Reset unavailable
                   </span>
                 ) : (
-                  <Button size="sm" variant="ghost" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!attacking || !mutatesDefaultContext} onClick={() => fireAttack("clear")} className="gap-1.5 text-muted-foreground">
+                  <Button size="sm" variant="ghost" disabled={attackControlsDisabled || !compatibleAttacks.some((a) => a.id === "foothold" && a.armed)} onClick={() => fireAttack("clear")} className="gap-1.5 text-muted-foreground">
                     {attacking === "clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Clear attack
                   </Button>
                 )}
@@ -376,12 +386,12 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
               {/* Compare all three defenders on THIS app with THIS attack — the result streams into
                   the Availability: 3-way tab while it runs. Kept as an explicit action because it
                   puts the policy in dryRun and rotates pods for ~7 minutes. */}
-              {armed && attacksFor(curType.type, armed).some((a) => a.runnable) && (
+              {armed && comparisonAttacksFor(curType.type, armed).some((a) => a.runnable) && (
                 <div className="rounded-md border border-border/60 bg-elevated/30 p-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <BarChart3 className="h-3.5 w-3.5 text-primary" />
                     <span className="text-[11px] font-medium text-foreground">Compare availability: no defense vs blind rotator vs Phorvex</span>
-                    {attacksFor(curType.type, armed).filter((a) => a.runnable).map((a) => (
+                    {comparisonAttacksFor(curType.type, armed).filter((a) => a.runnable).map((a) => (
                       <Button key={"cmp-" + a.id} size="sm" variant="outline" disabled={!queryScope.ready || !!targetQuery.error || !!workloadQuery.error || !!comparing || !mutatesDefaultContext}
                         onClick={() => runComparison(a.id)} className="gap-1.5">
                         {comparing === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BarChart3 className="h-3.5 w-3.5" />}
@@ -398,9 +408,9 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                   {compareMsg && <div className="mt-1.5 text-[11px] text-primary">{compareMsg}</div>}
                 </div>
               )}
-              {attacksFor(curType.type, armed).every((a) => !a.runnable) && (
-                <div className="text-[10px] text-warning">This workload’s namespace isn’t armed for live attacks yet — the row shows the attack→actuator mapping honestly. The armed workloads (vllm · voice · nats) run reactiveOnly, so they stay calm until you fire a foothold and Phorvex reacts attributably.</div>
-              )}
+              {compatibilityQuery.error && <div role="alert" className="text-[11px] text-warning">Attack compatibility could not be refreshed. <button onClick={() => void compatibilityQuery.refetch()} className="underline">Retry</button></div>}
+              {compatibilityQuery.isFetching && !compatibilityQuery.data && <div className="text-[11px] text-muted-foreground">Loading compatible actions…</div>}
+              {!compatibilityQuery.isFetching && !compatibilityQuery.error && compatibleAttacks.length > 0 && compatibleAttacks.every((a) => !a.armed) && <div className="text-[11px] text-warning">This app is not armed for live actions.</div>}
             </div>
           )}
           {attackMsg && <div className="text-[11px] text-primary">{attackMsg}</div>}

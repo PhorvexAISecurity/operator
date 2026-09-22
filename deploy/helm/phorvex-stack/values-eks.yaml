@@ -105,10 +105,10 @@ phorvex:
         tag: "0.4.150" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
-      # Recovery ceiling for the existing 10 GiB console-state PVC. This is deliberately
-      # finite: the append-only archive still pauses before consuming the filesystem reserve,
-      # and a retention/archive decision is required before this ceiling is raised again.
+      # Milad authorized a 30-day retention window on 2026-09-22.
+      # Compress retained records; keep the existing finite ceiling and filesystem reserve.
       state:
+        historyRetentionDays: 30
         historyArchiveMaxBytes: "6442450944"
         historyMinFreeBytes: "536870912"
         persistence:
