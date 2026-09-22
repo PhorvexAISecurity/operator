@@ -132,6 +132,38 @@ type TargetConfig struct {
 	// manager and its existing authenticated audit API. It is a complete runtime
 	// pin; nil keeps the arm unavailable and causes no manager/CRD mutation.
 	InstalledManagerFixture *InstalledManagerFixtureConfig `json:"installedManagerFixture,omitempty"`
+
+	// GPUFunctionalFixture binds one benign functional trial to an externally
+	// provisioned, supervisor-owned ordinary-GPU vLLM fixture. The harness never
+	// creates or deletes GPU capacity and never accepts an arbitrary serving URL.
+	GPUFunctionalFixture *GPUFunctionalFixtureConfig `json:"gpuFunctionalFixture,omitempty"`
+}
+
+type GPUFunctionalFixtureConfig struct {
+	Operation          string `json:"operation"`
+	Mode               string `json:"mode"`
+	NamespaceUID       string `json:"namespaceUID"`
+	RunLabel           string `json:"runLabel"`
+	NodeName           string `json:"nodeName"`
+	NodeUID            string `json:"nodeUID"`
+	PodName            string `json:"podName"`
+	PodUID             string `json:"podUID"`
+	OwnerKind          string `json:"ownerKind"`
+	OwnerName          string `json:"ownerName"`
+	OwnerUID           string `json:"ownerUID"`
+	ServiceName        string `json:"serviceName"`
+	ServiceUID         string `json:"serviceUID"`
+	ContainerName      string `json:"containerName"`
+	Image              string `json:"image"`
+	ImageID            string `json:"imageID"`
+	StartedAt          string `json:"startedAt"`
+	RestartCount       int32  `json:"restartCount"`
+	Port               int32  `json:"port"`
+	Model              string `json:"model"`
+	ModelDigest        string `json:"modelDigest"`
+	EngineSourceSHA256 string `json:"engineSourceSHA256"`
+	ProxySourceGitSHA  string `json:"proxySourceGitSHA"`
+	BearerTokenFile    string `json:"bearerTokenFile"`
 }
 
 type NATSJetStreamLocalPV struct {
@@ -334,6 +366,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateNATSJetStreamFixture(c); err != nil {
 			return err
 		}
+		if err := validateGPUFunctionalFixture(c); err != nil {
+			return err
+		}
 		return validateInstalledManagerFixture(c)
 	}
 	if strings.TrimSpace(c.BenignCheckpointStorageClass) == "" {
@@ -357,7 +392,82 @@ func (c TargetConfig) Validate() error {
 	if err := validateNATSJetStreamFixture(c); err != nil {
 		return err
 	}
+	if err := validateGPUFunctionalFixture(c); err != nil {
+		return err
+	}
 	return validateInstalledManagerFixture(c)
+}
+
+func validateGPUFunctionalFixture(c TargetConfig) error {
+	fixture := c.GPUFunctionalFixture
+	if fixture == nil {
+		return nil
+	}
+	wantScenario := map[string]string{
+		"prefix-cache-reset": "c2-vllm-prefix-cache-reset",
+		"request-drain":      "c2-vllm-request-drain",
+	}[fixture.Operation]
+	if wantScenario == "" {
+		return errors.New("config: gpuFunctionalFixture operation must be prefix-cache-reset or request-drain")
+	}
+	if fixture.Mode != "no-action" && fixture.Mode != "direct" {
+		return errors.New("config: gpuFunctionalFixture mode must be no-action or direct")
+	}
+	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != wantScenario || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" {
+		return fmt.Errorf("config: gpuFunctionalFixture requires one %s trial with defenderFilter=[d-nomtd]", wantScenario)
+	}
+	for label, value := range map[string]string{
+		"nodeName": fixture.NodeName, "podName": fixture.PodName, "ownerName": fixture.OwnerName,
+		"serviceName": fixture.ServiceName, "containerName": fixture.ContainerName,
+	} {
+		if value == "" || len(validation.IsDNS1123Subdomain(value)) != 0 {
+			return fmt.Errorf("config: gpuFunctionalFixture %s must be an exact DNS subdomain", label)
+		}
+	}
+	for label, value := range map[string]string{
+		"namespaceUID": fixture.NamespaceUID, "nodeUID": fixture.NodeUID, "podUID": fixture.PodUID,
+		"ownerUID": fixture.OwnerUID, "serviceUID": fixture.ServiceUID,
+	} {
+		if !kubernetesUIDPattern.MatchString(value) {
+			return fmt.Errorf("config: gpuFunctionalFixture %s must be an exact lowercase Kubernetes UUID", label)
+		}
+	}
+	if fixture.OwnerKind != "Deployment" && fixture.OwnerKind != "ReplicaSet" && fixture.OwnerKind != "StatefulSet" {
+		return errors.New("config: gpuFunctionalFixture ownerKind must be Deployment, ReplicaSet or StatefulSet")
+	}
+	if fixture.RunLabel == "" || len(fixture.RunLabel) > 63 || len(validation.IsValidLabelValue(fixture.RunLabel)) != 0 {
+		return errors.New("config: gpuFunctionalFixture runLabel must be a nonempty label-safe value")
+	}
+	if fixture.Port != 8000 || fixture.Model != "facebook/opt-125m" {
+		return errors.New("config: gpuFunctionalFixture requires port 8000 and model facebook/opt-125m")
+	}
+	if fixture.RestartCount < 0 {
+		return errors.New("config: gpuFunctionalFixture restartCount must be nonnegative")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, fixture.StartedAt); err != nil {
+		return errors.New("config: gpuFunctionalFixture startedAt must be exact RFC3339Nano")
+	}
+	imageRef := regexp.MustCompile(`^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$`)
+	imageID := regexp.MustCompile(`^((docker-pullable://)?[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}|containerd://sha256:[0-9a-f]{64})$`)
+	if !imageRef.MatchString(fixture.Image) || !imageID.MatchString(fixture.ImageID) {
+		return errors.New("config: gpuFunctionalFixture image and imageID must be digest-bound")
+	}
+	hex64 := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	hex40 := regexp.MustCompile(`^[0-9a-f]{40}$`)
+	canonicalDigest := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	if !canonicalDigest.MatchString(fixture.ModelDigest) || !hex64.MatchString(fixture.EngineSourceSHA256) {
+		return errors.New("config: gpuFunctionalFixture modelDigest must be a canonical sha256 digest and engineSourceSHA256 must be lowercase SHA-256")
+	}
+	if fixture.Operation == "request-drain" && !hex40.MatchString(fixture.ProxySourceGitSHA) {
+		return errors.New("config: request-drain gpuFunctionalFixture proxySourceGitSHA must be a lowercase 40-character Git SHA")
+	}
+	if fixture.Operation == "prefix-cache-reset" && fixture.ProxySourceGitSHA != "" && !hex40.MatchString(fixture.ProxySourceGitSHA) {
+		return errors.New("config: prefix-cache-reset gpuFunctionalFixture proxySourceGitSHA must be empty or a lowercase 40-character Git SHA")
+	}
+	if !filepath.IsAbs(fixture.BearerTokenFile) || filepath.Clean(fixture.BearerTokenFile) != fixture.BearerTokenFile {
+		return errors.New("config: gpuFunctionalFixture bearerTokenFile must be a clean absolute path")
+	}
+	return nil
 }
 
 func validateNATSJetStreamFixture(c TargetConfig) error {
