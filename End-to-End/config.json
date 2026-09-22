@@ -193,6 +193,17 @@
         "feasibility law "
       ]
     },
+    "_reason_fullmatch_patterns": "Anchored producer contracts for parameterized law reasons and reviewed capability gates. These stay separate from broad prefixes so arbitrary text under a known family remains an F01 failure.",
+    "reason_fullmatch_patterns": {
+      "availability-floor": [
+        "pdb: observation unavailable: .+",
+        "pdb: overlapping budgets unsupported: matches=(?:[2-9]|[1-9][0-9]+)",
+        "pdb: [1-9][0-9]* matching budget\\(s\\), disruptionsAllowed=(?:0|-[1-9][0-9]*)"
+      ],
+      "resource-capacity": [
+        "resource-capacity: target has no authoritative Service/EndpointSlice membership"
+      ]
+    },
     "phoenix_actions": [
       "rotate",
       "quarantine"

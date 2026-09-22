@@ -697,9 +697,11 @@ def b10(ctx):
 
 @check("F01", "feasibility", "every feasibility rejection names a law or capability gate",
        "\"infeasible\" without a reason cannot be audited", "major",
-       inputs=["record.feasible", "record.infeasibleWhy", "invariants.law_reason_prefixes"])
+       inputs=["record.feasible", "record.infeasibleWhy", "invariants.law_reason_prefixes",
+               "invariants.reason_fullmatch_patterns"])
 def f01(ctx):
     prefixes = ctx.inv["law_reason_prefixes"]
+    fullmatches = ctx.inv.get("reason_fullmatch_patterns", {})
     bad, unknown, matched, n = [], [], {}, 0
     for r in ctx.records:
         if r.get("feasible") is not False:
@@ -710,6 +712,9 @@ def f01(ctx):
             bad.append(f"{r.get('pod')} action={r.get('action')}")
             continue
         law = next((l for l, pres in prefixes.items() if any(why.startswith(p) or p in why for p in pres)), None)
+        if law is None:
+            law = next((l for l, patterns in fullmatches.items()
+                        if any(re.fullmatch(pattern, why) for pattern in patterns)), None)
         # authz.Checker emits an explicit SSAR deny, not a feasibility-law verdict.
         # Match the complete resource/verb/namespace tuple; arbitrary "denied" text
         # and SSAR transport errors must not count as an explained rejection.

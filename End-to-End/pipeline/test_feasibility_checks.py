@@ -29,6 +29,36 @@ class FeasibilityReasonTests(unittest.TestCase):
     def test_existing_law_still_passes(self):
         self.assertEqual(self.check_reason('availability: floor')['status'], 'pass')
 
+    def test_deployed_pdb_and_resource_capacity_refusals(self):
+        expected = {
+            'pdb: 1 matching budget(s), disruptionsAllowed=0': 'availability-floor',
+            'pdb: 2 matching budget(s), disruptionsAllowed=-1': 'availability-floor',
+            'pdb: observation unavailable: API discovery timed out': 'availability-floor',
+            'pdb: overlapping budgets unsupported: matches=2': 'availability-floor',
+            'pdb: overlapping budgets unsupported: matches=10': 'availability-floor',
+            ('resource-capacity: target has no authoritative '
+             'Service/EndpointSlice membership'): 'resource-capacity',
+        }
+        for why, gate in expected.items():
+            with self.subTest(why=why):
+                got = self.check_reason(why)
+                self.assertEqual(got['status'], 'pass', got)
+                self.assertEqual(got['evidence'], [f'{gate}: 1'])
+
+    def test_malformed_pdb_and_unreviewed_capacity_reasons_still_fail(self):
+        reasons = [
+            'pdb: 1 matching budget(s), disruptionsAllowed=1',
+            'pdb: 0 matching budget(s), disruptionsAllowed=0',
+            'pdb: observation unavailable: ',
+            'pdb: overlapping budgets unsupported: matches=1',
+            ('prefix resource-capacity: target has no authoritative '
+             'Service/EndpointSlice membership'),
+            'resource-capacity: unreviewed capacity explanation',
+        ]
+        for why in reasons:
+            with self.subTest(why=why):
+                self.assertEqual(self.check_reason(why)['status'], 'fail')
+
     def test_proactive_cadence_from_failed_live_run(self):
         # Run 34249621578, artifact 10065634085: the deployed 0.4.97
         # correctly vetoed hygiene motion, but F01 did not know the law.
@@ -66,3 +96,9 @@ class FeasibilityReasonTests(unittest.TestCase):
             for prefix in prefixes[name]:
                 self.assertTrue(isinstance(prefix, str) and prefix.strip(), name)
                 self.assertEqual(self.check_reason(prefix + ' fixture')['status'], 'pass')
+
+        for gate, patterns in inv['reason_fullmatch_patterns'].items():
+            self.assertTrue(patterns, f'{gate}: missing reviewed full-match pattern')
+            for pattern in patterns:
+                self.assertTrue(isinstance(pattern, str) and pattern.strip(), gate)
+                re.compile(pattern)
