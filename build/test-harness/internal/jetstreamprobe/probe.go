@@ -787,7 +787,7 @@ func validateQuorumObservation(receipt QuorumObservationReceipt, message Message
 	publishFinish, finishErr := time.Parse(time.RFC3339Nano, receipt.Publish.FinishedAtUTC)
 	pingStart, pingStartErr := time.Parse(time.RFC3339Nano, receipt.Ping.StartedAtUTC)
 	pingFinish, pingFinishErr := time.Parse(time.RFC3339Nano, receipt.Ping.FinishedAtUTC)
-	if startErr != nil || finishErr != nil || pingStartErr != nil || pingFinishErr != nil || publishFinish.Before(publishStart) || pingFinish.Before(pingStart) {
+	if startErr != nil || finishErr != nil || pingStartErr != nil || pingFinishErr != nil || publishFinish.Before(publishStart) || pingStart.Before(publishFinish) || pingFinish.Before(pingStart) {
 		return errors.New("quorum-loss observation timestamps are invalid")
 	}
 	if receipt.Publish.Ack != nil && (receipt.Publish.Ack.Stream == "" || receipt.Publish.Ack.Sequence == 0 || receipt.Publish.Ack.MessageID != message.ID || receipt.Publish.Ack.PayloadHash != hash(message.Payload)) {
@@ -804,7 +804,7 @@ func canFinishWithinDuplicateWindow(now, attemptStarted time.Time, window, recon
 }
 
 func validateQuorumPauseBoundary(receipt QuorumPauseReceipt, baseline ReplicationReceipt) error {
-	if receipt.ConnectedMember == "" || receipt.MaximumPauseNanos <= 0 || receipt.MaximumPauseNanos > int64(10*time.Second) || receipt.ObservedPauseNanos <= 0 || receipt.ObservedPauseNanos > receipt.MaximumPauseNanos+int64(2*time.Second) || receipt.ObservationCalls != 1 || len(receipt.Members) != 2 {
+	if receipt.ConnectedMember == "" || receipt.MaximumPauseNanos <= 0 || receipt.MaximumPauseNanos > int64(10*time.Second) || receipt.ObservedPauseNanos <= 0 || receipt.ObservedPauseNanos > receipt.MaximumPauseNanos || receipt.ObservationCalls != 1 || len(receipt.Members) != 2 {
 		return errors.New("quorum pause timing, membership, or observation count differs")
 	}
 	if !clusterHasMember(baseline.Stream, receipt.ConnectedMember) || !sameClusterMembers(baseline.Stream, baseline.Consumer) {

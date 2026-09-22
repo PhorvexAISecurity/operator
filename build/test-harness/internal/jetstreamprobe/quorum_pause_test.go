@@ -261,7 +261,23 @@ func TestDuplicateWindowUsesEarliestAttemptAndReservesReconcileTimeout(t *testin
 }
 
 func TestQuorumObservationCancellationRemainsUnknown(t *testing.T) {
-	if got := classifyObservationError(context.Canceled); got != "canceled-unknown" {
-		t.Fatalf("cancellation class=%q", got)
+	srv := startServer(t)
+	probe, err := Open(t.Context(), testConfig(srv.ClientURL()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(probe.Close)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	receipt := probe.publishAttempt(ctx, Message{ID: "canceled-x", Payload: []byte("canceled-payload")})
+	if receipt.AttemptCount != 1 || receipt.Acknowledged || receipt.Ack != nil || receipt.ErrorClass != "canceled-unknown" || receipt.StartedAtUTC == "" || receipt.FinishedAtUTC == "" {
+		t.Fatalf("canceled actual-client publication receipt=%+v", receipt)
+	}
+	state, err := probe.State(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Messages != 0 {
+		t.Fatalf("pre-canceled actual-client publication changed stream state: %+v", state)
 	}
 }
