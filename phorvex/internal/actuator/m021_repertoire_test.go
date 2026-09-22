@@ -138,11 +138,14 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 		switch configured := act.(type) {
 		case *NativeActuator:
 			configured.SetServingSecurity(legacyServingSecurityForTest(t))
+			configured.SetBoundaryReader(fakeC())
+			configured.JournalNamespace = "operator"
 		case *HybridActuator:
 			configured.SetServingSecurity(legacyServingSecurityForTest(t))
+			configured.ConfigureNativeJournal(fakeC(), "operator")
 		}
 		for _, e := range Repertoire(backend) {
-			ok, why := act.SupportsAction(t.Context(), e.Action, Target{Namespace: "ns", Pod: "p"})
+			ok, why := act.SupportsAction(t.Context(), e.Action, Target{Namespace: "ns", Pod: "p", UID: "target-uid"})
 			// mig-rebind on a native route has a runtime prerequisite the static table
 			// records separately; everywhere else acceptance and support must agree.
 			if e.Prerequisite != "" && !ok {

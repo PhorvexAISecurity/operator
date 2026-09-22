@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,11 +81,27 @@ checks:
     inputs:
     - phorvex/internal/console/vllm_outcome_test.go
     inputs_sha256: ea5ab88c9b789f2d4c38e3c9b76a25c691a8e0a45c4f8b06a8060c5a9b252e24
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 98f49a2f479a726edacc3435eb1b6732281adffefc69a0c1247fb337881a2a74
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:07:13+00:00'
+    baseline_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 22749229686412ac575f839f4f345d5998742efc8dbedab375d8df7078545a1c
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:07:13+00:00'
+    incident_sha256: 98f49a2f479a726edacc3435eb1b6732281adffefc69a0c1247fb337881a2a74
 fix_id: POST25-VLLM-CONSOLE-OUTCOMES
 issues: []
 title: Report truthful vLLM console stimulus and effect outcomes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -130,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -146,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-22T16:01:51+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T16:07:18+00:00'
 follow_up_to: RPT-20260922-143900-console-vllm-outcomes
 configuration_history:
 - at: '2026-09-22T15:35:57+00:00'
@@ -214,13 +230,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T16:07:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T16:07:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-VLLM-CONSOLE-OUTCOMES:9:submit
-  from: console-worker
+  id: POST25-VLLM-CONSOLE-OUTCOMES:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 11
 check_history:
 - check: l1
   result: PASS
