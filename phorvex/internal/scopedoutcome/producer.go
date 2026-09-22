@@ -37,11 +37,11 @@ const (
 )
 
 type SessionEndpoint struct {
-	URL                 string
-	SessionID           string
-	Challenge           string
-	TargetUID           string
-	WorkloadScopeSHA256 string
+	URL                 string `json:"url"`
+	SessionID           string `json:"sessionID"`
+	Challenge           string `json:"challenge"`
+	TargetUID           string `json:"targetUID"`
+	WorkloadScopeSHA256 string `json:"workloadScopeSHA256"`
 }
 
 type SessionResponse struct {
@@ -54,13 +54,13 @@ type SessionResponse struct {
 }
 
 type PrepareConfig struct {
-	Policy                        model.PolicyEpoch
-	Workload                      model.PersistenceWorkloadScope
-	TargetUID                     string
-	TargetName                    string
-	TargetTerminationGraceSeconds int64
-	Old                           SessionEndpoint
-	Replacement                   SessionEndpoint
+	Policy                        model.PolicyEpoch              `json:"policy"`
+	Workload                      model.PersistenceWorkloadScope `json:"workload"`
+	TargetUID                     string                         `json:"targetUID"`
+	TargetName                    string                         `json:"targetName"`
+	TargetTerminationGraceSeconds int64                          `json:"targetTerminationGraceSeconds"`
+	Old                           SessionEndpoint                `json:"old"`
+	Replacement                   SessionEndpoint                `json:"replacement"`
 }
 
 type EvidenceBundle struct {

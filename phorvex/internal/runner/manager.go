@@ -3144,7 +3144,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		if err == nil && res.Emitted && !contradictoryDisposition && disposition == actuator.NoEffectUnknown &&
 			res.MutationKind == "forward-only" && res.RollbackRef == "" && len(res.ObjectsTouched) == 1 &&
 			res.ObjectsTouched[0] == "Pod/"+request.Namespace+"/"+request.Pod && decisions[i].Action == model.ActionRotate &&
-			m.Actuator.Name() == "native" && m.ScopedOutcomeProducer != nil {
+			actuatorUsesNativeRotate(m.Actuator) && m.ScopedOutcomeProducer != nil {
 			// The producer hook only binds a previously authenticated synthetic
 			// session. It queues work without network or durable I/O on this tick.
 			m.ScopedOutcomeProducer.RecordNativeRotate(pol, v, request, res, time.Now())

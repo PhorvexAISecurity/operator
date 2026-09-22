@@ -8,11 +8,19 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 type m106RunnerAuthority struct {
@@ -130,5 +138,59 @@ func TestPost25M106ActualNativeDispatchFeedsOnlyNonblockingProducerHook(t *testi
 	}
 	if producer.calls != 1 || producer.request.TargetUID != "old-uid" || producer.result.Handler != string(model.ActionRotate) {
 		t.Fatalf("producer did not receive exact native request/receipt: calls=%d request=%+v result=%+v", producer.calls, producer.request, producer.result)
+	}
+}
+
+func TestPost25M106ActualHybridNativeRotateFeedsExactReceipt(t *testing.T) {
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, policyv1.AddToScheme, v1alpha1.AddToScheme} {
+		if err := add(scheme); err != nil {
+			t.Fatal(err)
+		}
+	}
+	controller := true
+	replicas := int32(2)
+	grace := int64(30)
+	owner := &corev1.ReplicationController{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "owner", UID: "owner-uid", ResourceVersion: "3"},
+		Spec:       corev1.ReplicationControllerSpec{Replicas: &replicas, Selector: map[string]string{"app": "fixture"}},
+		Status:     corev1.ReplicationControllerStatus{Replicas: replicas},
+	}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Namespace: "ns", Name: "old", UID: "old-uid", ResourceVersion: "7", Labels: map[string]string{"app": "fixture"},
+		OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ReplicationController", Name: owner.Name, UID: owner.UID, Controller: &controller}},
+	}, Spec: corev1.PodSpec{TerminationGracePeriodSeconds: &grace}}
+	policyObject := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid", Generation: 1}, Spec: v1alpha1.PhorvexPolicySpec{
+		Mode: v1alpha1.ModeActive, Tenant: "tenant", Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "fixture"}},
+		Budget: v1alpha1.BudgetSpec{MaxGracePeriodSeconds: &grace}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate}},
+	}}
+	evictions := 0
+	cluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns", UID: "ns-uid"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator", UID: "operator-uid"}}, owner, pod, policyObject,
+	).WithInterceptorFuncs(interceptor.Funcs{SubResourceCreate: func(ctx context.Context, inner client.Client, name string, obj client.Object, sub client.Object, _ ...client.SubResourceCreateOption) error {
+		eviction, ok := sub.(*policyv1.Eviction)
+		if name != "eviction" || !ok || eviction.DeleteOptions == nil {
+			return context.Canceled
+		}
+		evictions++
+		return inner.Delete(ctx, obj, &client.DeleteOptions{GracePeriodSeconds: eviction.DeleteOptions.GracePeriodSeconds, Preconditions: eviction.DeleteOptions.Preconditions})
+	}}).Build()
+	hybrid := actuator.NewHybridActuator(cluster)
+	hybrid.ConfigureNativeJournal(cluster, "operator")
+	producer := &m106RunnerProducer{}
+	manager := &Manager{Actuator: hybrid, ScopedOutcomeProducer: producer, BoundaryReader: cluster, Log: logr.Discard()}
+	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		MaxGracePeriodSeconds: grace, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	entry := &policyEntry{namespace: "ns", tenant: "tenant", key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", generation: 1,
+		spec: policyObject.Spec}
+	views := map[string]*model.WorkloadView{"ns/old": {Pod: model.Pod{Namespace: "ns", Name: "old", UID: "old-uid", Ready: true}}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "old", Trace: &model.DecisionTraceV2{}}}
+	if n, _ := manager.actuatePrepared(t.Context(), entry, policy, decisions, views); n != 1 || evictions != 1 || !decisions[0].Actuated {
+		t.Fatalf("hybrid native rotate did not complete: n=%d evictions=%d decision=%+v", n, evictions, decisions[0])
+	}
+	if producer.calls != 1 || producer.result.Actuator != "native" || producer.result.Handler != string(model.ActionRotate) ||
+		producer.request.TargetUID != "old-uid" || len(producer.result.ObjectsTouched) != 1 || producer.result.ObjectsTouched[0] != "Pod/ns/old" {
+		t.Fatalf("hybrid receipt did not reach scoped producer exactly: calls=%d request=%+v result=%+v", producer.calls, producer.request, producer.result)
 	}
 }
