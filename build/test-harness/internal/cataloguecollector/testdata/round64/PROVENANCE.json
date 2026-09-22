@@ -1,0 +1,11 @@
+{
+  "schema": "phorvex.catalogue-test-fixture-provenance.v1",
+  "source": "post25 round-64 installed-manager-session no-action metrics.jsonl",
+  "originalSHA256": "a450313504d92a907ebdd78de591a8a6f8c46cb2e35922284c686b02ffd5da73",
+  "sanitizedSHA256": "6891ac8f121924cc87cd3bd3686b137579b03065f6f745571362f04f2a920ae5",
+  "sanitization": [
+    "rawLogPath replaced with a repository-relative path"
+  ],
+  "reviewReference": "workflow review/installed-manager-catalogue/ROUND64-LEAD-REVIEW/RESULT.json",
+  "claimLimits": "Copied functional evidence fixture; no credentials, live access configuration, security score, or campaign PASS."
+}

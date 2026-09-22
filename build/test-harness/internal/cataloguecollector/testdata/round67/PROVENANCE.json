@@ -1,0 +1,10 @@
+{
+  "schema": "phorvex.catalogue-test-fixture-provenance.v1",
+  "source": "post25 round-67 installed-manager-session blind-timer metrics.jsonl",
+  "originalSHA256": "49224f3a1c9156d68de39441c0f7354416e4f74c4aa8d3b056b0324e8be3df78",
+  "sanitizedSHA256": "400844016f0566a465a67e4834ec934cf8ee90d8f8c2ac7f902597d57b8fb6e0",
+  "sanitization": [
+    "rawLogPath replaced with a repository-relative path"
+  ],
+  "claimLimits": "Anchor is INVALID; requested timer row is a supplementary functional observation and not a paired comparison PASS."
+}
