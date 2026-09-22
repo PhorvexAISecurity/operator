@@ -3,6 +3,14 @@
   "purpose": "Independent actual-producer wire-shape corpus for parser tests; historical observations only, cannot fabricate a new live pass",
   "files": [
     {
+      "file": "cold-metrics.txt",
+      "source": "catalogue/gpu-functional-live-prep-v4/output/prefix-no-action/run/harness/metrics.jsonl receiptJSON.baseline.rawBody",
+      "source_sha256": "54de5b2082e4f7b02aecb554ce86bf91e3947c860c8e265e5b065f4b2fcf92fb",
+      "body_sha256": "f3b9b115fe8cdf45c91bf8d21b3720b67434cbc7e4194e2da1fc38ec02921765",
+      "bytes": 3750,
+      "condition": "fresh vLLM exposition before its first inference; request_success_total is not initialized"
+    },
+    {
       "file": "prefix-completion.json",
       "source": "backend/gpu-reset-live-v9/089-archive-multiprocess-005-prefix-first.body.json",
       "source_sha256": "8bea2e5ef03859cb15c3681a4d22f1b421cea0a0e23a9869a56c85f715895f94",

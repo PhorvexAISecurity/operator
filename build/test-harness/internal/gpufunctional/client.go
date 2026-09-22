@@ -25,6 +25,7 @@ import (
 const (
 	MaxResponseBytes = 1 << 20
 	modelName        = "facebook/opt-125m"
+	primerPrompt     = "A short synthetic GPU metrics primer."
 )
 
 var metricNames = []string{
@@ -78,9 +79,10 @@ type Inference struct {
 }
 
 type Metrics struct {
-	Values      map[string]float64 `json:"values"`
-	RawBody     string             `json:"rawBody"`
-	Observation Observation        `json:"observation"`
+	Values                      map[string]float64 `json:"values"`
+	RequestSuccessMetricPresent bool               `json:"requestSuccessMetricPresent"`
+	RawBody                     string             `json:"rawBody"`
+	Observation                 Observation        `json:"observation"`
 }
 
 type Reset struct {
@@ -348,6 +350,14 @@ func (c *Client) Reset(ctx context.Context) (Reset, error) {
 }
 
 func (c *Client) Metrics(ctx context.Context) (Metrics, error) {
+	return c.metrics(ctx, true)
+}
+
+func (c *Client) coldMetrics(ctx context.Context) (Metrics, error) {
+	return c.metrics(ctx, false)
+}
+
+func (c *Client) metrics(ctx context.Context, requireRequestSuccess bool) (Metrics, error) {
 	obs, raw, err := c.request(ctx, http.MethodGet, "/metrics", nil, false)
 	if err != nil {
 		return Metrics{Observation: obs}, err
@@ -358,11 +368,16 @@ func (c *Client) Metrics(ctx context.Context) (Metrics, error) {
 	if len(raw) > 256<<10 {
 		return Metrics{Observation: obs}, errors.New("metrics response exceeds 256KiB evidence bound")
 	}
-	values, err := parseMetrics(raw)
-	return Metrics{Values: values, RawBody: string(raw), Observation: obs}, err
+	values, requestSuccessPresent, err := parseMetricsMode(raw, requireRequestSuccess)
+	return Metrics{Values: values, RequestSuccessMetricPresent: requestSuccessPresent, RawBody: string(raw), Observation: obs}, err
 }
 
 func parseMetrics(raw []byte) (map[string]float64, error) {
+	values, _, err := parseMetricsMode(raw, true)
+	return values, err
+}
+
+func parseMetricsMode(raw []byte, requireRequestSuccess bool) (map[string]float64, bool, error) {
 	text := string(raw)
 	values := map[string]float64{}
 	for _, name := range metricNames {
@@ -370,37 +385,43 @@ func parseMetrics(raw []byte) (map[string]float64, error) {
 		matches := pattern.FindAllStringSubmatch(text, -1)
 		labels, labelErr := parseMetricLabels(singleMetricLabels(matches))
 		if len(matches) != 1 || labelErr != nil || len(labels) != 1 || labels["model_name"] != modelName {
-			return nil, fmt.Errorf("metric %s did not have one exact model series", name)
+			return nil, false, fmt.Errorf("metric %s did not have one exact model series", name)
 		}
 		value, err := strconv.ParseFloat(matches[0][2], 64)
 		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-			return nil, fmt.Errorf("metric %s is non-finite", name)
+			return nil, false, fmt.Errorf("metric %s is non-finite", name)
 		}
 		values[name] = value
 	}
 	completedPattern := regexp.MustCompile(`(?m)^vllm:request_success_total(\{[^\n]*\})\s+([-+0-9.eE]+)$`)
 	matches := completedPattern.FindAllStringSubmatch(text, -1)
 	if len(matches) == 0 {
-		return nil, errors.New("request success metric is absent")
+		if regexp.MustCompile(`(?m)^vllm:request_success_total(?:\{|\s)`).MatchString(text) {
+			return nil, false, errors.New("request success metric is malformed")
+		}
+		if requireRequestSuccess {
+			return nil, false, errors.New("request success metric is absent")
+		}
+		return values, false, nil
 	}
 	seen := map[string]bool{}
 	for _, match := range matches {
 		labels, err := parseMetricLabels(match[1])
 		if err != nil || len(labels) != 2 || labels["model_name"] != modelName || labels["finished_reason"] == "" {
-			return nil, errors.New("request success metric has unexpected labels")
+			return nil, false, errors.New("request success metric has unexpected labels")
 		}
 		finishReason := labels["finished_reason"]
 		if seen[finishReason] {
-			return nil, errors.New("duplicate request success finish reason")
+			return nil, false, errors.New("duplicate request success finish reason")
 		}
 		seen[finishReason] = true
 		value, err := strconv.ParseFloat(match[2], 64)
 		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-			return nil, errors.New("request success metric is non-finite")
+			return nil, false, errors.New("request success metric is non-finite")
 		}
 		values["vllm:request_success_total"] += value
 	}
-	return values, nil
+	return values, true, nil
 }
 
 func singleMetricLabels(matches [][]string) string {
@@ -457,6 +478,8 @@ func (c *Client) waitMetrics(ctx context.Context, bound time.Duration, predicate
 type PrefixReceipt struct {
 	CapabilityObservation Observation  `json:"capabilityObservation"`
 	EngineBootID          string       `json:"engineBootID"`
+	Cold                  Metrics      `json:"cold"`
+	Primer                Inference    `json:"primer"`
 	Baseline              Metrics      `json:"baseline"`
 	First                 Inference    `json:"first"`
 	Second                Inference    `json:"second"`
@@ -489,7 +512,26 @@ func (c *Client) RunPrefix(ctx context.Context, direct bool) (PrefixReceipt, err
 	if cap.Admission != "OPEN" {
 		return receipt, errors.New("prefix fixture admission is not open")
 	}
-	receipt.Baseline, err = c.waitMetrics(ctx, 10*time.Second, idle)
+	receipt.Cold, err = c.coldMetrics(ctx)
+	if err != nil {
+		return receipt, err
+	}
+	if !idle(receipt.Cold.Values) {
+		return receipt, errors.New("prefix fixture was not idle before metrics primer")
+	}
+	coldPrompt := receipt.Cold.Values["vllm:prompt_tokens_total"]
+	coldCompleted := receipt.Cold.Values["vllm:request_success_total"]
+	receipt.Primer, err = c.Inference(ctx, primerPrompt, 1)
+	if err != nil {
+		return receipt, err
+	}
+	receipt.Baseline, err = c.waitMetrics(ctx, 15*time.Second, func(v map[string]float64) bool {
+		completedAdvanced := v["vllm:request_success_total"] >= 1
+		if receipt.Cold.RequestSuccessMetricPresent {
+			completedAdvanced = v["vllm:request_success_total"] >= coldCompleted+1
+		}
+		return idle(v) && v["vllm:prompt_tokens_total"] > coldPrompt && completedAdvanced
+	})
 	if err != nil {
 		return receipt, err
 	}

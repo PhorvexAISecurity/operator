@@ -62,9 +62,9 @@
       "id": "c2-vllm-prefix-cache-reset",
       "workloadBoundary": "ordinary-gpu-cache",
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
-      "measures": "Actual inference and prefix-cache metrics; direct idle reset, miss/repopulation and busy refusal.",
+      "measures": "Cold metrics and an explicit primer completion; the same two-request prefix population in both arms; direct idle reset, miss/repopulation and busy refusal.",
       "limits": "Logical reset only; no physical erasure, poisoning mitigation, cross-tenant isolation or installed selection claim.",
-      "sourceSHA256": "87f3c63fe12f6e60ad12a9c481a654224f6f4125240f31570b78ccf20b6a7560"
+      "sourceSHA256": "8f630dbe01d10d50c13ecc5196e97e2de9c4167cb7d0471daf36a5d7bf0666a7"
     },
     {
       "id": "c2-vllm-request-drain",
@@ -72,7 +72,7 @@
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
       "measures": "Actual engine admission, owned in-flight request dispositions, two fresh empty-queue observations and explicit reopen.",
       "limits": "Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
-      "sourceSHA256": "87f3c63fe12f6e60ad12a9c481a654224f6f4125240f31570b78ccf20b6a7560"
+      "sourceSHA256": "8f630dbe01d10d50c13ecc5196e97e2de9c4167cb7d0471daf36a5d7bf0666a7"
     }
   ],
   "profiles": [

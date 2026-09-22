@@ -53,8 +53,8 @@ type c2VLLMFunctional struct {
 
 func (s *c2VLLMFunctional) Metadata() core.ScenarioMeta {
 	name, mechanism, oracle := vllmPrefixScenario,
-		"real vLLM 0.7.3 OPT-125m prefix-cache protocol through an exact owned ordinary-GPU Pod port-forward",
-		"establishes real prefix reuse; direct mode requires idle reset acknowledgement, first post-reset miss, later repopulation, and correlated busy refusal"
+		"real vLLM 0.7.3 OPT-125m prefix-cache protocol through an exact owned ordinary-GPU Pod port-forward; one distinct synthetic primer initializes lazy metrics before both arms run the same two-request population sequence",
+		"retains the cold metric exposition and primer completion, then establishes real prefix reuse from the same measured request count in both arms; direct mode additionally requires idle reset acknowledgement, first post-reset miss, later repopulation, and correlated busy refusal"
 	if s.operation == "request-drain" {
 		name = vllmDrainScenario
 		mechanism = "real streaming vLLM 0.7.3 OPT-125m request plus operation-bound drain, exact dispositions, admission closure and explicit reopen"
