@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,11 +81,27 @@ checks:
     inputs:
     - phorvex/internal/console
     inputs_sha256: b41310b94e33decbb73c64b854f160c12a4abd9089909ec1f5a0509483386d88
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e62b73cc76d8f580f4579666851d15415cbb2e5c28cc79066a4c0e14912589f0
+    source_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+    at: '2026-09-22T17:07:13+00:00'
+    baseline_sha: f535f92ebc8dd1c4ab82c9b5594a4636e3f89960
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 87730f0878f594df2b65eb272704693dcc9366d99a9467c54f189813c2cbfc4b
+    source_sha: bc5d175a625f3c777dc6ebe3054fb8acad502d33
+    at: '2026-09-22T17:07:13+00:00'
+    incident_sha256: e62b73cc76d8f580f4579666851d15415cbb2e5c28cc79066a4c0e14912589f0
 fix_id: POST25-VLLM-REMAINING-OUTCOMES
 issues: []
 title: Check existing vLLM console producers and report bounded effects
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -131,7 +147,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -147,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-22T17:05:45+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T17:07:17+00:00'
 follow_up_to: RPT-20260922-143900-console-vllm-outcomes
 configuration_history:
 - at: '2026-09-22T16:19:22+00:00'
@@ -205,10 +221,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T17:07:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T17:07:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: POST25-VLLM-REMAINING-OUTCOMES:7:submit
-  from: console-worker
+  id: POST25-VLLM-REMAINING-OUTCOMES:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
