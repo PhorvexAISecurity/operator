@@ -196,3 +196,10 @@ intakes:
     state: FILED
     issue_id: M-183
     aliases: []
+  RPT-20260922-150000-serving-journal-gate:
+    directory: intake/RPT-20260922-150000-serving-journal-gate
+    kind: BUG
+    title: Unresolved protected serving operation remains selectable
+    state: DUPLICATE
+    issue_id: null
+    aliases: []
