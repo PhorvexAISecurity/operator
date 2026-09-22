@@ -128,3 +128,38 @@ func TestDefaultAndExplicitTimeoutExecUseSeparateWiring(t *testing.T) {
 		t.Fatalf("default/timed calls=%d/%d", defaultCalls, timedCalls)
 	}
 }
+
+func TestCreatedUIDAuthorityCannotBeReboundBeforeVerifiedRetirement(t *testing.T) {
+	env := newTestEnv("sandbox", "sandbox")
+	if err := env.RecordCreatedUID("pods", "victim", types.UID("uid-1")); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := env.CreatedUID("pods", "victim"); !ok || got != types.UID("uid-1") {
+		t.Fatalf("CreatedUID=%q,%v", got, ok)
+	}
+	if err := env.RecordCreatedUID("pods", "victim", types.UID("uid-2")); err == nil {
+		t.Fatal("rebound a live creation authority")
+	}
+	if err := env.ForgetCreatedUID("pods", "victim", types.UID("uid-2")); err == nil {
+		t.Fatal("retired creation authority with the wrong UID")
+	}
+	if err := env.ForgetCreatedUID("pods", "victim", types.UID("uid-1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.RecordCreatedUID("pods", "victim", types.UID("uid-2")); err != nil {
+		t.Fatalf("fresh identity after verified retirement: %v", err)
+	}
+}
+
+func TestRecordCreatedUIDRejectsMissingAuthority(t *testing.T) {
+	env := newTestEnv("sandbox", "sandbox")
+	for _, tc := range []struct {
+		resource string
+		name     string
+		uid      types.UID
+	}{{"", "p", "u"}, {"pods", "", "u"}, {"pods", "p", ""}} {
+		if err := env.RecordCreatedUID(tc.resource, tc.name, tc.uid); err == nil {
+			t.Fatalf("accepted missing authority: %+v", tc)
+		}
+	}
+}

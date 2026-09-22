@@ -344,41 +344,197 @@ var credObservationSleep = func(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// ensureSAWithRBAC creates a ServiceAccount + a (namespaced) Role granting
-// list/get on pods + a RoleBinding, all in the sandbox. It models the misconfigured
-// RBAC the cred-theft scenario exploits. Idempotent.
+// rbacRollbackTimeout bounds exact-absence verification after partial setup.
+var rbacRollbackTimeout = 10 * time.Second
+
+type createdRBACObject struct {
+	kind string
+	name string
+	uid  types.UID
+	del  func(context.Context, metav1.DeleteOptions) error
+	get  func(context.Context) (metav1.Object, error)
+}
+
+// ensureSAWithRBAC creates one fresh ServiceAccount, Role and RoleBinding. It
+// never adopts a same-name object. If a later create fails, every earlier object
+// is rolled back by its create-response UID; ambiguous creates are never replayed.
 func ensureSAWithRBAC(ctx context.Context, env *core.Env, saName string) error {
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return err
 	}
 	ns := env.Config.Namespace
+	var created []createdRBACObject
+	rollback := func(cause error) error {
+		var errs []error
+		errs = append(errs, cause)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rbacRollbackTimeout)
+		defer cancel()
+		for i := len(created) - 1; i >= 0; i-- {
+			obj := created[i]
+			current, err := env.NamespaceCurrent(cleanupCtx)
+			if err != nil || !current {
+				if err == nil {
+					err = fmt.Errorf("original namespace is absent")
+				}
+				errs = append(errs, fmt.Errorf("refusing rollback delete of %s %s UID %s without exact namespace identity: %w", obj.kind, obj.name, obj.uid, err))
+				continue
+			}
+			uid := obj.uid
+			if err := obj.del(cleanupCtx, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
+				errs = append(errs, fmt.Errorf("rollback %s %s UID %s: %w", obj.kind, obj.name, uid, err))
+				continue
+			}
+			if err := awaitCreatedObjectGone(cleanupCtx, env, obj); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if err := env.ForgetCreatedUID(obj.kind, obj.name, uid); err != nil {
+				errs = append(errs, fmt.Errorf("retire rollback authority for %s %s UID %s: %w", obj.kind, obj.name, uid, err))
+			}
+		}
+		return errors.Join(errs...)
+	}
+	fresh := func(kind, name string, get func() error) error {
+		current, err := env.NamespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace is absent")
+			}
+			return fmt.Errorf("refusing %s %s creation without exact namespace identity: %w", kind, name, err)
+		}
+		err = get()
+		if err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("check fresh %s %s: %w", kind, name, err)
+		}
+		if err == nil {
+			return fmt.Errorf("refusing to adopt existing %s %s", kind, name)
+		}
+		current, err = env.NamespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace is absent")
+			}
+			return fmt.Errorf("refusing %s %s creation after namespace identity changed: %w", kind, name, err)
+		}
+		return nil
+	}
+	bind := func(kind, name string, uid types.UID, del func(context.Context, metav1.DeleteOptions) error, get func(context.Context) (metav1.Object, error)) error {
+		if uid == "" {
+			return fmt.Errorf("create %s %s returned no authoritative UID", kind, name)
+		}
+		created = append(created, createdRBACObject{kind: kind, name: name, uid: uid, del: del, get: get})
+		if err := env.RecordCreatedUID(kind, name, uid); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := fresh("serviceaccounts", saName, func() error {
+		_, err := env.Kube.CoreV1().ServiceAccounts(ns).Get(ctx, saName, metav1.GetOptions{})
+		return err
+	}); err != nil {
+		return err
+	}
 	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: ns, Labels: env.OwnedLabels(nil)}}
 	env.Log.Command(fmt.Sprintf("kubectl create serviceaccount %s -n %s", saName, ns))
-	if _, err := env.Kube.CoreV1().ServiceAccounts(ns).Create(ctx, sa, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	createdSA, err := env.Kube.CoreV1().ServiceAccounts(ns).Create(ctx, sa, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("create serviceaccount %s (not retried): %w", saName, err)
+	}
+	if createdSA == nil {
+		return fmt.Errorf("create serviceaccount %s returned no object; outcome is ambiguous", saName)
+	}
+	if err := bind("serviceaccounts", saName, createdSA.UID, func(ctx context.Context, opts metav1.DeleteOptions) error {
+		return env.Kube.CoreV1().ServiceAccounts(ns).Delete(ctx, saName, opts)
+	}, func(ctx context.Context) (metav1.Object, error) {
+		return env.Kube.CoreV1().ServiceAccounts(ns).Get(ctx, saName, metav1.GetOptions{})
+	}); err != nil {
+		return rollback(err)
+	}
+
+	roleName := saName + "-role"
+	if err := fresh("roles", roleName, func() error {
+		_, err := env.Kube.RbacV1().Roles(ns).Get(ctx, roleName, metav1.GetOptions{})
 		return err
+	}); err != nil {
+		return rollback(err)
 	}
 	role := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{Name: saName + "-role", Namespace: ns, Labels: env.OwnedLabels(nil)},
+		ObjectMeta: metav1.ObjectMeta{Name: roleName, Namespace: ns, Labels: env.OwnedLabels(nil)},
 		Rules: []rbacv1.PolicyRule{{
-			APIGroups: []string{""},
-			Resources: []string{"pods", "secrets"},
-			Verbs:     []string{"get", "list"},
+			APIGroups: []string{""}, Resources: []string{"pods", "secrets"}, Verbs: []string{"get", "list"},
 		}},
 	}
-	env.Log.Command(fmt.Sprintf("kubectl create role %s-role --verb=get,list --resource=pods,secrets -n %s", saName, ns))
-	if _, err := env.Kube.RbacV1().Roles(ns).Create(ctx, role, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	env.Log.Command(fmt.Sprintf("kubectl create role %s --verb=get,list --resource=pods,secrets -n %s", roleName, ns))
+	createdRole, err := env.Kube.RbacV1().Roles(ns).Create(ctx, role, metav1.CreateOptions{})
+	if err != nil {
+		return rollback(fmt.Errorf("create role %s (not retried): %w", roleName, err))
+	}
+	if createdRole == nil {
+		return rollback(fmt.Errorf("create role %s returned no object; outcome is ambiguous", roleName))
+	}
+	if err := bind("roles", roleName, createdRole.UID, func(ctx context.Context, opts metav1.DeleteOptions) error {
+		return env.Kube.RbacV1().Roles(ns).Delete(ctx, roleName, opts)
+	}, func(ctx context.Context) (metav1.Object, error) {
+		return env.Kube.RbacV1().Roles(ns).Get(ctx, roleName, metav1.GetOptions{})
+	}); err != nil {
+		return rollback(err)
+	}
+
+	rbName := saName + "-rb"
+	if err := fresh("rolebindings", rbName, func() error {
+		_, err := env.Kube.RbacV1().RoleBindings(ns).Get(ctx, rbName, metav1.GetOptions{})
 		return err
+	}); err != nil {
+		return rollback(err)
 	}
 	rb := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: saName + "-rb", Namespace: ns, Labels: env.OwnedLabels(nil)},
+		ObjectMeta: metav1.ObjectMeta{Name: rbName, Namespace: ns, Labels: env.OwnedLabels(nil)},
 		Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: saName, Namespace: ns}},
-		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: saName + "-role"},
+		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: roleName},
 	}
-	env.Log.Command(fmt.Sprintf("kubectl create rolebinding %s-rb --role=%s-role --serviceaccount=%s:%s -n %s", saName, saName, ns, saName, ns))
-	if _, err := env.Kube.RbacV1().RoleBindings(ns).Create(ctx, rb, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return err
+	env.Log.Command(fmt.Sprintf("kubectl create rolebinding %s --role=%s --serviceaccount=%s:%s -n %s", rbName, roleName, ns, saName, ns))
+	createdRB, err := env.Kube.RbacV1().RoleBindings(ns).Create(ctx, rb, metav1.CreateOptions{})
+	if err != nil {
+		return rollback(fmt.Errorf("create rolebinding %s (not retried): %w", rbName, err))
+	}
+	if createdRB == nil {
+		return rollback(fmt.Errorf("create rolebinding %s returned no object; outcome is ambiguous", rbName))
+	}
+	if err := bind("rolebindings", rbName, createdRB.UID, func(ctx context.Context, opts metav1.DeleteOptions) error {
+		return env.Kube.RbacV1().RoleBindings(ns).Delete(ctx, rbName, opts)
+	}, func(ctx context.Context) (metav1.Object, error) {
+		return env.Kube.RbacV1().RoleBindings(ns).Get(ctx, rbName, metav1.GetOptions{})
+	}); err != nil {
+		return rollback(err)
 	}
 	return nil
+}
+
+func awaitCreatedObjectGone(ctx context.Context, env *core.Env, obj createdRBACObject) error {
+	for {
+		current, err := env.NamespaceCurrent(ctx)
+		if err != nil {
+			return fmt.Errorf("verify rollback %s %s namespace identity: %w", obj.kind, obj.name, err)
+		}
+		if !current {
+			return nil
+		}
+		got, err := obj.get(ctx)
+		switch {
+		case apierrors.IsNotFound(err):
+			return nil
+		case err != nil:
+			return fmt.Errorf("verify rollback %s %s UID %s absence: %w", obj.kind, obj.name, obj.uid, err)
+		case got.GetUID() != obj.uid:
+			return fmt.Errorf("rollback %s %s UID %s encountered replacement UID %s; replacement left untouched", obj.kind, obj.name, obj.uid, got.GetUID())
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("rollback %s %s UID %s remains (terminating=%t finalizers=%v): %w", obj.kind, obj.name, obj.uid, got.GetDeletionTimestamp() != nil, got.GetFinalizers(), ctx.Err())
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
 }
 
 // BackdoorMarkerPath is the on-pod path an attacker writes its persistence marker
@@ -388,67 +544,22 @@ const BackdoorMarkerPath = "/tmp/.r6th_backdoor"
 // BackdoorMarker is the unique sleeper-process marker string.
 const BackdoorMarker = "R6TH-BACKDOOR-SLEEPER"
 
-// deployTarget stands up a benign target workload pod in the sandbox, labeled as
-// a rotation target so the MTD arms know what to rotate. It is the shared
-// "victim" every scenario compromises. saName, if non-empty, mounts that SA.
+// deployTarget creates a fresh target and follows only the UID returned by that
+// Create. A predecessor, ambiguous create, or same-name replacement is a setup
+// failure; no object is stripped or deleted to make the name reusable.
 func deployTarget(ctx context.Context, env *core.Env, name, saName string, extraLabels map[string]string) (*corev1.Pod, error) {
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return nil, err
 	}
 	labels := mocks.LabelMap(map[string]string{defenders.RotationTargetLabel: "true", "app": name}, extraLabels)
-	pb := mocks.NewPod(env, name, labels).
-		WithBusyboxLoop("app", nil, 100, 32)
+	pb := mocks.NewPod(env, name, labels).WithBusyboxLoop("app", nil, 100, 32)
 	if saName != "" {
 		pb = pb.WithServiceAccount(saName)
 	}
-	pod := pb.Build()
-	// The runner reuses pod names across trials; ensure any prior same-named pod has
-	// fully terminated before creating, so WaitForPodRunning cannot latch onto a
-	// terminating pod (which then vanishes before Execute = a false "evicted" read).
-	waitPodGone(ctx, env, name)
-	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s -l %s=true  # target workload", name, mocks.BusyboxImage, env.Config.Namespace, defenders.RotationTargetLabel))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return nil, err
-	}
-	// Wait for a FRESH running, non-terminating pod (polls; tolerant of slow start).
-	running, err := runningPodByApp(ctx, env, name)
-	if err != nil {
-		return nil, err
-	}
-	return running, nil
+	return createFreshPod(ctx, env, pb.Build(), "target workload")
 }
 
-// waitPodGone FORCE-removes any lingering same-named pod so a fresh deploy is not
-// blocked by a prior arm's slow-terminating pod. A Phoenix rotation Deletes with the
-// default 30s grace, so the rotated pod is often STILL terminating when the next arm
-// starts — a plain wait would time out and the same-named Create returns AlreadyExists.
-// This grace-0 deletes it and strips any finalizer, then polls until it is gone.
-func waitPodGone(ctx context.Context, env *core.Env, name string) {
-	ns := env.Config.Namespace
-	grace := int64(0)
-	deadline := time.Now().Add(25 * time.Second)
-	for time.Now().Before(deadline) {
-		p, err := env.Kube.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			return
-		}
-		if err == nil {
-			if len(p.Finalizers) > 0 {
-				_, _ = env.Kube.CoreV1().Pods(ns).Patch(ctx, name, types.MergePatchType,
-					[]byte(`{"metadata":{"finalizers":null}}`), metav1.PatchOptions{})
-			}
-			_ = env.Kube.CoreV1().Pods(ns).Delete(ctx, name, metav1.DeleteOptions{GracePeriodSeconds: &grace})
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(400 * time.Millisecond):
-		}
-	}
-}
-
-// deployPlain stands up a benign pod that is NOT a rotation target (e.g. a
-// lateral-movement victim B). Confined to the sandbox.
+// deployPlain stands up a fresh benign pod that is not a rotation target.
 func deployPlain(ctx context.Context, env *core.Env, name string) (*corev1.Pod, error) {
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return nil, err
@@ -456,14 +567,87 @@ func deployPlain(ctx context.Context, env *core.Env, name string) (*corev1.Pod, 
 	pod := mocks.NewPod(env, name, map[string]string{"app": name}).
 		WithBusyboxLoop("app", nil, 100, 32).
 		Build()
-	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # plain workload", name, mocks.BusyboxImage, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	return createFreshPod(ctx, env, pod, "plain workload")
+}
+
+func createFreshPod(ctx context.Context, env *core.Env, pod *corev1.Pod, purpose string) (*corev1.Pod, error) {
+	ns, name := env.Config.Namespace, pod.Name
+	current, err := env.NamespaceCurrent(ctx)
+	if err != nil || !current {
+		if err == nil {
+			err = fmt.Errorf("original namespace is absent")
+		}
+		return nil, fmt.Errorf("refusing pod %s creation without exact namespace identity: %w", name, err)
+	}
+	if _, err := env.Kube.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		return nil, fmt.Errorf("refusing to adopt existing pod %s", name)
+	} else if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("check fresh pod %s: %w", name, err)
+	}
+	current, err = env.NamespaceCurrent(ctx)
+	if err != nil || !current {
+		if err == nil {
+			err = fmt.Errorf("original namespace is absent")
+		}
+		return nil, fmt.Errorf("refusing pod %s creation after namespace identity changed: %w", name, err)
+	}
+	env.Log.Command(fmt.Sprintf("POST /api/v1/namespaces/%s/pods name=%s images=%s  # %s", ns, name, strings.Join(podImageRefs(pod), ","), purpose))
+	created, err := env.Kube.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("create pod %s (not retried): %w", name, err)
+	}
+	if created == nil || created.UID == "" {
+		return nil, fmt.Errorf("create pod %s returned no authoritative UID; outcome is ambiguous", name)
+	}
+	if err := env.RecordCreatedUID("pods", name, created.UID); err != nil {
 		return nil, err
 	}
-	if err := env.WaitForPodRunning(ctx, name, 60*time.Second); err != nil {
-		return nil, err
+	return waitCreatedPodRunning(ctx, env, name, created.UID, 60*time.Second)
+}
+
+func podImageRefs(pod *corev1.Pod) []string {
+	images := make([]string, 0, len(pod.Spec.InitContainers)+len(pod.Spec.Containers))
+	for i := range pod.Spec.InitContainers {
+		images = append(images, pod.Spec.InitContainers[i].Image)
 	}
-	return pod, nil
+	for i := range pod.Spec.Containers {
+		images = append(images, pod.Spec.Containers[i].Image)
+	}
+	return images
+}
+
+func waitCreatedPodRunning(ctx context.Context, env *core.Env, name string, uid types.UID, timeout time.Duration) (*corev1.Pod, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		current, err := env.NamespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace is absent")
+			}
+			return nil, fmt.Errorf("pod %s readiness lost namespace authority: %w", name, err)
+		}
+		pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, name, metav1.GetOptions{})
+		switch {
+		case apierrors.IsNotFound(err):
+			return nil, fmt.Errorf("created pod %s UID %s disappeared before readiness", name, uid)
+		case err != nil:
+			return nil, fmt.Errorf("read created pod %s: %w", name, err)
+		case pod.UID != uid:
+			return nil, fmt.Errorf("created pod %s was replaced: expected UID %s, current UID %s", name, uid, pod.UID)
+		case pod.DeletionTimestamp != nil:
+			return nil, fmt.Errorf("created pod %s UID %s began terminating before readiness", name, uid)
+		case pod.Status.Phase == corev1.PodRunning:
+			return pod, nil
+		}
+		if !time.Now().Before(deadline) {
+			return nil, fmt.Errorf("created pod %s UID %s did not reach Running within %s", name, uid, timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }
 
 // firstContainerName looks up a pod by name and returns its first container name
@@ -579,22 +763,119 @@ func runningPodByApp(ctx context.Context, env *core.Env, appLabel string) (*core
 	}
 }
 
-// teardownByApp deletes every owned object for the scenario's app label. The
-// runner also does a global owned-cleanup, but a scenario Teardown that is
-// idempotent and scoped keeps trials isolated.
+// teardownByApp deletes only Pods whose exact create-response UIDs are recorded
+// in this Env and whose full owner/scenario/trial/app labels match. Enumeration is
+// bracketed by the captured namespace UID, and every delete carries a UID
+// precondition. Foreign or replacement objects are reported and left untouched.
 func teardownByApp(ctx context.Context, env *core.Env, appLabels ...string) error {
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return err
 	}
-	grace := int64(0)
-	dp := metav1.DeletePropagationBackground
-	for _, app := range appLabels {
-		lo := metav1.ListOptions{LabelSelector: "app=" + app}
-		env.Log.Command(fmt.Sprintf("kubectl delete pods -n %s -l app=%s --grace-period=0", env.Config.Namespace, app))
-		_ = env.Kube.CoreV1().Pods(env.Config.Namespace).DeleteCollection(ctx,
-			metav1.DeleteOptions{GracePeriodSeconds: &grace, PropagationPolicy: &dp}, lo)
+	ns := env.Config.Namespace
+	var problems []error
+	type target struct {
+		name string
+		uid  types.UID
 	}
-	return nil
+	var targets []target
+	seen := map[string]bool{}
+	for _, app := range appLabels {
+		current, err := env.NamespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace is absent")
+			}
+			return fmt.Errorf("refusing teardown without exact namespace identity: %w", err)
+		}
+		ownerLabels := env.OwnedLabels(nil)
+		selector := fmt.Sprintf("app=%s,%s=%s,%s=%s,%s=%s", app,
+			core.OwnedLabelKey, ownerLabels[core.OwnedLabelKey],
+			core.ScenarioLabelKey, ownerLabels[core.ScenarioLabelKey],
+			core.TrialLabelKey, ownerLabels[core.TrialLabelKey])
+		pods, err := env.Kube.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			problems = append(problems, fmt.Errorf("list app=%s pods: %w", app, err))
+			continue
+		}
+		current, err = env.NamespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace is absent")
+			}
+			return fmt.Errorf("refusing teardown after namespace identity changed: %w", err)
+		}
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			recorded, ok := env.CreatedUID("pods", pod.Name)
+			if !ok {
+				problems = append(problems, fmt.Errorf("refusing unrecorded pod %s UID %s matching app=%s", pod.Name, pod.UID, app))
+				continue
+			}
+			if recorded != pod.UID {
+				problems = append(problems, fmt.Errorf("refusing replacement pod %s: recorded UID %s, current UID %s", pod.Name, recorded, pod.UID))
+				continue
+			}
+			key := pod.Name + "/" + string(pod.UID)
+			if !seen[key] {
+				seen[key] = true
+				targets = append(targets, target{name: pod.Name, uid: pod.UID})
+			}
+		}
+	}
+	for _, target := range targets {
+		current, err := env.NamespaceCurrent(ctx)
+		if err != nil || !current {
+			if err == nil {
+				err = fmt.Errorf("original namespace is absent")
+			}
+			problems = append(problems, fmt.Errorf("refusing delete pod %s without exact namespace identity: %w", target.name, err))
+			continue
+		}
+		uid := target.uid
+		env.Log.Command(fmt.Sprintf("kubectl delete pod %s -n %s --precondition-uid=%s", target.name, ns, uid))
+		if err := env.Kube.CoreV1().Pods(ns).Delete(ctx, target.name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
+			problems = append(problems, fmt.Errorf("delete pod %s UID %s: %w", target.name, uid, err))
+			continue
+		}
+		if err := awaitExactPodGone(ctx, env, target.name, uid); err != nil {
+			problems = append(problems, err)
+			continue
+		}
+		if err := env.ForgetCreatedUID("pods", target.name, uid); err != nil {
+			problems = append(problems, err)
+		}
+	}
+	return errors.Join(problems...)
+}
+
+func awaitExactPodGone(ctx context.Context, env *core.Env, name string, uid types.UID) error {
+	deadline := time.Now().Add(core.DefaultResidueWait)
+	for {
+		current, err := env.NamespaceCurrent(ctx)
+		if err != nil {
+			return fmt.Errorf("verify pod %s cleanup namespace identity: %w", name, err)
+		}
+		if !current {
+			return nil
+		}
+		pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, name, metav1.GetOptions{})
+		switch {
+		case apierrors.IsNotFound(err):
+			return nil
+		case err != nil:
+			return fmt.Errorf("verify pod %s UID %s absence: %w", name, uid, err)
+		case pod.UID != uid:
+			return fmt.Errorf("pod %s UID %s was replaced by UID %s during cleanup; replacement left untouched", name, uid, pod.UID)
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("pod %s UID %s remains after cleanup budget (terminating=%t finalizers=%v)", name, uid, pod.DeletionTimestamp != nil, pod.Finalizers)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
 }
 
 // measureSurvival POLLS until the foothold is evicted (the backdoor marker is gone

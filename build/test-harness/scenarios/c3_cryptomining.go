@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/r6security/phoenix-test-harness/defenders"
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	"github.com/r6security/phoenix-test-harness/internal/mocks"
@@ -53,10 +51,8 @@ func (s *c3CryptoMining) Setup(ctx context.Context, env *core.Env) error {
 		WithBusyboxLoop("app", mocks.MinerScript(20), 200, 32). // 200m CPU cap
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s --limits=cpu=200m  # CPU-bounded miner stand-in", s.app, mocks.BusyboxImage, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-		return err
-	}
-	return env.WaitForPodRunning(ctx, s.app, 60*time.Second)
+	_, err := createFreshPod(ctx, env, pod, "CPU-bounded miner stand-in")
+	return err
 }
 
 func (s *c3CryptoMining) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {

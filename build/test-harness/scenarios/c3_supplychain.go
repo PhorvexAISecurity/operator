@@ -6,8 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	"github.com/r6security/phoenix-test-harness/internal/mocks"
 )
@@ -57,13 +55,7 @@ func (s *c3SupplyChain) Execute(ctx context.Context, env *core.Env) (core.Attack
 		WithBusyboxLoop("app", mocks.PoisonedImageCommand("/tmp/.r6th_tampered"), 100, 32).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # pull tampered image from %s", s.app, s.reg.PoisonedImageRef, env.Config.Namespace, s.reg.ClusterDNS))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-		return core.AttackResult{}, err
-	}
-	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
-		return core.AttackResult{}, err
-	}
-	original, err := runningPodByApp(ctx, env, s.app)
+	original, err := createFreshPod(ctx, env, pod, "tampered-image workload")
 	if err != nil {
 		return core.AttackResult{}, fmt.Errorf("stimulus target unavailable: %w", err)
 	}

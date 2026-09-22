@@ -69,14 +69,14 @@ func (s *c3SecretsSprawl) Setup(ctx context.Context, env *core.Env) error {
 		WithVolume(secVol, secMount).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # pod with over-permissive secret mount", s.app, mocks.BusyboxImage, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	if _, err := createFreshPod(ctx, env, pod, "over-permissive secret-mount workload"); err != nil {
 		return err
 	}
 	// The fixed in-namespace mock sink returns a response for the fake value.
 	if _, err := mocks.DeployMockCloudAPI(ctx, env); err != nil {
 		return err
 	}
-	return env.WaitForPodRunning(ctx, s.app, 60*time.Second)
+	return nil
 }
 
 func (s *c3SecretsSprawl) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {

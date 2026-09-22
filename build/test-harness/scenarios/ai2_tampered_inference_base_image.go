@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	"github.com/r6security/phoenix-test-harness/internal/mocks"
 )
@@ -56,10 +54,7 @@ func (s *ai2TamperedInferenceBaseImage) Execute(ctx context.Context, env *core.E
 		WithBusyboxLoop("serving", mocks.PoisonedImageCommand("/tmp/.r6th_tampered"), 100, 32).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # pull tampered inference base image from %s", s.app, s.reg.PoisonedImageRef, env.Config.Namespace, s.reg.ClusterDNS))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-		return core.AttackResult{}, err
-	}
-	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
+	if _, err := createFreshPod(ctx, env, pod, "tampered inference base-image workload"); err != nil {
 		return core.AttackResult{}, err
 	}
 	return core.AttackResult{

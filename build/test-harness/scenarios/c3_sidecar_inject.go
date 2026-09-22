@@ -6,11 +6,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	"github.com/r6security/phoenix-test-harness/internal/mocks"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func init() { core.RegisterScenario(&c3SidecarInject{}) }
@@ -69,13 +67,7 @@ func (s *c3SidecarInject) Execute(ctx context.Context, env *core.Env) (core.Atta
 		MutateSpec(func(spec *corev1.PodSpec) { spec.Volumes = append(spec.Volumes, shared) }).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # pod with INJECTED malicious sidecar", s.app, mocks.BusyboxImage, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-		return core.AttackResult{}, err
-	}
-	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
-		return core.AttackResult{}, err
-	}
-	original, err := runningPodByApp(ctx, env, s.app)
+	original, err := createFreshPod(ctx, env, pod, "pod with injected malicious sidecar")
 	if err != nil {
 		return core.AttackResult{}, fmt.Errorf("stimulus target unavailable: %w", err)
 	}

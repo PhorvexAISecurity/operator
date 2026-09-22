@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -123,6 +124,60 @@ type Env struct {
 	// namespaceUID is the exact sandbox instance observed or created by
 	// EnsureNamespace. Cleanup never adopts a same-name replacement.
 	namespaceUID types.UID
+
+	// createdUIDs records identities returned by successful create calls in this
+	// Env. Scenario-local teardown may act only on these exact identities; labels
+	// remain an enumeration aid and are never ownership authority by themselves.
+	createdMu   sync.RWMutex
+	createdUIDs map[string]types.UID
+}
+
+// RecordCreatedUID binds a namespaced object to the UID returned by its one
+// successful Create call. A missing UID or a second identity for the same key is
+// refused; callers must never turn an ambiguous create into name-based authority.
+func (e *Env) RecordCreatedUID(resource, name string, uid types.UID) error {
+	resource = strings.TrimSpace(resource)
+	name = strings.TrimSpace(name)
+	if resource == "" || name == "" || uid == "" {
+		return fmt.Errorf("cannot bind created object resource=%q name=%q UID=%q", resource, name, uid)
+	}
+	key := resource + "/" + e.Config.Namespace + "/" + name
+	e.createdMu.Lock()
+	defer e.createdMu.Unlock()
+	if e.createdUIDs == nil {
+		e.createdUIDs = make(map[string]types.UID)
+	}
+	if prior, ok := e.createdUIDs[key]; ok && prior != uid {
+		return fmt.Errorf("created object %s identity changed from UID %q to %q", key, prior, uid)
+	}
+	e.createdUIDs[key] = uid
+	return nil
+}
+
+// CreatedUID returns the exact create-response UID previously bound in this Env.
+func (e *Env) CreatedUID(resource, name string) (types.UID, bool) {
+	key := strings.TrimSpace(resource) + "/" + e.Config.Namespace + "/" + strings.TrimSpace(name)
+	e.createdMu.RLock()
+	defer e.createdMu.RUnlock()
+	uid, ok := e.createdUIDs[key]
+	return uid, ok
+}
+
+// ForgetCreatedUID retires a binding only after the caller has observed that
+// exact object absent. A replacement identity never satisfies this operation.
+func (e *Env) ForgetCreatedUID(resource, name string, uid types.UID) error {
+	key := strings.TrimSpace(resource) + "/" + e.Config.Namespace + "/" + strings.TrimSpace(name)
+	e.createdMu.Lock()
+	defer e.createdMu.Unlock()
+	prior, ok := e.createdUIDs[key]
+	if !ok {
+		return fmt.Errorf("created object %s has no recorded identity", key)
+	}
+	if prior != uid {
+		return fmt.Errorf("created object %s recorded UID %q differs from retired UID %q", key, prior, uid)
+	}
+	delete(e.createdUIDs, key)
+	return nil
 }
 
 // OwnedLabels returns the standard owner labels for a created object, including
@@ -229,6 +284,13 @@ func (e *Env) namespaceCurrent(ctx context.Context) (bool, error) {
 			e.Config.Namespace, e.namespaceUID, ns.UID)
 	}
 	return true, nil
+}
+
+// NamespaceCurrent verifies that the configured namespace is still the exact
+// instance captured by EnsureNamespace. Scenario helpers use it to bracket
+// every namespaced enumeration and destructive request.
+func (e *Env) NamespaceCurrent(ctx context.Context) (bool, error) {
+	return e.namespaceCurrent(ctx)
 }
 
 // CleanupResidue names owned objects still present after the deletes were

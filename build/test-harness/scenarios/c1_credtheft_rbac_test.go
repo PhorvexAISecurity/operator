@@ -26,8 +26,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
@@ -312,7 +314,9 @@ func TestCredReplayEmptyReadIsExecuteError(t *testing.T) {
 // An initial 401 means the theft's credential is not usable, so there is no
 // capability to observe surviving: an Execute error (invalid), not a defense win.
 func TestCredReplayUnusableBaselineIsExecuteError(t *testing.T) {
-	api := &ctAPI{behavior: func(w http.ResponseWriter, _ int) { writeStatus(w, http.StatusUnauthorized, metav1.StatusReasonUnauthorized) }}
+	api := &ctAPI{behavior: func(w http.ResponseWriter, _ int) {
+		writeStatus(w, http.StatusUnauthorized, metav1.StatusReasonUnauthorized)
+	}}
 	srv := startTLS(t, api)
 	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
@@ -463,6 +467,12 @@ func TestCredReplayTeardownClearsCapturedState(t *testing.T) {
 	api := &ctAPI{}
 	srv := startTLS(t, api)
 	env, _ := credEnvTLS(t, srv, "", 2)
+	if _, err := env.Kube.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "cred-teardown-namespace"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.EnsureNamespace(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 
@@ -624,10 +634,11 @@ func runCredMatrix(t *testing.T, api *ctAPI, execToken string, execExit int) cor
 	noSleepWindow(t)
 
 	factory := func(_, _ string, _ int, _ int64, _ string) (*core.Env, func() error, error) {
-		kube := fake.NewSimpleClientset()
+		kube := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: types.UID("cred-test-namespace")}})
 		kube.PrependReactor("create", "pods", func(a ktesting.Action) (bool, runtime.Object, error) {
 			if ca, ok := a.(ktesting.CreateAction); ok {
 				if pod, ok2 := ca.GetObject().(*corev1.Pod); ok2 {
+					pod.UID = types.UID("cred-test-pod")
 					pod.Status.Phase = corev1.PodRunning
 				}
 			}
@@ -636,7 +647,17 @@ func runCredMatrix(t *testing.T, api *ctAPI, execToken string, execExit int) cor
 		kube.PrependReactor("create", "serviceaccounts", func(a ktesting.Action) (bool, runtime.Object, error) {
 			if a.GetSubresource() == "token" {
 				t.Errorf("runner path minted a TokenRequest; replay must use the captured credential only")
+			} else if ca, ok := a.(ktesting.CreateAction); ok {
+				ca.GetObject().(*corev1.ServiceAccount).UID = types.UID("cred-test-sa")
 			}
+			return false, nil, nil
+		})
+		kube.PrependReactor("create", "roles", func(a ktesting.Action) (bool, runtime.Object, error) {
+			a.(ktesting.CreateAction).GetObject().(*rbacv1.Role).UID = types.UID("cred-test-role")
+			return false, nil, nil
+		})
+		kube.PrependReactor("create", "rolebindings", func(a ktesting.Action) (bool, runtime.Object, error) {
+			a.(ktesting.CreateAction).GetObject().(*rbacv1.RoleBinding).UID = types.UID("cred-test-rb")
 			return false, nil, nil
 		})
 		env := &core.Env{
@@ -648,6 +669,9 @@ func runCredMatrix(t *testing.T, api *ctAPI, execToken string, execExit int) cor
 			},
 			Log:   &ctLogger{},
 			Guard: ctGuard{},
+		}
+		if err := env.EnsureNamespace(context.Background()); err != nil {
+			return nil, nil, err
 		}
 		return env, func() error { return nil }, nil
 	}

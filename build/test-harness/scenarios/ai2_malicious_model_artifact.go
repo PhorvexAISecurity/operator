@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	"github.com/r6security/phoenix-test-harness/internal/mocks"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
 func init() { core.RegisterScenario(&ai2MaliciousModelArtifact{}) }
@@ -48,15 +46,11 @@ func (s *ai2MaliciousModelArtifact) Setup(ctx context.Context, env *core.Env) er
 		WithBusyboxLoop("loader", []string{"sh", "-c", "echo " + mocks.MaliciousArtifactMarker + " > /tmp/payload; while true; do sleep 3600; done"}, 100, 32).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # malicious model artifact loader stand-in", s.app, mocks.BusyboxImage, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+	created, err := createFreshPod(ctx, env, pod, "malicious model artifact loader stand-in")
+	if err != nil {
 		return err
 	}
-	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
-		return err
-	}
-	if p, err := runningPodByApp(ctx, env, s.app); err == nil {
-		s.oldUID = string(p.UID)
-	}
+	s.oldUID = string(created.UID)
 	return nil
 }
 

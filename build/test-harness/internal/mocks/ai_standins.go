@@ -420,11 +420,15 @@ func DeployMockAgentRuntime(ctx context.Context, env *core.Env) (*MockAgentRunti
 		WithRestartPolicy(corev1.RestartPolicyAlways).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s -l %s=true  # mock agent runtime (tool-calling loop)", name, BusyboxImage, env.Config.Namespace, RotationTargetLabelKey))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	createdPod, err := createOwnedPod(ctx, env, pod)
+	if err != nil {
 		return nil, fmt.Errorf("create agent pod: %w", err)
 	}
 	if err := env.WaitForPodRunning(ctx, name, waitTimeout); err != nil {
 		env.Log.Logf("mock agent pod not Ready in time: %v", err)
+	}
+	if err := requireCreatedPodCurrent(ctx, env, name, createdPod); err != nil {
+		return nil, err
 	}
 	return &MockAgentRuntime{PodName: name}, nil
 }
@@ -536,7 +540,7 @@ func deployNamedServer(ctx context.Context, env *core.Env, name, svcName string,
 			},
 		}
 		env.Log.Command(fmt.Sprintf("kubectl expose pod %s-pod --name=%s --port=%d -n %s", name, svcName, port, env.Config.Namespace))
-		if _, err := env.Kube.CoreV1().Services(env.Config.Namespace).Create(ctx, alias, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		if _, err := createOwnedService(ctx, env, alias); err != nil {
 			return ms, fmt.Errorf("create alias svc %s: %w", svcName, err)
 		}
 		ms.SvcName = svcName
@@ -568,7 +572,8 @@ func deployLeaderServer(ctx context.Context, env *core.Env, name, svcName string
 		WithRestartPolicy(corev1.RestartPolicyAlways).
 		Build()
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # mock %s :%d (leader=%s)", podName, BusyboxImage, env.Config.Namespace, name, port, InferLeaderValue))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	createdPod, err := createOwnedPod(ctx, env, pod)
+	if err != nil {
 		return nil, fmt.Errorf("create leader pod %s: %w", podName, err)
 	}
 	// EXTERNAL Service selects ONLY the leader label (NOT the pod name), so backend
@@ -581,7 +586,7 @@ func deployLeaderServer(ctx context.Context, env *core.Env, name, svcName string
 		},
 	}
 	env.Log.Command(fmt.Sprintf("kubectl expose --selector=%s=%s --name=%s --port=%d -n %s  # EXTERNAL svc (stable name, backend leader rotates)", InferLeaderLabel, InferLeaderValue, svcName, port, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Services(env.Config.Namespace).Create(ctx, svc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	if _, err := createOwnedService(ctx, env, svc); err != nil {
 		return nil, fmt.Errorf("create leader svc %s: %w", svcName, err)
 	}
 	ms := &MockServer{
@@ -593,6 +598,9 @@ func deployLeaderServer(ctx context.Context, env *core.Env, name, svcName string
 	}
 	if err := env.WaitForPodRunning(ctx, podName, waitTimeout); err != nil {
 		env.Log.Logf("mock %s pod not Ready in time: %v", name, err)
+	}
+	if err := requireCreatedPodCurrent(ctx, env, podName, createdPod); err != nil {
+		return nil, err
 	}
 	return ms, nil
 }

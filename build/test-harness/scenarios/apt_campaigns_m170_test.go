@@ -41,6 +41,12 @@ func TestAPTCampaignInventoryAndExecutedStimulus(t *testing.T) {
 				t.Fatalf("unused capability gate retained: %v", md.CapabilityRequirements)
 			}
 			env := fixtureObservationEnv()
+			if _, err := env.Kube.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox", UID: "apt-namespace"}}, metav1.CreateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := env.EnsureNamespace(context.Background()); err != nil {
+				t.Fatal(err)
+			}
 			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: campaign.app, Namespace: "sandbox", UID: "apt-fixture", Labels: map[string]string{"app": campaign.app}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
 			if _, err := env.Kube.CoreV1().Pods("sandbox").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				t.Fatal(err)
@@ -64,10 +70,16 @@ func TestAPTCampaignInventoryAndExecutedStimulus(t *testing.T) {
 			if err := campaign.Teardown(context.Background(), env); err != nil {
 				t.Fatal(err)
 			}
-			actions := env.Kube.(*fake.Clientset).Actions()
-			last := actions[len(actions)-1]
-			if last.GetVerb() != "delete-collection" || last.GetResource().Resource != "pods" {
-				t.Fatalf("teardown did not issue owned pod collection delete: %v", last)
+			// The manually seeded Pod is not a create-response identity owned by
+			// this Env. Teardown must preserve it and issue no broad collection
+			// delete even though its app label matches.
+			if _, err := env.Kube.CoreV1().Pods("sandbox").Get(context.Background(), pod.Name, metav1.GetOptions{}); err != nil {
+				t.Fatalf("foreign fixture pod was deleted: %v", err)
+			}
+			for _, action := range env.Kube.(*fake.Clientset).Actions() {
+				if action.GetVerb() == "delete" || action.GetVerb() == "delete-collection" || action.GetVerb() == "patch" {
+					t.Fatalf("teardown issued destructive request for foreign fixture: %v", action)
+				}
 			}
 		})
 	}

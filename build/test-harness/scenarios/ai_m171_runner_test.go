@@ -405,18 +405,27 @@ func TestM171RunnerEmitterDeliveryCannotRepairFixture(t *testing.T) {
 			}
 			defer recreatedWriter.Close()
 			recreatedRunner := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: t.TempDir(), ScenarioFilter: map[string]bool{name: true}, DefenderFilter: map[string]bool{"d-nomtd": true, "m171-acting-defender": true}, CleanupTimeout: 8 * time.Second}, factory, recreatedWriter, nil)
-			recreatedRows, err := recreatedRunner.Run(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, row := range recreatedRows {
-				if row.Defender == "m171-acting-defender" && (row.IsScored() || !row.Skipped || row.Validity == nil || row.Validity.Status != core.MeasurementInvalid) {
-					t.Fatalf("same-name recreated substrate received credit: %+v", row)
-				}
-			}
+			recreatedRows, recreatedErr := recreatedRunner.Run(context.Background())
 			actor.mu.Lock()
 			actor.recreateTarget = false
 			actor.mu.Unlock()
+			if name != "ai2-agent-rogue-tool-persistence" {
+				// The actor replaced the exact Pod after setup. The scenario oracle
+				// already marks the trial invalid, and ownership-safe teardown must
+				// additionally refuse to delete that replacement.
+				if recreatedErr == nil || !strings.Contains(recreatedErr.Error(), "refusing replacement pod") {
+					t.Fatalf("same-name replacement cleanup error=%v rows=%+v", recreatedErr, recreatedRows)
+				}
+			} else {
+				if recreatedErr != nil {
+					t.Fatal(recreatedErr)
+				}
+				for _, row := range recreatedRows {
+					if row.Defender == "m171-acting-defender" && (row.IsScored() || !row.Skipped || row.Validity == nil || row.Validity.Status != core.MeasurementInvalid) {
+						t.Fatalf("same-name recreated substrate received credit: %+v", row)
+					}
+				}
+			}
 			emitter.mu.Lock()
 			emitter.fail = true
 			emitter.mu.Unlock()

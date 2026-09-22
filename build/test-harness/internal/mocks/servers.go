@@ -7,7 +7,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -89,7 +88,8 @@ func deployServer(ctx context.Context, env *core.Env, name string, port int32, s
 	pod := pb.Build()
 
 	env.Log.Command(fmt.Sprintf("kubectl run %s --image=%s -n %s  # mock %s :%d", podName, BusyboxImage, env.Config.Namespace, name, port))
-	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	createdPod, err := createOwnedPod(ctx, env, pod)
+	if err != nil {
 		return nil, fmt.Errorf("create mock pod %s: %w", podName, err)
 	}
 
@@ -108,7 +108,7 @@ func deployServer(ctx context.Context, env *core.Env, name string, port int32, s
 		},
 	}
 	env.Log.Command(fmt.Sprintf("kubectl expose pod %s --name=%s --port=%d -n %s", podName, svcName, port, env.Config.Namespace))
-	if _, err := env.Kube.CoreV1().Services(env.Config.Namespace).Create(ctx, svc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	if _, err := createOwnedService(ctx, env, svc); err != nil {
 		return nil, fmt.Errorf("create mock svc %s: %w", svcName, err)
 	}
 
@@ -123,6 +123,9 @@ func deployServer(ctx context.Context, env *core.Env, name string, port int32, s
 		// Not fatal for the harness contract — return the server; the scenario will
 		// surface a dial failure in its oracle. But log it.
 		env.Log.Logf("mock %s pod not Ready in time: %v", name, err)
+	}
+	if err := requireCreatedPodCurrent(ctx, env, podName, createdPod); err != nil {
+		return nil, err
 	}
 	return ms, nil
 }
