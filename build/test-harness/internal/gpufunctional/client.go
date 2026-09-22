@@ -513,24 +513,26 @@ type BusyReceipt struct {
 	ActiveMetrics Metrics             `json:"activeMetrics"`
 	Reset         Reset               `json:"reset"`
 	Cohort        StreamCohortReceipt `json:"cohort"`
+	PostCohort    Metrics             `json:"postCohort"`
 }
 
 // StreamLifecycleReceipt retains the bounded producer lifecycle of one
 // synthetic request. RequestID is accepted only from a strict SSE event; a
 // locally submitted ordinal is never treated as an engine request identity.
 type StreamLifecycleReceipt struct {
-	Ordinal     int    `json:"ordinal"`
-	SubmittedAt string `json:"submittedAt"`
-	HTTPStatus  int    `json:"httpStatus"`
-	MediaType   string `json:"mediaType,omitempty"`
-	AcceptedAt  string `json:"acceptedAt,omitempty"`
-	RequestID   string `json:"requestID,omitempty"`
-	EventCount  int    `json:"eventCount"`
-	FinishedAt  string `json:"finishedAt,omitempty"`
-	Finished    bool   `json:"finished"`
-	SawDone     bool   `json:"sawDone"`
-	Termination string `json:"termination"`
-	Error       string `json:"error,omitempty"`
+	Ordinal      int    `json:"ordinal"`
+	SubmittedAt  string `json:"submittedAt"`
+	HTTPStatus   int    `json:"httpStatus"`
+	MediaType    string `json:"mediaType,omitempty"`
+	AcceptedAt   string `json:"acceptedAt,omitempty"`
+	RequestID    string `json:"requestID,omitempty"`
+	EventCount   int    `json:"eventCount"`
+	FinishedAt   string `json:"finishedAt,omitempty"`
+	Finished     bool   `json:"finished"`
+	SawDone      bool   `json:"sawDone"`
+	FinishReason string `json:"finishReason,omitempty"`
+	Termination  string `json:"termination"`
+	Error        string `json:"error,omitempty"`
 }
 
 type StreamCohortReceipt struct {
@@ -650,6 +652,9 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 	if err != nil {
 		return receipt, err
 	}
+	if !preIdle.RequestSuccessMetricPresent {
+		return receipt, errors.New("busy cohort precondition lacks the normal-completion counter")
+	}
 	cohort := c.startStreamCohort(ctx, streamCohortSize)
 	defer func() {
 		retErr = errors.Join(retErr, cohort.stop())
@@ -682,6 +687,17 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 	}
 	if err := cohort.requireCompleted(); err != nil {
 		return receipt, err
+	}
+	completedBefore := preIdle.Values["vllm:request_success_total"]
+	post, err := c.waitMetrics(ctx, 15*time.Second, func(v map[string]float64) bool {
+		return idle(v) && v["vllm:request_success_total"] == completedBefore+streamCohortSize
+	})
+	receipt.PostCohort = post
+	if err != nil {
+		return receipt, err
+	}
+	if !post.RequestSuccessMetricPresent || !idle(post.Values) || post.Values["vllm:request_success_total"]-completedBefore != streamCohortSize {
+		return receipt, errors.New("busy cohort lacks exact idle and normal-completion reconciliation")
 	}
 	return receipt, nil
 }
@@ -812,6 +828,47 @@ func (c *streamCohort) preActionFailure() error {
 	return nil
 }
 
+func (c *streamCohort) selectUnfinishedAnchor(selected time.Time) (DrainAnchor, error) {
+	var chosen StreamLifecycleReceipt
+	var chosenAt time.Time
+	seen := map[string]bool{}
+	for _, stream := range c.streams {
+		receipt := stream.snapshot()
+		if receipt.RequestID == "" || receipt.AcceptedAt == "" {
+			continue
+		}
+		if seen[receipt.RequestID] {
+			return DrainAnchor{}, errors.New("drain cohort producer request identity is duplicated")
+		}
+		seen[receipt.RequestID] = true
+		accepted, err := time.Parse(time.RFC3339Nano, receipt.AcceptedAt)
+		if err != nil {
+			return DrainAnchor{}, errors.New("drain anchor first-event timestamp is invalid")
+		}
+		if receipt.Finished {
+			continue
+		}
+		if chosen.RequestID == "" || accepted.After(chosenAt) || accepted.Equal(chosenAt) && receipt.Ordinal > chosen.Ordinal {
+			chosen, chosenAt = receipt, accepted
+		}
+	}
+	if chosen.RequestID == "" {
+		return DrainAnchor{}, errors.New("no authenticated unfinished drain anchor exists; operation not sent")
+	}
+	return DrainAnchor{StreamOrdinal: chosen.Ordinal, ProducerRequestID: chosen.RequestID,
+		FirstEventAtUTC: chosen.AcceptedAt, SelectedAtUTC: selected.Format(time.RFC3339Nano)}, nil
+}
+
+func (c *streamCohort) anchorStillUnfinished(anchor DrainAnchor) bool {
+	for _, stream := range c.streams {
+		receipt := stream.snapshot()
+		if receipt.Ordinal == anchor.StreamOrdinal {
+			return !receipt.Finished && receipt.RequestID == anchor.ProducerRequestID && receipt.AcceptedAt == anchor.FirstEventAtUTC
+		}
+	}
+	return false
+}
+
 func (c *streamCohort) waitFinished(ctx context.Context, bound time.Duration) error {
 	deadline := time.NewTimer(bound)
 	defer deadline.Stop()
@@ -831,7 +888,7 @@ func (c *streamCohort) requireCompleted() error {
 	seen := map[string]bool{}
 	for _, stream := range c.streams {
 		receipt := stream.snapshot()
-		if !receipt.Finished || receipt.Termination != "complete" || !receipt.SawDone || receipt.RequestID == "" || receipt.EventCount == 0 {
+		if !receipt.Finished || receipt.Termination != "complete" || !receipt.SawDone || receipt.FinishReason != "length" || receipt.RequestID == "" || receipt.EventCount == 0 {
 			return fmt.Errorf("stream %d lacks a complete authenticated producer lifecycle", receipt.Ordinal)
 		}
 		if seen[receipt.RequestID] {
@@ -843,7 +900,7 @@ func (c *streamCohort) requireCompleted() error {
 }
 
 func (c *streamCohort) receipt() StreamCohortReceipt {
-	receipt := StreamCohortReceipt{Schema: "phorvex.gpu.stream-cohort.v2", Expected: len(c.streams), Streams: make([]StreamLifecycleReceipt, 0, len(c.streams))}
+	receipt := StreamCohortReceipt{Schema: "phorvex.gpu.stream-cohort.v3", Expected: len(c.streams), Streams: make([]StreamLifecycleReceipt, 0, len(c.streams))}
 	for _, stream := range c.streams {
 		receipt.Streams = append(receipt.Streams, stream.snapshot())
 	}
@@ -930,6 +987,14 @@ func (c *Client) stream(ctx context.Context, run *streamExecution) error {
 		first := run.receipt.RequestID == ""
 		run.receipt.RequestID = event.ID
 		run.receipt.EventCount++
+		if event.Choices[0].FinishReason != nil {
+			reason, ok := event.Choices[0].FinishReason.(string)
+			if !ok || reason == "" || run.receipt.FinishReason != "" && run.receipt.FinishReason != reason {
+				run.mu.Unlock()
+				return errors.New("busy stream terminal finish reason is invalid or changed")
+			}
+			run.receipt.FinishReason = reason
+		}
 		if first {
 			run.receipt.AcceptedAt = c.now().UTC().Format(time.RFC3339Nano)
 		}
@@ -940,9 +1005,10 @@ func (c *Client) stream(ctx context.Context, run *streamExecution) error {
 	}
 	run.mu.Lock()
 	sawDone := run.receipt.SawDone
+	finishReason := run.receipt.FinishReason
 	run.mu.Unlock()
-	if !sawDone {
-		return errors.New("busy stream ended without terminal marker")
+	if !sawDone || finishReason != "length" {
+		return errors.New("busy stream ended without exact length terminal event and marker")
 	}
 	return nil
 }

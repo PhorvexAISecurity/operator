@@ -77,7 +77,11 @@ type DrainReceipt struct {
 	SecondIdle                     *Metrics               `json:"secondIdle,omitempty"`
 	ActiveMetrics                  *Metrics               `json:"activeMetrics,omitempty"`
 	Cohort                         StreamCohortReceipt    `json:"cohort"`
+	Anchor                         *DrainAnchor           `json:"anchor,omitempty"`
 	SnapshotBindings               []DrainSnapshotBinding `json:"snapshotBindings,omitempty"`
+	UnattributedSnapshotIDs        []string               `json:"unattributedSnapshotIDs,omitempty"`
+	FullCohortAttributed           bool                   `json:"fullCohortAttributed"`
+	AttributionScope               string                 `json:"attributionScope,omitempty"`
 	Create                         *DrainOperation        `json:"create,omitempty"`
 	CreateObservation              *Observation           `json:"createObservation,omitempty"`
 	Late                           *LateAdmission         `json:"late,omitempty"`
@@ -99,6 +103,15 @@ type DrainSnapshotBinding struct {
 	ProducerRequestID string `json:"producerRequestID"`
 }
 
+type DrainAnchor struct {
+	StreamOrdinal      int    `json:"streamOrdinal"`
+	ProducerRequestID  string `json:"producerRequestID"`
+	EngineRequestID    string `json:"engineRequestID,omitempty"`
+	FirstEventAtUTC    string `json:"firstEventAtUTC"`
+	SelectedAtUTC      string `json:"selectedAtUTC"`
+	CreateStartedAtUTC string `json:"createStartedAtUTC"`
+}
+
 type createOperation struct {
 	Schema                    string     `json:"schema"`
 	OperationID               string     `json:"operation_id"`
@@ -115,7 +128,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if direct {
 		mode = "direct"
 	}
-	receipt = DrainReceipt{Mode: mode}
+	receipt = DrainReceipt{Mode: mode, AttributionScope: "not-applicable-no-action"}
 	var err error
 	receipt.Baseline, err = c.Inference(ctx, "A bounded ordinary GPU functional request.", 1)
 	if err != nil {
@@ -191,6 +204,12 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 		return receipt, err
 	}
 	payload := createOperation{Schema: "phorvex.drain.v1", OperationID: operationID, OperationGeneration: strconv.FormatUint(generation, 10), Attempt: 1, Owner: owner, ExpectedIncarnationDigest: capability.IncarnationDigest, Deadline: c.now().UTC().Add(120 * time.Second).Format(time.RFC3339Nano), Mode: "abort-and-quiesce"}
+	anchor, err := cohort.selectUnfinishedAnchor(c.now().UTC())
+	if err != nil {
+		return receipt, err
+	}
+	receipt.Anchor = &anchor
+	receipt.AttributionScope = "one-late-selected-authenticated-unfinished-anchor; background snapshot IDs may be unattributed"
 	rollbackNeeded := true
 	operationAttempted := false
 	defer func() {
@@ -207,6 +226,11 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 		}
 		retErr = errors.Join(retErr, rollbackErr)
 	}()
+	if !cohort.anchorStillUnfinished(anchor) {
+		return receipt, errors.New("selected drain anchor finished before create; operation not sent")
+	}
+	anchor.CreateStartedAtUTC = c.now().UTC().Format(time.RFC3339Nano)
+	receipt.Anchor = &anchor
 	operationAttempted = true
 	created, createObservation, err := c.createDrain(ctx, payload)
 	receipt.Create, receipt.CreateObservation = &created, &createObservation
@@ -225,8 +249,11 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 		return receipt, err
 	}
 	receipt.Cohort = cohort.receipt()
-	bindings, err := validateDrainSnapshotCohort(created.EngineSnapshot, receipt.Cohort)
+	bindings, unknown, full, engineAnchor, err := validateDrainSnapshotAnchor(created.EngineSnapshot, receipt.Cohort, anchor)
 	receipt.SnapshotBindings = bindings
+	receipt.UnattributedSnapshotIDs = unknown
+	receipt.FullCohortAttributed = full
+	receipt.Anchor.EngineRequestID = engineAnchor
 	if err != nil {
 		return receipt, err
 	}
@@ -250,7 +277,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err != nil {
 		return receipt, err
 	}
-	if err := validateTerminalDrain(created, first, second, payload, capability, firstNonce, secondNonce); err != nil {
+	if err := validateTerminalDrain(created, first, second, payload, capability, firstNonce, secondNonce, engineAnchor); err != nil {
 		return receipt, err
 	}
 	reopened, reopenObservation, err := c.intentDrain(ctx, payload, second, "reopen")
@@ -466,7 +493,7 @@ func (c *Client) reconcileAndReopen(ctx context.Context, payload createOperation
 	return latest, observations, errors.New("drain cleanup could not observe a reopenable terminal state")
 }
 
-func validateTerminalDrain(created, first, second DrainOperation, payload createOperation, capability Capability, firstNonce, secondNonce string) error {
+func validateTerminalDrain(created, first, second DrainOperation, payload createOperation, capability Capability, firstNonce, secondNonce, anchorEngineID string) error {
 	if err := validateDrainIdentity(first, payload, capability, "DRAINING", "CLOSED"); err != nil {
 		return fmt.Errorf("first terminal observation: %w", err)
 	}
@@ -475,6 +502,9 @@ func validateTerminalDrain(created, first, second DrainOperation, payload create
 	}
 	if err := validateTerminalSequence(created, first, second, firstNonce, secondNonce); err != nil {
 		return err
+	}
+	if anchorEngineID == "" || first.TerminalDispositions[anchorEngineID] != "aborted" || second.TerminalDispositions[anchorEngineID] != "aborted" {
+		return errors.New("exact selected drain anchor lacks aborted disposition in both terminal observations")
 	}
 	requestIDs := map[string]bool{}
 	for _, queues := range created.EngineSnapshot {
@@ -530,17 +560,20 @@ func validateTerminalSequence(created, first, second DrainOperation, firstNonce,
 	return nil
 }
 
-func validateDrainSnapshotCohort(snapshot map[string]DrainQueue, cohort StreamCohortReceipt) ([]DrainSnapshotBinding, error) {
-	if cohort.Schema != "phorvex.gpu.stream-cohort.v2" || cohort.Expected != streamCohortSize || len(cohort.Streams) != cohort.Expected || len(snapshot) != 1 {
-		return nil, errors.New("drain cohort or engine snapshot shape differs")
+func validateDrainSnapshotAnchor(snapshot map[string]DrainQueue, cohort StreamCohortReceipt, anchor DrainAnchor) ([]DrainSnapshotBinding, []string, bool, string, error) {
+	if cohort.Schema != "phorvex.gpu.stream-cohort.v3" || cohort.Expected != streamCohortSize || len(cohort.Streams) != cohort.Expected || len(snapshot) != 1 {
+		return nil, nil, false, "", errors.New("drain cohort or engine snapshot shape differs")
 	}
 	producer := map[string]StreamLifecycleReceipt{}
 	for _, stream := range cohort.Streams {
-		if stream.RequestID == "" || stream.AcceptedAt == "" || stream.EventCount == 0 || !stream.Finished || stream.FinishedAt == "" || stream.Termination == "running" || stream.Termination == "not-started" || stream.Termination == "join-timeout" {
+		if !stream.Finished || stream.FinishedAt == "" || stream.Termination == "running" || stream.Termination == "not-started" || stream.Termination == "join-timeout" {
+			return nil, nil, false, "", fmt.Errorf("drain stream %d lacks a retained terminal lifecycle", stream.Ordinal)
+		}
+		if stream.RequestID == "" || stream.AcceptedAt == "" || stream.EventCount == 0 {
 			continue
 		}
 		if _, exists := producer[stream.RequestID]; exists {
-			return nil, errors.New("drain cohort producer request identity is duplicated")
+			return nil, nil, false, "", errors.New("drain cohort producer request identity is duplicated")
 		}
 		producer[stream.RequestID] = stream
 	}
@@ -551,25 +584,43 @@ func validateDrainSnapshotCohort(snapshot map[string]DrainQueue, cohort StreamCo
 		}
 	}
 	if len(snapshotIDs) == 0 {
-		return nil, errors.New("drain snapshot contains no admitted cohort request")
+		return nil, nil, false, "", errors.New("drain snapshot contains no admitted cohort request")
 	}
 	slices.Sort(snapshotIDs)
-	bindings := make([]DrainSnapshotBinding, 0, len(snapshotIDs))
-	seenProducer := map[string]bool{}
+	anchorStream, anchorExists := producer[anchor.ProducerRequestID]
+	if !anchorExists || anchorStream.Ordinal != anchor.StreamOrdinal || anchorStream.AcceptedAt != anchor.FirstEventAtUTC {
+		return nil, snapshotIDs, false, "", errors.New("selected drain anchor lacks its exact authenticated producer response")
+	}
+	bindings := make([]DrainSnapshotBinding, 0, 1)
+	unknown := make([]string, 0, len(snapshotIDs))
+	anchorEngineID := ""
 	for _, snapshotID := range snapshotIDs {
 		producerID := snapshotID
-		stream, ok := producer[producerID]
-		if !ok && strings.HasSuffix(snapshotID, "-0") {
+		if producerID != anchor.ProducerRequestID && strings.HasSuffix(snapshotID, "-0") {
 			producerID = strings.TrimSuffix(snapshotID, "-0")
-			stream, ok = producer[producerID]
 		}
-		if !ok || seenProducer[producerID] {
-			return bindings, fmt.Errorf("drain snapshot request %q lacks a unique authenticated cohort response identity", snapshotID)
+		if producerID != anchor.ProducerRequestID {
+			unknown = append(unknown, snapshotID)
+			continue
 		}
-		seenProducer[producerID] = true
-		bindings = append(bindings, DrainSnapshotBinding{SnapshotRequestID: snapshotID, StreamOrdinal: stream.Ordinal, ProducerRequestID: producerID})
+		if anchorEngineID != "" {
+			return bindings, unknown, false, anchorEngineID, fmt.Errorf("drain snapshot request %q duplicates an authenticated cohort identity", snapshotID)
+		}
+		bindings = append(bindings, DrainSnapshotBinding{SnapshotRequestID: snapshotID, StreamOrdinal: anchorStream.Ordinal, ProducerRequestID: producerID})
+		anchorEngineID = snapshotID
 	}
-	return bindings, nil
+	if anchor.ProducerRequestID == "" || anchor.FirstEventAtUTC == "" || anchor.SelectedAtUTC == "" || anchor.CreateStartedAtUTC == "" || anchorEngineID == "" {
+		return bindings, unknown, false, anchorEngineID, errors.New("exact late-selected drain anchor is absent from engine snapshot")
+	}
+	firstAt, firstErr := time.Parse(time.RFC3339Nano, anchor.FirstEventAtUTC)
+	selectedAt, selectedErr := time.Parse(time.RFC3339Nano, anchor.SelectedAtUTC)
+	createAt, createErr := time.Parse(time.RFC3339Nano, anchor.CreateStartedAtUTC)
+	if firstErr != nil || selectedErr != nil || createErr != nil || selectedAt.Before(firstAt) || createAt.Before(selectedAt) {
+		return bindings, unknown, false, anchorEngineID, errors.New("drain anchor first-event/selection/create timeline is invalid")
+	}
+	// This contract deliberately attributes only the late-selected anchor. It
+	// never upgrades the surrounding pressure cohort into a full cohort claim.
+	return bindings, unknown, false, anchorEngineID, nil
 }
 
 func validateDrainReceiptDigest(operation DrainOperation) error {

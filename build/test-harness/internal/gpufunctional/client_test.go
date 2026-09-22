@@ -38,24 +38,29 @@ func jsonResponse(w http.ResponseWriter, status int, value any) {
 }
 
 type prefixServer struct {
-	mu                sync.Mutex
-	prompt, completed int
-	hit               float64
-	active            int
-	resetCalls        int
-	streamDones       []chan struct{}
-	lastPrompt        string
-	successMetricMode string
-	requestPaths      []string
-	completionPrompts []string
-	completedAtReset  []int
-	rejectPrimer      bool
-	blockPrimer       bool
-	finishStreamsFast bool
-	forceBusySuccess  bool
-	rejectStream      int
-	streamRequests    int
-	releaseStreams    bool
+	mu                 sync.Mutex
+	prompt, completed  int
+	hit                float64
+	active             int
+	resetCalls         int
+	streamDones        []chan struct{}
+	lastPrompt         string
+	successMetricMode  string
+	requestPaths       []string
+	completionPrompts  []string
+	completedAtReset   []int
+	rejectPrimer       bool
+	blockPrimer        bool
+	finishStreamsFast  bool
+	forceBusySuccess   bool
+	missingTerminal    bool
+	terminalReason     string
+	skipStreamSuccess  bool
+	extraStreamSuccess int
+	postCohortBusy     bool
+	rejectStream       int
+	streamRequests     int
+	releaseStreams     bool
 }
 
 func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +81,8 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 		running, waiting := 0, 0
 		if active > 0 {
 			running, waiting = 1, active-1
+		} else if s.postCohortBusy && completed >= 3+streamCohortSize {
+			running = 1
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		fmt.Fprintf(w, "vllm:gpu_prefix_cache_hit_rate{model_name=\"%s\"} %g\n", modelName, hit)
@@ -146,8 +153,20 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 			if !s.finishStreamsFast {
 				s.active--
 			}
-			s.completed++
+			if !s.skipStreamSuccess {
+				s.completed++
+				if ordinal == streamCohortSize-1 {
+					s.completed += s.extraStreamSuccess
+				}
+			}
+			reason := s.terminalReason
+			if reason == "" {
+				reason = "length"
+			}
 			s.mu.Unlock()
+			if !s.missingTerminal {
+				fmt.Fprintf(w, "data: {\"id\":\"cmpl-prefix-stream-%d\",\"object\":\"text_completion\",\"created\":1,\"model\":%q,\"choices\":[{\"index\":0,\"text\":\"\",\"logprobs\":null,\"finish_reason\":%q,\"stop_reason\":null}]}\n\n", ordinal, modelName, reason)
+			}
 			fmt.Fprint(w, "data: [DONE]\n\n")
 			return
 		}
@@ -199,7 +218,7 @@ func TestRunPrefixCohortRefusesUnestablishedAndContradictoryBusyControls(t *test
 			}
 			client.sleep = func(context.Context, time.Duration) error { return nil }
 			receipt, err := client.RunPrefix(t.Context(), true)
-			if err == nil || receipt.Busy == nil || receipt.Busy.Cohort.Schema != "phorvex.gpu.stream-cohort.v2" || len(receipt.Busy.Cohort.Streams) != streamCohortSize {
+			if err == nil || receipt.Busy == nil || receipt.Busy.Cohort.Schema != "phorvex.gpu.stream-cohort.v3" || len(receipt.Busy.Cohort.Streams) != streamCohortSize {
 				t.Fatalf("receipt=%+v err=%v", receipt, err)
 			}
 			tc.state.mu.Lock()
@@ -276,15 +295,45 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 				if !busyEstablished(receipt.Busy.ActiveMetrics.Values) || !idle(receipt.Busy.PreIdle.Values) {
 					t.Fatalf("direct receipt omitted idle/active cohort bracket: %+v", receipt.Busy)
 				}
+				if !idle(receipt.Busy.PostCohort.Values) || receipt.Busy.PostCohort.Values["vllm:request_success_total"]-receipt.Busy.PreIdle.Values["vllm:request_success_total"] != streamCohortSize || receipt.Busy.PostCohort.RawBody == "" {
+					t.Fatalf("direct receipt omitted exact post-cohort reconciliation: %+v", receipt.Busy)
+				}
 				seenIDs := map[string]bool{}
 				for _, stream := range receipt.Busy.Cohort.Streams {
-					if stream.SubmittedAt == "" || stream.AcceptedAt == "" || stream.RequestID == "" || stream.EventCount == 0 || !stream.Finished || !stream.SawDone || stream.Termination != "complete" || seenIDs[stream.RequestID] {
+					if stream.SubmittedAt == "" || stream.AcceptedAt == "" || stream.RequestID == "" || stream.EventCount < 2 || !stream.Finished || !stream.SawDone || stream.FinishReason != "length" || stream.Termination != "complete" || seenIDs[stream.RequestID] {
 						t.Fatalf("direct cohort lifecycle differs: %+v", stream)
 					}
 					seenIDs[stream.RequestID] = true
 				}
 			} else if receipt.Reset != nil || state.resetCalls != 0 || len(prompts) != 3 {
 				t.Fatalf("no-action executed reset or extra inference: reset=%+v calls=%d prompts=%q", receipt.Reset, state.resetCalls, prompts)
+			}
+		})
+	}
+}
+
+func TestRunPrefixRequiresTerminalLengthAndExactPostCohortCounter(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		state *prefixServer
+	}{
+		{name: "missing terminal event", state: &prefixServer{missingTerminal: true}},
+		{name: "contradictory terminal reason", state: &prefixServer{terminalReason: "stop"}},
+		{name: "missing success counter advancement", state: &prefixServer{skipStreamSuccess: true}},
+		{name: "incorrect success counter advancement", state: &prefixServer{extraStreamSuccess: 1}},
+		{name: "post cohort remains busy", state: &prefixServer{postCohortBusy: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(tc.state.serve))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.sleep = func(context.Context, time.Duration) error { return nil }
+			receipt, err := client.RunPrefix(t.Context(), true)
+			if err == nil || receipt.Busy == nil || receipt.Busy.Cohort.Expected != streamCohortSize {
+				t.Fatalf("receipt=%+v err=%v", receipt, err)
 			}
 		})
 	}
@@ -378,21 +427,24 @@ func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 
 }
 
 type drainServer struct {
-	mu                  sync.Mutex
-	active              int
-	closed              bool
-	streamDones         []chan struct{}
-	streamIDs           []string
-	snapshotIDs         []string
-	opID, generation    string
-	nonces              []string
-	reopenCalls         int
-	capabilities        int
-	wrongRecoveredEpoch bool
-	omitDisposition     bool
-	loseCreateResponse  bool
-	loseReopenResponse  bool
-	wrongStreamIdentity bool
+	mu                      sync.Mutex
+	active                  int
+	streamRequests          int
+	closed                  bool
+	streamDones             []chan struct{}
+	streamIDs               []string
+	snapshotIDs             []string
+	opID, generation        string
+	nonces                  []string
+	reopenCalls             int
+	capabilities            int
+	wrongRecoveredEpoch     bool
+	omitDisposition         bool
+	loseCreateResponse      bool
+	loseReopenResponse      bool
+	wrongStreamIdentity     bool
+	anchorExitsBeforeCreate bool
+	anchorExitTriggered     bool
 }
 
 func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -416,7 +468,18 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/metrics":
 		s.mu.Lock()
 		active := s.active
+		var finishAnchor chan struct{}
+		if s.anchorExitsBeforeCreate && !s.anchorExitTriggered && active >= 2 && len(s.streamDones) > 0 {
+			s.anchorExitTriggered = true
+			finishAnchor = s.streamDones[0]
+		}
 		s.mu.Unlock()
+		if finishAnchor != nil {
+			close(finishAnchor)
+			// Let the real HTTP/SSE consumer observe the terminal event before the
+			// active-metrics response releases the operation-selection path.
+			time.Sleep(100 * time.Millisecond)
+		}
 		running, waiting := 0, 0
 		if active > 0 {
 			running, waiting = 1, active-1
@@ -435,18 +498,19 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if streaming, _ := body["stream"].(bool); streaming {
 			s.mu.Lock()
-			ordinal := s.active
+			ordinal := s.streamRequests
+			s.streamRequests++
 			s.active++
 			s.streamIDs = append(s.streamIDs, fmt.Sprintf("cmpl-drain-stream-%d-0", ordinal))
 			done := make(chan struct{})
 			s.streamDones = append(s.streamDones, done)
 			s.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
 			requestID := fmt.Sprintf("cmpl-drain-stream-%d", ordinal)
-			if s.wrongStreamIdentity && ordinal == 0 {
-				requestID = "cmpl-foreign-stream"
+			if ordinal == 0 {
+				fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", requestID, modelName)
 			}
-			fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", requestID, modelName)
 			w.(http.Flusher).Flush()
 			select {
 			case <-done:
@@ -455,6 +519,10 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			s.active--
 			s.mu.Unlock()
+			if ordinal == 0 && s.anchorExitsBeforeCreate {
+				fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"\",\"logprobs\":null,\"finish_reason\":\"length\",\"stop_reason\":null}]}\n\n", requestID, modelName)
+				fmt.Fprint(w, "data: [DONE]\n\n")
+			}
 			return
 		}
 		jsonResponse(w, 200, map[string]any{"id": "cmpl", "object": "text_completion", "created": 1, "model": modelName, "choices": []map[string]any{{"index": 0, "text": "x", "logprobs": nil, "finish_reason": "length", "stop_reason": nil, "prompt_logprobs": nil}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2, "prompt_tokens_details": nil}})
@@ -466,8 +534,15 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.opID = payload["operation_id"].(string)
 		s.generation = payload["operation_generation"].(string)
 		s.snapshotIDs = append([]string(nil), s.streamIDs...)
+		if s.wrongStreamIdentity && len(s.snapshotIDs) > 0 {
+			s.snapshotIDs[0] = "cmpl-foreign-stream-0"
+		}
 		for _, done := range s.streamDones {
-			close(done)
+			select {
+			case <-done:
+			default:
+				close(done)
+			}
 		}
 		s.streamDones = nil
 		body := operationBody(s.opID, s.generation, "DRAINING", "CLOSED", "2", "", "", s.snapshotIDs)
@@ -526,15 +601,15 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 	owner := testDrainOwner
 	for _, tc := range []struct {
-		name                                                                                             string
-		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity bool
-		wantErr                                                                                          bool
-		wantReopens                                                                                      int
+		name                                                                                                                      string
+		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, anchorExitsBeforeCreate bool
+		wantErr                                                                                                                   bool
+		wantReopens                                                                                                               int
 	}{
-		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot identity mismatch", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1},
+		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "anchor exited before create", direct: true, anchorExitsBeforeCreate: true, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity}
+			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity, anchorExitsBeforeCreate: tc.anchorExitsBeforeCreate}
 			server := httptest.NewServer(http.HandlerFunc(state.serve))
 			defer server.Close()
 			client, err := New(server.URL, testToken, server.Client())
@@ -555,20 +630,39 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 			if state.reopenCalls != tc.wantReopens {
 				t.Fatalf("reopen calls=%d want %d", state.reopenCalls, tc.wantReopens)
 			}
+			if tc.anchorExitsBeforeCreate && (receipt.Create != nil || state.opID != "") {
+				t.Fatalf("operation was sent after anchor exited: %+v", receipt)
+			}
 			if tc.loseCreateResponse && (receipt.CreateObservation == nil || receipt.CreateObservation.Body == "" || len(receipt.CleanupObservations) < 2) {
 				t.Fatalf("lost create response did not retain partial body and cleanup reads: %+v", receipt)
 			}
 			if tc.loseReopenResponse && (receipt.ReopenObservation == nil || receipt.ReopenObservation.Body == "" || len(receipt.CleanupObservations) != 1 || receipt.Reopen == nil || receipt.Reopen.State != "OPENED") {
 				t.Fatalf("lost reopen response did not retain raw response and observed OPEN state: %+v", receipt)
 			}
-			state.mu.Lock()
-			active := state.active
-			state.mu.Unlock()
+			var active int
+			for deadline := time.Now().Add(time.Second); ; time.Sleep(time.Millisecond) {
+				state.mu.Lock()
+				active = state.active
+				state.mu.Unlock()
+				if active == 0 || time.Now().After(deadline) {
+					break
+				}
+			}
 			if active != 0 {
 				t.Fatalf("owned stream remained active after return: %d", active)
 			}
-			if !tc.wantErr && (receipt.SecondObservation == nil || len(receipt.SecondObservation.Observations) != 2 || receipt.PostInference == nil || receipt.Mode != "direct" || len(receipt.SnapshotBindings) < 2 || receipt.Cohort.Expected != streamCohortSize || len(receipt.FirstObservationSource.Body) == 0 || len(receipt.SecondObservationSource.Body) == 0 || len(receipt.ReopenObservation.Body) == 0 || len(receipt.RecoveredCapabilityObservation.Body) == 0) {
+			if !tc.wantErr && (receipt.SecondObservation == nil || len(receipt.SecondObservation.Observations) != 2 || receipt.PostInference == nil || receipt.Mode != "direct" || len(receipt.SnapshotBindings) != 1 || len(receipt.UnattributedSnapshotIDs) != streamCohortSize-1 || receipt.FullCohortAttributed || receipt.Anchor == nil || receipt.Anchor.StreamOrdinal < 0 || receipt.Anchor.ProducerRequestID != "cmpl-drain-stream-0" || receipt.Anchor.EngineRequestID != "cmpl-drain-stream-0-0" || receipt.Anchor.CreateStartedAtUTC == "" || receipt.Cohort.Expected != streamCohortSize || len(receipt.FirstObservationSource.Body) == 0 || len(receipt.SecondObservationSource.Body) == 0 || len(receipt.ReopenObservation.Body) == 0 || len(receipt.RecoveredCapabilityObservation.Body) == 0) {
 				t.Fatalf("direct receipt incomplete: %+v", receipt)
+			}
+			if !tc.wantErr {
+				for _, stream := range receipt.Cohort.Streams {
+					if stream.Ordinal == receipt.Anchor.StreamOrdinal {
+						continue
+					}
+					if stream.RequestID != "" || stream.FinishedAt == "" || !stream.Finished {
+						t.Fatalf("queued background request was falsely attributed or not finalized: %+v", stream)
+					}
+				}
 			}
 		})
 	}
