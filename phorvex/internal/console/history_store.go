@@ -144,9 +144,8 @@ func openHistoryStore(cfg Config) (*historyStore, error) {
 	if cfg.HistoryRetentionDays < 0 || cfg.HistoryRetentionDays > 3650 {
 		return nil, errors.New("history retention must be 0..3650 days")
 	}
-	if err := prepareHistoryStorage(cfg); err != nil {
-		return nil, err
-	}
+	// Open the existing mixed-format archive directly. Retention and legacy-record
+	// compression run in bounded importer batches, never as a full startup scan.
 	path := filepath.Join(cfg.StateDir, "audit-history.db")
 	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 		usage, usageErr := readHistoryFilesystemUsage(cfg.StateDir)

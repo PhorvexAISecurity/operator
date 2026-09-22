@@ -1,7 +1,8 @@
 package console
 
-// Retention is opt-in. Migration builds and verifies a separate database before
-// atomically replacing the original; importer offsets and cursor sequences survive.
+// Retention is opt-in. Normal service startup never copies the archive: bounded
+// background maintenance expires records and compresses legacy values in place.
+// Explicit offline compaction preserves importer offsets and cursor sequences.
 import (
 	"bytes"
 	"compress/gzip"
@@ -77,6 +78,8 @@ func expiredHistoryValue(raw []byte, cutoff time.Time) (storedHistoryRecord, boo
 	return env, !rec.Time.IsZero() && rec.Time.Before(cutoff), nil
 }
 
+// prepareHistoryStorage is explicit offline maintenance, not a server startup step.
+// The caller must arrange downtime and exclusive access for the full copy/verification.
 func prepareHistoryStorage(cfg Config) error {
 	if cfg.HistoryRetentionDays == 0 {
 		return nil
@@ -320,7 +323,7 @@ func compactHistoryStorage(cfg Config, src *bolt.DB) error {
 	return dir.Sync()
 }
 
-// pruneExpiredHistory performs bounded maintenance, separate from source ingestion.
+// pruneExpiredHistory performs bounded expiry and legacy compression, separate from source ingestion.
 // Offsets stay intact so expired source rows are not imported again.
 func (h *historyStore) pruneExpiredHistory() error {
 	if h.cfg.HistoryRetentionDays == 0 {
@@ -373,8 +376,23 @@ func (h *historyStore) pruneExpiredHistory() error {
 				if e = cursor.Delete(); e != nil {
 					return e
 				}
+			} else if !bytes.HasPrefix(v, []byte{0x1f, 0x8b}) {
+				compressed, e := encodeHistoryValue(raw)
+				if e != nil {
+					return e
+				}
+				if len(compressed) < len(v) {
+					if e = rows.Put(key, compressed); e != nil {
+						return e
+					}
+				}
 			}
-			k, v = cursor.Next()
+			// Writes and deletes may change cursor positions. Resume strictly after
+			// the processed identity rather than skipping its following neighbour.
+			k, v = cursor.Seek(key)
+			if bytes.Equal(k, key) {
+				k, v = cursor.Next()
+			}
 		}
 		if k == nil {
 			next = nil
