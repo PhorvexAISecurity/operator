@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -100,9 +102,18 @@ func TestM064KVTerminalReconcileSupersedeAndStaleDecision(t *testing.T) {
 	if err != nil || !second.Emitted || stack.resetCalls != 2 {
 		t.Fatalf("fresh decision did not reuse terminal slot: result=%+v calls=%d err=%v", second, stack.resetCalls, err)
 	}
+	beforeCM, beforeReceipt, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionKVReset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeRV := beforeCM.ResourceVersion
 	stale, err := (kvResetHandler{}).Enact(context.Background(), ec, firstReq)
-	if err == nil || stale.Emitted || stack.resetCalls != 2 {
-		t.Fatalf("stale earlier decision superseded terminal high-water: result=%+v calls=%d err=%v", stale, stack.resetCalls, err)
+	if err != nil || stale.Emitted || stale.NoEffect != NoEffectRefused || stale.MutationKind != "none" || len(stale.ObjectsTouched) != 0 || stale.RollbackRef != "" || stack.resetCalls != 2 {
+		t.Fatalf("stale earlier decision was not a definite pre-send refusal: result=%+v calls=%d err=%v", stale, stack.resetCalls, err)
+	}
+	afterCM, afterReceipt, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionKVReset)
+	if err != nil || afterCM.ResourceVersion != beforeRV || !reflect.DeepEqual(afterReceipt, beforeReceipt) {
+		t.Fatalf("pre-send refusal changed protected receipt: rv=%s/%s before=%+v after=%+v err=%v", beforeRV, afterCM.ResourceVersion, beforeReceipt, afterReceipt, err)
 	}
 }
 
@@ -117,6 +128,72 @@ func TestM064PresenceAwareSelectionRejectsMissingVersusPresentEmpty(t *testing.T
 	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: stack}, req)
 	if err == nil || !IsNoEffectRefusal(err) || result.Emitted || stack.resetCalls != 0 {
 		t.Fatalf("missing/present-empty mismatch reached effect: result=%+v calls=%d err=%v", result, stack.resetCalls, err)
+	}
+}
+
+func TestM064TerminalGenerationExhaustionIsDefinitePreSendRefusal(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
+	receipt := m064PreparedReceipt(pod, model.ActionKVReset, "terminal-generation-exhausted")
+	receipt.Phase = "terminal-full"
+	receipt.Generation = math.MaxUint64
+	current := pod.DeepCopy()
+	current.Annotations[annoKVResetEpoch] = receipt.ExpectedReset.Value
+	cm := m064LiteralReceipt(receipt)
+	c := fakeC(current, cm)
+	stack := &mockVLLM{}
+	ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: stack}
+	req := boundReq(current, model.ActionKVReset)
+	req.TickID = "new-selection-after-generation-exhausted"
+	before := &corev1.ConfigMap{}
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(cm), before); err != nil {
+		t.Fatal(err)
+	}
+	result, err := (kvResetHandler{}).Enact(t.Context(), ec, req)
+	if err != nil || result.NoEffect != NoEffectRefused || result.Emitted || result.MutationKind != "none" || len(result.ObjectsTouched) != 0 || result.RollbackRef != "" || stack.resetCalls != 0 {
+		t.Fatalf("generation exhaustion result=%+v calls=%d err=%v", result, stack.resetCalls, err)
+	}
+	after := &corev1.ConfigMap{}
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(cm), after); err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("generation exhaustion changed terminal receipt: before=%+v after=%+v err=%v", before, after, err)
+	}
+}
+
+func TestM064TerminalEndpointOrSecurityDriftIsDefinitePreSendRefusal(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*corev1.Pod, *operationReceipt)
+	}{
+		{name: "endpoint-drift", mutate: func(current *corev1.Pod, _ *operationReceipt) { current.Status.PodIP = "10.0.0.44" }},
+		{name: "security-drift", mutate: func(_ *corev1.Pod, receipt *operationReceipt) { receipt.ServingServiceAccount = "other" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
+			pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
+			receipt := m064PreparedReceipt(pod, model.ActionKVReset, "terminal-"+tc.name)
+			receipt.Phase = "terminal-full"
+			current := pod.DeepCopy()
+			current.Annotations[annoKVResetEpoch] = receipt.ExpectedReset.Value
+			tc.mutate(current, &receipt)
+			cm := m064LiteralReceipt(receipt)
+			c := fakeC(current, cm)
+			stack := &mockVLLM{}
+			ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: stack}
+			req := boundReq(current, model.ActionKVReset)
+			req.TickID = "new-selection-after-" + tc.name
+			before := &corev1.ConfigMap{}
+			if err := c.Get(t.Context(), client.ObjectKeyFromObject(cm), before); err != nil {
+				t.Fatal(err)
+			}
+			result, err := (kvResetHandler{}).Enact(t.Context(), ec, req)
+			if err != nil || result.NoEffect != NoEffectRefused || result.Emitted || result.MutationKind != "none" || len(result.ObjectsTouched) != 0 || result.RollbackRef != "" || stack.resetCalls != 0 {
+				t.Fatalf("%s result=%+v calls=%d err=%v", tc.name, result, stack.resetCalls, err)
+			}
+			after := &corev1.ConfigMap{}
+			if err := c.Get(t.Context(), client.ObjectKeyFromObject(cm), after); err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("%s changed terminal receipt: before=%+v after=%+v err=%v", tc.name, before, after, err)
+			}
+		})
 	}
 }
 

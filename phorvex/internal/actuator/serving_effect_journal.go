@@ -281,17 +281,17 @@ func pendingProtectedServingReceipt(ctx context.Context, ec EnactCtx, req Reques
 // make that write safe to repeat. Malformed or unreadable slots fail closed for the
 // same reason. The dispatch path independently repeats this check so a record created
 // after capability evaluation still cannot be replayed.
-func protectedServingCapability(ctx context.Context, reader client.Reader, journalNamespace, targetUID string, action model.Action) (bool, string) {
+func protectedServingCapability(ctx context.Context, reader client.Reader, journalNamespace string, target Target, action model.Action, security *ServingSecurityConfig) (bool, string) {
 	if !protectedServingAction(action) {
 		return true, ""
 	}
 	domain := effectDomain(action)
-	if reader == nil || journalNamespace == "" || targetUID == "" {
+	if reader == nil || journalNamespace == "" || target.UID == "" {
 		return false, fmt.Sprintf("protected-serving-journal: exact %s slot authority is unavailable", domain)
 	}
 	readCtx, cancel := context.WithTimeout(ctx, protectedServingCapabilityTimeout)
 	defer cancel()
-	cm, r, err := servingReceiptGet(readCtx, EnactCtx{Reader: reader, JournalNamespace: journalNamespace}, targetUID, action)
+	cm, r, err := servingReceiptGet(readCtx, EnactCtx{Reader: reader, JournalNamespace: journalNamespace}, target.UID, action)
 	if apierrors.IsNotFound(err) {
 		return true, ""
 	}
@@ -299,9 +299,31 @@ func protectedServingCapability(ctx context.Context, reader client.Reader, journ
 		return false, fmt.Sprintf("protected-serving-journal: exact %s slot is unreadable or invalid", domain)
 	}
 	if terminalServingPhase(r.Phase) {
+		pod := &corev1.Pod{}
+		if err := reader.Get(readCtx, client.ObjectKey{Namespace: target.Namespace, Name: target.Pod}, pod); err != nil ||
+			string(pod.UID) != target.UID || pod.UID == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil ||
+			r.PolicyNamespace != target.Namespace || r.PolicyName != target.PolicyName || r.PolicyUID != target.PolicyUID ||
+			r.TargetName != target.Pod || r.TargetUID != target.UID ||
+			normalizeServiceAccount(pod.Spec.ServiceAccountName) != normalizeServiceAccount(target.ServiceAccount) ||
+			!servingExpectedMatches(pod, r) || !servingCapabilitySecurityMatches(security, pod, target, r) {
+			return false, fmt.Sprintf("protected-serving-journal: terminal %s authority or expected state drifted", domain)
+		}
 		return true, ""
 	}
 	return false, fmt.Sprintf("protected-serving-journal: unresolved %s operation in phase %s at %s", domain, r.Phase, cm.Name)
+}
+
+func servingCapabilitySecurityMatches(security *ServingSecurityConfig, pod *corev1.Pod, target Target, r operationReceipt) bool {
+	if security == nil || security.validationErr != nil || pod == nil ||
+		r.ServingServiceAccount != normalizeServiceAccount(pod.Spec.ServiceAccountName) ||
+		r.EndpointConfigSHA256 != protectedEndpointConfigDigest(pod) {
+		return false
+	}
+	if security.mode == ServingSecurityLegacyPlaintext {
+		return r.ServingLegacy && r.ServingBindingSHA256 == ""
+	}
+	binding, ok := security.binding(target.Namespace, target.PolicyName, target.PolicyUID, normalizeServiceAccount(target.ServiceAccount))
+	return ok && !r.ServingLegacy && r.ServingBindingSHA256 == servingBindingDigest(security.operatorNamespace, binding)
 }
 
 func servingSlotAdmission(ctx context.Context, ec EnactCtx) error {
@@ -433,8 +455,9 @@ func prepareServingReceipt(ctx context.Context, ec EnactCtx, req Request, pod *c
 			}
 			return cm, old, false, servingReconciled(cm, old, note), nil
 		}
-		if !servingReceiptSecurityMatches(ec, pod, r) || !servingExpectedMatches(pod, old) || !servingObservationMatches(pod, r) || old.Generation == math.MaxUint64 {
-			return cm, old, false, HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("stale selection cannot supersede protected serving terminal high-water"))
+		if !servingReceiptSecurityMatches(ec, pod, r) || !servingReceiptSecurityMatches(ec, pod, old) ||
+			!servingExpectedMatches(pod, old) || !servingObservationMatches(pod, r) || old.Generation == math.MaxUint64 {
+			return cm, old, false, HandlerResult{NoEffect: NoEffectRefused, MutationKind: "none", Note: "stale selection refused before protected serving journal advance"}, nil
 		}
 		r.Generation = old.Generation + 1
 		if err := journalAdvance(ctx, ec, cm, r); err != nil {

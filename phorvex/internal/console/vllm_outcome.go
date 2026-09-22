@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
 var vllmEventSequence atomic.Uint64
@@ -411,15 +412,10 @@ type endpointSetupAuthority struct {
 }
 
 type guardrailSetupAuthority struct {
-	pod                 string
-	targetUID           string
-	originalRuntime     guardrailState
-	originalAnnotations *map[string]string
-	stagedAnnotations   *map[string]string
-	runtimeAttempted    bool
-	runtimeStaged       bool
-	metadataStaged      bool
-	restoration         string
+	pod             string
+	targetUID       string
+	originalRuntime guardrailState
+	restoration     string
 }
 
 type jsonPatchOperation struct {
@@ -606,105 +602,34 @@ func (s *Server) restoreEndpointSetup(authority *endpointSetupAuthority) error {
 }
 
 func (s *Server) prepareGuardrailEffect(podName, targetUID string, execIn func(string) (string, error)) (*guardrailSetupAuthority, error) {
-	pod, err := s.readVLLMPod(podName)
-	if err != nil || pod.Metadata.UID != targetUID || pod.Metadata.ResourceVersion == "" {
+	firstPod, err := s.readVLLMPod(podName)
+	if err != nil || firstPod.Metadata.UID != targetUID || firstPod.Metadata.ResourceVersion == "" {
 		return nil, fmt.Errorf("target Pod identity authority changed before guardrail setup")
 	}
-	before, err := readGuardrailState(execIn)
+	firstRuntime, err := readGuardrailState(execIn)
 	if err != nil {
 		return nil, fmt.Errorf("read guardrail setup baseline: %w", err)
 	}
-	authority := &guardrailSetupAuthority{pod: podName, targetUID: targetUID, originalRuntime: before, originalAnnotations: copyOptionalStringMap(pod.Metadata.Annotations)}
-	authority.runtimeAttempted = true
-	if _, err := reloadGuardrail(execIn, "pgv1"); err != nil {
-		authority.restoration = "required: guardrail runtime write outcome is unknown"
-		return authority, fmt.Errorf("set guardrail stimulus variant: %w", err)
+	secondPod, podErr := s.readVLLMPod(podName)
+	secondRuntime, runtimeErr := readGuardrailState(execIn)
+	if podErr != nil || runtimeErr != nil || secondPod.Metadata.UID != targetUID || secondPod.Metadata.ResourceVersion == "" {
+		return nil, fmt.Errorf("guardrail coherent setup readback is unavailable")
 	}
-	authority.runtimeStaged = true
-	pod, err = s.readVLLMPod(podName)
-	if err != nil || pod.Metadata.UID != targetUID || pod.Metadata.ResourceVersion == "" {
-		return authority, fmt.Errorf("target Pod identity changed after guardrail runtime setup; restoration required")
+	firstCurrent := stringMapValue(firstPod.Metadata.Annotations, "phorvex.ai/guardrail-variant")
+	firstRoster := stringMapValue(firstPod.Metadata.Annotations, "phorvex.ai/guardrail-variants")
+	secondCurrent := stringMapValue(secondPod.Metadata.Annotations, "phorvex.ai/guardrail-variant")
+	secondRoster := stringMapValue(secondPod.Metadata.Annotations, "phorvex.ai/guardrail-variants")
+	if firstCurrent != secondCurrent || firstRoster != secondRoster || firstRuntime != secondRuntime {
+		return nil, fmt.Errorf("guardrail runtime or Pod roster changed during setup observation")
 	}
-	// Bind the manager-visible metadata to the actual runtime baseline. The live failure that led to
-	// this code had pgv1 in memory and stale pgv2 metadata, so the manager acknowledged another pgv1.
-	authority.originalAnnotations = copyOptionalStringMap(pod.Metadata.Annotations)
-	authority.stagedAnnotations = copyOptionalStringMap(authority.originalAnnotations)
-	if authority.stagedAnnotations == nil {
-		annotations := map[string]string{}
-		authority.stagedAnnotations = &annotations
+	roster, err := servingcontext.ParseGuardrailRoster(firstCurrent, firstRoster)
+	if err != nil {
+		return nil, fmt.Errorf("guardrail Pod roster is invalid: %w", err)
 	}
-	(*authority.stagedAnnotations)["phorvex.ai/guardrail-variant"] = "pgv1"
-	ops := replaceOptionalMapPatch("/metadata/annotations", authority.originalAnnotations, authority.stagedAnnotations)
-	if err := s.exactJSONPatch("pod", podName, targetUID, pod.Metadata.ResourceVersion, ops...); err != nil {
-		if restoreErr := s.restoreGuardrailEffect(authority, execIn); restoreErr != nil {
-			authority.restoration = "required: " + restoreErr.Error()
-			return authority, fmt.Errorf("synchronize guardrail metadata: %w; exact restoration required: %v", err, restoreErr)
-		}
-		return authority, fmt.Errorf("synchronize guardrail metadata: %w; partial setup was restored", err)
+	if !firstRuntime.Ready || firstRuntime.Active != roster.Current {
+		return nil, fmt.Errorf("guardrail runtime and Pod roster are incoherent")
 	}
-	authority.metadataStaged = true
-	readback, readErr := s.readVLLMPod(podName)
-	runtime, runtimeErr := readGuardrailState(execIn)
-	finalPod, finalErr := s.readVLLMPod(podName)
-	if readErr != nil || runtimeErr != nil || finalErr != nil || readback.Metadata.UID != targetUID || finalPod.Metadata.UID != targetUID ||
-		!stringMapsEqual(readback.Metadata.Annotations, authority.stagedAnnotations) || runtime.Active != "pgv1" {
-		if restoreErr := s.restoreGuardrailEffect(authority, execIn); restoreErr != nil {
-			authority.restoration = "required: " + restoreErr.Error()
-			return authority, fmt.Errorf("guardrail coherent setup readback failed; exact restoration required: %v", restoreErr)
-		}
-		return authority, fmt.Errorf("guardrail coherent setup readback failed; partial setup was restored")
-	}
-	return authority, nil
-}
-
-func (s *Server) restoreGuardrailEffect(authority *guardrailSetupAuthority, execIn func(string) (string, error)) error {
-	if authority == nil {
-		return fmt.Errorf("guardrail restoration authority is unavailable")
-	}
-	pod, err := s.readVLLMPod(authority.pod)
-	if err != nil || pod.Metadata.UID != authority.targetUID || pod.Metadata.ResourceVersion == "" {
-		return fmt.Errorf("target Pod identity changed; refusing guardrail restoration")
-	}
-	if authority.originalRuntime.Active == "" {
-		return fmt.Errorf("original guardrail runtime state is unavailable")
-	}
-	if authority.runtimeAttempted && !authority.runtimeStaged {
-		return fmt.Errorf("guardrail runtime write outcome is unknown; refusing automatic restoration")
-	}
-	currentRuntime, runtimeErr := readGuardrailState(execIn)
-	postRuntimePod, podErr := s.readVLLMPod(authority.pod)
-	if runtimeErr != nil || podErr != nil || postRuntimePod.Metadata.UID != authority.targetUID {
-		return fmt.Errorf("guardrail runtime restoration authority readback failed")
-	}
-	// The sidecar reload API has no compare-and-swap token. Never send a compensating reload that
-	// could overwrite a manager-owned change after our final GET. Only finish metadata restoration
-	// when another authority has already restored the exact captured runtime.
-	if currentRuntime.Active != authority.originalRuntime.Active {
-		return fmt.Errorf("guardrail runtime is %q, not captured original %q; conditional restoration backend is unavailable", currentRuntime.Active, authority.originalRuntime.Active)
-	}
-	if originalMetadataVariant := stringMapValue(authority.originalAnnotations, "phorvex.ai/guardrail-variant"); originalMetadataVariant != "" && originalMetadataVariant != authority.originalRuntime.Active {
-		return fmt.Errorf("captured guardrail metadata and runtime were already inconsistent; refusing to recreate stale metadata")
-	}
-	if authority.metadataStaged {
-		if !stringMapsEqual(pod.Metadata.Annotations, authority.stagedAnnotations) {
-			return fmt.Errorf("guardrail Pod annotations changed; refusing restoration")
-		}
-		ops := replaceOptionalMapPatch("/metadata/annotations", authority.stagedAnnotations, authority.originalAnnotations)
-		if err := s.exactJSONPatch("pod", authority.pod, authority.targetUID, pod.Metadata.ResourceVersion, ops...); err != nil {
-			return err
-		}
-	} else if !stringMapsEqual(pod.Metadata.Annotations, authority.originalAnnotations) {
-		return fmt.Errorf("guardrail Pod annotations changed before restoration")
-	}
-	restoredPod, podErr := s.readVLLMPod(authority.pod)
-	restoredRuntime, runtimeErr := readGuardrailState(execIn)
-	finalPod, finalErr := s.readVLLMPod(authority.pod)
-	if podErr != nil || runtimeErr != nil || finalErr != nil || restoredPod.Metadata.UID != authority.targetUID || finalPod.Metadata.UID != authority.targetUID ||
-		!stringMapsEqual(restoredPod.Metadata.Annotations, authority.originalAnnotations) || restoredRuntime.Active != authority.originalRuntime.Active {
-		return fmt.Errorf("guardrail setup restoration readback is incomplete")
-	}
-	authority.restoration = "restored"
-	return nil
+	return &guardrailSetupAuthority{pod: podName, targetUID: targetUID, originalRuntime: firstRuntime, restoration: "not-needed"}, nil
 }
 
 func decodeKubectlJSON(s *Server, ns string, dst any, args ...string) error {

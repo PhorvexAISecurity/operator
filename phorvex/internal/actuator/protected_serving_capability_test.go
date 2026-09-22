@@ -107,11 +107,42 @@ func TestProtectedServingCapabilityAbsentTerminalAndDifferentUIDControls(t *test
 	t.Run("terminal", func(t *testing.T) {
 		receipt := m064PreparedReceipt(pod, model.ActionKVReset, "capability-terminal")
 		receipt.Phase = "terminal-full"
-		c := fakeC(m064LiteralReceipt(receipt))
+		current := pod.DeepCopy()
+		current.Annotations[annoKVResetEpoch] = receipt.ExpectedReset.Value
+		c := fakeC(current, m064LiteralReceipt(receipt))
 		if ok, why := protectedCapabilityNative(t, c).SupportsAction(t.Context(), model.ActionKVReset, target); !ok {
-			t.Fatalf("terminal slot support=(%v,%q), want dispatch-time high-water evaluation", ok, why)
+			t.Fatalf("coherent terminal slot support=(%v,%q), want eligible", ok, why)
 		}
 	})
+
+	t.Run("terminal expected state drift", func(t *testing.T) {
+		receipt := m064PreparedReceipt(pod, model.ActionKVReset, "capability-terminal-drift")
+		receipt.Phase = "terminal-full"
+		c := fakeC(pod, m064LiteralReceipt(receipt))
+		if ok, why := protectedCapabilityNative(t, c).SupportsAction(t.Context(), model.ActionKVReset, target); ok || !strings.Contains(why, "terminal kv-session-v1 authority or expected state drifted") {
+			t.Fatalf("drifted terminal slot support=(%v,%q), want preselection exclusion", ok, why)
+		}
+	})
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*corev1.Pod, *operationReceipt)
+	}{
+		{name: "terminal endpoint drift", mutate: func(current *corev1.Pod, _ *operationReceipt) { current.Status.PodIP = "10.0.0.44" }},
+		{name: "terminal security drift", mutate: func(_ *corev1.Pod, receipt *operationReceipt) { receipt.ServingServiceAccount = "other" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			receipt := m064PreparedReceipt(pod, model.ActionKVReset, strings.ReplaceAll(tc.name, " ", "-"))
+			receipt.Phase = "terminal-full"
+			current := pod.DeepCopy()
+			current.Annotations[annoKVResetEpoch] = receipt.ExpectedReset.Value
+			tc.mutate(current, &receipt)
+			ok, why := protectedCapabilityNative(t, fakeC(current, m064LiteralReceipt(receipt))).SupportsAction(t.Context(), model.ActionKVReset, target)
+			if ok || !strings.Contains(why, "terminal kv-session-v1 authority or expected state drifted") {
+				t.Fatalf("%s support=(%v,%q), want preselection exclusion", tc.name, ok, why)
+			}
+		})
+	}
 
 	t.Run("different target UID", func(t *testing.T) {
 		old := pod.DeepCopy()
@@ -279,5 +310,64 @@ func TestProtectedServingCapabilityRemovesPendingCandidateButKeepsAlternative(t 
 	}
 	if !foundRotate || !foundKVExclusion {
 		t.Fatalf("pending domain did not preserve an alternative candidate: rotate=%t kvExclusion=%t set=%+v", foundRotate, foundKVExclusion, set)
+	}
+}
+
+func TestProtectedServingTerminalGuardrailDriftIsExcludedFromActionSet(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{"app": "infer", labelGuardrailTier: "true"})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
+	pod.Annotations[annoGuardrailVariant] = "pgv1"
+	pod.Annotations[annoGuardrailAlts] = "pgv1,pgv2"
+	receipt := m064PreparedReceipt(pod, model.ActionGuardrailRotate, "candidate-terminal-drift")
+	receipt.Phase = "terminal-full"
+	native := protectedCapabilityNative(t, fakeC(pod, m064LiteralReceipt(receipt)))
+	view := &model.WorkloadView{
+		Pod: model.Pod{Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID), Labels: copyLabels(pod.Labels),
+			Ready: true, DesiredReplicas: 2, ReadyReplicas: 2, ServingDeclared: true, ServingEndpointReady: true},
+		Phase: model.PhaseWarm, Telemetry: model.Telemetry{ReqRate: model.PresentSignal(0, "fixture-measured")}, BlastRadius: 0.5,
+		Events:             []model.SecurityEventInfo{{Name: "guardrail-signal", UID: "guardrail-event-uid", Type: model.AttackVectorGuardrail, TargetsPod: true}},
+		ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour},
+	}
+	profile, ok := recon.Registry.Get("ucw-recon")
+	if !ok {
+		t.Fatal("ucw recon profile unavailable")
+	}
+	deps := actionset.Deps{
+		Recon: profile,
+		FactContext: func(*model.WorkloadView) recon.FactContext {
+			return recon.FactContext{AssetValue: 1, PHold: 0.8, StageUrgency: 0.5, BlastRadius: 0.5}
+		},
+		ECost: func(*model.WorkloadView, model.Move, model.Policy) float64 { return 0.1 },
+		CHi:   func(*model.WorkloadView, model.Move, model.Policy) float64 { return 0.1 }, CostCeiling: 1,
+		Eligible: func(v *model.WorkloadView, action model.Action, cover []string) *actionset.Eligibility {
+			if len(cover) == 0 {
+				return &actionset.Eligibility{Excluded: true, Kind: "no-cover", Detail: "no cover"}
+			}
+			target := Target{Namespace: v.Pod.Namespace, Pod: v.Pod.Name, UID: v.Pod.UID, Labels: v.Pod.Labels,
+				PolicyName: "policy", PolicyUID: "policy-uid", ServiceAccount: "default"}
+			if supported, why := native.SupportsAction(t.Context(), action, target); !supported {
+				return &actionset.Eligibility{Excluded: true, Kind: "capability-unsupported", Detail: why}
+			}
+			return nil
+		},
+	}
+	policy := model.Policy{Tenant: "ns", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid",
+		EnabledActions:       map[model.Action]bool{model.ActionGuardrailRotate: true, model.ActionRotate: true},
+		MinAvailableReplicas: 1, AntiOverRotationWindow: time.Minute, P99Ms: 200, MaxMovesPerTick: 1}
+	set := deps.Generate([]*model.WorkloadView{view}, policy)
+	foundRotate, foundGuardrailExclusion := false, false
+	for _, candidate := range set.Candidates {
+		if candidate.Action == model.ActionGuardrailRotate {
+			t.Fatalf("drifted terminal guardrail action survived into candidates: %+v", candidate)
+		}
+		foundRotate = foundRotate || candidate.Action == model.ActionRotate
+	}
+	for _, exclusion := range set.Excluded {
+		if exclusion.Action == model.ActionGuardrailRotate && exclusion.EligibilityKind == "capability-unsupported" && strings.Contains(exclusion.Reason, guardrailEffectDomain) {
+			foundGuardrailExclusion = true
+		}
+	}
+	if !foundRotate || !foundGuardrailExclusion {
+		t.Fatalf("terminal drift did not preserve an alternative candidate: rotate=%t guardrailExclusion=%t set=%+v", foundRotate, foundGuardrailExclusion, set)
 	}
 }

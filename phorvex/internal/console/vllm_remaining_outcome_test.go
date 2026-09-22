@@ -103,15 +103,17 @@ func yamlValue(manifest, key string) string {
 }
 
 type remainingHandlerFixture struct {
-	t             *testing.T
-	serverURL     string
-	mu            sync.Mutex
-	events        map[string]string
-	creates       int
-	commands      []string
-	podUID        string
-	replaceOnExec bool
-	loseCreateAck bool
+	t                *testing.T
+	serverURL        string
+	mu               sync.Mutex
+	events           map[string]string
+	creates          int
+	commands         []string
+	podUID           string
+	replaceOnExec    bool
+	loseCreateAck    bool
+	guardrailCurrent string
+	guardrailRoster  string
 }
 
 func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...string) (string, error) {
@@ -131,8 +133,18 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 		if uid == "" {
 			uid = "pod-uid"
 		}
+		annotations := map[string]string{}
+		if f.guardrailCurrent != "" {
+			annotations["phorvex.ai/guardrail-variant"] = f.guardrailCurrent
+		}
+		if f.guardrailRoster != "" {
+			annotations["phorvex.ai/guardrail-variants"] = f.guardrailRoster
+		}
 		f.mu.Unlock()
-		return `{"metadata":{"name":"vllm-0","uid":"` + uid + `","resourceVersion":"11","labels":{"app":"vllm","phorvex.ai/lora-enabled":"true"},"annotations":{}}}`, nil
+		pod := map[string]any{"metadata": map[string]any{"name": "vllm-0", "uid": uid, "resourceVersion": "11",
+			"labels": map[string]string{"app": "vllm", "phorvex.ai/lora-enabled": "true"}, "annotations": annotations}}
+		encoded, _ := json.Marshal(pod)
+		return string(encoded), nil
 	case strings.Contains(joined, "get pod vllm-0") && strings.Contains(joined, "metadata.uid"):
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -274,6 +286,65 @@ func TestRemainingVLLMHandlersRetainAmbiguousStimulusCreate(t *testing.T) {
 				t.Fatalf("ambiguous event identity/disposition not retained: %+v", retained)
 			}
 		})
+	}
+}
+
+func TestGuardrailHandlerUsesCoherentDynamicBaselineWithoutSetupWrites(t *testing.T) {
+	resetM168AttackMemory()
+	var mu sync.Mutex
+	active, posts := "pgv2", 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/guardrail/state" {
+			posts++
+			http.Error(w, "writes refused", http.StatusMethodNotAllowed)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "active": active})
+	}))
+	defer server.Close()
+	fixture := &remainingHandlerFixture{t: t, serverURL: server.URL, events: map[string]string{}, guardrailCurrent: "pgv2", guardrailRoster: "pgv2,pgv1"}
+	cfg := Config{StateDir: t.TempDir(), Exec: fixture.exec, AttackWatchDuration: 200 * time.Millisecond, AttackWatchInterval: time.Millisecond}
+	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+	request := httptest.NewRequest(http.MethodPost, "/api/vllm/attack", strings.NewReader(`{"action":"guardrail-rotate"}`))
+	response := httptest.NewRecorder()
+	s.vllmAttack(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("coherent pgv2 launch failed: code=%d body=%s", response.Code, response.Body.String())
+	}
+	var reply struct {
+		AttackID string `json:"attackId"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil || reply.AttackID == "" {
+		t.Fatalf("missing attack identity: err=%v body=%s", err, response.Body.String())
+	}
+	fixture.mu.Lock()
+	commands := append([]string(nil), fixture.commands...)
+	fixture.mu.Unlock()
+	for _, command := range commands {
+		if strings.Contains(command, " patch ") {
+			t.Fatalf("read-only guardrail setup wrote Pod metadata: %s", command)
+		}
+	}
+	mu.Lock()
+	if posts != 0 {
+		mu.Unlock()
+		t.Fatalf("read-only guardrail setup sent %d runtime writes", posts)
+	}
+	active = "pgv1"
+	mu.Unlock()
+	deadline := time.Now().Add(time.Second)
+	var record *attackRecord
+	for time.Now().Before(deadline) {
+		record = attackSnapshotByID(reply.AttackID)
+		if record != nil && record.Status != "running" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if record == nil || record.EffectEvidence == nil || !record.EffectEvidence.Observed || record.EffectEvidence.Before != "pgv2" || record.EffectEvidence.After != "pgv1" || record.Outcome != "" || record.StimulusEvidence == nil || record.StimulusEvidence.BehavioralExecuted {
+		t.Fatalf("dynamic coherent guardrail effect record=%+v", record)
 	}
 }
 

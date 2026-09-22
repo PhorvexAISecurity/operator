@@ -203,6 +203,13 @@ intakes:
     state: VERIFIED
     issue_id: null
     aliases: []
+  RPT-20260922-150000-serving-journal-gate:
+    directory: intake/RPT-20260922-150000-serving-journal-gate
+    kind: BUG
+    title: Unresolved protected serving operation remains selectable
+    state: DUPLICATE
+    issue_id: null
+    aliases: []
   RPT-20260922-170733-console-vllm-reset-authority:
     directory: intake/RPT-20260922-170733-console-vllm-reset-authority
     kind: BUG
@@ -210,10 +217,10 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
-  RPT-20260922-150000-serving-journal-gate:
-    directory: intake/RPT-20260922-150000-serving-journal-gate
-    kind: BUG
-    title: Unresolved protected serving operation remains selectable
-    state: DUPLICATE
+  RPT-20260922-192000-guardrail-terminal-high-water:
+    directory: intake/RPT-20260922-192000-guardrail-terminal-high-water
+    kind: INCIDENT
+    title: Guardrail baseline conflicts with terminal serving journal high-water
+    state: REPORTED
     issue_id: null
     aliases: []
