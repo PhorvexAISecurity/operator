@@ -18,6 +18,8 @@ metadata:
     app.kubernetes.io/component: console
 spec:
   replicas: 1
+  # Initial archive compression and byte-for-byte verification can exceed ten minutes.
+  progressDeadlineSeconds: 3900
   # State ledgers use process-local serialization. Recreate prevents ordinary upgrades from
   # overlapping old and new console writers on the same claim.
   strategy:
@@ -138,10 +140,11 @@ spec:
         - name: http
           containerPort: {{ .Values.phorvex.console.port }}
         # One-time bounded archive migration completes before HTTP starts.
+        # Allow both passes over a multi-GiB archive on the existing small console Pod.
         startupProbe:
           httpGet: { path: /api/health, port: http }
           periodSeconds: 5
-          failureThreshold: 180
+          failureThreshold: 720
         readinessProbe:
           httpGet: { path: /, port: http }
           initialDelaySeconds: 3
