@@ -1,0 +1,273 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: d4a7b8d9547544387eb57d635191268028715fde042727b0c2b1f2d16e23c15b
+    source_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+    at: '2026-09-22T06:20:37+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: e69d5fbe892162234dccf3b9e4e0652801ee76352b5080eba559fcb20c123341
+    source_sha: 5ea6e29e515626c459de2d8f36014b0536bd87ee
+    at: '2026-09-22T06:38:35+00:00'
+    baseline_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+  red:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/baseline/focused-red.txt
+    sha256: eb982bb4deebf55c806497cfe90b9ddc3d32cb2915eb9d955622913f176ec864
+    source_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+    at: '2026-09-22T06:38:55+00:00'
+  preflight:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: e0ea6dcf88945e2c8ba31a2e599e696e693be3f010f73d3c6a5a41c4bab2488f
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:38:55+00:00'
+  implementation:
+    result: PASS
+    by: checkpoint-worker
+    artifact: 04-diff.patch
+    sha256: 959c39471d94ccabc44e38e29e8ea3d5589ad82191adb21ebc5cc38417db389c
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:38:55+00:00'
+  l0:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: e0ea6dcf88945e2c8ba31a2e599e696e693be3f010f73d3c6a5a41c4bab2488f
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:38:55+00:00'
+    inputs:
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 15d2ab485a99591657e62f496ea42493d9bd813604bc28e8d27d282fed6c85c6
+  l1:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/head/focused-tests.txt
+    sha256: b0f6cb3b0af2ff48b623dffa45587e95a0cb506bd8837b7f7efe5b8ce0e4d2df
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:38:55+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/ingest
+    - phorvex/internal/ownership
+    - phorvex/internal/runner
+    inputs_sha256: 3b856d64dabe71fb727fe956fb978d4c1132c727898e53b68239f7b368c823cb
+  l2:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/head/focused-tests.txt
+    sha256: b0f6cb3b0af2ff48b623dffa45587e95a0cb506bd8837b7f7efe5b8ce0e4d2df
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:38:55+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/ingest
+    - phorvex/internal/ownership
+    - phorvex/internal/runner
+    inputs_sha256: 3b856d64dabe71fb727fe956fb978d4c1132c727898e53b68239f7b368c823cb
+  positive_control:
+    result: PASS
+    by: checkpoint-worker
+    artifact: evidence/head/focused-tests.txt
+    sha256: b0f6cb3b0af2ff48b623dffa45587e95a0cb506bd8837b7f7efe5b8ce0e4d2df
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:38:55+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/ingest
+    - phorvex/internal/ownership
+    - phorvex/internal/runner
+    inputs_sha256: 3b856d64dabe71fb727fe956fb978d4c1132c727898e53b68239f7b368c823cb
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: efb294eba1adbca713cdbb4313f26170f75ab33097e796d3748e5b0e9a6e0a83
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:40:48+00:00'
+    baseline_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: c9b78e8e7bae45cf8b48dec69f8fffd4141f77856e9a6139648d172888a92d46
+    source_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+    at: '2026-09-22T06:40:48+00:00'
+    incident_sha256: efb294eba1adbca713cdbb4313f26170f75ab33097e796d3748e5b0e9a6e0a83
+fix_id: POST25-HYBRID-ROTATE-OWNERSHIP
+issues: []
+title: Supply ownership reader for hybrid native rotate
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: checkpoint-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: origin/main
+  code_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+  deployed_image: null
+  deployed_git_sha: b374bfa7c3cbce083258a37c60c861e6b330506d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-hybrid-rotate-ownership
+  base_sha: 5ea6e29e515626c459de2d8f36014b0536bd87ee
+  head_sha: 7f0437ea6a9decbf64b7abccc24d5062eb95813c
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T06:40:52+00:00'
+configuration_history:
+- at: '2026-09-22T06:19:55+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-22T06:21:41+00:00'
+  by: checkpoint-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-22T06:23:02+00:00'
+  by: checkpoint-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-22T06:38:55+00:00'
+  by: checkpoint-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T06:20:35+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T06:20:48+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T06:38:55+00:00'
+  by: checkpoint-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T06:38:57+00:00'
+  by: checkpoint-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T06:40:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T06:40:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: red
+  result: PASS
+  by: checkpoint-worker
+  artifact: evidence/baseline/focused-red.txt
+  sha256: eb982bb4deebf55c806497cfe90b9ddc3d32cb2915eb9d955622913f176ec864
+  source_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+  at: '2026-09-22T06:38:49+00:00'
+handoff:
+  id: POST25-HYBRID-ROTATE-OWNERSHIP:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10
