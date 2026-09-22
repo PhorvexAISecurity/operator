@@ -114,3 +114,35 @@ Missing capability is unavailable, not zero cost or successful defense. The
 larger actuator/workload matrix, vulnerability applicability, enabled network
 enforcement and remaining installed chains remain explicit work; this curated
 suite does not claim to cover every supported handler or every real-world stack.
+
+## Collecting retained runs offline
+
+`catalogue-collector` reads only an explicit local run index. It does not scan
+output directories, run the harness, contact Kubernetes, or call a network
+service. Paths in the index are relative to that index, and every suite,
+configuration, harness, source, and metrics identity is explicit and hashed.
+For a local synthetic example:
+
+```sh
+go run ./cmd/catalogue-collector \
+  -index catalogue/v3/examples/run-index.json \
+  -json /tmp/catalogue-functional.json \
+  -markdown /tmp/catalogue-functional.md
+```
+
+The example is deliberately opaque and reports
+`UNSUPPORTED_MEASUREMENT_SCHEMA`; it demonstrates retention without inventing a
+measurement. The first decoded family is the three `manager-session-*`
+profiles. Its decoder reconstructs the retained base64 segment receipt, checks
+its hashes and flattened observations, and reports HTTP 200 session presence,
+HTTP 404 peer responses, typed unknowns, Pod identities, action/effect fields,
+and every inter-segment gap separately. A 404 is not counted as a successful
+session read, and sampled windows are not described as continuous availability.
+
+An index may declare a run `missing` or `failed` with a reason, which keeps it in
+the trial denominator. `available` files with a wrong hash, duplicate JSON key,
+unknown profile, selection mismatch, conflicting profile reuse, partial receipt,
+or inconsistent flattened evidence are rejected. External review state and
+reference are copied as supplied metadata; the collector does not grant live
+acceptance. Reports always state `COMPARISON_NOT_ESTABLISHED` until a separately
+reviewed comparison contract is implemented.

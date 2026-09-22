@@ -1,0 +1,20 @@
+{
+  "schema": "phorvex.catalogue-run-index.v1",
+  "records": [
+    {
+      "id": "synthetic-nats-no-action",
+      "profileID": "nats-no-action",
+      "suiteFile": "../suite.json",
+      "suiteSHA256": "91586e8e1e2da13d3d50b5a702727193ebc6ee2a76385ced498e80e12d44cff6",
+      "sourceRevision": "cccccccccccccccccccccccccccccccccccccccc",
+      "harnessSHA256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "configSHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "metricsFile": "synthetic-nats-metrics.jsonl",
+      "metricsSHA256": "a75cfe7b33cf397b6f7dce817e411b109ff8cefdbf0afe44c7e2b2472b583e23",
+      "workloadSchedule": "synthetic-documentation-only",
+      "state": "available",
+      "externalReviewState": "unreviewed",
+      "externalReviewReference": "none"
+    }
+  ]
+}
