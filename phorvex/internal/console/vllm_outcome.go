@@ -502,12 +502,19 @@ func (s *Server) restoreGuardrailEffect(authority *guardrailSetupAuthority, exec
 	if authority.runtimeAttempted && !authority.runtimeStaged {
 		return fmt.Errorf("guardrail runtime write outcome is unknown; refusing automatic restoration")
 	}
-	if authority.runtimeStaged {
-		currentRuntime, runtimeErr := readGuardrailState(execIn)
-		postRuntimePod, podErr := s.readVLLMPod(authority.pod)
-		if runtimeErr != nil || podErr != nil || postRuntimePod.Metadata.UID != authority.targetUID || currentRuntime.Active != "pgv1" {
-			return fmt.Errorf("guardrail runtime no longer matches the exact staged state; refusing restoration")
-		}
+	currentRuntime, runtimeErr := readGuardrailState(execIn)
+	postRuntimePod, podErr := s.readVLLMPod(authority.pod)
+	if runtimeErr != nil || podErr != nil || postRuntimePod.Metadata.UID != authority.targetUID {
+		return fmt.Errorf("guardrail runtime restoration authority readback failed")
+	}
+	// The sidecar reload API has no compare-and-swap token. Never send a compensating reload that
+	// could overwrite a manager-owned change after our final GET. Only finish metadata restoration
+	// when another authority has already restored the exact captured runtime.
+	if currentRuntime.Active != authority.originalRuntime.Active {
+		return fmt.Errorf("guardrail runtime is %q, not captured original %q; conditional restoration backend is unavailable", currentRuntime.Active, authority.originalRuntime.Active)
+	}
+	if originalMetadataVariant := stringMapValue(authority.originalAnnotations, "phorvex.ai/guardrail-variant"); originalMetadataVariant != "" && originalMetadataVariant != authority.originalRuntime.Active {
+		return fmt.Errorf("captured guardrail metadata and runtime were already inconsistent; refusing to recreate stale metadata")
 	}
 	if authority.metadataStaged {
 		if !stringMapsEqual(pod.Metadata.Annotations, authority.stagedAnnotations) {
@@ -519,16 +526,6 @@ func (s *Server) restoreGuardrailEffect(authority *guardrailSetupAuthority, exec
 		}
 	} else if !stringMapsEqual(pod.Metadata.Annotations, authority.originalAnnotations) {
 		return fmt.Errorf("guardrail Pod annotations changed before restoration")
-	}
-	if authority.runtimeStaged {
-		currentRuntime, runtimeErr := readGuardrailState(execIn)
-		preRestorePod, podErr := s.readVLLMPod(authority.pod)
-		if runtimeErr != nil || podErr != nil || preRestorePod.Metadata.UID != authority.targetUID || currentRuntime.Active != "pgv1" {
-			return fmt.Errorf("guardrail runtime changed before compensation; refusing restoration")
-		}
-		if _, err := reloadGuardrail(execIn, authority.originalRuntime.Active); err != nil {
-			return err
-		}
 	}
 	restoredPod, podErr := s.readVLLMPod(authority.pod)
 	restoredRuntime, runtimeErr := readGuardrailState(execIn)

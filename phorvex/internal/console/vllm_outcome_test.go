@@ -374,7 +374,7 @@ func TestExactJSONPatchBindsUIDResourceVersionAndAbsentMap(t *testing.T) {
 	}
 }
 
-func TestGuardrailMetadataPatchFailureRestoresRuntime(t *testing.T) {
+func TestGuardrailMetadataPatchFailureRetainsUnknownRuntimeForReconciliation(t *testing.T) {
 	var mu sync.Mutex
 	active := "pgv2"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -406,13 +406,13 @@ func TestGuardrailMetadataPatchFailureRestoresRuntime(t *testing.T) {
 		return "", errors.New("unexpected command: " + joined)
 	}}}
 	authority, err := s.prepareGuardrailEffect("vllm-0", "pod-uid", execIn)
-	if err == nil || authority == nil || authority.restoration != "restored" {
+	if err == nil || authority == nil || !strings.Contains(authority.restoration, "required") {
 		t.Fatalf("authority=%+v err=%v", authority, err)
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if active != "pgv2" {
-		t.Fatalf("runtime left mutated after metadata patch failure: %s", active)
+	if active != "pgv1" {
+		t.Fatalf("runtime was overwritten without conditional authority: %s", active)
 	}
 }
 
@@ -464,5 +464,28 @@ func TestGuardrailRestorationRefusesConcurrentRuntimeChange(t *testing.T) {
 	err := s.restoreGuardrailEffect(authority, actualGuardrailExec(t, server.URL))
 	if err == nil || posts != 0 || active != "pgv3" {
 		t.Fatalf("concurrent runtime was overwritten: posts=%d active=%s err=%v", posts, active, err)
+	}
+}
+
+func TestGuardrailRestorationAcceptsAlreadyRestoredRuntimeWithoutWrite(t *testing.T) {
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts++
+			t.Fatal("restoration must not issue an unconditional runtime POST")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "active": "pgv2"})
+	}))
+	defer server.Close()
+	annotations := map[string]string{"phorvex.ai/guardrail-variant": "pgv2"}
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {
+		if strings.Contains(strings.Join(args, " "), "get pod vllm-0") {
+			return `{"metadata":{"name":"vllm-0","uid":"pod-uid","resourceVersion":"19","annotations":{"phorvex.ai/guardrail-variant":"pgv2"}}}`, nil
+		}
+		return "", errors.New("unexpected kubectl")
+	}}}
+	authority := &guardrailSetupAuthority{pod: "vllm-0", targetUID: "pod-uid", originalRuntime: guardrailState{Ready: true, Active: "pgv2"}, originalAnnotations: &annotations, runtimeAttempted: true, runtimeStaged: true}
+	if err := s.restoreGuardrailEffect(authority, actualGuardrailExec(t, server.URL)); err != nil || authority.restoration != "restored" || posts != 0 {
+		t.Fatalf("already-restored runtime result: posts=%d authority=%+v err=%v", posts, authority, err)
 	}
 }
