@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	"github.com/r6security/phoenix-test-harness/internal/safety"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -317,7 +321,7 @@ func TestCheckpointParserRejectsMissingNullDuplicateAndCaseVariant(t *testing.T)
 
 func TestCheckpointOracleIdentityAndProgressBoundaries(t *testing.T) {
 	oldWait := checkpointObservationWait
-	checkpointObservationWait = func(context.Context, time.Duration, time.Duration, func() (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
+	checkpointObservationWait = func(context.Context, time.Duration, time.Duration, func(context.Context) (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
 		start := time.Now()
 		return start, start.Add(checkpointObservationWindow), 1, 0, nil
 	}
@@ -492,7 +496,7 @@ func TestCheckpointStorageReadFailureIsMeasurementAndBindingDriftIsHard(t *testi
 
 func TestCheckpointObservationWaitFailureIsMeasurementEvidence(t *testing.T) {
 	oldWait := checkpointObservationWait
-	checkpointObservationWait = func(context.Context, time.Duration, time.Duration, func() (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
+	checkpointObservationWait = func(context.Context, time.Duration, time.Duration, func(context.Context) (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
 		start := time.Now()
 		return start, start, 0, 0, context.Canceled
 	}
@@ -506,6 +510,120 @@ func TestCheckpointObservationWaitFailureIsMeasurementEvidence(t *testing.T) {
 	result, err := (&c2CheckpointContinuity{targetName: "target", targetUID: "old", producerUID: "producer-owned", pvcUID: "pvc", deploymentUID: "deployment-uid", replicaSetName: "checkpoint-rs", replicaSetUID: "rs-uid", serviceUID: "service-uid", pvName: "pv-owned", pvUID: "pv-uid", storageClassName: "reviewed-storage"}).Execute(context.Background(), env)
 	if observationClass(err) != checkpointMeasurementError || result.BenchmarkEvidence["outcomeClass"] != string(checkpointMeasurementError) || result.BenchmarkEvidence["outcomeCategory"] != "observation-wait" {
 		t.Fatalf("wait failure err=%v evidence=%+v", err, result.BenchmarkEvidence)
+	}
+}
+
+func TestCheckpointObservationDeadlinePreventsQueuedCatchup(t *testing.T) {
+	started := time.Now()
+	calls := 0
+	start, end, attempts, failures, err := waitCheckpointObservation(context.Background(), 70*time.Millisecond, 5*time.Millisecond, func(ctx context.Context) (checkpointBody, error) {
+		calls++
+		<-ctx.Done()
+		return checkpointBody{}, normalizeCheckpointObservationDeadline(ctx, checkpointReceipt{}, measurementCheckpointObservation("request-context", checkpointReceipt{}, ctx.Err()))
+	})
+	if err != nil || calls != 1 || attempts != 1 || failures != 1 || end.Sub(start) < 70*time.Millisecond || time.Since(started) >= time.Second {
+		t.Fatalf("absolute observation bound differs: calls=%d attempts=%d failures=%d elapsed=%s window=%s err=%v", calls, attempts, failures, time.Since(started), end.Sub(start), err)
+	}
+}
+
+func TestCheckpointObservationNeverStartsQueuedRequestAfterExpiry(t *testing.T) {
+	calls := 0
+	start, end, attempts, failures, err := waitCheckpointObservation(context.Background(), 40*time.Millisecond, time.Millisecond, func(context.Context) (checkpointBody, error) {
+		calls++
+		// Model a misbehaving transport that ignores cancellation. The waiter is
+		// synchronous, so it must join this call and then refuse queued cadence.
+		time.Sleep(60 * time.Millisecond)
+		return checkpointBody{}, nil
+	})
+	if err != nil || calls != 1 || attempts != 1 || failures != 0 || end.Sub(start) < 60*time.Millisecond || end.Sub(start) >= time.Second {
+		t.Fatalf("post-expiry request started: calls=%d attempts=%d failures=%d elapsed=%s err=%v", calls, attempts, failures, end.Sub(start), err)
+	}
+}
+
+func TestCheckpointObservationParentCancellationIsNotWindowCensorship(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	calls := 0
+	_, _, attempts, failures, err := waitCheckpointObservation(parent, time.Second, time.Millisecond, func(ctx context.Context) (checkpointBody, error) {
+		calls++
+		cancel()
+		<-ctx.Done()
+		err := measurementCheckpointObservation("request-context", checkpointReceipt{}, ctx.Err())
+		return checkpointBody{}, normalizeCheckpointObservationDeadline(ctx, checkpointReceipt{}, err)
+	})
+	if observationClass(err) != checkpointMeasurementError || !errors.Is(err, context.Canceled) || calls != 1 || attempts != 1 || failures != 1 {
+		t.Fatalf("parent cancellation was reclassified: calls=%d attempts=%d failures=%d class=%q err=%v", calls, attempts, failures, observationClass(err), err)
+	}
+}
+
+func TestCheckpointObservationDeadlineCancelsRealSPDYAndRetainsPartialReceipt(t *testing.T) {
+	producerUID := types.UID("producer-owned")
+	partialStdout := "200\neyJib290U2VxdWVuY2UiOj"
+	partialStderr := "partial checkpoint diagnostic"
+	producer := &corev1.Pod{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"}, ObjectMeta: metav1.ObjectMeta{Name: checkpointProducer, Namespace: "owned", UID: producerUID}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "producer", Image: checkpointImage}}}}
+	requestDone := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/api/v1/namespaces/owned/pods/"+checkpointProducer:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(producer)
+		case req.Method == http.MethodPost && req.URL.Path == "/api/v1/namespaces/owned/pods/"+checkpointProducer+"/exec":
+			streams, err := upgradeInstalledTestExecStreams(w, req)
+			if err != nil {
+				t.Errorf("upgrade SPDY: %v", err)
+				return
+			}
+			defer streams.conn.Close()
+			_, _ = streams.stdout.Write([]byte(partialStdout))
+			_, _ = streams.stderr.Write([]byte(partialStderr))
+			select {
+			case <-req.Context().Done():
+			case <-time.After(300 * time.Millisecond):
+			}
+			close(requestDone)
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	defer server.Close()
+	cfg := &rest.Config{Host: server.URL}
+	kube, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := &core.Env{Kube: kube, Rest: cfg, Config: config.TargetConfig{Namespace: "owned"}, ScenarioName: "c2-checkpoint-continuity", Log: &ctLogger{}}
+	core.SetExecer(func(ctx context.Context, restCfg *rest.Config, kc kubernetes.Interface, ns, pod, container string, command []string) core.ExecResult {
+		got := safety.ExecInPod(ctx, restCfg, kc, ns, pod, container, command)
+		return core.ExecResult{Stdout: got.Stdout, Stderr: got.Stderr, ExitCode: got.ExitCode, Err: got.Err}
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	s := &c2CheckpointContinuity{producerUID: producerUID, observationPhase: "window", outageSamples: []checkpointOutageSample{}, censoredSamples: []checkpointCensoredSample{}}
+	started := time.Now()
+	_, _, attempts, failures, err := waitCheckpointObservation(context.Background(), 120*time.Millisecond, 5*time.Millisecond, func(ctx context.Context) (checkpointBody, error) {
+		return s.observeCheckpointAttempt(ctx, env, false)
+	})
+	if err != nil || attempts != 1 || failures != 1 || time.Since(started) >= time.Second {
+		t.Fatalf("real SPDY observation did not stop at bound: attempts=%d failures=%d elapsed=%s err=%v", attempts, failures, time.Since(started), err)
+	}
+	select {
+	case <-requestDone:
+	case <-time.After(time.Second):
+		t.Fatal("SPDY handler remained detached after observation deadline")
+	}
+	if len(s.outageSamples) != 0 || len(s.censoredSamples) != 1 || s.observationAttempts != 1 || s.observationSuccesses != 0 {
+		t.Fatalf("typed censorship accounting differs: outages=%+v censored=%+v attempts=%d successes=%d", s.outageSamples, s.censoredSamples, s.observationAttempts, s.observationSuccesses)
+	}
+	receipt := s.censoredSamples[0].Receipt
+	stdout, decodeErr := base64.StdEncoding.Strict().DecodeString(receipt.StdoutPrefixBase64)
+	if decodeErr != nil || string(stdout) != partialStdout || receipt.StdoutBytes != len(partialStdout) || receipt.StdoutSHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(partialStdout))) || receipt.StdoutTruncated || receipt.ExecErrorCategory != "deadline-exceeded" || receipt.ContextErrorCategory != "deadline-exceeded" {
+		t.Fatalf("censored stdout receipt is not reconstructable: stdout=%q receipt=%+v err=%v", stdout, receipt, decodeErr)
+	}
+	stderr, decodeErr := base64.StdEncoding.Strict().DecodeString(receipt.StderrPrefixBase64)
+	if decodeErr != nil || string(stderr) != partialStderr || receipt.StderrBytes != len(partialStderr) || receipt.StderrSHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(partialStderr))) || receipt.StderrTruncated {
+		t.Fatalf("censored stderr receipt is not reconstructable: stderr=%q receipt=%+v err=%v", stderr, receipt, decodeErr)
+	}
+	s.updateCheckpointBenchmarkEvidence()
+	if s.benchmarkEvidence["observationWindowStatus"] != "deadline-censored" || s.benchmarkEvidence["observationCensoredSamples"] != "1" || s.benchmarkEvidence["outageSamplesJSON"] != "[]" || !strings.Contains(s.benchmarkEvidence["censoredSamplesJSON"], `"stdoutPrefixBase64"`) {
+		t.Fatalf("censored benchmark evidence=%+v", s.benchmarkEvidence)
 	}
 }
 
@@ -663,7 +781,7 @@ func TestCheckpointNoActionFinalEvidenceHasNoInventedOutage(t *testing.T) {
 	})
 	t.Cleanup(func() { core.SetExecer(nil) })
 	got, err := observedCheckpointScenario().SuccessOracle(context.Background(), env)
-	if err != nil || !got.Achieved || got.Evidence["durabilityStatus"] != "acknowledged" || got.Evidence["availabilityInterrupted"] != "false" || got.Evidence["availabilityUnavailableSamples"] != "0" || got.Evidence["observationAttempts"] != "1" {
+	if err != nil || !got.Achieved || got.Evidence["durabilityStatus"] != "acknowledged" || got.Evidence["availabilityInterrupted"] != "false" || got.Evidence["availabilityUnavailableSamples"] != "0" || got.Evidence["observationAttempts"] != "1" || got.Evidence["outageSamplesJSON"] != "[]" || got.Evidence["censoredSamplesJSON"] != "[]" || got.Evidence["observationCensoredSamples"] != "0" || got.Evidence["observationWindowStatus"] != "complete" {
 		t.Fatalf("got=%+v err=%v", got, err)
 	}
 }
@@ -693,6 +811,7 @@ func TestCheckpointBenchmarkEvidenceSurvivesOracleThroughRunnerJSONL(t *testing.
 		wantCategory string
 		wantAchieved bool
 		wantOutage   string
+		wantCensored bool
 	}{
 		{
 			name: "recovered",
@@ -712,6 +831,15 @@ func TestCheckpointBenchmarkEvidenceSurvivesOracleThroughRunnerJSONL(t *testing.
 				}
 			},
 			wantClass: checkpointAcknowledged, wantCategory: "checkpoint-acknowledged", wantAchieved: true, wantOutage: "true",
+		},
+		{
+			name: "deadline-censored-recovered",
+			execer: func(t *testing.T) func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+				return func(context.Context, *rest.Config, kubernetes.Interface, string, string, string, []string) core.ExecResult {
+					return checkpointExecReply(t, checkpointFixture("old", "pvc", "old-inc", 9, 0), 200)
+				}
+			},
+			wantClass: checkpointAcknowledged, wantCategory: "checkpoint-acknowledged", wantAchieved: true, wantOutage: "false", wantCensored: true,
 		},
 		{
 			name: "hard-integrity",
@@ -736,6 +864,10 @@ func TestCheckpointBenchmarkEvidenceSurvivesOracleThroughRunnerJSONL(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			name := fmt.Sprintf("c2-checkpoint-evidence-runner-%s-%d", tc.name, checkpointEvidenceRunnerSequence.Add(1))
 			inner := observedCheckpointScenario()
+			if tc.wantCensored {
+				inner.observationAttempts = 1
+				inner.censoredSamples = []checkpointCensoredSample{{Ordinal: 1, Phase: "window", Category: "observation-deadline", Receipt: checkpointCensoredReceipt{URL: "http://checkpoint/progress", ProducerUID: "producer-owned", ExitCode: -1, StdoutPrefixBase64: base64.StdEncoding.EncodeToString([]byte("partial")), StdoutBytes: 7, StdoutSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("partial"))), StderrPrefixBase64: "", StderrBytes: 0, StderrSHA256: fmt.Sprintf("%x", sha256.Sum256(nil)), ExecErrorCategory: "deadline-exceeded", ContextErrorCategory: "deadline-exceeded"}}}
+			}
 			core.RegisterScenario(&checkpointEvidenceRunnerScenario{name: name, inner: inner})
 			core.SetExecer(tc.execer(t))
 			t.Cleanup(func() { core.SetExecer(nil) })
@@ -774,7 +906,11 @@ func TestCheckpointBenchmarkEvidenceSurvivesOracleThroughRunnerJSONL(t *testing.
 					metric = candidate
 				}
 			}
-			if len(rows) == 0 || metric.Scenario == "" || metric.OracleAchieved != tc.wantAchieved || metric.BenchmarkEvidence["outcomeClass"] != string(tc.wantClass) || metric.BenchmarkEvidence["outcomeCategory"] != tc.wantCategory || metric.BenchmarkEvidence["availabilityInterrupted"] != tc.wantOutage {
+			wantCensoredCount, wantWindowStatus := "0", "complete"
+			if tc.wantCensored {
+				wantCensoredCount, wantWindowStatus = "1", "deadline-censored"
+			}
+			if len(rows) == 0 || metric.Scenario == "" || metric.OracleAchieved != tc.wantAchieved || metric.BenchmarkEvidence["outcomeClass"] != string(tc.wantClass) || metric.BenchmarkEvidence["outcomeCategory"] != tc.wantCategory || metric.BenchmarkEvidence["availabilityInterrupted"] != tc.wantOutage || metric.BenchmarkEvidence["observationCensoredSamples"] != wantCensoredCount || metric.BenchmarkEvidence["observationWindowStatus"] != wantWindowStatus || !strings.HasPrefix(metric.BenchmarkEvidence["outageSamplesJSON"], "[") || !strings.HasPrefix(metric.BenchmarkEvidence["censoredSamplesJSON"], "[") || tc.wantCensored && !strings.Contains(metric.BenchmarkEvidence["censoredSamplesJSON"], `"stdoutPrefixBase64":"cGFydGlhbA=="`) {
 				t.Fatalf("rows=%+v metric=%+v evidence=%+v", rows, metric, metric.BenchmarkEvidence)
 			}
 		})
@@ -825,10 +961,10 @@ func TestCheckpointExecuteRetainsSampledHighWaterAcrossReplacement(t *testing.T)
 				}
 				return checkpointExecReply(t, body, 200)
 			})
-			checkpointObservationWait = func(ctx context.Context, _, _ time.Duration, sample func() (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
+			checkpointObservationWait = func(ctx context.Context, _, _ time.Duration, sample func(context.Context) (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
 				start := time.Now()
 				failures := 0
-				if _, err := sample(); err != nil {
+				if _, err := sample(ctx); err != nil {
 					failures++
 				}
 				if err := env.Kube.CoreV1().Pods("sandbox").Delete(ctx, "target", metav1.DeleteOptions{}); err != nil {
@@ -839,7 +975,7 @@ func TestCheckpointExecuteRetainsSampledHighWaterAcrossReplacement(t *testing.T)
 				bindCheckpointFixturePod(replacement)
 				createSessionFixturePod(t, env, replacement)
 				setCheckpointFixtureEndpoint(t, env, replacement)
-				if _, err := sample(); err != nil {
+				if _, err := sample(ctx); err != nil {
 					failures++
 				}
 				return start, start.Add(checkpointObservationWindow), 2, failures, nil

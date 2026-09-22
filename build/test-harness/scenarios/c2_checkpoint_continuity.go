@@ -30,29 +30,37 @@ import (
 func init() { core.RegisterScenario(&c2CheckpointContinuity{}) }
 
 const (
-	checkpointApp               = "c2-checkpoint-target"
-	checkpointPVC               = "c2-checkpoint-state"
-	checkpointService           = "c2-checkpoint-target"
-	checkpointProducer          = "c2-checkpoint-producer"
-	checkpointPort              = 8081
-	checkpointImage             = sessionPythonImage
-	checkpointObservationWindow = 20 * time.Second
-	checkpointSampleInterval    = 2 * time.Second
-	checkpointRecoveryWindow    = 12 * time.Second
-	checkpointRecoveryInterval  = 250 * time.Millisecond
-	checkpointRecoveryAttempts  = 3
-	checkpointMaxOutageSamples  = 32
-	checkpointMaxOutageJSON     = 8192
-	checkpointLocalHolder       = "checkpoint-local-holder"
-	checkpointLocalCampaign     = "post25-checkpoint-local-r1"
-	checkpointLocalOwnerLabel   = "fixture.phorvex.ai/external-owner"
-	checkpointLocalOwnerValue   = "checkpoint-local-holder"
-	checkpointLocalMarker       = ".phorvex-holder.json"
-	checkpointLocalCapacity     = "64Mi"
-	checkpointMaxIncarnations   = 16
+	checkpointApp                = "c2-checkpoint-target"
+	checkpointPVC                = "c2-checkpoint-state"
+	checkpointService            = "c2-checkpoint-target"
+	checkpointProducer           = "c2-checkpoint-producer"
+	checkpointPort               = 8081
+	checkpointImage              = sessionPythonImage
+	checkpointObservationWindow  = 20 * time.Second
+	checkpointSampleInterval     = 2 * time.Second
+	checkpointRecoveryWindow     = 12 * time.Second
+	checkpointRecoveryInterval   = 250 * time.Millisecond
+	checkpointRecoveryAttempts   = 3
+	checkpointMaxOutageSamples   = 32
+	checkpointMaxOutageJSON      = 8192
+	checkpointMaxCensoredSamples = 1
+	checkpointMaxCensoredJSON    = 16384
+	checkpointLocalHolder        = "checkpoint-local-holder"
+	checkpointLocalCampaign      = "post25-checkpoint-local-r1"
+	checkpointLocalOwnerLabel    = "fixture.phorvex.ai/external-owner"
+	checkpointLocalOwnerValue    = "checkpoint-local-holder"
+	checkpointLocalMarker        = ".phorvex-holder.json"
+	checkpointLocalCapacity      = "64Mi"
+	checkpointMaxIncarnations    = 16
 )
 
 var checkpointObservationWait = waitCheckpointObservation
+
+type checkpointObservationDeadlineKey struct{}
+
+type checkpointObservationDeadline struct {
+	parent context.Context
+}
 
 const checkpointServerSource = `import hashlib,json,os,tempfile,threading,time,uuid
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
@@ -181,6 +189,7 @@ type c2CheckpointContinuity struct {
 	incarnationChain                               []checkpointIncarnationObservation
 	benchmarkEvidence                              map[string]string
 	outageSamples                                  []checkpointOutageSample
+	censoredSamples                                []checkpointCensoredSample
 	observationAttempts, observationSuccesses      int
 	recoveryAttempts                               int
 	recoveryStarted, recoveryEnded                 time.Time
@@ -200,6 +209,7 @@ type checkpointObservationClass string
 const (
 	checkpointAcknowledged           checkpointObservationClass = "acknowledged"
 	checkpointApplicationUnavailable checkpointObservationClass = "application-unavailable"
+	checkpointObservationCensored    checkpointObservationClass = "observation-censored"
 	checkpointHardIntegrity          checkpointObservationClass = "hard-integrity"
 	checkpointMeasurementError       checkpointObservationClass = "measurement-error"
 )
@@ -235,6 +245,36 @@ type checkpointOutageSample struct {
 	HTTPStatus   int    `json:"httpStatus,omitempty"`
 }
 
+type checkpointCensoredSample struct {
+	Ordinal      int                       `json:"ordinal"`
+	Phase        string                    `json:"phase"`
+	StartedAtUTC string                    `json:"startedAtUTC,omitempty"`
+	EndedAtUTC   string                    `json:"endedAtUTC,omitempty"`
+	Category     string                    `json:"category"`
+	Receipt      checkpointCensoredReceipt `json:"receipt"`
+}
+
+type checkpointCensoredReceipt struct {
+	URL                  string `json:"url"`
+	ProducerUID          string `json:"producerUID"`
+	ObservedProducerUID  string `json:"observedProducerUID,omitempty"`
+	ExitCode             int    `json:"exitCode"`
+	StdoutPrefixBase64   string `json:"stdoutPrefixBase64"`
+	StdoutBytes          int    `json:"stdoutBytes"`
+	StdoutSHA256         string `json:"stdoutSHA256"`
+	StdoutTruncated      bool   `json:"stdoutTruncated"`
+	StderrPrefixBase64   string `json:"stderrPrefixBase64"`
+	StderrBytes          int    `json:"stderrBytes"`
+	StderrSHA256         string `json:"stderrSHA256"`
+	StderrTruncated      bool   `json:"stderrTruncated"`
+	ExecErrorCategory    string `json:"execErrorCategory,omitempty"`
+	ContextErrorCategory string `json:"contextErrorCategory,omitempty"`
+	IdentityErrorSHA256  string `json:"identityErrorSHA256,omitempty"`
+	RequestStartedAtUTC  string `json:"requestStartedAtUTC,omitempty"`
+	RequestEndedAtUTC    string `json:"requestEndedAtUTC,omitempty"`
+	DurationMillis       int64  `json:"durationMillis,omitempty"`
+}
+
 type checkpointIncarnationObservation struct {
 	PodName              string `json:"podName"`
 	PodUID               string `json:"podUID"`
@@ -251,7 +291,7 @@ func (s *c2CheckpointContinuity) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{Name: "c2-checkpoint-continuity", Category: core.CategoryR6Claimed, Source: "Post25 benign stateful checkpoint continuity control", R6ResponseTag: core.R6Partial, BenignControl: true, Realism: core.RealismExecutable,
 		Mechanism:          fmt.Sprintf("PVC-mounted Python CPU counter with atomic fsync+replace+directory-fsync checkpoints and ordinary HTTP observation; image=%s sourceSHA256=%s", checkpointImage, checkpointSourceSHA256()),
 		ClaimLimits:        "benign functional control only; zero ATT&CK techniques; no attack, detection, containment, network-isolation, continuous-availability, GPU-training, mitigation, security-coverage, ROI, or proof of every wholly unobserved intermediate Pod/process incarnation; sampled application outages remain separate from recovered durability",
-		OracleDescription:  "same identity must continue acknowledged progress; every observed bounded successive replacement must prove its last observed predecessor UID absent, retain the same owner/storage/service authority, use a new observed Pod UID and process incarnation, boot at or above that predecessor's latest acknowledgement, and preserve monotonic progress through the final observed incarnation; typed application unavailability may receive at most three recovery observations within twelve seconds and remains explicit evidence",
+		OracleDescription:  "same identity must continue acknowledged progress; every observed bounded successive replacement must prove its last observed predecessor UID absent, retain the same owner/storage/service authority, use a new observed Pod UID and process incarnation, boot at or above that predecessor's latest acknowledgement, and preserve monotonic progress through the final observed incarnation; the absolute observation deadline retains an in-flight sample as typed censorship rather than outage or acknowledgement; typed application unavailability may receive at most three recovery observations within twelve seconds and remains explicit evidence",
 		CleanupDescription: "UID-preconditioned deletion of only the successfully created Deployment, ReplicaSet/target Pod identities, Service, producer Pod, and PVC",
 		R6Justification:    "Measures only acknowledged synthetic checkpoint continuity across Pod replacement through a real application protocol."}
 }
@@ -701,7 +741,8 @@ func (s *c2CheckpointContinuity) Execute(ctx context.Context, env *core.Env) (co
 	s.windowEnded = time.Time{}
 	s.incarnationChain = nil
 	s.benchmarkEvidence = map[string]string{}
-	s.outageSamples = nil
+	s.outageSamples = make([]checkpointOutageSample, 0)
+	s.censoredSamples = make([]checkpointCensoredSample, 0)
 	s.observationAttempts = 0
 	s.observationSuccesses = 0
 	s.recoveryAttempts = 0
@@ -772,9 +813,10 @@ func (s *c2CheckpointContinuity) Execute(ctx context.Context, env *core.Env) (co
 	s.latestAcknowledgedAtUTC = secondReceipt.RequestEndedAtUTC
 	s.observationPhase = "window"
 	var terminalObservationErr error
-	start, end, samples, sampleFailures, err := checkpointObservationWait(ctx, checkpointObservationWindow, checkpointSampleInterval, func() (checkpointBody, error) {
-		body, sampleErr := s.observeCheckpointAttempt(ctx, env, false)
-		if sampleErr != nil && observationClass(sampleErr) != checkpointApplicationUnavailable && terminalObservationErr == nil {
+	start, end, samples, sampleFailures, err := checkpointObservationWait(ctx, checkpointObservationWindow, checkpointSampleInterval, func(sampleCtx context.Context) (checkpointBody, error) {
+		body, sampleErr := s.observeCheckpointAttempt(sampleCtx, env, false)
+		class := observationClass(sampleErr)
+		if sampleErr != nil && class != checkpointApplicationUnavailable && class != checkpointObservationCensored && terminalObservationErr == nil {
 			terminalObservationErr = sampleErr
 		}
 		return body, sampleErr
@@ -901,6 +943,64 @@ func unavailableCheckpointObservation(category string, status int, receipt check
 	return &checkpointObservationError{Class: checkpointApplicationUnavailable, Category: category, HTTPStatus: status, Receipt: receipt, Cause: cause}
 }
 
+func censoredCheckpointObservation(receipt checkpointReceipt, cause error) error {
+	return &checkpointObservationError{Class: checkpointObservationCensored, Category: "observation-deadline", Receipt: receipt, Cause: cause}
+}
+
+func normalizeCheckpointObservationDeadline(ctx context.Context, receipt checkpointReceipt, err error) error {
+	if err == nil {
+		return nil
+	}
+	boundary, ok := ctx.Value(checkpointObservationDeadlineKey{}).(checkpointObservationDeadline)
+	if !ok || boundary.parent == nil || boundary.parent.Err() != nil {
+		return err
+	}
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return censoredCheckpointObservation(receipt, err)
+}
+
+func checkpointErrorCategory(value string) string {
+	switch {
+	case value == "":
+		return ""
+	case strings.Contains(value, context.DeadlineExceeded.Error()):
+		return "deadline-exceeded"
+	case strings.Contains(value, context.Canceled.Error()):
+		return "cancelled"
+	default:
+		return "transport-error"
+	}
+}
+
+func checkpointCensoredReceiptFrom(receipt checkpointReceipt) checkpointCensoredReceipt {
+	identityHash := ""
+	if receipt.IdentityError != "" {
+		identityHash = fmt.Sprintf("%x", sha256.Sum256([]byte(receipt.IdentityError)))
+	}
+	return checkpointCensoredReceipt{
+		URL:                  receipt.URL,
+		ProducerUID:          receipt.ProducerUID,
+		ObservedProducerUID:  receipt.ObservedProducerUID,
+		ExitCode:             receipt.ExitCode,
+		StdoutPrefixBase64:   base64.StdEncoding.EncodeToString([]byte(receipt.Stdout)),
+		StdoutBytes:          receipt.StdoutBytes,
+		StdoutSHA256:         receipt.StdoutSHA256,
+		StdoutTruncated:      receipt.StdoutTruncated,
+		StderrPrefixBase64:   base64.StdEncoding.EncodeToString([]byte(receipt.Stderr)),
+		StderrBytes:          receipt.StderrBytes,
+		StderrSHA256:         receipt.StderrSHA256,
+		StderrTruncated:      receipt.StderrTruncated,
+		ExecErrorCategory:    checkpointErrorCategory(receipt.ExecError),
+		ContextErrorCategory: checkpointErrorCategory(receipt.ContextError),
+		IdentityErrorSHA256:  identityHash,
+		RequestStartedAtUTC:  receipt.RequestStartedAtUTC,
+		RequestEndedAtUTC:    receipt.RequestEndedAtUTC,
+		DurationMillis:       receipt.DurationMillis,
+	}
+}
+
 func (s *c2CheckpointContinuity) recordCheckpointOutcome(err error) {
 	if err == nil {
 		s.outcomeClass = string(checkpointAcknowledged)
@@ -928,7 +1028,28 @@ func (s *c2CheckpointContinuity) recordCheckpointAttempt(err error, receipt chec
 		return
 	}
 	var observed *checkpointObservationError
-	if !errors.As(err, &observed) || observed.Class != checkpointApplicationUnavailable {
+	if !errors.As(err, &observed) {
+		return
+	}
+	if observed.Class == checkpointObservationCensored {
+		if len(s.censoredSamples) >= checkpointMaxCensoredSamples {
+			return
+		}
+		start, end := observed.Receipt.RequestStartedAtUTC, observed.Receipt.RequestEndedAtUTC
+		if start == "" {
+			start = receipt.RequestStartedAtUTC
+		}
+		if end == "" {
+			end = receipt.RequestEndedAtUTC
+		}
+		phase := s.observationPhase
+		if phase == "" {
+			phase = "window"
+		}
+		s.censoredSamples = append(s.censoredSamples, checkpointCensoredSample{Ordinal: s.observationAttempts, Phase: phase, StartedAtUTC: start, EndedAtUTC: end, Category: observed.Category, Receipt: checkpointCensoredReceiptFrom(observed.Receipt)})
+		return
+	}
+	if observed.Class != checkpointApplicationUnavailable {
 		return
 	}
 	if len(s.outageSamples) >= checkpointMaxOutageSamples {
@@ -957,8 +1078,18 @@ func (s *c2CheckpointContinuity) observeCheckpointAttempt(ctx context.Context, e
 func (s *c2CheckpointContinuity) observeCheckpointAttemptDetailed(ctx context.Context, env *core.Env, final bool) (checkpointBody, *corev1.Pod, bool, error) {
 	reply, receipt, requestErr := s.request(ctx, env)
 	if requestErr != nil {
+		requestErr = normalizeCheckpointObservationDeadline(ctx, receipt, requestErr)
+		if observationClass(requestErr) == checkpointObservationCensored {
+			s.recordCheckpointAttempt(requestErr, receipt)
+			return reply, nil, false, requestErr
+		}
 		if observationClass(requestErr) == checkpointApplicationUnavailable {
-			if bindErr := s.validateUnavailableCheckpointAuthority(ctx, env, reply, receipt); bindErr != nil && observationClass(bindErr) != checkpointApplicationUnavailable {
+			bindErr := s.validateUnavailableCheckpointAuthority(ctx, env, reply, receipt)
+			if ctx.Err() != nil && bindErr == nil {
+				bindErr = measurementCheckpointObservation("post-response-context", receipt, ctx.Err())
+			}
+			bindErr = normalizeCheckpointObservationDeadline(ctx, receipt, bindErr)
+			if bindErr != nil && observationClass(bindErr) != checkpointApplicationUnavailable {
 				s.recordCheckpointAttempt(bindErr, receipt)
 				return reply, nil, false, bindErr
 			}
@@ -967,6 +1098,10 @@ func (s *c2CheckpointContinuity) observeCheckpointAttemptDetailed(ctx context.Co
 		return reply, nil, false, requestErr
 	}
 	pod, transitioned, routeAvailable, err := s.observeCheckpointReply(ctx, env, reply, receipt, final)
+	if err == nil && ctx.Err() != nil {
+		err = measurementCheckpointObservation("post-response-context", receipt, ctx.Err())
+	}
+	err = normalizeCheckpointObservationDeadline(ctx, receipt, err)
 	if err == nil {
 		s.latestAcknowledgedAtUTC = receipt.RequestEndedAtUTC
 	}
@@ -977,6 +1112,7 @@ func (s *c2CheckpointContinuity) observeCheckpointAttemptDetailed(ctx context.Co
 		}
 		err = unavailableCheckpointObservation(category, 0, receipt, errors.New("checkpoint durability acknowledgement bound while sampled application route was unavailable"))
 	}
+	err = normalizeCheckpointObservationDeadline(ctx, receipt, err)
 	s.recordCheckpointAttempt(err, receipt)
 	return reply, pod, transitioned, err
 }
@@ -1033,9 +1169,21 @@ func (s *c2CheckpointContinuity) updateCheckpointBenchmarkEvidence() {
 	if len(s.incarnationChain) > 0 {
 		latest = s.incarnationChain[len(s.incarnationChain)-1]
 	}
-	outageRaw, _ := json.Marshal(s.outageSamples)
+	outageSamples := s.outageSamples
+	if outageSamples == nil {
+		outageSamples = []checkpointOutageSample{}
+	}
+	outageRaw, _ := json.Marshal(outageSamples)
 	if len(outageRaw) > checkpointMaxOutageJSON {
 		outageRaw = []byte(`[{"category":"evidence-bound-exceeded"}]`)
+	}
+	censoredSamples := s.censoredSamples
+	if censoredSamples == nil {
+		censoredSamples = []checkpointCensoredSample{}
+	}
+	censoredRaw, _ := json.Marshal(censoredSamples)
+	if len(censoredRaw) > checkpointMaxCensoredJSON {
+		censoredRaw = []byte(`[{"category":"evidence-bound-exceeded"}]`)
 	}
 	outcomeClass, outcomeCategory := s.outcomeClass, s.outcomeCategory
 	if outcomeClass == "" {
@@ -1054,6 +1202,11 @@ func (s *c2CheckpointContinuity) updateCheckpointBenchmarkEvidence() {
 	}
 	s.benchmarkEvidence["availabilityInterrupted"] = strconv.FormatBool(len(s.outageSamples) > 0)
 	s.benchmarkEvidence["availabilityUnavailableSamples"] = strconv.Itoa(len(s.outageSamples))
+	s.benchmarkEvidence["observationCensoredSamples"] = strconv.Itoa(len(s.censoredSamples))
+	s.benchmarkEvidence["observationWindowStatus"] = "complete"
+	if len(s.censoredSamples) > 0 {
+		s.benchmarkEvidence["observationWindowStatus"] = "deadline-censored"
+	}
 	httpFailures := 0
 	for _, sample := range s.outageSamples {
 		if sample.Category == "http-transport-unavailable" || sample.HTTPStatus != 0 {
@@ -1079,6 +1232,7 @@ func (s *c2CheckpointContinuity) updateCheckpointBenchmarkEvidence() {
 	}
 	s.benchmarkEvidence["observationExposureMillis"] = strconv.FormatInt(exposure.Milliseconds(), 10)
 	s.benchmarkEvidence["outageSamplesJSON"] = string(outageRaw)
+	s.benchmarkEvidence["censoredSamplesJSON"] = string(censoredRaw)
 	if len(s.outageSamples) > 0 {
 		s.benchmarkEvidence["firstUnavailableAtUTC"] = s.outageSamples[0].StartedAtUTC
 		s.benchmarkEvidence["lastUnavailableAtUTC"] = s.outageSamples[len(s.outageSamples)-1].EndedAtUTC
@@ -1135,6 +1289,9 @@ func (s *c2CheckpointContinuity) observeCheckpointReply(ctx context.Context, env
 	}
 	if err = validateCheckpointIdentity(reply, pod.UID, s.pvcUID); err != nil {
 		return nil, false, false, hardCheckpointObservation("checkpoint-identity-or-checksum", receipt, err)
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, false, false, measurementCheckpointObservation("post-response-context", receipt, err)
 	}
 	transitioned, err := s.acceptCheckpointContinuity(pod, absent, reply, receipt, final)
 	if err != nil {
@@ -1425,25 +1582,25 @@ type checkpointReceipt struct {
 
 func (s *c2CheckpointContinuity) request(ctx context.Context, env *core.Env) (checkpointBody, checkpointReceipt, error) {
 	url := fmt.Sprintf("http://%s:%d/progress", checkpointService, checkpointPort)
-	rec := checkpointReceipt{URL: url, ProducerUID: string(s.producerUID), ExitCode: -1}
+	started := time.Now()
+	emptySHA := fmt.Sprintf("%x", sha256.Sum256(nil))
+	rec := checkpointReceipt{URL: url, ProducerUID: string(s.producerUID), ExitCode: -1, StdoutSHA256: emptySHA, StderrSHA256: emptySHA, RequestStartedAtUTC: started.UTC().Format(time.RFC3339Nano)}
 	p, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, checkpointProducer, metav1.GetOptions{})
 	if err != nil {
 		rec.IdentityError = err.Error()
+		finishCheckpointReceipt(&rec, started)
 		recordCheckpointReceipt(env, rec)
 		return checkpointBody{}, rec, measurementCheckpointObservation("producer-identity-read", rec, err)
 	}
 	rec.ObservedProducerUID = string(p.UID)
 	if s.producerUID == "" || p.UID != s.producerUID {
 		rec.IdentityError = "producer UID mismatch"
+		finishCheckpointReceipt(&rec, started)
 		recordCheckpointReceipt(env, rec)
 		return checkpointBody{}, rec, measurementCheckpointObservation("producer-identity", rec, errors.New(rec.IdentityError))
 	}
-	started := time.Now()
 	res := env.Exec(ctx, checkpointProducer, "producer", []string{"python3", "-B", "-c", checkpointClientSource, url})
-	ended := time.Now()
-	rec.RequestStartedAtUTC = started.UTC().Format(time.RFC3339Nano)
-	rec.RequestEndedAtUTC = ended.UTC().Format(time.RFC3339Nano)
-	rec.DurationMillis = ended.Sub(started).Milliseconds()
+	finishCheckpointReceipt(&rec, started)
 	rec.ExitCode = res.ExitCode
 	rec.Stdout, rec.StdoutBytes, rec.StdoutSHA256, rec.StdoutTruncated = boundedSessionReceipt(res.Stdout, 8192)
 	rec.Stderr, rec.StderrBytes, rec.StderrSHA256, rec.StderrTruncated = boundedSessionReceipt(res.Stderr, 1024)
@@ -1475,6 +1632,12 @@ func (s *c2CheckpointContinuity) request(ctx context.Context, env *core.Env) (ch
 		return reply.Body, rec, unavailableCheckpointObservation("http-status-unavailable", reply.HTTPStatus, rec, fmt.Errorf("checkpoint HTTP status=%d error=%q", reply.HTTPStatus, reply.Body.Error))
 	}
 	return reply.Body, rec, nil
+}
+
+func finishCheckpointReceipt(receipt *checkpointReceipt, started time.Time) {
+	ended := time.Now()
+	receipt.RequestEndedAtUTC = ended.UTC().Format(time.RFC3339Nano)
+	receipt.DurationMillis = ended.Sub(started).Milliseconds()
 }
 func recordCheckpointReceipt(env *core.Env, r checkpointReceipt) {
 	raw, _ := json.Marshal(r)
@@ -1634,28 +1797,47 @@ func checkpointObservationTarget(ctx context.Context, env *core.Env, app, origin
 	return replacements[0], true, nil
 }
 
-func waitCheckpointObservation(ctx context.Context, window, interval time.Duration, sample func() (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
+func waitCheckpointObservation(ctx context.Context, window, interval time.Duration, sample func(context.Context) (checkpointBody, error)) (time.Time, time.Time, int, int, error) {
 	start := time.Now()
-	deadline := time.NewTimer(window)
-	defer deadline.Stop()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	deadline := start.Add(window)
+	next := start.Add(interval)
 	n := 0
 	failures := 0
 	for {
+		now := time.Now()
+		if !now.Before(deadline) {
+			return start, now, n, failures, nil
+		}
+		if next.After(deadline) {
+			next = deadline
+		}
+		timer := time.NewTimer(time.Until(next))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return start, time.Now(), n, failures, ctx.Err()
-		case <-deadline.C:
+		case <-timer.C:
+		}
+		if !time.Now().Before(deadline) {
 			return start, time.Now(), n, failures, nil
-		case <-ticker.C:
-			n++
-			if _, err := sample(); err != nil {
-				failures++
-				if observationClass(err) != checkpointApplicationUnavailable {
-					return start, time.Now(), n, failures, err
-				}
+		}
+		windowParent := context.WithValue(ctx, checkpointObservationDeadlineKey{}, checkpointObservationDeadline{parent: ctx})
+		sampleCtx, cancel := context.WithDeadline(windowParent, deadline)
+		n++
+		_, err := sample(sampleCtx)
+		cancel()
+		if err != nil {
+			failures++
+			switch observationClass(err) {
+			case checkpointApplicationUnavailable:
+			case checkpointObservationCensored:
+				return start, time.Now(), n, failures, nil
+			default:
+				return start, time.Now(), n, failures, err
 			}
 		}
+		// Schedule from completion. A slow sample never creates queued cadence
+		// ticks, and no request can begin after the absolute window deadline.
+		next = time.Now().Add(interval)
 	}
 }
