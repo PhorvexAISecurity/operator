@@ -69,6 +69,12 @@ type attackRecord struct {
 	Expected     string            `json:"expectedActuator"`
 	Stateful     bool              `json:"stateful"`
 	EvidenceKind string            `json:"evidenceKind,omitempty"`
+	// StimulusEvidence and EffectEvidence keep setup, controller effect and attacker outcome
+	// separate. A selector or guardrail-state transition is useful operational evidence, but it
+	// does not by itself establish that an attack was executed or mitigated.
+	StimulusEvidence *attackStimulusEvidence `json:"stimulusEvidence,omitempty"`
+	EffectEvidence   *attackEffectEvidence   `json:"effectEvidence,omitempty"`
+	OutcomeClass     string                  `json:"outcomeClass,omitempty"`
 
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
@@ -131,6 +137,41 @@ type attackRecord struct {
 	baseKVEpoch string          // pre-attack kv-reset epoch (kvcache detection)
 	baseQuar    map[string]bool // pre-attack quarantine SecurityEvent names
 	baseNP      map[string]bool // pre-attack quarantine NetworkPolicy names
+	vllmEffect  *vllmEffectBaseline
+}
+
+type attackStimulusEvidence struct {
+	Kind               string `json:"kind"`
+	Observed           bool   `json:"observed"`
+	TargetUID          string `json:"targetUid"`
+	EventName          string `json:"eventName"`
+	EventUID           string `json:"eventUid"`
+	EventCreatedAt     string `json:"eventCreatedAt"`
+	EventRule          string `json:"eventRule"`
+	Correlation        string `json:"correlation"`
+	BehavioralExecuted bool   `json:"behavioralExecuted"`
+	Limitation         string `json:"limitation"`
+}
+
+type attackEffectEvidence struct {
+	Kind        string  `json:"kind"`
+	Observed    bool    `json:"observed"`
+	ObservedAt  string  `json:"observedAt,omitempty"`
+	TargetUID   string  `json:"targetUid"`
+	Before      string  `json:"before,omitempty"`
+	After       string  `json:"after,omitempty"`
+	ServiceUID  string  `json:"serviceUid,omitempty"`
+	Correlation string  `json:"correlation"`
+	Limitation  string  `json:"limitation"`
+	Seconds     float64 `json:"seconds"`
+}
+
+// vllmEffectBaseline is private watcher authority captured and checked by the launch path.
+// It is deliberately not reconstructed from old receipts or Pod annotations.
+type vllmEffectBaseline struct {
+	kind       string
+	before     string
+	serviceUID string
 }
 
 type decisionEvidence struct {
@@ -147,11 +188,14 @@ type decisionEvidence struct {
 // react within ~1s, faster than the watcher's own baseline kubectl calls would complete — so a
 // watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
 type defenseBaseline struct {
-	uid     string
-	epoch   string
-	kvEpoch string
-	quar    map[string]bool
-	nps     map[string]bool
+	uid          string
+	epoch        string
+	kvEpoch      string
+	quar         map[string]bool
+	nps          map[string]bool
+	stimulus     *attackStimulusEvidence
+	vllmEffect   *vllmEffectBaseline
+	outcomeClass string
 	// uptime is the workload availability read BEFORE the attack is applied. It must be captured
 	// here for the same reason as the quarantine/NP baselines: the operator is event-driven and
 	// reacts in ~1s, faster than startAttackRecord runs, so reading it afterwards recorded the
@@ -183,6 +227,18 @@ var (
 // boundary. Add copies here if attackRecord gains another map, slice or pointer field.
 func cloneAttackRecord(r *attackRecord) *attackRecord {
 	c := *r
+	if r.StimulusEvidence != nil {
+		stimulus := *r.StimulusEvidence
+		c.StimulusEvidence = &stimulus
+	}
+	if r.EffectEvidence != nil {
+		effect := *r.EffectEvidence
+		c.EffectEvidence = &effect
+	}
+	if r.vllmEffect != nil {
+		baseline := *r.vllmEffect
+		c.vllmEffect = &baseline
+	}
 	if r.DecisionEvidence != nil {
 		evidence := *r.DecisionEvidence
 		c.DecisionEvidence = &evidence
@@ -379,6 +435,15 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 	return s.startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected, stateful, base, started, started.Add(d))
 }
 
+func (s *Server) startVLLMEffectRecord(service, pod, attack, attackID, evidenceLabel, expected string, base defenseBaseline) string {
+	d := s.cfg.AttackWatchDuration
+	if d <= 0 {
+		d = 95 * time.Second
+	}
+	started := s.cfg.now()
+	return s.startAttackRecordAtKind("", service, vllmAttackNS, pod, attack, attackID, evidenceLabel, expected, false, base, started, started.Add(d), "vllm-in-place-effect", started)
+}
+
 // startAttackRecordAt pre-registers one exact observation window. Experiment arms use
 // this form so producer/API overhead cannot make one arm's measurement longer than another.
 func (s *Server) startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline, started, deadline time.Time) string {
@@ -395,8 +460,10 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 		FiredAt: started.UTC().Format(time.RFC3339Nano),
 		Service: service, Namespace: ns, Pod: pod, Deploy: deploy,
 		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful, EvidenceKind: evidenceKind,
-		TargetUID: base.uid,
-		Status:    "running",
+		TargetUID:        base.uid,
+		StimulusEvidence: base.stimulus,
+		OutcomeClass:     base.outcomeClass,
+		Status:           "running",
 		// PRE-FIRE value when the caller captured one (>=0); fall back to a live read only if the
 		// baseline predates this field, so an old caller still gets a number rather than 0.
 		UptimeBefore: func() float64 {
@@ -411,6 +478,7 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 		baseKVEpoch: base.kvEpoch,
 		baseQuar:    base.quar,
 		baseNP:      base.nps,
+		vllmEffect:  base.vllmEffect,
 	}
 	// capture value-at-risk NOW (the attacked pod's node still exists; it may be rotated away before
 	// the watcher finishes) so the cost is grounded in the real node price, not the cluster fallback.
@@ -488,10 +556,31 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if up := s.workloadUptime(r.Namespace, r.Deploy); up >= 0 && up < minUp {
 			minUp = up
 		}
-		if r.Outcome != "" || r.ResponseObserved {
+		if r.Outcome != "" || r.ResponseObserved || r.EffectEvidence != nil {
 			continue
 		}
 		switch r.AttackID {
+		case "endpoint-rotate", "guardrail-rotate":
+			effect, probeErr := s.observeVLLMInPlaceEffect(r)
+			if probeErr != nil {
+				r.ObservationError = "in-place effect observation: " + probeErr.Error()
+				publishAttack(r)
+				continue
+			}
+			if effect != nil {
+				if !s.cfg.now().Before(deadline) {
+					r.ObservationError = "in-place effect observation completed outside the registered window"
+					publishAttack(r)
+					continue
+				}
+				effect.Seconds = round2(s.cfg.now().Sub(r.started).Seconds())
+				r.EffectEvidence = effect
+				// The effect signature is exact, while attribution remains temporal until the
+				// manager audit carries the unique SecurityEvent UID. Do not set Actuated.
+				r.Action, r.Actuated, r.TimeToDefendSec = r.AttackID, false, 0
+				r.OutcomeClass = "effect-only"
+				publishAttack(r)
+			}
 		case "poison": // adapter-rotate: real actuation bumps the adapter epoch
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch"); ep != "" && ep != epoch0 {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "adapter-rotate", true
@@ -560,7 +649,20 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 			publishAttack(r)
 		}
 	}
-	if r.EvidenceKind == "synthetic-detector-signal" {
+	if r.EvidenceKind == "vllm-in-place-effect" {
+		// These scenarios currently have an exact setup/effect oracle but no behavioral attack
+		// oracle. Preserve the action evidence without manufacturing DEFENDED/LANDED, dwell or
+		// containment. In particular, an epoch/selector transition is not attacker mitigation.
+		r.Outcome, r.DefendedPod, r.Containment = "", "", ""
+		r.DwellSec, r.DwellOngoing = 0, false
+		if r.EffectEvidence == nil {
+			r.Actuated, r.Action, r.TimeToDefendSec = false, "", 0
+			r.OutcomeClass = "effect-unverified"
+			if r.ObservationError == "" {
+				r.ObservationError = "no exact target-bound in-place effect observed within the registered window"
+			}
+		}
+	} else if r.EvidenceKind == "synthetic-detector-signal" {
 		// A detector signal is not an exploit and supplies no attacker foothold. Persist
 		// response evidence without manufacturing DEFENDED/LANDED, containment or dwell.
 		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
@@ -580,6 +682,10 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
+	} else if r.EvidenceKind == "vllm-in-place-effect" {
+		// Decision evidence remains explicitly temporal unless the manager later exports the
+		// unique SecurityEvent UID in its audit schema.
+		s.fillReasoning(ctxName, r)
 	}
 	r.Status = "done"
 	if r.ObservationError != "" {

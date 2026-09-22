@@ -1,0 +1,3 @@
+# Verified by independent lead
+
+Root reproduced baseline30a1 actual console handler plus realHTTP503/curl: returns200/ok, emitsone SecurityEvent and persistsLANDED despite failedsetup. Same handlercontrol onfinald9c04 rejects beforeevent. Independently discovered actualHTTP applied-then-failedack and concurrent-runtime overwrite in rejected13d72; finald9c04 refusals pass. Full rootconsole70.620sPASS with positiveeffect-only and HTTPreadbackcontrols. References ../.. /fixes/POST25-VLLM-CONSOLE-OUTCOMES/evidence/baseline and evidence/p3; exactincidentdescribed in fix evidence/incident.md. Newcodeisnotdeployed, no liveacceptanceclaimed. Prioractualbossraw evidence staysprivate review/BOSS-CONSOLE-LANDINGS-20260922T1401Z.

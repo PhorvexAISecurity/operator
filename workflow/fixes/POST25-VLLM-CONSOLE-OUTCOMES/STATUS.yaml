@@ -1,0 +1,268 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 711fe83a90f8d5e9e29e739e74cea473b75f4d8ae1fd8220e9ac920ff58909f3
+    source_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+    at: '2026-09-22T15:36:31+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/baseline/baseline30a1-handler.log
+    sha256: 663adeacb7dcd18aef7990b4d5427c89c8c54dc1766f3149288ff54fd1cbbe76
+    source_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+    at: '2026-09-22T15:55:55+00:00'
+  preflight:
+    result: PASS
+    by: console-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 8c6b5c271295908e002a441d31ff61e2f05281102eb41d1bcaf0ca346a938147
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:00:57+00:00'
+  implementation:
+    result: PASS
+    by: console-worker
+    artifact: 04-diff.patch
+    sha256: b59c71eba5cd4ceb69b2772d1ee39cef92d6b6d721e4c5557224d7fcdf04b076
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:00:57+00:00'
+  l0:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker/console-test-vet.log
+    sha256: bb8024d059166b9992243e66240490c8a9bd488faf275cf12249c64d6a0c27b9
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:00:57+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: f86b45a5e0ba9d2b1b47c962d98fb5bd734bc22516080b4369fb5ed621ba11c8
+  l1:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker/frontend-type-build.log
+    sha256: 0b61e7b6750a0e05825a4f53215d421775862bf7e5a2c794e531638172411781
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:01:51+00:00'
+    inputs:
+    - dashboard-web/components/panels/attack-report.tsx
+    - dashboard-web/lib/api.ts
+    inputs_sha256: c6325687daa47ee5cf98b8cdb83b75698477e747d77077095735ff159f3e75a9
+  l2:
+    result: PASS
+    by: console-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 8c6b5c271295908e002a441d31ff61e2f05281102eb41d1bcaf0ca346a938147
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:00:57+00:00'
+    inputs:
+    - dashboard-web
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    inputs_sha256: c4620e5bdfb2b38c8f10b09649a565297588c9cfb9849c52370dc157db5f50e8
+  positive_control:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker/console-test-vet.log
+    sha256: bb8024d059166b9992243e66240490c8a9bd488faf275cf12249c64d6a0c27b9
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:00:57+00:00'
+    inputs:
+    - phorvex/internal/console/vllm_outcome_test.go
+    inputs_sha256: ea5ab88c9b789f2d4c38e3c9b76a25c691a8e0a45c4f8b06a8060c5a9b252e24
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 98f49a2f479a726edacc3435eb1b6732281adffefc69a0c1247fb337881a2a74
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:07:13+00:00'
+    baseline_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 22749229686412ac575f839f4f345d5998742efc8dbedab375d8df7078545a1c
+    source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+    at: '2026-09-22T16:07:13+00:00'
+    incident_sha256: 98f49a2f479a726edacc3435eb1b6732281adffefc69a0c1247fb337881a2a74
+fix_id: POST25-VLLM-CONSOLE-OUTCOMES
+issues: []
+title: Report truthful vLLM console stimulus and effect outcomes
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: console-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  deployed_image: 0.4.147
+  deployed_git_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-console-vllm-outcomes
+  base_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  head_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-22T16:07:18+00:00'
+follow_up_to: RPT-20260922-143900-console-vllm-outcomes
+configuration_history:
+- at: '2026-09-22T15:35:57+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-22T15:40:00+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-22T15:48:35+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-22T15:52:37+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-22T16:00:57+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T15:36:29+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T15:36:31+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-22T16:00:57+00:00'
+  by: console-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-22T16:00:59+00:00'
+  by: console-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-22T16:07:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-22T16:07:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-VLLM-CONSOLE-OUTCOMES:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11
+check_history:
+- check: l1
+  result: PASS
+  by: console-worker
+  artifact: evidence/worker/console-test-vet.log
+  sha256: bb8024d059166b9992243e66240490c8a9bd488faf275cf12249c64d6a0c27b9
+  source_sha: d9c04abf4696c041a8bd81f11b3e5bb9eea79209
+  at: '2026-09-22T16:00:57+00:00'
+  inputs:
+  - dashboard-web/components/panels/attack-report.tsx
+  - dashboard-web/lib/api.ts
+  - phorvex/internal/console
+  inputs_sha256: aae2589a058554ddc1eb3d4ec6a8dcbc4a7a7b8b946dedbc4c9806e6ed371c98

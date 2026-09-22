@@ -1,0 +1,64 @@
+schema_version: 1
+intake_id: RPT-20260922-143900-console-vllm-outcomes
+kind: BUG
+title: Console vLLM outcomes conflate effect with mitigation
+state: VERIFIED
+reporter: owner
+approval_ref: authorized-live-campaign-console-verification-20260922
+created_at: '2026-09-22T15:33:57+00:00'
+updated_at: '2026-09-22T15:57:03+00:00'
+pins:
+  source_main_sha: 30a1cea4e954830c815ceaba2b47bbaae0a16088
+  source_release: 0.4.146
+  deployed_image: 0.4.146
+  deployed_digest: 34e0311835430d2b7fa9fa496dac89fc89dc7c158da6de03f9bbb420a485dae7
+  deployed_git_sha: 9409389467504720b5f0eaa19b91bed7a4793e51
+  environment: dev
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: m183_finish
+  coordinator: root
+next_action:
+  owner: root
+  action: Reconcile related attribution issues without forced duplicate; deliver namedfix
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-22T15:57:03+00:00'
+  by: root
+  artifact: REPORT.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-22T15:57:03+00:00'
+  by: root
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-22T15:57:03+00:00'
+  by: root
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+revision: 3

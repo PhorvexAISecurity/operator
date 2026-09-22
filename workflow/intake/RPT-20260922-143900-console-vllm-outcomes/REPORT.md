@@ -1,0 +1,3 @@
+# Existing console vLLM outcome defect
+
+Owner reports boss endpoint/guardrail tests marked LANDED. Root retrieved actual runs and runtime logs: the guardrail test did not execute a calibrated bypass probe; manager commands existed, while runtime pgv1 and annotation pgv2 diverged. The baseline handler ignored runtime HTTP failure and still emitted the event and success response. Source940 wasobserved live; source30a1 retains the same defect. Scope is checked existing console setup and truthful mechanism/effect outcomes, notnewcatalogue scenarios. Fix POST25-VLLM-CONSOLE-OUTCOMES implements corrections under owner urgentconsole/mathpriority.

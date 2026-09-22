@@ -196,6 +196,13 @@ intakes:
     state: FILED
     issue_id: M-183
     aliases: []
+  RPT-20260922-143900-console-vllm-outcomes:
+    directory: intake/RPT-20260922-143900-console-vllm-outcomes
+    kind: BUG
+    title: Console vLLM outcomes conflate effect with mitigation
+    state: VERIFIED
+    issue_id: null
+    aliases: []
   RPT-20260922-150000-serving-journal-gate:
     directory: intake/RPT-20260922-150000-serving-journal-gate
     kind: BUG
