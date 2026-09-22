@@ -109,8 +109,8 @@ func TestCatalogueV3ManifestMatchesRegisteredSourceAndExplicitProfiles(t *testin
 			t.Fatalf("entry %s source hash drifted", entry.ID)
 		}
 	}
-	if len(entryIDs) != 7 {
-		t.Fatalf("catalogue entries=%d want 7", len(entryIDs))
+	if len(entryIDs) != 9 {
+		t.Fatalf("catalogue entries=%d want 9", len(entryIDs))
 	}
 
 	seenProfiles := map[string]bool{}
@@ -166,6 +166,19 @@ func TestCatalogueV3ManifestMatchesRegisteredSourceAndExplicitProfiles(t *testin
 				t.Fatalf("NATS profile %s mode %q is duplicated or mismatched", profile.ID, mode)
 			}
 			natsModes[mode] = true
+		}
+		if strings.HasPrefix(profile.ID, "native-") {
+			if profile.ExecutionKind != "direct-production-entrypoint-control" || profile.TrialsPerArm != 1 || !slices.Equal(profile.DefenderFilter, []string{"d-nomtd"}) || !slices.Equal(profile.RequiredRelationships, []string{"expectedNamespaceUID == nativeRouteFixture.namespaceUID"}) {
+				t.Fatalf("native route profile lacks fixed production-entrypoint boundary: %+v", profile)
+			}
+			var action string
+			if err := json.Unmarshal(profile.RequiredConfigValues["nativeRouteFixture.action"], &action); err != nil {
+				t.Fatalf("native route profile %s action is not a string: %v", profile.ID, err)
+			}
+			wantScenario := map[string]string{"route-rotate": nativeRouteScenario, "endpoint-rotate": nativeEndpointScenario}[action]
+			if wantScenario == "" || profile.ScenarioFilter[0] != wantScenario || profile.ID != "native-"+action {
+				t.Fatalf("native route profile %s action %q does not match scenario %s", profile.ID, action, profile.ScenarioFilter[0])
+			}
 		}
 	}
 	for entry := range entryIDs {
