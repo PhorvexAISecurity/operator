@@ -1,0 +1,119 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 5
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: d4a7b8d9547544387eb57d635191268028715fde042727b0c2b1f2d16e23c15b
+    source_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+    at: '2026-09-22T06:20:37+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+fix_id: POST25-HYBRID-ROTATE-OWNERSHIP
+issues: []
+title: Supply ownership reader for hybrid native rotate
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: checkpoint-worker
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: origin/main
+  code_sha: ff65961c68c62e10b3d8c9b3a50dc133e376443a
+  deployed_image: null
+  deployed_git_sha: b374bfa7c3cbce083258a37c60c861e6b330506d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: post25-hybrid-rotate-ownership
+  base_sha: 5ea6e29e515626c459de2d8f36014b0536bd87ee
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: checkpoint-worker
+  action: Implement narrow reader-routing fix and submit real tick regression evidence
+updated_at: '2026-09-22T06:21:41+00:00'
+configuration_history:
+- at: '2026-09-22T06:19:55+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-22T06:21:41+00:00'
+  by: checkpoint-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-22T06:20:35+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-22T06:20:48+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false

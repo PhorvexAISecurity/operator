@@ -1270,7 +1270,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	}
 
 	var ownerReader client.Reader
-	if m.Actuator != nil && m.Actuator.Name() == "native" {
+	if actuatorUsesNativeRotate(m.Actuator) {
 		ownerReader = m.OwnershipReader
 	}
 	snap, err := ingest.CollectSnapshotForRotationTargetsWithReceiptReader(ctx, m.Client, now, genericAssetValue, ownerReader, m.BoundaryReader, func(p *corev1.Pod) bool {
