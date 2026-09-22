@@ -384,7 +384,7 @@ func (a *Adapter) Run(ctx context.Context, cfg RunConfig) (receipt Receipt, runE
 	if result.RollbackRef != "" {
 		receipt.RollbackAttempted = true
 		defer func() {
-			if receipt.Restored != nil || receipt.RollbackError != "" {
+			if receipt.Restored != nil {
 				return
 			}
 			sampler.setPhase("rollback-transition")
@@ -392,13 +392,45 @@ func (a *Adapter) Run(ctx context.Context, cfg RunConfig) (receipt Receipt, runE
 			defer cancel()
 			rbErr := native.Rollback(rollbackCtx, req, result.RollbackRef)
 			if rbErr != nil {
-				receipt.RollbackError = rbErr.Error()
+				if receipt.RollbackError == "" {
+					receipt.RollbackError = rbErr.Error()
+				}
+				probe, _, _, probeErr := a.readState(rollbackCtx, cfg, "restored")
+				if probeErr != nil {
+					runErr = errors.Join(runErr, fmt.Errorf("route catalogue deferred rollback: %w", rbErr), fmt.Errorf("route catalogue post-rollback authority: %w", probeErr))
+					return
+				}
+				if restoreErr := validateRestored(baseline, probe); restoreErr == nil && len(probe.Journal) == 0 {
+					receipt.Restored = &probe
+					runErr = errors.Join(runErr, fmt.Errorf("route catalogue deferred rollback: %w", rbErr))
+					return
+				}
+				if len(probe.Journal) == 0 {
+					runErr = errors.Join(runErr, fmt.Errorf("route catalogue deferred rollback: %w", rbErr), errors.New("route catalogue state is unrestored without an exact protected receipt; reconciliation refused"))
+					return
+				}
+				// A canceled explicit rollback may have durably moved the protected
+				// receipt to its restoring phase before its caller lost the result.
+				// Rollback intentionally refuses that superseded phase. Resume it only
+				// through the production Actuate reconciliation path, with the same
+				// operation authority and a detached bounded context.
+				receipt.ReconciliationAttempted = true
+				reconciled, reconcileErr := native.Actuate(rollbackCtx, req)
+				receipt.ReconciliationResult = &reconciled
+				if reconcileErr != nil {
+					receipt.ReconciliationError = reconcileErr.Error()
+					runErr = errors.Join(runErr, fmt.Errorf("route catalogue deferred rollback: %w", rbErr), fmt.Errorf("route catalogue deferred reconciliation: %w", reconcileErr))
+					return
+				}
 				runErr = errors.Join(runErr, fmt.Errorf("route catalogue deferred rollback: %w", rbErr))
-				return
 			}
 			restored, _, _, err := a.readState(rollbackCtx, cfg, "restored")
 			if err != nil {
 				runErr = errors.Join(runErr, err)
+				return
+			}
+			if err := validateRestored(baseline, restored); err != nil || len(restored.Journal) != 0 {
+				runErr = errors.Join(runErr, err, errors.New("route catalogue detached cleanup did not restore exact state and empty journal"))
 				return
 			}
 			receipt.Restored = &restored
@@ -525,7 +557,7 @@ func (a *Adapter) readState(ctx context.Context, cfg RunConfig, phase string) (S
 	if err != nil {
 		return s, nil, nil, err
 	}
-	journal, err := readJournal(ctx, a.reader, f.JournalNamespace)
+	journal, err := readJournal(ctx, a.reader, f)
 	if err != nil {
 		return s, nil, nil, err
 	}
@@ -675,11 +707,11 @@ func serviceSnapshot(s *corev1.Service) ServiceSnapshot {
 	return ServiceSnapshot{Name: s.Name, UID: string(s.UID), ResourceVersion: s.ResourceVersion, ClusterIP: s.Spec.ClusterIP, ClusterIPs: append([]string(nil), s.Spec.ClusterIPs...), Ports: append([]corev1.ServicePort(nil), s.Spec.Ports...), Selector: copyMap(s.Spec.Selector)}
 }
 
-func readJournal(ctx context.Context, reader client.Reader, namespace string) ([]JournalSnapshot, error) {
+func readJournal(ctx context.Context, reader client.Reader, fixture Fixture) ([]JournalSnapshot, error) {
 	objects := map[types.UID]corev1.ConfigMap{}
 	for key, value := range map[string]string{operationJournalLabel: "v1", routeGuardLabel: "v1"} {
 		list := &corev1.ConfigMapList{}
-		if err := reader.List(ctx, list, client.InNamespace(namespace), client.MatchingLabels{key: value}); err != nil {
+		if err := reader.List(ctx, list, client.InNamespace(fixture.JournalNamespace), client.MatchingLabels{key: value}); err != nil {
 			return nil, fmt.Errorf("route catalogue journal inventory: %w", err)
 		}
 		for i := range list.Items {
@@ -692,8 +724,9 @@ func readJournal(ctx context.Context, reader client.Reader, namespace string) ([
 	out := make([]JournalSnapshot, 0, len(objects))
 	for _, item := range objects {
 		cm := item.DeepCopy()
-		if cm.UID == "" || cm.ResourceVersion == "" || cm.DeletionTimestamp != nil || !validJournalObjectName(cm.Name, cm.Labels) {
-			return nil, fmt.Errorf("route catalogue journal contains foreign object %s", cm.Name)
+		if cm.UID == "" || cm.ResourceVersion == "" || cm.DeletionTimestamp != nil || !validFixtureJournalObject(cm.Name, cm.Labels, fixture) {
+			serviceReceipt, targetGuard := fixtureJournalNames(fixture)
+			return nil, fmt.Errorf("route catalogue journal contains foreign object %s labels=%v (allowed %s or %s)", cm.Name, cm.Labels, serviceReceipt, targetGuard)
 		}
 		raw, err := json.Marshal(cm.Data)
 		if err != nil {
@@ -818,7 +851,7 @@ func (r *boundedReader) Get(ctx context.Context, key client.ObjectKey, obj clien
 	case *corev1.Service:
 		allowed = key.Namespace == f.Namespace && key.Name == f.ServiceName
 	case *corev1.ConfigMap:
-		allowed = key.Namespace == f.JournalNamespace && validJournalReadName(key.Name)
+		allowed = key.Namespace == f.JournalNamespace && validFixtureJournalReadName(key.Name, f)
 	case *discoveryv1.EndpointSlice:
 		allowed = key.Namespace == f.Namespace && key.Name != ""
 	}
@@ -828,16 +861,15 @@ func (r *boundedReader) Get(ctx context.Context, key client.ObjectKey, obj clien
 	return r.Reader.Get(ctx, key, obj, opts...)
 }
 
-func validJournalReadName(name string) bool {
-	for _, prefix := range []string{"phorvex-route-service-", "phorvex-route-target-"} {
-		digest := strings.TrimPrefix(name, prefix)
-		if digest != name && len(digest) == 40 {
-			if _, err := hex.DecodeString(digest); err == nil {
-				return true
-			}
-		}
-	}
-	return false
+func fixtureJournalNames(f Fixture) (serviceReceipt, targetGuard string) {
+	serviceSum := sha256.Sum256([]byte("route-service/" + f.ServiceUID))
+	targetSum := sha256.Sum256([]byte("route-target/" + f.TargetUID))
+	return fmt.Sprintf("phorvex-route-service-%x", serviceSum[:20]), fmt.Sprintf("phorvex-route-target-%x", targetSum[:20])
+}
+
+func validFixtureJournalReadName(name string, fixture Fixture) bool {
+	serviceReceipt, targetGuard := fixtureJournalNames(fixture)
+	return name == serviceReceipt || name == targetGuard
 }
 
 func (r *boundedReader) List(ctx context.Context, list client.ObjectList, options ...client.ListOption) error {
@@ -878,7 +910,7 @@ func (c *boundedClient) authorize(method string, obj client.Object) error {
 			return nil
 		}
 	case *corev1.ConfigMap:
-		if typed.Namespace == c.fixture.JournalNamespace && validJournalObjectName(typed.Name, typed.Labels) {
+		if typed.Namespace == c.fixture.JournalNamespace && validFixtureJournalObject(typed.Name, typed.Labels, c.fixture) {
 			switch method {
 			case "CREATE", "UPDATE", "DELETE":
 				return nil
@@ -888,22 +920,16 @@ func (c *boundedClient) authorize(method string, obj client.Object) error {
 	return fmt.Errorf("route catalogue refused foreign mutation %s %T %s/%s", method, obj, obj.GetNamespace(), obj.GetName())
 }
 
-func validJournalObjectName(name string, objectLabels map[string]string) bool {
-	prefix := ""
-	switch {
-	case objectLabels[operationJournalLabel] == "v1" && objectLabels[routeGuardLabel] == "":
-		prefix = "phorvex-route-service-"
-	case objectLabels[routeGuardLabel] == "v1" && objectLabels[operationJournalLabel] == "":
-		prefix = "phorvex-route-target-"
+func validFixtureJournalObject(name string, objectLabels map[string]string, fixture Fixture) bool {
+	serviceReceipt, targetGuard := fixtureJournalNames(fixture)
+	switch name {
+	case serviceReceipt:
+		return objectLabels[operationJournalLabel] == "v1" && objectLabels[routeGuardLabel] == ""
+	case targetGuard:
+		return objectLabels[routeGuardLabel] == "v1" && objectLabels[operationJournalLabel] == ""
 	default:
 		return false
 	}
-	digest := strings.TrimPrefix(name, prefix)
-	if digest == name || len(digest) != 40 {
-		return false
-	}
-	_, err := hex.DecodeString(digest)
-	return err == nil
 }
 
 func (c *boundedClient) record(method string, obj client.Object, started time.Time, err error) error {

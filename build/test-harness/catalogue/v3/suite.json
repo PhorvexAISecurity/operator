@@ -80,7 +80,7 @@
       "sourceFile": "scenarios/c2_native_route_cutover.go",
       "measures": "Production NativeActuator route-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback.",
       "limits": "Selector rekey only; no locator, credential, session, security-efficacy, universal-availability or installed-brain claim.",
-      "sourceSHA256": "3bb865025ed6ebdf9c8bef937119a09598f9ddc81ca861af00ab44df9419457a"
+      "sourceSHA256": "6a28026d78b3759e6784bd1eca3b7e2275d8c3a4e33c3584ff9018a691b5d150"
     },
     {
       "id": "c2-native-endpoint-cutover",
@@ -88,7 +88,7 @@
       "sourceFile": "scenarios/c2_native_route_cutover.go",
       "measures": "Production NativeActuator endpoint-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback.",
       "limits": "Selector rekey only; no locator, credential, session, security-efficacy, universal-availability or installed-brain claim.",
-      "sourceSHA256": "3bb865025ed6ebdf9c8bef937119a09598f9ddc81ca861af00ab44df9419457a"
+      "sourceSHA256": "6a28026d78b3759e6784bd1eca3b7e2275d8c3a4e33c3584ff9018a691b5d150"
     }
   ],
   "profiles": [

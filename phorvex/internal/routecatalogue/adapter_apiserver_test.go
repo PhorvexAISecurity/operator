@@ -45,6 +45,22 @@ type acceptedWriteLostAckClient struct {
 	once   atomic.Bool
 }
 
+type cancelExplicitRollbackClient struct {
+	client.Client
+	cancel  context.CancelFunc
+	patches atomic.Int32
+}
+
+func (c *cancelExplicitRollbackClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	// The exact forward producer performs three owned Pod patches. Cancel the
+	// caller at the first reverse patch after the rollback intent is durable.
+	if c.patches.Add(1) == 4 {
+		c.cancel()
+		return ctx.Err()
+	}
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
+
 func (c *acceptedWriteLostAckClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	err := c.Client.Patch(ctx, obj, patch, opts...)
 	if err == nil && c.method == "PATCH" && c.once.CompareAndSwap(false, true) {
@@ -263,6 +279,13 @@ func TestRouteEndpointCatalogueEntrypointActualAPIKCMHTTP(t *testing.T) {
 		if err := c.Get(ctx, client.ObjectKeyFromObject(foreign), &corev1.ConfigMap{}); !apierrors.IsNotFound(err) {
 			t.Fatalf("foreign ConfigMap write reached API: %v", err)
 		}
+		foreign = &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: journalNS.Name, Name: "phorvex-route-service-" + strings.Repeat("a", 40), Labels: map[string]string{operationJournalLabel: "v1"}}}
+		if err := bounded.Create(ctx, foreign); err == nil {
+			t.Fatal("foreign product-shaped journal name was admitted")
+		}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(foreign), &corev1.ConfigMap{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("foreign product-shaped ConfigMap write reached API: %v", err)
+		}
 		peerBefore := pods[1].DeepCopy()
 		peerMutation := pods[1].DeepCopy()
 		peerMutation.Labels[routeKey] = "foreign"
@@ -300,6 +323,25 @@ func TestRouteEndpointCatalogueEntrypointActualAPIKCMHTTP(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("canceled-explicit-rollback-still-runs-detached-cleanup", func(t *testing.T) {
+		runCtx, runCancel := context.WithCancel(ctx)
+		fault := &cancelExplicitRollbackClient{Client: c, cancel: runCancel}
+		faultAdapter, err := New(fault, c, &http.Client{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := base
+		cfg.Action = ActionRouteRotate
+		cfg.Fixture.OperationID = strings.Repeat("7", 64)
+		receipt, runErr := faultAdapter.Run(runCtx, cfg)
+		if runErr == nil || !errors.Is(runErr, context.Canceled) || receipt.RollbackError == "" || !receipt.ReconciliationAttempted || receipt.ReconciliationResult == nil || receipt.ReconciliationError != "" || receipt.Restored == nil {
+			t.Fatalf("canceled explicit rollback did not retain error and detached restoration: status=%s rollback=%q restored=%v err=%v", receipt.Status, receipt.RollbackError, receipt.Restored != nil, runErr)
+		}
+		if err := validateRestored(*receipt.Baseline, *receipt.Restored); err != nil || len(receipt.Restored.Journal) != 0 {
+			t.Fatalf("detached rollback did not restore exact baseline: restored=%+v reconcile=%+v err=%v", receipt.Restored, receipt.ReconciliationResult, err)
+		}
+	})
 
 	t.Run("wrong-rollback-authority-refuses-without-write", func(t *testing.T) {
 		cfg := base
@@ -477,7 +519,7 @@ func TestRouteEndpointCatalogueEntrypointActualAPIKCMHTTP(t *testing.T) {
 		}
 	})
 
-	journal, err := readJournal(ctx, c, journalNS.Name)
+	journal, err := readJournal(ctx, c, base.Fixture)
 	if err != nil || len(journal) != 0 {
 		t.Fatalf("producer retained protected journal: count=%d err=%v", len(journal), err)
 	}
