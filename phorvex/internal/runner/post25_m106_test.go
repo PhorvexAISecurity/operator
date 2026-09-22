@@ -77,6 +77,13 @@ type m106NativeActuator struct {
 	result *actuator.Result
 }
 
+type m106NamedActuator struct {
+	*m106NativeActuator
+	name string
+}
+
+func (a *m106NamedActuator) Name() string { return a.name }
+
 func (*m106NativeActuator) Name() string                                              { return "native" }
 func (*m106NativeActuator) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
 func (a *m106NativeActuator) Actuate(_ context.Context, req actuator.Request) (actuator.Result, error) {
@@ -101,6 +108,27 @@ func TestPost25M106ContradictoryNativeReceiptNeverFeedsProducer(t *testing.T) {
 	_ = actuateWithBoundary(t, manager, context.Background(), entry, policy, decisions, views)
 	if act.calls != 1 || producer.calls != 0 {
 		t.Fatalf("contradictory native receipt reached scoped producer: native=%d producer=%d", act.calls, producer.calls)
+	}
+}
+
+func TestPost25M106NonNativeRotateRoutesNeverFeedProducer(t *testing.T) {
+	for _, name := range []string{"phoenix", "unknown"} {
+		t.Run(name, func(t *testing.T) {
+			act := &m106NamedActuator{m106NativeActuator: &m106NativeActuator{}, name: name}
+			producer := &m106RunnerProducer{}
+			manager := &Manager{Actuator: act, ScopedOutcomeProducer: producer, Log: logr.Discard()}
+			policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
+				EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+			entry := &policyEntry{namespace: "ns"}
+			views := map[string]*model.WorkloadView{"ns/old": {Pod: model.Pod{Namespace: "ns", Name: "old", UID: "old-uid", Ready: true}}}
+			decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "old", Trace: &model.DecisionTraceV2{}}}
+			if n := actuateWithBoundary(t, manager, context.Background(), entry, policy, decisions, views); n != 1 || act.calls != 1 {
+				t.Fatalf("control receipt did not execute: n=%d calls=%d", n, act.calls)
+			}
+			if producer.calls != 0 {
+				t.Fatalf("non-native route %q reached scoped producer: calls=%d", name, producer.calls)
+			}
+		})
 	}
 }
 func (*m106NativeActuator) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
