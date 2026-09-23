@@ -169,7 +169,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err != nil {
 		return receipt, err
 	}
-	cohort := c.startStreamCohort(ctx, streamCohortSize, drainStreamMaxTokens)
+	cohort := c.startStreamCohort(ctx, streamCohortSize, drainStreamPrompt, drainStreamMaxTokens)
 	cohortFinalized := false
 	finalizeCohort := func() error {
 		if cohortFinalized {

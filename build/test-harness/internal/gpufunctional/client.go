@@ -26,10 +26,13 @@ const (
 	MaxResponseBytes      = 1 << 20
 	modelName             = "facebook/opt-125m"
 	primerPrompt          = "A short synthetic GPU metrics primer."
+	drainStreamPrompt     = "one two three four five six seven eight"
 	streamCohortSize      = 8
 	prefixStreamMaxTokens = 128
-	drainStreamMaxTokens  = 512
+	drainStreamMaxTokens  = 240
 )
+
+var prefixStreamPrompt = strings.TrimSpace(strings.Repeat("one two three four five six seven eight ", 12))
 
 var errNoAuthenticatedUnfinishedAnchor = errors.New("no authenticated unfinished drain anchor exists; operation not sent")
 
@@ -666,7 +669,7 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 	if !preIdle.RequestSuccessMetricPresent {
 		return receipt, errors.New("busy cohort precondition lacks the normal-completion counter")
 	}
-	cohort := c.startStreamCohort(ctx, streamCohortSize, prefixStreamMaxTokens)
+	cohort := c.startStreamCohort(ctx, streamCohortSize, prefixStreamPrompt, prefixStreamMaxTokens)
 	defer func() {
 		retErr = errors.Join(retErr, cohort.stop())
 		receipt.Cohort = cohort.receipt()
@@ -724,12 +727,12 @@ type streamExecution struct {
 	joinTimeout time.Duration
 }
 
-func (c *Client) startStream(ctx context.Context, ordinal int, lifecycle chan<- struct{}, maxTokens int) *streamExecution {
+func (c *Client) startStream(ctx context.Context, ordinal int, lifecycle chan<- struct{}, prompt string, maxTokens int) *streamExecution {
 	streamCtx, cancel := context.WithCancel(ctx)
 	run := &streamExecution{submitted: make(chan struct{}), response: make(chan struct{}), finished: make(chan struct{}), cancel: cancel, lifecycle: lifecycle, joinTimeout: 2 * time.Second}
 	run.receipt = StreamLifecycleReceipt{Ordinal: ordinal, Termination: "not-started"}
 	go func() {
-		err := c.stream(streamCtx, run, maxTokens)
+		err := c.stream(streamCtx, run, prompt, maxTokens)
 		run.mu.Lock()
 		run.receipt.Finished = true
 		run.receipt.FinishedAt = c.now().UTC().Format(time.RFC3339Nano)
@@ -794,11 +797,11 @@ type streamCohort struct {
 	lifecycle chan struct{}
 }
 
-func (c *Client) startStreamCohort(ctx context.Context, count, maxTokens int) *streamCohort {
+func (c *Client) startStreamCohort(ctx context.Context, count int, prompt string, maxTokens int) *streamCohort {
 	lifecycle := make(chan struct{}, count*2)
 	cohort := &streamCohort{streams: make([]*streamExecution, 0, count), lifecycle: lifecycle}
 	for ordinal := 0; ordinal < count; ordinal++ {
-		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal, lifecycle, maxTokens))
+		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal, lifecycle, prompt, maxTokens))
 	}
 	return cohort
 }
@@ -1014,8 +1017,8 @@ func (c *streamCohort) stop() error {
 	return result
 }
 
-func (c *Client) stream(ctx context.Context, run *streamExecution, maxTokens int) error {
-	body, _ := json.Marshal(map[string]any{"model": modelName, "prompt": strings.TrimSpace(strings.Repeat("one two three four five six seven eight ", 12)), "max_tokens": maxTokens, "temperature": 0, "seed": 1, "stream": true, "ignore_eos": true})
+func (c *Client) stream(ctx context.Context, run *streamExecution, prompt string, maxTokens int) error {
+	body, _ := json.Marshal(map[string]any{"model": modelName, "prompt": prompt, "max_tokens": maxTokens, "temperature": 0, "seed": 1, "stream": true, "ignore_eos": true})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base.String()+"/v1/completions", bytes.NewReader(body))
 	if err != nil {
 		return err

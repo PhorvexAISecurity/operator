@@ -62,6 +62,8 @@ type prefixServer struct {
 	postCohortBusy     bool
 	rejectStream       int
 	streamRequests     int
+	streamPrompts      []string
+	streamMaxTokens    []int
 	releaseStreams     bool
 }
 
@@ -129,6 +131,10 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			ordinal := s.streamRequests
 			s.streamRequests++
+			prompt, _ := body["prompt"].(string)
+			maxTokens, _ := body["max_tokens"].(float64)
+			s.streamPrompts = append(s.streamPrompts, prompt)
+			s.streamMaxTokens = append(s.streamMaxTokens, int(maxTokens))
 			if s.rejectStream > 0 && ordinal == s.rejectStream-1 {
 				s.mu.Unlock()
 				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "stream-refused"})
@@ -270,6 +276,8 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 			}
 			state.mu.Lock()
 			prompts := append([]string(nil), state.completionPrompts...)
+			streamPrompts := append([]string(nil), state.streamPrompts...)
+			streamMaxTokens := append([]int(nil), state.streamMaxTokens...)
 			paths := append([]string(nil), state.requestPaths...)
 			completedAtReset := append([]int(nil), state.completedAtReset...)
 			state.mu.Unlock()
@@ -282,6 +290,14 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 				t.Fatalf("HTTP prefix=%q want=%q", paths, wantPrefix)
 			}
 			if direct {
+				if len(streamPrompts) != streamCohortSize || len(streamMaxTokens) != streamCohortSize {
+					t.Fatalf("prefix stream request count differs: prompts=%d tokens=%d", len(streamPrompts), len(streamMaxTokens))
+				}
+				for i := range streamPrompts {
+					if streamPrompts[i] != prefixStreamPrompt || streamMaxTokens[i] != prefixStreamMaxTokens {
+						t.Fatalf("prefix stream request %d differs: prompt=%q max_tokens=%d", i, streamPrompts[i], streamMaxTokens[i])
+					}
+				}
 				if receipt.Reset == nil || !receipt.Reset.Success || receipt.FirstMiss == nil || receipt.FirstMiss.Values["vllm:gpu_prefix_cache_hit_rate"] != 0 || receipt.Repopulated == nil || receipt.Busy == nil || receipt.Busy.Reset.Success || receipt.Busy.Cohort.Expected != streamCohortSize || len(receipt.Busy.Cohort.Streams) != streamCohortSize {
 					t.Fatalf("direct receipt incomplete: %+v", receipt)
 				}
@@ -435,6 +451,7 @@ type drainServer struct {
 	closed                bool
 	streamDones           []chan struct{}
 	streamIDs             []string
+	streamPrompts         []string
 	streamMaxTokens       []int
 	metricsCalls          int
 	snapshotIDs           []string
@@ -498,6 +515,8 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			ordinal := s.streamRequests
 			s.streamRequests++
 			maxTokens, _ := body["max_tokens"].(float64)
+			prompt, _ := body["prompt"].(string)
+			s.streamPrompts = append(s.streamPrompts, prompt)
 			s.streamMaxTokens = append(s.streamMaxTokens, int(maxTokens))
 			s.active++
 			s.streamIDs = append(s.streamIDs, fmt.Sprintf("cmpl-drain-stream-%d-0", ordinal))
@@ -659,12 +678,12 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 				t.Fatalf("direct receipt incomplete: %+v", receipt)
 			}
 			if !tc.wantErr {
-				if len(state.streamMaxTokens) != streamCohortSize {
-					t.Fatalf("drain stream demand count differs: %v", state.streamMaxTokens)
+				if len(state.streamPrompts) != streamCohortSize || len(state.streamMaxTokens) != streamCohortSize {
+					t.Fatalf("drain stream request count differs: prompts=%d tokens=%d", len(state.streamPrompts), len(state.streamMaxTokens))
 				}
-				for _, maxTokens := range state.streamMaxTokens {
-					if maxTokens != drainStreamMaxTokens {
-						t.Fatalf("drain stream token demand=%d want %d", maxTokens, drainStreamMaxTokens)
+				for i, maxTokens := range state.streamMaxTokens {
+					if state.streamPrompts[i] != drainStreamPrompt || maxTokens != drainStreamMaxTokens {
+						t.Fatalf("drain stream request %d differs: prompt=%q max_tokens=%d", i, state.streamPrompts[i], maxTokens)
 					}
 				}
 				for _, stream := range receipt.Cohort.Streams {
