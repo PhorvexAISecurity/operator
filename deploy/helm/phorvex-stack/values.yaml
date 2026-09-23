@@ -67,3 +67,20 @@ dashboard:
     host: ""                  # e.g. console.phorvex.example.com
     annotations: {}
     tls: false
+
+# ── limited-v1 console auth tests: scoped bearer refresher ─────────────────────────────
+# Off by default. When enabled it keeps phorvex.console.catalogueV1.scopedToken's Secret
+# holding a valid short-lived bearer for `identityServiceAccount`. The Secret itself is
+# created out of band (never from git or values) because RBAC cannot restrict `create` by
+# name; this CronJob may only patch that one Secret.
+catalogueV1TokenRefresher:
+  enabled: false
+  name: phorvex-catalogue-v1-token-refresher
+  identityServiceAccount: phorvex-phorvex-console-e2e
+  audience: phorvex-console
+  secretName: ""
+  key: token
+  lifetimeSeconds: 86400
+  schedule: "17 */6 * * *"
+  # Official python image pinned by digest; the refresher uses only the standard library.
+  image: python:3.12-alpine@sha256:4c47124a8391cb7a9f571164147d154777cf012a4ece5f86097130d7a4478111
