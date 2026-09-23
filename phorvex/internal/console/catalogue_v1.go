@@ -19,6 +19,7 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 		return CatalogItem{EntryID: string(id), Name: name, Product: product, Category: category,
 			R6Tag: "not-applicable", Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{},
 			Realism: "executable-mechanism", BenignControl: boolPtr(true), ExpectedActuators: []string{},
+			ResponseGuidanceBasis: "none", ResponseGuidance: "Benign functional control; no actuator response or security outcome is asserted.",
 			MeaningfulWhen: limits, RunnableNote: reason, Prereqs: prereqs,
 			LaunchKind: "fixed-suite", ClaimClass: "functional", Profile: string(id),
 			Available: available, UnavailableReason: reason, RuntimeContext: c.catalogueV1RuntimeContext(id)}
@@ -63,8 +64,10 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 		functional(cataloguev1.AuthScope, "limited-v1-console-scoped-authorization", "platform", "Boundary", "Installed API tenant/target authorization boundary only; no application attack, brain or actuator claim.", []string{"fixed loopback origin", "projected scoped test identity", "fixed allowed and denied scopes"}, authReady, authReason),
 		{EntryID: limitedV1GuardrailID, Name: limitedV1GuardrailID, Product: "ai", Category: "Effect observation", R6Tag: "not-applicable",
 			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(true),
-			ExpectedActuators: []string{"guardrail-rotate"}, MeaningfulWhen: "Observes an exact-target runtime variant transition; behavioral bypass and mitigation are not measured.",
-			RunnableNote: "Uses the existing installed vLLM guardrail-effect handler and exact-ID result polling.", Prereqs: []string{"installed vLLM guardrail sidecar", "eligible guardrail-rotate policy"},
+			ExpectedActuators: []string{"guardrail-rotate"}, ResponseGuidanceBasis: "explicit-effect",
+			ResponseGuidance: "guardrail-rotate names the operation observed for an exact-target runtime variant effect. A variant change does not establish behavioral bypass or mitigation.",
+			MeaningfulWhen:   "Observes an exact-target runtime variant transition; behavioral bypass and mitigation are not measured.",
+			RunnableNote:     "Uses the existing installed vLLM guardrail-effect handler and exact-ID result polling.", Prereqs: []string{"installed vLLM guardrail sidecar", "eligible guardrail-rotate policy"},
 			LaunchKind: "live-vllm-effect", ClaimClass: "effect", Profile: "guardrail-rotate", Available: true, RuntimeContext: "in-cluster"},
 	}
 }

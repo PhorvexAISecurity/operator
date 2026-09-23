@@ -1,33 +1,37 @@
 /*
  * Phorvex Console — SCENARIO METADATA: per-attack actuator mapping + runnability explanation.
  *
- * The harness scenarios do not declare WHICH actuator they should trigger, nor a plain-English
- * "when is this meaningful / what does it need to run". This derives both from the scenario name +
- * its capability requirements (the same caps the harness uses to skip-gate), so the Attack Lab can
- * badge every attack with its expected actuator(s) and explain its prerequisites — and so a run's
- * RESULT can be scored for coordination (did Phorvex pick the expected actuator?).
+ * The harness scenarios do not declare an actuator mapping or explain their prerequisites.
+ * This derives name-based hints and prerequisites for display. A hint does not establish
+ * an available or selected response, a working actuator, or a security outcome.
  *
- * Derivation, not hand-authored per-scenario: a keyword map over the ~53 scenarios keeps it honest
- * and complete as the registry grows.
+ * The keyword map preserves the legacy expectedActuators field for compatibility.
  */
 
 package console
 
 import "strings"
 
-// ScenarioMeta is the derived per-attack guidance surfaced on the catalog/Attack-Lab.
+// ScenarioMeta is derived guidance surfaced on the catalog/Attack-Lab.
 type ScenarioMeta struct {
-	ExpectedActuators []string `json:"expectedActuators"` // actuator(s) this attack should trigger
-	MeaningfulWhen    string   `json:"meaningfulWhen"`    // when this attack matters
-	RunnableNote      string   `json:"runnableNote"`      // what it needs to RUN (hardware/workload)
-	Prereqs           []string `json:"prereqs"`           // explicit prerequisite chips
+	ExpectedActuators     []string `json:"expectedActuators"` // legacy compatibility; hints, not eligibility or outcomes
+	ResponseGuidanceBasis string   `json:"responseGuidanceBasis"`
+	ResponseGuidance      string   `json:"responseGuidance"`
+	MeaningfulWhen        string   `json:"meaningfulWhen"` // when this attack matters
+	RunnableNote          string   `json:"runnableNote"`   // what it needs to RUN (hardware/workload)
+	Prereqs               []string `json:"prereqs"`        // explicit prerequisite chips
 }
 
-// expectedActuatorsFor maps a scenario to the actuator(s) Phorvex SHOULD select against it. Keyword
+// expectedActuatorsFor retains legacy actuator hints derived from the scenario name. Keyword
 // order matters (most specific first). AI scenarios map to the AI actuators (kv-reset etc.);
 // structural scenarios map to the K8s moving-target actuators (rotate/quarantine).
 func expectedActuatorsFor(name string) []string {
 	n := strings.ToLower(name)
+	if n == "c1-credtheft-rbac" {
+		// An off-Pod replay is beyond network quarantine of the source Pod. Rotation
+		// is only a conditional hint for a Pod-bound credential, not a detector claim.
+		return []string{"rotate"}
+	}
 	has := func(subs ...string) bool {
 		for _, s := range subs {
 			if strings.Contains(n, s) {
@@ -100,6 +104,13 @@ func deriveScenarioMeta(name, product string, caps []string, benign bool) Scenar
 		return deriveBenignScenarioMeta(name, caps)
 	}
 	acts := expectedActuatorsFor(name)
+	guidance := "Name-based actuator hints only. Availability, selection, effect, and security outcome require case-specific evidence."
+	if len(acts) == 0 {
+		guidance = "No autonomous actuator is mapped by the name heuristic. Detection, feasible response, and security outcome require case-specific evidence."
+	}
+	if name == "c1-credtheft-rbac" {
+		guidance = "A captured Pod-bound API token may stop authenticating after its binding Pod is deleted; initial disclosure persists. Quarantine cannot revoke an off-Pod bearer token. No automatic detector or manager response is asserted."
+	}
 	capSet := map[string]bool{}
 	for _, c := range caps {
 		capSet[c] = true
@@ -107,12 +118,15 @@ func deriveScenarioMeta(name, product string, caps []string, benign bool) Scenar
 	prereqs := []string{}
 	notes := []string{}
 
-	if product == "ai" {
+	if name == "c1-credtheft-rbac" {
+		prereqs = append(prereqs, "a credential-bearing source Pod and an off-Pod API replay")
+		notes = append(notes, "Measures whether the same captured credential still authorizes API access after the observation window; binding and any response must be observed.")
+	} else if product == "ai" {
 		prereqs = append(prereqs, "a served model / inference workload")
-		notes = append(notes, "Meaningful on a live LLM/inference service — the attacker abuses the model's serving path (KV-cache, endpoint, weights, or agent tools), which a blind pod-rotation often can't cleanly evict.")
+		notes = append(notes, "Requires a matching served-model fixture. The failure path, detector, feasible response and behavioral oracle depend on this scenario and must be verified.")
 	} else {
-		prereqs = append(prereqs, "any pod with a reachable foothold")
-		notes = append(notes, "Meaningful wherever an attacker can gain + dwell in a foothold — moving-target rotation/quarantine invalidates the foothold faster than the attacker can use it.")
+		prereqs = append(prereqs, "a workload or fixture matching this scenario's preconditions")
+		notes = append(notes, "Requires scenario-specific foothold or objective evidence. Whether a response interrupts it depends on detection, action feasibility and an observed oracle.")
 	}
 	if capSet["CapGPU"] {
 		prereqs = append(prereqs, "a GPU node pool")
@@ -131,7 +145,7 @@ func deriveScenarioMeta(name, product string, caps []string, benign bool) Scenar
 			break
 		}
 	}
-	runnable := "Runs on any pod — no special hardware."
+	runnable := "No special hardware is declared; verify this scenario's fixture and oracle before running."
 	if capSet["CapGPU"] && capSet["CapMultiNode"] {
 		runnable = "Requires a GPU node pool AND ≥2 nodes."
 	} else if capSet["CapGPU"] {
@@ -139,13 +153,15 @@ func deriveScenarioMeta(name, product string, caps []string, benign bool) Scenar
 	} else if capSet["CapMultiNode"] {
 		runnable = "Requires ≥2 nodes."
 	} else if product == "ai" {
-		runnable = "Runs on any served-model workload; the oracle measures the model-serving path."
+		runnable = "Requires a matching served-model fixture; verify this scenario's actual oracle."
 	}
 	return ScenarioMeta{
-		ExpectedActuators: acts,
-		MeaningfulWhen:    strings.Join(notes, " "),
-		RunnableNote:      runnable,
-		Prereqs:           prereqs,
+		ExpectedActuators:     acts,
+		ResponseGuidanceBasis: "name-heuristic",
+		ResponseGuidance:      guidance,
+		MeaningfulWhen:        strings.Join(notes, " "),
+		RunnableNote:          runnable,
+		Prereqs:               prereqs,
 	}
 }
 
@@ -164,9 +180,11 @@ func deriveBenignScenarioMeta(name string, caps []string) ScenarioMeta {
 		meaning = "Synthetic Twilio-shaped WebSocket continuity fixture; it does not evaluate the installed Pipecat service, a provider call, speech quality, or brain efficacy."
 	}
 	return ScenarioMeta{
-		ExpectedActuators: []string{},
-		MeaningfulWhen:    meaning,
-		RunnableNote:      runnable,
-		Prereqs:           prereqs,
+		ExpectedActuators:     []string{},
+		ResponseGuidanceBasis: "none",
+		ResponseGuidance:      "Benign functional control; no actuator response or security outcome is asserted.",
+		MeaningfulWhen:        meaning,
+		RunnableNote:          runnable,
+		Prereqs:               prereqs,
 	}
 }

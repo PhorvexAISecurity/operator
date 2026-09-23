@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useApiRead, useCatalog, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
 import { emitQueryChange } from "@/lib/query-events";
+import { ScenarioResponseGuidance, displayActuatorHints } from "@/components/panels/scenario-response-guidance";
 
 // one streamed trial outcome (a completed attack attempt under one defender arm).
 interface Trial extends TimelineEvent { key: string }
@@ -309,7 +310,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
 
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[12px] text-muted-foreground">Attack scenarios — <span className="text-foreground">pick one or many</span> (batch). Each badge is the actuator Phorvex should trigger.</span>
+              <span className="text-[12px] text-muted-foreground">Attack scenarios — <span className="text-foreground">pick one or many</span> (batch). Actuator badges are catalogue hints; each run needs its own response evidence.</span>
               {picked.length > 0 && <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">{picked.length} selected</span>}
             </div>
             <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
@@ -329,10 +330,10 @@ export function AttackLab({ lens }: { lens: Lens }) {
                       </span>
                       {s.name}
                     </div>
-                    {/* expected-actuator badges */}
+                    {/* Legacy-compatible actuator hints; case guidance states their basis. */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                      {(s.expectedActuators || []).map((a) => (
-                        <span key={a} className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] text-primary" title="actuator Phorvex should trigger for this attack">{a}</span>
+                      {displayActuatorHints(s).map((a) => (
+                        <span key={a} className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] text-primary" title="Catalogue hint; availability and selection require live evidence">{a}</span>
                       ))}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -360,13 +361,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
                       {(s.prereqs || []).map((p, i) => <span key={i} className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">{p}</span>)}
                     </div>
                   )}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                    <span className="text-muted-foreground">Should trigger:</span>
-                    {(s.expectedActuators || []).map((a) => <span key={a} className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">{a}</span>)}
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-success">
-                    <ShieldCheck className="h-3 w-3" /> Phorvex can respond — every expected actuator (incl. the AI ones) is now enabled; the brain selects the gentlest net-positive one for the live situation.
-                  </div>
+                  <div className="mt-1.5"><ScenarioResponseGuidance item={s} /></div>
                 </div>
               );
             })()}

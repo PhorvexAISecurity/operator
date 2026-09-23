@@ -148,7 +148,8 @@ export interface CatalogItem {
   entryID?: string; name: string; product: "k8s" | "ai" | "structural" | "application" | "platform"; category: string; r6Tag: string;
   techniques: string[]; exercisedTechniques: string[]; caps: string[]; hasRun: boolean;
   realism?: string; benignControl?: boolean;
-  expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
+  expectedActuators?: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
+  responseGuidance?: string; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
   launchKind?: "harness-scenario" | "fixed-suite" | "live-vllm-effect";
   claimClass?: "security" | "functional" | "effect";
   profile?: string; available?: boolean; unavailableReason?: string;
@@ -383,8 +384,9 @@ export interface AppStack {
   stateful: boolean; workload: boolean; armed: boolean;
 }
 export interface CatalogCompat {
-  name: string; product: string; category: string; techniques: string[];
-  expectedActuators: string[]; prereqs: string[]; compatible: boolean; reason: string;
+  name: string; product: string; category: string; techniques: string[]; benignControl?: boolean;
+  expectedActuators: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
+  responseGuidance?: string; prereqs: string[]; compatible: boolean; reason: string;
 }
 export interface WorkloadAttacks {
   namespace: string; stack: AppStack; live: CompatEntry[];

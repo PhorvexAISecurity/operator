@@ -35,18 +35,19 @@ type CatalogItem struct {
 	// Keeping unknown distinct from false prevents old catalogue data from being
 	// silently upgraded into an attack claim.
 	BenignControl *bool `json:"benignControl,omitempty"`
-	// per-attack guidance (derived): which actuator(s) it should trigger, when it's meaningful,
-	// what it needs to run.
-	ExpectedActuators []string `json:"expectedActuators"`
-	MeaningfulWhen    string   `json:"meaningfulWhen"`
-	RunnableNote      string   `json:"runnableNote"`
-	Prereqs           []string `json:"prereqs"`
-	LaunchKind        string   `json:"launchKind"`
-	ClaimClass        string   `json:"claimClass"`
-	Profile           string   `json:"profile,omitempty"`
-	Available         bool     `json:"available"`
-	UnavailableReason string   `json:"unavailableReason,omitempty"`
-	RuntimeContext    string   `json:"runtimeContext,omitempty"`
+	// Legacy actuator hints remain compatible, with their evidence basis and limits explicit.
+	ExpectedActuators     []string `json:"expectedActuators"`
+	ResponseGuidanceBasis string   `json:"responseGuidanceBasis"`
+	ResponseGuidance      string   `json:"responseGuidance"`
+	MeaningfulWhen        string   `json:"meaningfulWhen"`
+	RunnableNote          string   `json:"runnableNote"`
+	Prereqs               []string `json:"prereqs"`
+	LaunchKind            string   `json:"launchKind"`
+	ClaimClass            string   `json:"claimClass"`
+	Profile               string   `json:"profile,omitempty"`
+	Available             bool     `json:"available"`
+	UnavailableReason     string   `json:"unavailableReason,omitempty"`
+	RuntimeContext        string   `json:"runtimeContext,omitempty"`
 }
 
 // Legacy harnesses used techniques; current harnesses separate declared from exercised.
@@ -136,7 +137,8 @@ func parseCatalog(out []byte, hasRun map[string]bool) []CatalogItem {
 			Name: name, Product: prod, Category: category, R6Tag: r6,
 			Techniques: declared, ExercisedTechniques: exercised, Caps: caps, HasRun: hasRun[name],
 			Realism: realism, BenignControl: benign,
-			ExpectedActuators: meta.ExpectedActuators, MeaningfulWhen: meta.MeaningfulWhen,
+			ExpectedActuators: meta.ExpectedActuators, ResponseGuidanceBasis: meta.ResponseGuidanceBasis,
+			ResponseGuidance: meta.ResponseGuidance, MeaningfulWhen: meta.MeaningfulWhen,
 			RunnableNote: meta.RunnableNote, Prereqs: meta.Prereqs,
 		})
 	}
