@@ -369,6 +369,40 @@ phorvex:
   console:
     enabled: false
     allowWorkloadMutations: false
+    # Opt-in fixed functional catalogue. Rows stay visible when disabled and
+    # report their missing prerequisites; browsers cannot override any target.
+    catalogueV1:
+      enabled: false
+      loopbackURL: "http://127.0.0.1:8090"
+      allowedTenant: ""
+      deniedTenant: ""
+      deniedTarget: ""
+      expectedSubject: ""
+      scopedToken:
+        existingSecret: ""
+        key: token
+        mountPath: /etc/phorvex-catalogue-v1
+      voice:
+        enabled: false
+        namespace: ""
+        deployment: ""
+        service: ""
+        container: ""
+        port: 0
+        pdb: ""
+        transcriptSelector: ""
+        transcriptContainer: ""
+      gpu:
+        enabled: false
+        namespace: ""
+        fixtureConfigMap: ""
+        fixtureKey: config.yaml
+        mountPath: /etc/phorvex-catalogue-v1-gpu
+        runtimeSecret: ""
+        kubeconfigKey: kubeconfig
+        bearerTokenKey: bearer-token
+        runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
+        kubeContext: ""
     auditTransport:
       port: 8445
       serverSecretName: ""

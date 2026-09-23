@@ -1,15 +1,10 @@
 /*
- * Phorvex Console — LIVE ATTACK RESULTS capture.
+ * Phorvex Console — bounded case observations.
  *
- * When a REAL attack is fired at a live workload (/api/workload/attack, /api/vllm/attack), we
- * snapshot the workload's uptime, then a watcher observes the GROUND-TRUTH outcome on the real
- * cluster — did Phorvex DEFEND it (attacked pod rotated / adapter rotated / quarantined) or did
- * the attack LAND (foothold survived) — records the real decision reasoning, the uptime dip +
- * recovery, and a three-way cost (WITHOUT any defense / R6 blind-timer / WITH Phorvex) computed
- * from live AWS pricing. Nothing here is fabricated: outcome is measured, pricing is real, and the
- * R6 column is a clearly-labelled blind-timer counterfactual derived from Phorvex's own r6 note.
- *
- * GET /api/attack-results returns the records (newest first) for the Report tab.
+ * Records may contain a behavioral oracle, a target-bound mechanism effect, or only a synthetic
+ * detector signal. Those stages stay typed and separate: accepted signals and manager decisions
+ * never become LANDED/DEFENDED outcomes without a behavioral oracle. GET /api/attack-results
+ * returns the authorized records (newest first) for the Report tab.
  */
 
 package console
@@ -24,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -75,6 +71,10 @@ type attackRecord struct {
 	StimulusEvidence *attackStimulusEvidence `json:"stimulusEvidence,omitempty"`
 	EffectEvidence   *attackEffectEvidence   `json:"effectEvidence,omitempty"`
 	OutcomeClass     string                  `json:"outcomeClass,omitempty"`
+	ProducerRoute    string                  `json:"producerRoute,omitempty"`
+	ResultSchema     string                  `json:"resultSchemaVersion,omitempty"`
+	ObservationStart string                  `json:"observationStartedAt,omitempty"`
+	ObservationEnd   string                  `json:"observationDeadline,omitempty"`
 
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
@@ -98,12 +98,14 @@ type attackRecord struct {
 	Containment string `json:"containment"`
 	// A synthetic detector signal can prove only an identity-bound workload response.
 	// Keep that evidence separate from attacker outcome, containment and dwell.
-	ResponseObserved bool              `json:"responseObserved,omitempty"`
-	ResponseAction   string            `json:"responseAction,omitempty"`
-	ResponsePod      string            `json:"responsePod,omitempty"`
-	ResponseSeconds  float64           `json:"responseSeconds,omitempty"`
-	ObservationError string            `json:"observationError,omitempty"`
-	DecisionEvidence *decisionEvidence `json:"decisionEvidence,omitempty"`
+	ResponseObserved         bool               `json:"responseObserved,omitempty"`
+	ResponseAction           string             `json:"responseAction,omitempty"`
+	ResponsePod              string             `json:"responsePod,omitempty"`
+	ResponseSeconds          float64            `json:"responseSeconds,omitempty"`
+	ObservationError         string             `json:"observationError,omitempty"`
+	DecisionEvidence         *decisionEvidence  `json:"decisionEvidence,omitempty"`
+	DecisionTraceEvidence    []decisionEvidence `json:"decisionTraceEvidence,omitempty"`
+	TemporalDecisionEvidence *decisionEvidence  `json:"temporalDecisionEvidence,omitempty"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
 	Why                       string  `json:"why"`
@@ -175,12 +177,50 @@ type vllmEffectBaseline struct {
 }
 
 type decisionEvidence struct {
-	Correlation string `json:"correlation"`
-	Time        string `json:"time"`
-	Action      string `json:"action"`
-	Reason      string `json:"reason"`
-	Selected    bool   `json:"selected"`
-	Actuated    bool   `json:"actuated"`
+	Correlation         string                   `json:"correlation"`
+	Source              string                   `json:"source,omitempty"`
+	Time                string                   `json:"time"`
+	EventName           string                   `json:"eventName,omitempty"`
+	EventUID            string                   `json:"eventUid,omitempty"`
+	EventRule           string                   `json:"eventRule,omitempty"`
+	DeclaredSource      string                   `json:"declaredSource,omitempty"`
+	TrustVerdict        string                   `json:"trustVerdict,omitempty"`
+	CreatorIdentity     string                   `json:"creatorIdentity,omitempty"`
+	TargetUID           string                   `json:"targetUid,omitempty"`
+	DecisionID          string                   `json:"decisionId,omitempty"`
+	TickID              string                   `json:"tickId,omitempty"`
+	BrainImage          string                   `json:"brainImage,omitempty"`
+	GitSHA              string                   `json:"gitSha,omitempty"`
+	PolicyNamespace     string                   `json:"policyNamespace,omitempty"`
+	PolicyName          string                   `json:"policyName,omitempty"`
+	PolicyUID           string                   `json:"policyUid,omitempty"`
+	Action              string                   `json:"action"`
+	Reason              string                   `json:"reason"`
+	Selected            bool                     `json:"selected"`
+	Feasible            bool                     `json:"feasible"`
+	InfeasibleWhy       string                   `json:"infeasibleWhy,omitempty"`
+	DryRun              bool                     `json:"dryRun"`
+	DryRunCause         string                   `json:"dryRunCause,omitempty"`
+	ActuationBrakeCause string                   `json:"actuationBrakeCause,omitempty"`
+	KillSwitch          bool                     `json:"killSwitch"`
+	KillSwitchCause     string                   `json:"killSwitchCause,omitempty"`
+	Actuated            bool                     `json:"actuated"`
+	DispatchOutcome     string                   `json:"dispatchOutcome,omitempty"`
+	DispatchReason      string                   `json:"dispatchReason,omitempty"`
+	Handler             string                   `json:"handler,omitempty"`
+	ObjectsTouched      []string                 `json:"objectsTouched,omitempty"`
+	RollbackRef         string                   `json:"rollbackRef,omitempty"`
+	MutationKind        string                   `json:"mutationKind,omitempty"`
+	ActionStatus        []decisionActionEvidence `json:"actionStatus,omitempty"`
+}
+
+type decisionActionEvidence struct {
+	Action        string `json:"action"`
+	Status        string `json:"status"`
+	ExclusionKind string `json:"exclusionKind,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+	Scored        bool   `json:"scored"`
+	RBACUnknown   bool   `json:"rbacUnknown,omitempty"`
 }
 
 // defenseBaseline is the snapshot of pre-existing defense artifacts, taken by the attack handler BEFORE
@@ -188,14 +228,16 @@ type decisionEvidence struct {
 // react within ~1s, faster than the watcher's own baseline kubectl calls would complete — so a
 // watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
 type defenseBaseline struct {
-	uid          string
-	epoch        string
-	kvEpoch      string
-	quar         map[string]bool
-	nps          map[string]bool
-	stimulus     *attackStimulusEvidence
-	vllmEffect   *vllmEffectBaseline
-	outcomeClass string
+	uid           string
+	epoch         string
+	kvEpoch       string
+	quar          map[string]bool
+	nps           map[string]bool
+	stimulus      *attackStimulusEvidence
+	vllmEffect    *vllmEffectBaseline
+	outcomeClass  string
+	producerRoute string
+	resultSchema  string
 	// uptime is the workload availability read BEFORE the attack is applied. It must be captured
 	// here for the same reason as the quarantine/NP baselines: the operator is event-driven and
 	// reacts in ~1s, faster than startAttackRecord runs, so reading it afterwards recorded the
@@ -241,7 +283,20 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 	}
 	if r.DecisionEvidence != nil {
 		evidence := *r.DecisionEvidence
+		evidence.ObjectsTouched = append([]string(nil), r.DecisionEvidence.ObjectsTouched...)
+		evidence.ActionStatus = append([]decisionActionEvidence(nil), r.DecisionEvidence.ActionStatus...)
 		c.DecisionEvidence = &evidence
+	}
+	if r.TemporalDecisionEvidence != nil {
+		evidence := *r.TemporalDecisionEvidence
+		evidence.ObjectsTouched = append([]string(nil), r.TemporalDecisionEvidence.ObjectsTouched...)
+		evidence.ActionStatus = append([]decisionActionEvidence(nil), r.TemporalDecisionEvidence.ActionStatus...)
+		c.TemporalDecisionEvidence = &evidence
+	}
+	c.DecisionTraceEvidence = append([]decisionEvidence(nil), r.DecisionTraceEvidence...)
+	for i := range c.DecisionTraceEvidence {
+		c.DecisionTraceEvidence[i].ObjectsTouched = append([]string(nil), r.DecisionTraceEvidence[i].ObjectsTouched...)
+		c.DecisionTraceEvidence[i].ActionStatus = append([]decisionActionEvidence(nil), r.DecisionTraceEvidence[i].ActionStatus...)
 	}
 	if r.Claim != nil {
 		claim := *r.Claim
@@ -293,7 +348,7 @@ func attackSnapshots(p *Principal) []*attackRecord {
 // Live views opt into the two console observation kinds. Experiment-only signals
 // and unknown evidence kinds remain excluded, as do observations in default reports.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus"))
+	return rec.EvidenceKind == "" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
@@ -460,6 +515,15 @@ func (s *Server) startVLLMUnsupportedRecord(service, pod, attack, attackID, evid
 	return s.startAttackRecordAtKind("", service, vllmAttackNS, pod, attack, attackID, evidenceLabel, expected, false, base, started, started.Add(d), "vllm-unsupported-stimulus", started)
 }
 
+func (s *Server) startCatalogueSignalRecord(ns, pod, scenario, mitre, expected string, stateful bool, base defenseBaseline) string {
+	d := s.cfg.AttackWatchDuration
+	if d <= 0 {
+		d = 95 * time.Second
+	}
+	started := s.cfg.now()
+	return s.startAttackRecordAtKind("", ns, ns, pod, scenario, scenario, mitre, expected, stateful, base, started, started.Add(d), "catalogue-signal", started)
+}
+
 // startAttackRecordAt pre-registers one exact observation window. Experiment arms use
 // this form so producer/API overhead cannot make one arm's measurement longer than another.
 func (s *Server) startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline, started, deadline time.Time) string {
@@ -479,6 +543,10 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 		TargetUID:        base.uid,
 		StimulusEvidence: base.stimulus,
 		OutcomeClass:     base.outcomeClass,
+		ProducerRoute:    base.producerRoute,
+		ResultSchema:     base.resultSchema,
+		ObservationStart: started.UTC().Format(time.RFC3339Nano),
+		ObservationEnd:   deadline.UTC().Format(time.RFC3339Nano),
 		Status:           "running",
 		// PRE-FIRE value when the caller captured one (>=0); fall back to a live read only if the
 		// baseline predates this field, so an old caller still gets a number rather than 0.
@@ -600,6 +668,30 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if r.EvidenceKind == "vllm-unsupported-stimulus" {
 			continue
 		}
+		if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "catalogue-signal" {
+			replaced, probeErr := s.targetUIDReplaced(r.Namespace, r.Pod, r.TargetUID)
+			if probeErr != nil {
+				r.ObservationError = "target identity observation: " + probeErr.Error()
+				publishAttack(r)
+				continue
+			}
+			if !s.cfg.now().Before(deadline) {
+				r.ObservationError = "target identity observation completed outside the registered window"
+				publishAttack(r)
+				continue
+			}
+			if replaced {
+				r.ResponseObserved = true
+				r.ResponseAction = "rotate"
+				r.ResponsePod = r.Pod
+				r.ResponseSeconds = round2(s.cfg.now().Sub(r.accepted).Seconds())
+				if r.EvidenceKind == "catalogue-signal" {
+					r.OutcomeClass = "response-only"
+				}
+				publishAttack(r)
+			}
+			continue
+		}
 		switch r.AttackID {
 		case "poison": // adapter-rotate: real actuation bumps the adapter epoch
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch"); ep != "" && ep != epoch0 {
@@ -618,7 +710,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				r.DefendedPod = r.Pod // the flush happens IN the attacked pod; it is never a neighbor
 				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
 			}
-		default: // foothold signal: only replacement of the exact pre-signal UID proves a target response
+		default: // behavioral foothold: exact target replacement or target-bound quarantine is scored
 			replaced, probeErr := s.targetUIDReplaced(r.Namespace, r.Pod, r.TargetUID)
 			if probeErr != nil {
 				r.ObservationError = "target identity observation: " + probeErr.Error()
@@ -630,19 +722,11 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				publishAttack(r)
 				continue
 			}
-			if replaced && r.EvidenceKind == "synthetic-detector-signal" {
-				r.ResponseObserved = true
-				r.ResponseAction = "rotate"
-				r.ResponsePod = r.Pod
-				r.ResponseSeconds = round2(s.cfg.now().Sub(r.accepted).Seconds())
-				publishAttack(r)
-			} else if replaced {
+			if replaced {
 				r.Outcome, r.Actuated = "DEFENDED", true
 				r.Action = "rotate"
 				r.DefendedPod = r.Pod
 				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
-			} else if r.EvidenceKind == "synthetic-detector-signal" {
-				continue
 			} else if qn := s.freshQuarantineName(r.Namespace, quar0); qn != "" {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "quarantine", true
 				// capture the REAL target Phorvex quarantined (may be a neighbor node it isolates to cut
@@ -682,19 +766,31 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				r.ObservationError = "no exact target-bound in-place effect observed within the registered window"
 			}
 		}
-	} else if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "vllm-unsupported-stimulus" {
+	} else if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "vllm-unsupported-stimulus" || r.EvidenceKind == "catalogue-signal" {
 		// A detector signal is not an exploit and supplies no attacker foothold. Persist
 		// response evidence without manufacturing DEFENDED/LANDED, containment or dwell.
 		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
 		r.Actuated, r.TimeToDefendSec, r.DwellSec, r.DwellOngoing = false, 0, 0, false
-	} else if r.Outcome == "" {
+		if r.EvidenceKind == "catalogue-signal" && !r.ResponseObserved {
+			if r.ObservationError == "" {
+				r.ObservationError = "no exact target response observed within the registered window"
+				r.OutcomeClass = "response-unconfirmed"
+			} else {
+				r.OutcomeClass = "observation-unavailable"
+			}
+		}
+	} else if r.Outcome == "" && r.ObservationError == "" {
 		r.Outcome = "LANDED"
 		r.Actuated = false
 		if r.Action == "" {
 			r.Action = "noop"
 		}
+	} else if r.Outcome == "" {
+		r.Action, r.DefendedPod, r.Containment = "", "", ""
+		r.Actuated, r.TimeToDefendSec, r.DwellSec, r.DwellOngoing = false, 0, 0, false
+		r.OutcomeClass = "observation-unavailable"
 	}
-	if r.EvidenceKind == "" {
+	if r.EvidenceKind == "" && r.Outcome != "" {
 		classifyContainment(r, round2(s.cfg.now().Sub(r.started).Seconds()))
 	}
 	r.UptimeDip = minUp
@@ -702,10 +798,18 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
-	} else if r.EvidenceKind == "vllm-in-place-effect" || r.EvidenceKind == "vllm-unsupported-stimulus" {
-		// Decision evidence remains explicitly temporal unless the manager later exports the
-		// unique SecurityEvent UID in its audit schema.
+	} else if r.EvidenceKind == "vllm-in-place-effect" || r.EvidenceKind == "vllm-unsupported-stimulus" || r.EvidenceKind == "catalogue-signal" {
+		// The manager audit can carry the SecurityEvent UID in steeredBy facts, but this
+		// bounded console correlator does not consume that binding yet. Keep this temporal.
 		s.fillReasoning(ctxName, r)
+	}
+	if r.EvidenceKind == "catalogue-signal" && r.DecisionEvidence == nil {
+		missing := "no manager decision could be correlated to the exact catalogue signal; brain disposition is unavailable"
+		if r.ObservationError == "" {
+			r.ObservationError = missing
+		} else {
+			r.ObservationError += "; " + missing
+		}
 	}
 	r.Status = "done"
 	if r.ObservationError != "" {
@@ -868,8 +972,20 @@ func (s *Server) workloadUptime(ns, deploy string) float64 {
 	return round2(float64(ready) / float64(desired) * 100)
 }
 
-// fillReasoning preserves event-derived facts and, separately, attaches a bounded temporal
-// candidate from the canonical decision audit. Time/workload proximity is evidence, not identity.
+const maxDecisionTraceEvidence = 16
+
+type matchedEventReference struct {
+	source, name, uid, rule, declaredSource, trust, creator, targetUID string
+}
+
+type exactDecisionMatch struct {
+	evidence decisionEvidence
+	record   *audit.Record
+}
+
+// fillReasoning preserves event-derived facts and attaches exact event-bound manager
+// dispositions when the audit carries immutable identity. A workload/time candidate is
+// retained separately for old records; it never becomes causal evidence.
 func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	s.parseDescReasoning(r)
 	target := r.Pod
@@ -880,17 +996,40 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	if err != nil {
 		return
 	}
-	deadline := s.cfg.now()
+	collectedAt := s.cfg.now()
+	temporalStart, temporalDeadline := fired, collectedAt
+	if persistedStart, parseErr := time.Parse(time.RFC3339Nano, r.ObservationStart); parseErr == nil && !persistedStart.IsZero() {
+		temporalStart = persistedStart
+	}
+	if persistedEnd, parseErr := time.Parse(time.RFC3339Nano, r.ObservationEnd); parseErr == nil && persistedEnd.After(temporalStart) && persistedEnd.Before(temporalDeadline) {
+		temporalDeadline = persistedEnd
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	records, err := s.readDecisionWindow(ctx, ctxName)
 	if err != nil {
 		return
 	}
-	var best *audit.Record
+	var best, noop *audit.Record
+	exact := make([]exactDecisionMatch, 0)
 	for i := range records {
 		d := &records[i]
-		if d.Namespace != r.Namespace || d.Pod != target || (!d.Selected && !d.Actuated) || d.Time.Before(fired) || d.Time.After(deadline) {
+		if d.Namespace != r.Namespace || d.Pod != target || d.Time.Before(temporalStart) || d.Time.After(temporalDeadline) {
+			// Exact event evidence may occur after the verified event creation but before
+			// a post-create observation record was registered. exactDecisionEvidence
+			// applies the persisted immutable bounds instead of this temporal filter.
+			if evidence, ok := exactDecisionEvidence(r, d, collectedAt); ok {
+				exact = append(exact, exactDecisionMatch{evidence: evidence, record: d})
+			}
+			continue
+		}
+		if evidence, ok := exactDecisionEvidence(r, d, collectedAt); ok {
+			exact = append(exact, exactDecisionMatch{evidence: evidence, record: d})
+		}
+		if !d.Selected && !d.Actuated {
+			if (r.EvidenceKind == "catalogue-signal" || r.EvidenceKind == "synthetic-detector-signal") && (noop == nil || d.Time.Before(noop.Time)) {
+				noop = d
+			}
 			continue
 		}
 		// When an observed action exists, a different selected action is not evidence for it.
@@ -901,10 +1040,43 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 			best = d
 		}
 	}
+	sort.SliceStable(exact, func(i, j int) bool { return exact[i].record.Time.Before(exact[j].record.Time) })
+	var chosen *audit.Record
+	correlation := "temporal-workload"
+	if best == nil && noop != nil {
+		best = noop
+		correlation = "temporal-workload-noop"
+	}
 	if best != nil {
-		r.DecisionEvidence = &decisionEvidence{Correlation: "temporal-workload", Time: best.Time.UTC().Format(time.RFC3339Nano), Action: best.Action, Reason: best.Reason, Selected: best.Selected, Actuated: best.Actuated}
-		if economics, ok := decodeAuditEconomics(best.Economics, best.Lambda); ok {
-			r.Lambda = best.Lambda
+		temporal := decisionEvidenceFromAudit(best, correlation, "temporal-candidate", matchedEventReference{})
+		r.TemporalDecisionEvidence = &temporal
+		if len(exact) == 0 {
+			r.DecisionEvidence = &temporal
+		}
+	}
+	if len(exact) > 0 {
+		summary := exact[0]
+		for i := 1; i < len(exact); i++ {
+			if decisionDispositionRank(exact[i].evidence) > decisionDispositionRank(summary.evidence) ||
+				(decisionDispositionRank(exact[i].evidence) == decisionDispositionRank(summary.evidence) && exact[i].record.Time.After(summary.record.Time)) {
+				summary = exact[i]
+			}
+		}
+		evidence := summary.evidence
+		r.DecisionEvidence = &evidence
+		chosen = summary.record
+		exact = boundedDecisionMatches(exact, summary)
+		r.DecisionTraceEvidence = make([]decisionEvidence, len(exact))
+		for i := range exact {
+			r.DecisionTraceEvidence[i] = exact[i].evidence
+		}
+	}
+	if len(exact) == 0 {
+		chosen = best
+	}
+	if chosen != nil {
+		if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
+			r.Lambda = chosen.Lambda
 			r.LambdaAvailable = true
 			r.EconomicsVersion = economics.Version
 			r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
@@ -914,6 +1086,165 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 			}
 			r.EconomicsAvailable = true
 		}
+	}
+}
+
+func boundedDecisionMatches(all []exactDecisionMatch, summary exactDecisionMatch) []exactDecisionMatch {
+	if len(all) <= maxDecisionTraceEvidence {
+		return all
+	}
+	// Preserve the beginning and end of a long-lived event plus the authoritative
+	// summary disposition. Audit records are immutable; pointer identity is safe here.
+	out := append([]exactDecisionMatch(nil), all[:maxDecisionTraceEvidence/2]...)
+	for _, candidate := range all[len(all)-maxDecisionTraceEvidence/2:] {
+		if len(out) == maxDecisionTraceEvidence {
+			break
+		}
+		out = append(out, candidate)
+	}
+	found := false
+	for i := range out {
+		found = found || out[i].record == summary.record
+	}
+	if !found {
+		out[len(out)/2] = summary
+		sort.SliceStable(out, func(i, j int) bool { return out[i].record.Time.Before(out[j].record.Time) })
+	}
+	return out
+}
+
+func exactDecisionEvidence(r *attackRecord, d *audit.Record, collectedAt time.Time) (decisionEvidence, bool) {
+	if r.StimulusEvidence == nil || !r.StimulusEvidence.Observed || r.StimulusEvidence.EventName == "" ||
+		r.StimulusEvidence.EventUID == "" || r.StimulusEvidence.EventRule == "" || r.TargetUID == "" ||
+		r.StimulusEvidence.TargetUID != r.TargetUID {
+		return decisionEvidence{}, false
+	}
+	created, err := time.Parse(time.RFC3339Nano, r.StimulusEvidence.EventCreatedAt)
+	if err != nil || created.IsZero() {
+		return decisionEvidence{}, false
+	}
+	start, err := time.Parse(time.RFC3339Nano, r.ObservationStart)
+	if err != nil || start.IsZero() {
+		return decisionEvidence{}, false
+	}
+	end, err := time.Parse(time.RFC3339Nano, r.ObservationEnd)
+	if err != nil || !end.After(start) || created.After(end) || d.Time.Before(created) || d.Time.After(end) || d.Time.After(collectedAt) {
+		return decisionEvidence{}, false
+	}
+	if d.Namespace != r.Namespace || d.Pod != r.Pod {
+		return decisionEvidence{}, false
+	}
+	ref, ok := exactAuditEventReference(r, d)
+	if !ok {
+		return decisionEvidence{}, false
+	}
+	return decisionEvidenceFromAudit(d, "exact-event-uid", ref.source, ref), true
+}
+
+func exactAuditEventReference(r *attackRecord, d *audit.Record) (matchedEventReference, bool) {
+	stimulus := r.StimulusEvidence
+	matches := make([]matchedEventReference, 0, 2)
+	if d.DecisionTrace != nil {
+		if d.DecisionTrace.Validate() != nil || d.DecisionTrace.AssetNamespace != r.Namespace ||
+			d.DecisionTrace.AssetName != r.Pod || d.DecisionTrace.AssetUID != r.TargetUID {
+			return matchedEventReference{}, false
+		}
+		for _, fact := range d.DecisionTrace.Facts {
+			if fact.SteeredBy == nil {
+				continue
+			}
+			for _, event := range fact.SteeredBy.Events {
+				if event.EventName == stimulus.EventName && event.EventUID == stimulus.EventUID && event.RuleType == stimulus.EventRule &&
+					(event.TargetPodUID == "" || event.TargetPodUID == r.TargetUID) {
+					matches = append(matches, matchedEventReference{source: "decision-trace-steered-event", name: event.EventName, uid: event.EventUID,
+						rule: event.RuleType, declaredSource: event.DeclaredSource, trust: event.TrustVerdict,
+						creator: event.CreatorIdentity, targetUID: r.TargetUID})
+				}
+			}
+		}
+	}
+	for _, event := range d.Events {
+		if event.TargetsPod && event.Name == stimulus.EventName && event.EventUID == stimulus.EventUID &&
+			event.Type == stimulus.EventRule && event.TargetPodUID == r.TargetUID {
+			matches = append(matches, matchedEventReference{source: "generic-event-evidence", name: event.Name, uid: event.EventUID,
+				rule: event.Type, declaredSource: event.Source, trust: event.TrustVerdict,
+				creator: event.CreatorIdentity, targetUID: event.TargetPodUID})
+		}
+	}
+	if len(matches) == 0 {
+		return matchedEventReference{}, false
+	}
+	merged := matches[0]
+	for _, candidate := range matches[1:] {
+		if candidate.name != merged.name || candidate.uid != merged.uid || candidate.rule != merged.rule || candidate.targetUID != merged.targetUID ||
+			conflictingNonempty(candidate.declaredSource, merged.declaredSource) || conflictingNonempty(candidate.trust, merged.trust) ||
+			conflictingNonempty(candidate.creator, merged.creator) {
+			return matchedEventReference{}, false
+		}
+		merged.declaredSource = richerString(merged.declaredSource, candidate.declaredSource)
+		merged.trust = richerString(merged.trust, candidate.trust)
+		merged.creator = richerString(merged.creator, candidate.creator)
+		if candidate.source == "decision-trace-steered-event" {
+			merged.source = candidate.source
+		}
+	}
+	return merged, true
+}
+
+func conflictingNonempty(a, b string) bool { return a != "" && b != "" && a != b }
+
+func richerString(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func decisionEvidenceFromAudit(d *audit.Record, correlation, source string, ref matchedEventReference) decisionEvidence {
+	e := decisionEvidence{
+		Correlation: correlation, Source: source, Time: d.Time.UTC().Format(time.RFC3339Nano), EventName: ref.name,
+		EventUID: ref.uid, EventRule: ref.rule, DeclaredSource: ref.declaredSource, TrustVerdict: ref.trust,
+		CreatorIdentity: ref.creator, TargetUID: ref.targetUID, Action: d.Action, Reason: d.Reason,
+		Selected: d.Selected, Feasible: d.Feasible, InfeasibleWhy: d.InfeasibleWhy, DryRun: d.DryRun,
+		DryRunCause: d.DryRunCause, ActuationBrakeCause: d.ActuationBrakeCause, KillSwitch: d.KillSwitch,
+		KillSwitchCause: d.KillSwitchCause, Actuated: d.Actuated, DispatchOutcome: d.DispatchOutcome,
+		DispatchReason: d.DispatchReason, Handler: d.Handler, ObjectsTouched: append([]string(nil), d.ObjectsTouched...),
+		RollbackRef: d.RollbackRef, MutationKind: d.MutationKind,
+	}
+	if trace := d.DecisionTrace; trace != nil && trace.Validate() == nil {
+		e.DecisionID, e.TickID, e.BrainImage, e.GitSHA = trace.DecisionID, trace.TickID, trace.BrainImage, trace.GitSHA
+		e.PolicyNamespace, e.PolicyName, e.PolicyUID = trace.PolicyNamespace, trace.PolicyName, trace.PolicyUID
+		e.ActionStatus = make([]decisionActionEvidence, 0, len(trace.ActionStatus))
+		for _, row := range trace.ActionStatus {
+			e.ActionStatus = append(e.ActionStatus, decisionActionEvidence{Action: row.Action, Status: row.Status,
+				ExclusionKind: row.ExclusionKind, Reason: row.Reason, Scored: row.Scored, RBACUnknown: row.RBACUnknown})
+		}
+	}
+	return e
+}
+
+func decisionDispositionRank(e decisionEvidence) int {
+	switch e.DispatchOutcome {
+	case model.DispatchEmitted, model.DispatchEmittedFalse, model.DispatchSatisfied, model.DispatchReconciled:
+		return 5
+	case model.DispatchError, model.DispatchRefused:
+		return 4
+	case model.DispatchDeclared:
+		return 3
+	case model.DispatchNotAttempted:
+		// Keep the actual selection/no-op rank below a later dispatch disposition.
+	default:
+		if e.Actuated {
+			return 3
+		}
+	}
+	switch {
+	case e.Actuated:
+		return 3
+	case e.Selected:
+		return 2
+	default:
+		return 1
 	}
 }
 

@@ -55,6 +55,38 @@ type Config struct {
 	BlindRotationDelay   time.Duration
 	// MutationAuditPath is a compatibility override for the mutation journal. Empty uses StateDir.
 	MutationAuditPath string
+	// CatalogueV1 is the opt-in, server-owned runtime for the six limited-v1
+	// checks. Catalogue rows remain visible when disabled; launch fails with the
+	// recorded prerequisite rather than accepting caller-supplied destinations.
+	CatalogueV1 CatalogueV1Config
+}
+
+type CatalogueV1Config struct {
+	Enabled             bool
+	Executable          string
+	KubeconfigPath      string
+	KubeContext         string
+	LoopbackURL         string
+	ScopedTokenFile     string
+	AllowedTenant       string
+	DeniedTenant        string
+	DeniedTarget        string
+	ExpectedSubject     string
+	GrantFile           string
+	VoiceEnabled        bool
+	VoiceNamespace      string
+	VoiceDeployment     string
+	VoiceService        string
+	VoiceContainer      string
+	VoiceServicePort    int32
+	VoicePDB            string
+	TranscriptSelector  string
+	TranscriptContainer string
+	GPUEnabled          bool
+	GPUFixtureNamespace string
+	GPUFixtureConfig    string
+	GPUKubeconfigPath   string
+	GPUKubeContext      string
 }
 
 const (

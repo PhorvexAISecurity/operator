@@ -118,18 +118,35 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 				send(map[string]any{"type": "stage", "scenario": m[1], "defender": m[2], "trial": n})
 			}
 		})
-		mOff = tailLines(metricsPath, mOff, func(line string) {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
-				return
+		status, _ := s.runs.Status(id)
+		terminalFixed := status != nil && status.ExecutionKind == "fixed-suite" && (status.State == "done" || status.State == "error" || status.State == "stopped")
+		fixedArtifactsValid := true
+		if terminalFixed {
+			if _, err := s.runs.FunctionalResult(id); err != nil {
+				fixedArtifactsValid = false
+				send(map[string]any{"type": "evidence-error", "outcome": outcomeUnverified, "reason": "fixed-suite terminal evidence failed validation: " + err.Error()})
 			}
-			var row runMetricRow
-			if err := json.Unmarshal([]byte(trimmed), &row); err != nil {
-				send(map[string]any{"type": "evidence-error", "outcome": outcomeUnverified, "reason": "metric row cannot be decoded: " + err.Error()})
-				return
-			}
-			send(trialEventFromRow(row))
-		})
+		}
+		if status == nil || status.ExecutionKind != "fixed-suite" || (terminalFixed && fixedArtifactsValid) {
+			mOff = tailLines(metricsPath, mOff, func(line string) {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					return
+				}
+				var row runMetricRow
+				if err := json.Unmarshal([]byte(trimmed), &row); err != nil {
+					send(map[string]any{"type": "evidence-error", "outcome": outcomeUnverified, "reason": "metric row cannot be decoded: " + err.Error()})
+					return
+				}
+				event := trialEventFromRow(row)
+				if terminalFixed {
+					event.ClaimClass = "functional"
+					event.Outcome = status.Outcome
+					event.OutcomeReason = "fixed-suite terminal result: " + status.Outcome
+				}
+				send(event)
+			})
+		}
 		if st := s.runs.runState(id); st == "done" || st == "partial" || st == "error" || st == "stopped" {
 			drain++ // one more pass to flush the final rows, then end cleanly.
 			if drain >= 2 {

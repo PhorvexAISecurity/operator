@@ -1,0 +1,279 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a4088e5f089d6293dd561665541a572d048a4cda4f22e7bf35db029673f70563
+    source_sha: 32a355f200964ab74ea202102fc8f7f0b668c214
+    at: '2026-09-23T14:00:58+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/baseline/RESULT.json
+    sha256: 10af8bc7bf25baf0274078f7ad7e4db2dae98b1da57deef31d2c3a02ca88c76b
+    source_sha: 32a355f200964ab74ea202102fc8f7f0b668c214
+    at: '2026-09-23T14:04:58+00:00'
+  preflight:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/preflight/receipt-final.json
+    sha256: eca95292478c17db5165ab03b406d349bdacfe8da6a24da0f8913243031c02d7
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:35:29+00:00'
+  implementation:
+    result: PASS
+    by: m183-finish
+    artifact: 04-diff.patch
+    sha256: b2644b1d85e8af94c65f228c57e3e271a588b3a10f971e98564a83d9d8b21b10
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:35:29+00:00'
+  l0:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/implementer/focused-go.log
+    sha256: a683fdf99bf73652ee261dc5fd07f4a3a546ebf8ec4d20ffffa0a6690b60976a
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:35:29+00:00'
+    inputs:
+    - phorvex/cmd/console
+    - phorvex/internal/cataloguev1
+    - phorvex/internal/console
+    inputs_sha256: a2ceb5605c28e3e5675897bf6b23a0075a2b75115948253a691df50c4774ae82
+  l1:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/preflight/receipt-final.json
+    sha256: eca95292478c17db5165ab03b406d349bdacfe8da6a24da0f8913243031c02d7
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:35:29+00:00'
+    inputs:
+    - dashboard-web
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: e9ff855023f77e2e9975c5e4f1d38f801c1895c02eb8d3950176901649aaf846
+  l2:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/implementer/RESULT.json
+    sha256: d32173b16b9a62766e8a4101e1aaeed7de837860f71db5c9680afbf495248aec
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:35:29+00:00'
+    inputs:
+    - phorvex/cmd/console
+    - phorvex/internal/cataloguev1
+    - phorvex/internal/console
+    inputs_sha256: a2ceb5605c28e3e5675897bf6b23a0075a2b75115948253a691df50c4774ae82
+  positive_control:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/root/retained-reader-root-final.log
+    sha256: 34ca7a00452a6ac049eeb3235933dcccebcbadb5ba5d41bcbe2207aeb8de0172
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:35:29+00:00'
+    inputs:
+    - dashboard-web
+    - phorvex/charts/phorvex
+    - phorvex/internal/console
+    inputs_sha256: 0d3a01531741a6510ee30a7b84d0f119e1813529b4f3089a4d57dace0ec07581
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 71f8ad14af45c16f869077bfe15c6d2e47a1678fd386d3d32d1f6498b86bcb84
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:36:07+00:00'
+    baseline_sha: 32a355f200964ab74ea202102fc8f7f0b668c214
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 0490df76b1d60b0b1fb95ccd44880b5a4b4676c6f63acd2941643be739ef25e6
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:36:07+00:00'
+    incident_sha256: 71f8ad14af45c16f869077bfe15c6d2e47a1678fd386d3d32d1f6498b86bcb84
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/publication-equivalence.json
+    sha256: f35c7873cd417a11eeb7b2e7201160833192d17a71c7ccbc8016fe16d3a5e1ba
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:37:56+00:00'
+fix_id: POST25-LIMITED-V1-CONSOLE
+issues: []
+title: Deliver fixed limited-v1 console catalogue with explicit outcomes and scoped
+  cleanup
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: m183-finish
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: catalogue/limited-v1
+  code_sha: 32a355f200964ab74ea202102fc8f7f0b668c214
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: catalogue/limited-v1-console
+  base_sha: 32a355f200964ab74ea202102fc8f7f0b668c214
+  head_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+  stacked_on:
+  - POST25-CONSOLE-V1-VERDICTS
+  diff_format: git-diff-digest-v1
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/318
+  reviewed_head: ca760f4f7e660e7a79077bdc98f66bef47f1403c
+  merge_sha: null
+  checks: FAIL
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: PR318 open against main. Hosted GitHub checks cannot start due billing/spending
+    limit; installed L3 awaits normal deployment and profile configuration.
+updated_at: '2026-09-23T15:38:10+00:00'
+configuration_history:
+- at: '2026-09-23T13:58:44+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-23T15:27:50+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T15:34:42+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T15:35:29+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T15:38:08+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-23T14:00:38+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-23T14:00:58+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-23T15:35:29+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-23T15:35:32+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-23T15:36:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-23T15:36:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-23T15:38:10+00:00'
+  by: codex-lead
+  artifact: evidence/root/publication-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: POST25-LIMITED-V1-CONSOLE:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

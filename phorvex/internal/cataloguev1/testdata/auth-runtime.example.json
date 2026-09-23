@@ -1,0 +1,9 @@
+{
+  "fixedLoopback": "http://127.0.0.1:8090",
+  "scopedTokenFile": "/var/run/secrets/phorvex-console-v1/token",
+  "expectedSubject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
+  "grantFile": "/etc/phorvex-console/grants.json",
+  "allowedTenant": "vllm",
+  "deniedTenant": "document-store",
+  "deniedTarget": "ungranted-cluster"
+}

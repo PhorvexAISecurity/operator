@@ -231,3 +231,10 @@ intakes:
     state: DUPLICATE
     issue_id: null
     aliases: []
+  RPT-20260923-193446-generic-catalogue-detector-signals-receive-unsup:
+    directory: intake/RPT-20260923-193446-generic-catalogue-detector-signals-receive-unsup
+    kind: BUG
+    title: Generic catalogue detector signals receive unsupported LANDED verdicts
+    state: REPORTED
+    issue_id: null
+    aliases: []

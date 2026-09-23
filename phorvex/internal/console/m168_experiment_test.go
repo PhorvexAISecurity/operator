@@ -75,11 +75,11 @@ func (f *fakeExperimentCluster) PodUID(context.Context, string, string) (string,
 	}
 	return f.podUID, f.podFound, f.podErr
 }
-func (f *fakeExperimentCluster) CreateEvent(_ context.Context, _, token, _, _ string) (string, error) {
+func (f *fakeExperimentCluster) CreateEvent(_ context.Context, _, token, _, _ string) (createdSignalIdentity, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.eventCreateErr != nil {
-		return "", f.eventCreateErr
+		return createdSignalIdentity{}, f.eventCreateErr
 	}
 	f.eventSeq++
 	f.eventUID = fmt.Sprintf("event-%d", f.eventSeq)
@@ -88,7 +88,7 @@ func (f *fakeExperimentCluster) CreateEvent(_ context.Context, _, token, _, _ st
 	if f.live.Mode == "active" {
 		f.podUID = fmt.Sprintf("pod-uid-active-%d", f.eventSeq)
 	}
-	return f.eventUID, nil
+	return createdSignalIdentity{UID: f.eventUID, CreatedAt: time.Now().UTC()}, nil
 }
 func (f *fakeExperimentCluster) EventIdentity(context.Context, string, string) (string, string, bool, error) {
 	f.mu.Lock()
@@ -415,6 +415,22 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 		stopped, _ := evidenceVerdict(a)
 		if stopped != "unknown" {
 			t.Errorf("synthetic arm claimed attacker stopped: %s", stopped)
+		}
+	}
+	attackMu.Lock()
+	records := make([]*attackRecord, len(attackList))
+	for i := range attackList {
+		records[i] = cloneAttackRecord(attackList[i])
+	}
+	attackMu.Unlock()
+	if len(records) == 0 {
+		t.Fatal("voice observations missing")
+	}
+	for _, record := range records {
+		if record.StimulusEvidence == nil || !record.StimulusEvidence.Observed || record.StimulusEvidence.EventUID == "" ||
+			record.StimulusEvidence.TargetUID == "" || record.StimulusEvidence.EventCreatedAt == "" || record.StimulusEvidence.BehavioralExecuted ||
+			record.ProducerRoute != "/api/workload/attack" || record.ResultSchema != "synthetic-detector-signal-v2" {
+			t.Fatalf("voice attack record dropped typed event identity: %+v", record)
 		}
 	}
 	if run.Arms[0].Outcome != "" || run.Arms[0].ResponseObserved || !run.Arms[1].ResponseObserved || !run.Arms[2].ResponseObserved || run.Arms[1].DefendedPod != run.Arms[1].TargetPod || run.Arms[2].DefendedPod != run.Arms[2].TargetPod {

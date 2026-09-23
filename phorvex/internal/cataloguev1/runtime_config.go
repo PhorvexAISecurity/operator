@@ -1,0 +1,115 @@
+package cataloguev1
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+)
+
+const RuntimeConfigVersion = 1
+
+// RuntimeConfig is the private, server-generated child configuration. It may
+// contain credential paths, but never credential bytes.
+type RuntimeConfig struct {
+	Version         int               `json:"version"`
+	StateDir        string            `json:"stateDir"`
+	KubeconfigPath  string            `json:"kubeconfigPath,omitempty"`
+	KubeContext     string            `json:"kubeContext,omitempty"`
+	FixedLoopback   string            `json:"fixedLoopback"`
+	ScopedTokenFile string            `json:"scopedTokenFile"`
+	AllowedTenant   string            `json:"allowedTenant"`
+	DeniedTenant    string            `json:"deniedTenant"`
+	DeniedTarget    string            `json:"deniedTarget"`
+	ExpectedSubject string            `json:"expectedSubject"`
+	GrantFile       string            `json:"grantFile"`
+	Voice           VoiceRuntime      `json:"voice"`
+	GPU             GPUFixtureRuntime `json:"gpu"`
+}
+
+func (c RuntimeConfig) SHA256() (string, error) {
+	if err := c.Validate(); err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func (c RuntimeConfig) Validate() error {
+	if c.Version != RuntimeConfigVersion || !filepath.IsAbs(filepath.Clean(c.StateDir)) {
+		return errors.New("catalogue v1 runtime version or state directory is invalid")
+	}
+	if (c.KubeconfigPath == "") != (c.KubeContext == "") || (c.KubeconfigPath != "" && !filepath.IsAbs(filepath.Clean(c.KubeconfigPath))) {
+		return errors.New("catalogue v1 kubeconfig path and context must be an absolute, complete pair")
+	}
+	if (c.GPU.KubeconfigPath == "") != (c.GPU.KubeContext == "") || (c.GPU.KubeconfigPath != "" && !filepath.IsAbs(filepath.Clean(c.GPU.KubeconfigPath))) {
+		return errors.New("catalogue v1 GPU kubeconfig path and context must be an absolute, complete pair")
+	}
+	if c.FixedLoopback != "" {
+		u, err := url.Parse(c.FixedLoopback)
+		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return errors.New("catalogue v1 loopback origin is invalid")
+		}
+	}
+	return nil
+}
+
+func WriteRuntimeConfig(path string, c RuntimeConfig) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWrite(path, append(raw, '\n'))
+}
+
+func LoadRuntimeConfig(path string) (RuntimeConfig, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return RuntimeConfig{}, err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() <= 0 || info.Size() > maxRecordBytes {
+		return RuntimeConfig{}, errors.New("catalogue v1 runtime file is not a private bounded regular file")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return RuntimeConfig{}, err
+	}
+	var c RuntimeConfig
+	if err = json.Unmarshal(raw, &c); err != nil {
+		return RuntimeConfig{}, err
+	}
+	return c, c.Validate()
+}
+
+func (c RuntimeConfig) Runtime(restConfig *rest.Config, kube kubernetes.Interface, client *http.Client) (Runtime, error) {
+	hash, err := c.SHA256()
+	if err != nil {
+		return Runtime{}, err
+	}
+	var loopback *url.URL
+	if strings.TrimSpace(c.FixedLoopback) != "" {
+		loopback, err = url.Parse(c.FixedLoopback)
+		if err != nil {
+			return Runtime{}, err
+		}
+	}
+	return Runtime{StateDir: c.StateDir, ConfigSHA256: hash, KubeconfigPath: c.KubeconfigPath, KubeContext: c.KubeContext, RESTConfig: restConfig, Kube: kube, HTTPClient: client,
+		FixedLoopback: loopback, ScopedTokenFile: c.ScopedTokenFile, AllowedTenant: c.AllowedTenant,
+		DeniedTenant: c.DeniedTenant, DeniedTarget: c.DeniedTarget, ExpectedSubject: c.ExpectedSubject,
+		GrantFile: c.GrantFile, Voice: c.Voice, GPU: c.GPU}, nil
+}

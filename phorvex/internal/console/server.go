@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/cataloguev1"
 )
 
 // Server is the console API.
@@ -500,6 +501,26 @@ func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"id": id})
 }
 
+func (s *Server) startFunctional(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Profile   string `json:"profile"`
+		StartedAt string `json:"startedAt"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid fixed-suite launch body"})
+		return
+	}
+	id, err := s.runs.StartFunctional(cataloguev1.ProfileID(body.Profile), body.StartedAt, principalKey(principalOf(r)))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	status, _ := s.runs.Status(id)
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "context": status.Target})
+}
+
 // targets lists the cluster targets this identity may select — filtered by the target scope in
 // its grant, so the selector never advertises a cluster the caller cannot reach.
 func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
@@ -585,15 +606,25 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 // runEvidence returns the full per-arm + per-trial metric ledger for one run (evidence view).
 // The boundary has already resolved the id to a run inside this identity's scope.
 func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
-	arms, trials, issues, st, ok := s.runs.RunEvidence(runIDOf(r))
+	id := runIDOf(r)
+	arms, trials, issues, st, ok := s.runs.RunEvidence(id)
 	if !ok {
 		writeJSON(w, 404, map[string]string{"error": "run not found"})
 		return
 	}
+	var functional any
+	if result, err := s.runs.FunctionalResult(id); err == nil && result != nil {
+		functional = map[string]any{"outcome": result.Outcome, "summary": result.Summary, "evidence": result.Evidence,
+			"limits": result.Limits, "cleanup": result.Cleanup, "unsafeToRetry": result.UnsafeToRetry,
+			"startedAt": result.StartedAt, "finishedAt": result.FinishedAt}
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "fixed-suite result unavailable: " + err.Error()})
+	}
 	writeJSON(w, 200, map[string]any{
 		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished,
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
-		"note": "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
+		"functionalResult": functional,
+		"note":             "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }
 

@@ -136,13 +136,13 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
 		// only the weight is lifted. There is deliberately no age predicate here: an event
 		// retained in the workload view remains an observation until ingestion removes it.
-		if refs := vectorEvents(view.Events, model.AttackVectorKV); len(refs) > 0 {
+		if refs := vectorEvents(view.Events, model.AttackVectorKV, view.Pod.UID); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactSession, model.AttackVectorKV, vectorDominance, refs) // -> kv-reset
 		}
-		if refs := vectorEvents(view.Events, model.AttackVectorGuardrail); len(refs) > 0 {
+		if refs := vectorEvents(view.Events, model.AttackVectorGuardrail, view.Pod.UID); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactGuardrailBypass, model.AttackVectorGuardrail, vectorDominance, refs) // -> guardrail-rotate
 		}
-		if refs := vectorEvents(view.Events, model.AttackVectorInflight); len(refs) > 0 {
+		if refs := vectorEvents(view.Events, model.AttackVectorInflight, view.Pod.UID); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactInflightRequests, model.AttackVectorInflight, vectorDominance, refs) // -> request-drain
 		}
 	}
@@ -271,14 +271,14 @@ const vectorDominance = 3.0
 
 // vectorEvents returns every pod-targeting observation that jointly causes the one
 // multiplier for vectorType. Trust remains an ingestion responsibility (M-94).
-func vectorEvents(events []model.SecurityEventInfo, vectorType string) []model.VectorSteeringEvent {
+func vectorEvents(events []model.SecurityEventInfo, vectorType, targetPodUID string) []model.VectorSteeringEvent {
 	refs := make([]model.VectorSteeringEvent, 0)
 	for i := range events {
 		if events[i].TargetsPod && events[i].Type == vectorType {
 			refs = append(refs, model.VectorSteeringEvent{
 				EventName: events[i].Name, EventUID: events[i].UID, RuleType: events[i].Type,
 				DeclaredSource: events[i].Source, TrustVerdict: events[i].Trust,
-				CreatorIdentity: events[i].CreatorIdentity,
+				CreatorIdentity: events[i].CreatorIdentity, TargetPodUID: targetPodUID,
 			})
 		}
 	}

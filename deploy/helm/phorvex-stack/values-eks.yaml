@@ -94,6 +94,40 @@ phorvex:
     console:
       enabled: true
       allowWorkloadMutations: true
+      # Fixed functional profiles remain unavailable until DevOps supplies the
+      # short-lived scoped identity and exact Voice/GPU fixture authorities.
+      catalogueV1:
+        enabled: false
+        loopbackURL: http://127.0.0.1:8090
+        allowedTenant: vllm
+        deniedTenant: document-store
+        deniedTarget: unavailable-control-target
+        expectedSubject: ""
+        scopedToken:
+          existingSecret: ""
+          key: token
+          mountPath: /etc/phorvex-catalogue-v1
+        voice:
+          enabled: false
+          namespace: voice
+          deployment: voice-bot
+          service: voice-bot
+          container: bot
+          port: 8080
+          pdb: voice-bot
+          transcriptSelector: app=voice-bot
+          transcriptContainer: bot
+        gpu:
+          enabled: false
+          namespace: vllm-functional
+          fixtureConfigMap: ""
+          fixtureKey: config.yaml
+          mountPath: /etc/phorvex-catalogue-v1-gpu
+          runtimeSecret: ""
+          kubeconfigKey: kubeconfig
+          bearerTokenKey: bearer-token
+          runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
+          kubeContext: ""
       auditTransport:
         port: 8445
         serverSecretName: phorvex-audit-server

@@ -73,16 +73,23 @@ func (s *Server) executePreparedResettableSignal(actor, ns, event string, target
 		return experimentStimulusReceipt{}, fmt.Errorf("attack refused before effect: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	eventUID, err := s.experimentCluster().CreateEvent(ctx, event, token, ns, pod)
+	created, err := s.experimentCluster().CreateEvent(ctx, event, token, ns, pod)
 	cancel()
 	if err != nil {
 		return experimentStimulusReceipt{}, fmt.Errorf("create SecurityEvent: %w", err)
 	}
 	acceptedAt := s.cfg.now()
-	receipt := experimentStimulusReceipt{Pod: pod, PodUID: uid, PodRV: target.ResourceVersion, Deploy: target.Deploy, Event: event, EventUID: eventUID, Token: token, WindowStart: windowStart, WindowEnd: windowEnd, AcceptedAt: acceptedAt}
+	receipt := experimentStimulusReceipt{Pod: pod, PodUID: uid, PodRV: target.ResourceVersion, Deploy: target.Deploy, Event: event, EventUID: created.UID, Token: token, WindowStart: windowStart, WindowEnd: windowEnd, AcceptedAt: acceptedAt}
 	if !acceptedAt.Before(windowEnd) {
 		return receipt, fmt.Errorf("signal acceptance exceeded the pre-registered observation window")
 	}
+	base.stimulus = &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: true, TargetUID: uid,
+		EventName: event, EventUID: created.UID, EventCreatedAt: created.CreatedAt.UTC().Format(time.RFC3339Nano),
+		EventRule: "Panic", Correlation: token, BehavioralExecuted: false,
+		Limitation: "synthetic detector signal is not a demonstrated exploit"}
+	base.outcomeClass = "behavioral-oracle-unsupported"
+	base.producerRoute = "/api/workload/attack"
+	base.resultSchema = "synthetic-detector-signal-v2"
 	id := s.startAttackRecordAtKind("", ns, ns, pod, "Synthetic detector signal", "foothold", "T1611", "rotate", false, base, windowStart, windowEnd, "synthetic-detector-signal", acceptedAt)
 	receipt.AttackID = id
 	return receipt, nil

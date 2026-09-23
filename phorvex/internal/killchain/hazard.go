@@ -366,8 +366,13 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 		if !e.TimestampMissing {
 			w = model.EventAgeWeight(e.Age, eventAgeHorizon(pol))
 		}
+		targetPodUID := ""
+		if e.TargetsPod {
+			targetPodUID = view.Pod.UID
+		}
 		eventRecords = append(eventRecords, model.EventEvidence{
-			Name: e.Name, Source: e.Source, Type: e.Type, ThreatLevel: e.ThreatLevel,
+			Name: e.Name, EventUID: e.UID, Source: e.Source, Type: e.Type, ThreatLevel: e.ThreatLevel,
+			TrustVerdict: e.Trust, CreatorIdentity: e.CreatorIdentity, TargetPodUID: targetPodUID,
 			TargetsPod: e.TargetsPod, AgeSec: e.Age.Seconds(), Weight: w, TimestampPresent: !e.TimestampMissing,
 		})
 		if w <= 0 {

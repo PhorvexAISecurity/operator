@@ -65,6 +65,7 @@ export interface RunStatus {
   id: string; config: string; state: "queued" | "running" | "done" | "partial" | "error" | "stopped"; started: string;
   date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
   trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean; compare3?: boolean;
+  executionKind?: string; claimClass?: string; outcome?: TrialOutcome; cleanupStatus?: string; unsafeToRetry?: boolean;
 }
 export interface PageMeta {
   limit: number;
@@ -144,10 +145,14 @@ async function post<T>(path: string, body: unknown, lens: Lens, context?: string
 }
 
 export interface CatalogItem {
-  name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string;
+  entryID?: string; name: string; product: "k8s" | "ai" | "structural" | "application" | "platform"; category: string; r6Tag: string;
   techniques: string[]; exercisedTechniques: string[]; caps: string[]; hasRun: boolean;
   realism?: string; benignControl?: boolean;
   expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
+  launchKind?: "harness-scenario" | "fixed-suite" | "live-vllm-effect";
+  claimClass?: "security" | "functional" | "effect";
+  profile?: string; available?: boolean; unavailableReason?: string;
+  runtimeContext?: string;
 }
 export interface BenchArm { defender: string; disruption: CI; dwell: CI; harmRate: CI; trials: number }
 export interface BenchGroup { scenario: string; source: string; arms: BenchArm[] }
@@ -256,6 +261,8 @@ export const api = {
   report: (id: string, lens: Lens, signal?: AbortSignal) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens, signal),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
+  startFunctional: (profile: string, lens: Lens) =>
+    post<{ id: string; context: string }>("/api/runs/functional", { profile, startedAt: new Date().toLocaleTimeString() }, lens),
   version: (lens: Lens, signal?: AbortSignal) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens, signal),
   vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
@@ -400,6 +407,52 @@ export interface TimelineEvent {
   reason?: string;
 }
 export type TrialOutcome = "test-failed" | "inconclusive" | "unverified" | "functional-pass" | "functional-fail" | "skipped" | "negative-control" | "security-landed" | "security-disrupted";
+export interface DecisionActionStatus {
+  action: string;
+  status: string;
+  exclusionKind?: string;
+  reason?: string;
+  scored?: boolean;
+  rbacUnknown?: boolean;
+}
+export interface AttackDecisionEvidence {
+  // Legacy fields remain optional so retained rows continue to decode.
+  correlation?: "exact-event-uid" | "temporal-workload" | "temporal-workload-candidate" | string;
+  time?: string;
+  action?: string;
+  reason?: string;
+  selected?: boolean;
+  actuated?: boolean;
+  source?: "decision-trace-steered-event" | "generic-event-evidence" | "temporal-candidate" | string;
+  eventName?: string;
+  eventUid?: string;
+  eventRule?: string;
+  declaredSource?: string;
+  trustVerdict?: string;
+  creatorIdentity?: string;
+  targetUid?: string;
+  decisionId?: string;
+  tickId?: string;
+  brainImage?: string;
+  gitSha?: string;
+  policyNamespace?: string;
+  policyName?: string;
+  policyUid?: string;
+  feasible?: boolean;
+  infeasibleWhy?: string;
+  dryRun?: boolean;
+  dryRunCause?: string;
+  actuationBrakeCause?: string;
+  killSwitch?: boolean;
+  killSwitchCause?: string;
+  dispatchOutcome?: string;
+  dispatchReason?: string;
+  handler?: string;
+  objectsTouched?: string[];
+  rollbackRef?: string;
+  mutationKind?: string;
+  actionStatus?: DecisionActionStatus[];
+}
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
 export interface AttackCost {
   valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string;
@@ -414,9 +467,21 @@ export interface AttackResult {
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
   status: "running" | "partial" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
   outcomeClass?: "behavioral-oracle-unsupported" | "effect-only" | "effect-unverified" | string;
+  evidenceKind?: "catalogue-signal" | "synthetic-detector-signal" | string;
+  producerRoute?: string;
+  resultSchemaVersion?: string;
   stimulusEvidence?: { kind: string; observed: boolean; targetUid: string; eventName: string; eventUid: string; eventCreatedAt: string; eventRule: string; correlation: string; behavioralExecuted: boolean; limitation: string };
   effectEvidence?: { kind: string; observed: boolean; observedAt?: string; targetUid: string; before?: string; after?: string; serviceUid?: string; correlation: string; limitation: string; seconds: number };
-  decisionEvidence?: { correlation: "temporal-workload"; time: string; action: string; reason: string; selected: boolean; actuated: boolean };
+  decisionEvidence?: AttackDecisionEvidence;
+  decisionTraceEvidence?: AttackDecisionEvidence[];
+  temporalDecisionEvidence?: AttackDecisionEvidence;
+  observationStartedAt?: string;
+  observationDeadline?: string;
+  responseObserved?: boolean;
+  responseAction?: string;
+  responsePod?: string;
+  responseSeconds?: number;
+  observationError?: string;
   dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "flushed" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
@@ -491,7 +556,8 @@ export interface RunEvidenceTrial {
   measurementStatus: string; measurementPhase: string; validityReasons: string[];
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; note: string }
+export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

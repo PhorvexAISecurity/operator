@@ -4,7 +4,13 @@
 
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+const maxEventEvidenceStringBytes = 1024
 
 // DefaultEventAgeHorizon is the inherited, uncalibrated migration default for
 // SecurityEvent evidence memory. It is intentionally independent of actuation
@@ -51,11 +57,41 @@ func EventAgeWeight(age, tau time.Duration) float64 {
 // (M-27): what the event was, how old it was at this tick, and the weight it carried.
 type EventEvidence struct {
 	Name             string  `json:"name,omitempty"`
+	EventUID         string  `json:"eventUID,omitempty"`
 	Source           string  `json:"source,omitempty"`
 	Type             string  `json:"type,omitempty"`
 	ThreatLevel      string  `json:"threatLevel,omitempty"`
+	TrustVerdict     string  `json:"trustVerdict,omitempty"`
+	CreatorIdentity  string  `json:"creatorIdentity,omitempty"`
+	TargetPodUID     string  `json:"targetPodUID,omitempty"`
 	TargetsPod       bool    `json:"targetsPod"`
 	AgeSec           float64 `json:"ageSec"`
 	Weight           float64 `json:"weight"`
 	TimestampPresent bool    `json:"present"` // false: the CR had no usable CreationTimestamp → weight 0
+}
+
+// Canonical returns the public audit projection of event identity. It applies the
+// same credential redaction as DecisionTrace steering references without changing
+// immutable Kubernetes identity or any numeric assessment input.
+func (e EventEvidence) Canonical() EventEvidence {
+	e.Name = boundedEventEvidenceString(e.Name)
+	e.EventUID = boundedEventEvidenceString(e.EventUID)
+	e.Source = boundedEventEvidenceString(e.Source)
+	e.Type = boundedEventEvidenceString(e.Type)
+	e.ThreatLevel = boundedEventEvidenceString(e.ThreatLevel)
+	e.TrustVerdict = boundedEventEvidenceString(e.TrustVerdict)
+	e.CreatorIdentity = boundedEventEvidenceString(e.CreatorIdentity)
+	e.TargetPodUID = boundedEventEvidenceString(e.TargetPodUID)
+	return e
+}
+
+func boundedEventEvidenceString(value string) string {
+	value = strings.ToValidUTF8(redactTraceString(value), "�")
+	if len(value) > maxEventEvidenceStringBytes {
+		value = value[:maxEventEvidenceStringBytes]
+		for !utf8.ValidString(value) {
+			value = value[:len(value)-1]
+		}
+	}
+	return value
 }
