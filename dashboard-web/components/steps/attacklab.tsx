@@ -5,6 +5,7 @@ import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "@/components/panels/effectiveness";
 import { cn } from "@/lib/utils";
+import { isSecurityOutcome, trialOutcomeDisplay } from "@/lib/trial-outcome";
 import { clearLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import {
   Server, Boxes, Swords, Play, Loader2, ShieldCheck, ShieldOff, Crosshair, Check,
@@ -62,7 +63,10 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const caps: Caps = capabilitiesQuery.data ? { gpu: !!capabilitiesQuery.data.gpu, mig: !!capabilitiesQuery.data.mig, multiNode: !!capabilitiesQuery.data.multiNode } : { gpu: false, mig: false, multiNode: false };
   const queryScope = useQueryScope(lens);
   const targets = targetQuery.data?.targets || [];
-  const scenarios = (catalogQuery.data?.items || []).filter((i) => !i.name.endsWith("-apt"));
+  // Attack Lab only launches scored security scenarios. Benign functional
+  // fixtures remain selectable in the Scenario Catalog, where their claims
+  // and controls are presented without attacker/defender language.
+  const scenarios = (catalogQuery.data?.items || []).filter((i) => !i.name.endsWith("-apt") && !i.benignControl);
   const nss = workloadQuery.data?.namespaces || [];
   const scopeIdentityRef = React.useRef("");
   scopeIdentityRef.current = `${lens}\u0000${sel.context}\u0000${target}`;
@@ -100,7 +104,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
       });
     }
     if (catalogQuery.data) {
-      const items = (catalogQuery.data.items || []).filter((i) => !i.name.endsWith("-apt"));
+      const items = (catalogQuery.data.items || []).filter((i) => !i.name.endsWith("-apt") && !i.benignControl);
       setPicked((current) => {
         const valid = current.filter((name) => items.some((item) => item.name === name));
         return valid.length ? valid : items[0] ? [items[0].name] : [];
@@ -143,6 +147,10 @@ export function AttackLab({ lens }: { lens: Lens }) {
         // silently dropped every scenario after the first.
         const k = `${e.scenario}-${e.defender}-${e.trial}`;
         return prev.some((p) => `${p.scenario}-${p.defender}-${p.trial}` === k) ? prev : [...prev, e];
+      });
+      else if (e.type === "evidence-error") setEvents((prev) => {
+        const k = e.reason || "metric evidence could not be decoded";
+        return prev.some((p) => p.type === "evidence-error" && (p.reason || "metric evidence could not be decoded") === k) ? prev : [...prev, e];
       });
       else if (e.type === "end") {
         setRunning(false); setStage(null); setEnded(e.state || "done");
@@ -217,6 +225,11 @@ export function AttackLab({ lens }: { lens: Lens }) {
 
   const targetObj = targets.find((t) => t.id === target);
   const trials = events.filter((e) => e.type === "trial") as Trial[];
+  const evidenceErrors = events.filter((e) => e.type === "evidence-error");
+  const failedEvidence = evidenceErrors.length > 0 || trials.some((t) => t.outcome === "test-failed" || t.outcome === "functional-fail");
+  const incompleteEvidence = trials.some((t) => t.outcome === "inconclusive" || t.outcome === "unverified" || t.outcome === "skipped");
+  const terminalError = ended === "error" || failedEvidence;
+  const terminalPartial = ended === "partial" || incompleteEvidence || evidenceErrors.length > 0;
 
   const displayErr = err || readErr;
   if (displayErr && !targets.length) return <ErrorState msg={displayErr} />;
@@ -281,6 +294,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
       <Card>
         <CardContent className="space-y-5 p-5">
           <SectionLabel>2 · Arm the attacker</SectionLabel>
+          <div className="text-[11px] text-muted-foreground">Benign functional controls run from the Scenario Catalog and are not presented as attacks or security comparisons here.</div>
 
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-[12px] text-muted-foreground"><Crosshair className="h-3.5 w-3.5" /> Attack sandbox</div>
@@ -426,7 +440,9 @@ export function AttackLab({ lens }: { lens: Lens }) {
                 {queuePos > 0 ? <Badge variant="accent"><Loader2 className="h-3 w-3 animate-spin" /> queued · #{queuePos}</Badge>
                   : running ? <Badge variant="accent"><Radio className="h-3 w-3 animate-pulse" /> running</Badge>
                   : ended === "stopped" ? <Badge variant="danger"><StopCircle className="h-3 w-3" /> stopped</Badge>
-                  : <Badge variant="real"><CheckCircle2 className="h-3 w-3" /> complete · report ready</Badge>}
+                  : terminalError ? <Badge variant="danger"><AlertTriangle className="h-3 w-3" /> complete · failed evidence</Badge>
+                  : terminalPartial ? <Badge variant="pending"><AlertTriangle className="h-3 w-3" /> complete · incomplete evidence</Badge>
+                  : <Badge variant="neutral"><FileText className="h-3 w-3" /> execution complete · report ready</Badge>}
                 {running && (
                   <Button variant="outline" size="sm" onClick={stop} disabled={stopping}>
                     {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <StopCircle className="h-3.5 w-3.5" />} {stopping ? "stopping…" : "Stop attack"}
@@ -477,12 +493,14 @@ export function AttackLab({ lens }: { lens: Lens }) {
                       {finalizing ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> finalizing…</span>
                         : running ? `${done}/${total} trials · elapsed ${elapsed}s · ~${eta}s left`
                         : ended === "stopped" ? "stopped by you"
-                        : <span className="inline-flex items-center gap-1 text-success"><FileText className="h-3 w-3" /> all done — report in the Report tab</span>}
+                        : terminalError ? <span className="inline-flex items-center gap-1 text-danger"><AlertTriangle className="h-3 w-3" /> execution ended with failed evidence</span>
+                        : terminalPartial ? <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle className="h-3 w-3" /> execution ended with incomplete evidence</span>
+                        : <span className="inline-flex items-center gap-1 text-muted-foreground"><FileText className="h-3 w-3" /> execution complete — typed report ready</span>}
                     </span>
                   </div>
                   {/* progress bar */}
                   <div className="h-2 w-full overflow-hidden rounded-full bg-muted/50">
-                    <div className={cn("h-2 rounded-full transition-all", running ? "bg-primary" : ended === "stopped" ? "bg-danger/60" : "bg-success")} style={{ width: `${Math.round(frac * 100)}%` }} />
+                    <div className={cn("h-2 rounded-full transition-all", running ? "bg-primary" : ended === "stopped" || terminalError ? "bg-danger/60" : terminalPartial ? "bg-warning/70" : "bg-muted-foreground/60")} style={{ width: `${Math.round(frac * 100)}%` }} />
                   </div>
                   {/* scenario chips — one per attack, with live status */}
                   {scenList.length > 1 && (
@@ -491,10 +509,10 @@ export function AttackLab({ lens }: { lens: Lens }) {
                         const st = statusOf(s);
                         return (
                           <span key={s} className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px]",
-                            st === "done" ? "border-success/40 bg-success/[0.06] text-success"
+                            st === "done" ? "border-border bg-muted/20 text-muted-foreground"
                             : st === "running" ? "border-primary/50 bg-primary/[0.08] text-primary"
                             : "border-border bg-elevated/30 text-muted-foreground/70")}>
-                            {st === "done" ? <Check className="h-3 w-3" /> : st === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <span className="text-[9px]">#{i + 1}</span>}
+                            {st === "done" ? <FileText className="h-3 w-3" /> : st === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <span className="text-[9px]">#{i + 1}</span>}
                             {s}
                           </span>
                         );
@@ -504,14 +522,15 @@ export function AttackLab({ lens }: { lens: Lens }) {
 
                   {/* per-attack results — each scenario's measured arms as it finishes */}
                   <div className="space-y-3">
+                    {evidenceErrors.map((event, i) => <div key={`evidence-error-${i}`} className="rounded border border-info/30 bg-info/5 px-3 py-2 text-[11px] text-info">unverified metric row: {event.reason || "decode failed"}</div>)}
                     {scenList.filter((s) => trialsOf(s).length > 0).map((s) => {
                       const st = statusOf(s);
                       return (
                         <div key={s} className="rounded-lg border border-border/60 bg-elevated/20 p-3">
                           <div className="mb-2 flex items-center gap-2 text-[12px]">
-                            {st === "done" ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                            {st === "done" ? <FileText className="h-3.5 w-3.5 text-muted-foreground" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
                             <span className="font-mono text-foreground">{s}</span>
-                            <Badge variant={st === "done" ? "real" : "accent"}>{st === "done" ? "done" : "running"}</Badge>
+                            <Badge variant={st === "done" ? "neutral" : "accent"}>{st === "done" ? "execution complete" : "running"}</Badge>
                             <span className="text-[11px] text-muted-foreground">{trialsOf(s).length}/{expectedPer} trials</span>
                           </div>
                           <ArmSummary trials={trialsOf(s)} />
@@ -575,25 +594,28 @@ function ArmSummary({ trials }: { trials: TimelineEvent[] }) {
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {defs.map((def) => {
         const rs = byDef[def];
-        const disrupt = rs.reduce((s, r) => s + (r.disruption || 0), 0) / rs.length;
-        const dwell = rs.reduce((s, r) => s + (r.dwellSeconds || 0), 0) / rs.length;
+        const security = rs.filter((r) => isSecurityOutcome(r.outcome));
+        const landedCount = security.filter((r) => r.outcome === "security-landed").length;
+        const disruptedCount = security.filter((r) => r.outcome === "security-disrupted").length;
+        const unresolvedCount = rs.length - security.length;
+        const disrupt = security.length ? security.reduce((s, r) => s + (r.disruption || 0), 0) / security.length : 0;
+        const dwell = security.length ? security.reduce((s, r) => s + (r.dwellSeconds || 0), 0) / security.length : 0;
         const px = def === "d-phorvex";
-        // OUTCOME STATE for this arm: the attack LANDED (arm failed to stop it) vs DISRUPTED.
-        const landed = disrupt < 0.5;
+        const allLanded = landedCount === rs.length;
+        const allDisrupted = disruptedCount === rs.length;
+        const summary = allLanded ? "all attacks landed" : allDisrupted ? "all attacks disrupted" : security.length ? "mixed security outcomes" : "no certified security comparison";
         return (
-          <div key={def} className={cn("rounded-lg border p-3", landed ? "border-danger/30 bg-danger/[0.04]" : "border-success/30 bg-success/[0.04]")}>
+          <div key={def} className={cn("rounded-lg border p-3", allLanded ? "border-danger/30 bg-danger/[0.04]" : allDisrupted ? "border-success/30 bg-success/[0.04]" : "border-border bg-muted/10")}>
             <div className="flex items-center justify-between gap-2">
               <ArmTag defender={def} />
-              {landed
-                ? <Badge variant="danger"><Skull className="h-3 w-3" /> attack landed</Badge>
-                : <Badge variant="real"><ShieldCheck className="h-3 w-3" /> {Math.round(disrupt * 100)}% disrupted{px ? " by Phorvex" : def === "d-r6blindtimer" ? " by R6 blind" : ""}</Badge>}
+              <Badge variant={allLanded ? "danger" : allDisrupted ? "real" : "pending"}>{summary}</Badge>
             </div>
-            <div className="mt-2 h-1.5 w-full rounded-full bg-muted/50">
-              <div className={cn("h-1.5 rounded-full", landed ? "bg-danger/60" : px ? "bg-primary" : "bg-success/70")} style={{ width: `${Math.round(disrupt * 100)}%` }} />
-            </div>
+            {security.length > 0 && <div className="mt-2 h-1.5 w-full rounded-full bg-muted/50">
+              <div className={cn("h-1.5 rounded-full", allLanded ? "bg-danger/60" : px ? "bg-primary" : "bg-success/70")} style={{ width: `${Math.round(disrupt * 100)}%` }} />
+            </div>}
             <div className="mt-1.5 flex justify-between text-[11px] tabular text-muted-foreground">
-              <span>disrupted {Math.round(disrupt * 100)}%</span>
-              <span>{rs.length} trials · dwell {dwell.toFixed(1)}s</span>
+              <span>{landedCount} landed · {disruptedCount} disrupted · {unresolvedCount} other</span>
+              <span>{rs.length} trials{security.length ? ` · dwell ${dwell.toFixed(1)}s` : ""}</span>
             </div>
           </div>
         );
@@ -605,15 +627,21 @@ function ArmSummary({ trials }: { trials: TimelineEvent[] }) {
 // one streamed trial: the attacker's command steps + whether the attack landed or was stopped.
 function TrialRow({ t }: { t: TimelineEvent }) {
   const [open, setOpen] = React.useState(false);
-  const landed = (t.disruption || 0) < 0.5 && t.oracleAchieved;
+  const display = trialOutcomeDisplay(t.outcome);
+  const landed = t.outcome === "security-landed";
+  const successful = t.outcome === "security-disrupted" || t.outcome === "functional-pass";
   const px = t.defender === "d-phorvex";
   return (
-    <div className={cn("rounded-md border px-3 py-2", landed ? "border-danger/25 bg-danger/[0.03]" : "border-success/25 bg-success/[0.03]")}>
+    <div className={cn("rounded-md border px-3 py-2", landed || t.outcome === "test-failed" || t.outcome === "functional-fail" ? "border-danger/25 bg-danger/[0.03]" : successful ? "border-success/25 bg-success/[0.03]" : "border-border bg-muted/10")}>
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 text-left">
-        {landed ? <Skull className="h-4 w-4 shrink-0 text-danger" /> : <ShieldCheck className="h-4 w-4 shrink-0 text-success" />}
+        {landed ? <Skull className="h-4 w-4 shrink-0 text-danger" />
+          : t.outcome === "security-disrupted" ? <ShieldCheck className="h-4 w-4 shrink-0 text-success" />
+          : t.outcome === "functional-pass" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+          : t.outcome === "test-failed" || t.outcome === "functional-fail" ? <AlertTriangle className="h-4 w-4 shrink-0 text-danger" />
+          : <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
         <ArmTag defender={t.defender || ""} />
         <span className="text-[11px] text-muted-foreground">trial {t.trial}</span>
-        <Badge variant={landed ? "danger" : "real"}>{landed ? "attack landed" : "disrupted"}</Badge>
+        <Badge variant={display.variant}>{display.label}</Badge>
         <span className="ml-auto flex items-center gap-3 text-[11px] tabular text-muted-foreground">
           <span>dwell {(t.dwellSeconds || 0).toFixed(1)}s</span>
           {t.mtdEffect && <span className="hidden sm:inline">{t.mtdEffect}</span>}
@@ -629,6 +657,7 @@ function TrialRow({ t }: { t: TimelineEvent }) {
             </div>
           ))}
           {t.observed && <div className="pt-1 text-[11px] text-muted-foreground">→ {t.observed}</div>}
+          {t.outcomeReason && <div className="pt-1 text-[11px] text-muted-foreground">{t.outcomeReason}{t.measurementPhase ? ` · phase ${t.measurementPhase}` : ""}</div>}
           {!t.commands?.length && <div className="text-[11px] text-muted-foreground/60">no command trace recorded for this trial</div>}
         </div>
       )}

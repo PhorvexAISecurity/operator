@@ -19,34 +19,6 @@ import (
 	"strings"
 )
 
-// richRow is the permissive full subset of a harness metric row used for per-run evidence.
-type richRow struct {
-	Scenario              string   `json:"scenario"`
-	Defender              string   `json:"defender"`
-	Trial                 int      `json:"trial"`
-	OracleAchieved        bool     `json:"oracleAchieved"`
-	DisruptionVsOracle    float64  `json:"disruptionVsOracle"`
-	AttackerDwellSeconds  float64  `json:"attackerDwellSeconds"`
-	DefensiveActions      int      `json:"defensiveActions"`
-	FalseDefensiveActions int      `json:"falseDefensiveActions"`
-	SecurityPerCost       float64  `json:"securityPerCost"`
-	EvidenceRetention     float64  `json:"evidenceRetention"`
-	Skipped               bool     `json:"skipped"`
-	NegativeControl       bool     `json:"negativeControl"`
-	MTDEffect             string   `json:"mtdEffect"`
-	ObservedState         string   `json:"observedState"`
-	Commands              []string `json:"commands"`
-	Schwartau             *struct {
-		ProtectionTimeSeconds float64 `json:"protectionTimeSeconds"`
-		DetectionTimeSeconds  float64 `json:"detectionTimeSeconds"`
-		ReactionTimeSeconds   float64 `json:"reactionTimeSeconds"`
-	} `json:"schwartau"`
-	Reuse *struct {
-		ReplaySuccessCount int `json:"replaySuccessCount"`
-		ReplayAttempts     int `json:"replayAttempts"`
-	} `json:"reuse"`
-}
-
 // RunEvidenceArm is the aggregated evidence for one defender arm of a run.
 type RunEvidenceArm struct {
 	Defender          string  `json:"defender"`
@@ -68,16 +40,33 @@ type RunEvidenceArm struct {
 
 // RunEvidenceTrial is one per-trial row (the granular evidence).
 type RunEvidenceTrial struct {
-	Defender         string   `json:"defender"`
-	Trial            int      `json:"trial"`
-	Skipped          bool     `json:"skipped"`
-	OracleAchieved   bool     `json:"oracleAchieved"`
-	Disruption       float64  `json:"disruption"`
-	Dwell            float64  `json:"dwell"`
-	DefensiveActions int      `json:"defensiveActions"`
-	MTDEffect        string   `json:"mtdEffect"`
-	Observed         string   `json:"observed"`
-	Commands         []string `json:"commands"`
+	Scenario               string   `json:"scenario"`
+	Defender               string   `json:"defender"`
+	Trial                  int      `json:"trial"`
+	Skipped                bool     `json:"skipped"`
+	OracleAchieved         bool     `json:"oracleAchieved"`
+	Disruption             float64  `json:"disruption"`
+	Dwell                  float64  `json:"dwell"`
+	DefensiveActions       int      `json:"defensiveActions"`
+	MTDEffect              string   `json:"mtdEffect"`
+	Observed               string   `json:"observed"`
+	Commands               []string `json:"commands"`
+	ScenarioRealism        string   `json:"scenarioRealism,omitempty"`
+	ScenarioBenignControl  bool     `json:"scenarioBenignControl"`
+	ScenarioClaimLimits    string   `json:"scenarioClaimLimits,omitempty"`
+	FunctionalOracleStatus string   `json:"functionalOracleStatus,omitempty"`
+	Outcome                string   `json:"outcome"`
+	OutcomeReason          string   `json:"outcomeReason"`
+	ClaimClass             string   `json:"claimClass"`
+	MeasurementStatus      string   `json:"measurementStatus"`
+	MeasurementPhase       string   `json:"measurementPhase"`
+	ValidityReasons        []string `json:"validityReasons"`
+}
+
+type RunEvidenceIssue struct {
+	Line    int    `json:"line"`
+	Outcome string `json:"outcome"`
+	Reason  string `json:"reason"`
 }
 
 func armLabelOf(def string) string {
@@ -99,7 +88,7 @@ func armLabelOf(def string) string {
 }
 
 // RunEvidence parses one run's metrics.jsonl into the full per-arm + per-trial evidence ledger.
-func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []RunEvidenceTrial, st RunStatus, ok bool) {
+func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []RunEvidenceTrial, issues []RunEvidenceIssue, st RunStatus, ok bool) {
 	rm.mu.Lock()
 	out, has := rm.runOut[id]
 	if s, sok := rm.runs[id]; sok {
@@ -107,11 +96,11 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 	}
 	rm.mu.Unlock()
 	if !has {
-		return nil, nil, st, false
+		return nil, nil, nil, st, false
 	}
 	f, err := os.Open(filepath.Join(rm.cfg.runOutputPath(out), "metrics.jsonl"))
 	if err != nil {
-		return []RunEvidenceArm{}, []RunEvidenceTrial{}, st, true // run exists, no metrics yet
+		return []RunEvidenceArm{}, []RunEvidenceTrial{}, []RunEvidenceIssue{}, st, true // run exists, no metrics yet
 	}
 	defer f.Close()
 
@@ -129,17 +118,36 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 	order := []string{}
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
+	line := 0
 	for sc.Scan() {
-		var r richRow
-		if json.Unmarshal([]byte(strings.TrimSpace(sc.Text())), &r) != nil || r.NegativeControl {
+		line++
+		trimmed := strings.TrimSpace(sc.Text())
+		if trimmed == "" {
 			continue
 		}
+		var r runMetricRow
+		if err := json.Unmarshal([]byte(trimmed), &r); err != nil {
+			issues = append(issues, RunEvidenceIssue{Line: line, Outcome: outcomeUnverified, Reason: "metric row cannot be decoded: " + err.Error()})
+			continue
+		}
+		outcome := r.outcome()
 		trials = append(trials, RunEvidenceTrial{
-			Defender: r.Defender, Trial: r.Trial, Skipped: r.Skipped, OracleAchieved: r.OracleAchieved,
+			Scenario: r.Scenario, Defender: r.Defender, Trial: r.Trial, Skipped: r.Skipped, OracleAchieved: r.OracleAchieved,
 			Disruption: r.DisruptionVsOracle, Dwell: r.AttackerDwellSeconds, DefensiveActions: r.DefensiveActions,
 			MTDEffect: r.MTDEffect, Observed: r.ObservedState, Commands: r.Commands,
+			ScenarioRealism: r.ScenarioRealism, ScenarioBenignControl: r.ScenarioBenignControl,
+			ScenarioClaimLimits: r.ScenarioClaimLimits,
+			Outcome:             outcome.Outcome, OutcomeReason: outcome.OutcomeReason, ClaimClass: outcome.ClaimClass,
+			MeasurementStatus: outcome.MeasurementStatus, MeasurementPhase: outcome.MeasurementPhase,
+			ValidityReasons: outcome.ValidityReasons,
 		})
-		if r.Skipped {
+		if status, ok, conflict := functionalOracleStatus(r.BenchmarkEvidence); ok && !conflict {
+			trials[len(trials)-1].FunctionalOracleStatus = status
+		}
+		// Security aggregates contain only rows authorized by the shared validity
+		// contract. Benign controls remain visible above as functional trials even
+		// when an older producer incorrectly claimed scored=true.
+		if r.NegativeControl || (outcome.Outcome != outcomeSecurityLanded && outcome.Outcome != outcomeSecurityDisrupted) {
 			continue
 		}
 		a := byDef[r.Defender]
@@ -168,6 +176,9 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 			a.replayAtt += r.Reuse.ReplayAttempts
 		}
 	}
+	if err := sc.Err(); err != nil {
+		issues = append(issues, RunEvidenceIssue{Line: line + 1, Outcome: outcomeUnverified, Reason: "metric stream cannot be read: " + err.Error()})
+	}
 	for _, def := range order {
 		a := byDef[def]
 		nn := float64(maxInt(a.n, 1))
@@ -186,6 +197,9 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 		return arms[i].Defender == "d-phorvex" || (arms[j].Defender != "d-phorvex" && arms[i].Defender < arms[j].Defender)
 	})
 	sort.Slice(trials, func(i, j int) bool {
+		if trials[i].Scenario != trials[j].Scenario {
+			return trials[i].Scenario < trials[j].Scenario
+		}
 		if trials[i].Defender != trials[j].Defender {
 			return trials[i].Defender < trials[j].Defender
 		}
@@ -197,7 +211,10 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 	if trials == nil {
 		trials = []RunEvidenceTrial{}
 	}
-	return arms, trials, st, true
+	if issues == nil {
+		issues = []RunEvidenceIssue{}
+	}
+	return arms, trials, issues, st, true
 }
 
 func maxInt(a, b int) int {

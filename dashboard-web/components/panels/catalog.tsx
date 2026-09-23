@@ -37,7 +37,7 @@ export function CatalogPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="animate-fade-up space-y-6">
-      <PageHead title="Attack Catalog" sub={`The full ${visibleItems.length}-scenario adversary suite — enumerated live from the harness registry, each runnable with or without Phorvex. AI scenarios are structurally real; their defense efficacy is [SP-0-PENDING-P4].`} />
+      <PageHead title="Scenario Catalog" sub={`${visibleItems.length} registered attack and benign functional scenarios, enumerated live from the harness registry. Each entry states whether it measures a security comparison or a bounded functional fixture.`} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented value={prod} onChange={setProd} tabs={[{ id: "all", label: "All", count: counts.all }, { id: "k8s", label: "K8s", count: counts.k8s }, { id: "ai", label: "AI / Inference", count: counts.ai }, { id: "structural", label: "Structural", count: counts.structural }]} />
         <div className="relative w-64">
@@ -79,7 +79,7 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
             <span className="font-mono text-[13px] text-foreground">{it.name}</span>
             <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>
             {it.hasRun && <Badge variant="accent">ran</Badge>}
-            {it.product === "ai" && <Badge variant="pending">SP-0</Badge>}
+            {it.benignControl ? <Badge variant="neutral">benign functional</Badge> : it.product === "ai" && <Badge variant="pending">SP-0</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{it.category}</span>
@@ -134,15 +134,18 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           <Badge variant="neutral">{item.category}</Badge>
           <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>
           <Badge variant={item.product === "ai" ? "modeled" : "accent"}>{item.product.toUpperCase()}</Badge>
+          {item.benignControl && <Badge variant="neutral">security outcome not applicable</Badge>}
         </div>
         <div>
           <SectionLabel>ATT&amp;CK techniques</SectionLabel>
           <div className="flex flex-wrap gap-1.5">{(item.techniques ?? []).length === 0 ? <span className="text-[12px] text-muted-foreground">none tagged</span> : (item.techniques ?? []).map((t) => <span key={t} className="rounded bg-muted/40 px-2 py-0.5 text-[12px] font-mono text-foreground/80">{t}</span>)}</div>
         </div>
-        {item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
+        {item.benignControl
+          ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">Benign functional control. This harness run does not establish an attack, defense efficacy, ROI, or behavior of the installed service. {item.meaningfulWhen}</div>
+          : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run with Phorvex</Button>
-          <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run without (baseline)</Button>
+          <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
+          <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           <span className="text-[11px] text-muted-foreground">target: {target?.label || target?.id || "none selected"}</span>
         </div>
         {lens !== "operator" && <div className="text-[11px] text-muted-foreground">Scenario launch is available in the operator view.</div>}

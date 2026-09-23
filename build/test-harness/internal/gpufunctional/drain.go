@@ -169,7 +169,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err != nil {
 		return receipt, err
 	}
-	cohort := c.startStreamCohort(ctx, streamCohortSize)
+	cohort := c.startStreamCohort(ctx, streamCohortSize, drainStreamPrompt, drainStreamMaxTokens)
 	cohortFinalized := false
 	finalizeCohort := func() error {
 		if cohortFinalized {
@@ -184,17 +184,6 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err := cohort.waitSubmitted(ctx, 10*time.Second); err != nil {
 		return receipt, err
 	}
-	active, err := c.waitMetrics(ctx, 5*time.Second, busyEstablished)
-	receipt.ActiveMetrics = &active
-	if err != nil {
-		return receipt, err
-	}
-	if cohort.unfinished() < 2 {
-		return receipt, errors.New("drain cohort finished before operation authority was established")
-	}
-	if err := cohort.preActionFailure(); err != nil {
-		return receipt, err
-	}
 	generation, err := strconv.ParseUint(capability.NextOperationGeneration, 10, 64)
 	if err != nil || generation == 0 {
 		return receipt, errors.New("next drain generation is invalid")
@@ -204,12 +193,15 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 		return receipt, err
 	}
 	payload := createOperation{Schema: "phorvex.drain.v1", OperationID: operationID, OperationGeneration: strconv.FormatUint(generation, 10), Attempt: 1, Owner: owner, ExpectedIncarnationDigest: capability.IncarnationDigest, Deadline: c.now().UTC().Add(120 * time.Second).Format(time.RFC3339Nano), Mode: "abort-and-quiesce"}
-	anchor, err := cohort.selectUnfinishedAnchor(c.now().UTC())
+	anchor, err := cohort.waitUnfinishedAnchor(ctx, 5*time.Second, c.now)
 	if err != nil {
 		return receipt, err
 	}
 	receipt.Anchor = &anchor
 	receipt.AttributionScope = "one-late-selected-authenticated-unfinished-anchor; background snapshot IDs may be unattributed"
+	if err := cohort.preActionFailure(); err != nil {
+		return receipt, err
+	}
 	rollbackNeeded := true
 	operationAttempted := false
 	defer func() {
@@ -388,7 +380,12 @@ func validateDrainBinding(operation DrainOperation, payload createOperation, cap
 	deadline, deadlineErr := time.Parse(time.RFC3339Nano, operation.Deadline)
 	grace, graceErr := time.Parse(time.RFC3339Nano, operation.CancellationGraceDeadline)
 	_, transitionErr := time.Parse(time.RFC3339Nano, operation.LastTransition)
-	if deadlineErr != nil || graceErr != nil || transitionErr != nil || !deadline.Equal(grace.Add(-30*time.Second)) || !strings.HasSuffix(operation.Deadline, "Z") || !strings.HasSuffix(operation.CancellationGraceDeadline, "Z") || !strings.HasSuffix(operation.LastTransition, "Z") || operation.TransitionReason != "none" || operation.CancelBoundaryRevision != "0" {
+	if deadlineErr != nil || graceErr != nil || transitionErr != nil || !strings.HasSuffix(operation.Deadline, "Z") || !strings.HasSuffix(operation.LastTransition, "Z") || operation.TransitionReason != "none" || operation.CancelBoundaryRevision != "0" {
+		return errors.New("drain receipt timing or cancellation boundary is invalid")
+	}
+	expectedGrace := deadline.UTC().Truncate(time.Microsecond).Add(30 * time.Second)
+	expectedGraceText := expectedGrace.Format("2006-01-02T15:04:05.000000Z")
+	if !grace.Equal(expectedGrace) || operation.CancellationGraceDeadline != expectedGraceText {
 		return errors.New("drain receipt timing or cancellation boundary is invalid")
 	}
 	if err := validateDrainSnapshots(operation); err != nil {
@@ -566,6 +563,9 @@ func validateDrainSnapshotAnchor(snapshot map[string]DrainQueue, cohort StreamCo
 	}
 	producer := map[string]StreamLifecycleReceipt{}
 	for _, stream := range cohort.Streams {
+		if stream.HTTPStatus != http.StatusOK || stream.MediaType != "text/event-stream" {
+			return nil, nil, false, "", fmt.Errorf("drain stream %d lacks accepted HTTP/SSE authority", stream.Ordinal)
+		}
 		if !stream.Finished || stream.FinishedAt == "" || stream.Termination == "running" || stream.Termination == "not-started" || stream.Termination == "join-timeout" {
 			return nil, nil, false, "", fmt.Errorf("drain stream %d lacks a retained terminal lifecycle", stream.Ordinal)
 		}

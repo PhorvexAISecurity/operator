@@ -1,0 +1,13 @@
+package console
+import ("os";"path/filepath";"encoding/json";"testing")
+func TestLimitedV1IncidentReproduction(t *testing.T) {
+ dir:=t.TempDir();cfg:=Config{StateDir:dir};out:=cfg.runOutputPath("out-repro");if e:=os.MkdirAll(out,0700);e!=nil{t.Fatal(e)}
+ rm:=&RunManager{cfg:cfg,runs:map[string]*RunStatus{"repro":{ID:"repro",State:"done"}},runOut:map[string]string{"repro":"out-repro"}}
+ read:=func(raw []byte)([]RunEvidenceArm,[]RunEvidenceTrial){t.Helper();if e:=os.WriteFile(filepath.Join(out,"metrics.jsonl"),append(raw,'\n'),0600);e!=nil{t.Fatal(e)};a,tr,_,ok:=rm.RunEvidence("repro");if !ok||len(tr)!=1{t.Fatalf("reader failed: arms=%+v trials=%+v",a,tr)};b,_:=json.Marshal(tr[0]);var m map[string]any;json.Unmarshal(b,&m);if _,ok:=m["validity"];ok{t.Fatal("baseline unexpectedly retains validity")};if _,ok:=m["scenarioBenignControl"];ok{t.Fatal("baseline unexpectedly retains benign flag")};return a,tr}
+ load:=func(p string)[]byte{t.Helper();b,e:=os.ReadFile(p);if e!=nil{t.Fatal(e)};return b}
+ a,tr:=read(load(os.Getenv("PHORVEX_REPRO_METRIC")));if len(a)!=0||!tr[0].Skipped||tr[0].OracleAchieved{t.Fatal("v11 expected invalid/skipped shape differs")};t.Log("ACTUAL_V11: excluded from security aggregation, shown only as skipped; invalid reason omitted. No false defended claim for this row.")
+ base:=filepath.Join("..","..","..","build","test-harness","internal","cataloguecollector","testdata")
+ a,tr=read(load(filepath.Join(base,"round57-restart","metrics.raw.jsonl")));if len(a)!=1||a[0].Trials!=1||tr[0].Skipped||!tr[0].OracleAchieved||tr[0].Disruption>=0.5{t.Fatal("legacy benign shape differs")};t.Log("REPRODUCED: actual retained benign round57 success counted as security trial; UI expression selects attack landed")
+ a,tr=read(load(filepath.Join(base,"round69-quorum","metrics.raw.jsonl")));if len(a)!=0||!tr[0].Skipped||!tr[0].OracleAchieved{t.Fatal("valid functional shape differs")};t.Log("REPRODUCED: actual valid benign round69 success reduced to skipped; functional result omitted")
+ a,tr=read([]byte(`{"scenario":"positive-adversarial-control","defender":"d-phorvex","trial":0,"skipped":false,"oracleAchieved":true,"disruptionVsOracle":0,"scenarioBenignControl":false,"validity":{"status":"valid","scored":true}}`));if len(a)!=1||a[0].Trials!=1||!tr[0].OracleAchieved{t.Fatal("positive control failed")};t.Log("POSITIVE_CONTROL_PASS: explicitly valid adversarial row reaches real reader")
+}

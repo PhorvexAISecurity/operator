@@ -30,10 +30,12 @@ import (
 const (
 	vllmPrefixScenario = "c2-vllm-prefix-cache-reset"
 	vllmDrainScenario  = "c2-vllm-request-drain"
-	vllmSuiteVersion   = "post25-vllm-functional-v3"
+	vllmSuiteVersion   = "post25-vllm-functional-v4"
 	vllmRunLabelKey    = "fixture.phorvex.ai/run"
 	vllmModelLabelKey  = "fixture.phorvex.ai/model-digest"
 )
+
+var errGPUFixtureReadiness = errors.New("GPU fixture Pod or exact Service endpoint is not Ready")
 
 func init() {
 	core.RegisterScenario(&c2VLLMFunctional{operation: "prefix-cache-reset"})
@@ -131,68 +133,125 @@ func readGPUFixtureToken(path string) (string, error) {
 }
 
 func (s *c2VLLMFunctional) validateFixture(ctx context.Context, env *core.Env, fixture *config.GPUFunctionalFixtureConfig) error {
+	ready, err := s.validateFixtureState(ctx, env, fixture)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return errGPUFixtureReadiness
+	}
+	return nil
+}
+
+func (s *c2VLLMFunctional) validateFixtureState(ctx context.Context, env *core.Env, fixture *config.GPUFunctionalFixtureConfig) (bool, error) {
 	current, err := env.NamespaceCurrent(ctx)
 	if err != nil {
-		return fmt.Errorf("read GPU fixture namespace authority: %w", err)
+		return false, fmt.Errorf("read GPU fixture namespace authority: %w", err)
 	}
 	if !current {
-		return errors.New("GPU fixture namespace authority differs")
+		return false, errors.New("GPU fixture namespace authority differs")
 	}
 	ns, err := env.Kube.CoreV1().Namespaces().Get(ctx, env.Config.Namespace, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read GPU fixture namespace: %w", err)
+		return false, fmt.Errorf("read GPU fixture namespace: %w", err)
 	}
-	if string(ns.UID) != fixture.NamespaceUID || ns.DeletionTimestamp != nil {
-		return errors.New("GPU fixture namespace identity differs")
+	if string(ns.UID) != fixture.NamespaceUID {
+		return false, errors.New("GPU fixture namespace UID differs")
+	}
+	if ns.DeletionTimestamp != nil {
+		return false, errors.New("GPU fixture namespace is terminating")
 	}
 	node, err := env.Kube.CoreV1().Nodes().Get(ctx, fixture.NodeName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read GPU fixture node: %w", err)
+		return false, fmt.Errorf("read GPU fixture node: %w", err)
 	}
 	pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, fixture.PodName, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return false, fmt.Errorf("read GPU fixture Pod: %w", err)
 	}
-	if string(pod.UID) != fixture.PodUID || pod.DeletionTimestamp != nil || pod.Spec.NodeName != fixture.NodeName || !podReady(pod) || pod.Labels[vllmRunLabelKey] != fixture.RunLabel || pod.Annotations[vllmModelLabelKey] != fixture.ModelDigest || pod.Labels[core.OwnedLabelKey] == core.OwnedLabelValue {
-		return errors.New("GPU fixture Pod identity, readiness, node, run/model binding or external ownership differs")
+	if string(pod.UID) != fixture.PodUID {
+		return false, errors.New("GPU fixture Pod UID differs")
+	}
+	if pod.DeletionTimestamp != nil {
+		return false, errors.New("GPU fixture Pod is terminating")
+	}
+	if pod.Spec.NodeName != fixture.NodeName {
+		return false, errors.New("GPU fixture Pod node binding differs")
+	}
+	if pod.Labels[vllmRunLabelKey] != fixture.RunLabel {
+		return false, errors.New("GPU fixture Pod run label differs")
+	}
+	if pod.Annotations[vllmModelLabelKey] != fixture.ModelDigest {
+		return false, errors.New("GPU fixture Pod model binding differs")
+	}
+	if pod.Labels[core.OwnedLabelKey] == core.OwnedLabelValue {
+		return false, errors.New("GPU fixture Pod acquired harness cleanup ownership")
 	}
 	if err := validateGPUNode(node, pod, fixture); err != nil {
-		return err
+		return false, err
 	}
 	if !exactControllerOwner(pod.OwnerReferences, fixture.OwnerKind, fixture.OwnerName, types.UID(fixture.OwnerUID)) {
-		return errors.New("GPU fixture Pod controller owner differs")
+		return false, errors.New("GPU fixture Pod controller owner differs")
 	}
 	if err := validateGPUOwner(ctx, env, fixture); err != nil {
-		return err
+		return false, err
 	}
 	container, status, err := exactGPUContainer(pod, fixture.ContainerName)
 	if err != nil {
-		return err
+		return false, err
 	}
 	gpu := container.Resources.Limits[corev1.ResourceName("nvidia.com/gpu")]
-	if gpu.Cmp(resource.MustParse("1")) != 0 || container.Image != fixture.Image || status.ImageID != fixture.ImageID || status.RestartCount != fixture.RestartCount || status.State.Running == nil || status.State.Running.StartedAt.UTC().Format(time.RFC3339Nano) != fixture.StartedAt {
-		return errors.New("GPU fixture container image, runtime incarnation or exact one-GPU limit differs")
+	if gpu.Cmp(resource.MustParse("1")) != 0 {
+		return false, errors.New("GPU fixture container GPU limit differs")
+	}
+	if container.Image != fixture.Image {
+		return false, errors.New("GPU fixture container image differs")
+	}
+	if status.ImageID != fixture.ImageID {
+		return false, errors.New("GPU fixture container image ID differs")
+	}
+	if status.RestartCount != fixture.RestartCount {
+		return false, errors.New("GPU fixture container restart count differs")
+	}
+	if status.State.Running == nil || status.State.Running.StartedAt.UTC().Format(time.RFC3339Nano) != fixture.StartedAt {
+		return false, errors.New("GPU fixture container running incarnation differs")
 	}
 	svc, err := env.Kube.CoreV1().Services(env.Config.Namespace).Get(ctx, fixture.ServiceName, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return false, fmt.Errorf("read GPU fixture Service: %w", err)
 	}
-	if string(svc.UID) != fixture.ServiceUID || svc.DeletionTimestamp != nil || svc.Labels[vllmRunLabelKey] != fixture.RunLabel || svc.Labels[core.OwnedLabelKey] == core.OwnedLabelValue || len(svc.Spec.Selector) == 0 || svc.Spec.Selector[vllmRunLabelKey] != fixture.RunLabel || len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0].Port != fixture.Port || svc.Spec.Ports[0].TargetPort.IntValue() != int(fixture.Port) {
-		return errors.New("GPU fixture Service identity, selector, ownership or port differs")
+	if string(svc.UID) != fixture.ServiceUID {
+		return false, errors.New("GPU fixture Service UID differs")
+	}
+	if svc.DeletionTimestamp != nil {
+		return false, errors.New("GPU fixture Service is terminating")
+	}
+	if svc.Labels[vllmRunLabelKey] != fixture.RunLabel || svc.Labels[core.OwnedLabelKey] == core.OwnedLabelValue {
+		return false, errors.New("GPU fixture Service run binding or ownership differs")
+	}
+	if len(svc.Spec.Selector) == 0 || svc.Spec.Selector[vllmRunLabelKey] != fixture.RunLabel {
+		return false, errors.New("GPU fixture Service selector differs")
+	}
+	if len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0].Port != fixture.Port || svc.Spec.Ports[0].TargetPort.IntValue() != int(fixture.Port) {
+		return false, errors.New("GPU fixture Service port differs")
 	}
 	for key, value := range svc.Spec.Selector {
 		if pod.Labels[key] != value {
-			return errors.New("GPU fixture Service selector does not select the exact Pod")
+			return false, errors.New("GPU fixture Service selector does not select the exact Pod")
 		}
 	}
 	selected, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: svc.Spec.Selector})})
 	if err != nil {
-		return fmt.Errorf("list GPU fixture selected Pods: %w", err)
+		return false, fmt.Errorf("list GPU fixture selected Pods: %w", err)
 	}
 	if len(selected.Items) != 1 || selected.Items[0].UID != pod.UID {
-		return errors.New("GPU fixture Service selector is not single-Pod exact")
+		return false, errors.New("GPU fixture Service selector is not single-Pod exact")
 	}
-	return validateGPUEndpoint(ctx, env, fixture, pod.UID)
+	endpointReady, err := validateGPUEndpointState(ctx, env, fixture, pod.UID)
+	if err != nil {
+		return false, err
+	}
+	return podReady(pod) && endpointReady, nil
 }
 
 func validateGPUNode(node *corev1.Node, pod *corev1.Pod, fixture *config.GPUFunctionalFixtureConfig) error {
@@ -290,27 +349,31 @@ func exactGPUContainer(pod *corev1.Pod, name string) (corev1.Container, corev1.C
 	return containers[0], statuses[0], nil
 }
 
-func validateGPUEndpoint(ctx context.Context, env *core.Env, fixture *config.GPUFunctionalFixtureConfig, podUID types.UID) error {
+func validateGPUEndpointState(ctx context.Context, env *core.Env, fixture *config.GPUFunctionalFixtureConfig, podUID types.UID) (bool, error) {
 	slices, err := env.Kube.DiscoveryV1().EndpointSlices(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: discoveryv1.LabelServiceName + "=" + fixture.ServiceName})
 	if err != nil {
-		return err
+		return false, fmt.Errorf("list GPU fixture EndpointSlices: %w", err)
 	}
 	matches := 0
+	ready := true
 	for _, slice := range slices.Items {
 		for _, endpoint := range slice.Endpoints {
 			if endpoint.TargetRef == nil || endpoint.TargetRef.Kind != "Pod" || endpoint.TargetRef.Name != fixture.PodName || endpoint.TargetRef.UID != podUID {
-				continue
+				return false, errors.New("GPU fixture EndpointSlice target identity differs")
 			}
 			if endpoint.Conditions.Ready == nil || !*endpoint.Conditions.Ready || endpoint.Conditions.Terminating != nil && *endpoint.Conditions.Terminating {
-				return errors.New("GPU fixture exact endpoint is not ready")
+				ready = false
 			}
 			matches++
 		}
 	}
-	if matches != 1 {
-		return fmt.Errorf("GPU fixture requires one exact ready endpoint, got %d", matches)
+	if matches == 0 {
+		return false, nil
 	}
-	return nil
+	if matches != 1 {
+		return false, fmt.Errorf("GPU fixture requires one exact endpoint target, got %d", matches)
+	}
+	return ready, nil
 }
 
 func validateGPUCapability(cap gpufunctional.Capability, fixture *config.GPUFunctionalFixtureConfig) error {
@@ -482,7 +545,7 @@ func vllmStages(operation string, direct bool, receipt any) []string {
 	if operation == "prefix-cache-reset" {
 		return append(stages, "establish real prefix reuse", "send one direct idle prefix reset", "observe first miss then cache repopulation", "correlate busy reset refusal with an eight-request running-and-waiting cohort", "join eight exact length completions to final idle metrics and the normal-completion counter")
 	}
-	return append(stages, "submit an eight-request streaming pressure cohort and retain running plus waiting evidence", "select one authenticated unfinished SSE anchor immediately before create", "send one operation-bound direct drain", "bind the exact anchor to an aborted engine disposition while retaining unattributed snapshot IDs and all client outcomes", "observe two zero-queue snapshots", "reopen admission and prove recovery inference")
+	return append(stages, "submit an eight-request streaming cohort and retain every client lifecycle", "select one authenticated unfinished SSE anchor immediately before create", "send one operation-bound direct drain", "bind the exact anchor to an aborted engine disposition while retaining unattributed snapshot IDs and all client outcomes", "observe two zero-queue snapshots", "reopen admission and prove recovery inference")
 }
 
 func validateVLLMEvidence(evidence map[string]string) error {
@@ -526,7 +589,43 @@ func (s *c2VLLMFunctional) Teardown(ctx context.Context, env *core.Env) error {
 		capabilityErr = err
 	}
 	forwardErr := s.closePortForward()
-	return errors.Join(capabilityErr, forwardErr, s.validateFixture(ctx, env, env.Config.GPUFunctionalFixture))
+	fixtureErr := s.validateFixture(ctx, env, env.Config.GPUFunctionalFixture)
+	if errors.Is(fixtureErr, errGPUFixtureReadiness) && s.drainReopened() {
+		fixtureErr = s.waitFixtureReady(ctx, env, env.Config.GPUFunctionalFixture, 12*time.Second, 2*time.Second)
+	}
+	return errors.Join(capabilityErr, forwardErr, fixtureErr)
+}
+
+func (s *c2VLLMFunctional) drainReopened() bool {
+	receipt, ok := s.receipt.(gpufunctional.DrainReceipt)
+	return ok && receipt.Reopen != nil && receipt.ReopenObservation != nil && receipt.Reopen.State == "OPENED" && receipt.Reopen.Admission == "OPEN" && receipt.ReopenObservation.Status >= 200 && receipt.ReopenObservation.Status < 300
+}
+
+func (s *c2VLLMFunctional) waitFixtureReady(ctx context.Context, env *core.Env, fixture *config.GPUFunctionalFixtureConfig, bound, interval time.Duration) error {
+	if bound <= 0 || interval <= 0 {
+		return errors.New("GPU fixture readiness convergence bound is invalid")
+	}
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	for {
+		ready, err := s.validateFixtureState(ctx, env, fixture)
+		if err != nil {
+			return err
+		}
+		if ready {
+			return nil
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-deadline.C:
+			timer.Stop()
+			return errors.New("GPU fixture Pod and exact Service endpoint did not become Ready within post-reopen bound")
+		case <-timer.C:
+		}
+	}
 }
 
 func (s *c2VLLMFunctional) closePortForward() error {

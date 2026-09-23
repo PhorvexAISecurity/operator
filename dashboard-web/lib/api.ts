@@ -62,7 +62,7 @@ export interface OwnerEvent {
 }
 export interface ArmResult { defender: string; trials: number; disruption: number; dwellMean: number }
 export interface RunStatus {
-  id: string; config: string; state: "queued" | "running" | "done" | "error" | "stopped"; started: string;
+  id: string; config: string; state: "queued" | "running" | "done" | "partial" | "error" | "stopped"; started: string;
   date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
   trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean; compare3?: boolean;
 }
@@ -143,7 +143,12 @@ async function post<T>(path: string, body: unknown, lens: Lens, context?: string
   return result;
 }
 
-export interface CatalogItem { name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string; techniques: string[]; caps: string[]; hasRun: boolean; expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[] }
+export interface CatalogItem {
+  name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string;
+  techniques: string[]; exercisedTechniques: string[]; caps: string[]; hasRun: boolean;
+  realism?: string; benignControl?: boolean;
+  expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
+}
 export interface BenchArm { defender: string; disruption: CI; dwell: CI; harmRate: CI; trials: number }
 export interface BenchGroup { scenario: string; source: string; arms: BenchArm[] }
 export interface CoverageTechnique { technique: string; scenarios: string[]; product: string; covered: boolean }
@@ -383,12 +388,18 @@ export interface WorkloadAttacks {
 }
 // Attack-timeline SSE event (one per harness stage header / completed trial / run end).
 export interface TimelineEvent {
-  type: "meta" | "stage" | "trial" | "end";
+  type: "meta" | "stage" | "trial" | "evidence-error" | "end";
   id?: string; state?: string; queuePos?: number; expectedTrials?: number; provider?: string; targetLabel?: string;
   scenario?: string; defender?: string; trial?: number;
   oracleAchieved?: boolean; disruption?: number; dwellSeconds?: number;
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
+  scenarioRealism?: string; scenarioBenignControl?: boolean; scenarioClaimLimits?: string;
+  functionalOracleStatus?: string;
+  outcome?: TrialOutcome; outcomeReason?: string; claimClass?: "functional" | "security" | "control";
+  measurementStatus?: string; measurementPhase?: string; validityReasons?: string[];
+  reason?: string;
 }
+export type TrialOutcome = "test-failed" | "inconclusive" | "unverified" | "functional-pass" | "functional-fail" | "skipped" | "negative-control" | "security-landed" | "security-disrupted";
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
 export interface AttackCost {
   valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string;
@@ -471,8 +482,16 @@ export interface UptimeScenarioArm { key: string; label: string; attackSuccess: 
 export interface UptimeScenario { scenario: string; category: string; arms: UptimeScenarioArm[] }
 export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; markerPartial?: boolean; strategies?: UptimeStrategy[]; scenarios?: UptimeScenario[]; strategiesSource?: string; strategiesRun?: string; note: string }
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
-export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }
+export interface RunEvidenceTrial {
+  scenario: string; defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number;
+  defensiveActions: number; mtdEffect: string; observed: string; commands: string[];
+  scenarioRealism?: string; scenarioBenignControl: boolean; scenarioClaimLimits?: string;
+  functionalOracleStatus?: string;
+  outcome: TrialOutcome; outcomeReason: string; claimClass: "functional" | "security" | "control";
+  measurementStatus: string; measurementPhase: string; validityReasons: string[];
+}
+export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

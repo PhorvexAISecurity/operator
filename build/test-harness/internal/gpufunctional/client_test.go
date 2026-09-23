@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -60,6 +62,8 @@ type prefixServer struct {
 	postCohortBusy     bool
 	rejectStream       int
 	streamRequests     int
+	streamPrompts      []string
+	streamMaxTokens    []int
 	releaseStreams     bool
 }
 
@@ -127,6 +131,10 @@ func (s *prefixServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			ordinal := s.streamRequests
 			s.streamRequests++
+			prompt, _ := body["prompt"].(string)
+			maxTokens, _ := body["max_tokens"].(float64)
+			s.streamPrompts = append(s.streamPrompts, prompt)
+			s.streamMaxTokens = append(s.streamMaxTokens, int(maxTokens))
 			if s.rejectStream > 0 && ordinal == s.rejectStream-1 {
 				s.mu.Unlock()
 				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "stream-refused"})
@@ -268,6 +276,8 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 			}
 			state.mu.Lock()
 			prompts := append([]string(nil), state.completionPrompts...)
+			streamPrompts := append([]string(nil), state.streamPrompts...)
+			streamMaxTokens := append([]int(nil), state.streamMaxTokens...)
 			paths := append([]string(nil), state.requestPaths...)
 			completedAtReset := append([]int(nil), state.completedAtReset...)
 			state.mu.Unlock()
@@ -280,6 +290,14 @@ func TestRunPrefixActualHTTPProducerNoActionAndDirect(t *testing.T) {
 				t.Fatalf("HTTP prefix=%q want=%q", paths, wantPrefix)
 			}
 			if direct {
+				if len(streamPrompts) != streamCohortSize || len(streamMaxTokens) != streamCohortSize {
+					t.Fatalf("prefix stream request count differs: prompts=%d tokens=%d", len(streamPrompts), len(streamMaxTokens))
+				}
+				for i := range streamPrompts {
+					if streamPrompts[i] != prefixStreamPrompt || streamMaxTokens[i] != prefixStreamMaxTokens {
+						t.Fatalf("prefix stream request %d differs: prompt=%q max_tokens=%d", i, streamPrompts[i], streamMaxTokens[i])
+					}
+				}
 				if receipt.Reset == nil || !receipt.Reset.Success || receipt.FirstMiss == nil || receipt.FirstMiss.Values["vllm:gpu_prefix_cache_hit_rate"] != 0 || receipt.Repopulated == nil || receipt.Busy == nil || receipt.Busy.Reset.Success || receipt.Busy.Cohort.Expected != streamCohortSize || len(receipt.Busy.Cohort.Streams) != streamCohortSize {
 					t.Fatalf("direct receipt incomplete: %+v", receipt)
 				}
@@ -417,7 +435,7 @@ func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 
 	for _, requestID := range requestIDs {
 		dispositions[requestID] = "aborted"
 	}
-	body := map[string]any{"schema": "phorvex.drain.v1", "operation_id": opID, "operation_generation": generation, "attempt": 1, "owner_digest": drainOwnerDigest(testDrainOwner), "backend_incarnation_digest": strings.Repeat("d", 64), "revision": revision, "state": state, "admission": admission, "admission_generation": "1", "engine_boot_id": strings.Repeat("c", 32), "virtual_engine_ids": []int{0}, "engine_snapshot": map[string]any{"0": map[string]any{"waiting": requestIDs[1:], "running": requestIDs[:1], "swapped": []string{}, "cached": []string{}}}, "terminal_dispositions": dispositions, "proxy_snapshot": map[string]any{"before_engine_begin": map[string]int{"active": len(requestIDs)}, "after_engine_begin": map[string]int{"cancelled": len(requestIDs), "remaining": 0}}, "observations": observations, "deadline": "2026-09-22T00:00:00Z", "cancellation_grace_deadline": "2026-09-22T00:00:30Z", "transition_reason": "none", "cancel_boundary_revision": "0", "last_transition": "2026-09-22T00:00:00Z", "query_nonce": queryNonce}
+	body := map[string]any{"schema": "phorvex.drain.v1", "operation_id": opID, "operation_generation": generation, "attempt": 1, "owner_digest": drainOwnerDigest(testDrainOwner), "backend_incarnation_digest": strings.Repeat("d", 64), "revision": revision, "state": state, "admission": admission, "admission_generation": "1", "engine_boot_id": strings.Repeat("c", 32), "virtual_engine_ids": []int{0}, "engine_snapshot": map[string]any{"0": map[string]any{"waiting": requestIDs[1:], "running": requestIDs[:1], "swapped": []string{}, "cached": []string{}}}, "terminal_dispositions": dispositions, "proxy_snapshot": map[string]any{"before_engine_begin": map[string]int{"active": len(requestIDs)}, "after_engine_begin": map[string]int{"cancelled": len(requestIDs), "remaining": 0}}, "observations": observations, "deadline": "2026-09-22T00:00:00Z", "cancellation_grace_deadline": "2026-09-22T00:00:30.000000Z", "transition_reason": "none", "cancel_boundary_revision": "0", "last_transition": "2026-09-22T00:00:00Z", "query_nonce": queryNonce}
 	digest, err := drainDigest("phorvex-drain-status-v1", body)
 	if err != nil {
 		panic(err)
@@ -427,24 +445,35 @@ func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 
 }
 
 type drainServer struct {
-	mu                      sync.Mutex
-	active                  int
-	streamRequests          int
-	closed                  bool
-	streamDones             []chan struct{}
-	streamIDs               []string
-	snapshotIDs             []string
-	opID, generation        string
-	nonces                  []string
-	reopenCalls             int
-	capabilities            int
-	wrongRecoveredEpoch     bool
-	omitDisposition         bool
-	loseCreateResponse      bool
-	loseReopenResponse      bool
-	wrongStreamIdentity     bool
-	anchorExitsBeforeCreate bool
-	anchorExitTriggered     bool
+	mu                    sync.Mutex
+	active                int
+	streamRequests        int
+	closed                bool
+	streamDones           []chan struct{}
+	streamIDs             []string
+	streamPrompts         []string
+	streamMaxTokens       []int
+	metricsCalls          int
+	snapshotIDs           []string
+	opID, generation      string
+	nonces                []string
+	reopenCalls           int
+	capabilities          int
+	wrongRecoveredEpoch   bool
+	omitDisposition       bool
+	loseCreateResponse    bool
+	loseReopenResponse    bool
+	wrongStreamIdentity   bool
+	noAuthenticatedEvents bool
+	delayPeerHeaders      bool
+	rejectDelayedPeer     bool
+	headersSent           int
+	headersAtCreate       int
+	rejectedAfterCreate   bool
+	peerRelease           chan struct{}
+	allStreamsRegistered  chan struct{}
+	peerReleaseOnce       sync.Once
+	allRegisteredOnce     sync.Once
 }
 
 func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -457,6 +486,10 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.capabilities++
 		body := capabilityBody()
+		if s.opID != "" {
+			body["generation_high_water"] = "1"
+			delete(body, "next_operation_generation")
+		}
 		if s.wrongRecoveredEpoch && s.capabilities > 1 {
 			body["engine_boot_id"] = strings.Repeat("9", 32)
 		}
@@ -467,19 +500,9 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 200, body)
 	case r.URL.Path == "/metrics":
 		s.mu.Lock()
+		s.metricsCalls++
 		active := s.active
-		var finishAnchor chan struct{}
-		if s.anchorExitsBeforeCreate && !s.anchorExitTriggered && active >= 2 && len(s.streamDones) > 0 {
-			s.anchorExitTriggered = true
-			finishAnchor = s.streamDones[0]
-		}
 		s.mu.Unlock()
-		if finishAnchor != nil {
-			close(finishAnchor)
-			// Let the real HTTP/SSE consumer observe the terminal event before the
-			// active-metrics response releases the operation-selection path.
-			time.Sleep(100 * time.Millisecond)
-		}
 		running, waiting := 0, 0
 		if active > 0 {
 			running, waiting = 1, active-1
@@ -500,18 +523,60 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			ordinal := s.streamRequests
 			s.streamRequests++
+			maxTokens, _ := body["max_tokens"].(float64)
+			prompt, _ := body["prompt"].(string)
+			s.streamPrompts = append(s.streamPrompts, prompt)
+			s.streamMaxTokens = append(s.streamMaxTokens, int(maxTokens))
 			s.active++
 			s.streamIDs = append(s.streamIDs, fmt.Sprintf("cmpl-drain-stream-%d-0", ordinal))
 			done := make(chan struct{})
 			s.streamDones = append(s.streamDones, done)
+			if s.allStreamsRegistered != nil && len(s.streamDones) == streamCohortSize {
+				s.allRegisteredOnce.Do(func() { close(s.allStreamsRegistered) })
+			}
+			delayPeerHeaders := s.delayPeerHeaders && ordinal > 0
+			peerRelease := s.peerRelease
+			allRegistered := s.allStreamsRegistered
+			s.mu.Unlock()
+			if allRegistered != nil {
+				select {
+				case <-allRegistered:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			if delayPeerHeaders {
+				select {
+				case <-peerRelease:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			if s.rejectDelayedPeer && ordinal == streamCohortSize-1 {
+				s.mu.Lock()
+				s.headersSent++
+				s.rejectedAfterCreate = s.closed
+				s.active--
+				s.mu.Unlock()
+				jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "delayed-peer-refused"})
+				return
+			}
+			s.mu.Lock()
+			s.headersSent++
 			s.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			requestID := fmt.Sprintf("cmpl-drain-stream-%d", ordinal)
-			if ordinal == 0 {
+			if ordinal == 0 && !s.noAuthenticatedEvents {
 				fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", requestID, modelName)
 			}
 			w.(http.Flusher).Flush()
+			if s.noAuthenticatedEvents {
+				s.mu.Lock()
+				s.active--
+				s.mu.Unlock()
+				return
+			}
 			select {
 			case <-done:
 			case <-r.Context().Done():
@@ -519,10 +584,6 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			s.active--
 			s.mu.Unlock()
-			if ordinal == 0 && s.anchorExitsBeforeCreate {
-				fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"\",\"logprobs\":null,\"finish_reason\":\"length\",\"stop_reason\":null}]}\n\n", requestID, modelName)
-				fmt.Fprint(w, "data: [DONE]\n\n")
-			}
 			return
 		}
 		jsonResponse(w, 200, map[string]any{"id": "cmpl", "object": "text_completion", "created": 1, "model": modelName, "choices": []map[string]any{{"index": 0, "text": "x", "logprobs": nil, "finish_reason": "length", "stop_reason": nil, "prompt_logprobs": nil}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2, "prompt_tokens_details": nil}})
@@ -531,11 +592,17 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&payload)
 		s.mu.Lock()
 		s.closed = true
+		s.headersAtCreate = s.headersSent
 		s.opID = payload["operation_id"].(string)
 		s.generation = payload["operation_generation"].(string)
 		s.snapshotIDs = append([]string(nil), s.streamIDs...)
-		if s.wrongStreamIdentity && len(s.snapshotIDs) > 0 {
-			s.snapshotIDs[0] = "cmpl-foreign-stream-0"
+		if s.delayPeerHeaders {
+			s.peerReleaseOnce.Do(func() { close(s.peerRelease) })
+		}
+		if s.wrongStreamIdentity {
+			for i := range s.snapshotIDs {
+				s.snapshotIDs[i] = fmt.Sprintf("cmpl-foreign-stream-%d", i)
+			}
 		}
 		for _, done := range s.streamDones {
 			select {
@@ -601,15 +668,23 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 	owner := testDrainOwner
 	for _, tc := range []struct {
-		name                                                                                                                      string
-		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, anchorExitsBeforeCreate bool
-		wantErr                                                                                                                   bool
-		wantReopens                                                                                                               int
+		name                                                                                                                                                         string
+		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, noAuthenticatedEvents, delayPeerHeaders, rejectDelayedPeer bool
+		wantErr                                                                                                                                                      bool
+		wantReopens                                                                                                                                                  int
 	}{
-		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "anchor exited before create", direct: true, anchorExitsBeforeCreate: true, wantErr: true},
+		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "create begins before queued peer response headers", direct: true, delayPeerHeaders: true, wantReopens: 1}, {name: "delayed peer HTTP400 invalidates after create", direct: true, delayPeerHeaders: true, rejectDelayedPeer: true, wantErr: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "queued requests expose no authenticated ID", direct: true, noAuthenticatedEvents: true, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity, anchorExitsBeforeCreate: tc.anchorExitsBeforeCreate}
+			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity, noAuthenticatedEvents: tc.noAuthenticatedEvents}
+			if tc.direct {
+				state.allStreamsRegistered = make(chan struct{})
+			}
+			if tc.delayPeerHeaders {
+				state.delayPeerHeaders = true
+				state.rejectDelayedPeer = tc.rejectDelayedPeer
+				state.peerRelease = make(chan struct{})
+			}
 			server := httptest.NewServer(http.HandlerFunc(state.serve))
 			defer server.Close()
 			client, err := New(server.URL, testToken, server.Client())
@@ -622,16 +697,25 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 				t.Fatalf("err=%v receipt=%+v", err, receipt)
 			}
 			if !tc.direct {
-				if receipt.Create != nil || state.reopenCalls != 0 {
+				if receipt.Create != nil || state.reopenCalls != 0 || state.metricsCalls != 2 {
 					t.Fatalf("no-action mutated: %+v", receipt)
 				}
 				return
 			}
+			if state.metricsCalls != 1 {
+				t.Fatalf("direct drain used a post-submission metrics gate: calls=%d", state.metricsCalls)
+			}
 			if state.reopenCalls != tc.wantReopens {
 				t.Fatalf("reopen calls=%d want %d", state.reopenCalls, tc.wantReopens)
 			}
-			if tc.anchorExitsBeforeCreate && (receipt.Create != nil || state.opID != "") {
-				t.Fatalf("operation was sent after anchor exited: %+v", receipt)
+			if tc.delayPeerHeaders && state.headersAtCreate != 1 {
+				t.Fatalf("headers at create=%d want 1", state.headersAtCreate)
+			}
+			if tc.rejectDelayedPeer && (!state.rejectedAfterCreate || receipt.Create == nil) {
+				t.Fatalf("delayed rejection boundary differs: rejectedAfterCreate=%v create=%v", state.rejectedAfterCreate, receipt.Create)
+			}
+			if tc.noAuthenticatedEvents && (receipt.Create != nil || state.opID != "" || receipt.Anchor != nil) {
+				t.Fatalf("operation was sent without an authenticated unfinished anchor: %+v", receipt)
 			}
 			if tc.loseCreateResponse && (receipt.CreateObservation == nil || receipt.CreateObservation.Body == "" || len(receipt.CleanupObservations) < 2) {
 				t.Fatalf("lost create response did not retain partial body and cleanup reads: %+v", receipt)
@@ -655,6 +739,14 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 				t.Fatalf("direct receipt incomplete: %+v", receipt)
 			}
 			if !tc.wantErr {
+				if len(state.streamPrompts) != streamCohortSize || len(state.streamMaxTokens) != streamCohortSize {
+					t.Fatalf("drain stream request count differs: prompts=%d tokens=%d", len(state.streamPrompts), len(state.streamMaxTokens))
+				}
+				for i, maxTokens := range state.streamMaxTokens {
+					if state.streamPrompts[i] != drainStreamPrompt || maxTokens != drainStreamMaxTokens {
+						t.Fatalf("drain stream request %d differs: prompt=%q max_tokens=%d", i, state.streamPrompts[i], maxTokens)
+					}
+				}
 				for _, stream := range receipt.Cohort.Streams {
 					if stream.Ordinal == receipt.Anchor.StreamOrdinal {
 						continue
@@ -663,6 +755,114 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 						t.Fatalf("queued background request was falsely attributed or not finalized: %+v", stream)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestDrainAnchorAuthorityRejectsCompletedAndUnauthenticatedStreams(t *testing.T) {
+	lifecycle := make(chan struct{}, 4)
+	finished := make(chan struct{})
+	stream := &streamExecution{finished: finished, lifecycle: lifecycle, receipt: StreamLifecycleReceipt{
+		Ordinal: 0, RequestID: "cmpl-anchor", AcceptedAt: "2026-09-23T00:00:00Z", EventCount: 1, Termination: "running",
+	}}
+	cohort := &streamCohort{streams: []*streamExecution{stream}, lifecycle: lifecycle}
+	anchor, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 1, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream.mu.Lock()
+	stream.receipt.Finished = true
+	stream.receipt.FinishedAt = "2026-09-23T00:00:02Z"
+	stream.receipt.Termination = "complete"
+	stream.mu.Unlock()
+	close(finished)
+	if cohort.anchorStillUnfinished(anchor) {
+		t.Fatal("completed selected anchor remained authorized for create")
+	}
+	if _, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 3, 0, time.UTC)); !errors.Is(err, errNoAuthenticatedUnfinishedAnchor) {
+		t.Fatalf("completed cohort was accepted: %v", err)
+	}
+
+	queued := &streamExecution{finished: make(chan struct{}), lifecycle: lifecycle, receipt: StreamLifecycleReceipt{Ordinal: 1, Termination: "running"}}
+	cohort = &streamCohort{streams: []*streamExecution{queued}, lifecycle: lifecycle}
+	if _, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 4, 0, time.UTC)); !errors.Is(err, errNoAuthenticatedUnfinishedAnchor) {
+		t.Fatalf("queued request without producer identity became an anchor: %v", err)
+	}
+}
+
+func TestDrainSnapshotRejectsPeerWithoutAcceptedHTTPAuthority(t *testing.T) {
+	streams := make([]StreamLifecycleReceipt, streamCohortSize)
+	for ordinal := range streams {
+		streams[ordinal] = StreamLifecycleReceipt{Ordinal: ordinal, HTTPStatus: http.StatusOK,
+			MediaType: "text/event-stream", FinishedAt: "2026-09-23T00:00:03Z",
+			Finished: true, Termination: "error"}
+	}
+	streams[0].RequestID = "cmpl-anchor"
+	streams[0].AcceptedAt = "2026-09-23T00:00:00Z"
+	streams[0].EventCount = 1
+	streams[7].HTTPStatus = http.StatusBadRequest
+	streams[7].MediaType = "application/json"
+	cohort := StreamCohortReceipt{Schema: "phorvex.gpu.stream-cohort.v3", Expected: streamCohortSize, Streams: streams}
+	anchor := DrainAnchor{StreamOrdinal: 0, ProducerRequestID: "cmpl-anchor", FirstEventAtUTC: "2026-09-23T00:00:00Z", SelectedAtUTC: "2026-09-23T00:00:01Z", CreateStartedAtUTC: "2026-09-23T00:00:02Z"}
+	snapshot := map[string]DrainQueue{"0": {Running: []string{"cmpl-anchor-0"}, Waiting: []string{}, Swapped: []string{}, Cached: []string{}}}
+	if _, _, _, _, err := validateDrainSnapshotAnchor(snapshot, cohort, anchor); err == nil || !strings.Contains(err.Error(), "lacks accepted HTTP/SSE authority") {
+		t.Fatalf("invalid peer authority accepted: %v", err)
+	}
+}
+
+func TestWaitResponseHeadersPrefersAcceptedAuthorityAndKeepsSeparateUnfinishedAnchor(t *testing.T) {
+	acceptedCompleted := func(ordinal int) *streamExecution {
+		response := make(chan struct{})
+		finished := make(chan struct{})
+		close(response)
+		close(finished)
+		return &streamExecution{response: response, finished: finished, receipt: StreamLifecycleReceipt{
+			Ordinal: ordinal, HTTPStatus: http.StatusOK, MediaType: "text/event-stream", Finished: true,
+			RequestID: "cmpl-completed", AcceptedAt: "2026-09-23T00:00:00Z", Termination: "complete",
+		}}
+	}
+	response := make(chan struct{})
+	close(response)
+	unfinished := &streamExecution{response: response, finished: make(chan struct{}), receipt: StreamLifecycleReceipt{
+		Ordinal: 1, HTTPStatus: http.StatusOK, MediaType: "text/event-stream",
+		RequestID: "cmpl-anchor", AcceptedAt: "2026-09-23T00:00:01Z", Termination: "running",
+	}}
+	for i := 0; i < 100; i++ {
+		cohort := &streamCohort{streams: []*streamExecution{acceptedCompleted(0), unfinished}}
+		if err := cohort.waitResponseHeaders(context.Background(), time.Millisecond); err != nil {
+			t.Fatalf("iteration %d rejected an already accepted completed SSE peer: %v", i, err)
+		}
+		anchor, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 2, 0, time.UTC))
+		if err != nil || anchor.StreamOrdinal != 1 || anchor.ProducerRequestID != "cmpl-anchor" {
+			t.Fatalf("separate unfinished anchor was not selected: anchor=%+v err=%v", anchor, err)
+		}
+	}
+}
+
+func TestWaitResponseHeadersRejectsMissingAndInvalidAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response bool
+		status   int
+		media    string
+	}{
+		{name: "finished without response"},
+		{name: "invalid accepted response", response: true, status: http.StatusBadGateway, media: "application/json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := make(chan struct{})
+			finished := make(chan struct{})
+			if tc.response {
+				close(response)
+			}
+			close(finished)
+			stream := &streamExecution{response: response, finished: finished, receipt: StreamLifecycleReceipt{
+				Ordinal: 0, HTTPStatus: tc.status, MediaType: tc.media, Finished: true, Termination: "error",
+			}}
+			cohort := &streamCohort{streams: []*streamExecution{stream}}
+			if err := cohort.waitResponseHeaders(context.Background(), time.Millisecond); err == nil {
+				t.Fatal("missing or invalid response authority was accepted")
 			}
 		})
 	}
@@ -838,6 +1038,92 @@ func TestCapabilityAcceptsRetainedActualWireShape(t *testing.T) {
 	}
 	if capability.Schema != "phorvex.drain.v1" || len(observation.Body) != len(raw) || observation.SHA256 != "0ab172493cb9ed3064b3b9058210c819d1609b9a5cfd0d3ab76335b2421c9e00" {
 		t.Fatalf("actual capability receipt differs: %+v %+v", capability, observation)
+	}
+}
+
+func TestCapabilityGenerationTransitionsAllowIntentionalMissingNextGeneration(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mutate  func(map[string]any)
+		wantErr bool
+	}{
+		{name: "baseline creatable"},
+		{name: "active closed", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "1"
+			body["admission"] = "CLOSED"
+			delete(body, "next_operation_generation")
+		}},
+		{name: "reopened retained operation", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "1"
+			delete(body, "next_operation_generation")
+		}},
+		{name: "noncanonical high water", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "01"
+			delete(body, "next_operation_generation")
+		}, wantErr: true},
+		{name: "next generation gap", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "1"
+			body["next_operation_generation"] = "3"
+		}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := capabilityBody()
+			if tc.mutate != nil {
+				tc.mutate(body)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				jsonResponse(w, http.StatusOK, body)
+			}))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, err = client.Capability(t.Context())
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestDrainTimingAcceptsExactPythonMicrosecondGraceForNanosecondDeadline(t *testing.T) {
+	opID := strings.Repeat("1", 32)
+	body := operationBody(opID, "1", "DRAINING", "CLOSED", "2", "", "", []string{"cmpl-anchor-0"})
+	body["deadline"] = "2026-09-23T10:57:43.351817702Z"
+	body["cancellation_grace_deadline"] = "2026-09-23T10:58:13.351817Z"
+	delete(body, "receipt_sha256")
+	digest, err := drainDigest("phorvex-drain-status-v1", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body["receipt_sha256"] = digest
+	decode := func(value map[string]any) DrainOperation {
+		t.Helper()
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var operation DrainOperation
+		if err := strictJSON(raw, &operation); err != nil {
+			t.Fatal(err)
+		}
+		return operation
+	}
+	payload := createOperation{Schema: "phorvex.drain.v1", OperationID: opID, OperationGeneration: "1", Attempt: 1, Owner: testDrainOwner, ExpectedIncarnationDigest: strings.Repeat("d", 64), Deadline: body["deadline"].(string), Mode: "abort-and-quiesce"}
+	capability := Capability{IncarnationDigest: strings.Repeat("d", 64), EngineBootID: strings.Repeat("c", 32)}
+	if err := validateDrainBinding(decode(body), payload, capability); err != nil {
+		t.Fatalf("actual Go-deadline/Python-grace precision contract rejected: %v", err)
+	}
+	for _, grace := range []string{
+		"2026-09-23T10:58:13.351817000Z",
+		"2026-09-23T10:58:13.351818Z",
+	} {
+		bad := maps.Clone(body)
+		bad["cancellation_grace_deadline"] = grace
+		if err := validateDrainBinding(decode(bad), payload, capability); err == nil || !strings.Contains(err.Error(), "timing or cancellation boundary") {
+			t.Fatalf("non-producer grace %q accepted: %v", grace, err)
+		}
 	}
 }
 

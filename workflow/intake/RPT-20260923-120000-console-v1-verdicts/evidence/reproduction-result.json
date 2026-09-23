@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-23T12:10:37.977644+00:00",
+  "reviewer": "codex-lead",
+  "sourceMain": "3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a",
+  "command": "go test ./internal/console -run TestLimitedV1IncidentReproduction -count=1 -v",
+  "goVersion": "go1.26.3",
+  "exitCode": 0,
+  "result": "PASS_REPRODUCED_METADATA_LOSS_AND_LEGACY_FUNCTIONAL_MISCLASSIFICATION",
+  "positiveControl": "PASS_VALID_ADVERSARIAL_ROW",
+  "v11FalseDefendedHypothesis": "REJECTED_SKIPPED_TRUE",
+  "sourceTestSHA256": "5b933b740f183d3c7685e03470fe98aa240916242619c99882f314bed3d59c6b",
+  "temporarySourceRemoved": true
+}

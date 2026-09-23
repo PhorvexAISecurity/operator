@@ -235,8 +235,10 @@ func (s *Server) compatibleCatalogue(st appStack) ([]map[string]any, bool) {
 		compatible, reason := scenarioFitsStack(it, st)
 		out = append(out, map[string]any{
 			"name": it.Name, "product": it.Product, "category": it.Category,
-			"techniques": it.Techniques, "expectedActuators": it.ExpectedActuators,
-			"prereqs": it.Prereqs, "compatible": compatible, "reason": reason,
+			"techniques": it.Techniques, "exercisedTechniques": it.ExercisedTechniques,
+			"realism": it.Realism, "benignControl": it.BenignControl,
+			"expectedActuators": it.ExpectedActuators,
+			"prereqs":           it.Prereqs, "compatible": compatible, "reason": reason,
 		})
 	}
 	return out, true

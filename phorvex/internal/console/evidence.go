@@ -21,13 +21,19 @@ import (
 // --- Attack Catalog (the full ~53 scenarios from the harness registry) -------------------
 
 type CatalogItem struct {
-	Name       string   `json:"name"`
-	Product    string   `json:"product"` // k8s | ai | structural
-	Category   string   `json:"category"`
-	R6Tag      string   `json:"r6Tag"`
-	Techniques []string `json:"techniques"` // ATT&CK
-	Caps       []string `json:"caps"`
-	HasRun     bool     `json:"hasRun"`
+	Name                string   `json:"name"`
+	Product             string   `json:"product"` // k8s | ai | structural
+	Category            string   `json:"category"`
+	R6Tag               string   `json:"r6Tag"`
+	Techniques          []string `json:"techniques"` // declared ATT&CK applicability (legacy-compatible name)
+	ExercisedTechniques []string `json:"exercisedTechniques"`
+	Caps                []string `json:"caps"`
+	HasRun              bool     `json:"hasRun"`
+	Realism             string   `json:"realism,omitempty"`
+	// BenignControl is nil for a legacy list row whose format never declared it.
+	// Keeping unknown distinct from false prevents old catalogue data from being
+	// silently upgraded into an attack claim.
+	BenignControl *bool `json:"benignControl,omitempty"`
 	// per-attack guidance (derived): which actuator(s) it should trigger, when it's meaningful,
 	// what it needs to run.
 	ExpectedActuators []string `json:"expectedActuators"`
@@ -38,12 +44,12 @@ type CatalogItem struct {
 
 // Legacy harnesses used techniques; current harnesses separate declared from exercised.
 // Catalogue techniques describe declared applicability, never observed attack coverage.
-var currentListRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s+realism=\S+\s+benign=(?:true|false)\s+declared=\[([^\]]*)\]\s+exercised=\[[^\]]*\]\s+caps=\[([^\]]*)\]`)
+var currentListRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s+realism=(\S+)\s+benign=(true|false)\s+declared=\[([^\]]*)\]\s+exercised=\[([^\]]*)\]\s+caps=\[([^\]]*)\]`)
 var listRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s+techniques=\[([^\]]*)\]\s+caps=\[([^\]]*)\]`)
 
 func productOf(name string) string {
 	switch {
-	case strings.HasPrefix(name, "ai1-") || strings.HasPrefix(name, "ai2-") || strings.HasSuffix(name, "-ai"):
+	case strings.HasPrefix(name, "ai1-") || strings.HasPrefix(name, "ai2-") || strings.HasPrefix(name, "c2-vllm-") || strings.HasSuffix(name, "-ai"):
 		return "ai"
 	case strings.HasPrefix(name, "b-") || strings.HasPrefix(name, "e-"):
 		return "structural"
@@ -71,22 +77,34 @@ func parseCatalog(out []byte, hasRun map[string]bool) []CatalogItem {
 	var items []CatalogItem
 	sc := bufio.NewScanner(strings.NewReader(string(out)))
 	for sc.Scan() {
-		m := currentListRe.FindStringSubmatch(sc.Text())
-		if m == nil {
-			m = listRe.FindStringSubmatch(sc.Text())
-		}
-		if m == nil {
+		line := sc.Text()
+		current := currentListRe.FindStringSubmatch(line)
+		legacy := listRe.FindStringSubmatch(line)
+		if current == nil && legacy == nil {
 			if strings.Contains(sc.Text(), " R6=") {
 				return nil // Reject incomplete catalogues if a scenario format is unknown.
 			}
 			continue
 		}
-		prod := productOf(m[1])
-		caps := splitFields(m[5])
-		meta := deriveScenarioMeta(m[1], prod, caps)
+		var name, category, r6, realism string
+		var declared, exercised, caps []string
+		var benign *bool
+		if current != nil {
+			name, category, r6, realism = current[1], current[2], current[3], current[4]
+			value := current[5] == "true"
+			benign = &value
+			declared, exercised, caps = splitFields(current[6]), splitFields(current[7]), splitFields(current[8])
+		} else {
+			name, category, r6 = legacy[1], legacy[2], legacy[3]
+			declared, caps = splitFields(legacy[4]), splitFields(legacy[5])
+			exercised = []string{}
+		}
+		prod := productOf(name)
+		meta := deriveScenarioMeta(name, prod, caps, benign != nil && *benign)
 		items = append(items, CatalogItem{
-			Name: m[1], Product: prod, Category: m[2], R6Tag: m[3],
-			Techniques: splitFields(m[4]), Caps: caps, HasRun: hasRun[m[1]],
+			Name: name, Product: prod, Category: category, R6Tag: r6,
+			Techniques: declared, ExercisedTechniques: exercised, Caps: caps, HasRun: hasRun[name],
+			Realism: realism, BenignControl: benign,
 			ExpectedActuators: meta.ExpectedActuators, MeaningfulWhen: meta.MeaningfulWhen,
 			RunnableNote: meta.RunnableNote, Prereqs: meta.Prereqs,
 		})

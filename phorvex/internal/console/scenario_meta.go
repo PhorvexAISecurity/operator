@@ -95,7 +95,10 @@ var aiResetActuators = map[string]bool{
 // deriveScenarioMeta builds the full per-attack guidance from the scenario name + its capability
 // requirements (caps) + product class. Nothing is fabricated: the prereqs come from the SAME caps
 // the harness gates on, and the actuator mapping is a declared keyword table.
-func deriveScenarioMeta(name, product string, caps []string) ScenarioMeta {
+func deriveScenarioMeta(name, product string, caps []string, benign bool) ScenarioMeta {
+	if benign {
+		return deriveBenignScenarioMeta(name, caps)
+	}
 	acts := expectedActuatorsFor(name)
 	capSet := map[string]bool{}
 	for _, c := range caps {
@@ -141,6 +144,28 @@ func deriveScenarioMeta(name, product string, caps []string) ScenarioMeta {
 	return ScenarioMeta{
 		ExpectedActuators: acts,
 		MeaningfulWhen:    strings.Join(notes, " "),
+		RunnableNote:      runnable,
+		Prereqs:           prereqs,
+	}
+}
+
+func deriveBenignScenarioMeta(name string, caps []string) ScenarioMeta {
+	prereqs := []string{"a disposable harness namespace"}
+	runnable := "Runs as a synthetic functional fixture; it does not exercise an installed application."
+	for _, capability := range caps {
+		if capability == "CapGPU" {
+			prereqs = append(prereqs, "an exact configured GPU functional fixture")
+			runnable = "Requires the exact configured GPU fixture and runs a bounded real-protocol functional control."
+			break
+		}
+	}
+	meaning := "Benign functional control; security outcome and defense efficacy are not measured."
+	if name == "c2-voice-websocket-continuity" {
+		meaning = "Synthetic Twilio-shaped WebSocket continuity fixture; it does not evaluate the installed Pipecat service, a provider call, speech quality, or brain efficacy."
+	}
+	return ScenarioMeta{
+		ExpectedActuators: []string{},
+		MeaningfulWhen:    meaning,
 		RunnableNote:      runnable,
 		Prereqs:           prereqs,
 	}

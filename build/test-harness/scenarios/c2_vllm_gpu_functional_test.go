@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
@@ -94,10 +95,11 @@ func TestVLLMGPUFixtureExactIdentityBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		mutate func(*corev1.Pod, *corev1.Service)
+		want   string
 	}{
-		{"pod replacement", func(p *corev1.Pod, _ *corev1.Service) { p.UID = "replacement" }},
-		{"generic cleanup label", func(p *corev1.Pod, _ *corev1.Service) { p.Labels[core.OwnedLabelKey] = core.OwnedLabelValue }},
-		{"service route drift", func(_ *corev1.Pod, s *corev1.Service) { s.Spec.Selector["app"] = "other" }},
+		{"pod replacement", func(p *corev1.Pod, _ *corev1.Service) { p.UID = "replacement" }, "Pod UID"},
+		{"generic cleanup label", func(p *corev1.Pod, _ *corev1.Service) { p.Labels[core.OwnedLabelKey] = core.OwnedLabelValue }, "cleanup ownership"},
+		{"service route drift", func(_ *corev1.Pod, s *corev1.Service) { s.Spec.Selector["app"] = "other" }, "selector does not select"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			caseEnv, caseFixture, _ := gpuFixtureObjects(t)
@@ -107,7 +109,7 @@ func TestVLLMGPUFixtureExactIdentityBoundary(t *testing.T) {
 			tc.mutate(pod, svc)
 			_, _ = kube.CoreV1().Pods("sandbox").Update(context.Background(), pod, metav1.UpdateOptions{})
 			_, _ = kube.CoreV1().Services("sandbox").Update(context.Background(), svc, metav1.UpdateOptions{})
-			if err := scenario.validateFixture(t.Context(), caseEnv, caseFixture); err == nil {
+			if err := scenario.validateFixture(t.Context(), caseEnv, caseFixture); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatal("fixture drift accepted")
 			}
 		})
@@ -171,6 +173,84 @@ func TestVLLMGPUNodeWithoutTaintsRemainsEligible(t *testing.T) {
 	_, _ = kube.CoreV1().Pods("sandbox").Update(t.Context(), pod, metav1.UpdateOptions{})
 	if err := (&c2VLLMFunctional{operation: "prefix-cache-reset"}).validateFixture(t.Context(), env, fixture); err != nil {
 		t.Fatalf("untainted eligible GPU node rejected: %v", err)
+	}
+}
+
+func TestVLLMGPUPostReopenReadinessConvergesOnlyForSameAuthority(t *testing.T) {
+	env, fixture, _ := gpuFixtureObjects(t)
+	kube := env.Kube.(*k8sfake.Clientset)
+	pod, _ := kube.CoreV1().Pods("sandbox").Get(t.Context(), fixture.PodName, metav1.GetOptions{})
+	pod.Status.Conditions[0].Status = corev1.ConditionFalse
+	_, _ = kube.CoreV1().Pods("sandbox").Update(t.Context(), pod, metav1.UpdateOptions{})
+	slice, _ := kube.DiscoveryV1().EndpointSlices("sandbox").Get(t.Context(), "vllm-1", metav1.GetOptions{})
+	ready := false
+	slice.Endpoints[0].Conditions.Ready = &ready
+	_, _ = kube.DiscoveryV1().EndpointSlices("sandbox").Update(t.Context(), slice, metav1.UpdateOptions{})
+
+	scenario := &c2VLLMFunctional{operation: "request-drain"}
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		pod, _ := kube.CoreV1().Pods("sandbox").Get(context.Background(), fixture.PodName, metav1.GetOptions{})
+		pod.Status.Conditions[0].Status = corev1.ConditionTrue
+		_, _ = kube.CoreV1().Pods("sandbox").Update(context.Background(), pod, metav1.UpdateOptions{})
+		slice, _ := kube.DiscoveryV1().EndpointSlices("sandbox").Get(context.Background(), "vllm-1", metav1.GetOptions{})
+		ready := true
+		slice.Endpoints[0].Conditions.Ready = &ready
+		_, _ = kube.DiscoveryV1().EndpointSlices("sandbox").Update(context.Background(), slice, metav1.UpdateOptions{})
+	}()
+	if err := scenario.waitFixtureReady(t.Context(), env, fixture, 200*time.Millisecond, time.Millisecond); err != nil {
+		t.Fatalf("same-authority readiness did not converge: %v", err)
+	}
+
+	env, fixture, _ = gpuFixtureObjects(t)
+	kube = env.Kube.(*k8sfake.Clientset)
+	pod, _ = kube.CoreV1().Pods("sandbox").Get(t.Context(), fixture.PodName, metav1.GetOptions{})
+	pod.Status.ContainerStatuses[0].RestartCount++
+	_, _ = kube.CoreV1().Pods("sandbox").Update(t.Context(), pod, metav1.UpdateOptions{})
+	err := scenario.waitFixtureReady(t.Context(), env, fixture, 200*time.Millisecond, time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "restart count") {
+		t.Fatalf("container identity drift was not rejected immediately: %v", err)
+	}
+
+	env, fixture, _ = gpuFixtureObjects(t)
+	kube = env.Kube.(*k8sfake.Clientset)
+	slice, _ = kube.DiscoveryV1().EndpointSlices("sandbox").Get(t.Context(), "vllm-1", metav1.GetOptions{})
+	slice.Endpoints[0].TargetRef.UID = "foreign"
+	_, _ = kube.DiscoveryV1().EndpointSlices("sandbox").Update(t.Context(), slice, metav1.UpdateOptions{})
+	err = scenario.waitFixtureReady(t.Context(), env, fixture, 200*time.Millisecond, time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "EndpointSlice target identity") {
+		t.Fatalf("foreign endpoint target was not rejected immediately: %v", err)
+	}
+}
+
+func TestVLLMGPUTeardownDoesNotRetryAuthorityDriftAfterReopen(t *testing.T) {
+	env, fixture, _ := gpuFixtureObjects(t)
+	kube := env.Kube.(*k8sfake.Clientset)
+	podGets := 0
+	kube.Fake.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		podGets++
+		if podGets != 1 {
+			return false, nil, nil
+		}
+		pod, err := kube.Tracker().Get(corev1.SchemeGroupVersion.WithResource("pods"), "sandbox", fixture.PodName)
+		if err != nil {
+			return true, nil, err
+		}
+		drifted := pod.(*corev1.Pod).DeepCopy()
+		drifted.UID = types.UID("00000000-0000-4000-8000-000000000099")
+		return true, drifted, nil
+	})
+	reopen := &gpufunctional.DrainOperation{State: "OPENED", Admission: "OPEN"}
+	observation := &gpufunctional.Observation{Status: 200}
+	scenario := &c2VLLMFunctional{operation: "request-drain", receipt: gpufunctional.DrainReceipt{
+		Reopen: reopen, ReopenObservation: observation,
+	}}
+	err := scenario.Teardown(t.Context(), env)
+	if err == nil || !strings.Contains(err.Error(), "Pod UID differs") {
+		t.Fatalf("teardown did not retain the first authority drift: %v", err)
+	}
+	if podGets != 1 {
+		t.Fatalf("authority drift triggered %d Pod reads; want exactly the first validation read", podGets)
 	}
 }
 

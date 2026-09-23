@@ -8,10 +8,11 @@ import { DataFreshness, PaginationBar } from "@/components/ui/pagination";
 import { useServerPage } from "@/lib/use-server-page";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
-import { Loader2, CheckCircle2, ShieldCheck, ShieldOff, Clock, FileText, Terminal, Server, Boxes } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldOff, Clock, FileText, Terminal, Server, Boxes } from "lucide-react";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, clearLiveSelection, readLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import { useExactRecord, useQueryScope, useRunEvidence } from "@/lib/query";
 import { emitQueryChange } from "@/lib/query-events";
+import { trialOutcomeDisplay } from "@/lib/trial-outcome";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -57,7 +58,7 @@ function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?:
             <th className="px-2 py-1">Schwartau P/D/R</th><th className="px-2 py-1">Replay</th>
           </tr></thead>
           <tbody>
-            {ev.arms.length === 0 && <tr><td colSpan={10} className="px-2 py-2 text-muted-foreground">no measured metrics — the attack was skipped (e.g. victim could not schedule).</td></tr>}
+            {ev.arms.length === 0 && <tr><td colSpan={10} className="px-2 py-2 text-muted-foreground">no certified security comparison — see the typed trial results below.</td></tr>}
             {ev.arms.map((a) => {
               const isPx = a.defender === "d-phorvex";
               return (
@@ -84,20 +85,22 @@ function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?:
         <div>
           <SectionLabel>Per-trial detail ({ev.trials.length})</SectionLabel>
           <div className="mt-1 space-y-1">
-            {ev.trials.map((t) => {
-              const key = `${t.defender}-${t.trial}`;
-              const landed = t.disruption < 0.5 && t.oracleAchieved;
+            {ev.trials.map((t, index) => {
+              const scenario = t.scenario || ev.scenario || "legacy scenario";
+              const key = `${scenario}-${t.defender}-${t.trial}-${index}`;
+              const display = trialOutcomeDisplay(t.outcome);
               return (
                 <div key={key} className="rounded border border-border/40">
                   <button onClick={() => setOpenTrial(openTrial === key ? "" : key)} className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px]">
-                    <span className="font-mono text-foreground/80">{armLabel(t.defender)} · trial {t.trial}</span>
-                    {t.skipped ? <Badge variant="neutral">skipped</Badge> : <Badge variant={landed ? "danger" : "real"}>{landed ? "attack landed" : "disrupted"}</Badge>}
-                    <span className="ml-auto tabular text-muted-foreground">disrupt {Math.round(t.disruption * 100)}% · dwell {ms(t.dwell)} · {t.defensiveActions} act{t.mtdEffect ? ` · ${t.mtdEffect.replace("MTD-", "")}` : ""} <Terminal className="inline h-3 w-3" /></span>
+                    <span className="font-mono text-foreground/80">{scenario} · {armLabel(t.defender)} · trial {t.trial}</span>
+                    <Badge variant={display.variant}>{display.label}</Badge>
+                    <span className="ml-auto tabular text-muted-foreground">{t.claimClass === "security" && (t.outcome === "security-landed" || t.outcome === "security-disrupted") ? `disrupt ${Math.round(t.disruption * 100)}% · ` : ""}dwell {ms(t.dwell)} · {t.defensiveActions} act{t.mtdEffect ? ` · ${t.mtdEffect.replace("MTD-", "")}` : ""} <Terminal className="inline h-3 w-3" /></span>
                   </button>
                   {openTrial === key && (
                     <div className="space-y-1 border-t border-border/40 px-2 py-2">
                       {(t.commands || []).map((c, i) => <div key={i} className="flex gap-2 font-mono text-[11px]"><span className="select-none text-muted-foreground/40">{i + 1}</span><span className="break-all text-foreground/80">{c}</span></div>)}
                       {t.observed && <div className="pt-1 text-[11px] text-muted-foreground">→ {t.observed}</div>}
+                      <div className="pt-1 text-[11px] text-muted-foreground">{t.outcomeReason}{t.measurementPhase ? ` · phase ${t.measurementPhase}` : ""}</div>
                       {!t.commands?.length && <div className="text-[11px] text-muted-foreground/60">no command trace</div>}
                     </div>
                   )}
@@ -107,6 +110,7 @@ function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?:
           </div>
         </div>
       )}
+      {(ev.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="rounded border border-info/30 bg-info/5 px-2 py-1 text-[11px] text-info">unverified metric row {issue.line}: {issue.reason}</div>)}
       <div className="text-[11px] text-muted-foreground">{ev.note}</div>
       {runErr && <div className="text-[11px] text-danger">run error: {runErr}</div>}
     </div>
@@ -186,8 +190,8 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="space-y-5">
-      <PageHead title="Attack reports" sub="Every attack you launched from the Attack Lab — newest first, with the date it ran and the real measured metrics: attack disruption without Phorvex vs with Phorvex, attacker dwell, and defensive actions. This list refreshes automatically as live attacks finish." />
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all reports by run, scenario, or namespace…" aria-label="Search attack reports" />
+      <PageHead title="Scenario run reports" sub="Run history with typed per-trial outcomes. Certified security rows include measured attack comparisons; benign, invalid, and legacy rows remain visible without being scored as security efficacy." />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all reports by run, scenario, or namespace…" aria-label="Search scenario run reports" />
       {pager.legacy && <div className="text-[11px] text-warning">Legacy/preview response: paging and search cover the full history returned by this fixture, not server snapshot pages.</div>}
       {pager.error && <div className="text-[11px] text-danger">Page refresh failed: {pager.error} <button className="text-primary" onClick={pager.retry}>Retry</button></div>}
       <DataFreshness updatedAt={pager.updatedAt} refreshing={pager.refreshing} failed={!!pager.error} />
@@ -195,8 +199,8 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
       {pinnedMissing && <div className="text-[11px] text-warning">Selected run <span className="font-mono">{open}</span> is missing or outside the authorized scope. <button className="text-primary" onClick={() => pinnedQuery.refetch()}>Retry</button></div>}
       {pinnedError && <div className="text-[11px] text-danger">Could not load selected run: {pinnedError} <button className="text-primary" onClick={() => pinnedQuery.refetch()}>Retry</button></div>}
       {pinnedPending && <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading exact selected run…</div>}
-      {pager.loading && !pager.pageMeta ? <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> loading attack reports…</CardContent></Card> : pager.error && !pager.pageMeta ? <ErrorState msg={pager.error} /> : runs.length === 0 ? (
-        open && (pinnedPending || pinnedMissing || pinnedError) ? (pinnedPending ? <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">Waiting for exact selected run <span className="font-mono">{open}</span>…</CardContent></Card> : null) : <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No attacks {sel.provider ? <>on <span className="text-foreground">{sel.label || sel.provider}</span></> : "run"} yet — go to <span className="text-primary">Attack Lab</span>, launch a scenario {sel.provider ? "on this provider" : ""}, and its report appears here when it finishes.</CardContent></Card>
+      {pager.loading && !pager.pageMeta ? <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> loading scenario reports…</CardContent></Card> : pager.error && !pager.pageMeta ? <ErrorState msg={pager.error} /> : runs.length === 0 ? (
+        open && (pinnedPending || pinnedMissing || pinnedError) ? (pinnedPending ? <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">Waiting for exact selected run <span className="font-mono">{open}</span>…</CardContent></Card> : null) : <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No scenario runs {sel.provider ? <>on <span className="text-foreground">{sel.label || sel.provider}</span></> : "recorded"} yet.</CardContent></Card>
       ) : (
         <Card><CardContent className="p-0">
           <div className="overflow-x-auto p-3">
@@ -207,15 +211,16 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                 <th className="px-2 py-1.5">Provider</th>
                 <th className="px-2 py-1.5">Namespace</th>
                 <th className="px-2 py-1.5">State</th>
-                <th className="px-2 py-1.5">Without Phorvex</th>
-                <th className="px-2 py-1.5">With Phorvex</th>
-                <th className="px-2 py-1.5">Attacker dwell</th>
+                <th className="px-2 py-1.5">Security baseline</th>
+                <th className="px-2 py-1.5">Security treatment</th>
+                <th className="px-2 py-1.5">Security dwell</th>
               </tr></thead>
               <tbody>
                 {runs.map((r) => {
                   const without = arm(r.arms, "d-nomtd");
                   const withPx = arm(r.arms, "d-phorvex");
                   const px = withPx || arm(r.arms, "d-r6blindtimer");
+                  const hasSecurityComparison = !!without || !!px;
                   return (
                     <React.Fragment key={r.id}>
                       <tr className={cn("cursor-pointer border-t border-border/40 hover:bg-elevated/40", open === r.id && "bg-primary/[0.04]")} onClick={() => {
@@ -229,13 +234,16 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                         <td className="px-2 py-2"><ProviderTag provider={r.provider} label={r.targetLabel || r.target} />{!r.target && <div className="mt-1 text-[10px] text-warning">legacy provider match</div>}</td>
                         <td className="px-2 py-2 font-mono text-muted-foreground">{r.namespace || "—"}</td>
                         <td className="px-2 py-2">
-                          {r.state === "running" ? <Badge variant="accent"><Loader2 className="h-3 w-3 animate-spin" />running</Badge>
-                            : r.state === "done" ? <Badge variant="real"><CheckCircle2 className="h-3 w-3" />done</Badge>
+                          {r.state === "queued" ? <Badge variant="accent">queued</Badge>
+                            : r.state === "running" ? <Badge variant="accent"><Loader2 className="h-3 w-3 animate-spin" />running</Badge>
+                            : r.state === "done" ? <Badge variant="neutral"><FileText className="h-3 w-3" />execution done</Badge>
+                            : r.state === "partial" ? <Badge variant="pending">incomplete</Badge>
+                            : r.state === "stopped" ? <Badge variant="neutral">stopped</Badge>
                             : <Badge variant="danger">error</Badge>}
                         </td>
-                        <td className="px-2 py-2"><span className="inline-flex items-center gap-1 text-danger"><ShieldOff className="h-3 w-3" />{without ? `${pct(without.disruption)} disrupted` : "—"}</span></td>
-                        <td className="px-2 py-2"><span className="inline-flex items-center gap-1 text-primary"><ShieldCheck className="h-3 w-3" />{px ? `${pct(px.disruption)} disrupted` : (r.state === "running" ? "…" : "—")}</span></td>
-                        <td className="px-2 py-2 tabular text-muted-foreground">{px && px.dwellMean > 0 ? `${px.dwellMean.toFixed(1)}s` : without && without.dwellMean > 0 ? `${without.dwellMean.toFixed(1)}s` : "—"}</td>
+                        <td className="px-2 py-2">{hasSecurityComparison ? <span className="inline-flex items-center gap-1 text-danger"><ShieldOff className="h-3 w-3" />{without ? `${pct(without.disruption)} disrupted` : "—"}</span> : <span className="text-muted-foreground">typed results</span>}</td>
+                        <td className="px-2 py-2">{hasSecurityComparison ? <span className="inline-flex items-center gap-1 text-primary"><ShieldCheck className="h-3 w-3" />{px ? `${pct(px.disruption)} disrupted` : (r.state === "running" ? "…" : "—")}</span> : <span className="text-muted-foreground">not security-scored</span>}</td>
+                        <td className="px-2 py-2 tabular text-muted-foreground">{hasSecurityComparison ? (px && px.dwellMean > 0 ? `${px.dwellMean.toFixed(1)}s` : without && without.dwellMean > 0 ? `${without.dwellMean.toFixed(1)}s` : "—") : "—"}</td>
                       </tr>
                       {open === r.id && (
                         <tr className="border-t border-border/20 bg-elevated/20">
@@ -250,7 +258,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
               </tbody>
             </table>
           </div>
-          <div className="px-4 pb-3 text-[11px] text-muted-foreground">Click a row for the per-arm breakdown. Metrics are read live from each run's metrics.jsonl; the cost/ROI report is regenerated automatically when a run finishes.</div>
+          <div className="px-4 pb-3 text-[11px] text-muted-foreground">Click a row for typed per-trial evidence. Security aggregates include only rows authorized by the shared validity contract.</div>
           <div className="px-4 pb-4"><PaginationBar page={pager.page} pageSize={20} total={pager.pageMeta?.total} hasNext={pager.hasNext} onPrevious={pager.previous} onNext={pager.next} onLatest={pager.latest} showLatest={pager.hasSnapshot || pager.page > 0} loading={pager.loading} /></div>
         </CardContent></Card>
       )}
