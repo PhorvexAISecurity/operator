@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, Lens, CatalogItem, ClusterTarget } from "@/lib/api";
+import { api, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Segmented, Input, Dialog, Loading, ErrorBox, Empty } from "@/components/ui/more";
 import { PageHead, SectionLabel } from "./effectiveness";
@@ -97,6 +97,10 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
 function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | null; target: ClusterTarget | null; lens: Lens; onClose: () => void }) {
   const [running, setRunning] = React.useState("");
   const [msg, setMsg] = React.useState("");
+  const [fixedRun, setFixedRun] = React.useState<{ id: string; context: string } | null>(null);
+  const [fixedStatus, setFixedStatus] = React.useState<RunStatus | null>(null);
+  const [fixedEvidence, setFixedEvidence] = React.useState<RunEvidence | null>(null);
+  const [fixedReadError, setFixedReadError] = React.useState("");
   const requestGeneration = React.useRef(0);
   const requestContext = `${item?.name || ""}\u0000${target?.id || ""}\u0000${target?.context || ""}\u0000${lens}`;
   const currentContext = React.useRef(requestContext);
@@ -106,9 +110,31 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   }
   React.useEffect(() => {
     requestGeneration.current++;
-    setRunning(""); setMsg("");
+    setRunning(""); setMsg(""); setFixedRun(null); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
   }, [item?.name, target?.id, target?.context, lens]);
   React.useEffect(() => () => { requestGeneration.current++; }, []);
+  React.useEffect(() => {
+    if (!fixedRun) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const status = await api.runStatus(fixedRun.id, lens);
+        if (!active) return;
+        setFixedStatus(status); setFixedReadError("");
+        if (["done", "error", "partial", "stopped"].includes(status.state)) {
+          try { const evidence = await api.runEvidence(fixedRun.id, lens); if (active) setFixedEvidence(evidence); }
+          catch (error: any) { if (active) setFixedReadError(String(error?.message || error)); }
+          return;
+        }
+      } catch (error: any) {
+        if (active) setFixedReadError(String(error?.message || error));
+      }
+      if (active) timer = setTimeout(poll, 2000);
+    };
+    void poll();
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [fixedRun, lens]);
   if (!item) return null;
   async function run(withPX: boolean) {
     if (lens !== "operator" || item!.available === false) return;
@@ -123,8 +149,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
       if (item!.launchKind === "fixed-suite") {
         const { id, context } = await api.startFunctional(item!.profile || item!.entryID || item!.name, selectedLens);
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
-        setSelectedTarget({ context, provider: selectedTarget?.context === context ? selectedTarget.provider : "Kubernetes", label: selectedTarget?.context === context ? selectedTarget.label : context });
-        selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
+        setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
+        if (selectedTarget?.context === context) selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
         setMsg(`Started ${id}. Its result reports the functional oracle, evidence, cleanup, and claim limits.`);
         return;
       }
@@ -133,8 +159,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         if (!result.attackId) throw new Error("guardrail effect launch returned no correlated attack ID");
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
         const context = item!.runtimeContext || "in-cluster";
-        setSelectedTarget({ context, provider: selectedTarget?.context === context ? selectedTarget.provider : "Kubernetes", label: selectedTarget?.context === context ? selectedTarget.label : context });
-        selectLiveRecord({ kind: "attack", id: result.attackId, lens: selectedLens, context });
+        if (selectedTarget?.context === context) selectLiveRecord({ kind: "attack", id: result.attackId, lens: selectedLens, context });
         setMsg(`Started ${result.attackId}. The result is effect-only and does not establish behavioral mitigation.`);
         return;
       }
@@ -175,6 +200,19 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         </div>
         {lens !== "operator" && <div className="text-[11px] text-muted-foreground">Scenario launch is available in the operator view.</div>}
         {msg && <div className="text-[12px] text-primary">{msg}</div>}
+        {fixedRun && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
+          <div className="font-mono text-foreground">run {fixedRun.id}</div>
+          <div className="mt-1 text-muted-foreground">server profile context: <span className="font-mono text-foreground/85">{fixedRun.context}</span> · state: <span className="text-foreground">{fixedStatus?.state || "starting"}</span></div>
+          {fixedStatus?.error && <div className="mt-1 text-warning">{fixedStatus.error}</div>}
+          {fixedEvidence?.functionalResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
+            <div>typed outcome: <span className="font-medium text-foreground">{fixedEvidence.functionalResult.outcome}</span> · cleanup: <span className="text-foreground">{fixedEvidence.functionalResult.cleanup.status}</span></div>
+            <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
+            <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
+          </div>}
+          {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
+          {fixedEvidence && !fixedEvidence.functionalResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no functional outcome is accepted</div>}
+          {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
+        </div>}
       </div>
     </Dialog>
   );
