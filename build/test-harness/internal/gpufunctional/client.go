@@ -822,6 +822,18 @@ func (c *streamCohort) waitResponseHeaders(ctx context.Context, bound time.Durat
 	deadline := time.NewTimer(bound)
 	defer deadline.Stop()
 	for _, stream := range c.streams {
+		// An accepted response may already be followed by completion. Prefer the
+		// response authority deterministically instead of racing two closed
+		// channels and falsely treating a valid completed peer as headerless.
+		select {
+		case <-stream.response:
+			receipt := stream.snapshot()
+			if receipt.HTTPStatus != http.StatusOK || receipt.MediaType != "text/event-stream" {
+				return fmt.Errorf("stream %d response was not accepted for SSE", receipt.Ordinal)
+			}
+			continue
+		default:
+		}
 		select {
 		case <-stream.response:
 			receipt := stream.snapshot()
@@ -829,6 +841,18 @@ func (c *streamCohort) waitResponseHeaders(ctx context.Context, bound time.Durat
 				return fmt.Errorf("stream %d response was not accepted for SSE", receipt.Ordinal)
 			}
 		case <-stream.finished:
+			// stream() closes response before the owning goroutine closes finished
+			// whenever HTTP/SSE authority was obtained. Recheck response here so
+			// completion cannot win a ready-channel select race.
+			select {
+			case <-stream.response:
+				receipt := stream.snapshot()
+				if receipt.HTTPStatus != http.StatusOK || receipt.MediaType != "text/event-stream" {
+					return fmt.Errorf("stream %d response was not accepted for SSE", receipt.Ordinal)
+				}
+				continue
+			default:
+			}
 			receipt := stream.snapshot()
 			return fmt.Errorf("stream %d finished before an accepted SSE response: %s", receipt.Ordinal, receipt.Termination)
 		case <-deadline.C:

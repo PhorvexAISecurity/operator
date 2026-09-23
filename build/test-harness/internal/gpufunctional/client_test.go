@@ -695,6 +695,63 @@ func TestDrainAnchorAuthorityRejectsCompletedAndUnauthenticatedStreams(t *testin
 	}
 }
 
+func TestWaitResponseHeadersPrefersAcceptedAuthorityAndKeepsSeparateUnfinishedAnchor(t *testing.T) {
+	acceptedCompleted := func(ordinal int) *streamExecution {
+		response := make(chan struct{})
+		finished := make(chan struct{})
+		close(response)
+		close(finished)
+		return &streamExecution{response: response, finished: finished, receipt: StreamLifecycleReceipt{
+			Ordinal: ordinal, HTTPStatus: http.StatusOK, MediaType: "text/event-stream", Finished: true,
+			RequestID: "cmpl-completed", AcceptedAt: "2026-09-23T00:00:00Z", Termination: "complete",
+		}}
+	}
+	response := make(chan struct{})
+	close(response)
+	unfinished := &streamExecution{response: response, finished: make(chan struct{}), receipt: StreamLifecycleReceipt{
+		Ordinal: 1, HTTPStatus: http.StatusOK, MediaType: "text/event-stream",
+		RequestID: "cmpl-anchor", AcceptedAt: "2026-09-23T00:00:01Z", Termination: "running",
+	}}
+	for i := 0; i < 100; i++ {
+		cohort := &streamCohort{streams: []*streamExecution{acceptedCompleted(0), unfinished}}
+		if err := cohort.waitResponseHeaders(context.Background(), time.Millisecond); err != nil {
+			t.Fatalf("iteration %d rejected an already accepted completed SSE peer: %v", i, err)
+		}
+		anchor, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 2, 0, time.UTC))
+		if err != nil || anchor.StreamOrdinal != 1 || anchor.ProducerRequestID != "cmpl-anchor" {
+			t.Fatalf("separate unfinished anchor was not selected: anchor=%+v err=%v", anchor, err)
+		}
+	}
+}
+
+func TestWaitResponseHeadersRejectsMissingAndInvalidAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response bool
+		status   int
+		media    string
+	}{
+		{name: "finished without response"},
+		{name: "invalid accepted response", response: true, status: http.StatusBadGateway, media: "application/json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := make(chan struct{})
+			finished := make(chan struct{})
+			if tc.response {
+				close(response)
+			}
+			close(finished)
+			stream := &streamExecution{response: response, finished: finished, receipt: StreamLifecycleReceipt{
+				Ordinal: 0, HTTPStatus: tc.status, MediaType: tc.media, Finished: true, Termination: "error",
+			}}
+			cohort := &streamCohort{streams: []*streamExecution{stream}}
+			if err := cohort.waitResponseHeaders(context.Background(), time.Millisecond); err == nil {
+				t.Fatal("missing or invalid response authority was accepted")
+			}
+		})
+	}
+}
+
 func TestRetainedRealWireCorpusParsesAndBindsProducerDigests(t *testing.T) {
 	for _, control := range []struct {
 		name, file, sha string
