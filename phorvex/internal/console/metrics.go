@@ -25,18 +25,20 @@ import (
 // metricRow mirrors the harness core.Metric fields the console needs (a permissive subset;
 // unknown fields are ignored by encoding/json).
 type metricRow struct {
-	Scenario             string   `json:"scenario"`
-	Defender             string   `json:"defender"`
-	Trial                int      `json:"trial"`
-	OracleAchieved       bool     `json:"oracleAchieved"`
-	DisruptionVsOracle   float64  `json:"disruptionVsOracle"`
-	DefensiveActions     int      `json:"defensiveActions"`
+	Scenario              string  `json:"scenario"`
+	Defender              string  `json:"defender"`
+	Trial                 int     `json:"trial"`
+	OracleAchieved        bool    `json:"oracleAchieved"`
+	DisruptionVsOracle    float64 `json:"disruptionVsOracle"`
+	DefensiveActions      int     `json:"defensiveActions"`
 	FalseDefensiveActions int     `json:"falseDefensiveActions"`
-	NegativeControl      bool     `json:"negativeControl"`
-	Skipped              bool     `json:"skipped"`
-	ObservedState        string   `json:"observedState"`
-	MeanRotationInterval float64  `json:"meanRotationIntervalSeconds"`
-	AttackerDwellSeconds float64  `json:"attackerDwellSeconds"`
+	NegativeControl       bool    `json:"negativeControl"`
+	Skipped               bool    `json:"skipped"`
+	ObservedState         string  `json:"observedState"`
+	ScenarioRealism       string  `json:"scenarioRealism"`
+	ScenarioBenignControl bool    `json:"scenarioBenignControl"`
+	MeanRotationInterval  float64 `json:"meanRotationIntervalSeconds"`
+	AttackerDwellSeconds  float64 `json:"attackerDwellSeconds"`
 	// TimeToActionSeconds is decoded because the shared contract corroborates a
 	// claimed cost observation against it: a "measured" cost with a non-finite
 	// time-to-action is a contradiction, not a measurement.
@@ -52,8 +54,8 @@ type metricRow struct {
 		ReactionTimeSeconds   float64 `json:"reactionTimeSeconds"`
 	} `json:"schwartau"`
 	Reuse *struct {
-		ReplaySuccessCount         int `json:"replaySuccessCount"`
-		ReplayAttempts             int `json:"replayAttempts"`
+		ReplaySuccessCount          int `json:"replaySuccessCount"`
+		ReplayAttempts              int `json:"replayAttempts"`
 		StaticBaselineReplaySuccess int `json:"staticBaselineReplaySuccess"`
 	} `json:"reuse"`
 	// Validity is the SHARED harness measurement-validity contract, decoded whole.
@@ -84,6 +86,13 @@ func (m metricRow) legacy() bool { return m.Validity == nil }
 
 // scorable reports whether this row's comparison may be published.
 func (m metricRow) scorable() bool { return m.verdict().Scorable }
+
+// securityScorable additionally checks the scenario-level claim boundary that
+// metricvalidity cannot see. It is used by run-result security summaries so a
+// historical benign row that claimed scored=true cannot become an attack arm.
+func (m metricRow) securityScorable() bool {
+	return strings.TrimSpace(m.Scenario) != "" && strings.TrimSpace(m.Defender) != "" && m.scorable() && !m.Skipped && !m.ScenarioBenignControl && m.ScenarioRealism == "executable-mechanism"
+}
 
 // excluded reports a row that must not reach a CERTIFIED aggregate. That is
 // every row the contract refuses AND every legacy row: a pre-contract row

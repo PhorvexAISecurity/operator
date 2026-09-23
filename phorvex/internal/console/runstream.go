@@ -27,33 +27,46 @@ import (
 // trialEvent is the per-completed-trial timeline payload — richer than metricRow: it carries the
 // literal attack command steps so the UI can render the attack as a visual sequence.
 type trialEvent struct {
-	Type             string   `json:"type"` // "trial"
-	Scenario         string   `json:"scenario"`
-	Defender         string   `json:"defender"`
-	Trial            int      `json:"trial"`
-	OracleAchieved   bool     `json:"oracleAchieved"`
-	Disruption       float64  `json:"disruption"`
-	DwellSeconds     float64  `json:"dwellSeconds"`
-	MTDEffect        string   `json:"mtdEffect"`
-	Observed         string   `json:"observed"`
-	Commands         []string `json:"commands"`
-	DefensiveActions int      `json:"defensiveActions"`
+	Type                   string   `json:"type"` // "trial"
+	Scenario               string   `json:"scenario"`
+	Defender               string   `json:"defender"`
+	Trial                  int      `json:"trial"`
+	OracleAchieved         bool     `json:"oracleAchieved"`
+	Disruption             float64  `json:"disruption"`
+	DwellSeconds           float64  `json:"dwellSeconds"`
+	MTDEffect              string   `json:"mtdEffect"`
+	Observed               string   `json:"observed"`
+	Commands               []string `json:"commands"`
+	DefensiveActions       int      `json:"defensiveActions"`
+	ScenarioRealism        string   `json:"scenarioRealism,omitempty"`
+	ScenarioBenignControl  bool     `json:"scenarioBenignControl"`
+	ScenarioClaimLimits    string   `json:"scenarioClaimLimits,omitempty"`
+	FunctionalOracleStatus string   `json:"functionalOracleStatus,omitempty"`
+	Outcome                string   `json:"outcome"`
+	OutcomeReason          string   `json:"outcomeReason"`
+	ClaimClass             string   `json:"claimClass"`
+	MeasurementStatus      string   `json:"measurementStatus"`
+	MeasurementPhase       string   `json:"measurementPhase"`
+	ValidityReasons        []string `json:"validityReasons"`
 }
 
-// streamMetricRow is the permissive subset of the harness metric row the timeline needs.
-type streamMetricRow struct {
-	Scenario             string   `json:"scenario"`
-	Defender             string   `json:"defender"`
-	Trial                int      `json:"trial"`
-	OracleAchieved       bool     `json:"oracleAchieved"`
-	DisruptionVsOracle   float64  `json:"disruptionVsOracle"`
-	AttackerDwellSeconds float64  `json:"attackerDwellSeconds"`
-	DefensiveActions     int      `json:"defensiveActions"`
-	Skipped              bool     `json:"skipped"`
-	NegativeControl      bool     `json:"negativeControl"`
-	MTDEffect            string   `json:"mtdEffect"`
-	ObservedState        string   `json:"observedState"`
-	Commands             []string `json:"commands"`
+func trialEventFromRow(row runMetricRow) trialEvent {
+	outcome := row.outcome()
+	event := trialEvent{
+		Type: "trial", Scenario: row.Scenario, Defender: row.Defender, Trial: row.Trial,
+		OracleAchieved: row.OracleAchieved, Disruption: row.DisruptionVsOracle,
+		DwellSeconds: row.AttackerDwellSeconds, MTDEffect: row.MTDEffect,
+		Observed: row.ObservedState, Commands: row.Commands, DefensiveActions: row.DefensiveActions,
+		ScenarioRealism: row.ScenarioRealism, ScenarioBenignControl: row.ScenarioBenignControl,
+		ScenarioClaimLimits: row.ScenarioClaimLimits,
+		Outcome:             outcome.Outcome, OutcomeReason: outcome.OutcomeReason, ClaimClass: outcome.ClaimClass,
+		MeasurementStatus: outcome.MeasurementStatus, MeasurementPhase: outcome.MeasurementPhase,
+		ValidityReasons: outcome.ValidityReasons,
+	}
+	if status, ok, conflict := functionalOracleStatus(row.BenchmarkEvidence); ok && !conflict {
+		event.FunctionalOracleStatus = status
+	}
+	return event
 }
 
 var stageLineRe = regexp.MustCompile(`scenario=([a-z0-9-]+)\s+defender=([a-z0-9-]+)\s+trial=(\d+)`)
@@ -106,19 +119,16 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 			}
 		})
 		mOff = tailLines(metricsPath, mOff, func(line string) {
-			var row streamMetricRow
-			if json.Unmarshal([]byte(strings.TrimSpace(line)), &row) != nil || row.Defender == "" {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
 				return
 			}
-			if row.Skipped || row.NegativeControl {
+			var row runMetricRow
+			if err := json.Unmarshal([]byte(trimmed), &row); err != nil {
+				send(map[string]any{"type": "evidence-error", "outcome": outcomeUnverified, "reason": "metric row cannot be decoded: " + err.Error()})
 				return
 			}
-			send(trialEvent{
-				Type: "trial", Scenario: row.Scenario, Defender: row.Defender, Trial: row.Trial,
-				OracleAchieved: row.OracleAchieved, Disruption: row.DisruptionVsOracle,
-				DwellSeconds: row.AttackerDwellSeconds, MTDEffect: row.MTDEffect,
-				Observed: row.ObservedState, Commands: row.Commands, DefensiveActions: row.DefensiveActions,
-			})
+			send(trialEventFromRow(row))
 		})
 		if st := s.runs.runState(id); st == "done" || st == "partial" || st == "error" || st == "stopped" {
 			drain++ // one more pass to flush the final rows, then end cleanly.

@@ -916,7 +916,7 @@ func summarizeArms(rows []metricRow) ([]ArmResult, int) {
 	byDef := map[string][]metricRow{}
 	total := 0
 	for _, r := range rows {
-		if r.NegativeControl || r.Skipped {
+		if r.NegativeControl || !r.securityScorable() {
 			continue
 		}
 		byDef[r.Defender] = append(byDef[r.Defender], r)

@@ -585,15 +585,15 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 // runEvidence returns the full per-arm + per-trial metric ledger for one run (evidence view).
 // The boundary has already resolved the id to a run inside this identity's scope.
 func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
-	arms, trials, st, ok := s.runs.RunEvidence(runIDOf(r))
+	arms, trials, issues, st, ok := s.runs.RunEvidence(runIDOf(r))
 	if !ok {
 		writeJSON(w, 404, map[string]string{"error": "run not found"})
 		return
 	}
 	writeJSON(w, 200, map[string]any{
 		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished,
-		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials,
-		"note": "Full measured evidence for this attack. Disruption/dwell carry a 95% CI; $ figures use the swappable ROI knobs; AI in-request legs are honestly MTD-CANNOT-HELP.",
+		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
+		"note": "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }
 
