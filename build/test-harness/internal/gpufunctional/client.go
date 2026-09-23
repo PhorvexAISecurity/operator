@@ -29,7 +29,7 @@ const (
 	drainStreamPrompt     = "one two three four five six seven eight"
 	streamCohortSize      = 8
 	prefixStreamMaxTokens = 128
-	drainStreamMaxTokens  = 240
+	drainStreamMaxTokens  = 768
 )
 
 var prefixStreamPrompt = strings.TrimSpace(strings.Repeat("one two three four five six seven eight ", 12))
