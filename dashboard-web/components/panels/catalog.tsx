@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence } from "@/lib/api";
+import { api, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence, AttackResult } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Segmented, Input, Dialog, Loading, ErrorBox, Empty } from "@/components/ui/more";
 import { PageHead, SectionLabel } from "./effectiveness";
@@ -101,6 +101,9 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   const [fixedStatus, setFixedStatus] = React.useState<RunStatus | null>(null);
   const [fixedEvidence, setFixedEvidence] = React.useState<RunEvidence | null>(null);
   const [fixedReadError, setFixedReadError] = React.useState("");
+  const [effectRecordId, setEffectRecordId] = React.useState("");
+  const [effectResult, setEffectResult] = React.useState<AttackResult | null>(null);
+  const [effectReadError, setEffectReadError] = React.useState("");
   const requestGeneration = React.useRef(0);
   const requestContext = `${item?.name || ""}\u0000${target?.id || ""}\u0000${target?.context || ""}\u0000${lens}`;
   const currentContext = React.useRef(requestContext);
@@ -110,7 +113,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   }
   React.useEffect(() => {
     requestGeneration.current++;
-    setRunning(""); setMsg(""); setFixedRun(null); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
+    setRunning(""); setMsg(""); setFixedRun(null); setFixedStatus(null); setFixedEvidence(null); setFixedReadError(""); setEffectRecordId(""); setEffectResult(null); setEffectReadError("");
   }, [item?.name, target?.id, target?.context, lens]);
   React.useEffect(() => () => { requestGeneration.current++; }, []);
   React.useEffect(() => {
@@ -135,6 +138,32 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     void poll();
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [fixedRun, lens]);
+  React.useEffect(() => {
+    if (!effectRecordId) return;
+    const request = requestGeneration.current;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
+    const poll = async () => {
+      tries++;
+      try {
+        const page = await api.attackResultsPage(lens, 1, { id: effectRecordId, includeObservations: "true" });
+        if (!active || request !== requestGeneration.current) return;
+        const exact = (page.attacks || []).find((entry) => entry.id === effectRecordId);
+        if (exact) {
+          setEffectResult(exact); setEffectReadError("");
+          if (exact.status === "done" || exact.status === "partial") return;
+        }
+      } catch (error: any) {
+        if (!active || request !== requestGeneration.current) return;
+        setEffectReadError(String(error?.message || error));
+      }
+      if (active && tries < 40) timer = setTimeout(poll, 3000);
+      else if (active) setEffectReadError((current) => current || `No terminal exact result was confirmed for ${effectRecordId} within the bounded polling window.`);
+    };
+    void poll();
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [effectRecordId, lens]);
   if (!item) return null;
   async function run(withPX: boolean) {
     if (lens !== "operator" || item!.available === false) return;
@@ -160,6 +189,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
         const context = item!.runtimeContext || "in-cluster";
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "attack", id: result.attackId, lens: selectedLens, context });
+        setEffectRecordId(result.attackId); setEffectResult(null); setEffectReadError("");
         setMsg(`Started ${result.attackId}. The result is effect-only and does not establish behavioral mitigation.`);
         return;
       }
@@ -212,6 +242,22 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
           {fixedEvidence && !fixedEvidence.functionalResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no functional outcome is accepted</div>}
           {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
+        </div>}
+        {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="modeled">EFFECT-ONLY OBSERVATION</Badge>
+            <span className="font-mono text-foreground" title={effectRecordId}>{effectRecordId}</span>
+            <span className="text-muted-foreground">{effectResult?.status || "waiting for exact result"}</span>
+          </div>
+          {effectResult ? <div className="mt-2 space-y-1.5">
+            {effectResult.effectEvidence?.observed
+              ? <div>fresh exact-target effect: <span className="font-mono text-foreground">{effectResult.effectEvidence.before || "—"} → {effectResult.effectEvidence.after || "—"}</span>{effectResult.effectEvidence.seconds > 0 ? ` in ${effectResult.effectEvidence.seconds}s` : ""}</div>
+              : <div className="text-warning">No fresh exact-target runtime effect was confirmed by this record.</div>}
+            {effectResult.decisionEvidence && <div className="text-muted-foreground">decision candidate: <span className="font-mono text-foreground/85">{effectResult.decisionEvidence.action || "—"}</span>{effectResult.decisionEvidence.reason ? ` · ${effectResult.decisionEvidence.reason}` : ""} · selected {effectResult.decisionEvidence.selected ? "yes" : "no"} · actuated {effectResult.decisionEvidence.actuated ? "yes" : "no"} · correlation {effectResult.decisionEvidence.correlation}</div>}
+            {effectResult.observationError && <div className="text-warning">observation error: {effectResult.observationError}</div>}
+            <div className="text-warning/90">limits: {effectResult.effectEvidence?.limitation || "This record measures a mechanism effect only; behavioral attack execution, mitigation, defense success, containment, dwell, and ROI are not established."}</div>
+          </div> : <div className="mt-2 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> polling this exact attack ID with observations enabled…</div>}
+          {effectReadError && <div className="mt-2 text-warning">result read incomplete: {effectReadError}</div>}
         </div>}
       </div>
     </Dialog>

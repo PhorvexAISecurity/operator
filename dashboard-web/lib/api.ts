@@ -421,9 +421,17 @@ export interface AttackResult {
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
   status: "running" | "partial" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
   outcomeClass?: "behavioral-oracle-unsupported" | "effect-only" | "effect-unverified" | string;
+  evidenceKind?: "catalogue-signal" | string;
+  producerRoute?: string;
+  resultSchemaVersion?: string;
   stimulusEvidence?: { kind: string; observed: boolean; targetUid: string; eventName: string; eventUid: string; eventCreatedAt: string; eventRule: string; correlation: string; behavioralExecuted: boolean; limitation: string };
   effectEvidence?: { kind: string; observed: boolean; observedAt?: string; targetUid: string; before?: string; after?: string; serviceUid?: string; correlation: string; limitation: string; seconds: number };
   decisionEvidence?: { correlation: "temporal-workload"; time: string; action: string; reason: string; selected: boolean; actuated: boolean };
+  responseObserved?: boolean;
+  responseAction?: string;
+  responsePod?: string;
+  responseSeconds?: number;
+  observationError?: string;
   dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "flushed" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;

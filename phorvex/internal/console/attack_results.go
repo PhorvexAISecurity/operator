@@ -75,6 +75,8 @@ type attackRecord struct {
 	StimulusEvidence *attackStimulusEvidence `json:"stimulusEvidence,omitempty"`
 	EffectEvidence   *attackEffectEvidence   `json:"effectEvidence,omitempty"`
 	OutcomeClass     string                  `json:"outcomeClass,omitempty"`
+	ProducerRoute    string                  `json:"producerRoute,omitempty"`
+	ResultSchema     string                  `json:"resultSchemaVersion,omitempty"`
 
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
@@ -188,14 +190,16 @@ type decisionEvidence struct {
 // react within ~1s, faster than the watcher's own baseline kubectl calls would complete — so a
 // watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
 type defenseBaseline struct {
-	uid          string
-	epoch        string
-	kvEpoch      string
-	quar         map[string]bool
-	nps          map[string]bool
-	stimulus     *attackStimulusEvidence
-	vllmEffect   *vllmEffectBaseline
-	outcomeClass string
+	uid           string
+	epoch         string
+	kvEpoch       string
+	quar          map[string]bool
+	nps           map[string]bool
+	stimulus      *attackStimulusEvidence
+	vllmEffect    *vllmEffectBaseline
+	outcomeClass  string
+	producerRoute string
+	resultSchema  string
 	// uptime is the workload availability read BEFORE the attack is applied. It must be captured
 	// here for the same reason as the quarantine/NP baselines: the operator is event-driven and
 	// reacts in ~1s, faster than startAttackRecord runs, so reading it afterwards recorded the
@@ -293,7 +297,7 @@ func attackSnapshots(p *Principal) []*attackRecord {
 // Live views opt into the two console observation kinds. Experiment-only signals
 // and unknown evidence kinds remain excluded, as do observations in default reports.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus"))
+	return rec.EvidenceKind == "" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
@@ -460,6 +464,15 @@ func (s *Server) startVLLMUnsupportedRecord(service, pod, attack, attackID, evid
 	return s.startAttackRecordAtKind("", service, vllmAttackNS, pod, attack, attackID, evidenceLabel, expected, false, base, started, started.Add(d), "vllm-unsupported-stimulus", started)
 }
 
+func (s *Server) startCatalogueSignalRecord(ns, pod, scenario, mitre, expected string, stateful bool, base defenseBaseline) string {
+	d := s.cfg.AttackWatchDuration
+	if d <= 0 {
+		d = 95 * time.Second
+	}
+	started := s.cfg.now()
+	return s.startAttackRecordAtKind("", ns, ns, pod, scenario, scenario, mitre, expected, stateful, base, started, started.Add(d), "catalogue-signal", started)
+}
+
 // startAttackRecordAt pre-registers one exact observation window. Experiment arms use
 // this form so producer/API overhead cannot make one arm's measurement longer than another.
 func (s *Server) startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline, started, deadline time.Time) string {
@@ -479,6 +492,8 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 		TargetUID:        base.uid,
 		StimulusEvidence: base.stimulus,
 		OutcomeClass:     base.outcomeClass,
+		ProducerRoute:    base.producerRoute,
+		ResultSchema:     base.resultSchema,
 		Status:           "running",
 		// PRE-FIRE value when the caller captured one (>=0); fall back to a live read only if the
 		// baseline predates this field, so an old caller still gets a number rather than 0.
@@ -600,6 +615,30 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if r.EvidenceKind == "vllm-unsupported-stimulus" {
 			continue
 		}
+		if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "catalogue-signal" {
+			replaced, probeErr := s.targetUIDReplaced(r.Namespace, r.Pod, r.TargetUID)
+			if probeErr != nil {
+				r.ObservationError = "target identity observation: " + probeErr.Error()
+				publishAttack(r)
+				continue
+			}
+			if !s.cfg.now().Before(deadline) {
+				r.ObservationError = "target identity observation completed outside the registered window"
+				publishAttack(r)
+				continue
+			}
+			if replaced {
+				r.ResponseObserved = true
+				r.ResponseAction = "rotate"
+				r.ResponsePod = r.Pod
+				r.ResponseSeconds = round2(s.cfg.now().Sub(r.accepted).Seconds())
+				if r.EvidenceKind == "catalogue-signal" {
+					r.OutcomeClass = "response-only"
+				}
+				publishAttack(r)
+			}
+			continue
+		}
 		switch r.AttackID {
 		case "poison": // adapter-rotate: real actuation bumps the adapter epoch
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch"); ep != "" && ep != epoch0 {
@@ -618,7 +657,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				r.DefendedPod = r.Pod // the flush happens IN the attacked pod; it is never a neighbor
 				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
 			}
-		default: // foothold signal: only replacement of the exact pre-signal UID proves a target response
+		default: // behavioral foothold: exact target replacement or target-bound quarantine is scored
 			replaced, probeErr := s.targetUIDReplaced(r.Namespace, r.Pod, r.TargetUID)
 			if probeErr != nil {
 				r.ObservationError = "target identity observation: " + probeErr.Error()
@@ -630,19 +669,11 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				publishAttack(r)
 				continue
 			}
-			if replaced && r.EvidenceKind == "synthetic-detector-signal" {
-				r.ResponseObserved = true
-				r.ResponseAction = "rotate"
-				r.ResponsePod = r.Pod
-				r.ResponseSeconds = round2(s.cfg.now().Sub(r.accepted).Seconds())
-				publishAttack(r)
-			} else if replaced {
+			if replaced {
 				r.Outcome, r.Actuated = "DEFENDED", true
 				r.Action = "rotate"
 				r.DefendedPod = r.Pod
 				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
-			} else if r.EvidenceKind == "synthetic-detector-signal" {
-				continue
 			} else if qn := s.freshQuarantineName(r.Namespace, quar0); qn != "" {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "quarantine", true
 				// capture the REAL target Phorvex quarantined (may be a neighbor node it isolates to cut
@@ -682,19 +713,31 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 				r.ObservationError = "no exact target-bound in-place effect observed within the registered window"
 			}
 		}
-	} else if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "vllm-unsupported-stimulus" {
+	} else if r.EvidenceKind == "synthetic-detector-signal" || r.EvidenceKind == "vllm-unsupported-stimulus" || r.EvidenceKind == "catalogue-signal" {
 		// A detector signal is not an exploit and supplies no attacker foothold. Persist
 		// response evidence without manufacturing DEFENDED/LANDED, containment or dwell.
 		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
 		r.Actuated, r.TimeToDefendSec, r.DwellSec, r.DwellOngoing = false, 0, 0, false
-	} else if r.Outcome == "" {
+		if r.EvidenceKind == "catalogue-signal" && !r.ResponseObserved {
+			if r.ObservationError == "" {
+				r.ObservationError = "no exact target response observed within the registered window"
+				r.OutcomeClass = "response-unconfirmed"
+			} else {
+				r.OutcomeClass = "observation-unavailable"
+			}
+		}
+	} else if r.Outcome == "" && r.ObservationError == "" {
 		r.Outcome = "LANDED"
 		r.Actuated = false
 		if r.Action == "" {
 			r.Action = "noop"
 		}
+	} else if r.Outcome == "" {
+		r.Action, r.DefendedPod, r.Containment = "", "", ""
+		r.Actuated, r.TimeToDefendSec, r.DwellSec, r.DwellOngoing = false, 0, 0, false
+		r.OutcomeClass = "observation-unavailable"
 	}
-	if r.EvidenceKind == "" {
+	if r.EvidenceKind == "" && r.Outcome != "" {
 		classifyContainment(r, round2(s.cfg.now().Sub(r.started).Seconds()))
 	}
 	r.UptimeDip = minUp
@@ -702,10 +745,18 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
-	} else if r.EvidenceKind == "vllm-in-place-effect" || r.EvidenceKind == "vllm-unsupported-stimulus" {
-		// Decision evidence remains explicitly temporal unless the manager later exports the
-		// unique SecurityEvent UID in its audit schema.
+	} else if r.EvidenceKind == "vllm-in-place-effect" || r.EvidenceKind == "vllm-unsupported-stimulus" || r.EvidenceKind == "catalogue-signal" {
+		// The manager audit can carry the SecurityEvent UID in steeredBy facts, but this
+		// bounded console correlator does not consume that binding yet. Keep this temporal.
 		s.fillReasoning(ctxName, r)
+	}
+	if r.EvidenceKind == "catalogue-signal" && r.DecisionEvidence == nil {
+		missing := "no manager decision could be correlated to the exact catalogue signal; brain disposition is unavailable"
+		if r.ObservationError == "" {
+			r.ObservationError = missing
+		} else {
+			r.ObservationError += "; " + missing
+		}
 	}
 	r.Status = "done"
 	if r.ObservationError != "" {
@@ -887,10 +938,16 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	if err != nil {
 		return
 	}
-	var best *audit.Record
+	var best, noop *audit.Record
 	for i := range records {
 		d := &records[i]
-		if d.Namespace != r.Namespace || d.Pod != target || (!d.Selected && !d.Actuated) || d.Time.Before(fired) || d.Time.After(deadline) {
+		if d.Namespace != r.Namespace || d.Pod != target || d.Time.Before(fired) || d.Time.After(deadline) {
+			continue
+		}
+		if !d.Selected && !d.Actuated {
+			if r.EvidenceKind == "catalogue-signal" && (noop == nil || d.Time.Before(noop.Time)) {
+				noop = d
+			}
 			continue
 		}
 		// When an observed action exists, a different selected action is not evidence for it.
@@ -901,8 +958,13 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 			best = d
 		}
 	}
+	correlation := "temporal-workload"
+	if best == nil && noop != nil {
+		best = noop
+		correlation = "temporal-workload-noop"
+	}
 	if best != nil {
-		r.DecisionEvidence = &decisionEvidence{Correlation: "temporal-workload", Time: best.Time.UTC().Format(time.RFC3339Nano), Action: best.Action, Reason: best.Reason, Selected: best.Selected, Actuated: best.Actuated}
+		r.DecisionEvidence = &decisionEvidence{Correlation: correlation, Time: best.Time.UTC().Format(time.RFC3339Nano), Action: best.Action, Reason: best.Reason, Selected: best.Selected, Actuated: best.Actuated}
 		if economics, ok := decodeAuditEconomics(best.Economics, best.Lambda); ok {
 			r.Lambda = best.Lambda
 			r.LambdaAvailable = true

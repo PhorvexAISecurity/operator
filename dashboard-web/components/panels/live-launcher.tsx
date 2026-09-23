@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { clearLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import { useApiRead, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
 import { emitQueryChange } from "@/lib/query-events";
+import { isCatalogueSignalResult } from "@/lib/attack-result-truth";
+import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 
 // LiveLauncherPanel — the per-app attack launcher with actuator verdicts.
 //
@@ -203,8 +205,9 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     finally { if (request === generation.current) setFiring(""); }
   };
 
-  // Fire a catalogue scenario as a REAL SecurityEvent at the live app's pod (not the sandbox),
-  // then poll the outcome the same way the live attacks do.
+  // Send a synthetic catalogue signal at the live app's exact pod, then follow only the
+  // returned record ID. The result describes signal acceptance and observed response;
+  // it does not claim that the named behavioral attack ran or was mitigated.
   const fireScenario = async (c: CatalogCompat) => {
     if (!canMutateApp || !compat?.stack.armed || !compat.catalog.some((entry) => entry.name === c.name && entry.compatible)) {
       setErr("Live scenario refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
@@ -224,7 +227,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
         action: "fire",
       }, lens);
       if (request !== generation.current) return;
-      setMsg(r.message || `Fired ${c.name} at ${app}.`);
+      setMsg(r.message || `Sent ${c.name} catalogue signal to ${app}.`);
       if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
       pollVerdict("scn:" + c.name, r.attackId);
     } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
@@ -332,7 +335,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
           <Card><CardContent className="p-4">
             <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Scenario catalogue — compatible with this app</div>
             <div className="mb-3 text-[11px] text-muted-foreground/70">
-              <b>Fire live</b> sends the scenario as a real SecurityEvent at this app&apos;s actual pod — Phorvex reacts for real and the recorded outcome appears below (needs the app armed). <b>Run</b> instead executes the full harness against synthetic sandbox pods (it can&apos;t touch your real pods) and reports its recorded run status.
+              <b>Send signal</b> creates a synthetic catalogue signal for this app&apos;s exact pod and reports signal acceptance, available decision evidence, and any observed target response. It does not execute the named behavioral attack or earn defense, dwell, containment, or ROI credit. <b>Run</b> executes the full harness against synthetic sandbox pods and reports its recorded run status.
             </div>
             {compat.catalogNote ? (
               <div className="text-[12px] text-muted-foreground">{compat.catalogNote}</div>
@@ -345,6 +348,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                   const v = verdicts["scn:" + c.name];
                   const verdictNote = verdictNotes["scn:" + c.name];
                   const matches = !!(v?.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator);
+                  const signalResult = !!v && isCatalogueSignalResult(v);
                   return (
                     <div key={c.name} className="rounded-md border border-border/60 p-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -357,7 +361,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                             </span>
                           )}
                           <Button size="sm" variant={compat.stack.armed ? "primary" : "outline"} disabled={!compat.stack.armed || !canMutateApp || firing !== ""} onClick={() => fireScenario(c)}>
-                            {firing === "scnlive:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Fire live</>}
+                            {firing === "scnlive:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Send signal</>}
                           </Button>
                           <Button size="sm" variant="ghost" disabled={lens !== "operator" || !targetId || selectedTarget?.id !== targetId || selectedTarget.context !== sel.context || compat.namespace !== app || firing !== "" || run?.state === "running"} onClick={() => runScenario(c)}>
                             {firing === "scn:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Run</>}
@@ -366,14 +370,15 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                       </div>
                       {(v || firing === "scnlive:" + c.name) && (
                         v ? (
-                          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
-                            <span>{v.outcome || (v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
-                            <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
-                            <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || c.expectedActuators?.join(", ") || "—"}</span></span>
-                            <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches expected" : "differs from expected") : "no actuation recorded"}</span>
-                          </div>
+                          signalResult ? <div className="mt-2"><CatalogueSignalResult result={v} compact /></div> :
+                            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
+                              <span>{v.outcome || (v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
+                              <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
+                              <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || c.expectedActuators?.join(", ") || "—"}</span></span>
+                              <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches expected" : "differs from expected") : "no actuation recorded"}</span>
+                            </div>
                         ) : (
-                          <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> firing at the real pod, measuring the outcome…</div>
+                          <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> sending the signal and following its exact result…</div>
                         )
                       )}
                       {verdictNote && <div className="mt-2 rounded-md border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">{verdictNote}</div>}
@@ -385,7 +390,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
             )}
           </CardContent></Card>
 
-          {msg && <div className="rounded-md border border-success/25 bg-success/[0.06] p-3 text-[12.5px] text-foreground">{msg} <span className="text-muted-foreground">— the actuator verdict appears above; results also stream to the Grafana dashboard and the Attack monitoring tab.</span></div>}
+          {msg && <div className="rounded-md border border-success/25 bg-success/[0.06] p-3 text-[12.5px] text-foreground">{msg} <span className="text-muted-foreground">— the exact recorded result appears above and in Live Operations.</span></div>}
           {err && <div className="rounded-md border border-danger/25 bg-danger/[0.06] p-3 text-[12.5px] text-danger">{err}</div>}
         </>
       )}

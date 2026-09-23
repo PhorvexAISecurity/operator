@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, readLiveSelection } from "@/lib/live-selection";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { useExactRecord } from "@/lib/query";
+import { isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
+import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 
-// AttackResultsPanel — the REAL outcome of every attack fired from Live Operations: landed vs defended,
-// the actuator Phorvex chose + why, uptime before/dip/after, and the three-way cost (without / R6 / with).
-// Everything is measured on the live cluster — polled from /api/attack-results (persisted per attack).
+// AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
+// observations. Signal-only rows never contribute behavioral outcomes or economics.
 export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: boolean }) {
   const target = useSelectedTarget();
   const [selectedId, setSelectedId] = React.useState("");
@@ -60,13 +61,20 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
   function exportCSV() {
     const rs = pager.items;
     const head = ["fired", "service", "attack", "mitre", "outcome", "actuator", "containment", "time_to_action_s", "dwell_s", "dwell_ongoing", "uptime_before", "uptime_dip", "uptime_after", "cost_without", "cost_r6", "cost_with", "savings", "why"];
-    const body = rs.map((r) => [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, r.phorvexAction, r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
+    const body = rs.map((r) => isCatalogueSignalResult(r)
+      ? [r.firedAt, r.service, r.attack, r.mitre, "CATALOGUE SIGNAL · UNSCORED", r.responseAction || "", "", "", "", "", "", "", "", "", "", "", "", r.observationError || r.stimulusEvidence?.limitation || "behavioral outcome not measured"]
+      : [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, r.phorvexAction, r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
     csvDownload("phorvex-attack-results-page.csv", [head, ...body]);
   }
 
-  const defended = pager.items.filter((r) => r.outcome === "DEFENDED").length;
-  const landed = pager.items.filter((r) => r.outcome === "LANDED").length;
-  const boundedRows = pager.items.filter((r) => (r.containment === "evicted" || r.containment === "contained" || r.containment === "flushed") && r.dwellSec > 0);
+  const typedBehavioralRows = pager.items.filter((r) => !isCatalogueSignalResult(r) && !isUnversionedResult(r));
+  const defended = typedBehavioralRows.filter((r) => r.outcome === "DEFENDED").length;
+  const landed = typedBehavioralRows.filter((r) => r.outcome === "LANDED").length;
+  const signalRows = pager.items.filter(isCatalogueSignalResult).length;
+  const unversionedRows = pager.items.filter(isUnversionedResult);
+  const legacyDefended = unversionedRows.filter((r) => r.outcome === "DEFENDED").length;
+  const legacyLanded = unversionedRows.filter((r) => r.outcome === "LANDED").length;
+  const boundedRows = typedBehavioralRows.filter((r) => (r.containment === "evicted" || r.containment === "contained" || r.containment === "flushed") && r.dwellSec > 0);
   const meanDwell = boundedRows.length ? (boundedRows.reduce((a, r) => a + r.dwellSec, 0) / boundedRows.length).toFixed(1) : null;
 
   return (
@@ -78,8 +86,9 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
       <DataFreshness updatedAt={pager.updatedAt} refreshing={pager.refreshing} failed={!!pager.error} />
       {!compact && (
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 text-[12px] font-medium"><Swords className="h-3.5 w-3.5 text-primary" /> Live attack results</div>
-          <div className="text-[11px] text-muted-foreground">Current page: {pager.items.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span>{meanDwell && <> · mean recorded response time <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
+          <div className="flex items-center gap-1.5 text-[12px] font-medium"><Swords className="h-3.5 w-3.5 text-primary" /> Recorded results</div>
+          <div className="text-[11px] text-muted-foreground">Current page: {pager.items.length} records · typed behavioral labels: <span className="text-success">{defended} defended</span> / <span className="text-danger">{landed} landed</span>{signalRows > 0 && <> · {signalRows} unscored catalogue signal{signalRows === 1 ? "" : "s"}</>}{meanDwell && <> · mean typed response time <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
+          {unversionedRows.length > 0 && <div className="basis-full text-[11px] text-warning">{unversionedRows.length} legacy/unversioned record{unversionedRows.length === 1 ? "" : "s"} preserve their historical labels ({legacyDefended} recorded DEFENDED / {legacyLanded} recorded LANDED); those labels are excluded from the typed summary and are not revalidated efficacy evidence.</div>}
           <Button size="sm" variant="outline" onClick={exportCSV} className="ml-auto gap-1.5"><Download className="h-3.5 w-3.5" /> CSV (page)</Button>
         </div>
       )}
@@ -90,7 +99,7 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
       {pager.loading && !pager.pageMeta && <div className="flex items-center gap-2 py-8 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading attack results…</div>}
       {rows.length === 0 && !pager.loading && !pager.error && (selectedId
         ? (!exactMissing && !exactError && <div className="text-[12px] text-muted-foreground">Waiting for exact attack result <span className="font-mono">{selectedId}</span>…</div>)
-        : <Empty msg={q ? "No attack results match this search." : "No attacks fired yet. Go to Protect → Live theatre, pick a workload, and fire a real attack — its measured outcome, uptime impact and 3-way cost will appear here."} />)}
+        : <Empty msg={q ? "No recorded results match this search." : "No persisted results yet. Run a supported Live Operations control or a bounded Scenario Catalog observation; each record will show its measured evidence and explicit limitations here."} />)}
       {shown.map((r) => <AttackCard key={r.id} r={r} selected={r.id === selectedId} />)}
       <PaginationBar page={pager.page} pageSize={pageSize} total={pager.pageMeta?.total} hasNext={pager.hasNext} onPrevious={pager.previous} onNext={pager.next} onLatest={pager.latest} showLatest={pager.hasSnapshot || pager.page > 0} loading={pager.loading} />
     </div>
@@ -116,10 +125,13 @@ function containmentInfo(r: AttackResult): { tone: "good" | "warn" | "bad"; cls:
 }
 
 function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boolean }) {
+  const signal = isCatalogueSignalResult(r);
+  const showSecurity = showSecurityOutcomeSections(r);
+  const unversioned = isUnversionedResult(r);
   const running = r.status === "running";
   const partial = r.status === "partial";
-  const defended = r.outcome === "DEFENDED";
-  const landed = r.outcome === "LANDED";
+  const defended = !signal && r.outcome === "DEFENDED";
+  const landed = !signal && r.outcome === "LANDED";
   const effectOnly = !defended && !landed && r.effectEvidence?.observed === true;
   const confirmed = defended || landed;
   const cinfo = containmentInfo(r);
@@ -129,7 +141,9 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {/* header */}
         <div className="flex flex-wrap items-center gap-2">
           {selected && <Badge variant="accent">selected attack</Badge>}
-          {running ? <Badge variant="modeled" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> measuring…</Badge>
+          {signal ? <Badge variant="pending">CATALOGUE SIGNAL · UNSCORED</Badge>
+            : unversioned && !running ? <Badge variant="neutral">RECORDED LEGACY LABEL · {r.outcome || r.status.toUpperCase()}</Badge>
+            : running ? <Badge variant="modeled" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> measuring…</Badge>
             : partial ? <Badge variant="pending">PARTIAL RECORD</Badge>
             : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> RESPONSE RECORDED</Badge>
               : landed ? <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> LANDED</Badge>
@@ -139,11 +153,14 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
           <span className="text-[12px] text-muted-foreground">· {r.attack}</span>
           <span className="font-mono text-[10px] text-muted-foreground" title={r.id}>attack {r.id}</span>
           <span className="rounded border border-border bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{r.mitre}</span>
+          {unversioned && <Badge variant="neutral">legacy · unversioned</Badge>}
           <span className="ml-auto font-mono text-[10px] text-muted-foreground/60">{new Date(r.firedAt).toLocaleTimeString()}</span>
         </div>
 
         <ClaimScopeNote claim={r.claim} />
-        {(r.stimulusEvidence || r.effectEvidence) && (
+        {unversioned && <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[11px] text-muted-foreground">Legacy/unversioned result: the recorded text is preserved, but it predates the typed catalogue-signal provenance contract and must not be reinterpreted as evidence for that producer.</div>}
+        {signal && <CatalogueSignalResult result={r} />}
+        {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Mechanism evidence</div>
             {r.stimulusEvidence && <div className="mt-1 text-muted-foreground">unique stimulus <span className="font-mono text-foreground/85">{r.stimulusEvidence.eventName}</span> · target UID {r.stimulusEvidence.targetUid.slice(0, 12)}… · behavioral attack executed: {r.stimulusEvidence.behavioralExecuted ? "yes" : "no"}</div>}
@@ -152,7 +169,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
           </div>
         )}
         {/* actuator line */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
+        {showSecurity && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
           <span className="text-muted-foreground">{effectOnly ? "observed effect signature →" : "Phorvex →"}
             <span className={cn("ml-1 font-mono font-semibold", defended ? "text-success" : "text-foreground")}>{r.phorvexAction || "—"}</span>
           </span>
@@ -161,10 +178,10 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
           {defended && r.timeToDefendSec > 0 && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.timeToDefendSec}s</span></span>}
           <span className="text-muted-foreground">target pod <span className="font-mono text-[11px] text-foreground/80">{r.pod?.split("-").slice(-1)[0]}</span></span>
           {!running && confirmed && cinfo.line && <span className={cinfo.cls}>{cinfo.line}</span>}
-        </div>
+        </div>}
 
         {/* attacker dwell time — how long the intruder held effective access */}
-        <div>
+        {showSecurity && <div>
           <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70"><Clock className="h-3 w-3" /> recorded response timing</div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
             {running
@@ -176,9 +193,9 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
                 : <><span className="tabular text-[15px] font-semibold text-danger">≥ {r.dwellSec}s</span><span className="text-warning">ongoing — {cinfo.dwellNote}</span></>}
             <span className="ml-auto text-[10px] text-muted-foreground/60">Recorded response timing is not a bound on attacker access or out-of-band gains.</span>
           </div>
-        </div>
+        </div>}
 
-        {r.decisionEvidence && (
+        {!signal && r.decisionEvidence && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Decision during observation window</div>
             <div className="mt-1 text-muted-foreground">Temporal workload candidate at {new Date(r.decisionEvidence.time).toLocaleTimeString()}; no causal audit record is linked.</div>
@@ -188,7 +205,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         )}
 
         {/* uptime before / dip / after */}
-        <div>
+        {showSecurity && <div>
           <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70"><Activity className="h-3 w-3" /> availability</div>
           <div className="flex items-center gap-2 text-[12px]">
             <UpCell label="before" v={r.uptimeBefore} />
@@ -198,10 +215,10 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
             <UpCell label="after" v={r.uptimeAfter} good={r.uptimeAfter >= 100} />
             <span className="ml-2 text-[11px] text-muted-foreground">{r.uptimeAfter >= 100 && r.uptimeDip < 100 ? "recovered — sibling replica kept serving" : r.uptimeDip >= 100 ? "no availability impact" : ""}</span>
           </div>
-        </div>
+        </div>}
 
         {/* three-way cost */}
-        <div>
+        {showSecurity && <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">annual cost exposure (real AWS $/yr) · <span className="text-muted-foreground/50">modelled from measured prevention rates — not this attack&apos;s outcome</span></div>
           <div className="grid grid-cols-3 gap-2">
             <CostCell label="Without any defense" v={r.cost?.without} tone="bad" max={r.cost?.without} />
@@ -209,10 +226,10 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
             <CostCell label="With Phorvex" v={r.cost?.with} tone="good" max={r.cost?.without} sub={(r.cost?.savings ?? 0) > 0 ? `saves $${fmt(r.cost?.savings)}/yr` : `costs $${fmt(Math.abs(r.cost?.savings ?? 0))}/yr more`} />
           </div>
           <CostBreakdown c={r.cost} />
-        </div>
+        </div>}
 
         {/* reasoning */}
-        {(r.why || r.r6Note) && (
+        {showSecurity && (r.why || r.r6Note) && (
           <div className="rounded-md border border-border/60 bg-elevated/30 p-2.5 text-[11px] leading-relaxed">
             {r.why && <div><span className="text-muted-foreground">why: </span><span className="font-mono text-foreground/85">{r.why}</span></div>}
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-muted-foreground">
