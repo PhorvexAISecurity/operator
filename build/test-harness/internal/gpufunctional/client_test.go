@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -418,7 +419,7 @@ func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 
 	for _, requestID := range requestIDs {
 		dispositions[requestID] = "aborted"
 	}
-	body := map[string]any{"schema": "phorvex.drain.v1", "operation_id": opID, "operation_generation": generation, "attempt": 1, "owner_digest": drainOwnerDigest(testDrainOwner), "backend_incarnation_digest": strings.Repeat("d", 64), "revision": revision, "state": state, "admission": admission, "admission_generation": "1", "engine_boot_id": strings.Repeat("c", 32), "virtual_engine_ids": []int{0}, "engine_snapshot": map[string]any{"0": map[string]any{"waiting": requestIDs[1:], "running": requestIDs[:1], "swapped": []string{}, "cached": []string{}}}, "terminal_dispositions": dispositions, "proxy_snapshot": map[string]any{"before_engine_begin": map[string]int{"active": len(requestIDs)}, "after_engine_begin": map[string]int{"cancelled": len(requestIDs), "remaining": 0}}, "observations": observations, "deadline": "2026-09-22T00:00:00Z", "cancellation_grace_deadline": "2026-09-22T00:00:30Z", "transition_reason": "none", "cancel_boundary_revision": "0", "last_transition": "2026-09-22T00:00:00Z", "query_nonce": queryNonce}
+	body := map[string]any{"schema": "phorvex.drain.v1", "operation_id": opID, "operation_generation": generation, "attempt": 1, "owner_digest": drainOwnerDigest(testDrainOwner), "backend_incarnation_digest": strings.Repeat("d", 64), "revision": revision, "state": state, "admission": admission, "admission_generation": "1", "engine_boot_id": strings.Repeat("c", 32), "virtual_engine_ids": []int{0}, "engine_snapshot": map[string]any{"0": map[string]any{"waiting": requestIDs[1:], "running": requestIDs[:1], "swapped": []string{}, "cached": []string{}}}, "terminal_dispositions": dispositions, "proxy_snapshot": map[string]any{"before_engine_begin": map[string]int{"active": len(requestIDs)}, "after_engine_begin": map[string]int{"cancelled": len(requestIDs), "remaining": 0}}, "observations": observations, "deadline": "2026-09-22T00:00:00Z", "cancellation_grace_deadline": "2026-09-22T00:00:30.000000Z", "transition_reason": "none", "cancel_boundary_revision": "0", "last_transition": "2026-09-22T00:00:00Z", "query_nonce": queryNonce}
 	digest, err := drainDigest("phorvex-drain-status-v1", body)
 	if err != nil {
 		panic(err)
@@ -434,6 +435,7 @@ type drainServer struct {
 	closed                bool
 	streamDones           []chan struct{}
 	streamIDs             []string
+	streamMaxTokens       []int
 	metricsCalls          int
 	snapshotIDs           []string
 	opID, generation      string
@@ -458,6 +460,10 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.capabilities++
 		body := capabilityBody()
+		if s.opID != "" {
+			body["generation_high_water"] = "1"
+			delete(body, "next_operation_generation")
+		}
 		if s.wrongRecoveredEpoch && s.capabilities > 1 {
 			body["engine_boot_id"] = strings.Repeat("9", 32)
 		}
@@ -491,6 +497,8 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			ordinal := s.streamRequests
 			s.streamRequests++
+			maxTokens, _ := body["max_tokens"].(float64)
+			s.streamMaxTokens = append(s.streamMaxTokens, int(maxTokens))
 			s.active++
 			s.streamIDs = append(s.streamIDs, fmt.Sprintf("cmpl-drain-stream-%d-0", ordinal))
 			done := make(chan struct{})
@@ -651,6 +659,14 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 				t.Fatalf("direct receipt incomplete: %+v", receipt)
 			}
 			if !tc.wantErr {
+				if len(state.streamMaxTokens) != streamCohortSize {
+					t.Fatalf("drain stream demand count differs: %v", state.streamMaxTokens)
+				}
+				for _, maxTokens := range state.streamMaxTokens {
+					if maxTokens != drainStreamMaxTokens {
+						t.Fatalf("drain stream token demand=%d want %d", maxTokens, drainStreamMaxTokens)
+					}
+				}
 				for _, stream := range receipt.Cohort.Streams {
 					if stream.Ordinal == receipt.Anchor.StreamOrdinal {
 						continue
@@ -922,6 +938,92 @@ func TestCapabilityAcceptsRetainedActualWireShape(t *testing.T) {
 	}
 	if capability.Schema != "phorvex.drain.v1" || len(observation.Body) != len(raw) || observation.SHA256 != "0ab172493cb9ed3064b3b9058210c819d1609b9a5cfd0d3ab76335b2421c9e00" {
 		t.Fatalf("actual capability receipt differs: %+v %+v", capability, observation)
+	}
+}
+
+func TestCapabilityGenerationTransitionsAllowIntentionalMissingNextGeneration(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mutate  func(map[string]any)
+		wantErr bool
+	}{
+		{name: "baseline creatable"},
+		{name: "active closed", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "1"
+			body["admission"] = "CLOSED"
+			delete(body, "next_operation_generation")
+		}},
+		{name: "reopened retained operation", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "1"
+			delete(body, "next_operation_generation")
+		}},
+		{name: "noncanonical high water", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "01"
+			delete(body, "next_operation_generation")
+		}, wantErr: true},
+		{name: "next generation gap", mutate: func(body map[string]any) {
+			body["generation_high_water"] = "1"
+			body["next_operation_generation"] = "3"
+		}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := capabilityBody()
+			if tc.mutate != nil {
+				tc.mutate(body)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				jsonResponse(w, http.StatusOK, body)
+			}))
+			defer server.Close()
+			client, err := New(server.URL, testToken, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, err = client.Capability(t.Context())
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestDrainTimingAcceptsExactPythonMicrosecondGraceForNanosecondDeadline(t *testing.T) {
+	opID := strings.Repeat("1", 32)
+	body := operationBody(opID, "1", "DRAINING", "CLOSED", "2", "", "", []string{"cmpl-anchor-0"})
+	body["deadline"] = "2026-09-23T10:57:43.351817702Z"
+	body["cancellation_grace_deadline"] = "2026-09-23T10:58:13.351817Z"
+	delete(body, "receipt_sha256")
+	digest, err := drainDigest("phorvex-drain-status-v1", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body["receipt_sha256"] = digest
+	decode := func(value map[string]any) DrainOperation {
+		t.Helper()
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var operation DrainOperation
+		if err := strictJSON(raw, &operation); err != nil {
+			t.Fatal(err)
+		}
+		return operation
+	}
+	payload := createOperation{Schema: "phorvex.drain.v1", OperationID: opID, OperationGeneration: "1", Attempt: 1, Owner: testDrainOwner, ExpectedIncarnationDigest: strings.Repeat("d", 64), Deadline: body["deadline"].(string), Mode: "abort-and-quiesce"}
+	capability := Capability{IncarnationDigest: strings.Repeat("d", 64), EngineBootID: strings.Repeat("c", 32)}
+	if err := validateDrainBinding(decode(body), payload, capability); err != nil {
+		t.Fatalf("actual Go-deadline/Python-grace precision contract rejected: %v", err)
+	}
+	for _, grace := range []string{
+		"2026-09-23T10:58:13.351817000Z",
+		"2026-09-23T10:58:13.351818Z",
+	} {
+		bad := maps.Clone(body)
+		bad["cancellation_grace_deadline"] = grace
+		if err := validateDrainBinding(decode(bad), payload, capability); err == nil || !strings.Contains(err.Error(), "timing or cancellation boundary") {
+			t.Fatalf("non-producer grace %q accepted: %v", grace, err)
+		}
 	}
 }
 

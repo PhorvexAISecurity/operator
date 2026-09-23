@@ -23,10 +23,12 @@ import (
 )
 
 const (
-	MaxResponseBytes = 1 << 20
-	modelName        = "facebook/opt-125m"
-	primerPrompt     = "A short synthetic GPU metrics primer."
-	streamCohortSize = 8
+	MaxResponseBytes      = 1 << 20
+	modelName             = "facebook/opt-125m"
+	primerPrompt          = "A short synthetic GPU metrics primer."
+	streamCohortSize      = 8
+	prefixStreamMaxTokens = 128
+	drainStreamMaxTokens  = 512
 )
 
 var errNoAuthenticatedUnfinishedAnchor = errors.New("no authenticated unfinished drain anchor exists; operation not sent")
@@ -291,8 +293,15 @@ func (c *Client) Capability(ctx context.Context) (Capability, Observation, error
 	if cap.PodUID == "" || cap.ProxyBootID == "" || cap.LedgerID == "" || cap.ProxySource == "" {
 		return Capability{}, obs, errors.New("drain capability omitted runtime identity")
 	}
-	if _, err := strconv.ParseUint(cap.NextOperationGeneration, 10, 64); err != nil {
-		return Capability{}, obs, errors.New("drain capability next generation is invalid")
+	high, err := strconv.ParseUint(cap.GenerationHighWater, 10, 64)
+	if err != nil || !canonicalDecimal(cap.GenerationHighWater) {
+		return Capability{}, obs, errors.New("drain capability generation high water is invalid")
+	}
+	if cap.NextOperationGeneration != "" {
+		next, nextErr := strconv.ParseUint(cap.NextOperationGeneration, 10, 64)
+		if nextErr != nil || !canonicalPositiveDecimal(cap.NextOperationGeneration) || high == ^uint64(0) || next != high+1 {
+			return Capability{}, obs, errors.New("drain capability next generation is invalid")
+		}
 	}
 	return cap, obs, nil
 }
@@ -657,7 +666,7 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 	if !preIdle.RequestSuccessMetricPresent {
 		return receipt, errors.New("busy cohort precondition lacks the normal-completion counter")
 	}
-	cohort := c.startStreamCohort(ctx, streamCohortSize)
+	cohort := c.startStreamCohort(ctx, streamCohortSize, prefixStreamMaxTokens)
 	defer func() {
 		retErr = errors.Join(retErr, cohort.stop())
 		receipt.Cohort = cohort.receipt()
@@ -715,12 +724,12 @@ type streamExecution struct {
 	joinTimeout time.Duration
 }
 
-func (c *Client) startStream(ctx context.Context, ordinal int, lifecycle chan<- struct{}) *streamExecution {
+func (c *Client) startStream(ctx context.Context, ordinal int, lifecycle chan<- struct{}, maxTokens int) *streamExecution {
 	streamCtx, cancel := context.WithCancel(ctx)
 	run := &streamExecution{submitted: make(chan struct{}), response: make(chan struct{}), finished: make(chan struct{}), cancel: cancel, lifecycle: lifecycle, joinTimeout: 2 * time.Second}
 	run.receipt = StreamLifecycleReceipt{Ordinal: ordinal, Termination: "not-started"}
 	go func() {
-		err := c.stream(streamCtx, run)
+		err := c.stream(streamCtx, run, maxTokens)
 		run.mu.Lock()
 		run.receipt.Finished = true
 		run.receipt.FinishedAt = c.now().UTC().Format(time.RFC3339Nano)
@@ -785,11 +794,11 @@ type streamCohort struct {
 	lifecycle chan struct{}
 }
 
-func (c *Client) startStreamCohort(ctx context.Context, count int) *streamCohort {
+func (c *Client) startStreamCohort(ctx context.Context, count, maxTokens int) *streamCohort {
 	lifecycle := make(chan struct{}, count*2)
 	cohort := &streamCohort{streams: make([]*streamExecution, 0, count), lifecycle: lifecycle}
 	for ordinal := 0; ordinal < count; ordinal++ {
-		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal, lifecycle))
+		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal, lifecycle, maxTokens))
 	}
 	return cohort
 }
@@ -1005,8 +1014,8 @@ func (c *streamCohort) stop() error {
 	return result
 }
 
-func (c *Client) stream(ctx context.Context, run *streamExecution) error {
-	body, _ := json.Marshal(map[string]any{"model": modelName, "prompt": strings.TrimSpace(strings.Repeat("one two three four five six seven eight ", 12)), "max_tokens": 128, "temperature": 0, "seed": 1, "stream": true, "ignore_eos": true})
+func (c *Client) stream(ctx context.Context, run *streamExecution, maxTokens int) error {
+	body, _ := json.Marshal(map[string]any{"model": modelName, "prompt": strings.TrimSpace(strings.Repeat("one two three four five six seven eight ", 12)), "max_tokens": maxTokens, "temperature": 0, "seed": 1, "stream": true, "ignore_eos": true})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base.String()+"/v1/completions", bytes.NewReader(body))
 	if err != nil {
 		return err

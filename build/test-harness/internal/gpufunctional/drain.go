@@ -169,7 +169,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err != nil {
 		return receipt, err
 	}
-	cohort := c.startStreamCohort(ctx, streamCohortSize)
+	cohort := c.startStreamCohort(ctx, streamCohortSize, drainStreamMaxTokens)
 	cohortFinalized := false
 	finalizeCohort := func() error {
 		if cohortFinalized {
@@ -383,7 +383,12 @@ func validateDrainBinding(operation DrainOperation, payload createOperation, cap
 	deadline, deadlineErr := time.Parse(time.RFC3339Nano, operation.Deadline)
 	grace, graceErr := time.Parse(time.RFC3339Nano, operation.CancellationGraceDeadline)
 	_, transitionErr := time.Parse(time.RFC3339Nano, operation.LastTransition)
-	if deadlineErr != nil || graceErr != nil || transitionErr != nil || !deadline.Equal(grace.Add(-30*time.Second)) || !strings.HasSuffix(operation.Deadline, "Z") || !strings.HasSuffix(operation.CancellationGraceDeadline, "Z") || !strings.HasSuffix(operation.LastTransition, "Z") || operation.TransitionReason != "none" || operation.CancelBoundaryRevision != "0" {
+	if deadlineErr != nil || graceErr != nil || transitionErr != nil || !strings.HasSuffix(operation.Deadline, "Z") || !strings.HasSuffix(operation.LastTransition, "Z") || operation.TransitionReason != "none" || operation.CancelBoundaryRevision != "0" {
+		return errors.New("drain receipt timing or cancellation boundary is invalid")
+	}
+	expectedGrace := deadline.UTC().Truncate(time.Microsecond).Add(30 * time.Second)
+	expectedGraceText := expectedGrace.Format("2006-01-02T15:04:05.000000Z")
+	if !grace.Equal(expectedGrace) || operation.CancellationGraceDeadline != expectedGraceText {
 		return errors.New("drain receipt timing or cancellation boundary is invalid")
 	}
 	if err := validateDrainSnapshots(operation); err != nil {
