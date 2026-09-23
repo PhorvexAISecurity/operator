@@ -87,6 +87,68 @@ spec:
           value: {{ .Values.phorvex.console.state.historyMinFreeBytes | quote }}
         - name: PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS
           value: {{ .Values.phorvex.console.state.historyRetentionDays | default 0 | quote }}
+        {{- with .Values.phorvex.console.catalogueV1 }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_LOOPBACK_URL
+          value: {{ .loopbackURL | default "http://127.0.0.1:8090" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_ALLOWED_TENANT
+          value: {{ .allowedTenant | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_DENIED_TENANT
+          value: {{ .deniedTenant | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_DENIED_TARGET
+          value: {{ .deniedTarget | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_EXPECTED_SUBJECT
+          value: {{ .expectedSubject | default "" | quote }}
+        {{- if $.Values.phorvex.console.auth.grants.enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GRANT_FILE
+          value: {{ printf "%s/%s" $.Values.phorvex.console.auth.grants.mountPath $.Values.phorvex.console.auth.grants.fileName | quote }}
+        {{- end }}
+        {{- with .scopedToken }}
+        {{- if .existingSecret }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_TOKEN_FILE
+          value: {{ printf "%s/%s" .mountPath .key | quote }}
+        {{- end }}
+        {{- end }}
+        {{- with .voice }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_ENABLED
+          value: {{ .enabled | default false | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_NAMESPACE
+          value: {{ .namespace | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_DEPLOYMENT
+          value: {{ .deployment | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_SERVICE
+          value: {{ .service | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_CONTAINER
+          value: {{ .container | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT
+          value: {{ .port | default 0 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PDB
+          value: {{ .pdb | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_SELECTOR
+          value: {{ .transcriptSelector | default "" | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_CONTAINER
+          value: {{ .transcriptContainer | default "" | quote }}
+        {{- end }}
+        {{- with .gpu }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_ENABLED
+          value: {{ .enabled | default false | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_NAMESPACE
+          value: {{ .namespace | default "" | quote }}
+        {{- if .fixtureConfigMap }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_CONFIG
+          value: {{ printf "%s/%s" .mountPath .fixtureKey | quote }}
+        {{- end }}
+        {{- if .runtimeSecret }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_KUBECONFIG
+          value: {{ printf "%s/%s" .runtimeMountPath .kubeconfigKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_KUBE_CONTEXT
+          value: {{ required "console.catalogueV1.gpu.kubeContext is required when runtimeSecret is set" .kubeContext | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
         {{- if .Values.phorvex.prometheusUrl }}
         # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
         # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
@@ -178,6 +240,29 @@ spec:
           mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
           readOnly: true
         {{- end }}
+        {{- with .Values.phorvex.console.catalogueV1 }}
+        {{- if .enabled }}
+        {{- with .scopedToken }}
+        {{- if .existingSecret }}
+        - name: catalogue-v1-token
+          mountPath: {{ .mountPath }}
+          readOnly: true
+        {{- end }}
+        {{- end }}
+        {{- with .gpu }}
+        {{- if .fixtureConfigMap }}
+        - name: catalogue-v1-gpu
+          mountPath: {{ .mountPath }}
+          readOnly: true
+        {{- end }}
+        {{- if .runtimeSecret }}
+        - name: catalogue-v1-gpu-runtime
+          mountPath: {{ .runtimeMountPath }}
+          readOnly: true
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
       volumes:
       - name: console-tmp
         emptyDir: {}
@@ -198,5 +283,43 @@ spec:
       - name: console-grants
         configMap:
           name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
+          defaultMode: 0440
+      {{- end }}
+      {{- with .Values.phorvex.console.catalogueV1 }}
+      {{- if .enabled }}
+      {{- with .scopedToken }}
+      {{- if .existingSecret }}
+      - name: catalogue-v1-token
+        secret:
+          secretName: {{ .existingSecret }}
+          defaultMode: 0440
+          items:
+          - key: {{ .key }}
+            path: {{ .key }}
+      {{- end }}
+      {{- end }}
+      {{- with .gpu }}
+      {{- if .fixtureConfigMap }}
+      - name: catalogue-v1-gpu
+        configMap:
+          name: {{ .fixtureConfigMap }}
+          defaultMode: 0440
+          items:
+          - key: {{ .fixtureKey }}
+            path: {{ .fixtureKey }}
+      {{- end }}
+      {{- if .runtimeSecret }}
+      - name: catalogue-v1-gpu-runtime
+        secret:
+          secretName: {{ .runtimeSecret }}
+          defaultMode: 0440
+          items:
+          - key: {{ .kubeconfigKey }}
+            path: {{ .kubeconfigKey }}
+          - key: {{ .bearerTokenKey }}
+            path: {{ .bearerTokenKey }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
       {{- end }}
 {{- end }}
