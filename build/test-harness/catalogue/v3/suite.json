@@ -64,7 +64,7 @@
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
       "measures": "Cold metrics and an explicit primer completion; the same two-request prefix population in both arms; direct idle reset, miss/repopulation and busy refusal bracketed by eight exact normal-length completions and final idle metrics.",
       "limits": "Logical reset only; the post-cohort counter is fixture-local protocol evidence, not a comparative performance result. No physical erasure, poisoning mitigation, cross-tenant isolation or installed selection claim.",
-      "sourceSHA256": "fe3f1c6201f288004b10f7bf15c449a6afe60625bec6d5d3c66d1d9a840bfc3b"
+      "sourceSHA256": "22dac0abe400b9fb807a3583e3fb90412c49bd2f4ae78dc39e16fabbe3005a4e"
     },
     {
       "id": "c2-vllm-request-drain",
@@ -72,7 +72,7 @@
       "sourceFile": "scenarios/c2_vllm_gpu_functional.go",
       "measures": "Actual engine admission, one late-selected authenticated unfinished SSE anchor captured and aborted by the engine operation, all engine dispositions, explicit unattributed background snapshot IDs, two fresh empty-queue observations and reopen.",
       "limits": "Client attribution is limited to the exact anchor; queued requests without an SSE identity remain unattributed and fullCohortAttributed is false. Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
-      "sourceSHA256": "fe3f1c6201f288004b10f7bf15c449a6afe60625bec6d5d3c66d1d9a840bfc3b"
+      "sourceSHA256": "22dac0abe400b9fb807a3583e3fb90412c49bd2f4ae78dc39e16fabbe3005a4e"
     },
     {
       "id": "c2-native-route-cutover",
