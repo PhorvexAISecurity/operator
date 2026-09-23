@@ -1,0 +1,91 @@
+schema_version: 2
+campaign_id: 2026-09-23-catalogue-coverage
+profile: workflow-v2
+question: Build and verify a realistic workload-derived catalogue with exact signal,
+  brain decision, actuator effect, independent security and service outcomes; repair
+  demonstrated failures and preserve blocked or unsupported cases.
+state: ANALYZING
+owner: mehrdad
+approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-23T22:19:16+00:00'
+updated_at: '2026-09-23T23:02:42+00:00'
+scope:
+  environment: dev-existing-cluster
+  source_release: pending-fresh-baseline
+  included_fixes: []
+  duration_ceiling: 60 minutes per initial live round including cleanup; rebaseline
+    between rounds
+  cost_ceiling: Existing cluster only; no new nodes, GPUs, paid services or purchases;
+    one mutating live package at a time with per-case ceilings
+  permission: attack
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.153
+  digest: sha256:e7800e86d03337e16a3f0e39bbd7ce8b7078d4ed043f324d9089d54f2971d946
+  embedded_git_sha: 1a400d281b3350fcb72cbfc8559e1597bb1ff1ce
+safety:
+  stop_conditions:
+  - 'Unexpected source or target identity change, loss of healthy baseline or cleanup
+    authority, unmanaged service impact: stop affected case and preserve evidence'
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  unresolved: []
+  cleanup: pending
+positive_control: PASS
+rounds:
+- id: round-1
+  state: COMPLETE
+- id: round-2
+  state: COMPLETE
+findings:
+- RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: codex-lead
+  independent_reviewer: catalogue-reference-review
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Review completed fixture-networking result, diagnose healthy placement and
+    continue coverage implementation; no credential/defense verdict yet
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-09-23T22:24:57+00:00'
+  by: codex-lead
+  artifact: CAMPAIGN.md
+  approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: APPROVED
+  to: BASELINED
+  at: '2026-09-23T22:39:33+00:00'
+  by: codex-lead
+  artifact: rounds/round-1/evidence/BASELINE.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Positive control only instrumentation and two fixed benign requests; security
+    NOT_EVALUATED; active source work continues
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-23T22:39:48+00:00'
+  by: codex-lead
+  artifact: rounds/round-1/evidence/BASELINE.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: Initial baseline round complete; no blanket permission for unreviewed live
+    package
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-23T23:02:42+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Bounded package ended inconclusively before any credential read because of
+    CNI readiness; exact namespace cleanup reported PASS; no security result
+  forced: false

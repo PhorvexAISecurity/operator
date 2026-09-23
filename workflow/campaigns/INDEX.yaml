@@ -20,3 +20,7 @@ campaigns:
     directory: campaigns/2026-09-20-post25-live
     state: RUNNING
     profile: workflow-v2
+  2026-09-23-catalogue-coverage:
+    directory: campaigns/2026-09-23-catalogue-coverage
+    state: ANALYZING
+    profile: workflow-v2

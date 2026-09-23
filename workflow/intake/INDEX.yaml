@@ -238,3 +238,10 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude:
+    directory: intake/RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
+    kind: OBSERVATION
+    title: Pod-bound credential invalidation may be excluded from rotation coverage
+    state: REPORTED
+    issue_id: null
+    aliases: []
