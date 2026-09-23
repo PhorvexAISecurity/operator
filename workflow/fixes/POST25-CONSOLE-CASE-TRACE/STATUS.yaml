@@ -1,0 +1,257 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f41671653f90daa8d8233fb1f76a5f0ba6261e12d257bddd5b0d3ad8186c2b27
+    source_sha: bb09d2017471cd0ba3fa2fb698df71cd866ab7a4
+    at: '2026-09-23T20:21:02+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/independent-tests.json
+    sha256: 1742dfb278cbf53611541053b4f695d1115b037f7800c9ce90c3d8b3da9a1bf3
+    source_sha: bb09d2017471cd0ba3fa2fb698df71cd866ab7a4
+    at: '2026-09-23T21:02:21+00:00'
+  preflight:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/preflight/receipt-r2.json
+    sha256: a75a6218d5bc0a488ad7f3553d2153649d77e4586d95c916a32c897ac1c9ffef
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:21:48+00:00'
+  implementation:
+    result: PASS
+    by: m183-finish
+    artifact: 04-diff.patch
+    sha256: ec4a86967ca4ab10501802cf06e7fb3c2a3f5561296aeb4bc9aa3f33c8822628
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:21:48+00:00'
+  l0:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/implementer-verify-offline-r4.log
+    sha256: 094e55b161d58f76b569bfff0f461ac4c896c3da09f7e10535b29353a5740824
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:21:48+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/console
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/recon
+    inputs_sha256: d4ec006d3637ab4ac6e4f123dfd5a6d9fb3baf3d24c7b238bd266deda73dceb5
+  l1:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/implementer-console-final-r3.log
+    sha256: 5ec0f1cc1c708363ecd43c9b3e4460d367b6b3e33cbbb6398480a1a684329ab1
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:21:48+00:00'
+    inputs:
+    - phorvex/internal/audit
+    - phorvex/internal/console
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    inputs_sha256: b90cc64771b986c18396f56002b9f12004106165685bc43c7f21dc9003c37fa7
+  l2:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/ui/RESULT.json
+    sha256: eeff540967915ec2c0c9d56dbe44c45a945625e1ce93c48678d5fdfc93ee9d62
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:21:48+00:00'
+    inputs:
+    - dashboard-web/components/panels
+    - dashboard-web/lib
+    - dashboard-web/tests
+    inputs_sha256: 0eb142f34197d6f060ecb2c81be75cb589abd8917c85540fe93d88b512e0472c
+  positive_control:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/root/review-delta.json
+    sha256: 015e613a0af078179728a462ddd6fbc0b1c000d354d125e70bad2f143df895c3
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:21:48+00:00'
+    inputs:
+    - dashboard-web
+    - phorvex/internal/audit
+    - phorvex/internal/console
+    - phorvex/internal/killchain
+    inputs_sha256: 5c33e1ac40591c2002a1d9a7c413aa5af0cce9f96c73696c062ed2c534528b1c
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e1e32ad3e126b6875a1f9afc73878e5ea766e7829cd5f9b7776306997f16d99d
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:22:06+00:00'
+    baseline_sha: bb09d2017471cd0ba3fa2fb698df71cd866ab7a4
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: eb7bb783b1ca24a73ac659d43d5bb2702c82489864933278a476f6715084e3d9
+    source_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+    at: '2026-09-23T21:22:06+00:00'
+    incident_sha256: e1e32ad3e126b6875a1f9afc73878e5ea766e7829cd5f9b7776306997f16d99d
+fix_id: POST25-CONSOLE-CASE-TRACE
+issues: []
+title: Trace console case signals to exact manager decisions and dispatch
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: m183-finish
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: catalogue/limited-v1-console
+  code_sha: bb09d2017471cd0ba3fa2fb698df71cd866ab7a4
+  deployed_image: null
+  deployed_git_sha: 1a400d281b3350fcb72cbfc8559e1597bb1ff1ce
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: catalogue/limited-v1-console
+  base_sha: bb09d2017471cd0ba3fa2fb698df71cd866ab7a4
+  head_sha: 1da799f3ddd9f3cd8e5d0ff1b14216fcd361acdb
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-23T21:22:10+00:00'
+follow_up_to: POST25-CONSOLE-SIGNAL-TRUTH
+configuration_history:
+- at: '2026-09-23T20:19:14+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-23T21:12:46+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T21:19:57+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T21:21:47+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-23T20:19:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-23T20:21:02+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-23T21:21:48+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-23T21:21:50+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-23T21:22:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-23T21:22:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: POST25-CONSOLE-CASE-TRACE:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
