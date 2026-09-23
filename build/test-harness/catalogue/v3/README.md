@@ -6,6 +6,10 @@ it is **not a completed live benchmark or a security-coverage certificate**.
 Source tests, direct backend effects, installed-manager attribution, application
 availability and security efficacy have separate acceptance records.
 
+The [September 23 limited-v1 evaluation](../../../../workflow/campaigns/2026-09-20-post25-live/limited-v1/README.md)
+records selected live controls and their limits. Its actual-service Voice and
+console API checks are separate from the harness profile registrations below.
+
 The full legacy catalogue remains available for assessment. Marker simulations,
 unassessed entries and unavailable hardware do not become demonstrated coverage
 by appearing in a registration list. These profiles select only the workload
@@ -175,3 +179,20 @@ the collector checks referenced suite and metrics bytes but does not
 independently establish binary lineage. Reports always state
 `COMPARISON_NOT_ESTABLISHED` until a separately reviewed comparison contract is
 implemented.
+
+### Direct GPU drain request profile
+
+The direct drain control uses the short prompt `one two three four five six
+seven eight` and requests 768 completion tokens. Its reviewed isolated vLLM
+0.7.3 fixture uses `--max-model-len 1024`,
+`--max-num-batched-tokens 1024`, `--max-num-seqs 1`, and the existing bounded
+GPU allocation. Earlier 256-context fixtures do not support this request.
+Prefix-cache controls retain their existing prompt and 128-token demand.
+
+The longer drain request addresses an observed test-lifetime mismatch: a
+240-token inference finished before the control round trip reached the engine.
+The test still requires the request selected before dispatch to appear in the
+engine snapshot and to be reported aborted. Unrelated aborted requests cannot
+substitute for it, and changing a timing profile does not turn an earlier
+invalid run into a passing result. See the limited-v1 report for the actual
+fixture, source and run verdict; no installed-stock-service result is implied.

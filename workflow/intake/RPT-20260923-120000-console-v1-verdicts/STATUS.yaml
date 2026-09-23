@@ -1,0 +1,205 @@
+schema_version: 1
+intake_id: RPT-20260923-120000-console-v1-verdicts
+kind: BUG
+title: Console run evidence drops validity and benign-control meaning
+state: DUPLICATE
+reporter: codex-lead
+approval_ref: '2026-09-23 owner: supported v1 items alongside old console catalogue,
+  truthful landed/defended outcomes; standing repair and reviewed own-PR merge authorization'
+created_at: '2026-09-23T12:05:13+00:00'
+updated_at: '2026-09-23T12:13:33+00:00'
+pins:
+  source_main_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Local exact source with retained dev-cluster v11 metric; installed
+    behavior to verify after deployment
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 31
+    overlap:
+    - against
+    - all
+    - already
+    - also
+    - attack
+    - claim
+    - does
+    - evidence
+    - exclude
+    - identical
+    - its
+    - metric
+    - nats
+    - not
+    - observed
+    - only
+    - positive
+    - reason
+    - retained
+    - same
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-2
+    score: 29
+    overlap:
+    - against
+    - all
+    - already
+    - also
+    - api
+    - does
+    - entries
+    - evidence
+    - existing
+    - has
+    - installed
+    - its
+    - list
+    - may
+    - metadata
+    - not
+    - observed
+    - only
+    - reason
+    - rejected
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-170
+    score: 28
+    overlap:
+    - actual
+    - attack
+    - catalogue
+    - claim
+    - correction
+    - evidence
+    - exclude
+    - execution
+    - gpu
+    - identical
+    - labels
+    - new
+    - real
+    - same
+    - scenarios
+    - source
+    - that
+    - unsupported
+    - valid
+    - verification
+    title: APT catalogue labels technique-specific attacks that execute the same generic
+      marker routine
+  - issue_id: M-136
+    score: 25
+    overlap:
+    - against
+    - all
+    - already
+    - api
+    - attack
+    - console
+    - control
+    - correction
+    - evidence
+    - files
+    - has
+    - its
+    - not
+    - only
+    - real
+    - same
+    - service
+    - supported
+    - that
+    - this
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-3
+    score: 24
+    overlap:
+    - against
+    - all
+    - also
+    - api
+    - control
+    - has
+    - installed
+    - may
+    - new
+    - not
+    - only
+    - positive
+    - rejected
+    - same
+    - that
+    - this
+    - valid
+    - values
+    - verification
+    - was
+    title: No admission control on `PhorvexPolicy` spec values
+  determination: DUPLICATE
+  issue_id: M-161
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Implement bounded M-161 console consumer follow-up
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-23T12:10:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-23T12:10:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-23T12:10:38+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-23T12:10:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: DUPLICATE
+  at: '2026-09-23T12:13:33+00:00'
+  by: codex-lead
+  artifact: DEDUP.md
+  note: null
+  approval_ref: null
+  forced: false
+revision: 5

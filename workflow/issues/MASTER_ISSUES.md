@@ -2472,7 +2472,7 @@ Superseded by `M-140`.
 
 ### M-161 · Benchmark errors and unobserved baselines are scored as successful defense · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: V3-M161
+Severity: HIGH · Tier: unassigned · Fixes: POST25-CONSOLE-V1-VERDICTS, V3-M161
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

@@ -224,3 +224,10 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20260923-120000-console-v1-verdicts:
+    directory: intake/RPT-20260923-120000-console-v1-verdicts
+    kind: BUG
+    title: Console run evidence drops validity and benign-control meaning
+    state: DUPLICATE
+    issue_id: null
+    aliases: []

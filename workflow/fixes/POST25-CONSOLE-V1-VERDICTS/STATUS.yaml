@@ -1,0 +1,278 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 61c9f3d8d036c805e357d0d4c1e5d6a986a914b2866ba784dbfc247dc7165e6d
+    source_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+    at: '2026-09-23T12:20:43+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md delegates in-scope plan amendments; 2026-09-23
+      owner requires verified console delivery; L3 was already required by signed
+      plan
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/baseline-red/RESULT.json
+    sha256: afb4f9c330f9303e40ecb33d7d78fa68233ec747574fb327d1296d7a9803fe06
+    source_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+    at: '2026-09-23T13:05:43+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/base-review.md
+    sha256: 40f79c73d8da46594632f4593491930a085d3007a4bf1390b6a4d78d0bb5656c
+    source_sha: bd58b0cadadbaa08f91c93829cdd4074f7500dab
+    at: '2026-09-23T13:23:56+00:00'
+    baseline_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+  preflight:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/preflight/receipt-r3.json
+    sha256: 0f3dbf24eca9a04ea1c25317e45a01e48e1b165a34bf30b26c4e3977f6fac759
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:31:25+00:00'
+  implementation:
+    result: PASS
+    by: m183-finish
+    artifact: 04-diff.patch
+    sha256: 0efab559cdc61b2b28f348c60b8d4206329ed7c9d962c27fa3047d1cafb8a597
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:31:25+00:00'
+  l0:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/worker/l0-summary.json
+    sha256: 742d9c3e4bc507c8dc02c322078d83e40d9103fd415269c1859753c0809ce318
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:31:25+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 93755106262bd9548985c0038dc3199f7691195f2d7b85591fe937b6a71fc2d3
+  l1:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/worker/focused-console.json
+    sha256: d0da1d208ffb5068f9eb4e860c89da6472315e324c454e3fb105296d6e30d381
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:31:25+00:00'
+    inputs:
+    - build/test-harness/internal/cataloguecollector/testdata
+    - phorvex/internal/console
+    inputs_sha256: 45a8d2c950e7c297ede2f13aa1ff22ca02733398c8706a7da5f66d25890a5cf6
+  l2:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/worker/full-console.json
+    sha256: 6ccd10b52db5a039874a42846dee9f272e31f3cab2b8f849a51051c29a1db237
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:31:25+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: f28699a0f8eac5e3ca29914159e43868df3e61ba03f62b921235fec0f50ee964
+  positive_control:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/worker/focused-console.json
+    sha256: d0da1d208ffb5068f9eb4e860c89da6472315e324c454e3fb105296d6e30d381
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:31:25+00:00'
+    inputs:
+    - build/test-harness/internal/cataloguecollector/testdata
+    - phorvex/internal/console
+    inputs_sha256: 45a8d2c950e7c297ede2f13aa1ff22ca02733398c8706a7da5f66d25890a5cf6
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: dee8763e61158fce0d68e06fc44221148abe1be94d688e8522bd6e11ed4f064b
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:32:01+00:00'
+    baseline_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: bdce0515fdb0ac0a182a798091bc2cefa2974b634d503f01aedc8387f2192272
+    source_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+    at: '2026-09-23T13:32:01+00:00'
+    incident_sha256: dee8763e61158fce0d68e06fc44221148abe1be94d688e8522bd6e11ed4f064b
+fix_id: POST25-CONSOLE-V1-VERDICTS
+issues:
+- M-161
+title: Preserve functional and validity outcomes through console catalogue and run
+  evidence
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: m183-finish
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: catalogue/limited-v1
+  base_sha: bd58b0cadadbaa08f91c93829cdd4074f7500dab
+  head_sha: c9207604086444aad6e99fe5b5303d5a5c0d2e11
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-23T13:32:05+00:00'
+follow_up_to: V3-M161
+configuration_history:
+- at: '2026-09-23T12:15:33+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: Owner authorized catalogue implementation, live checks and own PR
+    delivery/merge
+- at: '2026-09-23T12:15:34+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-23T12:19:16+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-23T13:07:19+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T13:31:25+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-23T12:18:07+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-23T12:20:51+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-23T13:31:25+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-23T13:31:28+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-23T13:32:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-23T13:32:03+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 61c9f3d8d036c805e357d0d4c1e5d6a986a914b2866ba784dbfc247dc7165e6d
+  source_sha: 3f4e2cc0c9415ce93ec525a957bfd96029f8dc0a
+  at: '2026-09-23T12:17:26+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+handoff:
+  id: POST25-CONSOLE-V1-VERDICTS:12:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 12
