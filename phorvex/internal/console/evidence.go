@@ -21,6 +21,7 @@ import (
 // --- Attack Catalog (the full ~53 scenarios from the harness registry) -------------------
 
 type CatalogItem struct {
+	EntryID             string   `json:"entryID,omitempty"`
 	Name                string   `json:"name"`
 	Product             string   `json:"product"` // k8s | ai | structural
 	Category            string   `json:"category"`
@@ -40,6 +41,12 @@ type CatalogItem struct {
 	MeaningfulWhen    string   `json:"meaningfulWhen"`
 	RunnableNote      string   `json:"runnableNote"`
 	Prereqs           []string `json:"prereqs"`
+	LaunchKind        string   `json:"launchKind"`
+	ClaimClass        string   `json:"claimClass"`
+	Profile           string   `json:"profile,omitempty"`
+	Available         bool     `json:"available"`
+	UnavailableReason string   `json:"unavailableReason,omitempty"`
+	RuntimeContext    string   `json:"runtimeContext,omitempty"`
 }
 
 // Legacy harnesses used techniques; current harnesses separate declared from exercised.
@@ -68,9 +75,33 @@ func (c *Config) Catalog() []CatalogItem {
 	cmd.Dir = c.HarnessDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil
+		return c.sortedLimitedV1Catalogue(nil)
 	}
-	return parseCatalog(out, c.scenariosRun())
+	items := parseCatalog(out, c.scenariosRun())
+	if items == nil {
+		return c.sortedLimitedV1Catalogue(nil)
+	}
+	for i := range items {
+		items[i].EntryID = items[i].Name
+		items[i].LaunchKind = "harness-scenario"
+		items[i].ClaimClass = "security"
+		items[i].Available = true
+		if items[i].BenignControl != nil && *items[i].BenignControl {
+			items[i].ClaimClass = "functional"
+		}
+	}
+	return c.sortedLimitedV1Catalogue(items)
+}
+
+func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
+	items = append(items, c.limitedV1Catalogue()...)
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Product != items[j].Product {
+			return items[i].Product < items[j].Product
+		}
+		return items[i].Name < items[j].Name
+	})
+	return items
 }
 
 func parseCatalog(out []byte, hasRun map[string]bool) []CatalogItem {

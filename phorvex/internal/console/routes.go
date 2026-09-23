@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/phorvex/phorvex/internal/cataloguev1"
 )
 
 var (
@@ -131,6 +133,7 @@ func (s *Server) apiRoutes() []route {
 		// omitted or unknown target cannot slip past the grant.
 		control("/api/runs/start", s.startRun, routeSpec{destination: suiteRunDestination}),
 		control("/api/runs/scenario", s.startScenario, routeSpec{targetBody: []string{"target"}, destination: scenarioRunDestination}),
+		control("/api/runs/functional", s.startFunctional, routeSpec{destination: functionalRunDestination}),
 		control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true}),
 		read("/api/runs/list", s.runsList, routeSpec{}),
 		read("/api/runs/status", s.runStatus, routeSpec{runQ: "id"}),
@@ -178,6 +181,13 @@ func suiteRunDestination(s *Server, _ *http.Request, body scopedBody) (runDestin
 		return runDestination{}, fmt.Errorf("config is required and must name an allowed attack-agent suite")
 	}
 	return s.runs.SuiteDestination(name)
+}
+
+func functionalRunDestination(s *Server, _ *http.Request, body scopedBody) (runDestination, error) {
+	if body.Profile == "" {
+		return runDestination{}, fmt.Errorf("profile is required")
+	}
+	return s.runs.FunctionalDestination(cataloguev1.ProfileID(body.Profile))
 }
 
 // costDestination resolves the ONE cluster /api/cost will actually price and read, so the

@@ -98,6 +98,14 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 	if !has {
 		return nil, nil, nil, st, false
 	}
+	if st.ExecutionKind == "fixed-suite" && st.State != "done" && st.State != "error" && st.State != "stopped" {
+		return []RunEvidenceArm{}, []RunEvidenceTrial{}, []RunEvidenceIssue{{Outcome: outcomeUnverified, Reason: "fixed-suite terminal result and cleanup are not yet verified"}}, st, true
+	}
+	if st.ExecutionKind == "fixed-suite" {
+		if _, err := rm.FunctionalResult(id); err != nil {
+			return []RunEvidenceArm{}, []RunEvidenceTrial{}, []RunEvidenceIssue{{Outcome: outcomeUnverified, Reason: "fixed-suite terminal evidence failed validation: " + err.Error()}}, st, true
+		}
+	}
 	f, err := os.Open(filepath.Join(rm.cfg.runOutputPath(out), "metrics.jsonl"))
 	if err != nil {
 		return []RunEvidenceArm{}, []RunEvidenceTrial{}, []RunEvidenceIssue{}, st, true // run exists, no metrics yet
@@ -131,6 +139,11 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 			continue
 		}
 		outcome := r.outcome()
+		if st.ExecutionKind == "fixed-suite" && st.Outcome != "" {
+			outcome.ClaimClass = "functional"
+			outcome.Outcome = st.Outcome
+			outcome.OutcomeReason = "fixed-suite terminal result: " + st.Outcome
+		}
 		trials = append(trials, RunEvidenceTrial{
 			Scenario: r.Scenario, Defender: r.Defender, Trial: r.Trial, Skipped: r.Skipped, OracleAchieved: r.OracleAchieved,
 			Disruption: r.DisruptionVsOracle, Dwell: r.AttackerDwellSeconds, DefensiveActions: r.DefensiveActions,

@@ -269,6 +269,7 @@ type scopedBody struct {
 	Namespace string
 	ID        string
 	Config    string
+	Profile   string
 	Target    map[string]string
 }
 
@@ -305,6 +306,7 @@ func readScopedBody(r *http.Request, targetKeys []string) (scopedBody, bool) {
 	out.Namespace = str("namespace")
 	out.ID = str("id")
 	out.Config = str("config")
+	out.Profile = str("profile")
 	// The scenario route carries its cluster target in the body, and the destination hook needs
 	// it even when the route did not declare an explicit targetBody check.
 	if _, ok := doc["target"]; ok {

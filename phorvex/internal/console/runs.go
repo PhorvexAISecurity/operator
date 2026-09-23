@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/cataloguev1"
 	"sigs.k8s.io/yaml"
 )
 
@@ -74,7 +75,12 @@ type RunStatus struct {
 	// suite's own config, or the forced scenario sandbox). Sharing a cluster does not make one
 	// tenant's run readable by another, so run-id authorization compares this too. Empty means
 	// the namespace could not be determined; that fails closed short of a cross-tenant grant.
-	ScopeTenant string `json:"scopeTenant,omitempty"`
+	ScopeTenant   string `json:"scopeTenant,omitempty"`
+	ExecutionKind string `json:"executionKind,omitempty"`
+	ClaimClass    string `json:"claimClass,omitempty"`
+	Outcome       string `json:"outcome,omitempty"`
+	CleanupStatus string `json:"cleanupStatus,omitempty"`
+	UnsafeToRetry bool   `json:"unsafeToRetry,omitempty"`
 }
 
 // tsNow is the canonical run timestamp format (UTC) used for the report history.
@@ -97,23 +103,27 @@ type pendingRun struct {
 
 // RunManager tracks triggered runs (in-memory; the console is single-user until P-VCLUSTER).
 type RunManager struct {
-	cfg       Config
-	mu        sync.Mutex
-	runs      map[string]*RunStatus
-	runOut    map[string]string     // run id -> the out dir its config writes to
-	procs     map[string]*exec.Cmd  // run id -> the live harness process (for Stop)
-	stopping  map[string]bool       // run id -> a user Stop was requested
-	pending   map[string]pendingRun // run id -> queued launch args (state=="queued")
-	queue     []string              // FIFO of queued run ids (auto-started as slots free)
-	seq       int
-	active    int       // currently-running exec count
-	lastStart time.Time // for the min-interval rate limit
-	loadErr   error
+	cfg        Config
+	mu         sync.Mutex
+	runs       map[string]*RunStatus
+	runOut     map[string]string     // run id -> the out dir its config writes to
+	procs      map[string]*exec.Cmd  // run id -> the live harness process (for Stop)
+	stopping   map[string]bool       // run id -> a user Stop was requested
+	pending    map[string]pendingRun // run id -> queued launch args (state=="queued")
+	queue      []string              // FIFO of queued run ids (auto-started as slots free)
+	seq        int
+	active     int       // currently-running exec count
+	lastStart  time.Time // for the min-interval rate limit
+	loadErr    error
+	functional map[string]cataloguev1.Job
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}}
+	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}}
 	rm.loadErr = rm.loadStatuses()
+	if rm.loadErr == nil {
+		go rm.reconcileInterruptedFunctional()
+	}
 	return rm
 }
 
@@ -156,8 +166,14 @@ func (rm *RunManager) loadStatuses() error {
 		}
 		cp := p.Run
 		if cp.State == "running" || cp.State == "queued" {
-			cp.State = "error"
-			cp.Error = "run interrupted by console restart"
+			if cp.ExecutionKind == "fixed-suite" && cp.State == "running" {
+				cp.State = "partial"
+				cp.Error = "fixed suite interrupted by console restart; reconciliation pending"
+				cp.UnsafeToRetry = true
+			} else {
+				cp.State = "error"
+				cp.Error = "run interrupted by console restart"
+			}
 			cp.Finished = tsNow()
 		}
 		rm.runs[cp.ID], rm.runOut[cp.ID] = &cp, p.Out
@@ -362,7 +378,24 @@ func (rm *RunManager) Stop(id string) error {
 	cmd := rm.procs[id]
 	rm.mu.Unlock()
 	if cmd != nil && cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) // negative pid = the whole process group
+		signal := syscall.SIGKILL
+		if st.ExecutionKind == "fixed-suite" {
+			signal = syscall.SIGTERM
+		}
+		_ = syscall.Kill(-cmd.Process.Pid, signal) // negative pid = the whole process group
+		if signal == syscall.SIGTERM {
+			go func(pid int) {
+				timer := time.NewTimer(2 * time.Minute)
+				defer timer.Stop()
+				<-timer.C
+				rm.mu.Lock()
+				current := rm.procs[id]
+				rm.mu.Unlock()
+				if current != nil && current.Process != nil && current.Process.Pid == pid {
+					_ = syscall.Kill(-pid, syscall.SIGKILL)
+				}
+			}(cmd.Process.Pid)
+		}
 	}
 	return nil
 }

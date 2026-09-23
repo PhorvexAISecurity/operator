@@ -47,7 +47,11 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audittransport"
+	"github.com/phorvex/phorvex/internal/cataloguev1"
 	"github.com/phorvex/phorvex/internal/console"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func main() {
@@ -89,21 +93,24 @@ func run() int {
 		return 2
 	}
 	var (
-		root            string
-		addr            string
-		auditPath       string
-		stateDir        string
-		web             string
-		metricsAllow    string
-		grantsPath      string
-		origins         string
-		auditSourceURL  string
-		auditServerDNS  string
-		auditClientCert string
-		auditClientKey  string
-		auditSourceCA   string
-		historyMaxBytes int64
-		historyMinFree  int64
+		root                 string
+		addr                 string
+		auditPath            string
+		stateDir             string
+		web                  string
+		metricsAllow         string
+		grantsPath           string
+		origins              string
+		auditSourceURL       string
+		auditServerDNS       string
+		auditClientCert      string
+		auditClientKey       string
+		auditSourceCA        string
+		historyMaxBytes      int64
+		historyMinFree       int64
+		catalogueV1Job       string
+		catalogueV1Reconcile string
+		catalogueV1Runtime   string
 	)
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
@@ -120,7 +127,13 @@ func run() int {
 	flag.StringVar(&metricsAllow, "metrics-allow", "", "Comma-separated host[:port] allowlist for /api/metrics?url= SSRF guard (loopback always allowed; metadata/link-local always blocked).")
 	flag.StringVar(&grantsPath, "auth-grants", "", "Path to the subject grant table (JSON). Overrides PHORVEX_CONSOLE_GRANTS.")
 	flag.StringVar(&origins, "trusted-origins", "", "Comma-separated exact browser origins allowed to drive the console. Overrides PHORVEX_CONSOLE_TRUSTED_ORIGINS.")
+	flag.StringVar(&catalogueV1Job, "catalogue-v1-job", "", "Internal: execute one private fixed-suite job.")
+	flag.StringVar(&catalogueV1Reconcile, "catalogue-v1-reconcile", "", "Internal: reconcile one interrupted fixed-suite job without replay.")
+	flag.StringVar(&catalogueV1Runtime, "catalogue-v1-runtime", "", "Internal: private server-generated fixed-suite runtime file.")
 	flag.Parse()
+	if catalogueV1Job != "" || catalogueV1Reconcile != "" {
+		return runCatalogueV1Worker(catalogueV1Job, catalogueV1Reconcile, catalogueV1Runtime)
+	}
 	if historyMaxBytes <= 0 || historyMinFree <= 0 {
 		log.Fatalf("console history capacity configuration: history limits must be positive")
 	}
@@ -133,6 +146,10 @@ func run() int {
 	cfg := console.DefaultConfig(root)
 	if stateDir != "" {
 		cfg.StateDir = stateDir
+	}
+	if err := applyCatalogueV1Environment(&cfg, os.LookupEnv); err != nil {
+		log.Printf("catalogue v1 configuration: %v", err)
+		return 2
 	}
 	cfg.HistoryArchiveMaxBytes = historyMaxBytes
 	cfg.HistoryMinFreeBytes = historyMinFree
@@ -268,6 +285,152 @@ func run() int {
 			log.Printf("console server: %v", err)
 			return 1
 		}
+	}
+	return 0
+}
+
+func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (string, bool)) error {
+	readBool := func(name string) (bool, error) {
+		raw, ok := lookup(name)
+		if !ok || raw == "" {
+			return false, nil
+		}
+		if raw == "true" {
+			return true, nil
+		}
+		if raw == "false" {
+			return false, nil
+		}
+		return false, fmt.Errorf("%s must be true or false", name)
+	}
+	read := func(name string) string { value, _ := lookup(name); return strings.TrimSpace(value) }
+	enabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED")
+	if err != nil {
+		return err
+	}
+	voiceEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_ENABLED")
+	if err != nil {
+		return err
+	}
+	gpuEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_ENABLED")
+	if err != nil {
+		return err
+	}
+	port := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
+		port, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || port < 1 || port > 65535 || raw != strconv.FormatInt(port, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT must be a canonical port")
+		}
+	}
+	executable, _ := os.Executable()
+	kubeconfigPath := read("KUBECONFIG")
+	gpuKubeconfigPath := read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_KUBECONFIG")
+	if gpuKubeconfigPath == "" {
+		gpuKubeconfigPath = kubeconfigPath
+	}
+	gpuKubeContext := read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_KUBE_CONTEXT")
+	cfg.CatalogueV1 = console.CatalogueV1Config{Enabled: enabled, Executable: executable,
+		KubeconfigPath: kubeconfigPath,
+		LoopbackURL:    read("PHORVEX_CONSOLE_CATALOGUE_V1_LOOPBACK_URL"), ScopedTokenFile: read("PHORVEX_CONSOLE_CATALOGUE_V1_TOKEN_FILE"),
+		AllowedTenant: read("PHORVEX_CONSOLE_CATALOGUE_V1_ALLOWED_TENANT"), DeniedTenant: read("PHORVEX_CONSOLE_CATALOGUE_V1_DENIED_TENANT"),
+		DeniedTarget: read("PHORVEX_CONSOLE_CATALOGUE_V1_DENIED_TARGET"), ExpectedSubject: read("PHORVEX_CONSOLE_CATALOGUE_V1_EXPECTED_SUBJECT"),
+		GrantFile: read("PHORVEX_CONSOLE_CATALOGUE_V1_GRANT_FILE"), VoiceEnabled: voiceEnabled,
+		VoiceNamespace: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_NAMESPACE"), VoiceDeployment: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_DEPLOYMENT"),
+		VoiceService: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_SERVICE"), VoiceContainer: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_CONTAINER"),
+		VoiceServicePort: int32(port), VoicePDB: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PDB"),
+		TranscriptSelector: read("PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_SELECTOR"), TranscriptContainer: read("PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_CONTAINER"),
+		GPUEnabled: gpuEnabled, GPUFixtureNamespace: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_NAMESPACE"),
+		GPUFixtureConfig: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_CONFIG"), GPUKubeconfigPath: gpuKubeconfigPath, GPUKubeContext: gpuKubeContext}
+	if cfg.CatalogueV1.KubeconfigPath != "" && cfg.CatalogueV1.KubeContext == "" {
+		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.KubeconfigPath}
+		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
+		if loadErr != nil || strings.TrimSpace(raw.CurrentContext) == "" {
+			return errors.New("catalogue v1 KUBECONFIG has no resolvable current context")
+		}
+		cfg.CatalogueV1.KubeContext = raw.CurrentContext
+	}
+	if cfg.CatalogueV1.GPUKubeconfigPath != "" && cfg.CatalogueV1.GPUKubeContext == "" {
+		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.GPUKubeconfigPath}
+		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
+		if loadErr != nil || strings.TrimSpace(raw.CurrentContext) == "" {
+			return errors.New("catalogue v1 GPU kubeconfig has no resolvable current context")
+		}
+		cfg.CatalogueV1.GPUKubeContext = raw.CurrentContext
+	}
+	return nil
+}
+
+func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
+	if (executePath == "") == (reconcilePath == "") || runtimePath == "" {
+		log.Printf("catalogue v1 worker requires exactly one job mode and one runtime file")
+		return 2
+	}
+	runtimeConfig, err := cataloguev1.LoadRuntimeConfig(runtimePath)
+	if err != nil {
+		log.Printf("catalogue v1 runtime: %v", err)
+		return 2
+	}
+	jobPath := executePath
+	if jobPath == "" {
+		jobPath = reconcilePath
+	}
+	job, err := cataloguev1.LoadJob(jobPath, runtimeConfig.StateDir)
+	if err != nil {
+		log.Printf("catalogue v1 job: %v", err)
+		return 2
+	}
+	var restConfig *rest.Config
+	var kube kubernetes.Interface
+	if job.Profile == cataloguev1.VoiceMedia || job.Profile == cataloguev1.VoiceRecovery {
+		if runtimeConfig.KubeconfigPath != "" {
+			loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: runtimeConfig.KubeconfigPath}
+			overrides := &clientcmd.ConfigOverrides{CurrentContext: runtimeConfig.KubeContext}
+			restConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, overrides).ClientConfig()
+		} else {
+			restConfig, err = rest.InClusterConfig()
+		}
+		if err == nil {
+			kube, err = kubernetes.NewForConfig(restConfig)
+		}
+		if err != nil {
+			log.Printf("catalogue v1 Kubernetes runtime: %v", err)
+			return 2
+		}
+	}
+	runtime, err := runtimeConfig.Runtime(restConfig, kube, &http.Client{Timeout: 30 * time.Second})
+	if err != nil {
+		log.Printf("catalogue v1 runtime authority: %v", err)
+		return 2
+	}
+	runner, err := cataloguev1.New(runtime,
+		cataloguev1.NewVoiceMediaHandler(), cataloguev1.NewVoiceRecoveryHandler(),
+		cataloguev1.NewGPUDrainHandler(),
+		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler())
+	if err != nil {
+		log.Printf("catalogue v1 registry: %v", err)
+		return 2
+	}
+	release, err := cataloguev1.AcquireExecutionLock(job.OutputDir)
+	if err != nil {
+		log.Printf("catalogue v1 execution authority: %v", err)
+		return 2
+	}
+	defer release()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	var result cataloguev1.Result
+	if executePath != "" {
+		result = runner.Execute(ctx, job)
+	} else {
+		result = runner.Reconcile(ctx, job)
+	}
+	if err := cataloguev1.ValidateResult(job, result); err != nil {
+		log.Printf("catalogue v1 terminal result: %v", err)
+		return 1
+	}
+	if result.Outcome == cataloguev1.OutcomeTestFailed {
+		return 1
 	}
 	return 0
 }

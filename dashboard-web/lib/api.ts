@@ -65,6 +65,7 @@ export interface RunStatus {
   id: string; config: string; state: "queued" | "running" | "done" | "partial" | "error" | "stopped"; started: string;
   date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
   trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean; compare3?: boolean;
+  executionKind?: string; claimClass?: string; outcome?: TrialOutcome; cleanupStatus?: string; unsafeToRetry?: boolean;
 }
 export interface PageMeta {
   limit: number;
@@ -144,10 +145,14 @@ async function post<T>(path: string, body: unknown, lens: Lens, context?: string
 }
 
 export interface CatalogItem {
-  name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string;
+  entryID?: string; name: string; product: "k8s" | "ai" | "structural" | "application" | "platform"; category: string; r6Tag: string;
   techniques: string[]; exercisedTechniques: string[]; caps: string[]; hasRun: boolean;
   realism?: string; benignControl?: boolean;
   expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
+  launchKind?: "harness-scenario" | "fixed-suite" | "live-vllm-effect";
+  claimClass?: "security" | "functional" | "effect";
+  profile?: string; available?: boolean; unavailableReason?: string;
+  runtimeContext?: string;
 }
 export interface BenchArm { defender: string; disruption: CI; dwell: CI; harmRate: CI; trials: number }
 export interface BenchGroup { scenario: string; source: string; arms: BenchArm[] }
@@ -256,6 +261,8 @@ export const api = {
   report: (id: string, lens: Lens, signal?: AbortSignal) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens, signal),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
+  startFunctional: (profile: string, lens: Lens) =>
+    post<{ id: string; context: string }>("/api/runs/functional", { profile, startedAt: new Date().toLocaleTimeString() }, lens),
   version: (lens: Lens, signal?: AbortSignal) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens, signal),
   vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
@@ -491,7 +498,8 @@ export interface RunEvidenceTrial {
   measurementStatus: string; measurementPhase: string; validityReasons: string[];
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; note: string }
+export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

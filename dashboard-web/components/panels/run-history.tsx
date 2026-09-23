@@ -47,6 +47,13 @@ function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?:
         <FileText className="h-3.5 w-3.5" /> Evidence · {ev.scenario} · ns={ev.namespace || "—"} · started {ev.date}{ev.finished ? ` · finished ${ev.finished}` : ""}
       </div>
 
+      {ev.functionalResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
+        <div className="flex flex-wrap items-center gap-2"><Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge><span className="text-foreground">{ev.functionalResult.summary}</span></div>
+        <div className="mt-2 text-muted-foreground">cleanup: <span className="text-foreground">{ev.functionalResult.cleanup.status}</span>{ev.functionalResult.cleanup.verified ? " · verified" : " · unverified"}</div>
+        {ev.functionalResult.limits?.map((limit) => <div key={limit} className="mt-1 text-muted-foreground">limit: {limit}</div>)}
+        <div className="mt-2 grid gap-1 md:grid-cols-2">{Object.entries(ev.functionalResult.evidence || {}).map(([key, value]) => <div key={key} className="break-all font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span>{value}</div>)}</div>
+      </div>}
+
       {/* per-arm evidence ledger */}
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
