@@ -1,0 +1,273 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: bd11452c6d17fd2e091bbb88229e7fa376cea74fbdd600ef2a2a9bf120fb34df
+    source_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+    at: '2026-09-23T19:30:31+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+  red:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/root/baseline-reproduction.json
+    sha256: efc743b8300a645b339808a274343f201d6b09d892813021860208e1f9ebf463
+    source_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+    at: '2026-09-23T20:05:58+00:00'
+  preflight:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/preflight/receipt-r2.json
+    sha256: 064a7518034f7b30ed23a293463583f49a66d95c42b752e1296f7e7c9720eb47
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:05:58+00:00'
+  implementation:
+    result: PASS
+    by: m183-finish
+    artifact: 04-diff.patch
+    sha256: 2ff58db616a60e984936646ebd692a071b65f31005d64de0eb735bff79db9265
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:05:58+00:00'
+  l0:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/implementation/focused-console.log
+    sha256: 0224ce5c61b22b009b01655b7f61cda0d7cd5e4e6c1ddba9186a2ca1ca399033
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:05:58+00:00'
+    inputs:
+    - phorvex/internal/console/attack_results.go
+    - phorvex/internal/console/scenario_fire.go
+    - phorvex/internal/console/scenario_fire_truth_test.go
+    - phorvex/internal/console/state.go
+    inputs_sha256: c2c0ec5f90f5021a6e9764cd2d71a5d761f0f6a5ecfd632005bc9c916f3d7df1
+  l1:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/preflight/run-1790193742697338509/go-phorvex.log
+    sha256: 778ca78c40600683637f827f1c0d411328483def1fd6c4ab8630275934e6a539
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:05:58+00:00'
+    inputs:
+    - dashboard-web
+    - phorvex
+    inputs_sha256: 9972b12530363c11a8e557356c7c60ad9baa351cd10189af2266ee51dcb8d866
+  l2:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/root/independent-go.log
+    sha256: d553a89e53502c8c2552ad5a980b2f7d7bc2c11926225be0e7214c576902a9c3
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:05:58+00:00'
+    inputs:
+    - dashboard-web
+    - phorvex/internal/console
+    inputs_sha256: 7c818915ba5cd9fb46fb4f3db1888d245dbcab0dfd773922b15b50e0889bb388
+  positive_control:
+    result: PASS
+    by: m183-finish
+    artifact: evidence/implementation/focused-console.log
+    sha256: 0224ce5c61b22b009b01655b7f61cda0d7cd5e4e6c1ddba9186a2ca1ca399033
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:05:58+00:00'
+    inputs:
+    - phorvex/internal/console/attack_results.go
+    - phorvex/internal/console/scenario_fire_truth_test.go
+    inputs_sha256: 764cdf4ecd0e31f767f66874e95127195a004c68540121f25039fa87c41978bf
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1ea7c80ce93c7902517078d4ac0019586022c84f9b1f921dca2ddda95d2b3d6e
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:06:22+00:00'
+    baseline_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 2586786c54222098b98766c8b78fb24c1bd8456c542c3f961dc252742acdc9d8
+    source_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+    at: '2026-09-23T20:06:22+00:00'
+    incident_sha256: 1ea7c80ce93c7902517078d4ac0019586022c84f9b1f921dca2ddda95d2b3d6e
+fix_id: POST25-CONSOLE-SIGNAL-TRUTH
+issues: []
+title: Separate synthetic catalogue signals from behavioral attack outcomes
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: m183-finish
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: catalogue/limited-v1-console
+  code_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+  deployed_image: null
+  deployed_git_sha: 1a400d281b3350fcb72cbfc8559e1597bb1ff1ce
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: catalogue/limited-v1-console
+  base_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+  head_sha: eddc8357c391ae01525528b7dafb3e330350b5be
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/318
+  reviewed_head: eddc8357c391ae01525528b7dafb3e330350b5be
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-23T20:06:43+00:00'
+follow_up_to: POST25-LIMITED-V1-CONSOLE
+configuration_history:
+- at: '2026-09-23T19:27:19+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-23T19:29:22+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-23T19:59:02+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T20:05:58+00:00'
+  by: m183-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-23T20:06:43+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-23T19:28:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-23T19:30:32+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-23T20:05:58+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-23T20:06:01+00:00'
+  by: m183-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-23T20:06:23+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-23T20:06:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: bd11452c6d17fd2e091bbb88229e7fa376cea74fbdd600ef2a2a9bf120fb34df
+  source_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+  at: '2026-09-23T19:29:04+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/root/baseline-reproduction.json
+  sha256: efc743b8300a645b339808a274343f201d6b09d892813021860208e1f9ebf463
+  source_sha: 3f29d0ddcbaf6878c84e6a88fe1e481917228000
+  at: '2026-09-23T19:37:53+00:00'
+handoff:
+  id: POST25-CONSOLE-SIGNAL-TRUTH:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10
