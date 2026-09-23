@@ -1,0 +1,52 @@
+# Exported verbatim from the live cluster on 2026-09-23 (generation 10).
+# Source of record for ci-reports/ci-reports-defense; see deploy/policies/README.md.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: ci-reports-defense
+  namespace: ci-reports
+spec:
+  actions:
+    enabled:
+    - rotate
+    - quarantine
+    - route-rotate
+    - warm-swap
+    - kv-reset
+    - endpoint-rotate
+    - model-shard-replace
+    - adapter-rotate
+    - request-drain
+    - guardrail-rotate
+    - kv-migrate-invalidate
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: '0.4'
+        public: '0.1'
+        restricted: '1.0'
+    weightSecrets: '0.8'
+  budget:
+    antiOverRotationWindow: 90s
+    maxGracePeriodSeconds: 30
+    maxMovesPerTick: 1
+    proactiveFloor: 15m
+    tickInterval: 5s
+  mode: active
+  objective:
+    costWeights:
+      flowDisruption: '0.6'
+      normSparsity: '0.4'
+    lambda: '0.4'
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ci-reports
+  slo:
+    costCeiling: '1.2'
+    minAvailableReplicas: 0
+  tenant: ci-reports
+  triggers:
+    eventAgeHorizon: 1h
+    eventDriven: true
+    reactiveOnly: true

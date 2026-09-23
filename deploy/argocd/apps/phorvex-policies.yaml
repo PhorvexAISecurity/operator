@@ -1,0 +1,22 @@
+# Tenant defense policies (deploy/policies). Manual sync on purpose: merging a policy change
+# never mutates a live policy by itself — a person reviews the diff in Argo CD and syncs.
+# NO resources finalizer: the root app prunes Applications removed from apps/, and without
+# the finalizer that removal leaves every live PhorvexPolicy in place.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phorvex-policies
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PhorvexSecurity/operator.git
+    targetRevision: main
+    path: deploy/policies
+    directory:
+      include: '*.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
