@@ -35,6 +35,8 @@ const (
 	vllmModelLabelKey  = "fixture.phorvex.ai/model-digest"
 )
 
+var errGPUFixtureReadiness = errors.New("GPU fixture Pod or exact Service endpoint is not Ready")
+
 func init() {
 	core.RegisterScenario(&c2VLLMFunctional{operation: "prefix-cache-reset"})
 	core.RegisterScenario(&c2VLLMFunctional{operation: "request-drain"})
@@ -136,7 +138,7 @@ func (s *c2VLLMFunctional) validateFixture(ctx context.Context, env *core.Env, f
 		return err
 	}
 	if !ready {
-		return errors.New("GPU fixture Pod or exact Service endpoint is not Ready")
+		return errGPUFixtureReadiness
 	}
 	return nil
 }
@@ -588,7 +590,7 @@ func (s *c2VLLMFunctional) Teardown(ctx context.Context, env *core.Env) error {
 	}
 	forwardErr := s.closePortForward()
 	fixtureErr := s.validateFixture(ctx, env, env.Config.GPUFunctionalFixture)
-	if fixtureErr != nil && s.drainReopened() {
+	if errors.Is(fixtureErr, errGPUFixtureReadiness) && s.drainReopened() {
 		fixtureErr = s.waitFixtureReady(ctx, env, env.Config.GPUFunctionalFixture, 12*time.Second, 2*time.Second)
 	}
 	return errors.Join(capabilityErr, forwardErr, fixtureErr)

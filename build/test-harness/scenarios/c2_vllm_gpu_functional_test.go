@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
@@ -219,6 +220,37 @@ func TestVLLMGPUPostReopenReadinessConvergesOnlyForSameAuthority(t *testing.T) {
 	err = scenario.waitFixtureReady(t.Context(), env, fixture, 200*time.Millisecond, time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "EndpointSlice target identity") {
 		t.Fatalf("foreign endpoint target was not rejected immediately: %v", err)
+	}
+}
+
+func TestVLLMGPUTeardownDoesNotRetryAuthorityDriftAfterReopen(t *testing.T) {
+	env, fixture, _ := gpuFixtureObjects(t)
+	kube := env.Kube.(*k8sfake.Clientset)
+	podGets := 0
+	kube.Fake.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		podGets++
+		if podGets != 1 {
+			return false, nil, nil
+		}
+		pod, err := kube.Tracker().Get(corev1.SchemeGroupVersion.WithResource("pods"), "sandbox", fixture.PodName)
+		if err != nil {
+			return true, nil, err
+		}
+		drifted := pod.(*corev1.Pod).DeepCopy()
+		drifted.UID = types.UID("00000000-0000-4000-8000-000000000099")
+		return true, drifted, nil
+	})
+	reopen := &gpufunctional.DrainOperation{State: "OPENED", Admission: "OPEN"}
+	observation := &gpufunctional.Observation{Status: 200}
+	scenario := &c2VLLMFunctional{operation: "request-drain", receipt: gpufunctional.DrainReceipt{
+		Reopen: reopen, ReopenObservation: observation,
+	}}
+	err := scenario.Teardown(t.Context(), env)
+	if err == nil || !strings.Contains(err.Error(), "Pod UID differs") {
+		t.Fatalf("teardown did not retain the first authority drift: %v", err)
+	}
+	if podGets != 1 {
+		t.Fatalf("authority drift triggered %d Pod reads; want exactly the first validation read", podGets)
 	}
 }
 
