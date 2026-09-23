@@ -29,6 +29,8 @@ const (
 	streamCohortSize = 8
 )
 
+var errNoAuthenticatedUnfinishedAnchor = errors.New("no authenticated unfinished drain anchor exists; operation not sent")
+
 var metricNames = []string{
 	"vllm:gpu_prefix_cache_hit_rate",
 	"vllm:num_requests_running",
@@ -704,16 +706,18 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 
 type streamExecution struct {
 	submitted   chan struct{}
+	response    chan struct{}
 	finished    chan struct{}
 	cancel      context.CancelFunc
+	lifecycle   chan<- struct{}
 	mu          sync.Mutex
 	receipt     StreamLifecycleReceipt
 	joinTimeout time.Duration
 }
 
-func (c *Client) startStream(ctx context.Context, ordinal int) *streamExecution {
+func (c *Client) startStream(ctx context.Context, ordinal int, lifecycle chan<- struct{}) *streamExecution {
 	streamCtx, cancel := context.WithCancel(ctx)
-	run := &streamExecution{submitted: make(chan struct{}), finished: make(chan struct{}), cancel: cancel, joinTimeout: 2 * time.Second}
+	run := &streamExecution{submitted: make(chan struct{}), response: make(chan struct{}), finished: make(chan struct{}), cancel: cancel, lifecycle: lifecycle, joinTimeout: 2 * time.Second}
 	run.receipt = StreamLifecycleReceipt{Ordinal: ordinal, Termination: "not-started"}
 	go func() {
 		err := c.stream(streamCtx, run)
@@ -732,6 +736,7 @@ func (c *Client) startStream(ctx context.Context, ordinal int) *streamExecution 
 			run.receipt.Error = boundedError(err)
 		}
 		run.mu.Unlock()
+		run.lifecycle <- struct{}{}
 		close(run.finished)
 	}()
 	return run
@@ -776,13 +781,15 @@ func (s *streamExecution) waitStopped(bound time.Duration) error {
 }
 
 type streamCohort struct {
-	streams []*streamExecution
+	streams   []*streamExecution
+	lifecycle chan struct{}
 }
 
 func (c *Client) startStreamCohort(ctx context.Context, count int) *streamCohort {
-	cohort := &streamCohort{streams: make([]*streamExecution, 0, count)}
+	lifecycle := make(chan struct{}, count*2)
+	cohort := &streamCohort{streams: make([]*streamExecution, 0, count), lifecycle: lifecycle}
 	for ordinal := 0; ordinal < count; ordinal++ {
-		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal))
+		cohort.streams = append(cohort.streams, c.startStream(ctx, ordinal, lifecycle))
 	}
 	return cohort
 }
@@ -792,9 +799,40 @@ func (c *streamCohort) waitSubmitted(ctx context.Context, bound time.Duration) e
 	defer deadline.Stop()
 	for _, stream := range c.streams {
 		select {
+		case <-stream.response:
+			receipt := stream.snapshot()
+			if receipt.HTTPStatus != http.StatusOK || receipt.MediaType != "text/event-stream" {
+				return fmt.Errorf("stream %d response was not accepted for SSE", receipt.Ordinal)
+			}
+			continue
+		default:
+		}
+		select {
 		case <-stream.submitted:
 		case <-deadline.C:
 			return errors.New("stream cohort submission bound expired")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (c *streamCohort) waitResponseHeaders(ctx context.Context, bound time.Duration) error {
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	for _, stream := range c.streams {
+		select {
+		case <-stream.response:
+			receipt := stream.snapshot()
+			if receipt.HTTPStatus != http.StatusOK || receipt.MediaType != "text/event-stream" {
+				return fmt.Errorf("stream %d response was not accepted for SSE", receipt.Ordinal)
+			}
+		case <-stream.finished:
+			receipt := stream.snapshot()
+			return fmt.Errorf("stream %d finished before an accepted SSE response: %s", receipt.Ordinal, receipt.Termination)
+		case <-deadline.C:
+			return errors.New("stream cohort response-header bound expired")
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -853,10 +891,34 @@ func (c *streamCohort) selectUnfinishedAnchor(selected time.Time) (DrainAnchor, 
 		}
 	}
 	if chosen.RequestID == "" {
-		return DrainAnchor{}, errors.New("no authenticated unfinished drain anchor exists; operation not sent")
+		return DrainAnchor{}, errNoAuthenticatedUnfinishedAnchor
 	}
 	return DrainAnchor{StreamOrdinal: chosen.Ordinal, ProducerRequestID: chosen.RequestID,
 		FirstEventAtUTC: chosen.AcceptedAt, SelectedAtUTC: selected.Format(time.RFC3339Nano)}, nil
+}
+
+func (c *streamCohort) waitUnfinishedAnchor(ctx context.Context, bound time.Duration, now func() time.Time) (DrainAnchor, error) {
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	for {
+		anchor, err := c.selectUnfinishedAnchor(now().UTC())
+		if err == nil {
+			return anchor, nil
+		}
+		if !errors.Is(err, errNoAuthenticatedUnfinishedAnchor) {
+			return DrainAnchor{}, err
+		}
+		if c.unfinished() == 0 {
+			return DrainAnchor{}, err
+		}
+		select {
+		case <-c.lifecycle:
+		case <-deadline.C:
+			return DrainAnchor{}, err
+		case <-ctx.Done():
+			return DrainAnchor{}, ctx.Err()
+		}
+	}
 }
 
 func (c *streamCohort) anchorStillUnfinished(anchor DrainAnchor) bool {
@@ -943,6 +1005,7 @@ func (c *Client) stream(ctx context.Context, run *streamExecution) error {
 	run.receipt.HTTPStatus = resp.StatusCode
 	run.receipt.MediaType = mediaType
 	run.mu.Unlock()
+	close(run.response)
 	if resp.StatusCode != http.StatusOK || mediaType != "text/event-stream" {
 		return fmt.Errorf("busy stream HTTP %d media type %q", resp.StatusCode, mediaType)
 	}
@@ -999,6 +1062,9 @@ func (c *Client) stream(ctx context.Context, run *streamExecution) error {
 			run.receipt.AcceptedAt = c.now().UTC().Format(time.RFC3339Nano)
 		}
 		run.mu.Unlock()
+		if first {
+			run.lifecycle <- struct{}{}
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return err

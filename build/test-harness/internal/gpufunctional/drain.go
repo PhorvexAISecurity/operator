@@ -184,15 +184,7 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err := cohort.waitSubmitted(ctx, 10*time.Second); err != nil {
 		return receipt, err
 	}
-	active, err := c.waitMetrics(ctx, 5*time.Second, busyEstablished)
-	receipt.ActiveMetrics = &active
-	if err != nil {
-		return receipt, err
-	}
-	if cohort.unfinished() < 2 {
-		return receipt, errors.New("drain cohort finished before operation authority was established")
-	}
-	if err := cohort.preActionFailure(); err != nil {
+	if err := cohort.waitResponseHeaders(ctx, 10*time.Second); err != nil {
 		return receipt, err
 	}
 	generation, err := strconv.ParseUint(capability.NextOperationGeneration, 10, 64)
@@ -204,12 +196,15 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 		return receipt, err
 	}
 	payload := createOperation{Schema: "phorvex.drain.v1", OperationID: operationID, OperationGeneration: strconv.FormatUint(generation, 10), Attempt: 1, Owner: owner, ExpectedIncarnationDigest: capability.IncarnationDigest, Deadline: c.now().UTC().Add(120 * time.Second).Format(time.RFC3339Nano), Mode: "abort-and-quiesce"}
-	anchor, err := cohort.selectUnfinishedAnchor(c.now().UTC())
+	anchor, err := cohort.waitUnfinishedAnchor(ctx, 5*time.Second, c.now)
 	if err != nil {
 		return receipt, err
 	}
 	receipt.Anchor = &anchor
 	receipt.AttributionScope = "one-late-selected-authenticated-unfinished-anchor; background snapshot IDs may be unattributed"
+	if err := cohort.preActionFailure(); err != nil {
+		return receipt, err
+	}
 	rollbackNeeded := true
 	operationAttempted := false
 	defer func() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -427,24 +428,24 @@ func operationBody(opID, generation, state, admission, revision, nonce1, nonce2 
 }
 
 type drainServer struct {
-	mu                      sync.Mutex
-	active                  int
-	streamRequests          int
-	closed                  bool
-	streamDones             []chan struct{}
-	streamIDs               []string
-	snapshotIDs             []string
-	opID, generation        string
-	nonces                  []string
-	reopenCalls             int
-	capabilities            int
-	wrongRecoveredEpoch     bool
-	omitDisposition         bool
-	loseCreateResponse      bool
-	loseReopenResponse      bool
-	wrongStreamIdentity     bool
-	anchorExitsBeforeCreate bool
-	anchorExitTriggered     bool
+	mu                    sync.Mutex
+	active                int
+	streamRequests        int
+	closed                bool
+	streamDones           []chan struct{}
+	streamIDs             []string
+	metricsCalls          int
+	snapshotIDs           []string
+	opID, generation      string
+	nonces                []string
+	reopenCalls           int
+	capabilities          int
+	wrongRecoveredEpoch   bool
+	omitDisposition       bool
+	loseCreateResponse    bool
+	loseReopenResponse    bool
+	wrongStreamIdentity   bool
+	noAuthenticatedEvents bool
 }
 
 func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -467,19 +468,9 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 200, body)
 	case r.URL.Path == "/metrics":
 		s.mu.Lock()
+		s.metricsCalls++
 		active := s.active
-		var finishAnchor chan struct{}
-		if s.anchorExitsBeforeCreate && !s.anchorExitTriggered && active >= 2 && len(s.streamDones) > 0 {
-			s.anchorExitTriggered = true
-			finishAnchor = s.streamDones[0]
-		}
 		s.mu.Unlock()
-		if finishAnchor != nil {
-			close(finishAnchor)
-			// Let the real HTTP/SSE consumer observe the terminal event before the
-			// active-metrics response releases the operation-selection path.
-			time.Sleep(100 * time.Millisecond)
-		}
 		running, waiting := 0, 0
 		if active > 0 {
 			running, waiting = 1, active-1
@@ -508,10 +499,16 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			requestID := fmt.Sprintf("cmpl-drain-stream-%d", ordinal)
-			if ordinal == 0 {
+			if ordinal == 0 && !s.noAuthenticatedEvents {
 				fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"x\",\"logprobs\":null,\"finish_reason\":null,\"stop_reason\":null}]}\n\n", requestID, modelName)
 			}
 			w.(http.Flusher).Flush()
+			if s.noAuthenticatedEvents {
+				s.mu.Lock()
+				s.active--
+				s.mu.Unlock()
+				return
+			}
 			select {
 			case <-done:
 			case <-r.Context().Done():
@@ -519,10 +516,6 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			s.active--
 			s.mu.Unlock()
-			if ordinal == 0 && s.anchorExitsBeforeCreate {
-				fmt.Fprintf(w, "data: {\"id\":%q,\"object\":\"text_completion\",\"created\":1,\"model\":\"%s\",\"choices\":[{\"index\":0,\"text\":\"\",\"logprobs\":null,\"finish_reason\":\"length\",\"stop_reason\":null}]}\n\n", requestID, modelName)
-				fmt.Fprint(w, "data: [DONE]\n\n")
-			}
 			return
 		}
 		jsonResponse(w, 200, map[string]any{"id": "cmpl", "object": "text_completion", "created": 1, "model": modelName, "choices": []map[string]any{{"index": 0, "text": "x", "logprobs": nil, "finish_reason": "length", "stop_reason": nil, "prompt_logprobs": nil}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2, "prompt_tokens_details": nil}})
@@ -601,15 +594,15 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 	owner := testDrainOwner
 	for _, tc := range []struct {
-		name                                                                                                                      string
-		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, anchorExitsBeforeCreate bool
-		wantErr                                                                                                                   bool
-		wantReopens                                                                                                               int
+		name                                                                                                                    string
+		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, noAuthenticatedEvents bool
+		wantErr                                                                                                                 bool
+		wantReopens                                                                                                             int
 	}{
-		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "anchor exited before create", direct: true, anchorExitsBeforeCreate: true, wantErr: true},
+		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "queued requests expose no authenticated ID", direct: true, noAuthenticatedEvents: true, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity, anchorExitsBeforeCreate: tc.anchorExitsBeforeCreate}
+			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity, noAuthenticatedEvents: tc.noAuthenticatedEvents}
 			server := httptest.NewServer(http.HandlerFunc(state.serve))
 			defer server.Close()
 			client, err := New(server.URL, testToken, server.Client())
@@ -622,16 +615,19 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 				t.Fatalf("err=%v receipt=%+v", err, receipt)
 			}
 			if !tc.direct {
-				if receipt.Create != nil || state.reopenCalls != 0 {
+				if receipt.Create != nil || state.reopenCalls != 0 || state.metricsCalls != 2 {
 					t.Fatalf("no-action mutated: %+v", receipt)
 				}
 				return
 			}
+			if state.metricsCalls != 1 {
+				t.Fatalf("direct drain used a post-submission metrics gate: calls=%d", state.metricsCalls)
+			}
 			if state.reopenCalls != tc.wantReopens {
 				t.Fatalf("reopen calls=%d want %d", state.reopenCalls, tc.wantReopens)
 			}
-			if tc.anchorExitsBeforeCreate && (receipt.Create != nil || state.opID != "") {
-				t.Fatalf("operation was sent after anchor exited: %+v", receipt)
+			if tc.noAuthenticatedEvents && (receipt.Create != nil || state.opID != "" || receipt.Anchor != nil) {
+				t.Fatalf("operation was sent without an authenticated unfinished anchor: %+v", receipt)
 			}
 			if tc.loseCreateResponse && (receipt.CreateObservation == nil || receipt.CreateObservation.Body == "" || len(receipt.CleanupObservations) < 2) {
 				t.Fatalf("lost create response did not retain partial body and cleanup reads: %+v", receipt)
@@ -665,6 +661,37 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDrainAnchorAuthorityRejectsCompletedAndUnauthenticatedStreams(t *testing.T) {
+	lifecycle := make(chan struct{}, 4)
+	finished := make(chan struct{})
+	stream := &streamExecution{finished: finished, lifecycle: lifecycle, receipt: StreamLifecycleReceipt{
+		Ordinal: 0, RequestID: "cmpl-anchor", AcceptedAt: "2026-09-23T00:00:00Z", EventCount: 1, Termination: "running",
+	}}
+	cohort := &streamCohort{streams: []*streamExecution{stream}, lifecycle: lifecycle}
+	anchor, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 1, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream.mu.Lock()
+	stream.receipt.Finished = true
+	stream.receipt.FinishedAt = "2026-09-23T00:00:02Z"
+	stream.receipt.Termination = "complete"
+	stream.mu.Unlock()
+	close(finished)
+	if cohort.anchorStillUnfinished(anchor) {
+		t.Fatal("completed selected anchor remained authorized for create")
+	}
+	if _, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 3, 0, time.UTC)); !errors.Is(err, errNoAuthenticatedUnfinishedAnchor) {
+		t.Fatalf("completed cohort was accepted: %v", err)
+	}
+
+	queued := &streamExecution{finished: make(chan struct{}), lifecycle: lifecycle, receipt: StreamLifecycleReceipt{Ordinal: 1, Termination: "running"}}
+	cohort = &streamCohort{streams: []*streamExecution{queued}, lifecycle: lifecycle}
+	if _, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 4, 0, time.UTC)); !errors.Is(err, errNoAuthenticatedUnfinishedAnchor) {
+		t.Fatalf("queued request without producer identity became an anchor: %v", err)
 	}
 }
 
