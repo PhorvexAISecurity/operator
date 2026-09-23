@@ -2,6 +2,10 @@
 # history a pull-request comment already links to. gp2-csi is the cluster default and
 # supports volume expansion, so this can grow without a re-create.
 #
+# 20Gi since 2026-09-23: the original 5Gi filled after 43 days (~0.11 GiB/day: `main` plus one
+# directory per pull request), and every E2E job then failed at publish with "No space left on
+# device" although the attack run itself passed. Growing keeps every report a PR comment links to.
+#
 # ReadWriteOnce is deliberate — one nginx replica owns the volume, and CI writes through
 # `kubectl cp` into that pod rather than by mounting the volume a second time.
 apiVersion: v1
@@ -14,4 +18,4 @@ spec:
   storageClassName: gp2-csi
   resources:
     requests:
-      storage: 5Gi
+      storage: 20Gi
