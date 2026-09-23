@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -102,12 +102,19 @@ checks:
     source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
     at: '2026-09-23T15:36:07+00:00'
     incident_sha256: 71f8ad14af45c16f869077bfe15c6d2e47a1678fd386d3d32d1f6498b86bcb84
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/publication-equivalence.json
+    sha256: f35c7873cd417a11eeb7b2e7201160833192d17a71c7ccbc8016fe16d3a5e1ba
+    source_sha: b610ec40077593b405a5098c1eb1cb4bb01f0b0e
+    at: '2026-09-23T15:37:56+00:00'
 fix_id: POST25-LIMITED-V1-CONSOLE
 issues: []
 title: Deliver fixed limited-v1 console catalogue with explicit outcomes and scoped
   cleanup
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,11 +143,11 @@ implementation:
   - POST25-CONSOLE-V1-VERDICTS
   diff_format: git-diff-digest-v1
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/318
+  reviewed_head: ca760f4f7e660e7a79077bdc98f66bef47f1403c
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -170,10 +177,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-23T15:36:11+00:00'
+  owner: codex-lead
+  action: PR318 open against main. Hosted GitHub checks cannot start due billing/spending
+    limit; installed L3 awaits normal deployment and profile configuration.
+updated_at: '2026-09-23T15:38:10+00:00'
 configuration_history:
 - at: '2026-09-23T13:58:44+00:00'
   by: codex-lead
@@ -199,6 +206,12 @@ configuration_history:
   by: m183-finish
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-23T15:38:08+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -248,6 +261,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-23T15:38:10+00:00'
+  by: codex-lead
+  artifact: evidence/root/publication-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: POST25-LIMITED-V1-CONSOLE:9:review
