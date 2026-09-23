@@ -72,6 +72,13 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	pid := Fact{Scope: ScopePod, Asset: asset, Kind: FactPodIdentity, Weight: base * urg}
 	facts = append(facts, pid)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], pid.Key())
+	// This is a planned capability cover, never an Eviction-accepted or
+	// observed-security-outcome claim. The producer has to establish an admitted
+	// mounted default-API-audience projection for this exact live Pod UID and
+	// current ServiceAccount; old-UID retirement is the eventual effect boundary.
+	if view.Pod.HasPodBoundKubeAPIAuth() {
+		addRotate(FactPodBoundKubeAPIAuthPotential, base*urg)
+	}
 	// NO COVER for identity-rotate. It writes a `phorvex.ai/identity-epoch` LABEL and nothing else:
 	// the SA-token branch is `_ = ec.Client` (a no-op on modern K8s, where projected tokens rotate on
 	// their own), and nothing in the repo or on the cluster selects on that label. So the pod's identity

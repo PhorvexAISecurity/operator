@@ -95,6 +95,12 @@ const (
 	// safety-guardrail variant. Covered by guardrail-rotate (swap the guardrail variant so the learned
 	// bypass no longer works) — a targeted AI-safety move the engine can pick instead of a blunt rotate.
 	FactGuardrailBypass = "guardrailBypass"
+	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
+	// started Pod mounts a projected default-audience API token tied to its exact
+	// UID and current ServiceAccount. Rotate has planned cover because retirement
+	// of that UID invalidates authentication at this API server. The fact does not
+	// assert bearer theft, observed token rejection, or generic JWT revocation.
+	FactPodBoundKubeAPIAuthPotential = "podBoundKubeAPIAuthPotential"
 
 	// Tier 2: shared-scope facts. They are emitted for audit but have no cover grant because the
 	// current action set has no scope-matched deterministic eraser or decision block for them.
@@ -104,9 +110,11 @@ const (
 
 	// Tier 3: persistent facts no current moving-target action can invalidate. These remain
 	// pod-attributed audit evidence and are permanently absent from every action cover set.
-	// CANNOT-HELP: FactCredential includes projected ServiceAccount-token knowledge. A
-	// pod-scoped action cannot revoke a bound token before its TTL; that requires issuer-side
-	// credential revocation, which is outside this actuator class.
+	// CANNOT-HELP: FactCredential is copied credential knowledge, including any
+	// copied JWT bytes, legacy Secret tokens, non-Kubernetes credentials and
+	// offline-valid JWT uses. Exact-Pod deletion can invalidate a bound token at
+	// this Kubernetes API server; that narrower potential API-auth capability is
+	// modeled separately above. It does not erase copied knowledge.
 	FactCredential              = "credential"
 	FactRetrievalState          = "retrievalState"
 	FactArtifactProvenance      = "artifactProvenance"

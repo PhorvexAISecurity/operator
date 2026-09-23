@@ -161,6 +161,10 @@ func TestNoDeadFactKinds(t *testing.T) {
 		{Pod: model.Pod{Namespace: "ns", Name: "web"}},
 		{Pod: model.Pod{Namespace: "ns", Name: "db", Stateful: true}},
 		{Pod: model.Pod{Namespace: "ns", Name: "lora", HasGPU: true, ModelID: "m", SuspectAdapter: "evil"}},
+		{Pod: model.Pod{Namespace: "ns", Name: "api", UID: "api-uid", PodResourceVersion: "10", ServiceAccount: "reader",
+			PodBoundKubeAPIAuth: &model.PodBoundKubeAPIAuthProjection{PodUID: "api-uid", PodResourceVersion: "10",
+				ServiceAccountName: "reader", ServiceAccountUID: "sa-uid", VolumeName: "api-token", MountedContainer: "api",
+				AudienceSource: "kube-apiserver-default", EvidenceSource: "admitted-pod-and-serviceaccount"}}},
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

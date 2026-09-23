@@ -77,5 +77,9 @@ func coverInvariantProbes() []coverInvariantProbe {
 		probe("stateful", model.Pod{Stateful: true, ServingEndpointReady: true}, FactContext{Stateful: true}),
 		probe("model", model.Pod{ModelID: "shared-model", ServingEndpointReady: true}, FactContext{}),
 		probe("gpu", model.Pod{HasGPU: true, MIGDevice: "1g.10gb", ModelID: "shared-model", SuspectAdapter: "suspect", ServingEndpointReady: true}, FactContext{HasGPU: true}),
+		probe("api-token", model.Pod{UID: "api-uid", PodResourceVersion: "10", ServiceAccount: "reader",
+			PodBoundKubeAPIAuth: &model.PodBoundKubeAPIAuthProjection{PodUID: "api-uid", PodResourceVersion: "10",
+				ServiceAccountName: "reader", ServiceAccountUID: "sa-uid", VolumeName: "api-token", MountedContainer: "api",
+				AudienceSource: "kube-apiserver-default", EvidenceSource: "admitted-pod-and-serviceaccount"}}, FactContext{}),
 	}
 }

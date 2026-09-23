@@ -381,6 +381,22 @@ type OwnedValue struct {
 	Value   string
 }
 
+// PodBoundKubeAPIAuthProjection is a structural, planned-only capability witness
+// from an admitted Pod and its current ServiceAccount. It contains no bearer or
+// assertion that an attacker acquired one. Rotate can retire this Pod's API
+// authentication capability only after the exact old Pod UID is observed gone;
+// Eviction acceptance alone is not that effect.
+type PodBoundKubeAPIAuthProjection struct {
+	PodUID             string
+	PodResourceVersion string
+	ServiceAccountName string
+	ServiceAccountUID  string
+	VolumeName         string
+	MountedContainer   string
+	AudienceSource     string // "kube-apiserver-default" only; explicit audiences remain unknown
+	EvidenceSource     string // "admitted-pod-and-serviceaccount" only
+}
+
 type Pod struct {
 	RotationOwnership RotationOwnership
 	// ServiceAvailability contains one row for every Service whose selector
@@ -390,23 +406,25 @@ type Pod struct {
 	ServiceAvailabilityKnown  bool
 	ServiceAvailabilityReason string
 
-	Namespace string
-	Name      string
-	UID       string
-	Labels    map[string]string
+	Namespace          string
+	Name               string
+	UID                string
+	PodResourceVersion string
+	Labels             map[string]string
 	// OptOut is the snapshot-time application-owner brake. It excludes this Pod
 	// before allocation; dispatch independently rechecks the live Pod.
-	OptOut         ActuationBrakeObservation
-	Node           string
-	Phase          string // raw K8s pod phase
-	Ready          bool
-	StartedAt      time.Time
-	ReadyAt        time.Time // PodReady=True transition; zero when unavailable/not Ready
-	Age            time.Duration
-	MountedSecrets []string // distinct Secret names referenced by the pod spec (names only)
-	ServiceAccount string
-	OwnerKind      string
-	OwnerName      string
+	OptOut              ActuationBrakeObservation
+	Node                string
+	Phase               string // raw K8s pod phase
+	Ready               bool
+	StartedAt           time.Time
+	ReadyAt             time.Time // PodReady=True transition; zero when unavailable/not Ready
+	Age                 time.Duration
+	MountedSecrets      []string // distinct Secret names referenced by the pod spec (names only)
+	ServiceAccount      string
+	PodBoundKubeAPIAuth *PodBoundKubeAPIAuthProjection // planned capability, never observed token rejection
+	OwnerKind           string
+	OwnerName           string
 	// ControllerUID is the immutable UID from this Pod's single Kubernetes
 	// controller reference. It is independent of the human-readable owner name
 	// and is the identity used by shared availability scopes.
@@ -461,6 +479,18 @@ type Pod struct {
 	RouteServiceReady    bool   // declared route Service exists in this namespace and can be restitched
 	GuardrailVariants    int    // distinct members of a valid complete ordered guardrail roster
 	ParallelSize         int    // phorvex.ai/parallel-size; <=0 means absent or invalid
+}
+
+// HasPodBoundKubeAPIAuth is deliberately stricter than a ServiceAccount name or
+// automount setting. The producer must bind current admitted objects to this Pod;
+// manually stale or partial witnesses carry no planned rotate cover.
+func (p Pod) HasPodBoundKubeAPIAuth() bool {
+	w := p.PodBoundKubeAPIAuth
+	return w != nil && p.Namespace != "" && p.Name != "" && p.UID != "" && p.PodResourceVersion != "" &&
+		w.PodUID == p.UID && w.PodResourceVersion == p.PodResourceVersion &&
+		p.ServiceAccount != "" && w.ServiceAccountName == p.ServiceAccount && w.ServiceAccountUID != "" &&
+		w.VolumeName != "" && w.MountedContainer != "" &&
+		w.AudienceSource == "kube-apiserver-default" && w.EvidenceSource == "admitted-pod-and-serviceaccount"
 }
 
 // HasModelDeclaration reports whether the workload declares a concrete served-model

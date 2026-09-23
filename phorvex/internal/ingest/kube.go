@@ -41,11 +41,14 @@ func ownedMetadataValue(values map[string]string, key string) model.OwnedValue {
 // processing is cheap.
 type Snapshot struct {
 	// M-34 observation substrate, separate from the numerical physics projection.
-	NamespaceLabels         map[string]map[string]string
-	Policies                []v1alpha1.PhorvexPolicy
-	PodInventoryComplete    bool
-	PolicyInventoryComplete bool
-	EventInventoryComplete  bool
+	NamespaceLabels      map[string]map[string]string
+	Policies             []v1alpha1.PhorvexPolicy
+	PodInventoryComplete bool
+	// ServiceAccountInventoryComplete is separate from Pod inventory. A failed or
+	// partial list leaves Pod-bound API-token capability witnesses absent.
+	ServiceAccountInventoryComplete bool
+	PolicyInventoryComplete         bool
+	EventInventoryComplete          bool
 	// PhoenixReceiptInventoryComplete is true only when the same cluster-wide
 	// SecurityEvent list used for this snapshot succeeded. Receipts remain outside
 	// detector belief even though they share the API list.
@@ -157,6 +160,26 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	if err := c.List(ctx, &podList); err != nil {
 		return nil, err
 	}
+	var serviceAccounts corev1.ServiceAccountList
+	// The production receipt boundary is a direct APIReader. Never ask the
+	// controller-runtime cached client to start a new ServiceAccount informer:
+	// missing list RBAC could otherwise wait until the whole tick expires. This
+	// optional witness gets at most a quarter of the remaining tick budget so
+	// a blocked read still leaves time for the required core inventory.
+	serviceAccountsComplete := false
+	saBudget := 250 * time.Millisecond
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if quarter := remaining / 4; quarter < saBudget {
+			saBudget = quarter
+		}
+	}
+	if receiptBoundary != nil && ctx.Err() == nil && saBudget > 0 {
+		saCtx, cancel := context.WithTimeout(ctx, saBudget)
+		err := receiptBoundary.List(saCtx, &serviceAccounts)
+		cancel()
+		serviceAccountsComplete = err == nil && serviceAccounts.Continue == "" && serviceAccounts.RemainingItemCount == nil
+	}
 	var nsList corev1.NamespaceList
 	if err := c.List(ctx, &nsList); err != nil {
 		return nil, err
@@ -208,6 +231,9 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 			pods[i].ReadyReplicas = oc.ready
 		}
 	}
+	if serviceAccountsComplete {
+		bindPodBoundKubeAPIAuth(pods, podList.Items, serviceAccounts.Items)
+	}
 
 	// RBAC projection.
 	roles, bindings, err := collectRBAC(ctx, c)
@@ -239,15 +265,16 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	g := graph.Build(gin)
 
 	snap := &Snapshot{
-		Pods:                 pods,
-		PodByKey:             map[string]*model.Pod{},
-		Graph:                g,
-		EventByPod:           map[string][]model.SecurityEventInfo{},
-		PhoenixReceipts:      map[string]model.PhoenixExecutionReceipt{},
-		NamespaceDryRun:      dryRunNS,
-		Now:                  now,
-		NamespaceLabels:      nsLabels,
-		PodInventoryComplete: true,
+		Pods:                            pods,
+		PodByKey:                        map[string]*model.Pod{},
+		Graph:                           g,
+		EventByPod:                      map[string][]model.SecurityEventInfo{},
+		PhoenixReceipts:                 map[string]model.PhoenixExecutionReceipt{},
+		NamespaceDryRun:                 dryRunNS,
+		Now:                             now,
+		NamespaceLabels:                 nsLabels,
+		PodInventoryComplete:            true,
+		ServiceAccountInventoryComplete: serviceAccountsComplete,
 	}
 	for i := range snap.Pods {
 		snap.PodByKey[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name] = &snap.Pods[i]
@@ -617,14 +644,15 @@ func collectPDBs(ctx context.Context, c client.Client) ([]PDBInfo, bool) {
 
 func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out := model.Pod{
-		Namespace:      p.Namespace,
-		Name:           p.Name,
-		UID:            string(p.UID),
-		Labels:         p.Labels,
-		OptOut:         actuationbrake.Pod(p.Annotations),
-		Node:           p.Spec.NodeName,
-		Phase:          string(p.Status.Phase),
-		ServiceAccount: p.Spec.ServiceAccountName,
+		Namespace:          p.Namespace,
+		Name:               p.Name,
+		UID:                string(p.UID),
+		PodResourceVersion: p.ResourceVersion,
+		Labels:             p.Labels,
+		OptOut:             actuationbrake.Pod(p.Annotations),
+		Node:               p.Spec.NodeName,
+		Phase:              string(p.Status.Phase),
+		ServiceAccount:     p.Spec.ServiceAccountName,
 	}
 	if out.ServiceAccount == "" {
 		out.ServiceAccount = "default"
