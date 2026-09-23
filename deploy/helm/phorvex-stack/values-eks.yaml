@@ -96,19 +96,30 @@ phorvex:
       allowWorkloadMutations: true
       # Fixed functional profiles remain unavailable until DevOps supplies the
       # short-lived scoped identity and exact Voice/GPU fixture authorities.
+      #
+      # Enabled 2026-09-23 for Voice media, Voice recovery and the two console auth profiles;
+      # GPU drain stays off until Codex supplies its owned fixture. The auth profiles use the
+      # existing E2E identity: its grant (operator on voice/nats/vllm, target "default") was
+      # verified live to return 200 for vllm and 403 for document-store and for
+      # unavailable-control-target. Its 24h bearer lives ONLY in the Secret named below,
+      # created out of band and re-minted by catalogueV1TokenRefresher (bottom of this file).
+      # That Secret must exist before this block is enabled, or the console pod cannot mount it.
       catalogueV1:
-        enabled: false
+        enabled: true
         loopbackURL: http://127.0.0.1:8090
         allowedTenant: vllm
         deniedTenant: document-store
         deniedTarget: unavailable-control-target
-        expectedSubject: ""
+        expectedSubject: "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e"
         scopedToken:
-          existingSecret: ""
+          existingSecret: phorvex-console-catalogue-v1-token
           key: token
           mountPath: /etc/phorvex-catalogue-v1
+        # Verified live 2026-09-23: Deployment voice-bot 3/3 Ready (container bot, port 8080),
+        # Service voice-bot -> app=voice-bot:8080, PDB voice-bot minAvailable 2 with
+        # disruptionsAllowed 1. The recovery profile evicts one Pod through that PDB.
         voice:
-          enabled: false
+          enabled: true
           namespace: voice
           deployment: voice-bot
           service: voice-bot
@@ -383,3 +394,11 @@ dashboard:
       alb.ingress.kubernetes.io/auth-scope: openid
       alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
       alb.ingress.kubernetes.io/auth-idp-cognito: '{"userPoolARN":"arn:aws:cognito-idp:us-east-2:753556437180:userpool/us-east-2_JfwlBPRbB","userPoolClientID":"2ms9uge9hm4uap1h0ida3it9on","userPoolDomain":"phorvex-console-753556437180"}'
+
+# ── limited-v1 console auth tests: scoped bearer refresher ─────────────────────────────
+# Re-mints the 24h bearer (the cluster caps TokenRequest at 86400 s) for the E2E identity
+# every 6 hours and patches it into the pre-created Secret the console mounts. See
+# templates/catalogue-v1-token-refresher.yaml for its narrow authority.
+catalogueV1TokenRefresher:
+  enabled: true
+  secretName: phorvex-console-catalogue-v1-token
