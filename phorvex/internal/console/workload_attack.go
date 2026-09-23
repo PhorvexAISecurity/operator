@@ -1,21 +1,18 @@
 /*
- * Phorvex Console — DASHBOARD-TRIGGERED live attacks on REAL workloads (beyond vLLM).
+ * Phorvex Console — dashboard-triggered workload detector signals.
  *
- * POST /api/workload/attack {namespace, action} fires a REAL detector signal (a SecurityEvent
- * CR — the same shape Falco/KubeArmor emit) at the live rotation-target pod of an armed demo
- * workload, so the in-cluster operator's actuator SELECTION is visible in Live Theatre. The
- * armed workloads run reactiveOnly policies, so they sit CALM (no proactive churn) until this
- * fires — making the response a clean, attributable reaction. The console can't reach pod IPs,
- * so it shells kubectl. vLLM keeps its own /api/vllm/attack (adapter/kv AI signals).
+ * POST /api/workload/attack creates an identity-bound synthetic SecurityEvent for a governed
+ * workload. It can expose the manager's exact decision and a target response, but it does not
+ * execute a foothold or establish attack mitigation. vLLM keeps its typed effect routes.
  */
 
 package console
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,9 +79,12 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	evName := "redteam-" + ns
 
 	if body.Action == "clear" {
-		_, _ = kctl(8*time.Second, "delete", "securityevent", evName, "--ignore-not-found")
-		writeJSON(w, 200, map[string]any{"ok": true, "action": "clear",
-			"message": "Attack signal cleared in " + ns + " — Phorvex returns to a calm baseline (no proactive churn)."})
+		if err := s.persistEffectIntent("/api/workload/attack", actorOf(r), ns, "clear-refused:foothold"); err != nil {
+			writeJSON(w, 503, map[string]string{"error": "clear refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+			return
+		}
+		writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "action": "clear",
+			"verdict": "unsupported-restoration-authority", "error": "clear refused: exact record-owned SecurityEvent name and UID authority is required"})
 		return
 	}
 	if body.Action != "foothold" && body.Action != "" {
@@ -191,49 +191,37 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
-kind: SecurityEvent
-metadata:
-  name: %s
-  namespace: %s
-  labels:
-    phorvex.ai/redteam: "true"
-spec:
-  description: "red-team (dashboard): container-escape foothold detected on %s"
-  targets: ["%s/%s"]
-  rule:
-    type: "Panic"
-    threatLevel: "critical"
-    source: "ExternalDetector"
-`, evName, ns, pod, ns, pod)
-
-	f, ferr := os.CreateTemp("", "phorvex-se-*.yaml")
-	if ferr != nil {
-		writeJSON(w, 500, map[string]string{"error": "temp file: " + ferr.Error()})
-		return
-	}
-	defer os.Remove(f.Name())
-	if _, ferr = f.WriteString(yaml); ferr == nil {
-		ferr = f.Sync()
-	}
-	if cerr := f.Close(); ferr == nil {
-		ferr = cerr
-	}
-	if ferr != nil {
-		writeJSON(w, 500, map[string]string{"error": "write attack manifest: " + ferr.Error()})
-		return
-	}
-
 	// snapshot the defense baseline BEFORE applying the attack — the operator can quarantine within ~1s,
 	// so a post-apply snapshot would absorb this attack's own response and misreport it as LANDED.
 	base := s.snapshotBaseline(ns, pod)
+	stimulus, createErr := s.prepareSecurityEventAt(base.uid, evName, "Panic")
+	if createErr != nil {
+		writeJSON(w, 503, map[string]string{"error": "prepare signal identity: " + createErr.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
+	if err := s.persistCatalogueSignalIntent("/api/workload/attack", actorOf(r), ns, "foothold", base.uid, stimulus); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "signal refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 	if err := s.persistEffectIntent("/api/workload/attack", actorOf(r), ns, "foothold"); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "attack refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
 		return
 	}
-
-	if out, e := kctl(10*time.Second, "apply", "-f", f.Name()); e != nil {
-		writeJSON(w, 502, map[string]string{"error": "apply SecurityEvent failed: " + strings.TrimSpace(out)})
+	stimulus, createErr = s.firePreparedSecurityEventAt(ns, pod,
+		"Synthetic detector signal on "+ns+"/"+pod, stimulus)
+	if createErr != nil {
+		dispatched := false
+		var unknown *catalogueSignalCreateError
+		if errors.As(createErr, &unknown) {
+			dispatched = unknown.dispatched
+		}
+		s.writeCatalogueSignalFailure(w, "/api/workload/attack", actorOf(r), ns, "foothold", "stimulus-create", base.uid, stimulus, dispatched, createErr)
+		return
+	}
+	liveUID, found, readErr := s.experimentCluster().PodUID(r.Context(), ns, pod)
+	if readErr != nil || !found || liveUID != base.uid {
+		cause := fmt.Errorf("target Pod identity changed or became unavailable across detector signal creation")
+		s.writeCatalogueSignalFailure(w, "/api/workload/attack", actorOf(r), ns, "foothold", "post-create-target-identity", base.uid, stimulus, true, cause)
 		return
 	}
 	// reuse the workload-level statefulness decided above — recomputing it from ownerKind here
@@ -244,11 +232,20 @@ spec:
 	if stateful {
 		actuator = "quarantine"
 	}
-	// capture the REAL outcome (landed vs defended) + reasoning + uptime + cost for the Report tab.
-	attackID := s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful, base)
-	msg := "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before). See the Report tab for the measured outcome."
+	base.stimulus = stimulus
+	base.outcomeClass = "behavioral-oracle-unsupported"
+	base.producerRoute = "/api/workload/attack"
+	base.resultSchema = "synthetic-detector-signal-v2"
+	window := s.cfg.AttackWatchDuration
+	if window <= 0 {
+		window = 95 * time.Second
+	}
+	started := s.cfg.now()
+	attackID := s.startAttackRecordAtKind("", ns, ns, pod, "Synthetic detector signal", "foothold", "T1611", actuator, stateful,
+		base, started, started.Add(window), "synthetic-detector-signal", started)
+	msg := "Synthetic detector signal accepted at " + pod + "; the report shows exact manager disposition and target response without a behavioral security verdict."
 	if warning != "" {
-		msg = "Real foothold signal fired at " + pod + ", but " + warning
+		msg += " " + warning
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": pod, "expect": expect, "attackId": attackID,
 		"warning": warning, "message": msg})

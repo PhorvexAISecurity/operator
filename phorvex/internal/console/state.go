@@ -69,13 +69,13 @@ type catalogueSignalFailureRecord struct {
 	Error       string `json:"error"`
 }
 
-func (s *Server) persistCatalogueSignalFailure(actor, namespace, scenario, phase, targetUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error) error {
-	if targetUID == "" || cause == nil {
+func (s *Server) persistCatalogueSignalFailure(endpoint, actor, namespace, scenario, phase, targetUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error) error {
+	if (endpoint != "/api/workload/fire-scenario" && endpoint != "/api/workload/attack") || targetUID == "" || cause == nil {
 		return fmt.Errorf("catalogue signal failure identity or cause is unavailable")
 	}
 	record := catalogueSignalFailureRecord{
 		Kind: "phorvex.console.catalogue.signal", Phase: phase, Time: s.cfg.now().UTC().Format(time.RFC3339Nano),
-		Endpoint: "/api/workload/fire-scenario", Actor: actor, Namespace: namespace, Scenario: scenario,
+		Endpoint: endpoint, Actor: actor, Namespace: namespace, Scenario: scenario,
 		TargetUID: targetUID, Mutated: mutated, Restoration: restoration, Error: cause.Error(),
 	}
 	if candidate != nil {
@@ -86,6 +86,27 @@ func (s *Server) persistCatalogueSignalFailure(actor, namespace, scenario, phase
 	b, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode catalogue signal failure: %w", err)
+	}
+	return s.cfg.appendState(s.cfg.statePath("effect-intents.jsonl"), b)
+}
+
+// persistCatalogueSignalIntent reserves the exact resource lookup authority before
+// dispatch. It deliberately has no event UID or delete authority until create readback
+// succeeds, but a lost acknowledgement can be reconciled by the unique name/correlation.
+func (s *Server) persistCatalogueSignalIntent(endpoint, actor, namespace, scenario, targetUID string, candidate *attackStimulusEvidence) error {
+	if (endpoint != "/api/workload/fire-scenario" && endpoint != "/api/workload/attack") || targetUID == "" ||
+		candidate == nil || candidate.TargetUID != targetUID || candidate.EventName == "" || candidate.Correlation == "" || candidate.EventRule == "" ||
+		candidate.Observed || candidate.EventUID != "" {
+		return fmt.Errorf("catalogue signal intent identity is unavailable")
+	}
+	record := catalogueSignalFailureRecord{
+		Kind: "phorvex.console.catalogue.signal", Phase: "stimulus-create-intent", Time: s.cfg.now().UTC().Format(time.RFC3339Nano),
+		Endpoint: endpoint, Actor: actor, Namespace: namespace, Scenario: scenario, TargetUID: targetUID,
+		EventName: candidate.EventName, Correlation: candidate.Correlation, Mutated: false, Restoration: "pending-dispatch",
+	}
+	b, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("encode catalogue signal intent: %w", err)
 	}
 	return s.cfg.appendState(s.cfg.statePath("effect-intents.jsonl"), b)
 }

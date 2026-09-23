@@ -30,14 +30,19 @@ type experimentCluster interface {
 	SetPolicyMode(context.Context, experimentPolicy, string, string, bool) (experimentPolicy, error)
 	DeletePod(context.Context, string, string, string, string) error
 	PodUID(context.Context, string, string) (string, bool, error)
-	CreateEvent(context.Context, string, string, string, string) (string, error)
+	CreateEvent(context.Context, string, string, string, string) (createdSignalIdentity, error)
 	EventIdentity(context.Context, string, string) (string, string, bool, error)
 	DeleteEvent(context.Context, string, string, string) error
 }
 
+type createdSignalIdentity struct {
+	UID       string
+	CreatedAt time.Time
+}
+
 var securityEventGVR = schema.GroupVersionResource{Group: "amtd.r6security.com", Version: "v1beta1", Resource: "securityevents"}
 
-func (d dynamicExperimentCluster) CreateEvent(ctx context.Context, name, token, ns, pod string) (string, error) {
+func (d dynamicExperimentCluster) CreateEvent(ctx context.Context, name, token, ns, pod string) (createdSignalIdentity, error) {
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1",
 		"kind":       "SecurityEvent",
@@ -59,16 +64,17 @@ func (d dynamicExperimentCluster) CreateEvent(ctx context.Context, name, token, 
 	}}
 	c, err := d.client()
 	if err != nil {
-		return "", err
+		return createdSignalIdentity{}, err
 	}
 	created, err := c.Resource(securityEventGVR).Create(ctx, u, metav1.CreateOptions{})
 	if err != nil {
-		return "", err
+		return createdSignalIdentity{}, err
 	}
-	if created.GetUID() == "" || created.GetAnnotations()[experimentMarker] != token {
-		return "", fmt.Errorf("created signal identity unavailable or mismatched")
+	createdAt := created.GetCreationTimestamp()
+	if created.GetUID() == "" || createdAt.IsZero() || created.GetAnnotations()[experimentMarker] != token {
+		return createdSignalIdentity{}, fmt.Errorf("created signal identity unavailable or mismatched")
 	}
-	return string(created.GetUID()), nil
+	return createdSignalIdentity{UID: string(created.GetUID()), CreatedAt: createdAt.Time}, nil
 }
 
 func (d dynamicExperimentCluster) PodUID(ctx context.Context, ns, name string) (string, bool, error) {

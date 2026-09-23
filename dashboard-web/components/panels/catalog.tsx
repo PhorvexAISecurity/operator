@@ -11,6 +11,7 @@ import { useLocalPage } from "@/lib/use-local-page";
 import { PaginationBar } from "@/components/ui/pagination";
 import { useCatalog, useTargets } from "@/lib/query";
 import { setSelectedTarget } from "@/lib/provider-store";
+import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 
@@ -253,7 +254,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             {effectResult.effectEvidence?.observed
               ? <div>fresh exact-target effect: <span className="font-mono text-foreground">{effectResult.effectEvidence.before || "—"} → {effectResult.effectEvidence.after || "—"}</span>{effectResult.effectEvidence.seconds > 0 ? ` in ${effectResult.effectEvidence.seconds}s` : ""}</div>
               : <div className="text-warning">No fresh exact-target runtime effect was confirmed by this record.</div>}
-            {effectResult.decisionEvidence && <div className="text-muted-foreground">decision candidate: <span className="font-mono text-foreground/85">{effectResult.decisionEvidence.action || "—"}</span>{effectResult.decisionEvidence.reason ? ` · ${effectResult.decisionEvidence.reason}` : ""} · selected {effectResult.decisionEvidence.selected ? "yes" : "no"} · actuated {effectResult.decisionEvidence.actuated ? "yes" : "no"} · correlation {effectResult.decisionEvidence.correlation}</div>}
+            <DecisionEvidencePanel exact={effectResult.decisionTraceEvidence} temporal={effectResult.temporalDecisionEvidence} legacy={effectResult.decisionEvidence} compact observationStartedAt={effectResult.observationStartedAt} observationDeadline={effectResult.observationDeadline} />
             {effectResult.observationError && <div className="text-warning">observation error: {effectResult.observationError}</div>}
             <div className="text-warning/90">limits: {effectResult.effectEvidence?.limitation || "This record measures a mechanism effect only; behavioral attack execution, mitigation, defense success, containment, dwell, and ROI are not established."}</div>
           </div> : <div className="mt-2 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> polling this exact attack ID with observations enabled…</div>}

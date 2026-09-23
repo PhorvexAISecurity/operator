@@ -39,6 +39,25 @@ test("catalogue signal remains unscored despite a contradictory legacy outcome",
   assert.equal(catalogueSignalState(row).response, "RESPONSE OBSERVED");
 });
 
+test("synthetic detector signal v2 remains unscored despite contradictory outcome labels", () => {
+  const row = {
+    ...base,
+    evidenceKind: "synthetic-detector-signal",
+    resultSchemaVersion: "synthetic-detector-signal-v2",
+    producerRoute: "/api/workload/attack",
+    outcome: "LANDED",
+    containment: "landed",
+    perDollar: 88,
+  };
+  assert.equal(isCatalogueSignalResult(row), true);
+  assert.equal(showSecurityOutcomeSections(row), false);
+  assert.equal(catalogueSignalState(row).response, "RESPONSE OBSERVED");
+
+  const schemaOnly = { ...row, evidenceKind: "", outcome: "DEFENDED" };
+  assert.equal(isCatalogueSignalResult(schemaOnly), true);
+  assert.equal(showSecurityOutcomeSections(schemaOnly), false);
+});
+
 test("unconfirmed and unavailable observations remain distinct", () => {
   const unconfirmed = {
     ...base,

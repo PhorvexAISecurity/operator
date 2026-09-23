@@ -13,6 +13,7 @@ import { useSelectedTarget } from "@/lib/provider-store";
 import { useExactRecord } from "@/lib/query";
 import { isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
+import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
 // observations. Signal-only rows never contribute behavioral outcomes or economics.
@@ -195,14 +196,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
           </div>
         </div>}
 
-        {!signal && r.decisionEvidence && (
-          <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
-            <div className="font-medium text-warning">Decision during observation window</div>
-            <div className="mt-1 text-muted-foreground">Temporal workload candidate at {new Date(r.decisionEvidence.time).toLocaleTimeString()}; no causal audit record is linked.</div>
-            <div className="mt-1 font-mono text-foreground/85">{r.decisionEvidence.action || "—"}{r.decisionEvidence.reason ? ` · ${r.decisionEvidence.reason}` : ""}</div>
-            <div className="mt-1 text-muted-foreground">candidate selected: {r.decisionEvidence.selected ? "yes" : "no"} · candidate actuated: {r.decisionEvidence.actuated ? "yes" : "no"}</div>
-          </div>
-        )}
+        {!signal && !!(r.decisionTraceEvidence?.length || r.temporalDecisionEvidence || r.decisionEvidence) && <DecisionEvidencePanel exact={r.decisionTraceEvidence} temporal={r.temporalDecisionEvidence} legacy={r.decisionEvidence} observationStartedAt={r.observationStartedAt} observationDeadline={r.observationDeadline} />}
 
         {/* uptime before / dip / after */}
         {showSecurity && <div>

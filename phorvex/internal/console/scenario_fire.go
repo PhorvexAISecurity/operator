@@ -76,7 +76,7 @@ func (s *Server) resolveRunningPod(ns string) (string, error) {
 // constrained to that set; "" falls back to "Panic". The scenario's identity is carried in the
 // description and the event name. Each event is unique and retained for exact reconciliation;
 // the legacy clear request has no UID authority and therefore refuses without deleting anything.
-func (s *Server) fireSecurityEventAt(ns, pod, targetUID, evName, desc, ruleType string) (*attackStimulusEvidence, error) {
+func (s *Server) prepareSecurityEventAt(targetUID, evName, ruleType string) (*attackStimulusEvidence, error) {
 	if targetUID == "" {
 		return nil, fmt.Errorf("target Pod UID is unavailable")
 	}
@@ -91,6 +91,14 @@ func (s *Server) fireSecurityEventAt(ns, pod, targetUID, evName, desc, ruleType 
 	}
 	evName += suffix
 	candidate := &attackStimulusEvidence{Kind: "synthetic-catalogue-signal", TargetUID: targetUID, EventName: evName, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "catalogue detector signal only; the named scenario behavior was not executed"}
+	return candidate, nil
+}
+
+func (s *Server) firePreparedSecurityEventAt(ns, pod, desc string, candidate *attackStimulusEvidence) (*attackStimulusEvidence, error) {
+	if candidate == nil || candidate.TargetUID == "" || candidate.EventName == "" || candidate.EventRule == "" || candidate.Correlation == "" || candidate.Observed || candidate.EventUID != "" {
+		return candidate, fmt.Errorf("prepared SecurityEvent identity is incomplete or already used")
+	}
+	evName, ruleType, correlation := candidate.EventName, candidate.EventRule, candidate.Correlation
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
 metadata:
@@ -143,6 +151,14 @@ spec:
 	return candidate, nil
 }
 
+func (s *Server) fireSecurityEventAt(ns, pod, targetUID, evName, desc, ruleType string) (*attackStimulusEvidence, error) {
+	candidate, err := s.prepareSecurityEventAt(targetUID, evName, ruleType)
+	if err != nil {
+		return candidate, err
+	}
+	return s.firePreparedSecurityEventAt(ns, pod, desc, candidate)
+}
+
 func (s *Server) catalogueSignalDefinition(name string) (CatalogItem, error) {
 	for _, item := range s.cfg.Catalog() {
 		if item.Name != name || item.LaunchKind != "harness-scenario" {
@@ -162,12 +178,12 @@ func (s *Server) catalogueSignalDefinition(name string) (CatalogItem, error) {
 	return CatalogItem{}, fmt.Errorf("scenario %q is not present in the authoritative harness catalogue", name)
 }
 
-func (s *Server) writeCatalogueSignalFailure(w http.ResponseWriter, actor, namespace, scenario, phase, targetUID string, candidate *attackStimulusEvidence, dispatched bool, cause error) {
+func (s *Server) writeCatalogueSignalFailure(w http.ResponseWriter, endpoint, actor, namespace, scenario, phase, targetUID string, candidate *attackStimulusEvidence, dispatched bool, cause error) {
 	restoration := "not-needed"
 	if dispatched {
 		restoration = "reconciliation-required"
 	}
-	if err := s.persistCatalogueSignalFailure(actor, namespace, scenario, phase, targetUID, candidate, dispatched, restoration, cause); err != nil {
+	if err := s.persistCatalogueSignalFailure(endpoint, actor, namespace, scenario, phase, targetUID, candidate, dispatched, restoration, cause); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"error":         "catalogue signal failure evidence could not be persisted; unsafe to retry: " + err.Error(),
 			"unsafeToRetry": true, "eventName": candidateEventName(candidate), "eventUID": candidateEventUID(candidate),
@@ -307,24 +323,33 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 	// is steered to it (kv-reset/guardrail-rotate/request-drain/adapter-rotate) instead of the
 	// cheapest generic cover; "" (e.g. rotate/quarantine) keeps the recognised "Panic" default.
 	vector := model.AttackVectorForActuator(expected)
+	stimulus, err := s.prepareSecurityEventAt(base.uid, evName, vector)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "prepare signal identity: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
+	if err := s.persistCatalogueSignalIntent("/api/workload/fire-scenario", actorOf(r), ns, scenario, base.uid, stimulus); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "signal refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 	if err := s.persistEffectIntent("/api/workload/fire-scenario", actorOf(r), ns, "fire:"+scenario); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "attack refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
 		return
 	}
-	stimulus, err := s.fireSecurityEventAt(ns, pod, base.uid, evName, desc, vector)
+	stimulus, err = s.firePreparedSecurityEventAt(ns, pod, desc, stimulus)
 	if err != nil {
 		dispatched := false
 		var createErr *catalogueSignalCreateError
 		if errors.As(err, &createErr) {
 			dispatched = createErr.dispatched
 		}
-		s.writeCatalogueSignalFailure(w, actorOf(r), ns, scenario, "stimulus-create", base.uid, stimulus, dispatched, err)
+		s.writeCatalogueSignalFailure(w, "/api/workload/fire-scenario", actorOf(r), ns, scenario, "stimulus-create", base.uid, stimulus, dispatched, err)
 		return
 	}
 	liveUID, found, readErr := s.experimentCluster().PodUID(r.Context(), ns, pod)
 	if readErr != nil || !found || liveUID != base.uid {
 		cause := fmt.Errorf("target Pod identity changed or became unavailable across catalogue signal creation")
-		s.writeCatalogueSignalFailure(w, actorOf(r), ns, scenario, "post-create-target-identity", base.uid, stimulus, true, cause)
+		s.writeCatalogueSignalFailure(w, "/api/workload/fire-scenario", actorOf(r), ns, scenario, "post-create-target-identity", base.uid, stimulus, true, cause)
 		return
 	}
 	base.stimulus = stimulus

@@ -2,7 +2,9 @@ import type { AttackResult } from "@/lib/api";
 
 export function isCatalogueSignalResult(result: AttackResult): boolean {
   return result.evidenceKind === "catalogue-signal"
+    || result.evidenceKind === "synthetic-detector-signal"
     || result.resultSchemaVersion === "catalogue-signal-v1"
+    || result.resultSchemaVersion === "synthetic-detector-signal-v2"
     || result.producerRoute === "/api/workload/fire-scenario";
 }
 
@@ -27,7 +29,7 @@ export function catalogueSignalState(result: AttackResult): {
     ? `${result.responseAction || "target response"}${result.responsePod ? ` on ${result.responsePod}` : ""}${(result.responseSeconds ?? 0) > 0 ? ` in ${result.responseSeconds}s` : ""}`
     : result.observationError || "No exact target response was confirmed during the observation window.";
   const limitation = result.stimulusEvidence?.limitation
-    || "This synthetic catalogue signal does not execute or measure the named behavioral attack and carries no defense, dwell, containment, or ROI credit.";
+    || "This synthetic signal does not execute or measure the named behavioral attack and carries no defense, dwell, containment, or ROI credit.";
   return {
     label: partial ? "SIGNAL RECORD PARTIAL" : "SIGNAL ACCEPTED",
     response,

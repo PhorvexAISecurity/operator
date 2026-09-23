@@ -998,6 +998,7 @@ func roundEvents(in []model.EventEvidence) []model.EventEvidence {
 	}
 	out := make([]model.EventEvidence, len(in))
 	for i, e := range in {
+		e = e.Canonical()
 		e.AgeSec = round4(e.AgeSec)
 		e.Weight = round4(e.Weight)
 		out[i] = e

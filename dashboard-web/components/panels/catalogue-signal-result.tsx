@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/primitives";
 import type { AttackResult } from "@/lib/api";
 import { catalogueSignalState } from "@/lib/attack-result-truth";
+import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 
 export function CatalogueSignalResult({ result, compact = false }: { result: AttackResult; compact?: boolean }) {
   const state = catalogueSignalState(result);
@@ -23,14 +24,7 @@ export function CatalogueSignalResult({ result, compact = false }: { result: Att
           {result.stimulusEvidence.correlation ? <> · correlation {result.stimulusEvidence.correlation}</> : null}
         </div>
       )}
-      {decision && (
-        <div className="border-t border-border/60 pt-2 text-muted-foreground">
-          decision candidate: <span className="font-mono text-foreground/85">{decision.action || "—"}</span>
-          {decision.reason ? <> · {decision.reason}</> : null}
-          <> · selected {decision.selected ? "yes" : "no"} · actuated {decision.actuated ? "yes" : "no"}</>
-          <div className="mt-1">Correlation: {decision.correlation}; this is diagnostic evidence, not behavioral mitigation.</div>
-        </div>
-      )}
+      <DecisionEvidencePanel exact={result.decisionTraceEvidence} temporal={result.temporalDecisionEvidence} legacy={decision} compact={compact} observationStartedAt={result.observationStartedAt} observationDeadline={result.observationDeadline} />
       {result.observationError && <div className="text-warning">observation error: {result.observationError}</div>}
       <div className="text-warning/90">limits: {state.limitation}</div>
     </div>

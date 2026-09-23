@@ -83,12 +83,12 @@ func TestM168APIServerClusterScopedSignalCleanupRequiresAbsence(t *testing.T) {
 	}()
 	d := dynamicExperimentCluster{cfg: cfg}
 	ctx := context.Background()
-	uid, err := d.CreateEvent(ctx, "m168-signal", "op-1", "voice", "voice-0")
+	created, err := d.CreateEvent(ctx, "m168-signal", "op-1", "voice", "voice-0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	gotUID, token, found, err := d.EventIdentity(ctx, "voice", "m168-signal")
-	if err != nil || !found || gotUID != uid || token != "op-1" {
+	if err != nil || !found || gotUID != created.UID || created.CreatedAt.IsZero() || token != "op-1" {
 		t.Fatalf("cluster-scoped signal identity mismatch: uid=%q token=%q found=%v err=%v", gotUID, token, found, err)
 	}
 	cli, err := d.client()
@@ -105,7 +105,7 @@ func TestM168APIServerClusterScopedSignalCleanupRequiresAbsence(t *testing.T) {
 	}
 	serverCfg := Config{StateDir: t.TempDir(), ExperimentRESTConfig: cfg, Sleep: func(time.Duration) {}}
 	s := &Server{cfg: serverCfg, runs: NewRunManager(serverCfg)}
-	receipt := experimentStimulusReceipt{Event: "m168-signal", EventUID: uid, Token: "op-1"}
+	receipt := experimentStimulusReceipt{Event: "m168-signal", EventUID: created.UID, Token: "op-1"}
 	if err = s.cleanupExperimentSignal("voice", receipt); err == nil {
 		t.Fatal("finalizer-retained signal was accepted as absent")
 	}

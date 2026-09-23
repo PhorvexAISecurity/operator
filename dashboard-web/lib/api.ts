@@ -407,6 +407,52 @@ export interface TimelineEvent {
   reason?: string;
 }
 export type TrialOutcome = "test-failed" | "inconclusive" | "unverified" | "functional-pass" | "functional-fail" | "skipped" | "negative-control" | "security-landed" | "security-disrupted";
+export interface DecisionActionStatus {
+  action: string;
+  status: string;
+  exclusionKind?: string;
+  reason?: string;
+  scored?: boolean;
+  rbacUnknown?: boolean;
+}
+export interface AttackDecisionEvidence {
+  // Legacy fields remain optional so retained rows continue to decode.
+  correlation?: "exact-event-uid" | "temporal-workload" | "temporal-workload-candidate" | string;
+  time?: string;
+  action?: string;
+  reason?: string;
+  selected?: boolean;
+  actuated?: boolean;
+  source?: "decision-trace-steered-event" | "generic-event-evidence" | "temporal-candidate" | string;
+  eventName?: string;
+  eventUid?: string;
+  eventRule?: string;
+  declaredSource?: string;
+  trustVerdict?: string;
+  creatorIdentity?: string;
+  targetUid?: string;
+  decisionId?: string;
+  tickId?: string;
+  brainImage?: string;
+  gitSha?: string;
+  policyNamespace?: string;
+  policyName?: string;
+  policyUid?: string;
+  feasible?: boolean;
+  infeasibleWhy?: string;
+  dryRun?: boolean;
+  dryRunCause?: string;
+  actuationBrakeCause?: string;
+  killSwitch?: boolean;
+  killSwitchCause?: string;
+  dispatchOutcome?: string;
+  dispatchReason?: string;
+  handler?: string;
+  objectsTouched?: string[];
+  rollbackRef?: string;
+  mutationKind?: string;
+  actionStatus?: DecisionActionStatus[];
+}
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
 export interface AttackCost {
   valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string;
@@ -421,12 +467,16 @@ export interface AttackResult {
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
   status: "running" | "partial" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
   outcomeClass?: "behavioral-oracle-unsupported" | "effect-only" | "effect-unverified" | string;
-  evidenceKind?: "catalogue-signal" | string;
+  evidenceKind?: "catalogue-signal" | "synthetic-detector-signal" | string;
   producerRoute?: string;
   resultSchemaVersion?: string;
   stimulusEvidence?: { kind: string; observed: boolean; targetUid: string; eventName: string; eventUid: string; eventCreatedAt: string; eventRule: string; correlation: string; behavioralExecuted: boolean; limitation: string };
   effectEvidence?: { kind: string; observed: boolean; observedAt?: string; targetUid: string; before?: string; after?: string; serviceUid?: string; correlation: string; limitation: string; seconds: number };
-  decisionEvidence?: { correlation: "temporal-workload"; time: string; action: string; reason: string; selected: boolean; actuated: boolean };
+  decisionEvidence?: AttackDecisionEvidence;
+  decisionTraceEvidence?: AttackDecisionEvidence[];
+  temporalDecisionEvidence?: AttackDecisionEvidence;
+  observationStartedAt?: string;
+  observationDeadline?: string;
   responseObserved?: boolean;
   responseAction?: string;
   responsePod?: string;
