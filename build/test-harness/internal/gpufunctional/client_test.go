@@ -465,6 +465,15 @@ type drainServer struct {
 	loseReopenResponse    bool
 	wrongStreamIdentity   bool
 	noAuthenticatedEvents bool
+	delayPeerHeaders      bool
+	rejectDelayedPeer     bool
+	headersSent           int
+	headersAtCreate       int
+	rejectedAfterCreate   bool
+	peerRelease           chan struct{}
+	allStreamsRegistered  chan struct{}
+	peerReleaseOnce       sync.Once
+	allRegisteredOnce     sync.Once
 }
 
 func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -522,6 +531,38 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 			s.streamIDs = append(s.streamIDs, fmt.Sprintf("cmpl-drain-stream-%d-0", ordinal))
 			done := make(chan struct{})
 			s.streamDones = append(s.streamDones, done)
+			if s.allStreamsRegistered != nil && len(s.streamDones) == streamCohortSize {
+				s.allRegisteredOnce.Do(func() { close(s.allStreamsRegistered) })
+			}
+			delayPeerHeaders := s.delayPeerHeaders && ordinal > 0
+			peerRelease := s.peerRelease
+			allRegistered := s.allStreamsRegistered
+			s.mu.Unlock()
+			if allRegistered != nil {
+				select {
+				case <-allRegistered:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			if delayPeerHeaders {
+				select {
+				case <-peerRelease:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			if s.rejectDelayedPeer && ordinal == streamCohortSize-1 {
+				s.mu.Lock()
+				s.headersSent++
+				s.rejectedAfterCreate = s.closed
+				s.active--
+				s.mu.Unlock()
+				jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "delayed-peer-refused"})
+				return
+			}
+			s.mu.Lock()
+			s.headersSent++
 			s.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
@@ -551,11 +592,17 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&payload)
 		s.mu.Lock()
 		s.closed = true
+		s.headersAtCreate = s.headersSent
 		s.opID = payload["operation_id"].(string)
 		s.generation = payload["operation_generation"].(string)
 		s.snapshotIDs = append([]string(nil), s.streamIDs...)
-		if s.wrongStreamIdentity && len(s.snapshotIDs) > 0 {
-			s.snapshotIDs[0] = "cmpl-foreign-stream-0"
+		if s.delayPeerHeaders {
+			s.peerReleaseOnce.Do(func() { close(s.peerRelease) })
+		}
+		if s.wrongStreamIdentity {
+			for i := range s.snapshotIDs {
+				s.snapshotIDs[i] = fmt.Sprintf("cmpl-foreign-stream-%d", i)
+			}
 		}
 		for _, done := range s.streamDones {
 			select {
@@ -621,15 +668,23 @@ func (s *drainServer) serve(w http.ResponseWriter, r *http.Request) {
 func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 	owner := testDrainOwner
 	for _, tc := range []struct {
-		name                                                                                                                    string
-		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, noAuthenticatedEvents bool
-		wantErr                                                                                                                 bool
-		wantReopens                                                                                                             int
+		name                                                                                                                                                         string
+		direct, wrongEpoch, omitDisposition, loseCreateResponse, loseReopenResponse, wrongStreamIdentity, noAuthenticatedEvents, delayPeerHeaders, rejectDelayedPeer bool
+		wantErr                                                                                                                                                      bool
+		wantReopens                                                                                                                                                  int
 	}{
-		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "queued requests expose no authenticated ID", direct: true, noAuthenticatedEvents: true, wantErr: true},
+		{name: "no-action"}, {name: "direct", direct: true, wantReopens: 1}, {name: "create begins before queued peer response headers", direct: true, delayPeerHeaders: true, wantReopens: 1}, {name: "delayed peer HTTP400 invalidates after create", direct: true, delayPeerHeaders: true, rejectDelayedPeer: true, wantErr: true, wantReopens: 1}, {name: "wrong recovered epoch", direct: true, wrongEpoch: true, wantErr: true, wantReopens: 1}, {name: "tampered disposition receipt", direct: true, omitDisposition: true, wantErr: true}, {name: "accepted create lost response", direct: true, loseCreateResponse: true, wantErr: true, wantReopens: 1}, {name: "accepted reopen lost response", direct: true, loseReopenResponse: true, wantErr: true, wantReopens: 1}, {name: "snapshot missing selected anchor", direct: true, wrongStreamIdentity: true, wantErr: true, wantReopens: 1}, {name: "queued requests expose no authenticated ID", direct: true, noAuthenticatedEvents: true, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			state := &drainServer{wrongRecoveredEpoch: tc.wrongEpoch, omitDisposition: tc.omitDisposition, loseCreateResponse: tc.loseCreateResponse, loseReopenResponse: tc.loseReopenResponse, wrongStreamIdentity: tc.wrongStreamIdentity, noAuthenticatedEvents: tc.noAuthenticatedEvents}
+			if tc.direct {
+				state.allStreamsRegistered = make(chan struct{})
+			}
+			if tc.delayPeerHeaders {
+				state.delayPeerHeaders = true
+				state.rejectDelayedPeer = tc.rejectDelayedPeer
+				state.peerRelease = make(chan struct{})
+			}
 			server := httptest.NewServer(http.HandlerFunc(state.serve))
 			defer server.Close()
 			client, err := New(server.URL, testToken, server.Client())
@@ -652,6 +707,12 @@ func TestRunDrainActualHTTPProducerModesAndFailures(t *testing.T) {
 			}
 			if state.reopenCalls != tc.wantReopens {
 				t.Fatalf("reopen calls=%d want %d", state.reopenCalls, tc.wantReopens)
+			}
+			if tc.delayPeerHeaders && state.headersAtCreate != 1 {
+				t.Fatalf("headers at create=%d want 1", state.headersAtCreate)
+			}
+			if tc.rejectDelayedPeer && (!state.rejectedAfterCreate || receipt.Create == nil) {
+				t.Fatalf("delayed rejection boundary differs: rejectedAfterCreate=%v create=%v", state.rejectedAfterCreate, receipt.Create)
 			}
 			if tc.noAuthenticatedEvents && (receipt.Create != nil || state.opID != "" || receipt.Anchor != nil) {
 				t.Fatalf("operation was sent without an authenticated unfinished anchor: %+v", receipt)
@@ -727,6 +788,26 @@ func TestDrainAnchorAuthorityRejectsCompletedAndUnauthenticatedStreams(t *testin
 	cohort = &streamCohort{streams: []*streamExecution{queued}, lifecycle: lifecycle}
 	if _, err := cohort.selectUnfinishedAnchor(time.Date(2026, 9, 23, 0, 0, 4, 0, time.UTC)); !errors.Is(err, errNoAuthenticatedUnfinishedAnchor) {
 		t.Fatalf("queued request without producer identity became an anchor: %v", err)
+	}
+}
+
+func TestDrainSnapshotRejectsPeerWithoutAcceptedHTTPAuthority(t *testing.T) {
+	streams := make([]StreamLifecycleReceipt, streamCohortSize)
+	for ordinal := range streams {
+		streams[ordinal] = StreamLifecycleReceipt{Ordinal: ordinal, HTTPStatus: http.StatusOK,
+			MediaType: "text/event-stream", FinishedAt: "2026-09-23T00:00:03Z",
+			Finished: true, Termination: "error"}
+	}
+	streams[0].RequestID = "cmpl-anchor"
+	streams[0].AcceptedAt = "2026-09-23T00:00:00Z"
+	streams[0].EventCount = 1
+	streams[7].HTTPStatus = http.StatusBadRequest
+	streams[7].MediaType = "application/json"
+	cohort := StreamCohortReceipt{Schema: "phorvex.gpu.stream-cohort.v3", Expected: streamCohortSize, Streams: streams}
+	anchor := DrainAnchor{StreamOrdinal: 0, ProducerRequestID: "cmpl-anchor", FirstEventAtUTC: "2026-09-23T00:00:00Z", SelectedAtUTC: "2026-09-23T00:00:01Z", CreateStartedAtUTC: "2026-09-23T00:00:02Z"}
+	snapshot := map[string]DrainQueue{"0": {Running: []string{"cmpl-anchor-0"}, Waiting: []string{}, Swapped: []string{}, Cached: []string{}}}
+	if _, _, _, _, err := validateDrainSnapshotAnchor(snapshot, cohort, anchor); err == nil || !strings.Contains(err.Error(), "lacks accepted HTTP/SSE authority") {
+		t.Fatalf("invalid peer authority accepted: %v", err)
 	}
 }
 

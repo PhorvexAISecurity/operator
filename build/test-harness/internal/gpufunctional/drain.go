@@ -184,9 +184,6 @@ func (c *Client) RunDrain(ctx context.Context, direct bool, owner DrainOwner) (r
 	if err := cohort.waitSubmitted(ctx, 10*time.Second); err != nil {
 		return receipt, err
 	}
-	if err := cohort.waitResponseHeaders(ctx, 10*time.Second); err != nil {
-		return receipt, err
-	}
 	generation, err := strconv.ParseUint(capability.NextOperationGeneration, 10, 64)
 	if err != nil || generation == 0 {
 		return receipt, errors.New("next drain generation is invalid")
@@ -566,6 +563,9 @@ func validateDrainSnapshotAnchor(snapshot map[string]DrainQueue, cohort StreamCo
 	}
 	producer := map[string]StreamLifecycleReceipt{}
 	for _, stream := range cohort.Streams {
+		if stream.HTTPStatus != http.StatusOK || stream.MediaType != "text/event-stream" {
+			return nil, nil, false, "", fmt.Errorf("drain stream %d lacks accepted HTTP/SSE authority", stream.Ordinal)
+		}
 		if !stream.Finished || stream.FinishedAt == "" || stream.Termination == "running" || stream.Termination == "not-started" || stream.Termination == "join-timeout" {
 			return nil, nil, false, "", fmt.Errorf("drain stream %d lacks a retained terminal lifecycle", stream.Ordinal)
 		}

@@ -890,9 +890,13 @@ func (c *streamCohort) unfinished() int {
 
 func (c *streamCohort) preActionFailure() error {
 	for _, stream := range c.streams {
+		receipt := stream.snapshot()
+		if receipt.HTTPStatus != 0 && (receipt.HTTPStatus != http.StatusOK || receipt.MediaType != "text/event-stream") {
+			return fmt.Errorf("stream %d response was not accepted for SSE", receipt.Ordinal)
+		}
 		select {
 		case <-stream.finished:
-			receipt := stream.snapshot()
+			receipt = stream.snapshot()
 			if receipt.Termination != "complete" {
 				return fmt.Errorf("stream %d failed before action: %s", receipt.Ordinal, receipt.Termination)
 			}
