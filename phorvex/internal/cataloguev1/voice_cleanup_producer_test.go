@@ -48,8 +48,27 @@ class Collection:
   return rows[0] if rows else None
  def delete_one(self,original):
   state=load();state["deletes"]+=1
+  drift=state.get("driftAtDelete")
+  if drift and state["docs"]:
+   if drift=="append":state["docs"][0]["later_field"]="later"
+   elif drift=="value":state["docs"][0]["synthetic"]="changed"
+   else:raise AssertionError("unknown controlled drift")
+   state["driftAtDelete"]=""
+  def matches(doc,query):
+   for k,v in query.items():
+    if k=="$expr":
+     assert list(v)==["$eq"] and v["$eq"][0]=="$$ROOT"
+     literal=v["$eq"][1]
+     assert list(literal)==["$literal"]
+     expected=literal["$literal"]
+     if doc!=expected or list(doc)!=list(expected):return False
+    elif doc.get(k)!=v:return False
+   return True
   before=len(state["docs"])
-  state["docs"]=[d for d in state["docs"] if d!=original]
+  for i,d in enumerate(state["docs"]):
+   if matches(d,original):
+    del state["docs"][i]
+    break
   save(state)
   return type("R",(),{"deleted_count":before-len(state["docs"])})()
  def count_documents(self,query):
@@ -196,4 +215,96 @@ func TestVoiceCleanupEmbeddedDeleteRejectsContentDriftWithoutMutation(t *testing
 	if state.Deletes != 0 || len(state.Docs) != 1 || remaining.Synthetic != "after" {
 		t.Fatalf("drift mutated the exact owned document: deletes=%d docs=%d", state.Deletes, len(state.Docs))
 	}
+}
+
+func TestVoiceCleanupEmbeddedDeleteAtomicFullDocumentPredicate(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("Python is needed to exercise the embedded cleanup producer")
+	}
+	for _, tc := range []struct {
+		name         string
+		drift        string
+		wantDeleted  int
+		wantDocument int
+	}{
+		{name: "appended-field-at-delete", drift: "append", wantDocument: 1},
+		{name: "changed-value-at-delete", drift: "value", wantDocument: 1},
+		{name: "unchanged-document", wantDeleted: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "pymongo.py"), []byte(fakeVoiceMongo), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(root, "bson"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "bson", "__init__.py"), []byte("class ObjectId(str): pass\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "bson", "json_util.py"), []byte("import json\ndef dumps(value,**kwargs):return json.dumps(value,**kwargs)\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			statePath := filepath.Join(root, "db.json")
+			objectID := strings.Repeat("1", 24)
+			state, err := json.Marshal(map[string]any{"queries": 0, "deletes": 0, "secondAdded": true,
+				"docs": []any{map[string]string{"_id": objectID, "call_sid": cleanupFirstSID, "synthetic": "original"}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(statePath, state, 0600); err != nil {
+				t.Fatal(err)
+			}
+			run := func(program string, args ...string) []byte {
+				t.Helper()
+				cmd := exec.Command(python, append([]string{"-c", program}, args...)...)
+				cmd.Env = append(os.Environ(), "PYTHONPATH="+root, "FAKE_VOICE_DB="+statePath, "MONGO_URI=memory")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("embedded producer failed: %v output=%q", err, output)
+				}
+				return output
+			}
+			refs, err := parseTranscriptRefs(string(run(transcriptQueryProgram, cleanupFirstSID)), []string{cleanupFirstSID})
+			if err != nil || len(refs) != 1 {
+				t.Fatalf("initial exact ref differs: err=%v count=%d", err, len(refs))
+			}
+			var snapshot map[string]any
+			if err := json.Unmarshal(mustReadVoiceCleanupState(t, statePath), &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			snapshot["driftAtDelete"] = tc.drift
+			state, err = json.Marshal(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(statePath, state, 0600); err != nil {
+				t.Fatal(err)
+			}
+			deleted, alreadyAbsent, err := parseTranscriptDelete(string(run(transcriptDeleteProgram, cleanupFirstSID, objectID, refs[0].ContentSHA256)))
+			if err != nil || alreadyAbsent || deleted != tc.wantDeleted {
+				t.Fatalf("atomic exact delete receipt differs: deleted=%d absent=%v err=%v", deleted, alreadyAbsent, err)
+			}
+			var after struct {
+				Deletes int               `json:"deletes"`
+				Docs    []json.RawMessage `json:"docs"`
+			}
+			if err := json.Unmarshal(mustReadVoiceCleanupState(t, statePath), &after); err != nil {
+				t.Fatal(err)
+			}
+			if after.Deletes != 1 || len(after.Docs) != tc.wantDocument {
+				t.Fatalf("owned DB mutation differs: attempts=%d documents=%d", after.Deletes, len(after.Docs))
+			}
+		})
+	}
+}
+
+func mustReadVoiceCleanupState(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }

@@ -657,7 +657,7 @@ d=col.find_one({"_id":ObjectId(oid),"call_sid":sid})
 if d is None: print("OWNED_DELETE="+json.dumps({"deletedCount":0,"alreadyAbsent":True,"remaining":col.count_documents({"call_sid":sid})},sort_keys=True));sys.exit(0)
 original=dict(d);d["_id"]=str(d["_id"]);got=hashlib.sha256(json_util.dumps(d,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
 if got!=want: print("OWNED_DELETE="+json.dumps({"error":"content-hash-drift"},sort_keys=True));sys.exit(42)
-r=col.delete_one(original)
+r=col.delete_one({"_id":ObjectId(oid),"call_sid":sid,"$expr":{"$eq":["$$ROOT",{"$literal":original}]}})
 print("OWNED_DELETE="+json.dumps({"deletedCount":r.deleted_count,"alreadyAbsent":False,"remaining":col.count_documents({"call_sid":sid})},sort_keys=True))`
 
 func (r *kubeVoiceRuntime) CleanupTranscripts(ctx context.Context, cfg VoiceConfig, pod VoicePod, callSIDs []string, onIntent func(TranscriptRef) error, onResult func(TranscriptRef) error) VoiceCleanup {
