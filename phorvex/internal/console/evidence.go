@@ -57,6 +57,8 @@ var listRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s
 
 func productOf(name string) string {
 	switch {
+	case name == "c2-nats-uncredentialed-exposure":
+		return "application"
 	case strings.HasPrefix(name, "ai1-") || strings.HasPrefix(name, "ai2-") || strings.HasPrefix(name, "c2-vllm-") || strings.HasSuffix(name, "-ai"):
 		return "ai"
 	case strings.HasPrefix(name, "b-") || strings.HasPrefix(name, "e-"):
@@ -89,6 +91,19 @@ func (c *Config) Catalog() []CatalogItem {
 		items[i].Available = true
 		if items[i].BenignControl != nil && *items[i].BenignControl {
 			items[i].ClaimClass = "functional"
+		}
+		if items[i].Name == "c2-nats-uncredentialed-exposure" {
+			items[i].LaunchKind = "named-suite"
+			items[i].Profile = natsBaselineConfig
+			dest, err := (&RunManager{cfg: *c}).SuiteDestination(natsBaselineConfig)
+			items[i].Available = err == nil
+			if err == nil {
+				items[i].RuntimeContext = dest.ScopeTarget
+			}
+			items[i].RunnableNote = "Server-owned NATS no-signal profile; one separate-Pod synthetic message and exact cleanup. This does not test a defense."
+			if !items[i].Available {
+				items[i].UnavailableReason = "NATS server-owned profile is not configured with reviewed source and image pins"
+			}
 		}
 	}
 	return c.sortedLimitedV1Catalogue(items)

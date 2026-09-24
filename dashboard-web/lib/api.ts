@@ -150,7 +150,7 @@ export interface CatalogItem {
   realism?: string; benignControl?: boolean;
   expectedActuators?: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
   responseGuidance?: string; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
-  launchKind?: "harness-scenario" | "fixed-suite" | "live-vllm-effect";
+  launchKind?: "harness-scenario" | "fixed-suite" | "named-suite" | "live-vllm-effect";
   claimClass?: "security" | "functional" | "effect" | "calibration";
   profile?: string; available?: boolean; unavailableReason?: string;
   runtimeContext?: string;
@@ -299,6 +299,7 @@ export const api = {
   runsPage: (lens: Lens, limit: number, filters: { context?: string; provider?: string; q?: string } = {}, cursor?: string, signal?: AbortSignal) =>
     get<{ runs: RunStatus[]; page?: PageMeta }>(`/api/runs/list?${pageQuery(limit, filters, cursor)}`, lens, signal),
   stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
+  reconcileNATSRun: (id: string, lens: Lens) => post<{ status: string; id: string }>(`/api/runs/nats-reconcile?id=${encodeURIComponent(id)}`, { id }, lens),
   runEvidence: (id: string, lens: Lens, signal?: AbortSignal) => get<RunEvidence>(`/api/runs/evidence?id=${encodeURIComponent(id)}`, lens, signal),
   catalog: (lens: Lens, signal?: AbortSignal) => get<{ items: CatalogItem[] }>("/api/catalog", lens, signal),
   benchmarks: (lens: Lens, signal?: AbortSignal) => get<{ groups: BenchGroup[] }>("/api/benchmarks", lens, signal),
@@ -559,7 +560,8 @@ export interface RunEvidenceTrial {
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
 export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; note: string }
+export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; brainMode: "NO_SIGNAL"; securityEfficacy: "NOT_EVALUATED"; sourceAttestation: string; issues?: string[] }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

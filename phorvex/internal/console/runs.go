@@ -13,6 +13,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,15 +37,16 @@ func envBase() []string { return os.Environ() }
 
 // suite is a triggerable attack-agent run: its config file + the out dir that config writes
 // to (parsed from the yaml's outDir at author time; the console reads the metrics from there).
-type suite struct{ File, OutDir, Desc string }
+type suite struct{ File, OutDir, Desc, Namespace string }
 
 // allowedConfigs is the whitelist of attack-agent suites the console may trigger.
 var allowedConfigs = map[string]suite{
-	"p3-v3":        {"config.p3.v3.yaml", "out-p3-v3", "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
-	"pactuator":    {"config.pactuator.yaml", "out-pactuator", "Lead demo: native actuator preserves the stateful job"},
-	"p3-verify":    {"config.p3.verify.yaml", "out-p3-verify", "P3 verification suite"},
-	"fpprobe":      {"config.fpprobe.yaml", "out-fpprobe", "False-positive / controls probe"},
-	"p3deep-smoke": {"config.p3deep.smoke.yaml", "out-p3deep-smoke", "Structural zero-day smoke (recon-validity)"},
+	"nats-exposure-baseline": {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
+	"p3-v3":                  {File: "config.p3.v3.yaml", OutDir: "out-p3-v3", Desc: "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
+	"pactuator":              {File: "config.pactuator.yaml", OutDir: "out-pactuator", Desc: "Lead demo: native actuator preserves the stateful job"},
+	"p3-verify":              {File: "config.p3.verify.yaml", OutDir: "out-p3-verify", Desc: "P3 verification suite"},
+	"fpprobe":                {File: "config.fpprobe.yaml", OutDir: "out-fpprobe", Desc: "False-positive / controls probe"},
+	"p3deep-smoke":           {File: "config.p3deep.smoke.yaml", OutDir: "out-p3deep-smoke", Desc: "Structural zero-day smoke (recon-validity)"},
 }
 
 // RunStatus is the live state of a triggered attack-agent run.
@@ -75,7 +79,10 @@ type RunStatus struct {
 	// suite's own config, or the forced scenario sandbox). Sharing a cluster does not make one
 	// tenant's run readable by another, so run-id authorization compares this too. Empty means
 	// the namespace could not be determined; that fails closed short of a cross-tenant grant.
-	ScopeTenant   string `json:"scopeTenant,omitempty"`
+	ScopeTenant string `json:"scopeTenant,omitempty"`
+	// The named NATS suite also mutates the fixed installer-owned fixture tenant.
+	// Current grants must still cover both destinations for every run read/stop.
+	FixtureTenant string `json:"fixtureTenant,omitempty"`
 	ExecutionKind string `json:"executionKind,omitempty"`
 	ClaimClass    string `json:"claimClass,omitempty"`
 	Outcome       string `json:"outcome,omitempty"`
@@ -103,23 +110,24 @@ type pendingRun struct {
 
 // RunManager tracks triggered runs (in-memory; the console is single-user until P-VCLUSTER).
 type RunManager struct {
-	cfg        Config
-	mu         sync.Mutex
-	runs       map[string]*RunStatus
-	runOut     map[string]string     // run id -> the out dir its config writes to
-	procs      map[string]*exec.Cmd  // run id -> the live harness process (for Stop)
-	stopping   map[string]bool       // run id -> a user Stop was requested
-	pending    map[string]pendingRun // run id -> queued launch args (state=="queued")
-	queue      []string              // FIFO of queued run ids (auto-started as slots free)
-	seq        int
-	active     int       // currently-running exec count
-	lastStart  time.Time // for the min-interval rate limit
-	loadErr    error
-	functional map[string]cataloguev1.Job
+	cfg             Config
+	mu              sync.Mutex
+	runs            map[string]*RunStatus
+	runOut          map[string]string     // run id -> the out dir its config writes to
+	procs           map[string]*exec.Cmd  // run id -> the live harness process (for Stop)
+	stopping        map[string]bool       // run id -> a user Stop was requested
+	pending         map[string]pendingRun // run id -> queued launch args (state=="queued")
+	queue           []string              // FIFO of queued run ids (auto-started as slots free)
+	seq             int
+	active          int       // currently-running exec count
+	lastStart       time.Time // for the min-interval rate limit
+	loadErr         error
+	functional      map[string]cataloguev1.Job
+	natsReconciling map[string]bool
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}}
+	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}}
 	rm.loadErr = rm.loadStatuses()
 	if rm.loadErr == nil {
 		go rm.reconcileInterruptedFunctional()
@@ -166,7 +174,7 @@ func (rm *RunManager) loadStatuses() error {
 		}
 		cp := p.Run
 		if cp.State == "running" || cp.State == "queued" {
-			if cp.ExecutionKind == "fixed-suite" && cp.State == "running" {
+			if (cp.ExecutionKind == "fixed-suite" || cp.Config == natsBaselineConfig) && cp.State == "running" {
 				cp.State = "partial"
 				cp.Error = "fixed suite interrupted by console restart; reconciliation pending"
 				cp.UnsafeToRetry = true
@@ -282,7 +290,18 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	if !ok {
 		return "", fmt.Errorf("config %q not in the allowed attack-agent suites", name)
 	}
+	if name == "nats-exposure-baseline" && (nativeActuator || dest.ScopeTenant != "nats" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 2 || dest.Tenants[0] != "nats" || dest.Tenants[1] != "phorvex-nats-exposure-fixture" || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget) {
+		return "", fmt.Errorf("NATS baseline requires the authorized no-actuator broker-scoped suite")
+	}
 	rm.mu.Lock()
+	if name == natsBaselineConfig {
+		for _, prior := range rm.runs {
+			if prior.Config == natsBaselineConfig && prior.UnsafeToRetry {
+				rm.mu.Unlock()
+				return "", fmt.Errorf("prior NATS baseline has unresolved owned cleanup; exact reconciliation is required")
+			}
+		}
+	}
 	if err := rm.guard(time.Now()); err != nil {
 		rm.mu.Unlock()
 		return "", err
@@ -291,7 +310,7 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	rm.active++
 	rm.lastStart = time.Now()
 	id := fmt.Sprintf("run-%d", rm.seq)
-	runtimeSuite, err := rm.prepareSuite(id, su)
+	runtimeSuite, err := rm.prepareSuite(id, su, dest.SuiteSHA256)
 	if err != nil {
 		rm.active--
 		rm.mu.Unlock()
@@ -302,6 +321,13 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	// Both halves are recorded so a later run-id lookup is authorized against the cluster AND the
 	// namespace this run actually drives.
 	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator, Owner: owner, ScopeTarget: normalizeTargetID(dest.ScopeTarget), ScopeTenant: dest.ScopeTenant}
+	if name == "nats-exposure-baseline" {
+		st.Namespace = runtimeSuite.Namespace
+		st.FixtureTenant = runtimeSuite.Namespace
+		st.Target = dest.ScopeTarget
+		st.TargetLabel = dest.ScopeTarget
+		st.Provider = "Kubernetes"
+	}
 	rm.runs[id] = st
 	rm.runOut[id] = su.OutDir
 	if err := rm.persistStatus(st, su.OutDir); err != nil {
@@ -317,7 +343,7 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	return id, nil
 }
 
-func (rm *RunManager) prepareSuite(id string, su suite) (suite, error) {
+func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (suite, error) {
 	if rm.cfg.runsDir() == "" {
 		return suite{}, fmt.Errorf("console state directory is not configured")
 	}
@@ -325,12 +351,31 @@ func (rm *RunManager) prepareSuite(id string, su suite) (suite, error) {
 	if err != nil {
 		return suite{}, err
 	}
+	if authorizedSHA != "" {
+		h := sha256.Sum256(raw)
+		if hex.EncodeToString(h[:]) != authorizedSHA {
+			return suite{}, fmt.Errorf("authorized suite bytes changed before launch")
+		}
+	}
 	var doc map[string]any
 	if err = yaml.Unmarshal(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")), &doc); err != nil {
 		return suite{}, err
 	}
 	out := id
 	doc["outDir"] = rm.cfg.runOutputPath(out)
+	if authorizedSHA != "" {
+		random := make([]byte, 12)
+		if _, err := rand.Read(random); err != nil {
+			return suite{}, fmt.Errorf("allocate owned fixture nonce: %w", err)
+		}
+		nonce := hex.EncodeToString(random)
+		fixture, ok := doc["natsExposureFixture"].(map[string]any)
+		if !ok {
+			return suite{}, fmt.Errorf("NATS baseline fixture missing")
+		}
+		fixture["nonce"], fixture["runID"] = nonce, id
+		su.Namespace = "phorvex-nats-exposure-fixture"
+	}
 	raw, err = yaml.Marshal(doc)
 	if err != nil {
 		return suite{}, err
@@ -343,7 +388,7 @@ func (rm *RunManager) prepareSuite(id string, su suite) (suite, error) {
 	if err = rm.cfg.appendState(rm.cfg.statePath("run-events.jsonl"), intent); err != nil {
 		return suite{}, err
 	}
-	return suite{File: configPath, OutDir: out, Desc: su.Desc}, nil
+	return suite{File: configPath, OutDir: out, Desc: su.Desc, Namespace: su.Namespace}, nil
 }
 
 // Stop terminates a running attack: it kills the harness AND the operator children it spawned
@@ -461,6 +506,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		return "", fmt.Errorf("too many scenarios (max 16 per batch)")
 	}
 	for _, s := range scenarios {
+		if s == "c2-nats-uncredentialed-exposure" {
+			return "", fmt.Errorf("NATS exposure requires the server-owned named suite nats-exposure-baseline")
+		}
 		if !scenarioRe.MatchString(s) {
 			return "", fmt.Errorf("invalid scenario name %q", s)
 		}
@@ -576,6 +624,8 @@ type runDestination struct {
 	// undetermined namespace is not "no tenant effect": the harness still runs somewhere, so the
 	// request needs a cross-tenant grant rather than passing an empty tenant check.
 	RequireTenantWildcard bool
+	// SuiteSHA256 binds the authorized named baseline suite to the bytes launched.
+	SuiteSHA256 string
 }
 
 // hostTargetID is the target identifier for "the machine this console runs on" — the console's
@@ -604,7 +654,28 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 	dest := runDestination{Targets: []string{hostTargetID}, ScopeTarget: hostTargetID, RequireTenantWildcard: true}
 	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
 	if err != nil {
+		if name == "nats-exposure-baseline" {
+			return dest, err
+		}
 		return dest, nil
+	}
+	if name == "nats-exposure-baseline" {
+		if bytes.Contains(raw, []byte("__SET_")) {
+			return dest, fmt.Errorf("named NATS baseline suite is not configured with reviewed installed source and image pins")
+		}
+		var cfg struct {
+			Context             string `json:"context"`
+			Namespace           string `json:"namespace"`
+			Kubeconfig          string `json:"kubeconfig"`
+			NATSExposureFixture *struct {
+				Transport string `json:"transport"`
+			} `json:"natsExposureFixture"`
+		}
+		if err := yaml.Unmarshal(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")), &cfg); err != nil || cfg.Context == "" || cfg.Context == "in-cluster" || cfg.Kubeconfig != "" || cfg.Namespace != "phorvex-nats-exposure-fixture" || cfg.NATSExposureFixture == nil || cfg.NATSExposureFixture.Transport != "in-cluster" {
+			return dest, fmt.Errorf("named NATS baseline suite requires a logical cluster target, in-cluster transport and dedicated fixture destination")
+		}
+		h := sha256.Sum256(raw)
+		return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{"nats", cfg.Namespace}, ScopeTarget: cfg.Context, ScopeTenant: "nats", SuiteSHA256: hex.EncodeToString(h[:])}, nil
 	}
 	var cfg suiteConfig
 	// The shipped configs carry a UTF-8 BOM; strip it so the destination is actually parsed
@@ -648,9 +719,11 @@ func (rm *RunManager) ScenarioDestination(targetID string) runDestination {
 // runOwnership is what a run id resolves to for authorization: the destination it actually
 // drives, plus the verified identity that created it.
 type runOwnership struct {
-	Owner  string
-	Target string
-	Tenant string
+	Owner         string
+	Target        string
+	Tenant        string
+	Config        string
+	FixtureTenant string
 }
 
 // Ownership reports the destination and creator recorded for a run id. The auth boundary uses it
@@ -663,7 +736,7 @@ func (rm *RunManager) Ownership(id string) (runOwnership, bool) {
 	if !found {
 		return runOwnership{}, false
 	}
-	return runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant}, true
+	return runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant, Config: st.Config, FixtureTenant: st.FixtureTenant}, true
 }
 
 // Status returns a snapshot of a run (with the latest parsed metrics).
@@ -786,9 +859,13 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	// Cap so a triggered run can never hang the console. A 3-strategy (compare3) run executes
 	// 3 arms × trials and needs more headroom than a 2-arm scenario, so give it longer.
 	cap := 5 * time.Minute
+	isNATS := false
 	rm.mu.Lock()
 	if st := rm.runs[id]; st != nil && st.Compare3 {
 		cap = 12 * time.Minute
+	} else if st != nil && st.Config == natsBaselineConfig {
+		cap = 10 * time.Minute
+		isNATS = true
 	}
 	rm.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), cap)
@@ -796,6 +873,9 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	cmd := exec.CommandContext(ctx, rm.cfg.HarnessBin,
 		"-config", su.File,
 		"-negative-control=false", "-adaptive=false")
+	if isNATS {
+		cmd.Args = append(cmd.Args, "-nats-safety-out="+rm.cfg.runOutputPath(su.OutDir), "-nats-safety-id="+id)
+	}
 	cmd.Dir = rm.cfg.HarnessDir
 	cmd.Env = append(envBase(), "NO_COLOR=1")
 	if native {
@@ -819,9 +899,11 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	cmd.Stdout, cmd.Stderr = lf, lf
 	defer lf.Close()
 	var err error
+	started := false
 	if serr := cmd.Start(); serr != nil {
 		err = serr
 	} else {
+		started = true
 		rm.mu.Lock()
 		rm.procs[id] = cmd
 		rm.mu.Unlock()
@@ -841,14 +923,45 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	defer func() {
 		if e := rm.persistStatus(st, rm.runOut[id]); e != nil {
 			st.State = "partial"
+			st.UnsafeToRetry = true
 			st.Error = "run outcome persistence failed; unsafe to retry: " + e.Error()
 		}
 	}()
 	if rm.stopping[id] {
 		delete(rm.stopping, id)
+		if st.Config == natsBaselineConfig {
+			st.State, st.CleanupStatus, st.UnsafeToRetry = "partial", "UNVERIFIED", true
+			st.Finished, st.Error = tsNow(), "NATS baseline stopped before exact terminal cleanup; read-only reconciliation required"
+			return
+		}
 		st.State = "stopped"
 		st.Finished = tsNow()
 		st.Error = "stopped by user"
+		return
+	}
+	if st.Config == natsBaselineConfig {
+		st.Finished = tsNow()
+		if !started {
+			st.State, st.CleanupStatus, st.UnsafeToRetry = "error", "NO_EFFECT", false
+			st.Error = "NATS harness process did not start: " + err.Error()
+			return
+		}
+		result, evidenceErr := readNATSConfigurationResult(outAbs, id, st.Namespace)
+		if evidenceErr == nil && result.Accepted && err == nil && ctx.Err() == nil {
+			st.State, st.CleanupStatus, st.UnsafeToRetry = "done", "VERIFIED", false
+			return
+		}
+		st.State = "partial"
+		if evidenceErr == nil && result.FixtureResourcesCleanup == "VERIFIED" && result.StreamCleanup == "CONFIRMED_ABSENT" && result.ObserverCleanup == "OBSERVER_AND_STREAM_CONFIRMED_ABSENT" {
+			st.CleanupStatus, st.UnsafeToRetry = "VERIFIED", false
+			st.Error = "NATS measurement incomplete; exact owned cleanup verified; original result remains partial"
+		} else if readNATSNoEffect(outAbs, id, st.Namespace, su.File) {
+			st.CleanupStatus, st.UnsafeToRetry = "NO_EFFECT", false
+			st.Error = "NATS pre-effect refusal verified; original result remains partial"
+		} else {
+			st.CleanupStatus, st.UnsafeToRetry = "UNVERIFIED", true
+			st.Error = "NATS baseline terminal evidence or cleanup unverified; exact reconciliation required"
+		}
 		return
 	}
 	if err != nil && ctx.Err() == nil {

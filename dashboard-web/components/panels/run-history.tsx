@@ -33,6 +33,30 @@ function ProviderTag({ provider, label }: { provider?: string; label?: string })
   );
 }
 
+function NATSReconcileAction({ run, lens }: { run: RunStatus; lens: Lens }) {
+  const [busy, setBusy] = React.useState(false);
+  const [uncertain, setUncertain] = React.useState(false);
+  const [message, setMessage] = React.useState("");
+  if (lens !== "operator" || run.config !== "nats-exposure-baseline" || run.state !== "partial" || !run.unsafeToRetry) return null;
+  async function reconcile() {
+    setBusy(true); setUncertain(true); setMessage("");
+    try {
+      await api.reconcileNATSRun(run.id, lens);
+      setUncertain(false);
+      setMessage("Exact read-only cleanup reconciliation verified. The original measurement remains incomplete; refresh this run's status before a new launch.");
+    } catch (error: any) {
+      setMessage(error instanceof ApiError && error.status >= 400 && error.status < 500
+        ? `Read-only reconciliation refused: ${String(error.message || error)}`
+        : "Reconciliation response is uncertain. Refresh exact run status before another request; no fixture was replayed by this control.");
+    } finally { setBusy(false); }
+  }
+  return <div className="mb-3 rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">
+    <div>Owned NATS cleanup is unverified. This original run cannot be accepted or safely repeated until its exact resources are reconciled.</div>
+    <button className="mt-2 text-primary disabled:opacity-50" disabled={busy || uncertain} onClick={reconcile}>{busy ? "Checking exact owned state…" : "Reconcile this run read-only"}</button>
+    {message && <div className="mt-2 text-muted-foreground">{message}</div>}
+  </div>;
+}
+
 // Full per-run evidence ledger (per-arm aggregates + per-trial rows with attack command steps).
 function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?: string }) {
   const [openTrial, setOpenTrial] = React.useState<string>("");
@@ -52,6 +76,14 @@ function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?:
         <div className="mt-2 text-muted-foreground">cleanup: <span className="text-foreground">{ev.functionalResult.cleanup.status}</span>{ev.functionalResult.cleanup.verified ? " · verified" : " · unverified"}</div>
         {ev.functionalResult.limits?.map((limit) => <div key={limit} className="mt-1 text-muted-foreground">limit: {limit}</div>)}
         <div className="mt-2 grid gap-1 md:grid-cols-2">{Object.entries(ev.functionalResult.evidence || {}).map(([key, value]) => <div key={key} className="break-all font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span>{value}</div>)}</div>
+      </div>}
+
+      {ev.configurationResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
+        <div className="font-medium text-foreground">Accepted synthetic NATS configuration finding: {ev.configurationResult.finding}</div>
+        <div className="mt-1 text-muted-foreground">{ev.configurationResult.accepted ? "Complete owned control" : "Observed receipt retained; complete result unverified"} · no signal · no detector · defense efficacy not evaluated</div>
+        {!ev.configurationResult.accepted && <div className="mt-1 text-muted-foreground">Unaccepted observer indication: {ev.configurationResult.observedFinding}</div>}
+        <div className="mt-1 text-muted-foreground">Separate Pod: {ev.configurationResult.remoteStatus} · legitimate ACK: {ev.configurationResult.legitimateAcked ? "confirmed" : "unverified"} · stream: {ev.configurationResult.streamCleanup} · observer: {ev.configurationResult.observerCleanup} · fixture resources: {ev.configurationResult.fixtureResourcesCleanup}</div>
+        {ev.configurationResult.issues?.map((issue) => <div key={issue} className="mt-1 text-warning">unverified: {issue}</div>)}
       </div>}
 
       {/* per-arm evidence ledger */}
@@ -255,6 +287,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                       {open === r.id && (
                         <tr className="border-t border-border/20 bg-elevated/20">
                           <td colSpan={8} className="px-4 py-3">
+                            <NATSReconcileAction run={r} lens={lens} />
                             <EvidenceDetail id={r.id} lens={lens} runErr={r.error} />
                           </td>
                         </tr>

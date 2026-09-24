@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence, AttackResult } from "@/lib/api";
+import { api, ApiError, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence, AttackResult } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Segmented, Input, Dialog, Loading, ErrorBox, Empty } from "@/components/ui/more";
 import { PageHead, SectionLabel } from "./effectiveness";
@@ -106,6 +106,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   const [effectRecordId, setEffectRecordId] = React.useState("");
   const [effectResult, setEffectResult] = React.useState<AttackResult | null>(null);
   const [effectReadError, setEffectReadError] = React.useState("");
+  const [natsLaunchUncertain, setNatsLaunchUncertain] = React.useState(false);
   const requestGeneration = React.useRef(0);
   const requestContext = `${item?.name || ""}\u0000${target?.id || ""}\u0000${target?.context || ""}\u0000${lens}`;
   const currentContext = React.useRef(requestContext);
@@ -175,6 +176,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     const selectedContext = requestContext;
     const request = ++requestGeneration.current;
     setRunning(withPX ? "px" : "nopx"); setMsg("");
+    let natsLaunchSent = false;
+    let natsLaunchConfirmed = false;
     if (selectedTarget?.context) clearLiveSelection(selectedLens, selectedTarget.context);
     try {
       if (item!.launchKind === "fixed-suite") {
@@ -183,6 +186,19 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
         setMsg(item!.claimClass === "calibration" ? `Started ${id}. Its result reports only fixed benign classifier calibration, source pins, and cleanup.` : `Started ${id}. Its result reports the functional oracle, evidence, cleanup, and claim limits.`);
+        return;
+      }
+      if (item!.launchKind === "named-suite") {
+        if (item!.profile !== "nats-exposure-baseline") throw new Error("NATS named suite profile differs from the server-owned case");
+        natsLaunchSent = true;
+        const { id } = await api.startRun(item!.profile, false, selectedLens);
+        natsLaunchConfirmed = true;
+        setNatsLaunchUncertain(false);
+        if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
+        const context = item!.runtimeContext || selectedTarget?.context || "";
+        setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
+        if (selectedTarget?.context === context) selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
+        setMsg(`Started ${id}. The result is a synthetic no-signal configuration finding, not a defense verdict.`);
         return;
       }
       if (item!.launchKind === "live-vllm-effect") {
@@ -202,10 +218,15 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
       selectLiveRecord({ kind: "run", id, lens: selectedLens, context: selectedTarget.context });
       setMsg(`Launched ${id} on ${selectedTarget.label || selectedTarget.id} — watch Run Attack Agents / Live Operations.`);
     }
-    catch (e: any) { if (request === requestGeneration.current && selectedContext === currentContext.current) setMsg(String(e.message || e)); }
+    catch (e: any) {
+      if (natsLaunchSent && !natsLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)) setNatsLaunchUncertain(true);
+      if (request === requestGeneration.current && selectedContext === currentContext.current) setMsg(natsLaunchSent && !natsLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)
+        ? "NATS launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly."
+        : String(e.message || e));
+    }
     finally { if (request === requestGeneration.current && selectedContext === currentContext.current) setRunning(""); }
   }
-  const runnable = lens === "operator" && item.available !== false && (item.launchKind === "fixed-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
+  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && natsLaunchUncertain) && (item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
   return (
     <Dialog open={!!item} onClose={() => { requestGeneration.current++; setRunning(""); setMsg(""); onClose(); }} title={item.name}>
       <div className="space-y-4">
@@ -223,8 +244,9 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
           : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
+        {item.launchKind === "named-suite" && natsLaunchUncertain && <div className="text-[11px] text-warning">The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one. This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {item.launchKind === "fixed-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
+          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
           <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           </>}
@@ -242,8 +264,16 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}
+          {fixedEvidence?.configurationResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
+            <div>accepted configuration finding: <span className="font-medium text-foreground">{fixedEvidence.configurationResult.finding}</span> · accepted: <span className="text-foreground">{fixedEvidence.configurationResult.accepted ? "yes" : "no"}</span></div>
+            {!fixedEvidence.configurationResult.accepted && <div className="text-muted-foreground">Unaccepted observer indication: {fixedEvidence.configurationResult.observedFinding}</div>}
+            <div>remote receipt: {fixedEvidence.configurationResult.remoteStatus} · legitimate ACK: {fixedEvidence.configurationResult.legitimateAcked ? "yes" : "unverified"}</div>
+            <div>stream cleanup: {fixedEvidence.configurationResult.streamCleanup} · fixture cleanup: {fixedEvidence.configurationResult.fixtureResourcesCleanup}</div>
+            <div>brain: {fixedEvidence.configurationResult.brainMode} · defense efficacy: {fixedEvidence.configurationResult.securityEfficacy}</div>
+            {(fixedEvidence.configurationResult.issues || []).map((issue, index) => <div key={`${index}-${issue}`} className="text-warning">{issue}</div>)}
+          </div>}
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
-          {fixedEvidence && !fixedEvidence.functionalResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no functional outcome is accepted</div>}
+          {fixedEvidence && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
           {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
         </div>}
         {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">

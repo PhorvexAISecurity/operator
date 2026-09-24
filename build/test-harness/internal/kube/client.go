@@ -5,6 +5,7 @@ package kube
 
 import (
 	"fmt"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -56,6 +57,22 @@ func Build(kubeconfigPath, contextName string) (*Clients, error) {
 		liveCtx = contextName
 	}
 
+	return buildClients(restCfg, liveCtx)
+}
+
+// BuildNATSInCluster is the sole explicit ServiceAccount transport for the
+// one-use NATS exposure fixture. The caller checks the server-owned cluster UID
+// before namespace creation; ordinary suites continue through Build above.
+func BuildNATSInCluster() (*Clients, error) {
+	restCfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("build NATS in-cluster rest config: %w", err)
+	}
+	restCfg.Timeout = 20 * time.Second
+	return buildClients(restCfg, "in-cluster")
+}
+
+func buildClients(restCfg *rest.Config, liveCtx string) (*Clients, error) {
 	kc, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
 		return nil, fmt.Errorf("build kubernetes client: %w", err)

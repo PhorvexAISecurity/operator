@@ -470,6 +470,24 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
 	}
+	// The named broker baseline reads a server-owned file at authorization and
+	// launch. Recheck the second snapshot against this verified principal; Start
+	// also requires its digest still to match the exact file it copies.
+	if body.Config == "nats-exposure-baseline" {
+		p := principalOf(r)
+		for _, target := range dest.Targets {
+			if p == nil || !p.AllowsTarget(target) {
+				writeJSON(w, 403, map[string]string{"error": "suite target changed outside this identity's grant"})
+				return
+			}
+		}
+		for _, tenant := range dest.Tenants {
+			if p == nil || !p.AllowsTenant(tenant) {
+				writeJSON(w, 403, map[string]string{"error": "suite tenant changed outside this identity's grant"})
+				return
+			}
+		}
+	}
 	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
@@ -571,7 +589,7 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 		}
 		matching := make([]RunStatus, 0, len(all))
 		for _, st := range all {
-			if seqOf(st.ID) > cursor.Snapshot || !runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant}) {
+			if seqOf(st.ID) > cursor.Snapshot || !runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant, Config: st.Config, FixtureTenant: st.FixtureTenant}) {
 				continue
 			}
 			if contextFilter != "" && st.Target != contextFilter && !(st.Target == "" && providerFilter != "" && st.Provider == providerFilter) {
@@ -596,7 +614,7 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 	all := s.runs.List()
 	out := make([]RunStatus, 0, len(all))
 	for _, st := range all {
-		if runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant}) {
+		if runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant, Config: st.Config, FixtureTenant: st.FixtureTenant}) {
 			out = append(out, st)
 		}
 	}
@@ -613,6 +631,12 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var functional any
+	var configuration any
+	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
+		configuration = result
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "NATS configuration artifact unavailable: " + err.Error()})
+	}
 	if result, err := s.runs.FunctionalResult(id); err == nil && result != nil {
 		functional = map[string]any{"outcome": result.Outcome, "summary": result.Summary, "evidence": result.Evidence,
 			"limits": result.Limits, "cleanup": result.Cleanup, "unsafeToRetry": result.UnsafeToRetry,
@@ -623,8 +647,9 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished,
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
-		"functionalResult": functional,
-		"note":             "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
+		"functionalResult":    functional,
+		"configurationResult": configuration,
+		"note":                "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }
 
@@ -638,6 +663,17 @@ func (s *Server) runStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "stopping", "id": id})
+}
+
+// runNATSReconcile uses the same run-ID and dual-tenant authorization boundary
+// as status and stop. It only verifies ownership and absence for a stopped run.
+func (s *Server) runNATSReconcile(w http.ResponseWriter, r *http.Request) {
+	id := runIDOf(r)
+	if err := s.runs.ReconcileNATS(id, principalKey(principalOf(r))); err != nil {
+		writeJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "verified_read_only", "id": id})
 }
 
 func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {

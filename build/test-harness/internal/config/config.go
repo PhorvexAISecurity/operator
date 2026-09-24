@@ -25,12 +25,14 @@ import (
 type TargetConfig struct {
 	// Kubeconfig is the path to the kubeconfig file. Empty falls back to the
 	// standard KUBECONFIG / ~/.kube/config resolution (still validated against
-	// the named Context).
+	// the named Context). The NATS baseline alone requires this to be empty and
+	// uses its explicit in-cluster transport plus the kube-system UID pin.
 	Kubeconfig string `json:"kubeconfig"`
 
-	// Context is the kube-context this run is authorized to target. The safety
-	// guard refuses any other live context AND verifies the apiserver host of
-	// this named context matches the live connection before ANY mutating call.
+	// Context is the kube-context this run is authorized to target. Ordinary
+	// suites bind its live name and host. For the NATS baseline it is the
+	// server-owned logical cluster authorization target; its separate in-cluster
+	// transport is physically pinned by the kube-system UID before mutation.
 	Context string `json:"context"`
 
 	// Namespace is the sandbox namespace. ALL attack behavior and every created
@@ -132,6 +134,9 @@ type TargetConfig struct {
 	// authority for the isolated c2-nats-jetstream-durability scenario. Nil
 	// keeps the scenario unavailable and creates no NATS or storage objects.
 	NATSJetStreamFixture *NATSJetStreamFixtureConfig `json:"natsJetStreamFixture,omitempty"`
+	// NATSExposureFixture permits one credential-free, independently observed
+	// synthetic broker-message control. It never enables an injected signal.
+	NATSExposureFixture *NATSExposureFixtureConfig `json:"natsExposureFixture,omitempty"`
 
 	// InstalledManagerFixture attaches one catalogue arm to an already installed
 	// manager and its existing authenticated audit API. It is a complete runtime
@@ -211,6 +216,19 @@ type NATSJetStreamFixtureConfig struct {
 	HolderUID       string                 `json:"holderUID"`
 	Nonce           string                 `json:"nonce"`
 	PVs             []NATSJetStreamLocalPV `json:"pvs"`
+}
+
+type NATSExposureFixtureConfig struct {
+	RunID         string `json:"runID"`
+	Nonce         string `json:"nonce"`
+	Transport     string `json:"transport"`
+	ClusterUID    string `json:"clusterUID"`
+	ConfigSHA256  string `json:"configSHA256"`
+	NodeName      string `json:"nodeName"`
+	ObserverImage string `json:"observerImage"`
+	BrokerImageID string `json:"brokerImageID"`
+	BrokerVersion string `json:"brokerVersion"`
+	MaxRunSeconds int    `json:"maxRunSeconds"`
 }
 
 type InstalledManagerFixtureConfig struct {
@@ -397,6 +415,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateNATSJetStreamFixture(c); err != nil {
 			return err
 		}
+		if err := validateNATSExposureFixture(c); err != nil {
+			return err
+		}
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
@@ -424,6 +445,9 @@ func (c TargetConfig) Validate() error {
 		return errors.New("config: benignCheckpointLocalNonce must be a nonempty label-safe value of at most 63 bytes")
 	}
 	if err := validateNATSJetStreamFixture(c); err != nil {
+		return err
+	}
+	if err := validateNATSExposureFixture(c); err != nil {
 		return err
 	}
 	if err := validateGPUFunctionalFixture(c); err != nil {
@@ -548,6 +572,43 @@ func validateGPUFunctionalFixture(c TargetConfig) error {
 	}
 	if !filepath.IsAbs(fixture.BearerTokenFile) || filepath.Clean(fixture.BearerTokenFile) != fixture.BearerTokenFile {
 		return errors.New("config: gpuFunctionalFixture bearerTokenFile must be a clean absolute path")
+	}
+	return nil
+}
+
+var natsExposureNonce = regexp.MustCompile(`^[0-9a-f]{24}$`)
+var natsExposureDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var natsExposureImage = regexp.MustCompile(`^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$`)
+var natsExposureRunID = regexp.MustCompile(`^run-[1-9][0-9]*$`)
+
+func validateNATSExposureFixture(c TargetConfig) error {
+	f := c.NATSExposureFixture
+	if f == nil {
+		return nil
+	}
+	if c.ExpectedNamespaceUID != "" || c.Namespace != "phorvex-nats-exposure-fixture" {
+		return errors.New("config: natsExposureFixture requires the dedicated precreated fixture namespace without a preselected UID")
+	}
+	if !natsExposureNonce.MatchString(f.Nonce) || !natsExposureRunID.MatchString(f.RunID) {
+		return errors.New("config: natsExposureFixture requires a server-generated run ID and lowercase 96-bit nonce")
+	}
+	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-nats-uncredentialed-exposure" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" || f.MaxRunSeconds < 60 || f.MaxRunSeconds > 600 {
+		return errors.New("config: natsExposureFixture requires one bounded c2-nats-uncredentialed-exposure/d-nomtd trial")
+	}
+	if c.NATSJetStreamFixture != nil || c.InstalledManagerFixture != nil || c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+		return errors.New("config: natsExposureFixture cannot share another external fixture")
+	}
+	if !natsExposureDigest.MatchString(f.ConfigSHA256) || !natsExposureImage.MatchString(f.ObserverImage) || !natsExposureImage.MatchString(f.BrokerImageID) {
+		return errors.New("config: natsExposureFixture source and images must be digest pinned")
+	}
+	if !kubernetesUIDPattern.MatchString(f.ClusterUID) {
+		return errors.New("config: natsExposureFixture requires the admitted cluster kube-system UID")
+	}
+	if f.Transport != "in-cluster" || c.Context == "in-cluster" || c.Kubeconfig != "" {
+		return errors.New("config: natsExposureFixture requires a logical cluster context and explicit in-cluster ServiceAccount transport without kubeconfig")
+	}
+	if f.NodeName == "" || len(validation.IsDNS1123Subdomain(f.NodeName)) != 0 || f.BrokerVersion == "" || len(f.BrokerVersion) > 24 {
+		return errors.New("config: natsExposureFixture node or broker version invalid")
 	}
 	return nil
 }

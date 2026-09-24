@@ -120,6 +120,10 @@ type Env struct {
 	EffectAttemptID string
 	// RestConfigHost is the live apiserver host (provenance/debug).
 	RestConfigHost string
+	// NATSFenceIdentity is the exact exclusive run lock inode held by the
+	// harness process through setup, effects and cleanup; legacy absence fails
+	// read-only reconciliation closed.
+	NATSFenceIdentity string
 
 	// namespaceUID is the exact sandbox instance observed or created by
 	// EnsureNamespace. Cleanup never adopts a same-name replacement.
@@ -218,18 +222,25 @@ func sanitizeLabel(s string) string {
 	return strings.Trim(out, "-.")
 }
 
-// EnsureNamespace creates the sandbox namespace (labeled owned) if missing. It
-// goes through the safety guard so a misconfigured namespace cannot be created.
+// EnsureNamespace creates an ordinary sandbox namespace (labeled owned) if
+// missing. The NATS fixture instead requires its precreated labelled namespace
+// and never creates one. The safety guard runs before either path.
 func (e *Env) EnsureNamespace(ctx context.Context) error {
 	if err := e.Guard.AssertMutationAllowed(e.Config.Namespace); err != nil {
 		return err
 	}
 	ns, err := e.Kube.CoreV1().Namespaces().Get(ctx, e.Config.Namespace, metav1.GetOptions{})
 	if err == nil {
+		if e.Config.NATSExposureFixture != nil && ns.Labels["phorvex.ai/nats-exposure-fixture"] != "true" {
+			return fmt.Errorf("NATS fixture namespace %q lacks the installed ownership label", e.Config.Namespace)
+		}
 		return e.bindNamespaceUID(ns)
 	}
 	if !apierrors.IsNotFound(err) {
 		return err
+	}
+	if e.Config.NATSExposureFixture != nil {
+		return fmt.Errorf("dedicated NATS fixture namespace %q is absent; refusing to create it", e.Config.Namespace)
 	}
 	if e.Config.ExpectedNamespaceUID != "" {
 		return fmt.Errorf("sandbox namespace %q expectedNamespaceUID %q is absent; refusing to create or adopt a replacement",
@@ -255,6 +266,11 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	}
 	return e.bindNamespaceUID(created)
 }
+
+// NamespaceUID is authoritative only after EnsureNamespace has returned nil.
+// The NATS runner transfers the observed installed fixture namespace UID to
+// later Env instances; it never rederives ownership from a label alone.
+func (e *Env) NamespaceUID() types.UID { return e.namespaceUID }
 
 func (e *Env) bindNamespaceUID(ns *corev1.Namespace) error {
 	if ns == nil || ns.Name != e.Config.Namespace || ns.UID == "" {
@@ -334,6 +350,12 @@ func (r CleanupResidue) String() string {
 func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	if err := e.Guard.AssertMutationAllowed(e.Config.Namespace); err != nil {
 		return err
+	}
+	if e.Config.NATSExposureFixture != nil {
+		if deleteNamespace {
+			return fmt.Errorf("NATS fixture cleanup cannot delete the installed namespace")
+		}
+		return e.VerifyNATSFixtureClean(ctx)
 	}
 	ns := e.Config.Namespace
 	current, err := e.namespaceCurrent(ctx)
@@ -558,6 +580,33 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	if len(problems) > 0 {
 		return fmt.Errorf("cleanup of owned objects in namespace %s did not verify (%d problem(s)): %s",
 			ns, len(problems), strings.Join(problems, "; "))
+	}
+	return nil
+}
+
+// VerifyNATSFixtureClean checks only this run's nonce names. The scenario owns
+// UID-preconditioned deletion; generic label-based deletion would exceed the
+// dedicated fixture Role and could touch another run's resources.
+func (e *Env) VerifyNATSFixtureClean(ctx context.Context) error {
+	if e.Config.NATSExposureFixture == nil {
+		return fmt.Errorf("NATS fixture cleanup requested without fixture")
+	}
+	current, err := e.namespaceCurrent(ctx)
+	if err != nil || !current {
+		return fmt.Errorf("dedicated NATS fixture namespace identity unavailable: %w", err)
+	}
+	e.createdMu.RLock()
+	pending := len(e.createdUIDs)
+	e.createdMu.RUnlock()
+	if pending != 0 {
+		return fmt.Errorf("%d create-response UID bindings not retired by exact scenario teardown", pending)
+	}
+	name := "nats-observer-" + e.Config.NATSExposureFixture.Nonce
+	if _, err := e.Kube.CoreV1().Pods(e.Config.Namespace).Get(ctx, name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		return fmt.Errorf("owned observer Pod absence unverified: %v", err)
+	}
+	if _, err := e.Kube.CoreV1().ConfigMaps(e.Config.Namespace).Get(ctx, name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		return fmt.Errorf("owned observer ConfigMap absence unverified: %v", err)
 	}
 	return nil
 }

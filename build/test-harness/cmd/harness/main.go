@@ -8,16 +8,22 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"math/rand"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -31,7 +37,7 @@ import (
 	// Side-effect imports: every scenario/defender self-registers via init().
 	// Adding a future plugin = one new file in these packages, ZERO changes here.
 	_ "github.com/r6security/phoenix-test-harness/defenders"
-	_ "github.com/r6security/phoenix-test-harness/scenarios"
+	scenarios "github.com/r6security/phoenix-test-harness/scenarios"
 )
 
 // cleanupBudget bounds the owned cleanup this command performs per trial and at
@@ -47,6 +53,10 @@ func main() {
 	adaptive := flag.Bool("adaptive", true, "run the adaptive-attacker arm per (scenario,defender)")
 	dollarsFrom := flag.String("dollars-from", "", "PASS-A-WITH-DOLLARS view: read this existing metrics.jsonl, recompute ROI($)/Schwartau/reusability + H1/H2/H3, write report-dollars.md NEXT TO it, and exit (no cluster, no re-run)")
 	resume := flag.Bool("resume", false, "ACCUMULATE: append this run's metrics to outDir/metrics.jsonl instead of truncating it, and regenerate the report/dollars over the running total (for batched benchmarks sharing one out-dir + masterSeed; keep batch scenarioFilters disjoint)")
+	natsSafetyOut := flag.String("nats-safety-out", "", "Internal: exact NATS run output for pre-effect refusal receipt")
+	natsSafetyID := flag.String("nats-safety-id", "", "Internal: exact NATS run ID for pre-effect refusal receipt")
+	natsReconcile := flag.Bool("nats-reconcile", false, "Internal: read-only exact NATS run reconciliation")
+	natsReconcileAttempt := flag.String("nats-reconcile-attempt", "", "Internal: unique read-only reconciliation attempt")
 	flag.Parse()
 
 	if *listOnly {
@@ -69,8 +79,35 @@ func main() {
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
+		if !*natsReconcile && *natsSafetyOut != "" && *natsSafetyID != "" {
+			raw, readErr := os.ReadFile(*cfgPath)
+			if readErr == nil {
+				h := sha256.Sum256(raw)
+				writeErr := scenarios.WriteNATSNoEffect(*natsSafetyOut, scenarios.NATSNoEffectReceipt{Schema: "nats-baseline-no-effect-v1", RunID: *natsSafetyID, ConfigSHA256: hex.EncodeToString(h[:]), Phase: "CONFIG_LOAD_REFUSED"})
+				if writeErr != nil {
+					err = errors.Join(err, writeErr)
+				}
+			}
+		}
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(2)
+	}
+	if cfg.NATSExposureFixture != nil && (*natsSafetyID != cfg.NATSExposureFixture.RunID || filepath.Clean(*natsSafetyOut) != filepath.Clean(cfg.OutDir)) {
+		fmt.Fprintln(os.Stderr, "ERROR: NATS safety receipt destination differs from generated run config")
+		os.Exit(2)
+	}
+	if *natsReconcile {
+		if cfg.NATSExposureFixture == nil || *natsSafetyOut == "" || *natsSafetyID == "" {
+			fmt.Fprintln(os.Stderr, "ERROR: exact NATS reconciliation identity required")
+			os.Exit(2)
+		}
+		rctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := reconcileNATSRun(rctx, cfg, *natsReconcileAttempt); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	ctx := context.Background()
@@ -78,6 +115,30 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func reconcileNATSRun(ctx context.Context, cfg config.TargetConfig, attemptID string) error {
+	fence, fenceIdentity, err := acquireNATSFence(cfg.OutDir)
+	if err != nil {
+		return err
+	}
+	defer fence.Close()
+	clients, err := kube.BuildNATSInCluster()
+	if err != nil {
+		return err
+	}
+	guard, err := safety.NewGuard(cfg, clients.LiveContext, clients.LiveHost)
+	if err != nil {
+		return err
+	}
+	if err := assertNATSClusterPin(ctx, cfg, clients.Kube); err != nil {
+		return err
+	}
+	env := &core.Env{Kube: clients.Kube, Rest: clients.Rest, Ctrl: clients.Ctrl, Config: cfg, Guard: guard, NATSFenceIdentity: fenceIdentity}
+	if err := env.EnsureNamespace(ctx); err != nil {
+		return err
+	}
+	return scenarios.ReconcileNATSExposure(ctx, env, cfg.OutDir, attemptID)
 }
 
 func listPlugins() {
@@ -93,7 +154,26 @@ func listPlugins() {
 	}
 }
 
-func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adaptive, resume bool) error {
+func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adaptive, resume bool) (runErr error) {
+	enteredMatrix := false
+	var natsFenceIdentity string
+	if f := cfg.NATSExposureFixture; f != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = natsRunContext(ctx, f)
+		defer cancel()
+		fence, identity, err := acquireNATSFence(cfg.OutDir)
+		if err != nil {
+			return err
+		}
+		defer fence.Close()
+		natsFenceIdentity = identity
+		defer func() {
+			if runErr != nil && !enteredMatrix {
+				writeErr := scenarios.WriteNATSNoEffect(cfg.OutDir, scenarios.NATSNoEffectReceipt{Schema: "nats-baseline-no-effect-v1", RunID: f.RunID, Nonce: f.Nonce, Namespace: cfg.Namespace, ClusterUID: types.UID(f.ClusterUID), Phase: "PRE_MATRIX_REFUSED"})
+				runErr = errors.Join(runErr, writeErr)
+			}
+		}()
+	}
 	// The exact local PV authority is one-use: the registered scenario owns one
 	// ordinary trial and cannot be expanded into runner-generated negative or
 	// adaptive arms over the same external volumes.
@@ -106,8 +186,17 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if cfg.GPUFunctionalFixture != nil && (negControl || adaptive) {
 		return errors.New("gpuFunctionalFixture requires -negative-control=false and -adaptive=false before Kubernetes clients are built")
 	}
+	if cfg.NATSExposureFixture != nil && (negControl || adaptive || resume) {
+		return errors.New("natsExposureFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
+	}
 	// 1) Build clients PINNED to the configured context.
-	clients, err := kube.Build(cfg.Kubeconfig, cfg.Context)
+	var clients *kube.Clients
+	var err error
+	if cfg.NATSExposureFixture != nil {
+		clients, err = kube.BuildNATSInCluster()
+	} else {
+		clients, err = kube.Build(cfg.Kubeconfig, cfg.Context)
+	}
 	if err != nil {
 		return err
 	}
@@ -119,6 +208,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		return fmt.Errorf("safety guard: %w", err)
 	}
 	fmt.Printf("Safety guard OK: context=%s host=%s namespace=%s ownedAck=%v\n", clients.LiveContext, clients.LiveHost, cfg.Namespace, cfg.OwnedAck)
+	if err := assertNATSClusterPin(ctx, cfg, clients.Kube); err != nil {
+		return err
+	}
 
 	// 3) Capability detection at runtime.
 	caps, capNotes, err := capability.Detect(ctx, clients.Kube)
@@ -183,29 +275,57 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	// 5) Build the EnvFactory: a fresh Env per trial with a deterministic RNG and a
 	// per-trial raw logger. The whole loop is generic; the factory is the only
 	// place clients/loggers are wired.
+	var fixtureNamespaceMu sync.Mutex
+	var fixtureNamespaceReadAttempted bool
+	var fixtureNamespaceUID types.UID
 	factory := func(scenarioName, defenderName string, trial int, seed int64, rawLogPath string) (*core.Env, func() error, error) {
 		tl, err := core.NewTrialLogger(rawLogPath, func(line string) { /* raw-log only; stdout stays terse */ })
 		if err != nil {
 			return nil, nil, err
 		}
+		envCfg := cfg
+		if cfg.NATSExposureFixture != nil {
+			fixtureNamespaceMu.Lock()
+			defer fixtureNamespaceMu.Unlock()
+			if fixtureNamespaceUID != "" {
+				envCfg.ExpectedNamespaceUID = string(fixtureNamespaceUID)
+			} else if fixtureNamespaceReadAttempted {
+				_ = closeLogger(tl)
+				return nil, nil, errors.New("dedicated fixture namespace read was attempted but no UID was confirmed; no retry or adoption")
+			} else {
+				fixtureNamespaceReadAttempted = true
+			}
+		}
 		env := &core.Env{
-			Ctrl:           clients.Ctrl,
-			Kube:           clients.Kube,
-			Rest:           clients.Rest,
-			Config:         cfg,
-			Caps:           caps,
-			Rand:           newRand(seed),
-			Log:            tl,
-			Guard:          guard,
-			Trial:          trial,
-			ScenarioName:   scenarioName,
-			DefenderName:   defenderName,
-			RestConfigHost: clients.LiveHost,
+			Ctrl:              clients.Ctrl,
+			Kube:              clients.Kube,
+			Rest:              clients.Rest,
+			Config:            envCfg,
+			Caps:              caps,
+			Rand:              newRand(seed),
+			Log:               tl,
+			Guard:             guard,
+			Trial:             trial,
+			ScenarioName:      scenarioName,
+			DefenderName:      defenderName,
+			RestConfigHost:    clients.LiveHost,
+			NATSFenceIdentity: natsFenceIdentity,
 		}
 		// Ensure the sandbox namespace exists once per trial (idempotent).
 		if err := env.EnsureNamespace(ctx); err != nil {
+			if cfg.NATSExposureFixture != nil && fixtureNamespaceUID == "" {
+				writeErr := scenarios.WriteNATSNoEffect(cfg.OutDir, scenarios.NATSNoEffectReceipt{Schema: "nats-baseline-no-effect-v1", RunID: cfg.NATSExposureFixture.RunID, Nonce: cfg.NATSExposureFixture.Nonce, Namespace: cfg.Namespace, ClusterUID: types.UID(cfg.NATSExposureFixture.ClusterUID), Phase: "PRE_MATRIX_REFUSED"})
+				err = errors.Join(err, writeErr)
+			}
 			_ = closeLogger(tl)
 			return nil, nil, err
+		}
+		if cfg.NATSExposureFixture != nil && fixtureNamespaceUID == "" {
+			fixtureNamespaceUID = env.NamespaceUID()
+			if fixtureNamespaceUID == "" {
+				_ = closeLogger(tl)
+				return nil, nil, errors.New("dedicated fixture namespace read returned without a UID")
+			}
 		}
 		closer := func() error {
 			// Per-trial owned cleanup (idempotent), then close the logger.
@@ -239,14 +359,15 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	runner := core.NewRunner(opts, factory, mw, func(line string) { fmt.Println(line) })
 	fmt.Printf("\nRunning matrix: %d scenarios x %d defenders x %d trials/arm (seed=%d)\n", len(selScenarios(opts)), len(selDefenders(opts)), cfg.TrialsPerArm, cfg.MasterSeed)
-	metrics, runErr := runner.Run(ctx)
+	enteredMatrix = true
+	metrics, matrixErr := runner.Run(ctx)
 	outcome := runner.Outcome()
-	if runErr != nil {
+	if matrixErr != nil {
 		// The run stopped early (e.g. unverified cleanup, or a metric write
 		// failure). The rows produced before the stop are real evidence, so the
 		// reports are still written — labelled INCOMPLETE — and the command then
 		// exits non-zero. Nothing here claims a complete matrix.
-		fmt.Fprintf(os.Stderr, "RUN INCOMPLETE: %v\n", runErr)
+		fmt.Fprintf(os.Stderr, "RUN INCOMPLETE: %v\n", matrixErr)
 	}
 
 	// 6b) Do not abandon cleanup the runner still owns. A call that outlived its
@@ -270,7 +391,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		}
 	}
 
-	// 7) Final teardown: remove the sandbox namespace + all owned objects — but
+	// 7) Final teardown: remove the ordinary sandbox namespace + owned objects;
+	// the NATS fixture instead verifies its exact resources absent and preserves
+	// the precreated namespace. In both paths, proceed
 	// ONLY if no cleanup this run still owns is still running. Its failures are
 	// part of the RUN RESULT, not a warning: an unverified (or refused) final
 	// teardown leaves the cluster dirty for the NEXT run, so it makes this run
@@ -322,7 +445,25 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	fmt.Printf("\nDone (%s: planned %d / executed %d / written %d). %d metric records.\n  metrics:    %s\n  report:     %s\n  provenance: %s\n  mitre:      %s\n  inventory:  %s\n  dollars:    %s\n",
 		state, outcome.PlannedTrials, outcome.ExecutedTrials, outcome.WrittenTrials, len(metrics), metricsPath, repPath, provPath, mitrePath, inventoryPath, dollarsPath)
 	// Both failures matter and neither masks the other.
-	return errors.Join(runErr, finalErr)
+	return errors.Join(matrixErr, finalErr)
+}
+
+func natsRunContext(parent context.Context, fixture *config.NATSExposureFixtureConfig) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, time.Duration(fixture.MaxRunSeconds)*time.Second)
+}
+
+func assertNATSClusterPin(ctx context.Context, cfg config.TargetConfig, kc kubernetes.Interface) error {
+	if cfg.NATSExposureFixture == nil {
+		return nil
+	}
+	if cfg.NATSExposureFixture.Transport != "in-cluster" || cfg.Context == "" || cfg.Context == "in-cluster" || cfg.Kubeconfig != "" {
+		return errors.New("NATS baseline requires explicit in-cluster ServiceAccount mode")
+	}
+	ns, err := kc.CoreV1().Namespaces().Get(ctx, "kube-system", metav1.GetOptions{})
+	if err != nil || ns.UID == "" || string(ns.UID) != cfg.NATSExposureFixture.ClusterUID {
+		return errors.New("NATS baseline cluster UID differs from server-owned admission pin; refusing before namespace creation")
+	}
+	return nil
 }
 
 // finalizeRun performs the run-level teardown, honouring the SAME ownership
@@ -371,13 +512,84 @@ func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) 
 	}
 	fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
 	defer fcancel()
-	deleteNamespace := !env.Config.BenignCheckpointLocalFixture && env.Config.NATSJetStreamFixture == nil && env.Config.GPUFunctionalFixture == nil
+	deleteNamespace := !env.Config.BenignCheckpointLocalFixture && env.Config.NATSJetStreamFixture == nil && env.Config.GPUFunctionalFixture == nil && env.Config.NATSExposureFixture == nil
 	cleanupErr := env.CleanupOwned(fctx, deleteNamespace)
 	if cleanupErr == nil && !deleteNamespace {
 		env.Log.Logf("cleanup: verified supported generic-owned residue absent; preserving exact external fixture holder and namespace for collector handoff")
 	}
 	closeErr := boundedClose(closer)
-	return errors.Join(cleanupErr, closeErr)
+	if cleanupErr != nil || closeErr != nil {
+		return errors.Join(cleanupErr, closeErr)
+	}
+	if env.Config.NATSExposureFixture != nil {
+		return writeNATSTerminalReceipt(fctx, env, outDir)
+	}
+	return nil
+}
+
+// The separate terminal receipt joins the run's immutable scenario artifact to
+// the precreated fixture namespace UID and independently confirms exact nonce
+// resources absent while that namespace remains the same instance.
+func writeNATSTerminalReceipt(ctx context.Context, env *core.Env, outDir string) error {
+	f := env.Config.NATSExposureFixture
+	if f == nil || env.NamespaceUID() == "" {
+		return errors.New("NATS terminal namespace identity unavailable")
+	}
+	ns, err := env.Kube.CoreV1().Namespaces().Get(ctx, env.Config.Namespace, metav1.GetOptions{})
+	if err != nil || ns.UID != env.NamespaceUID() || ns.DeletionTimestamp != nil || ns.Labels["phorvex.ai/nats-exposure-fixture"] != "true" {
+		return errors.New("NATS terminal dedicated namespace identity unverified")
+	}
+	if err := env.VerifyNATSFixtureClean(ctx); err != nil {
+		return err
+	}
+	artifactPath := filepath.Join(outDir, "nats-baseline.json")
+	info, err := os.Stat(artifactPath)
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 64<<10 {
+		return errors.New("NATS terminal artifact unavailable or oversized")
+	}
+	raw, err := os.ReadFile(artifactPath)
+	if err != nil {
+		return err
+	}
+	var artifact struct {
+		RunID        string `json:"runId"`
+		Nonce        string `json:"nonce"`
+		Namespace    string `json:"namespace"`
+		NamespaceUID string `json:"namespaceUID"`
+	}
+	if json.Unmarshal(raw, &artifact) != nil || artifact.RunID != f.RunID || artifact.Nonce != f.Nonce || artifact.Namespace != env.Config.Namespace || artifact.NamespaceUID != string(env.NamespaceUID()) {
+		return errors.New("NATS terminal artifact identity differs")
+	}
+	h := sha256.Sum256(raw)
+	receipt := map[string]any{"schema": "nats-baseline-terminal-v1", "runId": f.RunID, "nonce": f.Nonce, "namespace": env.Config.Namespace, "namespaceUID": string(env.NamespaceUID()), "artifactSHA256": hex.EncodeToString(h[:]), "fixtureResourcesAbsent": true, "namespacePreserved": true, "observedAt": time.Now().UTC().Format(time.RFC3339Nano)}
+	data, err := json.Marshal(receipt)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(outDir, "nats-baseline-terminal.json")
+	tmp := path + ".tmp"
+	file, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err = file.Write(data); err == nil {
+		err = file.Sync()
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err = os.Rename(tmp, path); err != nil {
+		return err
+	}
+	dir, err := os.Open(outDir)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 // boundedClose waits on the context-free closer under the shared cleanup budget.
