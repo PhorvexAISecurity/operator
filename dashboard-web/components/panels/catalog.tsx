@@ -139,7 +139,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   const [effectRecordId, setEffectRecordId] = React.useState("");
   const [effectResult, setEffectResult] = React.useState<AttackResult | null>(null);
   const [effectReadError, setEffectReadError] = React.useState("");
-  const [natsLaunchUncertain, setNatsLaunchUncertain] = React.useState(false);
+  const [namedLaunchUncertain, setNamedLaunchUncertain] = React.useState(false);
   const [admissionRefreshes, setAdmissionRefreshes] = React.useState(0);
   const [fixedAdmission, setFixedAdmission] = React.useState<FixedAdmissionState | null>(null);
   const admissionGeneration = React.useRef(0);
@@ -240,8 +240,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     const selectedContext = requestContext;
     const request = ++requestGeneration.current;
     setRunning(withPX ? "px" : "nopx"); setMsg("");
-    let natsLaunchSent = false;
-    let natsLaunchConfirmed = false;
+    let namedLaunchSent = false;
+    let namedLaunchConfirmed = false;
     if (selectedTarget?.context) clearLiveSelection(selectedLens, selectedTarget.context);
     try {
       if (item!.launchKind === "fixed-suite") {
@@ -254,10 +254,10 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
       }
       if (item!.launchKind === "named-suite") {
         if (item!.profile !== "nats-exposure-baseline" && item!.profile !== "nats-client-response" && item!.profile !== "guardrail-confidentiality-static") throw new Error("Named suite profile differs from the server-owned case");
-        natsLaunchSent = true;
+        namedLaunchSent = true;
         const { id } = await api.startRun(item!.profile, false, selectedLens);
-        natsLaunchConfirmed = true;
-        setNatsLaunchUncertain(false);
+        namedLaunchConfirmed = true;
+        setNamedLaunchUncertain(false);
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
         const context = item!.runtimeContext || selectedTarget?.context || "";
         setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
@@ -286,14 +286,14 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     }
     catch (e: any) {
       if (item!.launchKind === "fixed-suite" && request === requestGeneration.current) setFixedAdmission({ key: admissionKey, profile: fixedProfile, phase: "error" });
-      if (natsLaunchSent && !natsLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)) setNatsLaunchUncertain(true);
-      if (request === requestGeneration.current && selectedContext === currentContext.current) setMsg(natsLaunchSent && !natsLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)
-        ? "NATS launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly."
+      if (namedLaunchSent && !namedLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)) setNamedLaunchUncertain(true);
+      if (request === requestGeneration.current && selectedContext === currentContext.current) setMsg(namedLaunchSent && !namedLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)
+        ? item!.profile === "guardrail-confidentiality-static" ? "Guardrail comparison launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly." : "NATS launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly."
         : String(e.message || e));
     }
     finally { if (request === requestGeneration.current && selectedContext === currentContext.current) setRunning(""); }
   }
-  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && natsLaunchUncertain) && (item.launchKind === "fixed-suite" ? fixedSuiteAdmissionReady(admissionKey, fixedProfile, fixedAdmission) : item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
+  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && namedLaunchUncertain) && (item.launchKind === "fixed-suite" ? fixedSuiteAdmissionReady(admissionKey, fixedProfile, fixedAdmission) : item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
   return (
     <Dialog open={!!item} onClose={() => { requestGeneration.current++; setRunning(""); setMsg(""); onClose(); }} title={item.name}>
       <div className="space-y-4">
@@ -313,7 +313,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
         {item.launchKind === "fixed-suite" && <FixedSuiteAdmissionNotice configured={item.available !== false} state={fixedAdmission?.key === admissionKey ? fixedAdmission : null} refreshes={admissionRefreshes} onRefresh={() => setAdmissionRefreshes((count) => Math.min(3, count + 1))} />}
-        {item.launchKind === "named-suite" && natsLaunchUncertain && <div className="text-[11px] text-warning">The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one. This button stays disabled for this page session.</div>}
+        {item.launchKind === "named-suite" && namedLaunchUncertain && <div className="text-[11px] text-warning">{item.profile === "guardrail-confidentiality-static" ? "The last comparison launch response was indeterminate. Inspect Run History for the exact run before starting a new one." : "The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one."} This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
           {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === "guardrail-confidentiality-static" ? "Run fixed confidentiality comparison" : item.profile === "nats-client-response" ? "Run NATS client response" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
