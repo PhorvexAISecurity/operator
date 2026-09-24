@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,6 +81,13 @@ checks:
     source_sha: 28378a127dfc7cce7c88e7c3da91ae0aea8e9a6d
     at: '2026-09-24T22:20:12+00:00'
     incident_sha256: 5206f984c753e919622921b47dc1172a9e25623ff0dad8a983c235736c0a7b9d
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 4122b4782de0348fc281f0dea8672ca938d414878398e4dcdbd89274a994755c
+    source_sha: 28378a127dfc7cce7c88e7c3da91ae0aea8e9a6d
+    at: '2026-09-24T22:21:11+00:00'
 fix_id: CAT-GUARDRAIL-STATE
 issues: []
 title: Read legacy and current guardrail calibration state without overstating enforcement
@@ -149,7 +156,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-24T22:20:16+00:00'
+updated_at: '2026-09-24T22:21:11+00:00'
 configuration_history:
 - at: '2026-09-24T21:51:34+00:00'
   by: codex-lead
