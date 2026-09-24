@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/natsexposure"
@@ -26,14 +27,30 @@ type natsResponsePhaseArtifact struct {
 }
 
 type natsResponseServiceReceipt struct {
-	AddressKind        string      `json:"addressKind"`
-	ServiceUID         types.UID   `json:"serviceUID"`
-	EndpointSliceUID   types.UID   `json:"endpointSliceUID,omitempty"`
-	EndpointMemberUIDs []types.UID `json:"endpointMemberUIDs,omitempty"`
-	PodUID             types.UID   `json:"podUID"`
-	ServerID           string      `json:"serverID"`
-	Status             string      `json:"status"`
-	ObservedAt         string      `json:"observedAt"`
+	AddressKind        string                      `json:"addressKind"`
+	ServiceUID         types.UID                   `json:"serviceUID"`
+	EndpointSliceUID   types.UID                   `json:"endpointSliceUID,omitempty"`
+	EndpointMemberUIDs []types.UID                 `json:"endpointMemberUIDs,omitempty"`
+	EndpointMembers    []natsResponseServiceMember `json:"endpointMembers,omitempty"`
+	PodUID             types.UID                   `json:"podUID"`
+	ServerID           string                      `json:"serverID"`
+	Status             string                      `json:"status"`
+	ObservedAt         string                      `json:"observedAt"`
+}
+
+// A service member is an API-observed, first-incarnation fixture process. A
+// post-quarantine ReplicaSet replacement may carry service traffic, but never
+// substitutes for either original Pod's M0/M1 message receipt.
+type natsResponseServiceMember struct {
+	PodUID       types.UID `json:"podUID"`
+	PodName      string    `json:"podName"`
+	PodIP        string    `json:"podIP"`
+	OwnerKind    string    `json:"ownerKind"`
+	OwnerUID     types.UID `json:"ownerUID"`
+	ContainerID  string    `json:"containerID"`
+	ImageID      string    `json:"imageID"`
+	Ready        bool      `json:"ready"`
+	RestartCount int32     `json:"restartCount"`
 }
 
 type natsResponseArtifact struct {
@@ -159,7 +176,8 @@ func natsResponseCompleteArtifact(a natsResponseArtifact) bool {
 		a.ServiceBefore.Status != "HTTP_200" || a.ServiceAfter.Status != "HTTP_200" ||
 		a.PeerBefore.Status != "HTTP_200" || a.PeerAfter.Status != "HTTP_200" ||
 		a.PeerBefore.PodUID != a.Fixture.Peer.UID || a.PeerAfter.PodUID != a.Fixture.Peer.UID ||
-		a.ServiceBefore.EndpointSliceUID == "" || a.ServiceAfter.EndpointSliceUID != a.ServiceBefore.EndpointSliceUID ||
+		a.ServiceBefore.EndpointSliceUID == "" || a.ServiceAfter.EndpointSliceUID == "" ||
+		!natsResponseServiceEvidenceComplete(a.ServiceBefore) || !natsResponseServiceEvidenceComplete(a.ServiceAfter) ||
 		a.Decision.EventCleanupStatus != "CONFIRMED_ABSENT" {
 		return false
 	}
@@ -173,6 +191,25 @@ func natsResponseCompleteArtifact(a natsResponseArtifact) bool {
 		(a.Decision.SelectedAction == "quarantine" && a.Decision.DispatchOutcome == "emitted" &&
 			a.Decision.EffectStatus == "OBJECT_EFFECT_OBSERVED_PACKET_UNVERIFIED" &&
 			a.SecurityOutcome == "CONTAINMENT_NOT_ACHIEVED")
+}
+
+func natsResponseServiceEvidenceComplete(r natsResponseServiceReceipt) bool {
+	if len(r.EndpointMemberUIDs) < 1 || len(r.EndpointMemberUIDs) > 2 ||
+		len(r.EndpointMembers) != len(r.EndpointMemberUIDs) ||
+		!sort.SliceIsSorted(r.EndpointMemberUIDs, func(i, j int) bool { return r.EndpointMemberUIDs[i] < r.EndpointMemberUIDs[j] }) {
+		return false
+	}
+	responded := false
+	for i, uid := range r.EndpointMemberUIDs {
+		member := r.EndpointMembers[i]
+		if uid == "" || member.PodUID != uid || member.PodName == "" || member.PodIP == "" ||
+			member.OwnerKind == "" || member.OwnerUID == "" || member.ContainerID == "" || member.ImageID == "" ||
+			!member.Ready || member.RestartCount != 0 || (i > 0 && uid == r.EndpointMemberUIDs[i-1]) {
+			return false
+		}
+		responded = responded || uid == r.PodUID
+	}
+	return responded
 }
 
 // An artifact is published once. A later process may inspect it but cannot

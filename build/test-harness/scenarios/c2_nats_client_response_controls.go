@@ -6,10 +6,12 @@ import (
 	"errors"
 	"net"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -21,7 +23,65 @@ type natsResponseCurrentControl struct {
 	// Members is the exact Ready, serving set from the authoritative Service
 	// EndpointSlices at this snapshot. A Service HTTP response is accepted only
 	// when its Pod UID belongs to this set; direct peer health is separate.
-	Members map[types.UID]bool
+	Members       map[types.UID]bool
+	MemberDetails map[types.UID]natsResponseServiceMember
+}
+
+func natsResponseMemberProof(p *corev1.Pod, expected types.UID) (natsResponseServiceMember, error) {
+	var proof natsResponseServiceMember
+	if p == nil || p.UID != expected || p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning ||
+		p.Status.PodIP == "" || len(p.OwnerReferences) != 1 || p.OwnerReferences[0].Controller == nil ||
+		!*p.OwnerReferences[0].Controller || p.OwnerReferences[0].UID == "" || len(p.Status.ContainerStatuses) != 1 ||
+		!p.Status.ContainerStatuses[0].Ready || p.Status.ContainerStatuses[0].RestartCount != 0 ||
+		p.Status.ContainerStatuses[0].ContainerID == "" || p.Status.ContainerStatuses[0].ImageID == "" {
+		return proof, errors.New("NATS response Service member process identity unavailable")
+	}
+	ready := false
+	for _, condition := range p.Status.Conditions {
+		ready = ready || condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue
+	}
+	if !ready {
+		return proof, errors.New("NATS response Service member not API Ready")
+	}
+	owner := p.OwnerReferences[0]
+	return natsResponseServiceMember{PodUID: p.UID, PodName: p.Name, PodIP: p.Status.PodIP,
+		OwnerKind: owner.Kind, OwnerUID: owner.UID, ContainerID: p.Status.ContainerStatuses[0].ContainerID,
+		ImageID: p.Status.ContainerStatuses[0].ImageID, Ready: true, RestartCount: 0}, nil
+}
+
+// EndpointSlice targets are not accepted merely because their UIDs appear in
+// the Service. Every additional member is a fresh first-incarnation Pod of the
+// exact admitted ReplicaSet, with the original immutable observer source.
+func natsResponseReplacementMembers(ctx context.Context, env *core.Env, fixture natsResponseFixture,
+	slices []discoveryv1.EndpointSlice, rsName string) ([]natsResponsePodIdentity, map[types.UID]*corev1.Pod, error) {
+	var replacements []natsResponsePodIdentity
+	pods := map[types.UID]*corev1.Pod{}
+	for _, slice := range slices {
+		for _, endpoint := range slice.Endpoints {
+			if endpoint.TargetRef == nil || endpoint.TargetRef.UID == fixture.Client.UID || endpoint.TargetRef.UID == fixture.Peer.UID {
+				continue
+			}
+			if len(replacements) >= 1 || endpoint.TargetRef.Name == "" {
+				return nil, nil, errors.New("NATS response Service replacement count or identity invalid")
+			}
+			pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, endpoint.TargetRef.Name, metav1.GetOptions{})
+			if err != nil || pod.UID != endpoint.TargetRef.UID || pod.Labels[natsResponseRoleLabel] != "" ||
+				!strings.HasPrefix(pod.Name, fixture.Name+"-") || pod.Status.PodIP == fixture.Client.IP ||
+				pod.Status.PodIP == fixture.Peer.IP || len(pod.Status.ContainerStatuses) != 1 ||
+				pod.Status.ContainerStatuses[0].ContainerID == fixture.Client.ContainerID ||
+				pod.Status.ContainerStatuses[0].ContainerID == fixture.Peer.ContainerID {
+				return nil, nil, errors.New("NATS response Service replacement API identity differs")
+			}
+			id, err := natsResponseReadyPod(pod, fixture.ReplicaSetUID, rsName,
+				env.Config.NATSExposureFixture.Nonce, env.Config.NATSExposureFixture.NodeName, env.Config.NATSExposureFixture.ObserverImage)
+			if err != nil {
+				return nil, nil, err
+			}
+			replacements = append(replacements, id)
+			pods[id.UID] = pod
+		}
+	}
+	return replacements, pods, nil
 }
 
 func natsResponseAwaitInitialControls(ctx context.Context, env *core.Env, fixture natsResponseFixture,
@@ -124,20 +184,57 @@ func natsResponseCurrentControls(ctx context.Context, env *core.Env, fixture nat
 	if err != nil || slices.Continue != "" || slices.RemainingItemCount != nil {
 		return unknown, errors.New("NATS response Service EndpointSlice inventory incomplete")
 	}
+	var replacements []natsResponsePodIdentity
+	memberPods := map[types.UID]*corev1.Pod{fixture.Client.UID: source, fixture.Peer.UID: peer}
+	if !requireSourceReady {
+		replacements, replacementPods, err := natsResponseReplacementMembers(ctx, env, fixture, slices.Items, peer.OwnerReferences[0].Name)
+		if err != nil {
+			return unknown, err
+		}
+		for uid, pod := range replacementPods {
+			memberPods[uid] = pod
+		}
+		if len(replacements) > 0 && source.Labels[natsResponseComponentLabel] == "consumer" {
+			return unknown, errors.New("NATS response replacement appeared before original source left Service selector")
+		}
+	}
 	if requireSourceReady {
 		err = natsResponseEndpointMembers(slices.Items, fixture.Name, fixture.ServiceUID, fixture.Client, fixture.Peer)
 	} else {
-		err = natsResponseEndpointMembersAfter(slices.Items, fixture.Name, fixture.ServiceUID, fixture.Client, fixture.Peer)
+		err = natsResponseEndpointMembersAfterWithReplacements(slices.Items, fixture.Name, fixture.ServiceUID, fixture.Client, fixture.Peer, replacements)
 	}
 	if err != nil {
 		return unknown, err
 	}
 	members := make(map[types.UID]bool, 2)
+	details := make(map[types.UID]natsResponseServiceMember, 3)
 	for _, slice := range slices.Items {
 		for _, endpoint := range slice.Endpoints {
-			members[endpoint.TargetRef.UID] = true // validated above
+			uid := endpoint.TargetRef.UID // validated above
+			if uid == fixture.Client.UID && !requireSourceReady {
+				if err := natsResponseClientIncarnation(ctx, env, fixture, true); err != nil {
+					return unknown, err
+				}
+			}
+			proof, err := natsResponseMemberProof(memberPods[uid], uid)
+			if err != nil {
+				return unknown, err
+			}
+			if uid != fixture.Client.UID {
+				if proof.OwnerKind != "ReplicaSet" || proof.OwnerUID != fixture.ReplicaSetUID {
+					return unknown, errors.New("NATS response Service member ReplicaSet owner changed")
+				}
+			} else if proof.OwnerKind == "ReplicaSet" {
+				if proof.OwnerUID != fixture.ReplicaSetUID {
+					return unknown, errors.New("NATS response original source ReplicaSet changed")
+				}
+			} else if requireSourceReady || proof.OwnerKind != "AdaptiveMovingTargetDefense" ||
+				proof.OwnerUID == "" || memberPods[uid].OwnerReferences[0].APIVersion != "amtd.r6security.com/v1beta1" {
+				return unknown, errors.New("NATS response original source Service owner changed")
+			}
+			members[uid], details[uid] = true, proof
 		}
 	}
 	return natsResponseCurrentControl{ServiceIP: service.Spec.ClusterIP,
-		EndpointSliceUID: slices.Items[0].UID, Members: members}, nil
+		EndpointSliceUID: slices.Items[0].UID, Members: members, MemberDetails: details}, nil
 }

@@ -26,8 +26,8 @@ func natsResponseProbeControls(ctx context.Context, env *core.Env, fixture natsR
 	for _, broker := range route.Brokers {
 		allowed[broker.ServerID] = true
 	}
-	service, err = natsResponseProbeHealth(ctx, "SERVICE", before.ServiceIP,
-		env.Config.NATSExposureFixture.Nonce, fixture.ServiceUID, fixture.Peer.UID, fixture.Client.UID, allowed)
+	service, err = natsResponseProbeHealthMembers(ctx, "SERVICE", before.ServiceIP,
+		env.Config.NATSExposureFixture.Nonce, fixture.ServiceUID, fixture.Peer.UID, before.Members, allowed)
 	if err != nil {
 		return service, peer, err
 	}
