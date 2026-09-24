@@ -40,6 +40,9 @@ func persistGPUProcessIdentity(path string, job Job, command *exec.Cmd, harnessS
 	if err != nil {
 		return err
 	}
+	if filepath.Base(path) == "crm-process.json" && executableSHA != harnessSHA {
+		return errors.New("CRM started executable SHA-256 differs from reviewed harness")
+	}
 	commandLine, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
 	if err != nil || len(commandLine) == 0 {
 		return errors.New("GPU harness command-line identity is unavailable")
@@ -83,7 +86,11 @@ func readLinuxProcessIdentity(pid int) (pgid int, start uint64, err error) {
 }
 
 func reapRetainedGPUProcess(job JobContext, harnessSHA, configSHA string) string {
-	raw, err := os.ReadFile(filepath.Join(job.Job.OutputDir, "gpu-process.json"))
+	return reapRetainedProcess(job, harnessSHA, configSHA, "gpu-process.json")
+}
+
+func reapRetainedProcess(job JobContext, harnessSHA, configSHA, file string) string {
+	raw, err := os.ReadFile(filepath.Join(job.Job.OutputDir, file))
 	if err != nil || len(raw) > maxRecordBytes {
 		return "process-identity-absent"
 	}

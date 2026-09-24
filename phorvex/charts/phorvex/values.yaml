@@ -460,6 +460,23 @@ phorvex:
         bearerTokenKey: bearer-token
         runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
         kubeContext: ""
+      # Synthetic CRM functional controls. Owner provisions a dedicated labelled
+      # namespace and scoped kubeconfig. RBAC binds only the dedicated fixture SA.
+      crm:
+        enabled: false
+        namespace: ""
+        namespaceUID: ""
+        serviceAccountName: ""
+        manifestConfigMap: ""
+        manifestKey: manifest.json
+        manifestMountPath: /etc/phorvex-catalogue-v1-crm
+        manifestSHA256: ""
+        harnessSHA256: ""
+        runtimeSecret: ""
+        kubeconfigKey: kubeconfig
+        runtimeMountPath: /etc/phorvex-catalogue-v1-crm-runtime
+        kubeconfigSHA256: ""
+        kubeContext: ""
     auditTransport:
       port: 8445
       serverSecretName: ""

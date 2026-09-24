@@ -36,6 +36,7 @@ type RuntimeConfig struct {
 	MCP             *MCPSessionRuntime           `json:"mcp,omitempty"`
 	Chroma          *ChromaRuntime               `json:"chroma,omitempty"`
 	LiteLLM         *LiteLLMRuntime              `json:"liteLLM,omitempty"`
+	CRM             *CRMCapabilityRuntime        `json:"crm,omitempty"`
 }
 
 func (c RuntimeConfig) SHA256() (string, error) {
@@ -83,6 +84,11 @@ func (c RuntimeConfig) Validate() error {
 	}
 	if c.LiteLLM != nil {
 		if err := ValidateLiteLLMRuntime(*c.LiteLLM); err != nil {
+			return err
+		}
+	}
+	if c.CRM != nil {
+		if err := ValidateCRMLocalAuthority(*c.CRM); err != nil {
 			return err
 		}
 	}
@@ -139,6 +145,9 @@ func (c RuntimeConfig) Runtime(restConfig *rest.Config, kube kubernetes.Interfac
 	}
 	if c.LiteLLM != nil {
 		runtime.LiteLLM = *c.LiteLLM
+	}
+	if c.CRM != nil {
+		runtime.CRM = *c.CRM
 	}
 	return runtime, nil
 }

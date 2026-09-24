@@ -127,6 +127,16 @@ type CatalogueV1Config struct {
 	LiteLLMConfigMap            string
 	LiteLLMConfigKey            string
 	LiteLLMConfigSHA256         string
+	CRMEnabled                  bool
+	CRMNamespace                string
+	CRMServiceAccountName       string
+	CRMNamespaceUID             string
+	CRMManifestFile             string
+	CRMManifestSHA256           string
+	CRMHarnessSHA256            string
+	CRMKubeconfigPath           string
+	CRMKubeconfigSHA256         string
+	CRMKubeContext              string
 }
 
 const (

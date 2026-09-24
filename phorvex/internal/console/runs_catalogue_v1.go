@@ -48,6 +48,8 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.ChromaNamespace)
 	case cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.LiteLLMNamespace)
+	case cataloguev1.CRMRefund, cataloguev1.CRMReset:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.CRMNamespace)
 	}
 	if tenant == "" {
 		return runDestination{}, errors.New("fixed suite resolved tenant is unavailable")
@@ -101,6 +103,15 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Service: c.CatalogueV1.LiteLLMService, Container: c.CatalogueV1.LiteLLMContainer,
 			Port: c.CatalogueV1.LiteLLMPort, ConfigMap: c.CatalogueV1.LiteLLMConfigMap,
 			ConfigKey: c.CatalogueV1.LiteLLMConfigKey, ExpectedConfigSHA256: c.CatalogueV1.LiteLLMConfigSHA256}
+	}
+	if c.CatalogueV1.CRMEnabled {
+		runtime.CRM = &cataloguev1.CRMCapabilityRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.CRMNamespace, NamespaceUID: c.CatalogueV1.CRMNamespaceUID,
+			ManifestFile: c.CatalogueV1.CRMManifestFile, ManifestSHA256: c.CatalogueV1.CRMManifestSHA256,
+			HarnessBinary: c.HarnessBin, HarnessSHA256: c.CatalogueV1.CRMHarnessSHA256, HarnessDir: c.HarnessDir,
+			ServiceAccountName: c.CatalogueV1.CRMServiceAccountName,
+			KubeconfigSHA256:   c.CatalogueV1.CRMKubeconfigSHA256,
+			KubeconfigPath:     c.CatalogueV1.CRMKubeconfigPath, KubeContext: c.CatalogueV1.CRMKubeContext}
 	}
 	return runtime
 }
@@ -175,6 +186,14 @@ func (rm *RunManager) functionalInputs(profile cataloguev1.ProfileID) (functiona
 		return functionalInputs{}, functionalRuntimeUnavailable, err
 	}
 	runtime := rm.cfg.catalogueV1RuntimeConfig()
+	if profile == cataloguev1.CRMRefund || profile == cataloguev1.CRMReset {
+		if runtime.CRM == nil {
+			return functionalInputs{}, functionalConfigUnavailable, errors.New("CRM fixed suite disabled")
+		}
+		if err := cataloguev1.ValidateCRMRuntime(*runtime.CRM); err != nil {
+			return functionalInputs{}, functionalRuntimeUnavailable, fmt.Errorf("CRM fixed suite authority: %w", err)
+		}
+	}
 	runtimeHash, err := runtime.SHA256()
 	if err != nil {
 		return functionalInputs{}, functionalRuntimeUnavailable, fmt.Errorf("validate fixed-suite runtime: %w", err)

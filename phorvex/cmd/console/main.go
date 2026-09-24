@@ -337,6 +337,10 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	crmEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_CRM_ENABLED")
+	if err != nil {
+		return err
+	}
 	port := int64(0)
 	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
 		port, err = strconv.ParseInt(raw, 10, 32)
@@ -428,6 +432,16 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	cfg.CatalogueV1.LiteLLMConfigMap = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIGMAP")
 	cfg.CatalogueV1.LiteLLMConfigKey = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_KEY")
 	cfg.CatalogueV1.LiteLLMConfigSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_SHA256")
+	cfg.CatalogueV1.CRMEnabled = crmEnabled
+	cfg.CatalogueV1.CRMNamespace = read("PHORVEX_CONSOLE_CATALOGUE_CRM_NAMESPACE")
+	cfg.CatalogueV1.CRMServiceAccountName = read("PHORVEX_CONSOLE_CATALOGUE_CRM_SERVICE_ACCOUNT")
+	cfg.CatalogueV1.CRMNamespaceUID = read("PHORVEX_CONSOLE_CATALOGUE_CRM_NAMESPACE_UID")
+	cfg.CatalogueV1.CRMManifestFile = read("PHORVEX_CONSOLE_CATALOGUE_CRM_MANIFEST_FILE")
+	cfg.CatalogueV1.CRMManifestSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CRM_MANIFEST_SHA256")
+	cfg.CatalogueV1.CRMHarnessSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CRM_HARNESS_SHA256")
+	cfg.CatalogueV1.CRMKubeconfigPath = read("PHORVEX_CONSOLE_CATALOGUE_CRM_KUBECONFIG")
+	cfg.CatalogueV1.CRMKubeconfigSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CRM_KUBECONFIG_SHA256")
+	cfg.CatalogueV1.CRMKubeContext = read("PHORVEX_CONSOLE_CATALOGUE_CRM_KUBE_CONTEXT")
 	if cfg.CatalogueV1.KubeconfigPath != "" && cfg.CatalogueV1.KubeContext == "" {
 		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.KubeconfigPath}
 		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
@@ -481,7 +495,8 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		cataloguev1.NewGPUDrainHandler(),
 		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler(),
 		cataloguev1.NewGuardrailCalibrationHandler(), cataloguev1.NewMCPSessionHandler(),
-		cataloguev1.NewChromaHandler(), cataloguev1.NewLiteLLMHealthHandler(), cataloguev1.NewLiteLLMCredentialHandler())
+		cataloguev1.NewChromaHandler(), cataloguev1.NewLiteLLMHealthHandler(), cataloguev1.NewLiteLLMCredentialHandler(),
+		cataloguev1.NewCRMCapabilityHandler(cataloguev1.CRMRefund), cataloguev1.NewCRMCapabilityHandler(cataloguev1.CRMReset))
 	if err != nil {
 		log.Printf("catalogue v1 registry: %v", err)
 		return 2

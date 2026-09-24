@@ -28,6 +28,8 @@ const (
 	ChromaOwnedVector    ProfileID = "catalogue-chroma-owned-vector"
 	LiteLLMHealth        ProfileID = "catalogue-litellm-route-health"
 	LiteLLMCredential    ProfileID = "catalogue-litellm-credential-boundary"
+	CRMRefund            ProfileID = "c2-crm-refund-capability"
+	CRMReset             ProfileID = "c2-crm-reset-capability"
 )
 
 // Definition is immutable product metadata for a fixed profile.
@@ -55,6 +57,8 @@ func DefinitionFor(id ProfileID) (Definition, error) {
 		ChromaOwnedVector:    {ID: ChromaOwnedVector, Title: "Chroma owned vector state", Product: "application", Category: "Functional", ClaimLimits: "one fresh synthetic collection and document on the exact installed Chroma route; no customer data, authorization bypass, SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "document-store", MaxDuration: 3 * time.Minute, MaxMutations: 3},
 		LiteLLMHealth:        {ID: LiteLLMHealth, Title: "LiteLLM route availability", Product: "ai", Category: "Functional", ClaimLimits: "fixed listener liveliness on each exact serving Pod; no authenticated model serving, SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 		LiteLLMCredential:    {ID: LiteLLMCredential, Title: "LiteLLM credential configuration boundary", Product: "ai", Category: "Boundary", ClaimLimits: "missing and generated invalid bearer on reviewed GET /v1/models authentication route for each exact serving Pod; NO_CONNECTED_DB is configuration-limited, not a verified denial or bypass; no SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
+		CRMRefund:            {ID: CRMRefund, Title: "Disposable CRM refund capability", Product: "application", Category: "Functional", ClaimLimits: "synthetic A/B record capability in isolated Mongo only; A/B are not authenticated principals; no installed customer write, phone/provider, authentication bypass, brain or security efficacy claim", FixedTarget: "default", FixedTenant: "crm-functional", MaxDuration: 14 * time.Minute, MaxMutations: 2},
+		CRMReset:             {ID: CRMReset, Title: "Disposable CRM reset capability", Product: "application", Category: "Functional", ClaimLimits: "synthetic A/B record capability in isolated Mongo only; A/B are not authenticated principals; no installed customer write, phone/provider, authentication bypass, brain or security efficacy claim", FixedTarget: "default", FixedTenant: "crm-functional", MaxDuration: 14 * time.Minute, MaxMutations: 2},
 	}
 	definition, ok := definitions[id]
 	if !ok {
@@ -128,6 +132,21 @@ type MCPSessionRuntime struct {
 	ExpectedSourceSHA256 string `json:"expectedSourceSHA256"`
 }
 
+type CRMCapabilityRuntime struct {
+	Enabled            bool   `json:"enabled"`
+	Namespace          string `json:"namespace"`
+	ServiceAccountName string `json:"serviceAccountName"`
+	NamespaceUID       string `json:"namespaceUID"`
+	ManifestFile       string `json:"manifestFile"`
+	ManifestSHA256     string `json:"manifestSHA256"`
+	HarnessBinary      string `json:"harnessBinary"`
+	HarnessSHA256      string `json:"harnessSHA256"`
+	HarnessDir         string `json:"harnessDir"`
+	KubeconfigPath     string `json:"kubeconfigPath"`
+	KubeconfigSHA256   string `json:"kubeconfigSHA256"`
+	KubeContext        string `json:"kubeContext"`
+}
+
 // Runtime contains trusted process configuration. It is assembled by the
 // console from chart/startup settings, never decoded from the launch request or
 // the private Job file.
@@ -152,6 +171,7 @@ type Runtime struct {
 	MCP             MCPSessionRuntime
 	Chroma          ChromaRuntime
 	LiteLLM         LiteLLMRuntime
+	CRM             CRMCapabilityRuntime
 }
 
 type Outcome string

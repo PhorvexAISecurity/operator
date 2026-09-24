@@ -16,8 +16,8 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 13 {
-		t.Fatalf("items=%d, want nine existing entries, disabled Mongo and three Chroma/LiteLLM entries", len(items))
+	if len(items) != 15 {
+		t.Fatalf("items=%d, want nine existing entries, disabled Mongo, three Chroma/LiteLLM and two CRM entries", len(items))
 	}
 	responseRows, mongoRows := 0, 0
 	for _, item := range items {
@@ -32,7 +32,8 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 				t.Fatalf("unconfigured Mongo row gained launch authority: %+v", item)
 			}
 		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) &&
-			item.Name != string(cataloguev1.ChromaOwnedVector) && item.Name != string(cataloguev1.LiteLLMHealth) && item.Name != string(cataloguev1.LiteLLMCredential) {
+			item.Name != string(cataloguev1.ChromaOwnedVector) && item.Name != string(cataloguev1.LiteLLMHealth) && item.Name != string(cataloguev1.LiteLLMCredential) &&
+			item.Name != string(cataloguev1.CRMRefund) && item.Name != string(cataloguev1.CRMReset) {
 			t.Fatalf("unexpected entry %q", item.Name)
 		}
 		if item.LaunchKind == "" || item.ClaimClass == "" {

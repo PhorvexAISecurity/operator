@@ -14,17 +14,20 @@ import (
 
 	crmfixture "github.com/r6security/phoenix-test-harness/fixtures/crm"
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 const (
 	crmInstalledSourceSHA = "328f37a8d6d3692fb3bd6d4db2637e72d54becf8e9e4396d5e47f4ab5f909350"
 	crmInstalledBaseImage = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
 	crmDependencyLockSHA  = "50143dfea339319c70edcc4e37c5d852031446f5e609ef4f538c68a0436f956a"
+	crmInstalledProbeSHA  = "a6a57a181d5b2d86eab95cca02e74a23f2d46255c2f6787fd52e165391e77b04"
 	crmFixtureManifestEnv = "PHORVEX_CRM_FIXTURE_MANIFEST"
 	crmFixtureSchema      = "phorvex.crm-fixture.v1"
 	crmFixtureTimeout     = 25 * time.Second
@@ -109,8 +112,8 @@ func crmFixtureFiles() (app, probe []byte, err error) {
 	if fmt.Sprintf("%x", sha256.Sum256(app)) != crmInstalledSourceSHA {
 		return nil, nil, errors.New("CRM fixture source differs from installed source SHA-256")
 	}
-	if len(probe) == 0 || len(probe) > 128*1024 {
-		return nil, nil, errors.New("CRM probe source size invalid")
+	if len(probe) == 0 || len(probe) > 128*1024 || fmt.Sprintf("%x", sha256.Sum256(probe)) != crmInstalledProbeSHA {
+		return nil, nil, errors.New("CRM probe source size or SHA-256 invalid")
 	}
 	return app, probe, nil
 }
@@ -176,6 +179,9 @@ func (s *crmCapabilityScenario) setup(ctx context.Context, env *core.Env, kind s
 	if err != nil {
 		return fmt.Errorf("invalid CRM fixture manifest: %w", err)
 	}
+	if f := env.Config.CRMCapabilityFixture; f != nil && manifestSHA != f.ManifestSHA256 {
+		return errors.New("CRM fixture manifest differs from fixed console authority")
+	}
 	app, probe, err := crmFixtureFiles()
 	if err != nil {
 		return err
@@ -187,6 +193,11 @@ func (s *crmCapabilityScenario) setup(ctx context.Context, env *core.Env, kind s
 	if env.Rand == nil {
 		return errors.New("CRM fixture requires deterministic trial RNG")
 	}
+	if f := env.Config.CRMCapabilityFixture; f != nil {
+		if err := crmVerifyScopedIdentity(ctx, env.Kube, env.Config.Kubeconfig, env.Config.Namespace, f.ServiceAccountName, f.KubeconfigSHA256); err != nil {
+			return err
+		}
+	}
 	if err := env.Guard.AssertMutationAllowed(env.Config.Namespace); err != nil {
 		return err
 	}
@@ -197,6 +208,9 @@ func (s *crmCapabilityScenario) setup(ctx context.Context, env *core.Env, kind s
 	s.lock = lock
 	s.probeSHA = fmt.Sprintf("%x", sha256.Sum256(probe))
 	s.run = fmt.Sprintf("%016x", env.Rand.Uint64())
+	if f := env.Config.CRMCapabilityFixture; f != nil {
+		s.run = f.RunID
+	}
 	s.name = "c2-crm-" + kind + "-" + s.run
 	s.configMapName = s.name + "-code"
 	labels := env.OwnedLabels(map[string]string{"app": "c2-crm-fixture", "case": kind})
@@ -212,6 +226,9 @@ func (s *crmCapabilityScenario) setup(ctx context.Context, env *core.Env, kind s
 	}
 	s.configMapUID = cm.UID
 	if err := env.RecordCreatedUID("configmaps", s.configMapName, cm.UID); err != nil {
+		return err
+	}
+	if err := s.recordUIDEvent(env, "created", "configmaps", s.configMapName, cm.UID); err != nil {
 		return err
 	}
 	noToken := false
@@ -247,6 +264,9 @@ func (s *crmCapabilityScenario) setup(ctx context.Context, env *core.Env, kind s
 	if err := env.RecordCreatedUID("pods", s.name, pod.UID); err != nil {
 		return err
 	}
+	if err := s.recordUIDEvent(env, "created", "pods", s.name, pod.UID); err != nil {
+		return err
+	}
 	if err := env.WaitForPodRunning(ctx, s.name, 120*time.Second); err != nil {
 		return err
 	}
@@ -262,6 +282,53 @@ func (s *crmCapabilityScenario) setup(ctx context.Context, env *core.Env, kind s
 	}
 	s.seed = seed
 	return nil
+}
+
+func crmVerifyScopedIdentity(ctx context.Context, client kubernetes.Interface, kubeconfig, namespace, serviceAccount, expectedSHA string) error {
+	raw, err := os.ReadFile(kubeconfig)
+	if err != nil || len(raw) < 1 || len(raw) > 1<<20 || fmt.Sprintf("%x", sha256.Sum256(raw)) != expectedSHA {
+		return errors.New("CRM scoped kubeconfig bytes differ")
+	}
+	review, err := client.AuthenticationV1().SelfSubjectReviews().Create(ctx, &authenticationv1.SelfSubjectReview{}, metav1.CreateOptions{})
+	if err != nil || review.Status.UserInfo.Username != "system:serviceaccount:"+namespace+":"+serviceAccount {
+		return fmt.Errorf("CRM scoped service-account identity differs: %v", err)
+	}
+	return nil
+}
+
+// The console reconciler reads only these create-response UIDs; a label or
+// same-name replacement is never enough authority for a delete.
+func (s *crmCapabilityScenario) recordUIDEvent(env *core.Env, event, resource, name string, uid types.UID) error {
+	if env.Config.CRMCapabilityFixture == nil {
+		return nil
+	}
+	record := struct {
+		Schema       string `json:"schema"`
+		Event        string `json:"event"`
+		Run          string `json:"run"`
+		Namespace    string `json:"namespace"`
+		NamespaceUID string `json:"namespaceUID"`
+		Resource     string `json:"resource"`
+		Name         string `json:"name"`
+		UID          string `json:"uid"`
+	}{"phorvex.crm-created.v1", event, s.run, env.Config.Namespace, env.Config.ExpectedNamespaceUID, resource, name, string(uid)}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(env.Config.OutDir+"/crm-created.jsonl", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := f.Write(append(raw, '\n'))
+	if writeErr == nil {
+		writeErr = f.Sync()
+	}
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
 
 const crmRuntimeVerification = `import hashlib,importlib.metadata as m,json,platform
@@ -320,12 +387,24 @@ func (s *crmCapabilityScenario) verifyIdentity(ctx context.Context, env *core.En
 	if !crmOK || !mongoOK {
 		return errors.New("CRM fixture expected container missing")
 	}
+	if !crmRuntimeImageMatches(s.manifest.CRMImage, crm.ImageID) || !crmRuntimeImageMatches(s.manifest.MongoImage, mongo.ImageID) {
+		return errors.New("CRM runtime image digest differs from immutable manifest")
+	}
 	if s.crmImageID != "" && (s.crmImageID != crm.ImageID || s.mongoImageID != mongo.ImageID || s.crmContainerID != crm.ContainerID || s.mongoContainerID != mongo.ContainerID) {
 		return errors.New("CRM fixture runtime image/container identity changed within trial")
 	}
 	s.crmImageID, s.mongoImageID = crm.ImageID, mongo.ImageID
 	s.crmContainerID, s.mongoContainerID = crm.ContainerID, mongo.ContainerID
 	return nil
+}
+
+func crmRuntimeImageMatches(reference, imageID string) bool {
+	index := strings.LastIndex(reference, "@sha256:")
+	if index < 0 {
+		return false
+	}
+	digest := reference[index+1:]
+	return strings.HasSuffix(imageID, "@"+digest) || imageID == digest || strings.HasSuffix(imageID, "://"+digest)
 }
 
 func (s *crmCapabilityScenario) verifyRuntime(ctx context.Context, env *core.Env) error {
@@ -444,7 +523,7 @@ func (s *crmCapabilityScenario) SuccessOracle(ctx context.Context, env *core.Env
 	if got.CrossExactCount < 0 || got.CrossExactCount > 1 {
 		return core.OracleResult{}, errors.New("CRM cross-record write cardinality inconclusive")
 	}
-	if s.kind == "refund" && (got.OwnOrderID != s.seed.OrderIDs[0] || got.AppointmentCount != 1) {
+	if s.kind == "refund" && (got.OwnOrderID != s.seed.OrderIDs[0] || got.AppointmentCount != 1 || got.OwnCreatedID == "") {
 		return core.OracleResult{}, errors.New("CRM legitimate refund/appointment readback differs")
 	}
 	if s.kind == "reset" && (got.OwnAccountID != s.seed.AccountIDs[0] || got.OwnCreatedID == "") {
@@ -457,12 +536,39 @@ func (s *crmCapabilityScenario) SuccessOracle(ctx context.Context, env *core.Env
 		if s.execution.CrossRefundID != "" && got.CrossCreatedID != s.execution.CrossRefundID {
 			return core.OracleResult{}, errors.New("CRM cross refund response ID differs from Mongo")
 		}
+		if got.CrossExactCount == 1 && (got.CrossCreatedID == "" || got.CrossOrderID != s.seed.OrderIDs[1]) {
+			return core.OracleResult{}, errors.New("CRM cross refund Mongo identity incomplete")
+		}
 		observed = observed && got.CrossCreatedID != "" && got.CrossOrderID == s.seed.OrderIDs[1]
 	} else {
+		if got.CrossExactCount == 1 && (got.CrossCreatedID == "" || got.CrossAccountID != s.seed.AccountIDs[1]) {
+			return core.OracleResult{}, errors.New("CRM cross reset Mongo identity incomplete")
+		}
 		observed = observed && got.CrossAccountID == s.seed.AccountIDs[1] && got.CrossCreatedID != ""
 	}
+	state, err := json.Marshal(struct {
+		Schema              string            `json:"schema"`
+		Case                string            `json:"case"`
+		Run                 string            `json:"run"`
+		LegitimateRead      bool              `json:"legitimateRead"`
+		OwnExactCount       int               `json:"ownExactCount"`
+		CrossExactCount     int               `json:"crossExactCount"`
+		CrossHTTPStatus     int               `json:"crossHTTPStatus"`
+		OwnCreatedID        string            `json:"ownCreatedID"`
+		CrossCreatedID      string            `json:"crossCreatedID"`
+		SeedHashesUnchanged bool              `json:"seedHashesUnchanged"`
+		SeedHashes          map[string]string `json:"seedHashes"`
+		AccountIDs          []string          `json:"accountIDs"`
+		OrderIDs            []string          `json:"orderIDs"`
+		CrossObserved       bool              `json:"crossObserved"`
+		PodUID              string            `json:"podUID"`
+		ConfigMapUID        string            `json:"configMapUID"`
+	}{"phorvex.crm-observation.v1", s.kind, s.run, s.execution.LegitimateRead, got.OwnExactCount, got.CrossExactCount, s.execution.CrossStatus, got.OwnCreatedID, got.CrossCreatedID, true, s.seed.BaselineHashes, s.seed.AccountIDs, s.seed.OrderIDs, observed, string(s.podUID), string(s.configMapUID)})
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	return core.OracleResult{Achieved: observed,
-		ObservedState: fmt.Sprintf("owned synthetic %s: legitimate write preserved; cross-record write observed=%t; no caller identity asserted by application", s.kind, observed),
+		ObservedState: string(state),
 		Evidence: map[string]string{"scope": "functional-capability-not-attack-or-defense-efficacy", "sourceSHA256": crmInstalledSourceSHA,
 			"podUID": string(s.podUID), "runID": s.run, "legitimateExactCount": fmt.Sprint(got.OwnExactCount),
 			"crossExactCount": fmt.Sprint(got.CrossExactCount), "crossHTTPStatus": fmt.Sprint(s.execution.CrossStatus),
@@ -545,6 +651,26 @@ func (s *crmCapabilityScenario) Teardown(ctx context.Context, env *core.Env) err
 			}
 		}
 		if podGone && cmGone {
+			if s.podUID != "" {
+				if err := s.recordUIDEvent(env, "retired", "pods", s.name, s.podUID); err != nil {
+					return err
+				}
+			}
+			if s.configMapUID != "" {
+				if err := s.recordUIDEvent(env, "retired", "configmaps", s.configMapName, s.configMapUID); err != nil {
+					return err
+				}
+			}
+			if s.podUID != "" {
+				if err := env.ForgetCreatedUID("pods", s.name, s.podUID); err != nil {
+					return err
+				}
+			}
+			if s.configMapUID != "" {
+				if err := env.ForgetCreatedUID("configmaps", s.configMapName, s.configMapUID); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 		if time.Now().After(deadline) {
