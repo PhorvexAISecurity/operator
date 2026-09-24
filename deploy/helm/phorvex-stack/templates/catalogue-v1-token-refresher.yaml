@@ -1,0 +1,161 @@
+{{- /*
+Keeps the limited-v1 console auth tests' scoped bearer token valid.
+
+The console never mints this token (phorvex/docs/LIMITED-V1-CONSOLE.md): the deployment
+provisions it in a Secret that the console mounts read-only, and the kubelet refreshes the
+mounted file in place when the Secret changes, so no console restart is needed.
+
+Authority is deliberately narrow: create a token for exactly one ServiceAccount and patch
+exactly one pre-existing Secret. RBAC cannot restrict `create` by name, so the Secret is
+created once out of band and this job never creates or reads any other object. The token is
+never printed; only its expiry is logged.
+*/ -}}
+{{- with .Values.catalogueV1TokenRefresher }}
+{{- if .enabled }}
+{{- if not .secretName }}
+{{- fail "catalogueV1TokenRefresher.secretName is required when the refresher is enabled" }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: phorvex-stack
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: phorvex-stack
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  verbs: ["create"]
+  resourceNames: [{{ .identityServiceAccount | quote }}]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["patch"]
+  resourceNames: [{{ .secretName | quote }}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: phorvex-stack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: phorvex-stack
+spec:
+  schedule: {{ .schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 300
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ .name }}
+            app.kubernetes.io/instance: {{ $.Release.Name }}
+            app.kubernetes.io/part-of: phorvex-stack
+        spec:
+          serviceAccountName: {{ .name }}
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: refresh
+            image: {{ .image | quote }}
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: IDENTITY
+              value: {{ .identityServiceAccount | quote }}
+            - name: AUDIENCE
+              value: {{ .audience | quote }}
+            - name: SECRET
+              value: {{ .secretName | quote }}
+            - name: KEY
+              value: {{ .key | quote }}
+            - name: LIFETIME_SECONDS
+              value: {{ .lifetimeSeconds | quote }}
+            command: ["python3", "-c"]
+            args:
+            - |
+              import base64, json, os, ssl, sys, urllib.error, urllib.request
+              sa = "/var/run/secrets/kubernetes.io/serviceaccount"
+              ns = open(sa + "/namespace").read().strip()
+              base = "https://%s:%s/api/v1/namespaces/%s" % (
+                  os.environ["KUBERNETES_SERVICE_HOST"], os.environ["KUBERNETES_SERVICE_PORT"], ns)
+              ctx = ssl.create_default_context(cafile=sa + "/ca.crt")
+              auth = "Bearer " + open(sa + "/token").read().strip()
+
+              def call(method, path, body, content_type):
+                  req = urllib.request.Request(base + path, data=json.dumps(body).encode(), method=method,
+                      headers={"Authorization": auth, "Content-Type": content_type, "Accept": "application/json"})
+                  try:
+                      with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+                          return json.load(resp)
+                  except urllib.error.HTTPError as err:
+                      sys.exit("%s %s failed: HTTP %d %s" % (method, path, err.code, err.reason))
+
+              issued = call("POST", "/serviceaccounts/%s/token" % os.environ["IDENTITY"],
+                  {"apiVersion": "authentication.k8s.io/v1", "kind": "TokenRequest",
+                   "spec": {"audiences": [os.environ["AUDIENCE"]],
+                            "expirationSeconds": int(os.environ["LIFETIME_SECONDS"])}},
+                  "application/json")["status"]
+              token = issued["token"]
+              # The console refuses a token file with whitespace or outside 32..16384 bytes.
+              if token.count(".") != 2 or any(c.isspace() for c in token) or not 32 <= len(token) <= 16384:
+                  sys.exit("token request returned an unusable value; Secret left unchanged")
+              call("PATCH", "/secrets/%s" % os.environ["SECRET"],
+                  {"metadata": {"annotations": {"phorvex.ai/token-expires-at": issued["expirationTimestamp"]}},
+                   "data": {os.environ["KEY"]: base64.b64encode(token.encode()).decode()}},
+                  "application/merge-patch+json")
+              print("refreshed Secret %s; token expires %s" % (os.environ["SECRET"], issued["expirationTimestamp"]))
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 64Mi
+{{- end }}
+{{- end }}
