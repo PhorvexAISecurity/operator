@@ -18,6 +18,39 @@
 {{- fail "console.podBoundToken.profileSHA256 must be 64 lowercase hex characters" }}
 {{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.mongoExposure.enabled }}
+{{- $name := required "console.mongoExposure.configMapName is required" .Values.phorvex.console.mongoExposure.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}
+{{- fail "console.mongoExposure.configMapName must be a DNS subdomain name" }}
+{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.mongoExposure.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.mongoExposure.profileSHA256 is required" .Values.phorvex.console.mongoExposure.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.mongoExposure.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.natsExposure.enabled }}
+{{- $name := required "console.natsExposure.configMapName is required" .Values.phorvex.console.natsExposure.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}{{- fail "console.natsExposure.configMapName must be a DNS subdomain name" }}{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.natsExposure.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.natsExposure.profileSHA256 is required" .Values.phorvex.console.natsExposure.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.natsExposure.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.natsExposure.clientResponse.enabled }}
+{{- if not .Values.phorvex.console.natsExposure.enabled }}{{- fail "console.natsExposure.clientResponse.enabled requires console.natsExposure.enabled" }}{{- end }}
+{{- $name := required "console.natsExposure.clientResponse.configMapName is required" .Values.phorvex.console.natsExposure.clientResponse.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}{{- fail "console.natsExposure.clientResponse.configMapName must be a DNS subdomain name" }}{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.natsExposure.clientResponse.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.natsExposure.clientResponse.profileSHA256 is required" .Values.phorvex.console.natsExposure.clientResponse.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.natsExposure.clientResponse.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.guardrailStatic.enabled }}
+{{- $name := required "console.guardrailStatic.configMapName is required" .Values.phorvex.console.guardrailStatic.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}
+{{- fail "console.guardrailStatic.configMapName must be a DNS subdomain name" }}
+{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.guardrailStatic.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.guardrailStatic.profileSHA256 is required" .Values.phorvex.console.guardrailStatic.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailStatic.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,6 +134,28 @@ spec:
         # fixed baked config and current installed source before admission.
         - name: PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED
           value: {{ .Values.phorvex.console.mongoExposure.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.mongoExposure.enabled }}
+        - name: PHORVEX_CONSOLE_MONGO_EXPOSURE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.mongoExposure.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_NATS_EXPOSURE_ENABLED
+          value: {{ .Values.phorvex.console.natsExposure.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.natsExposure.enabled }}
+        - name: PHORVEX_CONSOLE_NATS_EXPOSURE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.natsExposure.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_ENABLED
+          value: {{ .Values.phorvex.console.natsExposure.clientResponse.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.natsExposure.clientResponse.enabled }}
+        - name: PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.natsExposure.clientResponse.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_STATIC_ENABLED
+          value: {{ .Values.phorvex.console.guardrailStatic.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.guardrailStatic.enabled }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.guardrailStatic.profileSHA256 | quote }}
+        {{- end }}
         - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED
           value: {{ .Values.phorvex.console.podBoundToken.enabled | default false | quote }}
         {{- if .Values.phorvex.console.podBoundToken.enabled }}
@@ -385,6 +440,30 @@ spec:
           subPath: manifest.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.mongoExposure.enabled }}
+        - name: mongo-exposure-reviewed-profile
+          mountPath: {{ printf "%s/build/test-harness/config.mongo-exposure-baseline.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.mongo-exposure-baseline.yaml
+          readOnly: true
+        {{- end }}
+        {{- if .Values.phorvex.console.natsExposure.enabled }}
+        - name: nats-exposure-reviewed-profile
+          mountPath: {{ printf "%s/build/test-harness/config.nats-exposure-baseline.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.nats-exposure-baseline.yaml
+          readOnly: true
+        {{- end }}
+        {{- if .Values.phorvex.console.natsExposure.clientResponse.enabled }}
+        - name: nats-client-response-reviewed-profile
+          mountPath: {{ printf "%s/build/test-harness/config.nats-client-response.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.nats-client-response.yaml
+          readOnly: true
+        {{- end }}
+        {{- if .Values.phorvex.console.guardrailStatic.enabled }}
+        - name: guardrail-static-reviewed-profile
+          mountPath: {{ printf "%s/build/test-harness/config.guardrail-confidentiality-static.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.guardrail-confidentiality-static.yaml
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -450,6 +529,42 @@ spec:
             path: config.pod-bound-api-auth-response.yaml
           - key: manifest.json
             path: manifest.json
+      {{- end }}
+      {{- if .Values.phorvex.console.mongoExposure.enabled }}
+      - name: mongo-exposure-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.mongoExposure.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.mongo-exposure-baseline.yaml
+            path: config.mongo-exposure-baseline.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.natsExposure.enabled }}
+      - name: nats-exposure-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.natsExposure.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.nats-exposure-baseline.yaml
+            path: config.nats-exposure-baseline.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.natsExposure.clientResponse.enabled }}
+      - name: nats-client-response-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.natsExposure.clientResponse.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.nats-client-response.yaml
+            path: config.nats-client-response.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.guardrailStatic.enabled }}
+      - name: guardrail-static-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.guardrailStatic.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.guardrail-confidentiality-static.yaml
+            path: config.guardrail-confidentiality-static.yaml
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

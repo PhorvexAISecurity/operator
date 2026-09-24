@@ -3,6 +3,7 @@ package console
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -377,6 +378,8 @@ func TestMongoExposureNamedAdmissionAndGrantRecheck(t *testing.T) {
 	writeConfig := func(target string) {
 		body := fmt.Sprintf("context: %s\nnamespace: document-store\nownedAck: true\ntrialsPerArm: 1\nscenarioFilter: [c2-mongo-uncredentialed-service-exposure]\ndefenderFilter: []\nmongoExposureFixture:\n  transport: in-cluster\n  clusterUID: 11111111-1111-4111-8111-111111111111\n  mongoDeployment: mongo\n  mongoService: mongo\n  mongoImageID: registry.test/mongo@sha256:%s\n  policyName: mongo-defense\n  managerNamespace: phorvex-system\n  managerDeployment: phorvex-phorvex\n  managerImageID: registry.test/manager@sha256:%s\n  allowedNodeNames: [cpu-node]\n  maxRunSeconds: 600\n", target, strings.Repeat("a", 64), strings.Repeat("b", 64))
 		mongoTestWrite(t, configPath, []byte(body))
+		cfg.MongoExposureProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(body)))
+		rm.cfg.MongoExposureProfileSHA256 = cfg.MongoExposureProfileSHA256
 	}
 	writeConfig("old-target")
 	old, err := rm.SuiteDestination(mongoExposureConfig)
@@ -386,7 +389,21 @@ func TestMongoExposureNamedAdmissionAndGrantRecheck(t *testing.T) {
 	if item := cfg.mongoExposureCatalogueItem(); !item.Available || item.Profile != mongoExposureConfig || item.LaunchKind != "named-suite" {
 		t.Fatalf("configured catalogue unavailable: %+v", item)
 	}
-	mongoTestWrite(t, configPath, []byte("context: old-target\nnamespace: document-store\nmongoExposureFixture:\n  transport: in-cluster\n"))
+	rm.cfg.MongoExposureProfileSHA256 = strings.Repeat("f", 64)
+	if _, err := rm.SuiteDestination(mongoExposureConfig); err == nil {
+		t.Fatal("changed Mongo profile hash accepted")
+	}
+	rm.cfg.MongoExposureProfileSHA256 = cfg.MongoExposureProfileSHA256
+	placeholder := []byte("context: __SET_LOGICAL_CLUSTER_TARGET__\n")
+	mongoTestWrite(t, configPath, placeholder)
+	rm.cfg.MongoExposureProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256(placeholder))
+	if _, err := rm.SuiteDestination(mongoExposureConfig); err == nil {
+		t.Fatal("Mongo placeholder admitted with matching owner hash")
+	}
+	writeConfig("old-target")
+	incomplete := []byte("context: old-target\nnamespace: document-store\nmongoExposureFixture:\n  transport: in-cluster\n")
+	mongoTestWrite(t, configPath, incomplete)
+	cfg.MongoExposureProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256(incomplete))
 	if item := cfg.mongoExposureCatalogueItem(); item.Available {
 		t.Fatal("incomplete source pins advertised as available")
 	}
@@ -395,8 +412,8 @@ func TestMongoExposureNamedAdmissionAndGrantRecheck(t *testing.T) {
 		t.Fatal("generic scenario admitted")
 	}
 	writeConfig("new-target")
-	if _, err := rm.prepareSuite("run-1", allowedConfigs[mongoExposureConfig], old.SuiteSHA256); err == nil {
-		t.Fatal("changed config digest admitted")
+	if _, err := rm.prepareSuite("run-1", allowedConfigs[mongoExposureConfig], old.SuiteSHA256); err == nil || !strings.Contains(err.Error(), "authorized suite bytes changed before launch") {
+		t.Fatalf("changed Mongo config did not reach authorized-byte barrier: %v", err)
 	}
 	p := &Principal{Targets: []string{hostTargetID, "old-target"}, Tenants: []string{mongoExposureNamespace}}
 	server := &Server{runs: rm}

@@ -182,6 +182,7 @@ jobs:
           helm template phorvex deploy/helm/phorvex-stack -n phorvex-system \
             -f deploy/helm/phorvex-stack/values.yaml \
             -f deploy/helm/phorvex-stack/values-eks.yaml --include-crds > /dev/null
+          python3 tools/test_profile_mounts_chart.py
 
       - name: Vendored subchart matches its source
         run: bash tools/check-vendored-chart.sh

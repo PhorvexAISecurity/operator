@@ -15,10 +15,11 @@ func TestNATSResponseCatalogueUsesOnlyNamedSuite(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile := filepath.Join(dir, allowedConfigs[natsResponseConfig].File)
-	if err := os.WriteFile(profile, []byte("context: reviewed-dev-cluster\nnamespace: phorvex-nats-exposure-fixture\nkubeconfig: ''\nnatsExposureFixture:\n  transport: in-cluster\n"), 0600); err != nil {
+	profileRaw := []byte("context: reviewed-dev-cluster\nnamespace: phorvex-nats-exposure-fixture\nkubeconfig: ''\nnatsExposureFixture:\n  transport: in-cluster\n")
+	if err := os.WriteFile(profile, profileRaw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{HarnessDir: dir, HarnessBin: bin, StateDir: t.TempDir()}
+	cfg := Config{HarnessDir: dir, HarnessBin: bin, StateDir: t.TempDir(), NATSExposureEnabled: true, NATSClientResponseEnabled: true, NATSClientResponseProfileSHA256: profileDigest(profileRaw)}
 	check := func(wantAvailable bool) {
 		t.Helper()
 		count := 0

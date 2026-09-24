@@ -37,6 +37,16 @@ type Config struct {
 	// MongoExposureEnabled is set only by the opt-in chart installation that
 	// grants the fixed document-store fixture permissions.
 	MongoExposureEnabled bool
+	// MongoExposureProfileSHA256 pins the operator-reviewed raw named YAML bytes.
+	MongoExposureProfileSHA256 string
+	// NATS named suites require separate reviewed profile bytes and explicit opt-in.
+	NATSExposureEnabled             bool
+	NATSExposureProfileSHA256       string
+	NATSClientResponseEnabled       bool
+	NATSClientResponseProfileSHA256 string
+	// GuardrailStaticEnabled and its digest admit only the reviewed named YAML.
+	GuardrailStaticEnabled       bool
+	GuardrailStaticProfileSHA256 string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool

@@ -426,7 +426,33 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 	if rm.cfg.runsDir() == "" {
 		return suite{}, fmt.Errorf("console state directory is not configured")
 	}
-	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
+	path := filepath.Join(rm.cfg.HarnessDir, su.File)
+	var raw []byte
+	var err error
+	switch su.File {
+	case allowedConfigs[natsBaselineConfig].File:
+		if !rm.cfg.NATSExposureEnabled {
+			return suite{}, fmt.Errorf("named NATS baseline suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.NATSExposureProfileSHA256)
+	case allowedConfigs[natsResponseConfig].File:
+		if !rm.cfg.NATSExposureEnabled || !rm.cfg.NATSClientResponseEnabled {
+			return suite{}, fmt.Errorf("named NATS response suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.NATSClientResponseProfileSHA256)
+	case allowedConfigs[mongoExposureConfig].File:
+		if !rm.cfg.MongoExposureEnabled {
+			return suite{}, fmt.Errorf("named Mongo suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.MongoExposureProfileSHA256)
+	case allowedConfigs[guardrailStaticConfig].File:
+		if !rm.cfg.GuardrailStaticEnabled {
+			return suite{}, fmt.Errorf("named guardrail static suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.GuardrailStaticProfileSHA256)
+	default:
+		raw, err = os.ReadFile(path)
+	}
 	if err != nil {
 		return suite{}, err
 	}
@@ -779,7 +805,33 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 	// or failing to read one at all — does not mean the run touches no tenant; it means we cannot
 	// say which, and that is not something to resolve in the caller's favour.
 	dest := runDestination{Targets: []string{hostTargetID}, ScopeTarget: hostTargetID, RequireTenantWildcard: true}
-	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
+	path := filepath.Join(rm.cfg.HarnessDir, su.File)
+	var raw []byte
+	var err error
+	switch name {
+	case natsBaselineConfig:
+		if !rm.cfg.NATSExposureEnabled {
+			return dest, fmt.Errorf("named NATS baseline suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.NATSExposureProfileSHA256)
+	case natsResponseConfig:
+		if !rm.cfg.NATSExposureEnabled || !rm.cfg.NATSClientResponseEnabled {
+			return dest, fmt.Errorf("named NATS response suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.NATSClientResponseProfileSHA256)
+	case mongoExposureConfig:
+		if !rm.cfg.MongoExposureEnabled {
+			return dest, fmt.Errorf("named Mongo suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.MongoExposureProfileSHA256)
+	case guardrailStaticConfig:
+		if !rm.cfg.GuardrailStaticEnabled {
+			return dest, fmt.Errorf("named guardrail static suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.GuardrailStaticProfileSHA256)
+	default:
+		raw, err = os.ReadFile(path)
+	}
 	if err != nil {
 		if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig || name == guardrailStaticConfig || name == podBoundTokenConfig {
 			return dest, err
@@ -787,7 +839,7 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 		return dest, nil
 	}
 	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
-		if bytes.Contains(raw, []byte("__SET_")) {
+		if (name == guardrailStaticConfig && bytes.Contains(raw, []byte("__SET_"))) || (name != guardrailStaticConfig && natsProfileHasPlaceholder(raw)) {
 			return dest, fmt.Errorf("named suite is not configured with reviewed installed pins")
 		}
 		if name == guardrailStaticConfig {

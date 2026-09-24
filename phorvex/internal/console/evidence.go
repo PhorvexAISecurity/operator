@@ -109,7 +109,7 @@ func (c *Config) Catalog() []CatalogItem {
 			}
 			items[i].RunnableNote = "Server-owned NATS no-signal profile; one separate-Pod synthetic message and exact cleanup. This does not test a defense."
 			if !items[i].Available {
-				items[i].UnavailableReason = "NATS server-owned profile is not configured with reviewed source and image pins"
+				items[i].UnavailableReason = "NATS baseline is disabled or its reviewed profile bytes, source and image pins are unavailable"
 			}
 		}
 		if items[i].Name == "c2-mongo-uncredentialed-service-exposure" {
@@ -161,7 +161,7 @@ func (c *Config) mongoExposureCatalogueItem() CatalogItem {
 	if err == nil {
 		item.RuntimeContext = dest.ScopeTarget
 	} else {
-		item.UnavailableReason = "Mongo named suite is disabled or has no reviewed source, image, target and audit pins"
+		item.UnavailableReason = "Mongo named suite is disabled or lacks reviewed profile bytes, source, image, target and audit pins"
 	}
 	return item
 }
@@ -172,13 +172,13 @@ func (c *Config) guardrailStaticCatalogueItem() CatalogItem {
 		Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false), ExpectedActuators: []string{},
 		ResponseGuidanceBasis: "none", ResponseGuidance: "Direct static filter comparison only. Natural detector, brain decision and actuator are not evaluated.",
 		MeaningfulWhen: "One fixed synthetic confidential marker is sent to the same exact Pod model through raw and guarded loopback ports. Say OK and arithmetic remain separate legitimate controls. This does not establish general defense efficacy.",
-		RunnableNote:   "Server-owned named suite; exact installed Pod, source, route and journals must be pinned. Private original replies are independently checked before any public classification.",
+		RunnableNote:   "Server-owned, default-off named suite; exact installed Pod, source, route and journals must be pinned. Private original replies are independently checked before any public classification.",
 		Prereqs:        []string{"reviewed installed local vLLM source and target pins", "vllm and phorvex-system tenant grants"},
 		LaunchKind:     "named-suite", ClaimClass: "effect", Profile: guardrailStaticConfig, Available: err == nil}
 	if err == nil {
 		item.RuntimeContext = dest.ScopeTarget
 	} else {
-		item.UnavailableReason = "Guardrail comparison is disabled until exact installed source and target pins are configured"
+		item.UnavailableReason = "Guardrail comparison is disabled or lacks reviewed profile bytes, installed source and target pins"
 	}
 	return item
 }
@@ -202,7 +202,7 @@ func (c *Config) natsResponseCatalogueItem() CatalogItem {
 	if err == nil {
 		item.RuntimeContext = dest.ScopeTarget
 	} else {
-		item.UnavailableReason = "NATS response profile has no reviewed fixed context and fixture destination; launch also rechecks current source pins"
+		item.UnavailableReason = "NATS response is disabled or its reviewed profile bytes and fixed fixture destination are unavailable; launch also rechecks current source pins"
 	}
 	return item
 }

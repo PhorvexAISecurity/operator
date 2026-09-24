@@ -140,16 +140,18 @@ func TestNATSSuiteDestinationBindsBothTenantsAndExplicitInClusterMode(t *testing
 		}
 	}
 	write("context: reviewed-dev-cluster\nnamespace: phorvex-nats-exposure-fixture\nkubeconfig: ''\nnatsExposureFixture:\n  transport: in-cluster\n")
-	rm := NewRunManager(Config{HarnessDir: dir, StateDir: t.TempDir()})
+	rm := NewRunManager(Config{HarnessDir: dir, StateDir: t.TempDir(), NATSExposureEnabled: true, NATSExposureProfileSHA256: profileDigest([]byte("context: reviewed-dev-cluster\nnamespace: phorvex-nats-exposure-fixture\nkubeconfig: ''\nnatsExposureFixture:\n  transport: in-cluster\n"))})
 	dest, err := rm.SuiteDestination(natsBaselineConfig)
 	if err != nil || len(dest.Tenants) != 2 || dest.Tenants[0] != "nats" || dest.Tenants[1] != "phorvex-nats-exposure-fixture" || len(dest.Targets) != 2 || dest.Targets[1] != "reviewed-dev-cluster" || dest.ScopeTenant != "nats" || dest.SuiteSHA256 == "" {
 		t.Fatalf("destination did not bind broker and fixture: %+v %v", dest, err)
 	}
 	write("context: in-cluster\nnamespace: phorvex-nats-exposure-fixture\nnatsExposureFixture:\n  transport: in-cluster\n")
+	rm.cfg.NATSExposureProfileSHA256 = profileDigest([]byte("context: in-cluster\nnamespace: phorvex-nats-exposure-fixture\nnatsExposureFixture:\n  transport: in-cluster\n"))
 	if _, err := rm.SuiteDestination(natsBaselineConfig); err == nil {
 		t.Fatal("other context accepted for explicit NATS suite")
 	}
 	write("context: reviewed-dev-cluster\nnamespace: unrelated\nnatsExposureFixture:\n  transport: in-cluster\n")
+	rm.cfg.NATSExposureProfileSHA256 = profileDigest([]byte("context: reviewed-dev-cluster\nnamespace: unrelated\nnatsExposureFixture:\n  transport: in-cluster\n"))
 	if _, err := rm.SuiteDestination(natsBaselineConfig); err == nil {
 		t.Fatal("other fixture namespace accepted")
 	}
@@ -261,10 +263,11 @@ func TestNATSCatalogRoutesOnlyThroughNamedSuite(t *testing.T) {
 	if err := os.WriteFile(bin, []byte(listing), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, allowedConfigs[natsBaselineConfig].File), []byte("context: reviewed-dev-cluster\nnamespace: phorvex-nats-exposure-fixture\nkubeconfig: ''\nnatsExposureFixture:\n  transport: in-cluster\n"), 0600); err != nil {
+	profile := []byte("context: reviewed-dev-cluster\nnamespace: phorvex-nats-exposure-fixture\nkubeconfig: ''\nnatsExposureFixture:\n  transport: in-cluster\n")
+	if err := os.WriteFile(filepath.Join(dir, allowedConfigs[natsBaselineConfig].File), profile, 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{HarnessDir: dir, HarnessBin: bin, StateDir: t.TempDir()}
+	cfg := Config{HarnessDir: dir, HarnessBin: bin, StateDir: t.TempDir(), NATSExposureEnabled: true, NATSExposureProfileSHA256: profileDigest(profile)}
 	items := cfg.Catalog()
 	found := false
 	for _, it := range items {
