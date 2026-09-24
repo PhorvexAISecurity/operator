@@ -41,13 +41,14 @@ type suite struct{ File, OutDir, Desc, Namespace string }
 
 // allowedConfigs is the whitelist of attack-agent suites the console may trigger.
 var allowedConfigs = map[string]suite{
-	"nats-exposure-baseline": {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
-	"nats-client-response":   {File: "config.nats-client-response.yaml", OutDir: "out-nats-client-response", Desc: "Owned NATS client response and exact-event observation"},
-	"p3-v3":                  {File: "config.p3.v3.yaml", OutDir: "out-p3-v3", Desc: "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
-	"pactuator":              {File: "config.pactuator.yaml", OutDir: "out-pactuator", Desc: "Lead demo: native actuator preserves the stateful job"},
-	"p3-verify":              {File: "config.p3.verify.yaml", OutDir: "out-p3-verify", Desc: "P3 verification suite"},
-	"fpprobe":                {File: "config.fpprobe.yaml", OutDir: "out-fpprobe", Desc: "False-positive / controls probe"},
-	"p3deep-smoke":           {File: "config.p3deep.smoke.yaml", OutDir: "out-p3deep-smoke", Desc: "Structural zero-day smoke (recon-validity)"},
+	"nats-exposure-baseline":           {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
+	"nats-client-response":             {File: "config.nats-client-response.yaml", OutDir: "out-nats-client-response", Desc: "Owned NATS client response and exact-event observation"},
+	"guardrail-confidentiality-static": {File: "config.guardrail-confidentiality-static.yaml", OutDir: "out-guardrail-confidentiality-static", Desc: "Fixed synthetic raw-versus-guarded vLLM confidentiality comparison"},
+	"p3-v3":                            {File: "config.p3.v3.yaml", OutDir: "out-p3-v3", Desc: "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
+	"pactuator":                        {File: "config.pactuator.yaml", OutDir: "out-pactuator", Desc: "Lead demo: native actuator preserves the stateful job"},
+	"p3-verify":                        {File: "config.p3.verify.yaml", OutDir: "out-p3-verify", Desc: "P3 verification suite"},
+	"fpprobe":                          {File: "config.fpprobe.yaml", OutDir: "out-fpprobe", Desc: "False-positive / controls probe"},
+	"p3deep-smoke":                     {File: "config.p3deep.smoke.yaml", OutDir: "out-p3deep-smoke", Desc: "Structural zero-day smoke (recon-validity)"},
 }
 
 // RunStatus is the live state of a triggered attack-agent run.
@@ -298,8 +299,11 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	if (name == natsBaselineConfig || name == natsResponseConfig) && (nativeActuator || dest.ScopeTenant != "nats" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 2 || dest.Tenants[0] != "nats" || dest.Tenants[1] != natsFixtureNamespace || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget) {
 		return "", fmt.Errorf("named NATS suite requires authorized broker and owned fixture destinations")
 	}
+	if name == guardrailStaticConfig && (nativeActuator || dest.ScopeTenant != "vllm" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 2 || dest.Tenants[0] != "vllm" || dest.Tenants[1] != "phorvex-system" || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget) {
+		return "", fmt.Errorf("guardrail static suite requires reviewed vLLM and journal destinations")
+	}
 	rm.mu.Lock()
-	if name == natsBaselineConfig || name == natsResponseConfig {
+	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
 		if rm.loadErr != nil {
 			rm.mu.Unlock()
 			return "", fmt.Errorf("prior NATS run state unavailable; exact reconciliation is required")
@@ -339,9 +343,13 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	// Both halves are recorded so a later run-id lookup is authorized against the cluster AND the
 	// namespace this run actually drives.
 	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator, Owner: owner, ScopeTarget: normalizeTargetID(dest.ScopeTarget), ScopeTenant: dest.ScopeTenant}
-	if name == natsBaselineConfig || name == natsResponseConfig {
+	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
 		st.Namespace = runtimeSuite.Namespace
-		st.FixtureTenant = runtimeSuite.Namespace
+		if name == guardrailStaticConfig {
+			st.FixtureTenant = "phorvex-system"
+		} else {
+			st.FixtureTenant = runtimeSuite.Namespace
+		}
 		st.Target = dest.ScopeTarget
 		st.TargetLabel = dest.ScopeTarget
 		st.Provider = "Kubernetes"
@@ -390,17 +398,20 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 	out := id
 	doc["outDir"] = rm.cfg.runOutputPath(out)
 	if authorizedSHA != "" {
-		random := make([]byte, 12)
-		if _, err := rand.Read(random); err != nil {
-			return suite{}, fmt.Errorf("allocate owned fixture nonce: %w", err)
+		if fixture, ok := doc["natsExposureFixture"].(map[string]any); ok {
+			random := make([]byte, 12)
+			if _, err := rand.Read(random); err != nil {
+				return suite{}, fmt.Errorf("allocate owned fixture nonce: %w", err)
+			}
+			nonce := hex.EncodeToString(random)
+			fixture["nonce"], fixture["runID"] = nonce, id
+			su.Namespace = natsFixtureNamespace
+		} else if fixture, ok := doc["guardrailStaticFixture"].(map[string]any); ok {
+			fixture["runID"] = id
+			su.Namespace = "vllm"
+		} else {
+			return suite{}, fmt.Errorf("named fixture missing")
 		}
-		nonce := hex.EncodeToString(random)
-		fixture, ok := doc["natsExposureFixture"].(map[string]any)
-		if !ok {
-			return suite{}, fmt.Errorf("named NATS fixture missing")
-		}
-		fixture["nonce"], fixture["runID"] = nonce, id
-		su.Namespace = natsFixtureNamespace
 	}
 	raw, err = yaml.Marshal(doc)
 	if err != nil {
@@ -532,6 +543,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		return "", fmt.Errorf("too many scenarios (max 16 per batch)")
 	}
 	for _, s := range scenarios {
+		if s == "ai-vllm-guardrail-confidentiality-static" || s == guardrailStaticConfig {
+			return "", fmt.Errorf("guardrail confidentiality comparison requires the server-owned named suite %s", guardrailStaticConfig)
+		}
 		if s == "c2-nats-uncredentialed-exposure" {
 			return "", fmt.Errorf("NATS exposure requires the server-owned named suite nats-exposure-baseline")
 		}
@@ -683,14 +697,22 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 	dest := runDestination{Targets: []string{hostTargetID}, ScopeTarget: hostTargetID, RequireTenantWildcard: true}
 	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
 	if err != nil {
-		if name == natsBaselineConfig || name == natsResponseConfig {
+		if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
 			return dest, err
 		}
 		return dest, nil
 	}
-	if name == natsBaselineConfig || name == natsResponseConfig {
+	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
 		if bytes.Contains(raw, []byte("__SET_")) {
-			return dest, fmt.Errorf("named NATS suite is not configured with reviewed installed source and image pins")
+			return dest, fmt.Errorf("named suite is not configured with reviewed installed pins")
+		}
+		if name == guardrailStaticConfig {
+			cfg, err := parseStaticAdmission(raw)
+			if err != nil {
+				return dest, fmt.Errorf("guardrail static suite destination or identity pins differ")
+			}
+			h := sha256.Sum256(raw)
+			return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{"vllm", "phorvex-system"}, ScopeTarget: cfg.Context, ScopeTenant: "vllm", SuiteSHA256: hex.EncodeToString(h[:])}, nil
 		}
 		var cfg struct {
 			Context             string `json:"context"`
@@ -892,9 +914,9 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	rm.mu.Lock()
 	if st := rm.runs[id]; st != nil && st.Compare3 {
 		cap = 12 * time.Minute
-	} else if st != nil && (st.Config == natsBaselineConfig || st.Config == natsResponseConfig) {
-		cap = 10 * time.Minute
-		isNATS = true
+	} else if st != nil && (st.Config == natsBaselineConfig || st.Config == natsResponseConfig || st.Config == guardrailStaticConfig) {
+		cap = 11 * time.Minute
+		isNATS = st.Config == natsBaselineConfig || st.Config == natsResponseConfig
 	}
 	rm.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), cap)
@@ -1017,6 +1039,28 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if st.Config == natsResponseConfig {
 		result, evidenceErr := readNATSResponseResult(outAbs, id, st.Namespace)
 		finishNATSResponseStatus(st, result, evidenceErr, responseErr, err, ctx.Err())
+		return
+	}
+	if st.Config == guardrailStaticConfig {
+		st.Finished = tsNow()
+		if !started {
+			st.State = "error"
+			st.Error = "guardrail harness process did not start: " + err.Error()
+			return
+		}
+		result, evidenceErr := readGuardrailStaticResult(outAbs, id, filepath.Join(rm.cfg.runsDir(), "configs", id+".yaml"))
+		if evidenceErr == nil && result.Accepted && err == nil && ctx.Err() == nil {
+			st.State = "done"
+			st.Outcome = result.Status
+			return
+		}
+		st.State = "partial"
+		st.Outcome = "UNKNOWN"
+		if evidenceErr != nil {
+			st.Error = "guardrail terminal evidence unavailable: " + evidenceErr.Error()
+		} else {
+			st.Error = "guardrail comparison incomplete or inconsistent"
+		}
 		return
 	}
 	if err != nil && ctx.Err() == nil {

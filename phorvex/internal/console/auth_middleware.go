@@ -494,6 +494,9 @@ func (s *Server) runInScope(p *Principal, id string) (int, string, bool) {
 // runVisibleTo is the single definition of "this identity may see this run", shared by the
 // boundary's id check and the run listing so the two cannot disagree.
 func runVisibleTo(p *Principal, own runOwnership) bool {
+	if own.Config == guardrailStaticConfig && (own.Tenant != "vllm" || own.FixtureTenant != "phorvex-system" || !p.AllowsTenant(own.FixtureTenant) || !p.AllowsTarget(hostTargetID)) {
+		return false
+	}
 	if (own.Config == natsBaselineConfig || own.Config == natsResponseConfig) && (own.Tenant != "nats" || own.FixtureTenant != natsFixtureNamespace || !p.AllowsTenant(own.FixtureTenant)) {
 		return false
 	}

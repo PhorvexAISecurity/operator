@@ -474,7 +474,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// The named broker baseline reads a server-owned file at authorization and
 	// launch. Recheck the second snapshot against this verified principal; Start
 	// also requires its digest still to match the exact file it copies.
-	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig {
+	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == guardrailStaticConfig {
 		p := principalOf(r)
 		for _, target := range dest.Targets {
 			if p == nil || !p.AllowsTarget(target) {
@@ -643,6 +643,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var functional any
 	var configuration any
 	var natsResponse any
+	var guardrailStatic any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -653,6 +654,15 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "NATS response terminal artifact unavailable: " + err.Error()})
 	}
+	if result, err := s.runs.GuardrailStaticResult(id); err == nil && result != nil {
+		guardrailStatic = result
+	} else if err != nil {
+		reason := "guardrail static terminal artifact unavailable: " + err.Error()
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: reason})
+		if st.Config == guardrailStaticConfig {
+			guardrailStatic = &GuardrailStaticResult{Accepted: false, Status: "UNKNOWN", Issues: []string{reason}, EventMode: "DIRECT_STATIC", NaturalDetector: "NOT_EVALUATED", BrainDecision: "NOT_EVALUATED", Actuator: "NOT_EVALUATED", ExternalRoute: "NOT_TESTED"}
+		}
+	}
 	if result, err := s.runs.FunctionalResult(id); err == nil && result != nil {
 		functional = map[string]any{"outcome": result.Outcome, "summary": result.Summary, "evidence": result.Evidence,
 			"limits": result.Limits, "cleanup": result.Cleanup, "unsafeToRetry": result.UnsafeToRetry,
@@ -661,12 +671,13 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "fixed-suite result unavailable: " + err.Error()})
 	}
 	writeJSON(w, 200, map[string]any{
-		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished,
+		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished, "outcome": st.Outcome,
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
-		"functionalResult":    functional,
-		"configurationResult": configuration,
-		"natsResponseResult":  natsResponse,
-		"note":                "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
+		"functionalResult":      functional,
+		"configurationResult":   configuration,
+		"natsResponseResult":    natsResponse,
+		"guardrailStaticResult": guardrailStatic,
+		"note":                  "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }
 

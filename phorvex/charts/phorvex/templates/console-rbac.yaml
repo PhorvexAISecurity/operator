@@ -231,3 +231,60 @@ subjects:
 {{- end }}
 {{- end }}
 {{- end }}
+{{- with .Values.phorvex.console.guardrailStatic }}
+{{- if and $.Values.phorvex.console.enabled .enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-static-source
+  namespace: vllm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ required "guardrailStatic.sourceConfigMap is required" .sourceConfigMap | quote }}]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-static-source
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-static-source
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-static-journals
+  namespace: phorvex-system
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ required "guardrailStatic.guardrailJournalName is required" .guardrailJournalName | quote }}, {{ required "guardrailStatic.kvJournalName is required" .kvJournalName | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-static-journals
+  namespace: phorvex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-static-journals
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
