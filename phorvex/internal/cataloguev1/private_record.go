@@ -16,6 +16,19 @@ var errPrivateRecord = errors.New("catalogue v1 persisted file is not a private 
 // console's intended GID. Read through one no-follow descriptor so a pathname
 // swap cannot substitute different bytes between a separate Stat and ReadFile.
 func readPrivateRecord(path string) ([]byte, error) {
+	return readPrivateRecordLimit(path, maxRecordBytes)
+}
+
+// ReadPrivateArtifact reads a persisted fixed-suite artifact through one
+// no-follow descriptor. The caller supplies the format-specific size bound.
+func ReadPrivateArtifact(path string, limit int64) ([]byte, error) {
+	if limit <= 0 || limit > 256*maxRecordBytes {
+		return nil, errPrivateRecord
+	}
+	return readPrivateRecordLimit(path, limit)
+}
+
+func readPrivateRecordLimit(path string, limit int64) ([]byte, error) {
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) {
@@ -26,26 +39,30 @@ func readPrivateRecord(path string) ([]byte, error) {
 	f := os.NewFile(uintptr(fd), path)
 	defer f.Close()
 	before, err := f.Stat()
-	if err != nil || !trustedPrivateRecord(before, os.Geteuid(), os.Getegid()) {
+	if err != nil || !trustedPrivateRecordLimit(before, os.Geteuid(), os.Getegid(), limit) {
 		return nil, errPrivateRecord
 	}
-	raw, err := io.ReadAll(io.LimitReader(f, maxRecordBytes+1))
+	raw, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil || len(raw) != int(before.Size()) {
 		return nil, errPrivateRecord
 	}
 	afterFD, err := f.Stat()
-	if err != nil || !trustedPrivateRecord(afterFD, os.Geteuid(), os.Getegid()) || !samePrivateRecord(before, afterFD) {
+	if err != nil || !trustedPrivateRecordLimit(afterFD, os.Geteuid(), os.Getegid(), limit) || !samePrivateRecord(before, afterFD) {
 		return nil, errPrivateRecord
 	}
 	afterPath, err := os.Lstat(path)
-	if err != nil || !trustedPrivateRecord(afterPath, os.Geteuid(), os.Getegid()) || !samePrivateRecord(before, afterPath) {
+	if err != nil || !trustedPrivateRecordLimit(afterPath, os.Geteuid(), os.Getegid(), limit) || !samePrivateRecord(before, afterPath) {
 		return nil, errPrivateRecord
 	}
 	return raw, nil
 }
 
 func trustedPrivateRecord(info os.FileInfo, euid, egid int) bool {
-	if info == nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxRecordBytes ||
+	return trustedPrivateRecordLimit(info, euid, egid, maxRecordBytes)
+}
+
+func trustedPrivateRecordLimit(info os.FileInfo, euid, egid int, limit int64) bool {
+	if info == nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > limit ||
 		info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
 		return false
 	}
