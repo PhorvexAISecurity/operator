@@ -395,7 +395,7 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	if !ok || status.ExecutionKind != "fixed-suite" {
 		return nil, nil
 	}
-	if status.State != "done" && status.State != "error" && status.State != "stopped" {
+	if status.State != "done" && status.State != "error" && status.State != "stopped" && status.State != "partial" {
 		return nil, errors.New("fixed-suite terminal result is not yet verified")
 	}
 	dir := rm.cfg.runOutputPath(out)
@@ -419,6 +419,12 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	}
 	if string(result.Outcome) != status.Outcome || result.Cleanup.Status != status.CleanupStatus {
 		return nil, errors.New("fixed-suite terminal result differs from the accepted run status")
+	}
+	// A partial run can expose a validated failed observation for diagnosis. It
+	// cannot expose a functional pass as an accepted result; its metric remains
+	// excluded by RunEvidence regardless of the terminal file's contents.
+	if status.State == "partial" && result.Outcome == cataloguev1.OutcomeFunctionalPass {
+		return nil, errors.New("partial fixed-suite functional pass is not accepted")
 	}
 	return &result, nil
 }
