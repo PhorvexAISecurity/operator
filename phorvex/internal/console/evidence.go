@@ -13,9 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/cataloguev1"
 )
 
 // --- Attack Catalog (the full ~53 scenarios from the harness registry) -------------------
@@ -85,6 +88,9 @@ func (c *Config) Catalog() []CatalogItem {
 		return c.sortedLimitedV1Catalogue(nil)
 	}
 	for i := range items {
+		if items[i].Name == string(cataloguev1.CRMRefund) || items[i].Name == string(cataloguev1.CRMReset) {
+			continue
+		}
 		items[i].EntryID = items[i].Name
 		items[i].LaunchKind = "harness-scenario"
 		items[i].ClaimClass = "security"
@@ -106,6 +112,9 @@ func (c *Config) Catalog() []CatalogItem {
 			}
 		}
 	}
+	items = slices.DeleteFunc(items, func(item CatalogItem) bool {
+		return item.Name == string(cataloguev1.CRMRefund) || item.Name == string(cataloguev1.CRMReset)
+	})
 	return c.sortedLimitedV1Catalogue(items)
 }
 

@@ -32,6 +32,18 @@ const admissionMessage = (reason?: FunctionalAdmissionReason) => {
   }
 };
 
+export function CRMCapabilityResult({ evidence }: { evidence: Record<string, string> }) {
+  const own = evidence.ownExactCount;
+  const cross = evidence.crossExactCount;
+  return <div data-crm-functional-result className="rounded-md border border-border bg-muted/20 p-3 text-[12px] space-y-1">
+    <div className="font-medium text-foreground">Synthetic A/B record control</div>
+    <div>A legitimate write: {own === undefined ? "unverified" : `${own} exact Mongo record`} · B cross-record write: {cross === undefined ? "unverified" : `${cross} exact Mongo record`}</div>
+    <div>Cross-record HTTP status: {evidence.crossHTTPStatus || "unverified"} · original seed hashes: {evidence.seedHashesUnchanged === "true" ? "unchanged" : "unverified"}</div>
+    <div>Event mode: DIRECT; no alert is required. Detector, actuator, brain and installed defense: not evaluated.</div>
+    <div className="text-muted-foreground">A and B label synthetic records, not callers. This is a functional capability observation, not an authentication bypass or defense score.</div>
+  </div>;
+}
+
 export function fixedSuiteAdmissionReady(key: string, profile: string, state: FixedAdmissionState | null): boolean {
   return !!state && state.key === key && state.profile === profile && state.phase === "ready" && state.reasonCode === "READY" && !!profile;
 }
@@ -330,6 +342,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
             {fixedEvidence.functionalResult.unsafeToRetry && <div className="text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
             {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
+            {(fixedProfile === "c2-crm-refund-capability" || fixedProfile === "c2-crm-reset-capability") && <CRMCapabilityResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}
           {fixedEvidence?.configurationResult && <div className="mt-2 space-y-1 border-t border-border pt-2">

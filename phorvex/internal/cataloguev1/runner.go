@@ -242,6 +242,8 @@ func validateResolvedAuthority(job Job, definition Definition, runtime Runtime) 
 		wantTenant = runtime.Guardrail.Namespace
 	case MCPSessionBaseline:
 		wantTenant = runtime.MCP.Namespace
+	case CRMRefund, CRMReset:
+		wantTenant = runtime.CRM.Namespace
 	}
 	if strings.TrimSpace(wantTenant) == "" || job.ResolvedTenant != wantTenant {
 		return errors.New("catalogue v1 resolved tenant differs from the fixed runtime profile")
@@ -250,7 +252,7 @@ func validateResolvedAuthority(job Job, definition Definition, runtime Runtime) 
 }
 
 func validateDefinition(definition Definition) error {
-	known := map[ProfileID]bool{VoiceMedia: true, VoiceRecovery: true, GPUDrain: true, AuthUnauth: true, AuthScope: true, GuardrailCalibration: true, MCPSessionBaseline: true}
+	known := map[ProfileID]bool{VoiceMedia: true, VoiceRecovery: true, GPUDrain: true, AuthUnauth: true, AuthScope: true, GuardrailCalibration: true, MCPSessionBaseline: true, CRMRefund: true, CRMReset: true}
 	if !known[definition.ID] {
 		return fmt.Errorf("unknown catalogue v1 profile %q", definition.ID)
 	}
@@ -440,6 +442,9 @@ func ValidateTerminalArtifacts(job Job, result Result, metricPath string) error 
 	wantScenario, wantDefender := string(job.Profile), "d-functional"
 	if job.Profile == GPUDrain {
 		wantScenario, wantDefender = "c2-vllm-request-drain", "d-nomtd"
+	}
+	if job.Profile == CRMRefund || job.Profile == CRMReset {
+		wantDefender = "d-nomtd"
 	}
 	if metric.Scenario != wantScenario || metric.Defender != wantDefender || metric.Trial != 0 || !metric.ScenarioBenignControl || metric.ScenarioRealism != "executable-mechanism" {
 		return errors.New("catalogue v1 metric identity or benign-functional claim differs from the fixed profile")

@@ -22,10 +22,12 @@ import (
 
 	"math/rand"
 
+	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/r6security/phoenix-test-harness/internal/capability"
 	"github.com/r6security/phoenix-test-harness/internal/config"
@@ -189,6 +191,31 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if cfg.NATSExposureFixture != nil && (negControl || adaptive || resume) {
 		return errors.New("natsExposureFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
 	}
+	if cfg.CRMCapabilityFixture != nil && (negControl || adaptive || resume) {
+		return errors.New("crmCapabilityFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
+	}
+	if f := cfg.CRMCapabilityFixture; f != nil {
+		info, statErr := os.Stat(cfg.Kubeconfig)
+		if statErr != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 1<<20 {
+			return errors.New("CRM scoped kubeconfig unavailable or unbounded before client build")
+		}
+		raw, readErr := os.ReadFile(cfg.Kubeconfig)
+		if readErr != nil || fmt.Sprintf("%x", sha256.Sum256(raw)) != f.KubeconfigSHA256 {
+			return errors.New("CRM scoped kubeconfig SHA-256 differs before client build")
+		}
+		kc, parseErr := clientcmd.Load(raw)
+		if parseErr != nil {
+			return fmt.Errorf("CRM scoped kubeconfig invalid: %w", parseErr)
+		}
+		contextEntry := kc.Contexts[cfg.Context]
+		if contextEntry == nil {
+			return errors.New("CRM scoped kubeconfig context absent")
+		}
+		auth := kc.AuthInfos[contextEntry.AuthInfo]
+		if auth == nil || auth.Exec != nil || auth.AuthProvider != nil || auth.Impersonate != "" || auth.ImpersonateUID != "" || len(auth.ImpersonateGroups) != 0 || len(auth.ImpersonateUserExtra) != 0 || auth.Username != "" || auth.Password != "" || auth.ClientCertificate != "" || len(auth.ClientCertificateData) != 0 || auth.ClientKey != "" || len(auth.ClientKeyData) != 0 || auth.Token == "" && auth.TokenFile == "" {
+			return errors.New("CRM scoped kubeconfig must use only the pinned fixture bearer identity")
+		}
+	}
 	// 1) Build clients PINNED to the configured context.
 	var clients *kube.Clients
 	var err error
@@ -202,6 +229,13 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 
 	// 2) Safety guard: assert owned-ack + live-context + apiserver-host match BEFORE
+	if f := cfg.CRMCapabilityFixture; f != nil {
+		review, reviewErr := clients.Kube.AuthenticationV1().SelfSubjectReviews().Create(ctx, &authenticationv1.SelfSubjectReview{}, metav1.CreateOptions{})
+		if reviewErr != nil || review.Status.UserInfo.Username != "system:serviceaccount:"+cfg.Namespace+":"+f.ServiceAccountName {
+			return fmt.Errorf("CRM fixture scoped service-account identity differs: %v", reviewErr)
+		}
+	}
+
 	// any mutation. A refusal aborts the whole run.
 	guard, err := safety.NewGuard(cfg, clients.LiveContext, clients.LiveHost)
 	if err != nil {
@@ -213,9 +247,15 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 
 	// 3) Capability detection at runtime.
-	caps, capNotes, err := capability.Detect(ctx, clients.Kube)
-	if err != nil {
-		return fmt.Errorf("capability detect: %w", err)
+	var caps core.Capabilities
+	capNotes := map[string]string{}
+	if cfg.CRMCapabilityFixture == nil {
+		caps, capNotes, err = capability.Detect(ctx, clients.Kube)
+		if err != nil {
+			return fmt.Errorf("capability detect: %w", err)
+		}
+	} else {
+		capNotes["CRM"] = "CPU-only fixed control uses a namespace-scoped identity; node census omitted"
 	}
 	fmt.Printf("Detected capabilities: GPU=%v MultiNode=%v MIG=%v Nodes=%d\n", caps.GPU, caps.MultiNode, caps.MIG, caps.NodeCount)
 
@@ -540,7 +580,7 @@ func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) 
 	}
 	fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
 	defer fcancel()
-	deleteNamespace := !env.Config.BenignCheckpointLocalFixture && env.Config.NATSJetStreamFixture == nil && env.Config.GPUFunctionalFixture == nil && env.Config.NATSExposureFixture == nil
+	deleteNamespace := !env.Config.BenignCheckpointLocalFixture && env.Config.NATSJetStreamFixture == nil && env.Config.GPUFunctionalFixture == nil && env.Config.NATSExposureFixture == nil && env.Config.CRMCapabilityFixture == nil
 	cleanupErr := env.CleanupOwned(fctx, deleteNamespace)
 	if cleanupErr == nil && !deleteNamespace {
 		env.Log.Logf("cleanup: verified supported generic-owned residue absent; preserving exact external fixture holder and namespace for collector handoff")

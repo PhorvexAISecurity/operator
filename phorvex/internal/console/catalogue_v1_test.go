@@ -16,8 +16,8 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 9 {
-		t.Fatalf("items=%d, want seven limited-v1 entries, one MCP baseline and the disabled server-owned NATS response", len(items))
+	if len(items) != 11 {
+		t.Fatalf("items=%d, want fixed catalogue profiles including two CRM controls and the disabled server-owned NATS response", len(items))
 	}
 	responseRows := 0
 	for _, item := range items {
@@ -26,7 +26,7 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 			if item.Available || item.LaunchKind != "named-suite" || item.Profile != natsResponseConfig || item.ClaimClass != "effect" {
 				t.Fatalf("unconfigured response row gained launch authority: %+v", item)
 			}
-		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) {
+		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) && item.Name != string(cataloguev1.CRMRefund) && item.Name != string(cataloguev1.CRMReset) {
 			t.Fatalf("unexpected entry %q", item.Name)
 		}
 		if item.LaunchKind == "" || item.ClaimClass == "" {

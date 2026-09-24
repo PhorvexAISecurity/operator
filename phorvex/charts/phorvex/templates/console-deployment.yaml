@@ -191,6 +191,30 @@ spec:
           value: {{ required "console.catalogueV1.gpu.kubeContext is required when runtimeSecret is set" .kubeContext | quote }}
         {{- end }}
         {{- end }}
+        {{- with .crm }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_NAMESPACE
+          value: {{ required "console.catalogueV1.crm.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_NAMESPACE_UID
+          value: {{ required "console.catalogueV1.crm.namespaceUID is required" .namespaceUID | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_SERVICE_ACCOUNT
+          value: {{ required "console.catalogueV1.crm.serviceAccountName is required" .serviceAccountName | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_MANIFEST_FILE
+          value: {{ printf "%s/%s" .manifestMountPath .manifestKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_MANIFEST_SHA256
+          value: {{ required "console.catalogueV1.crm.manifestSHA256 is required" .manifestSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_HARNESS_SHA256
+          value: {{ required "console.catalogueV1.crm.harnessSHA256 is required" .harnessSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_KUBECONFIG
+          value: {{ printf "%s/%s" .runtimeMountPath .kubeconfigKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_KUBECONFIG_SHA256
+          value: {{ required "console.catalogueV1.crm.kubeconfigSHA256 is required" .kubeconfigSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_KUBE_CONTEXT
+          value: {{ required "console.catalogueV1.crm.kubeContext is required" .kubeContext | quote }}
+        {{- end }}
+        {{- end }}
         {{- end }}
         {{- end }}
         {{- if .Values.phorvex.prometheusUrl }}
@@ -305,6 +329,16 @@ spec:
           readOnly: true
         {{- end }}
         {{- end }}
+        {{- with .crm }}
+        {{- if .enabled }}
+        - name: catalogue-v1-crm-manifest
+          mountPath: {{ .manifestMountPath }}
+          readOnly: true
+        - name: catalogue-v1-crm-runtime
+          mountPath: {{ .runtimeMountPath }}
+          readOnly: true
+        {{- end }}
+        {{- end }}
         {{- end }}
         {{- end }}
       volumes:
@@ -362,6 +396,24 @@ spec:
             path: {{ .kubeconfigKey }}
           - key: {{ .bearerTokenKey }}
             path: {{ .bearerTokenKey }}
+      {{- end }}
+      {{- end }}
+      {{- with .crm }}
+      {{- if .enabled }}
+      - name: catalogue-v1-crm-manifest
+        configMap:
+          name: {{ required "console.catalogueV1.crm.manifestConfigMap is required" .manifestConfigMap }}
+          defaultMode: 0440
+          items:
+          - key: {{ .manifestKey }}
+            path: {{ .manifestKey }}
+      - name: catalogue-v1-crm-runtime
+        secret:
+          secretName: {{ required "console.catalogueV1.crm.runtimeSecret is required" .runtimeSecret }}
+          defaultMode: 0440
+          items:
+          - key: {{ .kubeconfigKey }}
+            path: {{ .kubeconfigKey }}
       {{- end }}
       {{- end }}
       {{- end }}

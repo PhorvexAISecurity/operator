@@ -25,6 +25,8 @@ const (
 	AuthScope            ProfileID = "limited-v1-console-scoped-authorization"
 	GuardrailCalibration ProfileID = "limited-v1-vllm-guardrail-calibration"
 	MCPSessionBaseline   ProfileID = "catalogue-mcp-session-baseline"
+	CRMRefund            ProfileID = "c2-crm-refund-capability"
+	CRMReset             ProfileID = "c2-crm-reset-capability"
 )
 
 // Definition is immutable product metadata for a fixed profile.
@@ -49,6 +51,8 @@ func DefinitionFor(id ProfileID) (Definition, error) {
 		AuthScope:            {ID: AuthScope, Title: "Console scoped authorization boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API tenant/target authorization boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
 		GuardrailCalibration: {ID: GuardrailCalibration, Title: "Installed guardrail benign calibration", Product: "ai", Category: "Calibration", ClaimLimits: "two fixed benign requests to the reviewed non-forwarding classifier endpoint/source contract; loaded process, forwarding behavior, guarded serving, injected response, detector, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 		MCPSessionBaseline:   {ID: MCPSessionBaseline, Title: "Installed MCP owned session", Product: "application", Category: "Functional", ClaimLimits: "one synthetic MCP tool read and exact in-memory session invalidation with mounted-file/package hash pins; already-loaded Python bytes, business mutation, provider, authorization, brain, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "mcp", MaxDuration: 2 * time.Minute, MaxMutations: 2},
+		CRMRefund:            {ID: CRMRefund, Title: "Disposable CRM refund capability", Product: "application", Category: "Functional", ClaimLimits: "synthetic A/B record capability in isolated Mongo only; A/B are not authenticated principals; no installed customer write, phone/provider, authentication bypass, brain or security efficacy claim", FixedTarget: "default", FixedTenant: "crm-functional", MaxDuration: 14 * time.Minute, MaxMutations: 2},
+		CRMReset:             {ID: CRMReset, Title: "Disposable CRM reset capability", Product: "application", Category: "Functional", ClaimLimits: "synthetic A/B record capability in isolated Mongo only; A/B are not authenticated principals; no installed customer write, phone/provider, authentication bypass, brain or security efficacy claim", FixedTarget: "default", FixedTenant: "crm-functional", MaxDuration: 14 * time.Minute, MaxMutations: 2},
 	}
 	definition, ok := definitions[id]
 	if !ok {
@@ -122,6 +126,21 @@ type MCPSessionRuntime struct {
 	ExpectedSourceSHA256 string `json:"expectedSourceSHA256"`
 }
 
+type CRMCapabilityRuntime struct {
+	Enabled            bool   `json:"enabled"`
+	Namespace          string `json:"namespace"`
+	ServiceAccountName string `json:"serviceAccountName"`
+	NamespaceUID       string `json:"namespaceUID"`
+	ManifestFile       string `json:"manifestFile"`
+	ManifestSHA256     string `json:"manifestSHA256"`
+	HarnessBinary      string `json:"harnessBinary"`
+	HarnessSHA256      string `json:"harnessSHA256"`
+	HarnessDir         string `json:"harnessDir"`
+	KubeconfigPath     string `json:"kubeconfigPath"`
+	KubeconfigSHA256   string `json:"kubeconfigSHA256"`
+	KubeContext        string `json:"kubeContext"`
+}
+
 // Runtime contains trusted process configuration. It is assembled by the
 // console from chart/startup settings, never decoded from the launch request or
 // the private Job file.
@@ -144,6 +163,7 @@ type Runtime struct {
 	GPU             GPUFixtureRuntime
 	Guardrail       GuardrailCalibrationRuntime
 	MCP             MCPSessionRuntime
+	CRM             CRMCapabilityRuntime
 }
 
 type Outcome string

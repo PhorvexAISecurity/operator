@@ -152,6 +152,17 @@ type TargetConfig struct {
 	// to the narrow native-route-catalogue binary. The harness never accepts an
 	// arbitrary command or action through this boundary.
 	NativeRouteFixture *NativeRouteFixtureConfig `json:"nativeRouteFixture,omitempty"`
+	// CRMCapabilityFixture marks one exact disposable CRM control. It preserves
+	// the pre-existing namespace and prevents generic label-sweep cleanup.
+	CRMCapabilityFixture *CRMCapabilityFixtureConfig `json:"crmCapabilityFixture,omitempty"`
+}
+
+type CRMCapabilityFixtureConfig struct {
+	RunID              string `json:"runID"`
+	NamespaceUID       string `json:"namespaceUID"`
+	ManifestSHA256     string `json:"manifestSHA256"`
+	ServiceAccountName string `json:"serviceAccountName"`
+	KubeconfigSHA256   string `json:"kubeconfigSHA256"`
 }
 
 type NativeRouteFixtureConfig struct {
@@ -371,6 +382,9 @@ func (c TargetConfig) Validate() error {
 	}
 	if c.ExpectedNamespaceUID != "" && !kubernetesUIDPattern.MatchString(c.ExpectedNamespaceUID) {
 		return errors.New("config: expectedNamespaceUID must be an exact lowercase Kubernetes UUID when set")
+	}
+	if err := validateCRMCapabilityFixture(c); err != nil {
+		return err
 	}
 	if c.TrialsPerArm < 1 {
 		return fmt.Errorf("config: trialsPerArm must be >= 1, got %d", c.TrialsPerArm)

@@ -154,6 +154,10 @@ phorvex:
           bearerTokenKey: bearer-token
           runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
           kubeContext: ""
+        # Await owner-reviewed immutable CRM/Mongo images, a dedicated labelled
+        # fixture namespace and a scoped fixture identity before opt-in.
+        crm:
+          enabled: false
       auditTransport:
         port: 8445
         serverSecretName: phorvex-audit-server
