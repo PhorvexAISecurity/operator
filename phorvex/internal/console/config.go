@@ -37,8 +37,14 @@ type Config struct {
 	// MongoExposureEnabled is set only by the opt-in chart installation that
 	// grants the fixed document-store fixture permissions.
 	MongoExposureEnabled bool
-	Addr                 string // http listen address
-	Web                  string // static SPA dir (dashboard-web/out) served at / alongside /api
+	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
+	// trusted creator and authenticated exact-window audit authority.
+	PodBoundTokenEnabled bool
+	// PodBoundTokenProfileSHA256 is the installation-reviewed digest of the
+	// read-only named profile, independent of that profile's own manifest pin.
+	PodBoundTokenProfileSHA256 string
+	Addr                       string // http listen address
+	Web                        string // static SPA dir (dashboard-web/out) served at / alongside /api
 	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
 	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
 	MetricsAllow []string

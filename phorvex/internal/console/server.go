@@ -86,6 +86,7 @@ func NewServer(cfg Config) *Server {
 	}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
 	s.runs.natsResponse = s.coordinateNATSResponse
+	s.runs.podBoundTokenResponse = s.coordinatePodBoundTokenResponse
 	if cfg.StateDir == "" {
 		s.stateErr = "console state directory is not configured"
 	} else if s.runs.loadErr != nil {
@@ -146,7 +147,23 @@ npm run build</pre><p>then restart this binary. (Or pass <code>--web &lt;path-to
 }
 
 func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"items": s.cfg.Catalog()})
+	items := s.cfg.Catalog()
+	for i := range items {
+		if items[i].Profile != podBoundTokenConfig || !items[i].Available {
+			continue
+		}
+		dest, err := s.runs.SuiteDestination(podBoundTokenConfig)
+		if err == nil {
+			s.runs.mu.Lock()
+			err = s.runs.podBoundTokenPriorAdmissionLocked(dest)
+			s.runs.mu.Unlock()
+		}
+		if err != nil {
+			items[i].Available = false
+			items[i].UnavailableReason = err.Error()
+		}
+	}
+	writeJSON(w, 200, map[string]any{"items": items})
 }
 func (s *Server) benchmarks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"groups": s.cfg.Benchmarks()})
@@ -474,7 +491,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// The named broker baseline reads a server-owned file at authorization and
 	// launch. Recheck the second snapshot against this verified principal; Start
 	// also requires its digest still to match the exact file it copies.
-	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig || body.Config == guardrailStaticConfig {
+	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig || body.Config == guardrailStaticConfig || body.Config == podBoundTokenConfig {
 		p := principalOf(r)
 		for _, target := range dest.Targets {
 			if p == nil || !p.AllowsTarget(target) {
@@ -644,6 +661,8 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var configuration any
 	var natsResponse any
 	var mongoExposure any
+	var podBoundToken any
+	var podBoundTokenUnsafe any
 	var guardrailStatic any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
@@ -659,6 +678,16 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		mongoExposure = result
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "Mongo exposure terminal or audit evidence unavailable: " + err.Error()})
+	}
+	if result, err := s.runs.PodBoundTokenResult(id); err == nil && result != nil {
+		podBoundToken = result
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "Pod-bound token terminal or audit evidence unavailable: " + err.Error()})
+	}
+	if receipt, err := s.runs.PodBoundTokenUnsafe(id); err == nil && receipt != nil {
+		podBoundTokenUnsafe = receipt
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "Pod-bound token early unsafe receipt unavailable: " + err.Error()})
 	}
 	if result, err := s.runs.GuardrailStaticResult(id); err == nil && result != nil {
 		guardrailStatic = result
@@ -683,6 +712,8 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"configurationResult":   configuration,
 		"natsResponseResult":    natsResponse,
 		"mongoExposureResult":   mongoExposure,
+		"podBoundTokenResult":   podBoundToken,
+		"podBoundTokenUnsafe":   podBoundTokenUnsafe,
 		"guardrailStaticResult": guardrailStatic,
 		"note":                  "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})

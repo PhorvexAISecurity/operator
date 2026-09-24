@@ -16,6 +16,7 @@ import { trialOutcomeDisplay } from "@/lib/trial-outcome";
 import { NATSClientResponseResult } from "@/components/panels/nats-client-response-result";
 import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
 import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
+import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -90,6 +91,8 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
         {ev.configurationResult.issues?.map((issue) => <div key={issue} className="mt-1 text-warning">unverified: {issue}</div>)}
       </div>}
       {ev.natsResponseResult && <NATSClientResponseResult result={ev.natsResponseResult} unsafeToRetry={unsafeToRetry} />}
+      {runConfig === "pod-bound-api-auth-response" && ev.podBoundTokenResult && <PodBoundTokenResultPanel result={ev.podBoundTokenResult} unsafeToRetry={unsafeToRetry} />}
+      {runConfig === "pod-bound-api-auth-response" && !ev.podBoundTokenResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Pod-bound bearer stage evidence is unavailable. No injected-signal, operation or credential mechanism result is accepted.</div>}
       {ev.guardrailStaticResult && <GuardrailStaticResultPanel result={ev.guardrailStaticResult} />}
       {runConfig === "guardrail-confidentiality-static" && !ev.guardrailStaticResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact private guardrail comparison evidence is unavailable or incomplete. No static-filter finding is accepted.</div>}
       {runConfig === "nats-client-response" && !ev.natsResponseResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact NATS response evidence is unavailable or incomplete. No injected-signal outcome, packet isolation, or defense result is accepted.</div>}

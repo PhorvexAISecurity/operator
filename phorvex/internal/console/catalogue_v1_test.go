@@ -19,6 +19,7 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	// Published baseline has nine rows. Mongo, guardrail static, three stack
 	// controls and two CRM controls add seven distinct reviewed rows.
 	want := map[string]struct{ launch, claim string }{
+		"c2-pod-bound-api-auth-response":           {"named-suite", "effect"},
 		"c2-nats-owned-client-response":            {"named-suite", "effect"},
 		"c2-mongo-uncredentialed-service-exposure": {"named-suite", "configuration"},
 		"ai-vllm-guardrail-confidentiality-static": {"named-suite", "effect"},

@@ -121,3 +121,15 @@ func TestHostsEqualTolerance(t *testing.T) {
 		t.Fatalf("different hosts must not be equal")
 	}
 }
+
+func TestPodBoundTokenUsesOnlyExplicitInClusterTransport(t *testing.T) {
+	cfg := baseCfg("", "reviewed-voice", "voice", true)
+	cfg.PodBoundTokenFixture = &config.PodBoundTokenFixtureConfig{}
+	if !fixedInClusterFixture(cfg) {
+		t.Fatal("named Pod token fixture did not select in-cluster transport")
+	}
+	cfg.Kubeconfig = "/unexpected/kubeconfig"
+	if fixedInClusterFixture(cfg) {
+		t.Fatal("Pod token fixture accepted an alternate kubeconfig")
+	}
+}

@@ -36,6 +36,10 @@ func NewClient(c ClientConfig) (*Client, error) {
 // validates the server on every connection. It avoids retaining a connection
 // authorized by a certificate that was rotated or revoked after the last read.
 func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
+	return c.request(ctx, http.MethodGet, path, nil, 10*time.Second)
+}
+
+func (c *Client) request(ctx context.Context, method, path string, body io.Reader, timeout time.Duration) (*http.Response, error) {
 	ca, e := certPool(c.cfg.CAFile)
 	if e != nil {
 		return nil, e
@@ -44,13 +48,20 @@ func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
 	if e != nil {
 		return nil, e
 	}
-	tr := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca, ServerName: c.cfg.ServerDNSName, Certificates: []tls.Certificate{cert}}, DisableKeepAlives: true, ResponseHeaderTimeout: 5 * time.Second}
+	headerTimeout := 5 * time.Second
+	if timeout > 10*time.Second {
+		headerTimeout = timeout - time.Second
+	}
+	tr := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca, ServerName: c.cfg.ServerDNSName, Certificates: []tls.Certificate{cert}}, DisableKeepAlives: true, ResponseHeaderTimeout: headerTimeout}
 	defer tr.CloseIdleConnections()
-	req, e := http.NewRequestWithContext(ctx, "GET", c.cfg.URL+path, nil)
+	req, e := http.NewRequestWithContext(ctx, method, c.cfg.URL+path, body)
 	if e != nil {
 		return nil, e
 	}
-	return (&http.Client{Transport: tr, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(req)
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return (&http.Client{Transport: tr, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(req)
 }
 
 func (c *Client) Manifest(ctx context.Context) (Manifest, error) {

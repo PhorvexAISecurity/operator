@@ -95,6 +95,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(2)
 	}
+	if cfg.PodBoundTokenFixture != nil {
+		raw, readErr := os.ReadFile(*cfgPath)
+		if readErr != nil || len(raw) == 0 || len(raw) > 64<<10 {
+			fmt.Fprintln(os.Stderr, "ERROR: Pod-bound token run-private profile unreadable or oversized")
+			os.Exit(2)
+		}
+		digest := sha256.Sum256(raw)
+		cfg.ProfileSHA256 = hex.EncodeToString(digest[:])
+	}
 	if cfg.NATSExposureFixture != nil && (*natsSafetyID != cfg.NATSExposureFixture.RunID || filepath.Clean(*natsSafetyOut) != filepath.Clean(cfg.OutDir)) {
 		fmt.Fprintln(os.Stderr, "ERROR: NATS safety receipt destination differs from generated run config")
 		os.Exit(2)
@@ -198,6 +207,11 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(f.MaxRunSeconds)*time.Second)
 		defer cancel()
 	}
+	if f := cfg.PodBoundTokenFixture; f != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(f.MaxRunSeconds)*time.Second)
+		defer cancel()
+	}
 	// The exact local PV authority is one-use: the registered scenario owns one
 	// ordinary trial and cannot be expanded into runner-generated negative or
 	// adaptive arms over the same external volumes.
@@ -215,6 +229,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	if cfg.MongoExposureFixture != nil && (negControl || adaptive || resume) {
 		return errors.New("mongoExposureFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
+	}
+	if cfg.PodBoundTokenFixture != nil && (negControl || adaptive || resume || dryRun) {
+		return errors.New("podBoundTokenFixture requires one nonadaptive, nonnegative, nonresumed named run")
 	}
 	if cfg.CRMCapabilityFixture != nil && (negControl || adaptive || resume) {
 		return errors.New("crmCapabilityFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
@@ -244,7 +261,7 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	// 1) Build clients PINNED to the configured context.
 	var clients *kube.Clients
 	var err error
-	if cfg.NATSExposureFixture != nil || cfg.MongoExposureFixture != nil {
+	if cfg.NATSExposureFixture != nil || cfg.MongoExposureFixture != nil || cfg.PodBoundTokenFixture != nil {
 		clients, err = kube.BuildNATSInCluster()
 	} else {
 		clients, err = kube.Build(cfg.Kubeconfig, cfg.Context)
@@ -272,6 +289,12 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	if err := assertMongoClusterPin(ctx, cfg, clients.Kube); err != nil {
 		return err
+	}
+	if f := cfg.PodBoundTokenFixture; f != nil {
+		cluster, pinErr := clients.Kube.CoreV1().Namespaces().Get(ctx, "kube-system", metav1.GetOptions{})
+		if pinErr != nil || string(cluster.UID) != f.ClusterUID {
+			return fmt.Errorf("Pod-bound token cluster UID differs: %v", pinErr)
+		}
 	}
 
 	// 3) Capability detection at runtime.
@@ -308,6 +331,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	if cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Mode == "client-response" {
 		return runNATSResponseCase(ctx, cfg, clients, guard, caps, natsFenceIdentity)
+	}
+	if cfg.PodBoundTokenFixture != nil {
+		return runPodBoundTokenCase(ctx, cfg, clients, guard, caps)
 	}
 	if cfg.MongoExposureFixture != nil {
 		return runMongoExposureCase(ctx, cfg, clients, guard, caps)
@@ -545,6 +571,27 @@ func runNATSResponseCase(ctx context.Context, cfg config.TargetConfig, clients *
 		return err
 	}
 	return scenarios.RunNATSClientResponse(ctx, env)
+}
+
+// One injected, unscored case. The console owns the sole event and decision
+// barrier; the harness owns only its nonce fixture, replay and exact cleanup.
+func runPodBoundTokenCase(ctx context.Context, cfg config.TargetConfig, clients *kube.Clients,
+	guard core.SafetyGuard, caps core.Capabilities) (runErr error) {
+	if err := os.MkdirAll(filepath.Join(cfg.OutDir, "raw"), 0700); err != nil {
+		return err
+	}
+	logger, err := core.NewTrialLogger(filepath.Join(cfg.OutDir, "raw", "pod-bound-token.log"), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { runErr = errors.Join(runErr, closeLogger(logger)) }()
+	env := &core.Env{Ctrl: clients.Ctrl, Kube: clients.Kube, Rest: clients.Rest, Config: cfg,
+		Caps: caps, Log: logger, Guard: guard, Trial: 0, ScenarioName: "c2-pod-bound-api-auth-response",
+		DefenderName: "injected-response", RestConfigHost: clients.LiveHost}
+	if err := env.EnsureNamespace(ctx); err != nil {
+		return err
+	}
+	return scenarios.RunPodBoundTokenCase(ctx, env)
 }
 
 func natsRunContext(parent context.Context, fixture *config.NATSExposureFixtureConfig) (context.Context, context.CancelFunc) {

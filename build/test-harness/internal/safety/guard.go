@@ -110,7 +110,8 @@ func (g *Guard) AssertMutationAllowed(targetNS string) error {
 // transport while preserving the logical cluster target used for authorization.
 func fixedInClusterFixture(cfg config.TargetConfig) bool {
 	return cfg.Kubeconfig == "" && ((cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Transport == "in-cluster") ||
-		(cfg.MongoExposureFixture != nil && cfg.MongoExposureFixture.Transport == "in-cluster"))
+		(cfg.MongoExposureFixture != nil && cfg.MongoExposureFixture.Transport == "in-cluster") ||
+		cfg.PodBoundTokenFixture != nil)
 }
 
 // LiveHost exposes the resolved live apiserver host (provenance).

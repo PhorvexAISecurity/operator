@@ -1,0 +1,277 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 3c4fcac89bf57cad3c15922f81229e89981d6b6ed903941d19e082d558ee34c4
+    source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+    at: '2026-09-24T17:14:44+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-review/red.md
+    sha256: 4804dffb6b774f8c62ac3e2f411c9c3dc8c1a58abd3a37c7cd91d874c7de01ef
+    source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+    at: '2026-09-24T17:24:15+00:00'
+  preflight:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/preflight/receipt.json
+    sha256: 2c2e38a1b0bc179b84838a98f8c06fb7ea856f8f12b07a83403451d1d07c1ea1
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  implementation:
+    result: PASS
+    by: mongo-finish
+    artifact: 04-diff.patch
+    sha256: 67c99703fc6703003186165d944648ba2cc194ad0773249f5b2321df715fc5cf
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  l0:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/preflight/receipt.json
+    sha256: 2c2e38a1b0bc179b84838a98f8c06fb7ea856f8f12b07a83403451d1d07c1ea1
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  l1:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/implementer/l1.md
+    sha256: 0c202729b88e22c58ad117a267326ee2d9decc522a1ec3ebc10d1f3ede58127a
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  l2:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/implementer/l2.md
+    sha256: 4b5b8bcb5530d7af56aaf1c2bacaf4af2964a9cc2de0cc1dbc2974713b1bf8cd
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  positive_control:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/implementer/positive-control.md
+    sha256: 0873d0e148fd816baa5c4bf2907da819100afdfd838ee61c493322c404ec8c4a
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4b73242d843a4a2a1796eaa3648da659e29ee3ee2c2f31f14c06b3f5d813f4d6
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:59:02+00:00'
+    baseline_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: a3fb9de973d86a253e34a7042521e5bff9353345eb9897a3f1fd52270940e699
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:59:02+00:00'
+    incident_sha256: 4b73242d843a4a2a1796eaa3648da659e29ee3ee2c2f31f14c06b3f5d813f4d6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 3559004ff2e9c4a62090c5cf67c2339564a293531102cfea132722a4ec0be6df
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T18:00:18+00:00'
+fix_id: CAT-POD-TOKEN-CASE
+issues: []
+title: Add a causal Pod-bound credential response catalogue suite
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: mongo-finish
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-pod-token-case-20260924
+  code_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-pod-token-case-20260924
+  base_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  head_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/330
+  reviewed_head: 8c223bf673128f9199fcf2aec6741684b2002c48
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Track PR330 CI, then verify installed source and the named causal response
+    suite after deployment. Hosted checks currently blocked by account billing; retain
+    live verification as pending.
+updated_at: '2026-09-24T18:06:35+00:00'
+follow_up_to: CAT-POD-TOKEN-VECTOR
+configuration_history:
+- at: '2026-09-24T15:52:24+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T15:53:17+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T17:57:48+00:00'
+  by: mongo-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T18:06:33+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T15:52:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T15:53:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T17:57:49+00:00'
+  by: mongo-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T17:57:52+00:00'
+  by: mongo-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T17:59:03+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T17:59:05+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T18:06:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: cf2e61dfe6a47423ed3887600d5e4d2d2270e8952a0664bbcd588458f91be8dc
+  source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  at: '2026-09-24T15:52:27+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: cf2e61dfe6a47423ed3887600d5e4d2d2270e8952a0664bbcd588458f91be8dc
+  source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  at: '2026-09-24T15:53:18+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: c510e30ae98e8779bafb923a5b2601953c462bf81cb294ab0b94b44b7485a9dc
+  source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  at: '2026-09-24T16:13:41+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+handoff:
+  id: CAT-POD-TOKEN-CASE:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11
