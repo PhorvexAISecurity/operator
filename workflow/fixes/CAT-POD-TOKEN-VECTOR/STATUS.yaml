@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,13 +81,20 @@ checks:
     source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
     at: '2026-09-24T13:03:35+00:00'
     incident_sha256: 69e9bd6bd3d3afe1e9a74efe22b29de2feb0d816abeeb604aec4b9c6db42d0ed
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-delta/EQUIVALENCE.json
+    sha256: c3831c262873973c434ba87ef9fd7e2df66135fcc221372d0660540ae627cb15
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T13:11:00+00:00'
 fix_id: CAT-POD-TOKEN-VECTOR
 issues:
 - M-184
 title: Attribute trusted Pod-bound API credential observations to their revocable
   capability
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -114,8 +121,8 @@ implementation:
   head_sha: 757e2c5b85614dbf2a50760636648c01077fb364
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/327
+  reviewed_head: 744435b493c9b85f1d5a2979f1e5075ee766142a
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -148,10 +155,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T13:03:39+00:00'
+  owner: codex-lead
+  action: Observe reviewed PR checks and deployment then independently verify exact
+    injected response chain
+updated_at: '2026-09-24T13:11:00+00:00'
 follow_up_to: CAT-POD-TOKEN
 configuration_history:
 - at: '2026-09-24T12:06:05+00:00'
@@ -166,6 +173,11 @@ configuration_history:
   by: catalogue-reference-review
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-24T13:10:58+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -215,6 +227,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T13:11:00+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-POD-TOKEN-VECTOR:7:review
