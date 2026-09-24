@@ -561,7 +561,59 @@ export interface RunEvidenceTrial {
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
 export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
 export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; brainMode: "NO_SIGNAL"; securityEfficacy: "NOT_EVALUATED"; sourceAttestation: string; issues?: string[] }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; note: string }
+export interface NATSResponseDecisionTrace {
+  schema: string;
+  runId: string;
+  namespaceUID: string;
+  clientPodUID: string;
+  policyUID: string;
+  policyGeneration: number;
+  managerPodUID: string;
+  managerContainerID: string;
+  m0ReceiptSHA256: string;
+  peerM0ReceiptSHA256: string;
+  decisionId: string;
+  tickId: string;
+  eventName: string;
+  eventUID: string;
+  decisionTraceSHA256: string;
+  brainImage: string;
+  brainImageSHA256: string;
+  gitSHA: string;
+  inputPhase: string;
+  inputStage: string;
+  pHold: { present: boolean; value: number };
+  threatPosture: { present: boolean; value: number };
+  sloHeadroom: { present: boolean; value: number };
+  facts: { type: string; weight: number; source: string; coveredBefore: boolean }[];
+  candidates: { action: string; marginalCoverage: { present: boolean; value: number }; expectedCost: { present: boolean; value: number }; netGain: { present: boolean; value: number }; feasible: { present: boolean; value: boolean }; selected: boolean; exclusion: string }[];
+  actionStatus: { action: string; status: string; exclusionKind: string; reason: string; scored: boolean; rbacUnknown: boolean }[];
+  selectedAction: string;
+  noopReason: string;
+  dispatchOutcome: string;
+  dispatchReason: string;
+  objectEffect?: { generatedEventName: string; generatedEventUID: string; operationID: string; amtdName: string; amtdUID: string; phoenixNetworkPolicyName: string; phoenixNetworkPolicyUID: string; sourcePodUID: string; peerPodUID: string };
+  claim: string;
+}
+export interface NATSResponseResult {
+  accepted: boolean;
+  cleanupVerified: boolean;
+  m0Status: string;
+  signalStatus: string;
+  decisionStatus: string;
+  selectedAction: string;
+  dispatchOutcome: string;
+  effectStatus: string;
+  m1Status: string;
+  peerStatus: string;
+  cleanupStatus: string;
+  capacityReservationStatus: "UNKNOWN" | "NOT_APPLICABLE" | "UNRECONCILED_POSSIBLE";
+  repeatability: "UNKNOWN" | "NOT_EVALUATED";
+  securityEfficacy: "NOT_EVALUATED" | "CONTAINMENT_NOT_ACHIEVED";
+  decisionTrace?: NATSResponseDecisionTrace;
+  issues: string[];
+}
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

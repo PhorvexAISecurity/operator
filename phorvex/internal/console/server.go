@@ -85,6 +85,7 @@ func NewServer(cfg Config) *Server {
 		cfg.AuditPath = cfg.auditFile()
 	}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+	s.runs.natsResponse = s.coordinateNATSResponse
 	if cfg.StateDir == "" {
 		s.stateErr = "console state directory is not configured"
 	} else if s.runs.loadErr != nil {
@@ -473,7 +474,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// The named broker baseline reads a server-owned file at authorization and
 	// launch. Recheck the second snapshot against this verified principal; Start
 	// also requires its digest still to match the exact file it copies.
-	if body.Config == "nats-exposure-baseline" {
+	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig {
 		p := principalOf(r)
 		for _, target := range dest.Targets {
 			if p == nil || !p.AllowsTarget(target) {
@@ -488,7 +489,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest)
+	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest, principalOf(r))
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
@@ -632,10 +633,16 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 	var functional any
 	var configuration any
+	var natsResponse any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "NATS configuration artifact unavailable: " + err.Error()})
+	}
+	if result, err := s.runs.NATSResponseResult(id); err == nil && result != nil {
+		natsResponse = result
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "NATS response terminal artifact unavailable: " + err.Error()})
 	}
 	if result, err := s.runs.FunctionalResult(id); err == nil && result != nil {
 		functional = map[string]any{"outcome": result.Outcome, "summary": result.Summary, "evidence": result.Evidence,
@@ -649,6 +656,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
 		"functionalResult":    functional,
 		"configurationResult": configuration,
+		"natsResponseResult":  natsResponse,
 		"note":                "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }

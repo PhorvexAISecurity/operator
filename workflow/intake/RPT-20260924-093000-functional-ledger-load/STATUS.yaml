@@ -1,0 +1,186 @@
+schema_version: 1
+intake_id: RPT-20260924-093000-functional-ledger-load
+kind: BUG
+title: Fixed-suite launch ignores retained run ledger load failure
+state: FILED
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T09:29:36+00:00'
+updated_at: '2026-09-24T09:40:27+00:00'
+pins:
+  source_main_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: isolated-console-worker
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 25
+    overlap:
+    - after
+    - any
+    - before
+    - but
+    - change
+    - claim
+    - does
+    - independently
+    - inert
+    - ledger
+    - load
+    - not
+    - observed
+    - path
+    - retained
+    - separate
+    - sequence
+    - state
+    - then
+    - this
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-142
+    score: 19
+    overlap:
+    - any
+    - baseline
+    - before
+    - change
+    - checks
+    - claim
+    - does
+    - fixed
+    - historical
+    - load
+    - not
+    - observed
+    - real
+    - state
+    - then
+    - therefore
+    - this
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-140
+    score: 18
+    overlap:
+    - after
+    - any
+    - behavior
+    - but
+    - does
+    - inert
+    - map
+    - new
+    - not
+    - prior
+    - restart
+    - state
+    - then
+    - therefore
+    - this
+    - through
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-155
+    score: 17
+    overlap:
+    - after
+    - any
+    - before
+    - check
+    - cluster
+    - does
+    - failure
+    - not
+    - observed
+    - path
+    - run
+    - then
+    - this
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-168
+    score: 17
+    overlap:
+    - after
+    - checks
+    - does
+    - failure
+    - ignores
+    - new
+    - not
+    - observed
+    - restart
+    - runs
+    - state
+    - this
+    - unsafe
+    title: Console availability experiment claims attack results despite failed stimulus
+      and unsafe restart recovery
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-193
+  fix_id: CAT-FIXED-LEDGER
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: campaign-cleanup-audit
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-193.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T09:29:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T09:29:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T09:40:22+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T09:40:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T09:40:27+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-193.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

@@ -1,0 +1,256 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e0ae78c863f5ae20196c8b2d53ceb3032dd7f6438c91f55ca3b2c3ce4e8a29e7
+    source_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+    at: '2026-09-24T09:03:09+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 44eb6c0cf860f7a95c451f4586a945344eb2214d0356eb82178897a0fb9aa8e6
+    source_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+    at: '2026-09-24T09:23:08+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 751dbe1cd449e49fdc99dc37998112b63ce93622cb81ab83ed72594c1fcc538f
+    source_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+    at: '2026-09-24T10:00:15+00:00'
+    baseline_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  preflight:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/preflight/receipt.json
+    sha256: 0148ea284e5e6d1afc8a122fd2972af091eb0b36ec10b3845cecec07fa277f58
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:00:56+00:00'
+  implementation:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: 04-diff.patch
+    sha256: d30eb11c750bb9fc0c9babc38a002dce287bebf8beafcca56062e5bf25e2fa4d
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:00:56+00:00'
+  l0:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/preflight/run-1790243290101444217/go-build-phoenix-extended.log
+    sha256: ecfcbbe5dbf4b248a93608a009ff7d4c50a3cd58f5ede1907370f1a5ce60d643
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:00:56+00:00'
+    inputs:
+    - build/phoenix-extended
+    inputs_sha256: 4c1ec4960ee64c0d20ea565d9ad01bcb7cdb3385db7c16a1a438fb58bd1beeed
+  l1:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/lead/head.log
+    sha256: f904bc0c8301de2b1af5dc4076d5834875a70f31e7d488be69258c0dfdf311f3
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:00:56+00:00'
+    inputs:
+    - build/phoenix-extended/api/v1beta1/quarantine_name.go
+    - build/phoenix-extended/api/v1beta1/quarantine_name_test.go
+    - build/phoenix-extended/internal/controller/securityevent_controller.go
+    - build/phoenix-extended/internal/controller/securityevent_controller_test.go
+    inputs_sha256: 082defed2ceabc04164b521d52c3c8038832d207de2b53fa00b743f6f237dc3c
+  l2:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/lead/head.log
+    sha256: f904bc0c8301de2b1af5dc4076d5834875a70f31e7d488be69258c0dfdf311f3
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:00:56+00:00'
+    inputs:
+    - build/phoenix-extended/api/v1beta1/quarantine_name.go
+    - build/phoenix-extended/api/v1beta1/quarantine_name_test.go
+    - build/phoenix-extended/internal/controller/securityevent_controller.go
+    - build/phoenix-extended/internal/controller/securityevent_controller_test.go
+    inputs_sha256: 082defed2ceabc04164b521d52c3c8038832d207de2b53fa00b743f6f237dc3c
+  positive_control:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/lead/head.log
+    sha256: f904bc0c8301de2b1af5dc4076d5834875a70f31e7d488be69258c0dfdf311f3
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:00:56+00:00'
+    inputs:
+    - build/phoenix-extended/api/v1beta1/quarantine_name.go
+    - build/phoenix-extended/api/v1beta1/quarantine_name_test.go
+    - build/phoenix-extended/internal/controller/securityevent_controller.go
+    - build/phoenix-extended/internal/controller/securityevent_controller_test.go
+    inputs_sha256: 082defed2ceabc04164b521d52c3c8038832d207de2b53fa00b743f6f237dc3c
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 44eb6c0cf860f7a95c451f4586a945344eb2214d0356eb82178897a0fb9aa8e6
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:31+00:00'
+    baseline_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: db263997ad2bb3d6c5f573146558aa93696b887da0be79fb92e02bb580a42740
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:31+00:00'
+    incident_sha256: 44eb6c0cf860f7a95c451f4586a945344eb2214d0356eb82178897a0fb9aa8e6
+fix_id: CAT-PHOENIX-LABEL
+issues:
+- M-53
+title: Bound Phoenix quarantine names for Kubernetes labels
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: catalogue-reference-review
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-causal-response-20260924
+  base_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+  head_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T10:01:36+00:00'
+configuration_history:
+- at: '2026-09-24T09:03:05+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T09:59:57+00:00'
+  by: catalogue-reference-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T10:00:55+00:00'
+  by: catalogue-reference-review
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T09:03:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T09:03:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T10:00:56+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T10:00:58+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T10:01:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T10:01:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-PHOENIX-LABEL:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

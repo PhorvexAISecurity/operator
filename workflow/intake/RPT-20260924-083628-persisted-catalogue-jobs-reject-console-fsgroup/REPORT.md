@@ -1,0 +1,11 @@
+# Persisted catalogue evidence rejected after console rollout
+
+On September24 the running PR323 console at `e2ee94315828a180a83902f6eb61e37a66bce22d` returned `functionalResult=null` for the original failed Voice recovery run `v1run-5`. The typed API reason was `catalogue v1 job file is not a private bounded regular file`. The original status remains `partial`, `test-failed`, cleanup `FAIL`, unsafe to retry; no trial or history was rewritten.
+
+A reviewed bounded helper mounted the same PVC read-only, with no fsGroup setting or Kubernetes token. It read only metadata and hashes for six exact files in that synthetic run directory. All six are regular files, UID65532/GID65532, one link, mode0660. The job, result, journal and worker hashes exactly match the prior round18 forensic capture. One helper creation and UID-preconditioned deletion were acknowledged, and exact-name absence was confirmed. No file contents or filesystem permissions were changed by the helper.
+
+`cataloguev1.LoadJob` and `LoadRuntimeConfig` reject any group permission (`mode & 0077 != 0`). The chart sets fsGroup65532. The [Kubernetes1.34 volume permission implementation](https://github.com/kubernetes/kubernetes/blob/v1.34.0/pkg/volume/volume_linux.go#L136) adds group permissions on filesystem ownership changes; the default policy applies recursively. The direct observed failure is the reader rejecting these existing0660 files. The exact actor/time that changed each mode is not separately audited, so the fsGroup transition is a source-backed explanation, not a recovered historical chmod receipt.
+
+The worker reproduced the failure through the actual job writer followed by the filesystem mode transition and reader. The proposed repair accepts only bounded regular files owned by the running identity, allowing its intended runtime group while rejecting world access, unrelated ownership, links and changing files. It does not chmod the shared PVC, clear unsafe state, or convert the earlier trial into a pass. Fresh independent tests and installed verification are required.
+
+A separate usability gap remains: already completed unsafe Voice runs lack an explicit reviewed recovery endpoint. The original cleanup failure was separately resolved and verified, but that external fact must not silently rewrite the original run or bypass the console's retained safety gate.

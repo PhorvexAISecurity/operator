@@ -1,3 +1,6 @@
+{{- if and .Values.phorvex.console.natsExposure.clientResponse.enabled (not (and .Values.phorvex.console.enabled .Values.phorvex.console.natsExposure.enabled)) }}
+{{- fail "natsExposure.clientResponse requires console.enabled and natsExposure.enabled" }}
+{{- end }}
 {{- if and .Values.phorvex.console.enabled .Values.phorvex.console.natsExposure.enabled }}
 apiVersion: v1
 kind: Namespace
@@ -13,11 +16,40 @@ metadata:
   namespace: phorvex-nats-exposure-fixture
 rules:
 - apiGroups: [""]
-  resources: ["pods", "configmaps"]
+  resources: ["pods"]
+  verbs: ["get", "create", "delete"{{- if .Values.phorvex.console.natsExposure.clientResponse.enabled }}, "list", "patch"{{- end }}]
+- apiGroups: [""]
+  resources: ["configmaps"]
   verbs: ["get", "create", "delete"]
 - apiGroups: [""]
   resources: ["pods/log"]
   verbs: ["get"]
+{{- if .Values.phorvex.console.natsExposure.clientResponse.enabled }}
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "create", "delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "create", "delete"]
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "create", "delete"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["adaptivemovingtargetdefenses"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "delete"]
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

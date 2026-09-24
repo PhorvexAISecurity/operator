@@ -296,3 +296,24 @@ intakes:
     state: FILED
     issue_id: M-191
     aliases: []
+  RPT-20260924-083628-persisted-catalogue-jobs-reject-console-fsgroup:
+    directory: intake/RPT-20260924-083628-persisted-catalogue-jobs-reject-console-fsgroup
+    kind: BUG
+    title: Persisted catalogue jobs reject console fsGroup permissions after rollout
+    state: FILED
+    issue_id: M-192
+    aliases: []
+  RPT-20260924-090229-phoenix-quarantine-long-name:
+    directory: intake/RPT-20260924-090229-phoenix-quarantine-long-name
+    kind: BUG
+    title: Phoenix quarantine names overflow the Kubernetes label limit
+    state: DUPLICATE
+    issue_id: null
+    aliases: []
+  RPT-20260924-093000-functional-ledger-load:
+    directory: intake/RPT-20260924-093000-functional-ledger-load
+    kind: BUG
+    title: Fixed-suite launch ignores retained run ledger load failure
+    state: FILED
+    issue_id: M-193
+    aliases: []

@@ -20,6 +20,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -29,10 +30,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -258,6 +261,106 @@ func TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod
 	}
 	if len(gotPolicy.Spec.Ingress) != 0 || len(gotPolicy.Spec.Egress) != 0 {
 		t.Fatalf("quarantine policy must remain deny-all: ingress=%v egress=%v", gotPolicy.Spec.Ingress, gotPolicy.Spec.Egress)
+	}
+}
+
+func TestSecurityEventReconciler_LongPodQuarantineUsesAdmissibleSelector(t *testing.T) {
+	ctx := context.Background()
+	ns := "phorvex-nats-exposure-fixture"
+	podName := "nats-response-" + strings.Repeat("a", 24) + "-1234567890-abcde"
+	amtdName := "phorvex-" + ns + "-" + strings.Repeat("a", 24)
+	rule := amtdv1beta1.Rule{Type: "phorvex.quarantine", ThreatLevel: "high", Source: "PhorvexController"}
+	amtd := &amtdv1beta1.AdaptiveMovingTargetDefense{
+		ObjectMeta: metav1.ObjectMeta{Name: amtdName, Namespace: ns, UID: "amtd-uid"},
+		Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
+			PodSelector: map[string]string{"r6th.io/rotation-target": "true"},
+			Strategy:    []amtdv1beta1.ResponseStrategy{{Rule: rule, Action: amtdv1beta1.AMTDAction{Quarantine: &amtdv1beta1.QuarantineAction{}}}},
+		},
+	}
+	pod := managedPod(podName, ns, ns, amtdName)
+	pod.UID = "long-pod-uid"
+	pod.Labels = map[string]string{"r6th.io/rotation-target": "true"}
+	isController := true
+	pod.OwnerReferences = []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "consumer-rs", UID: "rs-uid", Controller: &isController}}
+	event := &amtdv1beta1.SecurityEvent{
+		ObjectMeta: metav1.ObjectMeta{Name: "long-quarantine-event", Annotations: map[string]string{
+			PHORVEX_QUARANTINE_TARGET_UID: string(pod.UID), PHORVEX_QUARANTINE_NAMESPACE_UID: "namespace-uid",
+			PHORVEX_QUARANTINE_OPERATION: strings.Repeat("a", 40),
+		}},
+		Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{ns + "/" + podName}, Rule: rule, Description: "owned long-name quarantine"},
+	}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, UID: "namespace-uid"}}
+	validatedPolicy, validatedPod := false, false
+	validateSelector := func(obj crclient.Object) error {
+		switch value := obj.(type) {
+		case *networkingv1.NetworkPolicy:
+			for _, label := range value.Spec.PodSelector.MatchLabels {
+				if why := validation.IsValidLabelValue(label); len(why) != 0 {
+					return fmt.Errorf("API NetworkPolicy selector label rejected: %v", why)
+				}
+			}
+			validatedPolicy = true
+		case *corev1.Pod:
+			if label := value.Labels[AMTD_NETWORK_POLICY]; label != "" {
+				if why := validation.IsValidLabelValue(label); len(why) != 0 {
+					return fmt.Errorf("API Pod label rejected: %v", why)
+				}
+				validatedPod = true
+			}
+		}
+		return nil
+	}
+	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(namespace, amtd, pod, event).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, inner crclient.WithWatch, obj crclient.Object, opts ...crclient.CreateOption) error {
+				if err := validateSelector(obj); err != nil {
+					return err
+				}
+				return inner.Create(ctx, obj, opts...)
+			},
+			Update: func(ctx context.Context, inner crclient.WithWatch, obj crclient.Object, opts ...crclient.UpdateOption) error {
+				if err := validateSelector(obj); err != nil {
+					return err
+				}
+				return inner.Update(ctx, obj, opts...)
+			},
+		}).Build()
+	r := &SecurityEventReconciler{Client: cl, Scheme: seTestScheme}
+	if !MatchStrategyForMode(rule, event.Spec, amtd.Spec.MatcherMode) {
+		t.Fatal("long-name fixture rule does not match expected quarantine strategy")
+	}
+	var checkAMTD amtdv1beta1.AdaptiveMovingTargetDefense
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(amtd), &checkAMTD); err != nil || len(checkAMTD.Spec.Strategy) != 1 {
+		t.Fatalf("long-name fixture AMTD unavailable: %v %+v", err, checkAMTD.Spec)
+	}
+	var checkPod corev1.Pod
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(pod), &checkPod); err != nil || checkPod.Annotations[AMTD_MANAGED_BY] == "" {
+		t.Fatalf("long-name fixture managed Pod unavailable: %v %+v", err, checkPod.Annotations)
+	}
+	var info []AMTDManageInfo
+	if json.Unmarshal([]byte(checkPod.Annotations[AMTD_MANAGED_BY]), &info) != nil || len(info) != 1 || info[0].AMTDName != amtdName || info[0].AMTDNamespace != ns {
+		t.Fatalf("long-name fixture management binding differs: %+v", info)
+	}
+	if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: crclient.ObjectKey{Name: event.Name}}); err != nil {
+		t.Fatalf("long-name producer reconcile: %v", err)
+	}
+	var gotPod corev1.Pod
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(pod), &gotPod); err != nil {
+		t.Fatal(err)
+	}
+	name := amtdv1beta1.QuarantineNetworkPolicyName(ns, podName)
+	if gotPod.Labels[AMTD_NETWORK_POLICY] != name {
+		t.Fatalf("producer Pod selector = %q, want %q", gotPod.Labels[AMTD_NETWORK_POLICY], name)
+	}
+	var policy networkingv1.NetworkPolicy
+	if err := cl.Get(ctx, crclient.ObjectKey{Namespace: ns, Name: name}, &policy); err != nil {
+		t.Fatalf("producer NetworkPolicy absent: %v", err)
+	}
+	if policy.Spec.PodSelector.MatchLabels[AMTD_NETWORK_POLICY] != name {
+		t.Fatal("producer NetworkPolicy and Pod selector differ")
+	}
+	if !validatedPolicy || !validatedPod {
+		t.Fatal("producer path did not pass API selector and Pod-label validation")
 	}
 }
 

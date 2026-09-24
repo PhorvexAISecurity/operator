@@ -60,14 +60,7 @@ func New(runtime Runtime, handlers ...Handler) (*Runner, error) {
 }
 
 func LoadJob(path, stateDir string) (Job, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return Job{}, err
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() <= 0 || info.Size() > maxRecordBytes {
-		return Job{}, errors.New("catalogue v1 job file is not a private bounded regular file")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := readPrivateRecord(path)
 	if err != nil {
 		return Job{}, err
 	}

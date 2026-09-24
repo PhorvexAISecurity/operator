@@ -20,13 +20,18 @@ accounting:
     only applicable valid executed reviewed S trials; M controls, invalid, blocked, unavailable and not-run
     trials remain separately counted.
 progress_accounting:
-  through_round: 19
+  through_round: 22
   interpretation: Exclusive planning-progress buckets. An observed related arm may be only a prerequisite,
     refusal or configuration baseline; it does not mark the entire candidate completed or security-scored.
     Blocked means a concrete current source, configuration or infrastructure prerequisite remains; not_run
-    means no admitted candidate-specific trial yet. Round19 supplied a routed fixture and an exact
-    trusted-event-to-selection join, but route preparation refused all six selected quarantine
-    decisions before dispatch; the observed-cell counts do not change.
+    means no admitted candidate-specific trial yet. Round19 supplied a routed fixture and an exact trusted-event-to-selection
+    join, but route preparation refused all six selected quarantine decisions before dispatch. Round20
+    used a unique tenant and observed one emitted quarantine, AMTD-bound source and deny-policy object,
+    service200 and continuing source-token200; the observed-cell counts do not change and packet isolation
+    was not tested. Round21 stopped before any serving request because guardrail variant/journal changed;
+    zero additional observed arms or security credit. Round22 observed a stable pgv1 guarded-serving
+    false positive for Say OK plus successful arithmetic control; this is calibration evidence, not
+    additional security efficacy.
   mechanism_or_control:
     related_arm_observed:
     - voice-stream-continuity
@@ -70,10 +75,12 @@ progress_accounting:
     - mcp-response-trust
   eligible_installed_defense_efficacy_trials: 0
   installed_source_at_round_19: a50d796af128cd4109875e03eaf429d460126740
-  pending_installed_verification: PR323 contains reviewed source changes for NATS console controls,
-    detector contracts and response tracing; M-184 and CAT-RESOURCE-TRACE source changes are also
-    ahead of the observed installed a50d796a manager/console. No source-only fix is counted as an installed
-    effect or regression closure.
+  installed_source_at_round_20: a50d796af128cd4109875e03eaf429d460126740
+  pending_installed_verification: At Sep24 08:21–08:24 the manager and console were bound to PR323 merge
+    e2ee94315828a180a83902f6eb61e37a66bce22d through exact build digests and manager audit source.
+    Issue-specific behavioral reruns remain pending; the adapter detector producer is still the old
+    source. Earlier rounds keep their own installed-source pins and no old result is upgraded by rollout.
+
 event_modes:
   direct: Direct mechanism probe; no installed-manager or attack claim.
   proactive: Installed decision without an alert; observe actual context and no-action.
@@ -100,8 +107,8 @@ cells:
     interruption.
   present_constraints: Sep23 22:22 inventory was 2/3 with one CNI-blocked Pending Pod and PDB allowing
     zero disruptions. A later Sep24 00:08:57 exact-target read found three Ready Pods and PDB allowing
-    one disruption. Round18 restored three Ready Pods and observed one replacement plus 2/2 minimum
-    Ready Pod/endpoint sparse samples, but its original console result was partial/test-failed/cleanupFAIL.
+    one disruption. Round18 restored three Ready Pods and observed one replacement plus 2/2 minimum Ready
+    Pod/endpoint sparse samples, but its original console result was partial/test-failed/cleanupFAIL.
   next_step: Preserve original round18 failure and supplemental exact-residue cleanup; review the cleanup
     source repair and fresh installed authority before a distinct recovery rerun. Do not override the
     original unsafe-to-retry gate or treat sparse samples as continuous availability.
@@ -110,10 +117,10 @@ cells:
   reviewed_progress: Round15 independently reviewed live early-disconnect then normal media passed with
     683 input and 72 response frames plus exact transcript/forward cleanup. Round16 installed console
     v1run-4 reported the same frame counts and functional-pass, corroborated by the retained journal and
-    independent exact transcript/helper absence; helper delete acknowledgement gap retained. Round18
-    recorded a real exact-UID eviction and recovery media, but original terminal cleanup failed with one
-    synthetic transcript remaining. A separate exact CAS cleanup and independent two-SID zero read resolved
-    that residue without changing the original partial result. No security or Phorvex response claim.
+    independent exact transcript/helper absence; helper delete acknowledgement gap retained. Round18 recorded
+    a real exact-UID eviction and recovery media, but original terminal cleanup failed with one synthetic
+    transcript remaining. A separate exact CAS cleanup and independent two-SID zero read resolved that
+    residue without changing the original partial result. No security or Phorvex response claim.
   progress_evidence: rounds/round-15/review.md
   additional_progress_evidence:
   - rounds/round-16/review.md
@@ -133,12 +140,12 @@ cells:
     outcome, separated from initial disclosure.
   service_oracle: Same-time legitimate session establishment, frame continuity and recovery.
   present_constraints: Actual custom handler passes start-frame call ID into provider-capable pipeline.
-    Rounds15 and16 sent bounded ordinary synthetic media; neither tested unauthorized session reuse.
-    Upstream identity controls remain unverified.
-  next_step: Retain this unresolved cell; proposed isolated session test was automatically rejected
-    for possible cybersecurity risk and remains unexecuted. Do not retry the rejected package.
-  source_gap: No verified unauthorized producer, session oracle or detector-to-brain path.
-    The tool rejection is not proof of inapplicability or a security verdict.
+    Rounds15 and16 sent bounded ordinary synthetic media; neither tested unauthorized session reuse. Upstream
+    identity controls remain unverified.
+  next_step: Retain this unresolved cell; proposed isolated session test was automatically rejected for
+    possible cybersecurity risk and remains unexecuted. Do not retry the rejected package.
+  source_gap: No verified unauthorized producer, session oracle or detector-to-brain path. The tool rejection
+    is not proof of inapplicability or a security verdict.
   progress_evidence: evidence/VOICE-ADVISORY-ROUTES/REPORT.md
 - id: voice-runner-advisory-boundary
   stack: voice
@@ -153,11 +160,11 @@ cells:
   threat_oracle: In an isolated fixture, owned-file containment or synthetic call-control denial; no live
     exploit payload.
   service_oracle: Authorized disposable session/call workflow still completes.
-  present_constraints: Exact sampled PID1 runs python bot.py from /app; both process-bound and
-    installed bot.py hashes match. The custom FastAPI route set has no development-runner import,
-    mount, files endpoint or folder flag. Package version alone does not establish reachability.
-  next_step: Recheck route and entrypoint on image or application-source change. Keep the separate
-    custom-app session authorization candidate unresolved.
+  present_constraints: Exact sampled PID1 runs python bot.py from /app; both process-bound and installed
+    bot.py hashes match. The custom FastAPI route set has no development-runner import, mount, files endpoint
+    or folder flag. Package version alone does not establish reachability.
+  next_step: Recheck route and entrypoint on image or application-source change. Keep the separate custom-app
+    session authorization candidate unresolved.
   source_gap: Exclusion applies only to the observed serving path, not all alternate image processes.
     No vulnerability request or provider call-control test was sent.
   progress_evidence: evidence/VOICE-ADVISORY-ROUTES/REPORT.md
@@ -546,9 +553,9 @@ cells:
     comparison, without weakening business policy.
   source_gap: Existing benign controls do not provide attack efficacy; refreshed manager candidate context
     required.
-  reviewed_progress: A separate current read-only NATS audit window observed two exact policy/asset
-    no-ops with reactive-only/no-direct-foothold reasons and no dispatch. This is not round14's missing
-    historical decision window and does not establish a selected action or service effect.
+  reviewed_progress: A separate current read-only NATS audit window observed two exact policy/asset no-ops
+    with reactive-only/no-direct-foothold reasons and no dispatch. This is not round14's missing historical
+    decision window and does not establish a selected action or service effect.
   progress_evidence: evidence/NATS-CURRENT-DECISIONS/REPORT.md
 - id: phorvex-real-detector-chain
   stack: phorvex-manager
@@ -568,8 +575,8 @@ cells:
     does not establish absent detection.
   next_step: Identify a real detector rule and inert owned producer signal, then separately admit a behavioral
     S cell.
-  source_gap: Real producer/event semantics, timing and negative sensor control are missing.
-    M-187 source repair is reviewed in PR323 but has no installed producer-to-actuator observation.
+  source_gap: Real producer/event semantics, timing and negative sensor control are missing. M-187 source
+    repair is reviewed in PR323 but has no installed producer-to-actuator observation.
 - id: phorvex-injected-response
   stack: phorvex-manager
   kind: M
@@ -582,22 +589,27 @@ cells:
     must not count.
   threat_oracle: No attack objective; injected-event receipt is response-wiring evidence only.
   service_oracle: Benign target/peer request status and availability through the window.
-  present_constraints: Round17 admitted one exact trusted event and joined five downstream no-op
-    decisions. Both enabled actions stopped at missing authoritative Service/EndpointSlice membership;
-    their trace incorrectly labels that refusal no-cover. Round19 supplied real two-Ready-Pod routed
-    Service/EndpointSlice topology, baseline Pod and Service HTTP200, PDB headroom and one exact trusted
-    event. Six joined decisions selected quarantine, but all retained route-preparation-failed and
-    not-attempted; both original tokens and the routed Service remained HTTP200.
-  next_step: Diagnose the exact installed route-preparation refusal with source and bounded read-only
-    runtime evidence before admitting another response trial. Do not force rotate, weaken gates or infer
-    a natural detector from the injected event.
-  source_gap: Wrong/stale identities and actual actuator effect still require their own controls.
-    CAT-RESOURCE-TRACE source correction is integrated but not installed in the observed a50d796a
-    manager; the round19 post-selection route failure has no backend effect or security efficacy credit.
-  reviewed_progress: Round17 completed the missing-topology refusal; round19 removed that fixture
-    prerequisite and established a distinct, historical-audit-confirmed route-preparation refusal after
-    selected quarantine. Neither run demonstrates an installed actuation or credential-specific defense.
-  progress_evidence: rounds/round-19/analysis.md
+  present_constraints: Round17 admitted one exact trusted event and joined five downstream no-op decisions.
+    Both enabled actions stopped at missing authoritative Service/EndpointSlice membership; their trace
+    incorrectly labels that refusal no-cover. Round19 supplied real two-Ready-Pod routed Service/EndpointSlice
+    topology, baseline Pod and Service HTTP200, PDB headroom and one exact trusted event. Six joined decisions
+    selected quarantine, but all retained route-preparation-failed and not-attempted; both original tokens
+    and the routed Service remained HTTP200.
+  next_step: Retain round20 unique-tenant response evidence; after deployment verify the repaired trace
+    and narrow token-capability representation without forcing a winner. Network-isolation acceptance
+    requires actual packet controls after the shared CNI prerequisite is resolved.
+  source_gap: Wrong/stale identity controls and packet isolation still require their own witnesses. CAT-RESOURCE-TRACE
+    source correction is integrated but not installed in the observed a50d796a manager. Round20 proves
+    a bounded object-level actuation, not security efficacy.
+  reviewed_progress: Round17 completed the missing-topology refusal; round19 removed that fixture prerequisite
+    and established a distinct, historical-audit-confirmed route-preparation refusal after selected quarantine.
+    Round20 removed tenant-owner overlap, observed current route preparation, and joined one exact selected
+    quarantine to its generated Phoenix event and owned target/deny policy. Both retained tokens and legitimate
+    Service remained200. Independent cleanup passed; no natural detection, credential-specific defense
+    or packet-isolation result is credited.
+  progress_evidence: rounds/round-20/review.md
+  additional_progress_evidence:
+  - rounds/round-19/analysis.md
 - id: phorvex-console-trace
   stack: phorvex-console
   kind: M
@@ -614,8 +626,8 @@ cells:
   next_step: Admit fresh exact-identity installed response case to verify new trace path; historical effect-only
     record is not a failure or PASS for new trace generation.
   source_gap: Console label is not an independent outcome witness; report storage remote checks remain
-    blocked. PR323's source trace and NATS console additions await installation and exact installed
-    comparison; round17's manager audit is not a console trace PASS.
+    blocked. PR323's source trace and NATS console additions await installation and exact installed comparison;
+    round17's manager audit is not a console trace PASS.
 - id: phorvex-console-unauthenticated-boundary
   stack: phorvex-console
   kind: M
@@ -685,9 +697,11 @@ cells:
   service_oracle: Authorized Pod-list control, target workload availability and response cost.
   present_constraints: Direct owned round3 confirmed same-token API authentication rejects after binding
     Pod deletion, legitimate token still200. Round17 generic injected-response trial left both tokens
-    accepted because the fixture lacked required Service membership. Round19 supplied actual routed
-    membership, but selected quarantine stopped at route preparation before dispatch; both captured
-    tokens still worked. Neither trial is credential-specific or natural-detector coverage.
+    accepted because the fixture lacked required Service membership. Round19 supplied actual routed membership,
+    but selected quarantine stopped at route preparation before dispatch; both captured tokens still worked.
+    Round20 emitted quarantine and retained the source Pod; the captured token continued to work while
+    legitimate Service stayed200. These generic injected-response trials are not credential-specific or
+    natural-detector coverage.
   next_step: M-184 implements narrow potential API token exposure from actual admitted metadata; retain
     initial-disclosure and no-detector limits; source implementation is ahead of the observed installed
     a50d796a manager, so installed verification remains pending.
@@ -758,7 +772,7 @@ scope_decisions:
   disposition: excluded-from-stimulus
   evidence: Campaign authorization is bounded to owned fixtures and independently measured service outcomes.
   revisit: No automatic expansion; require a separately reviewed and authorized case.
-updated_at: '2026-09-24T02:32:37.206813+00:00'
+updated_at: '2026-09-24T09:05:03.389864+00:00'
 scope_revisions:
 - at: '2026-09-24'
   change: Add nats-uncredentialed-message-exposure separately from existing subject ACL/advisory cell

@@ -549,7 +549,7 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			log.Info("Successfully attached custom action container", "containerName", action.CustomAction.Name)
 		} else if action.Quarantine != nil {
-			networkPolicyName := fmt.Sprintf("%s-%s-%s", pod.Namespace, pod.Name, "policy")
+			networkPolicyName := amtdv1beta1.QuarantineNetworkPolicyName(pod.Namespace, pod.Name)
 
 			networkPolicy := &v1.NetworkPolicy{}
 			err = r.Client.Get(ctx, types.NamespacedName{

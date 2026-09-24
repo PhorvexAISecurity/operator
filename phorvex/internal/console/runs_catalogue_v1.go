@@ -107,6 +107,10 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 		return "", fmt.Errorf("validate fixed-suite runtime: %w", err)
 	}
 	rm.mu.Lock()
+	if rm.loadErr != nil {
+		rm.mu.Unlock()
+		return "", errors.New("retained fixed-suite run state unavailable; exact reconciliation required")
+	}
 	for _, existing := range rm.runs {
 		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
 			rm.mu.Unlock()

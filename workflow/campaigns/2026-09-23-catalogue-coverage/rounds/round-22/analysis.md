@@ -1,0 +1,5 @@
+# Round22 interpretation
+
+Accept the narrow result: a real serving false positive for the fixed benign Say OK prompt under the observed pgv1 configuration, alongside a working benign arithmetic control. The prior classifier-only finding now has a corresponding actual guarded serving result. This does not estimate a general false-positive rate or prove that pgv2 is universally preferable. The comparison is conditional on the naturally observed active variant; no variant was forced and no alert or actuator was invoked.
+
+This was a new admitted attempt after PR323 installation, preserving round21's earlier pre-dispatch failure. One current as-found observation was collected; there was no polling-until-favorable loop or replay of an ambiguous request. No security-defense, natural-detection, actuator-effect, external-Service availability or KV recovery credit follows. The frozen benign case belongs in regression reporting, with held-out benign and malicious corpora required before changing guardrail thresholds or scoring preferences.

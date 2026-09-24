@@ -1,0 +1,5 @@
+schema_version: 2
+subject:
+  kind: intake
+  id: RPT-20260924-083628-persisted-catalogue-jobs-reject-console-fsgroup
+artifacts: []
