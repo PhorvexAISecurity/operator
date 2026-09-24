@@ -67,7 +67,19 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 	if guardrailReady {
 		guardrailReason = "configured only; launch rechecks route, permissions, source and runtime before two fixed classifier reads"
 	}
+	mcpRuntime := cataloguev1.MCPSessionRuntime{Enabled: c.CatalogueV1.MCPEnabled,
+		Namespace: c.CatalogueV1.MCPNamespace, Deployment: c.CatalogueV1.MCPDeployment,
+		Service: c.CatalogueV1.MCPService, Container: c.CatalogueV1.MCPContainer,
+		Port: c.CatalogueV1.MCPPort, SourceConfigMap: c.CatalogueV1.MCPSourceConfigMap,
+		SourceKey: c.CatalogueV1.MCPSourceKey, ExpectedImageID: c.CatalogueV1.MCPImageID,
+		ExpectedSourceSHA256: c.CatalogueV1.MCPSourceSHA256}
+	mcpReady := c.CatalogueV1.Enabled && cataloguev1.ValidateMCPSessionRuntime(mcpRuntime) == nil
+	mcpReason := "installed MCP profile source, image and fixed route are not configured"
+	if mcpReady {
+		mcpReason = "configured only; launch checks current installed Pod, mounted source and protocol"
+	}
 	return []CatalogItem{
+		functional(cataloguev1.MCPSessionBaseline, "catalogue-mcp-session-baseline", "application", "Functional", "One synthetic MCP tool read and exact in-memory session invalidation with mounted-file/package hash pins; already-loaded Python bytes, business mutation, provider, authorization, brain, actuator and security efficacy are not attested.", []string{"reviewed installed MCP source and image", "fixed Pod proxy authority", "exact session cleanup"}, mcpReady, mcpReason),
 		functional(cataloguev1.VoiceMedia, "limited-v1-voice-media", "application", "Functional", "Ordinary installed Pipecat media only; no phone-call, semantic, brain or security claim.", []string{"installed Voice service", "three Ready endpoints", "exact transcript cleanup"}, voiceReady, voiceReason),
 		functional(cataloguev1.VoiceRecovery, "limited-v1-voice-recovery", "application", "Functional", "One PDB-honoring exact-UID eviction and fresh-session recovery; no seamless-session or security claim.", []string{"installed Voice service", "PDB minAvailable=2", "one eviction permission"}, voiceReady, voiceReason),
 		functional(cataloguev1.GPUDrain, limitedV1GPUName, "ai", "Functional", "Owned ordinary-GPU drain/reopen/recovery fixture only; no installed-brain or security claim.", []string{"dedicated reviewed GPU fixture", "private operation bearer", "ordinary GPU"}, gpuReady, gpuReason),
@@ -97,7 +109,7 @@ func (c Config) catalogueV1RuntimeContext(profile cataloguev1.ProfileID) string 
 			return value
 		}
 	}
-	if profile == cataloguev1.VoiceMedia || profile == cataloguev1.VoiceRecovery || profile == cataloguev1.GuardrailCalibration {
+	if profile == cataloguev1.VoiceMedia || profile == cataloguev1.VoiceRecovery || profile == cataloguev1.GuardrailCalibration || profile == cataloguev1.MCPSessionBaseline {
 		if value := strings.TrimSpace(c.CatalogueV1.KubeContext); value != "" {
 			return value
 		}

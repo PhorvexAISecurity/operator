@@ -24,6 +24,7 @@ const (
 	AuthUnauth           ProfileID = "limited-v1-console-unauthenticated"
 	AuthScope            ProfileID = "limited-v1-console-scoped-authorization"
 	GuardrailCalibration ProfileID = "limited-v1-vllm-guardrail-calibration"
+	MCPSessionBaseline   ProfileID = "catalogue-mcp-session-baseline"
 )
 
 // Definition is immutable product metadata for a fixed profile.
@@ -47,6 +48,7 @@ func DefinitionFor(id ProfileID) (Definition, error) {
 		AuthUnauth:           {ID: AuthUnauth, Title: "Console unauthenticated boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API authentication boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
 		AuthScope:            {ID: AuthScope, Title: "Console scoped authorization boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API tenant/target authorization boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
 		GuardrailCalibration: {ID: GuardrailCalibration, Title: "Installed guardrail benign calibration", Product: "ai", Category: "Calibration", ClaimLimits: "two fixed benign requests to the reviewed non-forwarding classifier endpoint/source contract; loaded process, forwarding behavior, guarded serving, injected response, detector, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
+		MCPSessionBaseline:   {ID: MCPSessionBaseline, Title: "Installed MCP owned session", Product: "application", Category: "Functional", ClaimLimits: "one synthetic MCP tool read and exact in-memory session invalidation with mounted-file/package hash pins; already-loaded Python bytes, business mutation, provider, authorization, brain, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "mcp", MaxDuration: 2 * time.Minute, MaxMutations: 2},
 	}
 	definition, ok := definitions[id]
 	if !ok {
@@ -106,6 +108,20 @@ type GuardrailCalibrationRuntime struct {
 	ExpectedSourceSHA256 string `json:"expectedSourceSHA256"`
 }
 
+// MCPSessionRuntime is fixed by the deployment, never by a launch request.
+type MCPSessionRuntime struct {
+	Enabled              bool   `json:"enabled"`
+	Namespace            string `json:"namespace"`
+	Deployment           string `json:"deployment"`
+	Service              string `json:"service"`
+	Container            string `json:"container"`
+	Port                 int32  `json:"port"`
+	SourceConfigMap      string `json:"sourceConfigMap"`
+	SourceKey            string `json:"sourceKey"`
+	ExpectedImageID      string `json:"expectedImageID"`
+	ExpectedSourceSHA256 string `json:"expectedSourceSHA256"`
+}
+
 // Runtime contains trusted process configuration. It is assembled by the
 // console from chart/startup settings, never decoded from the launch request or
 // the private Job file.
@@ -127,6 +143,7 @@ type Runtime struct {
 	Voice           VoiceRuntime
 	GPU             GPUFixtureRuntime
 	Guardrail       GuardrailCalibrationRuntime
+	MCP             MCPSessionRuntime
 }
 
 type Outcome string

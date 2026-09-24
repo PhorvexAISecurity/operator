@@ -42,6 +42,8 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.AllowedTenant)
 	case cataloguev1.GuardrailCalibration:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GuardrailNamespace)
+	case cataloguev1.MCPSessionBaseline:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.MCPNamespace)
 	}
 	if tenant == "" {
 		return runDestination{}, errors.New("fixed suite resolved tenant is unavailable")
@@ -71,6 +73,14 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Port: c.CatalogueV1.GuardrailPort, Container: c.CatalogueV1.GuardrailContainer,
 			SourceConfigMap: c.CatalogueV1.GuardrailSourceConfigMap, SourceKey: c.CatalogueV1.GuardrailSourceKey,
 			ExpectedSourceSHA256: c.CatalogueV1.GuardrailSourceSHA256}
+	}
+	if c.CatalogueV1.MCPEnabled {
+		runtime.MCP = &cataloguev1.MCPSessionRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.MCPNamespace, Deployment: c.CatalogueV1.MCPDeployment,
+			Service: c.CatalogueV1.MCPService, Container: c.CatalogueV1.MCPContainer,
+			Port: c.CatalogueV1.MCPPort, SourceConfigMap: c.CatalogueV1.MCPSourceConfigMap,
+			SourceKey: c.CatalogueV1.MCPSourceKey, ExpectedImageID: c.CatalogueV1.MCPImageID,
+			ExpectedSourceSHA256: c.CatalogueV1.MCPSourceSHA256}
 	}
 	return runtime
 }

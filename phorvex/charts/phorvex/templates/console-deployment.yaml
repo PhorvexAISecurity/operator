@@ -151,6 +151,30 @@ spec:
           value: {{ required "console.catalogueV1.guardrailCalibration.sourceSHA256 is required" .sourceSHA256 | quote }}
         {{- end }}
         {{- end }}
+        {{- with .mcpSession }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_NAMESPACE
+          value: {{ required "console.catalogueV1.mcpSession.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_DEPLOYMENT
+          value: {{ required "console.catalogueV1.mcpSession.deployment is required" .deployment | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_SERVICE
+          value: {{ required "console.catalogueV1.mcpSession.service is required" .service | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_CONTAINER
+          value: {{ required "console.catalogueV1.mcpSession.container is required" .container | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_PORT
+          value: {{ .port | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_CONFIGMAP
+          value: {{ required "console.catalogueV1.mcpSession.sourceConfigMap is required" .sourceConfigMap | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_KEY
+          value: {{ required "console.catalogueV1.mcpSession.sourceKey is required" .sourceKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_IMAGE_ID
+          value: {{ required "console.catalogueV1.mcpSession.imageID is required" .imageID | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.mcpSession.sourceSHA256 is required" .sourceSHA256 | quote }}
+        {{- end }}
+        {{- end }}
         {{- with .gpu }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_ENABLED
           value: {{ .enabled | default false | quote }}

@@ -16,11 +16,11 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 7 {
-		t.Fatalf("items=%d, want seven limited-v1 entries", len(items))
+	if len(items) != 8 {
+		t.Fatalf("items=%d, want seven limited-v1 entries plus one MCP baseline", len(items))
 	}
 	for _, item := range items {
-		if !strings.HasPrefix(item.Name, "limited-v1-") {
+		if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) {
 			t.Fatalf("unexpected entry %q", item.Name)
 		}
 		if item.LaunchKind == "" || item.ClaimClass == "" {

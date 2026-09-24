@@ -34,6 +34,7 @@ type RuntimeConfig struct {
 	Voice           VoiceRuntime                 `json:"voice"`
 	GPU             GPUFixtureRuntime            `json:"gpu"`
 	Guardrail       *GuardrailCalibrationRuntime `json:"guardrail,omitempty"`
+	MCP             *MCPSessionRuntime           `json:"mcp,omitempty"`
 }
 
 func (c RuntimeConfig) SHA256() (string, error) {
@@ -66,6 +67,11 @@ func (c RuntimeConfig) Validate() error {
 	}
 	if c.Guardrail != nil {
 		if err := ValidateGuardrailCalibrationRuntime(*c.Guardrail); err != nil {
+			return err
+		}
+	}
+	if c.MCP != nil {
+		if err := ValidateMCPSessionRuntime(*c.MCP); err != nil {
 			return err
 		}
 	}
@@ -120,6 +126,9 @@ func (c RuntimeConfig) Runtime(restConfig *rest.Config, kube kubernetes.Interfac
 		GrantFile: c.GrantFile, Voice: c.Voice, GPU: c.GPU}
 	if c.Guardrail != nil {
 		runtime.Guardrail = *c.Guardrail
+	}
+	if c.MCP != nil {
+		runtime.MCP = *c.MCP
 	}
 	return runtime, nil
 }

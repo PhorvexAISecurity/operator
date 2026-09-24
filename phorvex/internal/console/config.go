@@ -95,6 +95,16 @@ type CatalogueV1Config struct {
 	GuardrailSourceConfigMap    string
 	GuardrailSourceKey          string
 	GuardrailSourceSHA256       string
+	MCPEnabled                  bool
+	MCPNamespace                string
+	MCPDeployment               string
+	MCPService                  string
+	MCPContainer                string
+	MCPPort                     int32
+	MCPSourceConfigMap          string
+	MCPSourceKey                string
+	MCPImageID                  string
+	MCPSourceSHA256             string
 }
 
 const (

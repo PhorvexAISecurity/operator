@@ -320,6 +320,10 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	mcpEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_MCP_ENABLED")
+	if err != nil {
+		return err
+	}
 	port := int64(0)
 	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
 		port, err = strconv.ParseInt(raw, 10, 32)
@@ -332,6 +336,13 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		guardrailPort, err = strconv.ParseInt(raw, 10, 32)
 		if err != nil || guardrailPort < 1 || guardrailPort > 65535 || raw != strconv.FormatInt(guardrailPort, 10) {
 			return errors.New("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_PORT must be a canonical port")
+		}
+	}
+	mcpPort := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_MCP_PORT"); raw != "" {
+		mcpPort, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || mcpPort < 1 || mcpPort > 65535 || raw != strconv.FormatInt(mcpPort, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_MCP_PORT must be a canonical port")
 		}
 	}
 	executable, _ := os.Executable()
@@ -361,6 +372,16 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		GuardrailSourceConfigMap:    read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_CONFIGMAP"),
 		GuardrailSourceKey:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_KEY"),
 		GuardrailSourceSHA256:       read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_SHA256")}
+	cfg.CatalogueV1.MCPEnabled = mcpEnabled
+	cfg.CatalogueV1.MCPNamespace = read("PHORVEX_CONSOLE_CATALOGUE_MCP_NAMESPACE")
+	cfg.CatalogueV1.MCPDeployment = read("PHORVEX_CONSOLE_CATALOGUE_MCP_DEPLOYMENT")
+	cfg.CatalogueV1.MCPService = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SERVICE")
+	cfg.CatalogueV1.MCPContainer = read("PHORVEX_CONSOLE_CATALOGUE_MCP_CONTAINER")
+	cfg.CatalogueV1.MCPPort = int32(mcpPort)
+	cfg.CatalogueV1.MCPSourceConfigMap = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_CONFIGMAP")
+	cfg.CatalogueV1.MCPSourceKey = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_KEY")
+	cfg.CatalogueV1.MCPImageID = read("PHORVEX_CONSOLE_CATALOGUE_MCP_IMAGE_ID")
+	cfg.CatalogueV1.MCPSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_SHA256")
 	if cfg.CatalogueV1.KubeconfigPath != "" && cfg.CatalogueV1.KubeContext == "" {
 		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.KubeconfigPath}
 		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
@@ -426,7 +447,7 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		cataloguev1.NewVoiceMediaHandler(), cataloguev1.NewVoiceRecoveryHandler(),
 		cataloguev1.NewGPUDrainHandler(),
 		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler(),
-		cataloguev1.NewGuardrailCalibrationHandler())
+		cataloguev1.NewGuardrailCalibrationHandler(), cataloguev1.NewMCPSessionHandler())
 	if err != nil {
 		log.Printf("catalogue v1 registry: %v", err)
 		return 2
