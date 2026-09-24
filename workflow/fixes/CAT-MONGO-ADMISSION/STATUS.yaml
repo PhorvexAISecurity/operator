@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,6 +81,13 @@ checks:
     source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
     at: '2026-09-24T20:50:58+00:00'
     incident_sha256: 01a710bee8f01a18b6417095926fa3d96101d15213ef9c6ff8c2c1c53394c87a
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: a618f54df34eced92f4d12d7c88bbb45cc4a5a1c3c143b7d0733eca0f21c24d5
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:52:15+00:00'
 fix_id: CAT-MONGO-ADMISSION
 issues: []
 title: Admit exact Mongo controls on valid EKS nodes beside bounded prior Voice debt
@@ -149,7 +156,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-24T20:51:03+00:00'
+updated_at: '2026-09-24T20:52:15+00:00'
 follow_up_to: CAT-MONGO-EXPOSURE
 configuration_history:
 - at: '2026-09-24T20:13:30+00:00'
