@@ -167,7 +167,7 @@ func TestPost25EconomicsAbsentLegacyAndExplicitZero(t *testing.T) {
 		d.Economics.EffectiveCostCoefficient != 0 || d.Lambda != 10 {
 		t.Fatalf("explicit zero was confused with absence or lambda: %+v", d)
 	}
-	if d.Trace == nil || d.Trace.SchemaVersion != model.DecisionTraceSchemaV6 || errString(d.Trace.Validate()) != "" {
+	if d.Trace == nil || d.Trace.SchemaVersion != model.DecisionTraceSchemaV7 || errString(d.Trace.Validate()) != "" {
 		t.Fatalf("explicit-zero V4 trace invalid: trace=%+v err=%s", d.Trace, errString(d.Trace.Validate()))
 	}
 }

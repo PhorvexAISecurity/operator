@@ -119,7 +119,7 @@ func m156MeasuredTrace(t *testing.T, ceiling float64) *model.DecisionTraceV2 {
 
 func TestM156TraceV5BindsActualInputsAndReconstructsCost(t *testing.T) {
 	trace := m156MeasuredTrace(t, 10)
-	if trace.SchemaVersion != model.DecisionTraceSchemaV6 ||
+	if trace.SchemaVersion != model.DecisionTraceSchemaV7 ||
 		trace.FlowCostSemanticsVersion != model.FlowCostSemanticsConservativeRegimeV1 {
 		t.Fatalf("wrong current trace semantics: %+v", trace)
 	}

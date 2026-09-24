@@ -697,8 +697,8 @@ func validateInstalledManagerFixture(c TargetConfig) error {
 	if !regexp.MustCompile(`^[0-9a-f]{7,64}$`).MatchString(fixture.OCIRevision) {
 		return errors.New("config: installedManagerFixture ociRevision must be a lowercase hexadecimal revision")
 	}
-	if fixture.TraceSchema != "phorvex.decision-trace.v6" {
-		return errors.New("config: installedManagerFixture traceSchema must be phorvex.decision-trace.v6")
+	if fixture.TraceSchema != "phorvex.decision-trace.v6" && fixture.TraceSchema != "phorvex.decision-trace.v7" {
+		return errors.New("config: installedManagerFixture traceSchema must be phorvex.decision-trace.v6 or v7")
 	}
 	if fixture.PolicyCRDResourceVersion == "" || len(fixture.PolicyCRDResourceVersion) > 128 {
 		return errors.New("config: installedManagerFixture policyCRDResourceVersion is required and bounded")
