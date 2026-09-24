@@ -62,6 +62,7 @@ class MongoExposureChart(unittest.TestCase):
             {"apiGroups": [""], "resources": ["pods/log"], "verbs": ["get"]},
             {"apiGroups": [""], "resources": ["pods/portforward"], "verbs": ["create"]},
             {"apiGroups": [""], "resources": ["services"], "resourceNames": ["mongo"], "verbs": ["get"]},
+            {"apiGroups": [""], "resources": ["persistentvolumeclaims"], "resourceNames": ["mongo-data"], "verbs": ["get"]},
             {"apiGroups": ["discovery.k8s.io"], "resources": ["endpointslices"], "verbs": ["get", "list"]},
         ])
         self.assertFalse([doc for doc in docs if doc["kind"] == "Namespace" and doc["metadata"]["name"] == "document-store"])
