@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,6 +81,13 @@ checks:
     source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
     at: '2026-09-24T17:59:02+00:00'
     incident_sha256: 4b73242d843a4a2a1796eaa3648da659e29ee3ee2c2f31f14c06b3f5d813f4d6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 3559004ff2e9c4a62090c5cf67c2339564a293531102cfea132722a4ec0be6df
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T18:00:18+00:00'
 fix_id: CAT-POD-TOKEN-CASE
 issues: []
 title: Add a causal Pod-bound credential response catalogue suite
@@ -149,7 +156,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-24T17:59:07+00:00'
+updated_at: '2026-09-24T18:00:18+00:00'
 follow_up_to: CAT-POD-TOKEN-VECTOR
 configuration_history:
 - at: '2026-09-24T15:52:24+00:00'
