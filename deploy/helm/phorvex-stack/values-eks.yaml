@@ -143,6 +143,10 @@ phorvex:
           sourceConfigMap: guardrail-proxy
           sourceKey: guardrail_proxy.py
           sourceSHA256: fba39e68dea763043125b29416b832418387a6780e8cce067cbe0121104d09ce
+        chroma:
+          enabled: true
+        litellm:
+          enabled: true
         gpu:
           enabled: false
           namespace: vllm-functional
