@@ -291,7 +291,6 @@ func TestMongoNamedRouterRejectsUnclassifiedVoiceBeforeAllocation(t *testing.T) 
 		}},
 		{"pending-reconciliation", func(_ *testing.T, _ Config, rm *RunManager) { rm.runs["v1run-5"].Error = "reconciliation pending" }},
 		{"unavailable-ledger", func(_ *testing.T, _ Config, rm *RunManager) { rm.loadErr = fmt.Errorf("damaged ledger") }},
-		{"nil-status", func(_ *testing.T, _ Config, rm *RunManager) { rm.runs["other"] = nil }},
 		{"rate-limit", func(_ *testing.T, _ Config, rm *RunManager) { rm.lastStart = time.Now() }},
 		{"concurrency-limit", func(_ *testing.T, _ Config, rm *RunManager) { rm.active = maxConcurrentRuns }},
 	} {
@@ -299,11 +298,22 @@ func TestMongoNamedRouterRejectsUnclassifiedVoiceBeforeAllocation(t *testing.T) 
 			cfg := mongoAdmissionConfig(t)
 			writeVoiceFailureRun(t, cfg, cataloguev1.VoiceRecovery)
 			f := newAuthFixture(t, cfg, operatorGrant("op", []string{mongoExposureNamespace}, []string{hostTargetID, "reviewed-cluster"}))
-			tc.edit(t, cfg, f.srv.runs)
+			func() {
+				f.srv.runs.mu.Lock()
+				defer f.srv.runs.mu.Unlock()
+				tc.edit(t, cfg, f.srv.runs)
+			}()
 			post := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/start", `{"config":"mongo-exposure-baseline"}`, "op"))
 			if post.Code != http.StatusBadRequest || f.srv.runs.seq != 5 {
 				t.Fatalf("unclassified prior allocated run: code=%d seq=%d body=%s", post.Code, f.srv.runs.seq, post.Body.String())
 			}
 		})
+	}
+}
+
+func TestMongoPriorAdmissionRejectsNilRetainedStatusWithoutLiveManager(t *testing.T) {
+	rm := &RunManager{runs: map[string]*RunStatus{"ambiguous": nil}}
+	if err := rm.mongoPriorAdmissionLocked(); err == nil {
+		t.Fatal("nil retained status admitted")
 	}
 }
