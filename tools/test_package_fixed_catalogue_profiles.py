@@ -40,8 +40,11 @@ class PackageProfiles(unittest.TestCase):
                      "releaseSHA": "d" * 40, "sourceSHA256": sha(self.build_raw),
                      "components": {kind: {"allPodsReady": True, "allImageIDsMatchSourceBuild": True,
                                           "podCount": 1, "readyReplicas": 1, "podImageIDs": [image],
-                                          "podUIDs": ["22222222-2222-4222-8222-222222222222"]}
+                                          "podUIDs": ["22222222-2222-4222-8222-222222222222"],
+                                          "deploymentUID": "33333333-3333-4333-8333-333333333333",
+                                          "deploymentGeneration": 1}
                                     for kind, image in (("manager", MANAGER), ("console", CONSOLE))}}
+        self.join["readWindow"] = ["2026-09-24T19:57:35Z", "2026-09-24T19:57:42Z"]
         self.join_raw = (json.dumps(self.join, sort_keys=True) + "\n").encode()
         (self.input / "evidence/JOIN.json").write_bytes(self.join_raw)
 
@@ -108,9 +111,26 @@ class PackageProfiles(unittest.TestCase):
         self.assertFalse((self.root / "output").exists())
 
     def test_pod_source_review_and_release_tags(self):
+        projection = {"cluster": {"uid": CLUSTER}}
+        for component, image in (("manager", MANAGER), ("console", CONSOLE)):
+            projection[component + "Deployment"] = {
+                "namespace": "phorvex-system", "uid": "33333333-3333-4333-8333-333333333333",
+                "generation": 1, "replicas": 1, "readyReplicas": 1,
+                "containers": [{"name": component, "image": image.split("@sha256:")[0] + ":0.4.162"}]}
+            projection[component + "Pods"] = [{
+                "namespace": "phorvex-system", "uid": "22222222-2222-4222-8222-222222222222",
+                "ready": True, "phase": "Running", "deleting": False,
+                "containers": [{"name": component, "imageID": image, "ready": True}]}]
+        pods_raw = (json.dumps({"schema": "catalogue-pr330-rollout-read-v1", "status": "COMPLETE",
+                                "startedAtUTC": self.join["readWindow"][0],
+                                "finishedAtUTC": self.join["readWindow"][1],
+                                "projection": projection}, sort_keys=True) + "\n").encode()
+        pods_path = self.input / "evidence/PODS.json"
+        pods_path.write_bytes(pods_raw)
         review = {"approved": True, "sourceCommit": COMMIT, "managerImageID": MANAGER,
                   "consoleImageID": CONSOLE, "buildEvidenceSHA256": sha(self.build_raw),
-                  "rolloutJoinSHA256": sha(self.join_raw), "reviewer": "independent-reviewer",
+                  "rolloutJoinSHA256": sha(self.join_raw), "rolloutPodReadSHA256": sha(pods_raw),
+                  "reviewer": "independent-reviewer",
                   "reviewedAtUTC": "2026-09-24T20:26:54Z"}
         review_raw = (json.dumps(review, sort_keys=True) + "\n").encode()
         (self.input / "evidence/source-review.json").write_bytes(review_raw)
@@ -138,6 +158,19 @@ class PackageProfiles(unittest.TestCase):
         self.assertEqual(cm["data"]["manifest.json"].encode(), manifest_raw)
         self.assertIn(sha(manifest_raw), cm["data"]["config.pod-bound-api-auth-response.yaml"])
         self.assertEqual((self.root / "output/evidence/source-review.json").read_bytes(), review_raw)
+        self.assertEqual((self.root / "output/evidence/PODS.json").read_bytes(), pods_raw)
+        pods_path.write_bytes(pods_raw.replace(b'"ready": true', b'"ready": false', 1))
+        bad = self.args("pod-token", enabled=True)
+        bad.output = self.root / "changed-pods"
+        with self.assertRaisesRegex(ValueError, "Pod read"):  # join or signed hash must fail
+            pack.package(bad)
+        self.assertFalse(bad.output.exists())
+        pods_path.unlink()
+        bad.output = self.root / "missing-pods"
+        with self.assertRaises(FileNotFoundError):
+            pack.package(bad)
+        self.assertFalse(bad.output.exists())
+        pods_path.write_bytes(pods_raw)
         for ref in ("receipt.json", "../escape.json"):
             manifest["reviewRecordRef"] = ref
             (self.input / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")

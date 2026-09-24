@@ -84,7 +84,7 @@ def strict_yaml(raw):
     return yaml.load(raw, Loader=UniqueLoader)
 
 
-def pod_manifest(raw, build_raw, review_raw, rollout, rollout_sha, overlay):
+def pod_manifest(raw, build_raw, review_raw, pods_raw, rollout, rollout_sha, overlay):
     manifest = strict_json(raw)
     need(isinstance(manifest, dict) and set(manifest) == {
         "schema", "sourceCommit", "managerImageID", "buildEvidenceRef", "buildEvidenceSHA256",
@@ -110,6 +110,7 @@ def pod_manifest(raw, build_raw, review_raw, rollout, rollout_sha, overlay):
          review.get("approved") is True and review.get("sourceCommit") == manifest["sourceCommit"] and
          review.get("managerImageID") == manifest["managerImageID"] and
          review.get("buildEvidenceSHA256") == manifest["buildEvidenceSHA256"] and
+         review.get("rolloutPodReadSHA256") == digest(pods_raw) and
          review.get("rolloutJoinSHA256") == rollout_sha and
          review.get("consoleImageID") == rollout["console"] and
          isinstance(review.get("reviewer"), str) and bool(review["reviewer"].strip()) and
@@ -125,6 +126,38 @@ def pod_manifest(raw, build_raw, review_raw, rollout, rollout_sha, overlay):
     need(overlay["image"]["tag"] == rollout["tag"] and
          overlay["console"]["image"]["tag"] == rollout["tag"], "manager/console desired tags differ from reviewed release")
     return manifest
+
+
+def verify_pod_read(pods_raw, join, rollout):
+    pods = strict_json(pods_raw)
+    need(isinstance(pods, dict) and pods.get("schema") == "catalogue-pr330-rollout-read-v1" and
+         pods.get("status") == "COMPLETE" and b"/home/" not in pods_raw and
+         isinstance(pods.get("projection"), dict), "rollout Pod read differs")
+    projection = pods["projection"]
+    need(projection.get("cluster", {}).get("uid") == rollout["clusterUID"] and
+         [pods.get("startedAtUTC"), pods.get("finishedAtUTC")] == join.get("readWindow"),
+         "rollout Pod read cluster/window differs")
+    for component in ("manager", "console"):
+        deployment = projection.get(component + "Deployment", {})
+        actual_pods = projection.get(component + "Pods", [])
+        joined = join["components"][component]
+        expected_image = rollout[component].split("@sha256:", 1)[0] + ":" + rollout["tag"]
+        need(isinstance(deployment, dict) and isinstance(actual_pods, list) and len(actual_pods) == 1 and
+             deployment.get("namespace") == "phorvex-system" and
+             deployment.get("uid") == joined.get("deploymentUID") and
+             deployment.get("generation") == joined.get("deploymentGeneration") and
+             deployment.get("replicas") == deployment.get("readyReplicas") == 1 and
+             deployment.get("containers") == [{"name": component, "image": expected_image}],
+             "rollout Pod read deployment differs: " + component)
+        pod = actual_pods[0]
+        containers = pod.get("containers", []) if isinstance(pod, dict) else []
+        need(pod.get("namespace") == "phorvex-system" and
+             pod.get("uid") == joined.get("podUIDs", [None])[0] and
+             pod.get("ready") is True and pod.get("phase") == "Running" and pod.get("deleting") is False and
+             isinstance(containers, list) and len(containers) == 1 and
+             containers[0].get("name") == component and
+             containers[0].get("imageID") == rollout[component] and containers[0].get("ready") is True,
+             "rollout Pod read incarnation/image differs: " + component)
 
 
 def overlay_block(console, dotted):
@@ -229,6 +262,7 @@ def package(args):
     join_raw = read_relative(root, "evidence/JOIN.json", MAX_EVIDENCE)
     build_raw = read_relative(root, "evidence/SOURCE-BUILD.json", MAX_EVIDENCE)
     review_raw = read_relative(root, "evidence/source-review.json", MAX_EVIDENCE) if "pod-token" in kinds else None
+    pods_raw = read_relative(root, "evidence/PODS.json", MAX_EVIDENCE) if "pod-token" in kinds else None
     join = strict_json(join_raw)
     build = strict_json(build_raw)
     need(isinstance(join.get("schema"), str) and UID.fullmatch(join.get("clusterUID", "")) and
@@ -257,6 +291,8 @@ def package(args):
              build.get("run", {}).get("jobs", {}).get(component, {}).get("manifestListDigest") ==
              images[0].split("@sha256:", 1)[1], "rollout incarnation/image differs: " + component)
         rollout[component] = images[0]
+    if "pod-token" in kinds:
+        verify_pod_read(pods_raw, join, rollout)
     for kind, (_, dotted, _, _) in SPECS.items():
         if kind in kinds:
             continue
@@ -275,7 +311,7 @@ def package(args):
         manifest_raw = None
         if kind == "pod-token":
             manifest_raw = read_relative(root, "manifest.json", MAX_MANIFEST)
-            manifest = pod_manifest(manifest_raw, build_raw, review_raw, rollout, digest(join_raw), phorvex)
+            manifest = pod_manifest(manifest_raw, build_raw, review_raw, pods_raw, rollout, digest(join_raw), phorvex)
             if PLACEHOLDER.encode() in raw:
                 need(raw.count(PLACEHOLDER.encode()) == 1, "Pod-token manifest placeholder count differs")
                 raw = raw.replace(PLACEHOLDER.encode(), digest(manifest_raw).encode())
@@ -327,13 +363,15 @@ def package(args):
     (evidence / "SOURCE-BUILD.json").write_bytes(build_raw)
     if "pod-token" in kinds:
         (evidence / "source-review.json").write_bytes(review_raw)
+        (evidence / "PODS.json").write_bytes(pods_raw)
     (args.output / "configmaps.yaml").write_text(yaml.safe_dump_all(configmaps, sort_keys=False, explicit_start=True))
     (args.output / "values-overlay.yaml").write_text(yaml.safe_dump(overlay, sort_keys=False))
     receipt = {"schema": "phorvex.catalogue-profile-package.v1", "status": "OFFLINE_REVIEW_REQUIRED_NOT_DEPLOYED",
                "inputOverlaySHA256": digest(overlay_raw), "profiles": profiles,
                "rolloutJoinSHA256": digest(join_raw), "rolloutImageIDs": {k: rollout[k] for k in ("manager", "console")},
                "copiedEvidenceSHA256": {"evidence/JOIN.json": digest(join_raw), "evidence/SOURCE-BUILD.json": digest(build_raw),
-                                        **({"evidence/source-review.json": digest(review_raw)} if "pod-token" in kinds else {})},
+                                        **({"evidence/source-review.json": digest(review_raw),
+                                            "evidence/PODS.json": digest(pods_raw)} if "pod-token" in kinds else {})},
                "configMapsSHA256": digest((args.output / "configmaps.yaml").read_bytes()),
                "valuesOverlaySHA256": digest((args.output / "values-overlay.yaml").read_bytes())}
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
