@@ -389,6 +389,15 @@ phorvex:
     # Service and server-owned harness config are not browser-selectable.
     mongoExposure:
       enabled: false
+    # One fixed, injected Pod-bound API bearer response case. Enabling this
+    # grants Voice fixture mutations and a name-bound E2E TokenRequest only.
+    # Approval means the operator reviewed the PodMonitor selection path;
+    # fresh per-Pod samples are still checked by the case at runtime.
+    podBoundToken:
+      enabled: false
+      scrapeApproved: false
+      scrapeNamespace: voice
+      podSelectorLabel: fixture.phorvex.ai/token-response
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
     catalogueV1:

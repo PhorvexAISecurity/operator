@@ -91,6 +91,8 @@ spec:
         # fixed baked config and current installed source before admission.
         - name: PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED
           value: {{ .Values.phorvex.console.mongoExposure.enabled | default false | quote }}
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED
+          value: {{ .Values.phorvex.console.podBoundToken.enabled | default false | quote }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
           value: {{ .enabled | default false | quote }}

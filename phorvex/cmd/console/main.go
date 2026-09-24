@@ -329,6 +329,11 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return err
 	}
 	cfg.MongoExposureEnabled = mongoExposureEnabled
+	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.PodBoundTokenEnabled = podBoundTokenEnabled
 	chromaEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_CHROMA_ENABLED")
 	if err != nil {
 		return err
