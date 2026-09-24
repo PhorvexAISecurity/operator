@@ -4,11 +4,11 @@ profile: workflow-v2
 question: Build and verify a realistic workload-derived catalogue with exact signal,
   brain decision, actuator effect, independent security and service outcomes; repair
   demonstrated failures and preserve blocked or unsupported cases.
-state: RUNNING
+state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 created_at: '2026-09-23T22:19:16+00:00'
-updated_at: '2026-09-24T11:50:59+00:00'
+updated_at: '2026-09-24T11:57:11+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: pending-fresh-baseline
@@ -82,7 +82,7 @@ rounds:
 - id: round-25
   state: COMPLETE
 - id: round-26
-  state: RUNNING
+  state: COMPLETE
 findings:
 - RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
 - RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
@@ -96,7 +96,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: One immediate as-found preflight and bounded static guardrail comparison
+  action: Deliver reviewed repairs and permanent causal catalogue items; retain adaptation
+    and availability gaps
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -566,5 +567,14 @@ transitions:
   artifact: rounds/round-26/spec.md
   approval_ref: null
   phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-26/evidence/LEAD-REVIEW.json
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T11:57:11+00:00'
+  by: codex-lead
+  artifact: rounds/round-26/review.md
+  approval_ref: null
+  phase_approval_ref: null
   note: null
   forced: false
