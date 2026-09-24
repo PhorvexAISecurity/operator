@@ -384,10 +384,29 @@ func podTokenNoCollision(ctx context.Context, env *core.Env) error {
 		return errors.New("Pod token policy inventory incomplete")
 	}
 	nonce := env.Config.PodBoundTokenFixture.Nonce
+	baseLabels := labels.Set(podTokenLabels(nonce))
+	sourceLabels := labels.Set(podTokenLabels(nonce))
+	sourceLabels[podTokenRoleLabel] = "source"
 	for i := range list.Items {
-		tenant, _, err := unstructured.NestedString(list.Items[i].Object, "spec", "tenant")
-		if err != nil || tenant == nonce {
-			return errors.New("Pod token policy tenant collision")
+		tenant, found, err := unstructured.NestedString(list.Items[i].Object, "spec", "tenant")
+		if err != nil || !found || tenant == nonce {
+			return errors.New("Pod token policy tenant collision or ambiguity")
+		}
+		selectorMap, found, err := unstructured.NestedMap(list.Items[i].Object, "spec", "selector")
+		if err != nil || !found {
+			return errors.New("existing Voice policy selector unavailable")
+		}
+		raw, err := json.Marshal(selectorMap)
+		if err != nil || len(raw) > 16<<10 {
+			return errors.New("existing Voice policy selector oversized")
+		}
+		var selector metav1.LabelSelector
+		if json.Unmarshal(raw, &selector) != nil {
+			return errors.New("existing Voice policy selector malformed")
+		}
+		compiled, err := metav1.LabelSelectorAsSelector(&selector)
+		if err != nil || compiled.Empty() || compiled.Matches(baseLabels) || compiled.Matches(sourceLabels) {
+			return errors.New("existing Voice policy selector overlaps nonce fixture")
 		}
 	}
 	return nil
@@ -397,17 +416,22 @@ func podTokenNoCollision(ctx context.Context, env *core.Env) error {
 // creating a nonce fixture and recheck before emitting the one event request.
 func podTokenDisjointPrecreate(ctx context.Context, env *core.Env) error {
 	ns := env.Config.Namespace
-	fixtureLabels := labels.Set(podTokenLabels(env.Config.PodBoundTokenFixture.Nonce))
+	baseLabels := labels.Set(podTokenLabels(env.Config.PodBoundTokenFixture.Nonce))
+	sourceLabels := labels.Set(podTokenLabels(env.Config.PodBoundTokenFixture.Nonce))
+	sourceLabels[podTokenRoleLabel] = "source"
+	overlaps := func(selector labels.Selector) bool {
+		return selector.Matches(baseLabels) || selector.Matches(sourceLabels)
+	}
 	dep, err := env.Kube.AppsV1().Deployments(ns).Get(ctx, "voice-bot", metav1.GetOptions{})
 	if err != nil || dep.UID == "" || dep.DeletionTimestamp != nil || dep.Spec.Selector == nil {
 		return errors.New("old Voice Deployment authority unavailable")
 	}
 	depSelector, err := metav1.LabelSelectorAsSelector(dep.Spec.Selector)
-	if err != nil || depSelector.Empty() || depSelector.Matches(fixtureLabels) {
+	if err != nil || depSelector.Empty() || overlaps(depSelector) {
 		return errors.New("old Voice Deployment selector overlaps fixture")
 	}
 	svc, err := env.Kube.CoreV1().Services(ns).Get(ctx, "voice-bot", metav1.GetOptions{})
-	if err != nil || svc.UID == "" || svc.DeletionTimestamp != nil || len(svc.Spec.Selector) == 0 || labels.SelectorFromSet(svc.Spec.Selector).Matches(fixtureLabels) {
+	if err != nil || svc.UID == "" || svc.DeletionTimestamp != nil || len(svc.Spec.Selector) == 0 || overlaps(labels.SelectorFromSet(svc.Spec.Selector)) {
 		return errors.New("old Voice Service selector overlaps fixture")
 	}
 	pdb, err := env.Kube.PolicyV1().PodDisruptionBudgets(ns).Get(ctx, "voice-bot", metav1.GetOptions{})
@@ -415,7 +439,7 @@ func podTokenDisjointPrecreate(ctx context.Context, env *core.Env) error {
 		return errors.New("old Voice PDB authority unavailable")
 	}
 	pdbSelector, err := metav1.LabelSelectorAsSelector(pdb.Spec.Selector)
-	if err != nil || pdbSelector.Empty() || pdbSelector.Matches(fixtureLabels) {
+	if err != nil || pdbSelector.Empty() || overlaps(pdbSelector) {
 		return errors.New("old Voice PDB selector overlaps fixture")
 	}
 	oldPods, err := env.Kube.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: "app=voice-bot", Limit: 10})

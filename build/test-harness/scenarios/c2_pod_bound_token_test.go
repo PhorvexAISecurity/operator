@@ -23,10 +23,13 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func testPodTokenJWT(podUID, accountUID string, expiry time.Time) string {
@@ -82,12 +85,58 @@ func TestPodTokenDisjointOldVoiceSelectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc, _ := kube.CoreV1().Services("voice").Get(context.Background(), "voice-bot", metav1.GetOptions{})
-	svc.Spec.Selector = map[string]string{podTokenOwnerLabel: nonce}
+	svc.Spec.Selector = map[string]string{podTokenRoleLabel: "source"}
 	if _, err := kube.CoreV1().Services("voice").Update(context.Background(), svc, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := podTokenDisjointPrecreate(context.Background(), env); err == nil {
-		t.Fatal("old Voice Service selector overlap accepted")
+		t.Fatal("old Voice Service source-role overlap accepted")
+	}
+	svc.Spec.Selector = old
+	if _, err := kube.CoreV1().Services("voice").Update(context.Background(), svc, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	pdb, _ := kube.PolicyV1().PodDisruptionBudgets("voice").Get(context.Background(), "voice-bot", metav1.GetOptions{})
+	pdb.Spec.Selector.MatchLabels = map[string]string{podTokenRoleLabel: "source"}
+	if _, err := kube.PolicyV1().PodDisruptionBudgets("voice").Update(context.Background(), pdb, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := podTokenDisjointPrecreate(context.Background(), env); err == nil {
+		t.Fatal("old Voice PDB source-role overlap accepted")
+	}
+	pdb.Spec.Selector.MatchLabels = old
+	if _, err := kube.PolicyV1().PodDisruptionBudgets("voice").Update(context.Background(), pdb, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	dep, _ := kube.AppsV1().Deployments("voice").Get(context.Background(), "voice-bot", metav1.GetOptions{})
+	dep.Spec.Selector.MatchLabels = map[string]string{podTokenRoleLabel: "source"}
+	if _, err := kube.AppsV1().Deployments("voice").Update(context.Background(), dep, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := podTokenDisjointPrecreate(context.Background(), env); err == nil {
+		t.Fatal("old Voice Deployment source-role overlap accepted")
+	}
+}
+
+func TestPodTokenRefusesOtherPolicySelectorBeforeCreate(t *testing.T) {
+	nonce := strings.Repeat("a", 24)
+	policy := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "phorvex.ai/v1alpha1", "kind": "PhorvexPolicy", "metadata": map[string]any{"name": "other-policy", "namespace": "voice", "uid": "old-policy"}, "spec": map[string]any{"tenant": "other", "selector": map[string]any{"matchLabels": map[string]any{podTokenRoleLabel: "source"}}}}}
+	policy.SetGroupVersionKind(natsResponsePolicyGVK)
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypeWithName(natsResponsePolicyGVK, &unstructured.Unstructured{})
+	scheme.AddKnownTypeWithName(schema.GroupVersionKind{Group: natsResponsePolicyGVK.Group, Version: natsResponsePolicyGVK.Version, Kind: "PhorvexPolicyList"}, &unstructured.UnstructuredList{})
+	env := &core.Env{Ctrl: ctrlfake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build(), Config: config.TargetConfig{Namespace: "voice", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce}}}
+	if err := podTokenNoCollision(context.Background(), env); err == nil {
+		t.Fatal("different-tenant policy matching planned source accepted")
+	}
+	if err := unstructured.SetNestedField(policy.Object, map[string]any{"matchLabels": map[string]any{"app": "voice-bot"}}, "spec", "selector"); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.Ctrl.Update(context.Background(), policy); err != nil {
+		t.Fatal(err)
+	}
+	if err := podTokenNoCollision(context.Background(), env); err != nil {
+		t.Fatalf("disjoint old policy refused: %v", err)
 	}
 }
 
