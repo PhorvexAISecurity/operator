@@ -1,0 +1,137 @@
+# Source proposal only. Do not apply: image digest, owned fixture, manager trust,
+# serving mode, source mapping, and terminal coordinator have no live admission.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: adapter-detector
+  namespace: adapter-catalogue
+---
+# Operator creates this empty lock once. The detector has update but no create,
+# delete, or patch right on it. One claim permanently consumes this instance.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-inv-lock-fd1adaf9bcd2e1e816fc0d37
+  namespace: adapter-catalogue
+  labels:
+    phorvex.ai/adapter-detector: owned-proof
+data: {}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: adapter-detector
+  namespace: adapter-catalogue
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    resourceNames: ["models"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["adapter-inv-lock-fd1adaf9bcd2e1e816fc0d37"]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: adapter-detector
+  namespace: adapter-catalogue
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: adapter-detector
+subjects:
+  - kind: ServiceAccount
+    name: adapter-detector
+    namespace: adapter-catalogue
+---
+# Cluster-scoped SecurityEvent API requires a ClusterRole. The admission stamp,
+# manager allowlist, and exact producer source are separate trust boundaries.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: adapter-catalogue-detector
+rules:
+  - apiGroups: ["amtd.r6security.com"]
+    resources: ["securityevents"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: adapter-catalogue-detector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: adapter-catalogue-detector
+subjects:
+  - kind: ServiceAccount
+    name: adapter-detector
+    namespace: adapter-catalogue
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adapter-detector
+  namespace: adapter-catalogue
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: adapter-detector
+  template:
+    metadata:
+      labels:
+        app: adapter-detector
+    spec:
+      serviceAccountName: adapter-detector
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: detector
+          image: REPLACE_WITH_REVIEWED_IMMUTABLE_IMAGE_DIGEST
+          command: ["python3", "/app/detector.py"]
+          env:
+            - name: TARGET_NAMESPACE
+              value: adapter-catalogue
+            - name: TARGET_SERVICE
+              value: models
+            - name: MODELS_PORT
+              value: "8001"
+            - name: ENGINE_CONTAINER
+              value: engine
+            - name: EXPECTED_ADAPTERS
+              value: ""
+            - name: DETECTOR_INSTANCE
+              value: owned-proof
+            - name: SERVICE_ACCOUNT_NAME
+              value: adapter-detector
+            - name: LOCK_UID
+              value: REPLACE_WITH_OPERATOR_PRECREATED_CONFIGMAP_UID
+            - name: POLL_SECONDS
+              value: "15"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi

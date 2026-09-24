@@ -1,0 +1,8 @@
+FROM python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY --chown=65532:65532 detector.py /app/detector.py
+USER 65532:65532
+CMD ["python3", "/app/detector.py"]
