@@ -420,23 +420,10 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		log.Printf("catalogue v1 job: %v", err)
 		return 2
 	}
-	var restConfig *rest.Config
-	var kube kubernetes.Interface
-	if job.Profile == cataloguev1.VoiceMedia || job.Profile == cataloguev1.VoiceRecovery || job.Profile == cataloguev1.GuardrailCalibration {
-		if runtimeConfig.KubeconfigPath != "" {
-			loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: runtimeConfig.KubeconfigPath}
-			overrides := &clientcmd.ConfigOverrides{CurrentContext: runtimeConfig.KubeContext}
-			restConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, overrides).ClientConfig()
-		} else {
-			restConfig, err = rest.InClusterConfig()
-		}
-		if err == nil {
-			kube, err = kubernetes.NewForConfig(restConfig)
-		}
-		if err != nil {
-			log.Printf("catalogue v1 Kubernetes runtime: %v", err)
-			return 2
-		}
+	restConfig, kube, err := workerKubernetesRuntime(job.Profile, runtimeConfig)
+	if err != nil {
+		log.Printf("catalogue v1 Kubernetes runtime: %v", err)
+		return 2
 	}
 	runtime, err := runtimeConfig.Runtime(restConfig, kube, &http.Client{Timeout: 30 * time.Second})
 	if err != nil {
@@ -474,6 +461,27 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		return 1
 	}
 	return 0
+}
+
+func workerKubernetesRuntime(profile cataloguev1.ProfileID, runtimeConfig cataloguev1.RuntimeConfig) (*rest.Config, kubernetes.Interface, error) {
+	if profile != cataloguev1.VoiceMedia && profile != cataloguev1.VoiceRecovery &&
+		profile != cataloguev1.GuardrailCalibration && profile != cataloguev1.MCPSessionBaseline {
+		return nil, nil, nil
+	}
+	var restConfig *rest.Config
+	var err error
+	if runtimeConfig.KubeconfigPath != "" {
+		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: runtimeConfig.KubeconfigPath}
+		overrides := &clientcmd.ConfigOverrides{CurrentContext: runtimeConfig.KubeContext}
+		restConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, overrides).ClientConfig()
+	} else {
+		restConfig, err = rest.InClusterConfig()
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	kube, err := kubernetes.NewForConfig(restConfig)
+	return restConfig, kube, err
 }
 
 func auditGate(next http.Handler, source *audittransport.Client) http.Handler {

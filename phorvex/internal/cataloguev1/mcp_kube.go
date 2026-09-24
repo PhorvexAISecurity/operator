@@ -69,7 +69,7 @@ func (t mcpKubeTransport) snapshot(ctx context.Context, c MCPSessionRuntime) (mc
 	if err != nil {
 		return mcpAuthority{}, err
 	}
-	if rs.UID != p.OwnerReferences[0].UID || len(rs.OwnerReferences) != 1 || rs.OwnerReferences[0].Kind != "Deployment" || rs.OwnerReferences[0].Name != c.Deployment || rs.OwnerReferences[0].UID != deploy.UID || rs.DeletionTimestamp != nil {
+	if rs.UID != p.OwnerReferences[0].UID || len(rs.OwnerReferences) != 1 || rs.OwnerReferences[0].Kind != "Deployment" || rs.OwnerReferences[0].Name != c.Deployment || rs.OwnerReferences[0].UID != deploy.UID || rs.OwnerReferences[0].Controller == nil || !*rs.OwnerReferences[0].Controller || rs.DeletionTimestamp != nil {
 		return mcpAuthority{}, errors.New("MCP ReplicaSet Deployment owner differs")
 	}
 	service, err := k.CoreV1().Services(c.Namespace).Get(ctx, c.Service, metav1.GetOptions{})

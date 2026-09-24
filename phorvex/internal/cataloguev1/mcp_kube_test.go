@@ -92,6 +92,32 @@ func TestMCPSnapshotRejectsWrongEndpointAndImage(t *testing.T) {
 	}
 }
 
+func TestMCPSnapshotRequiresControllerReplicaSetOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		controller *bool
+	}{
+		{name: "nil"},
+		{name: "false", controller: func() *bool { value := false; return &value }()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			f, cfg := mcpSnapshotFixture(t)
+			rs, err := f.runtime.Kube.AppsV1().ReplicaSets(cfg.Namespace).Get(ctx, "mcp-server-rs", metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rs.OwnerReferences[0].Controller = tc.controller
+			if _, err := f.runtime.Kube.AppsV1().ReplicaSets(cfg.Namespace).Update(ctx, rs, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.snapshot(ctx, cfg); err == nil {
+				t.Fatal("non-controller ReplicaSet owner admitted")
+			}
+		})
+	}
+}
+
 func TestMCPProxyUsesOnlyPinnedPodPathAndDoesNotFollowRedirect(t *testing.T) {
 	cfg := mcpTestConfig()
 	a := mcpAuthority{PodName: "mcp-server-pod", PodUID: "pod-uid"}
