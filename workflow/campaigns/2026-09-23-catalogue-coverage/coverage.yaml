@@ -48,12 +48,15 @@ cells:
     one disruption. This is a changed availability snapshot, not a completed Voice session case.
   next_step: Use the validated actual-source pipeline to design controlled live session/availability and
     attributable actuator comparisons; refresh target/PDB identities before admission.
-  source_gap: Prior registered fixture overrides image command. New offline real handler control is validated
-    but real provider speech, live interruption and Phorvex response remain unverified.
-  reviewed_progress: Offline exact installed source/image normal media and early pre-start disconnect/recovery
-    controls PASS; real handler and Pipecat pipeline/transport/serializer, deterministic provider substitutes;
-    exact cleanup. No live replacement, external-provider, security or Phorvex response claim.
-  progress_evidence: evidence/VOICE-SOURCE-REAL/REPORT.md
+  source_gap: Live Pod replacement, semantic speech quality and Phorvex response remain unverified.
+    Ordinary provider media now has direct and installed-console observations; provider accounting and
+    CRM side effects are not attested.
+  reviewed_progress: Round15 independently reviewed live early-disconnect then normal media passed with
+    683 input and 72 response frames plus exact transcript/forward cleanup. Round16 installed console
+    v1run-4 reported the same frame counts and functional-pass, corroborated by the retained journal and
+    independent exact transcript/helper absence; helper delete acknowledgement gap retained. No security
+    or Phorvex response claim.
+  progress_evidence: rounds/round-15/review.md
 - id: voice-session-authorization
   stack: voice
   kind: S
@@ -67,8 +70,9 @@ cells:
   threat_oracle: Independent server-side accepted/rejected session identity and bounded media/control
     outcome, separated from initial disclosure.
   service_oracle: Same-time legitimate session establishment, frame continuity and recovery.
-  present_constraints: Actual custom handler passes start-frame call ID into provider-capable pipeline;
-    no frame/live call has been sent. Upstream identity controls unverified.
+  present_constraints: Actual custom handler passes start-frame call ID into provider-capable pipeline.
+    Rounds15 and16 sent bounded ordinary synthetic media; neither tested unauthorized session reuse.
+    Upstream identity controls remain unverified.
   next_step: Preserve real handler with provider fakes and denied external egress; verify legitimate versus
     forbidden session identities separately. A101 handshake alone is not a security case.
   source_gap: No verified unauthorized producer, session oracle or detector-to-brain path.

@@ -8,7 +8,7 @@ state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 created_at: '2026-09-23T22:19:16+00:00'
-updated_at: '2026-09-24T04:23:54+00:00'
+updated_at: '2026-09-24T04:56:04+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: pending-fresh-baseline
@@ -61,6 +61,8 @@ rounds:
   state: COMPLETE
 - id: round-15
   state: COMPLETE
+- id: round-16
+  state: COMPLETE
 findings:
 - RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
 - RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
@@ -74,8 +76,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Peer review Voice receipts and deliver NATS console retry-safe source; prepare
-    installed causal response control
+  action: Publish reviewed catalogue source and admit exact owned injected-response
+    trial after worker review
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -365,4 +367,24 @@ transitions:
   phase_approval_ref: null
   note: One direct Voice continuity control returned actual audio after early disconnect;
     exact transcript/forward cleanup verified; no security or Phorvex defense claim
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T04:37:48+00:00'
+  by: codex-lead
+  artifact: rounds/round-16/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T04:56:04+00:00'
+  by: codex-lead
+  artifact: rounds/round-16/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Installed console normal media corroborated by exact retained journal and
+    independent transcript/helper absence; helper DELETE acknowledgement gap retained;
+    no security claim
   forced: false
