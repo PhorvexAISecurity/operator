@@ -62,31 +62,49 @@ type Config struct {
 }
 
 type CatalogueV1Config struct {
-	Enabled             bool
-	Executable          string
-	KubeconfigPath      string
-	KubeContext         string
-	LoopbackURL         string
-	ScopedTokenFile     string
-	AllowedTenant       string
-	DeniedTenant        string
-	DeniedTarget        string
-	ExpectedSubject     string
-	GrantFile           string
-	VoiceEnabled        bool
-	VoiceNamespace      string
-	VoiceDeployment     string
-	VoiceService        string
-	VoiceContainer      string
-	VoiceServicePort    int32
-	VoicePDB            string
-	TranscriptSelector  string
-	TranscriptContainer string
-	GPUEnabled          bool
-	GPUFixtureNamespace string
-	GPUFixtureConfig    string
-	GPUKubeconfigPath   string
-	GPUKubeContext      string
+	Enabled                     bool
+	Executable                  string
+	KubeconfigPath              string
+	KubeContext                 string
+	LoopbackURL                 string
+	ScopedTokenFile             string
+	AllowedTenant               string
+	DeniedTenant                string
+	DeniedTarget                string
+	ExpectedSubject             string
+	GrantFile                   string
+	VoiceEnabled                bool
+	VoiceNamespace              string
+	VoiceDeployment             string
+	VoiceService                string
+	VoiceContainer              string
+	VoiceServicePort            int32
+	VoicePDB                    string
+	TranscriptSelector          string
+	TranscriptContainer         string
+	GPUEnabled                  bool
+	GPUFixtureNamespace         string
+	GPUFixtureConfig            string
+	GPUKubeconfigPath           string
+	GPUKubeContext              string
+	GuardrailCalibrationEnabled bool
+	GuardrailNamespace          string
+	GuardrailService            string
+	GuardrailPort               int32
+	GuardrailContainer          string
+	GuardrailSourceConfigMap    string
+	GuardrailSourceKey          string
+	GuardrailSourceSHA256       string
+	MCPEnabled                  bool
+	MCPNamespace                string
+	MCPDeployment               string
+	MCPService                  string
+	MCPContainer                string
+	MCPPort                     int32
+	MCPSourceConfigMap          string
+	MCPSourceKey                string
+	MCPImageID                  string
+	MCPSourceSHA256             string
 }
 
 const (

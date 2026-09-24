@@ -239,6 +239,58 @@ func TestEveryDeclaredFactKindIsEmittedAndEveryFixtureMintsFacts(t *testing.T) {
 	}
 }
 
+// The structural witness mints a separate planned API-auth capability only for
+// the exact current Pod. It never converts copied credential knowledge into cover.
+func TestPodBoundAPIAuthFixtureRequiresCurrentIdentity(t *testing.T) {
+	rep, _, _ := fresh(t)
+	for _, profile := range rep.Profiles {
+		rows := map[string]Result{}
+		for _, r := range rep.Results {
+			if r.Profile == profile {
+				rows[r.Fixture] = r
+			}
+		}
+		qualified, ok := rows["pod-bound-api"]
+		if !ok {
+			t.Fatalf("%s: qualified fixture missing", profile)
+		}
+		stale, ok := rows["pod-bound-api-stale-uid"]
+		if !ok {
+			t.Fatalf("%s: stale-UID fixture missing", profile)
+		}
+		plain := rows["plain"]
+		for _, tc := range []struct {
+			name string
+			row  Result
+			want bool
+		}{{"qualified", qualified, true}, {"stale", stale, false}, {"absent", plain, false}} {
+			var found int
+			for _, fact := range tc.row.Facts {
+				if fact.Kind == recon.FactPodBoundKubeAPIAuthPotential {
+					found++
+					if fact.Scope != string(recon.ScopePod) || fact.Weight != 1 || !slices.Equal(fact.CoveredBy, []string{string(model.ActionRotate)}) {
+						t.Errorf("%s/%s: capability fact = %+v, want pod-scoped weight 1 and rotate-only planned cover", profile, tc.name, fact)
+					}
+				}
+				if fact.Kind == recon.FactCredential && len(fact.CoveredBy) != 0 {
+					t.Errorf("%s/%s: copied credential knowledge gained cover: %v", profile, tc.name, fact.CoveredBy)
+				}
+			}
+			if (found == 1) != tc.want || found > 1 {
+				t.Errorf("%s/%s: capability fact count %d, want present=%t", profile, tc.name, found, tc.want)
+			}
+			for action, cover := range tc.row.Cover {
+				if slices.Contains(cover, recon.FactPodBoundKubeAPIAuthPotential) != (tc.want && action == string(model.ActionRotate)) {
+					t.Errorf("%s/%s: %s capability cover %v, want rotate-only when qualified", profile, tc.name, action, cover)
+				}
+				if slices.Contains(cover, recon.FactCredential) {
+					t.Errorf("%s/%s: %s covers copied credential knowledge", profile, tc.name, action)
+				}
+			}
+		}
+	}
+}
+
 // The current-source facts the guide states (build/test-harness/ACTUATOR_COVERAGE.md §4)
 // are asserted here against the report so the prose cannot drift without a test failing.
 func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {

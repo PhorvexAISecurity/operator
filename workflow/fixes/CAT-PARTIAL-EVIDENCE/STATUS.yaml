@@ -1,0 +1,288 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 15
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 32941dab083eea8ea16efcb7d650e1af7a38cad4defe2f0912790d88866cd82f
+    source_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+    at: '2026-09-24T06:25:31+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/lead-baseline.log
+    sha256: dec4ea17cb25c838f9927d4702bf196d79789d9ae8e9be9911c43f5b5cb14654
+    source_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+    at: '2026-09-24T06:41:05+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 7a7cc2d99380134f7a7fa714437b2229521c493b31f0f57e906b4b30c378f2d1
+    source_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+    at: '2026-09-24T06:56:59+00:00'
+    baseline_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:59+00:00'
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: 93314f59d307c1209fd8f86f38c7fa92d38bc613ee1bcb359b404557b845cfe8
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:59+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:59+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker/head-focused.log
+    sha256: 961ef1bc53eded77fbdf909e811fdbb729a774a9e88764b7ac461b170736eba6
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:59+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: d14be7a78c931f5f6a54e4d167d5f3faa117eea4cb5b76844cb6dea9bdbb8680
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker/startup-unsafe-head.log
+    sha256: a255487f804637aac8ab7fc48cffa4852250f903b366ae99a7034af8d2e466c1
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:59+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: d14be7a78c931f5f6a54e4d167d5f3faa117eea4cb5b76844cb6dea9bdbb8680
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker/head-focused.log
+    sha256: 961ef1bc53eded77fbdf909e811fdbb729a774a9e88764b7ac461b170736eba6
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:00+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: d14be7a78c931f5f6a54e4d167d5f3faa117eea4cb5b76844cb6dea9bdbb8680
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 3d4f8aa20e6ad391a2447e0af7e4dec07588e446e5e800ba0ed0f5c7e2c30a52
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:59:36+00:00'
+    baseline_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: fcb7e322af7f1197f2088d8010727e35118d9e68055b09569f96a3b32bb205f5
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:59:36+00:00'
+    incident_sha256: 3d4f8aa20e6ad391a2447e0af7e4dec07588e446e5e800ba0ed0f5c7e2c30a52
+fix_id: CAT-PARTIAL-EVIDENCE
+issues:
+- M-189
+title: Expose validated partial-run failure evidence without granting success
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-coverage-plan
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-coverage-20260923
+  code_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+  deployed_image: 0.4.154
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  head_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Publish PR323 update; await required CI and deployment for live acceptance
+updated_at: '2026-09-24T07:02:50+00:00'
+configuration_history:
+- at: '2026-09-24T05:46:46+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T06:21:48+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:25:30+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:38:20+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:53:36+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:57:59+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T05:47:39+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T05:47:41+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T06:58:00+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T06:58:02+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T06:59:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T06:59:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T07:02:50+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: f8c9625f830c83c997bcc7c5ea95438c6fcc7ebe53301ebe3b1021c761a8fc49
+  source_sha: 7d6c056f1015e4faa680b940cb275139825cdc35
+  at: '2026-09-24T05:47:41+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 4fdf93bbcf207c47ba388e682b76ed17921494c9a8ea491c860b2d4cd5d9f035
+  source_sha: 7d6c056f1015e4faa680b940cb275139825cdc35
+  at: '2026-09-24T06:08:55+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+handoff:
+  id: CAT-PARTIAL-EVIDENCE:14:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 14

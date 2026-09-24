@@ -105,10 +105,14 @@ func (s ActionSet) CollisionError() error {
 
 // Exclusion is one pruned move and the structural or hard-constraint reason.
 type Exclusion struct {
-	GenerationRank       int
-	Key                  string
-	Action               model.Action
-	Reason               string
+	GenerationRank int
+	Key            string
+	Action         model.Action
+	Reason         string
+	// StructuralKind identifies an exclusion that occurs before feasibility but
+	// is not missing recon cover. It is a closed decision-trace cause, never
+	// inferred by parsing Reason text.
+	StructuralKind       string
 	Category             string
 	Detail               string
 	CoverKeys            []string
@@ -324,16 +328,18 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					}
 					out.Excluded = append(out.Excluded, Exclusion{
 						GenerationRank: generationRank, Key: key, Action: action,
-						Reason:    "quarantine-capacity-inventory-unknown: " + detail,
-						CoverKeys: append([]string(nil), coverKeys...),
+						Reason:         "quarantine-capacity-inventory-unknown: " + detail,
+						StructuralKind: model.ExclusionResourceCapacity,
+						CoverKeys:      append([]string(nil), coverKeys...),
 					})
 					continue
 				}
 				if pol.QuarantineCapacityUsed >= pol.QuarantineCapacityLimit {
 					out.Excluded = append(out.Excluded, Exclusion{
 						GenerationRank: generationRank, Key: key, Action: action,
-						Reason:    fmt.Sprintf("quarantine-capacity-exhausted: used=%d limit=%d", pol.QuarantineCapacityUsed, pol.QuarantineCapacityLimit),
-						CoverKeys: append([]string(nil), coverKeys...),
+						Reason:         fmt.Sprintf("quarantine-capacity-exhausted: used=%d limit=%d", pol.QuarantineCapacityUsed, pol.QuarantineCapacityLimit),
+						StructuralKind: model.ExclusionResourceCapacity,
+						CoverKeys:      append([]string(nil), coverKeys...),
 					})
 					continue
 				}
@@ -365,8 +371,9 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			if resourceReason != "" {
 				out.Excluded = append(out.Excluded, Exclusion{
 					GenerationRank: generationRank, Key: key, Action: action,
-					Reason:    "resource-capacity: " + resourceReason,
-					CoverKeys: append([]string(nil), coverKeys...),
+					Reason:         "resource-capacity: " + resourceReason,
+					StructuralKind: model.ExclusionResourceCapacity,
+					CoverKeys:      append([]string(nil), coverKeys...),
 				})
 				continue
 			}

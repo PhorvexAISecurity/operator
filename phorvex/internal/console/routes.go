@@ -135,6 +135,7 @@ func (s *Server) apiRoutes() []route {
 		control("/api/runs/scenario", s.startScenario, routeSpec{targetBody: []string{"target"}, destination: scenarioRunDestination}),
 		control("/api/runs/functional", s.startFunctional, routeSpec{destination: functionalRunDestination}),
 		control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true}),
+		control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true}),
 		read("/api/runs/list", s.runsList, routeSpec{}),
 		read("/api/runs/status", s.runStatus, routeSpec{runQ: "id"}),
 		read("/api/runs/stream", s.runStream, routeSpec{runQ: "id"}),

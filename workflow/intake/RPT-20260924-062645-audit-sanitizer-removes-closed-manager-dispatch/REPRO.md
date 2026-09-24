@@ -1,0 +1,1 @@
+Run retained fixes/CAT-DISPATCH-REASON/evidence/lead/lead_actual_capacity_test.go on actual baseline0c4a11f7 and head8bd77c01. Zero capacity reaches real quarantine-capacity-refused producer, then audit loses the reason on baseline only. Available capacity positive control invokes backend once and retains emitted-unconfirmed.

@@ -92,14 +92,9 @@ func TestSuiteRunAuthorizesItsEffectiveDestination(t *testing.T) {
 			if err := os.WriteFile(bin, []byte("#!/bin/sh\necho local-only > started\nexit 1\n"), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			suiteName := ""
-			for name := range allowedConfigs {
-				suiteName = name
-				break
-			}
-			if suiteName == "" {
-				t.Fatal("no attack-agent suite is registered")
-			}
+			// This test exercises the ordinary suite fallback contract. The
+			// separately configured NATS baseline has a stricter broker scope.
+			suiteName := "fpprobe"
 			if c.writeConfig {
 				cfg := "context: \"kind-amtd-test\"\nnamespace: \"amtd-attack-test\"\nownedAck: true\n"
 				if err := os.WriteFile(filepath.Join(dir, allowedConfigs[suiteName].File), []byte(cfg), 0o600); err != nil {

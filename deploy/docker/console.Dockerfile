@@ -71,6 +71,11 @@ WORKDIR /workspace/build/test-harness
 # CGO-free + static so it runs on the distroless/static final base next to the console binary.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /harness ./cmd/harness
+# The synthetic NATS observer is a single read-only client. Build it from the
+# same reviewed source into the existing console image; no runtime download or
+# second image release is involved. Its Pod runs only this binary.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /nats-owned-observer ./cmd/nats-owned-observer
 
 # ---- Stage 2b: kubectl ----
 # internal/console/workload_attack.go fires a real attack by applying a SecurityEvent CR,
@@ -131,6 +136,7 @@ COPY --from=data /data /data
 # <root>/build/test-harness/bin/harness.exe. The .exe name is a historical dev artifact and is
 # just a filename on Linux — the console execs it by that path, so it must match.
 COPY --from=harnessbuild /harness /data/build/test-harness/bin/harness.exe
+COPY --from=harnessbuild /nats-owned-observer /app/nats-owned-observer
 # The phorvex operator binary lands at the exact path DefaultConfig() hardcodes for the
 # console's live-scan subsystem: <root>/phorvex/bin/phorvex.exe. Without it the Scan step
 # reports 0 nodes / 0 pods on a live cluster (missing-binary exec => empty result).

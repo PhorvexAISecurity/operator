@@ -22,6 +22,7 @@ type rawActionDisposition struct {
 	Status        string `json:"status"`
 	ExclusionKind string `json:"exclusionKind"`
 	Reason        string `json:"reason"`
+	Scored        *bool  `json:"scored"`
 }
 
 var availabilityRefusalPattern = regexp.MustCompile(`^availability: ready=(0|[1-9][0-9]*)-1 < minAvailable=(0|[1-9][0-9]*)$`)
@@ -172,7 +173,7 @@ func imageDigest(value string) string {
 	return "sha256:" + hex.EncodeToString(s[:])
 }
 
-func safeActionDisposition(status, exclusion string) bool {
+func safeActionDisposition(schema, status, exclusion string, scored *bool) bool {
 	switch status {
 	case model.ActionStatusNotEnabled, model.ActionStatusNoCover, model.ActionStatusInfeasible,
 		model.ActionStatusConformalSLO, model.ActionStatusPricedOut, model.ActionStatusBudgetExhausted,
@@ -180,6 +181,9 @@ func safeActionDisposition(status, exclusion string) bool {
 		model.ActionStatusNotInstallable, model.ActionStatusIneligible:
 	default:
 		return false
+	}
+	if exclusion == model.ExclusionResourceCapacity {
+		return schema == model.DecisionTraceSchemaV7 && status == model.ActionStatusInfeasible && scored != nil && !*scored
 	}
 	switch exclusion {
 	case model.ExclusionNone, model.ExclusionNotEnabled, model.ExclusionReconCover, model.ExclusionFeasibility,
@@ -298,7 +302,7 @@ func project(raw []byte, ranges []SourceRange, cfg Config) (Receipt, bool, error
 		return Receipt{}, false, errors.New("action disposition exceeds its bound")
 	}
 	for _, candidate := range t.ActionStatus {
-		if candidate.Action == "" || seenActions[candidate.Action] || !safeActionDisposition(candidate.Status, candidate.ExclusionKind) {
+		if candidate.Action == "" || seenActions[candidate.Action] || !safeActionDisposition(t.SchemaVersion, candidate.Status, candidate.ExclusionKind, candidate.Scored) {
 			return Receipt{}, false, errors.New("action disposition is empty or duplicated")
 		}
 		seenActions[candidate.Action] = true

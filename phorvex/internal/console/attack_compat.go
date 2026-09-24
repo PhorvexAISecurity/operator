@@ -233,15 +233,21 @@ func (s *Server) compatibleCatalogue(st appStack) ([]map[string]any, bool) {
 	out := make([]map[string]any, 0, len(items))
 	for _, it := range items {
 		compatible, reason := scenarioFitsStack(it, st)
-		out = append(out, map[string]any{
-			"name": it.Name, "product": it.Product, "category": it.Category,
-			"techniques": it.Techniques, "exercisedTechniques": it.ExercisedTechniques,
-			"realism": it.Realism, "benignControl": it.BenignControl,
-			"expectedActuators": it.ExpectedActuators,
-			"prereqs":           it.Prereqs, "compatible": compatible, "reason": reason,
-		})
+		out = append(out, catalogueCompatProjection(it, compatible, reason))
 	}
 	return out, true
+}
+
+func catalogueCompatProjection(it CatalogItem, compatible bool, reason string) map[string]any {
+	return map[string]any{
+		"name": it.Name, "product": it.Product, "category": it.Category,
+		"techniques": it.Techniques, "exercisedTechniques": it.ExercisedTechniques,
+		"realism": it.Realism, "benignControl": it.BenignControl,
+		"expectedActuators":     it.ExpectedActuators,
+		"responseGuidanceBasis": it.ResponseGuidanceBasis,
+		"responseGuidance":      it.ResponseGuidance,
+		"prereqs":               it.Prereqs, "compatible": compatible, "reason": reason,
+	}
 }
 
 // scenarioFitsStack applies one catalogue scenario's product/caps to an app's stack. An AI

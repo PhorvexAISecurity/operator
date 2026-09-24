@@ -1,0 +1,9 @@
+# Verified narrow source/model mismatch
+
+Source at a50d796af128cd4109875e03eaf429d460126740: internal/recon/facts.go and ucw.go justify broad credential exclusion by saying Pod-scoped action cannot invalidate a bound token before TTL. The real ingest model has ServiceAccount name and mounted Secrets, but no typed mounted Pod-bound default-API-audience projection witness; there is no separately conditional continued API-auth capability fact. The broad copied-knowledge credential fact should stay coverless.
+
+Independent reviewer/executor catalogue-reference-review ran the lead-authored pre-registered round3 package. The exact captured owned token returned HTTP200 initially and after a 65s no-action interval, then HTTP401 73.376s after exact binding Pod absence; separate legitimate token still returned200. Natural expiry was at least433s later. Exactly one UID-checked direct Eviction; cleanup independently confirmed. Evidence: ../../campaigns/2026-09-23-catalogue-coverage/rounds/round-3/evidence/RESULT.json and its private hash manifest. Earlier CNI-blocked round2 retained separately.
+
+Verification PASS applies only to the inaccurate blanket rationale and missing narrow representable capability. Installed defense and security outcome remain NOT_EVALUATED; no claim that a detector found theft, that brain ought always to rotate, or that all credentials become invalid. Existing policy/availability/eligibility gates are valid independent constraints. Prospective cover needs a real admitted-Pod producer, current SA identity and exact API-audience witness, not merely serviceAccountName. No token bytes enter product telemetry.
+
+Positive controls: source token remained accepted without action; a separate legitimate identity remained accepted after intervention. Falsifiers and failure/cleanup bounds were registered before execution in round3/spec.md.

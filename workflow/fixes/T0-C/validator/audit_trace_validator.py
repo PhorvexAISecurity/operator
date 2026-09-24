@@ -4,7 +4,7 @@ Independent validator for Phorvex audit decision records.
 
 Each record is a `phorvex.audit.v2` envelope carrying a nested
 `decisionTrace` (`phorvex.decision-trace.v2`, v3, economics-aware v4,
-flow-regime-aware v5, or capacity-aware v6).
+flow-regime-aware v5, capacity-aware v6, or resource-exclusion-aware v7).
 
 The laws asserted here were derived by reading the Go source, NOT by fitting
 the records (see README.md for the file:line of every law):
@@ -38,6 +38,7 @@ TRACE_V3 = "phorvex.decision-trace.v3"
 TRACE_V4 = "phorvex.decision-trace.v4"
 TRACE_V5 = "phorvex.decision-trace.v5"
 TRACE_V6 = "phorvex.decision-trace.v6"
+TRACE_V7 = "phorvex.decision-trace.v7"
 AUDIT_V2 = "phorvex.audit.v2"
 
 ECON_LEGACY = "legacy-runtime-lambda-v1"
@@ -218,8 +219,8 @@ def check_schema(rec: dict, tr: dict) -> Check:
     if env != AUDIT_V2:
         problems.append(f"schemaVersion={env!r} (want {AUDIT_V2!r})")
     tv = tr.get("schemaVersion")
-    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6):
-        problems.append(f"decisionTrace.schemaVersion={tv!r} (want v2, v3, v4, v5, or v6)")
+    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7):
+        problems.append(f"decisionTrace.schemaVersion={tv!r} (want v2, v3, v4, v5, v6, or v7)")
     if problems:
         return Check(1, "schema", FAIL, "; ".join(problems))
     return Check(1, "schema", PASS, f"envelope {AUDIT_V2}; trace {tv}")
@@ -370,7 +371,7 @@ def check_ecost(tr: dict) -> Check:
 
 def check_netgain(tr: dict) -> Check:
     # decision_trace.go Validate() ~390-396; coverage.go legacyMixedGain + lambdaContribution = lambda*ECost
-    has_v4 = tr.get("schemaVersion") in (TRACE_V4, TRACE_V5, TRACE_V6)
+    has_v4 = tr.get("schemaVersion") in (TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7)
     fixed = has_v4 and tr.get("economicsVersion") == ECON_FIXED
     coefficient = tr.get("effectiveCostCoefficient") if has_v4 else tr.get("lambdaRuntime")
     contribution_key = "objectiveCostContribution" if fixed else "lambdaContribution"
@@ -678,7 +679,7 @@ def check_redaction(rec: dict) -> Check:
 
 def check_economics(rec: dict, tr: dict) -> Check:
     """Reconstruct the V4 scoring coefficient and exact trace-off audit descriptor."""
-    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5, TRACE_V6):
+    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7):
         return Check(13, "economics-v4", SKIPPED, "trace is v2/v3; economics metadata is not required")
 
     problems = []
@@ -750,7 +751,7 @@ def check_economics(rec: dict, tr: dict) -> Check:
             problems.append("audit exact lambdaRuntimeLegacy disagrees with trace")
         if expected_beta_present and beta.ok and (not envelope_beta.ok or envelope_beta.num != beta.num):
             problems.append("audit exact disruptionAversion disagrees with trace")
-        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6):
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6, TRACE_V7):
             if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
                 problems.append("V5 trace flowCostSemanticsVersion is missing or unknown")
             if envelope.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
@@ -781,8 +782,29 @@ def v3_action_status(tr: dict) -> list[str]:
         st, ek = r.get("status"), r.get("exclusionKind")
         if st not in V3_STATUS:
             problems.append(f"{p}.status={st!r} not in vocabulary")
-        if ek not in V3_EXCLUSION_KIND:
+        if ek not in V3_EXCLUSION_KIND and not (ek == "resource-capacity" and tr.get("schemaVersion") == TRACE_V7):
             problems.append(f"{p}.exclusionKind={ek!r} not in vocabulary")
+        if ek == "resource-capacity" and (st != "infeasible" or r.get("scored") is not False):
+            problems.append(f"{p}: resource-capacity requires unscored infeasible status")
+        if ek == "resource-capacity" and tr.get("schemaVersion") == TRACE_V7:
+            matching = [c for c in tr.get("candidates") or []
+                        if isinstance(c, dict) and c.get("action") == r.get("action")]
+            if len(matching) != 1:
+                problems.append(f"{p}: resource-capacity requires one matching exclusion candidate")
+            else:
+                c = matching[0]
+                scored_fields = ("marginalCoverage", "netGain", "cNorm", "cFlow", "expectedCost",
+                                 "costHigh", "lambdaContribution", "objectiveCostContribution",
+                                 "feasible", "conformalQuantile", "conformalCalibrated",
+                                 "gpuEnvelopeApplied", "gpuEnvelopeSlack", "sloGateResult",
+                                 "selectionRound", "flowPredictedMean", "flowConservativeFloor",
+                                 "flowUncertaintyBound", "flowUncertaintySlack",
+                                 "conformalWindowReady", "conformalRegimeApplicable")
+                scored = [name for name in scored_fields
+                          if isinstance(c.get(name), dict) and c[name].get("present") is True]
+                if (not c.get("existingExclusionReason") or c.get("selected") is True or scored
+                        or c.get("resources") not in (None, []) or c.get("flowRegime") not in (None, "")):
+                    problems.append(f"{p}: resource-capacity candidate carries scored or post-gate fields: {scored}")
         if st == "selected" and ek != "none":
             problems.append(f"{p}: status==selected requires exclusionKind==none (got {ek!r})")
         if ek == "cost-nan" and st != "infeasible":
@@ -815,7 +837,7 @@ def v3_cost_high(tr: dict) -> list[str]:
             q = cq.num if cq.ok else 0.0
             g = slack.num if (applied and slack.ok) else 0.0
             extra = max(q, g)
-        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6):
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6, TRACE_V7):
             uncertainty = optional(c, "flowUncertaintySlack", p)
             if uncertainty.ok:
                 extra = max(extra, uncertainty.num)
@@ -856,9 +878,9 @@ def v3_dispatch(tr: dict) -> list[str]:
 
 
 def check_v3(tr: dict, strict: bool) -> Check:
-    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6):
+    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7):
         if strict:
-            return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not v3/v4/v5/v6")
+            return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not v3/v4/v5/v6/v7")
         return Check(12, "v3-hooks", SKIPPED, "trace is v2; v3 laws (actionStatus/costHigh/coveredBefore/dispatch) not applicable")
     problems = v3_action_status(tr) + v3_cost_high(tr) + v3_covered_before(tr) + v3_dispatch(tr)
     if problems:
@@ -867,7 +889,7 @@ def check_v3(tr: dict, strict: bool) -> Check:
 
 
 def check_flow_v5(tr: dict) -> Check:
-    if tr.get("schemaVersion") not in (TRACE_V5, TRACE_V6):
+    if tr.get("schemaVersion") not in (TRACE_V5, TRACE_V6, TRACE_V7):
         return Check(14, "flow-regime-v5", SKIPPED, "historical trace; V5 flow-regime contract is not applicable")
     problems = []
     if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
@@ -987,7 +1009,7 @@ def check_resources_v6(tr: dict) -> Check:
     version = tr.get("schemaVersion")
     capacities = tr.get("resources")
     candidates = tr.get("candidates") or []
-    if version != TRACE_V6:
+    if version not in (TRACE_V6, TRACE_V7):
         problems = []
         if capacities not in (None, []):
             problems.append("historical trace carries V6 resource capacities")

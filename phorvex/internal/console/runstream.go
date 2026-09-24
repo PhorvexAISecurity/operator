@@ -141,6 +141,9 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 				event := trialEventFromRow(row)
 				if terminalFixed {
 					event.ClaimClass = "functional"
+					if status.ClaimClass == "calibration" {
+						event.ClaimClass = "calibration"
+					}
 					event.Outcome = status.Outcome
 					event.OutcomeReason = "fixed-suite terminal result: " + status.Outcome
 				}

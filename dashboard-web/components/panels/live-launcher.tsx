@@ -11,6 +11,7 @@ import { useApiRead, useQueryScope, useTargets, useWorkloads } from "@/lib/query
 import { emitQueryChange } from "@/lib/query-events";
 import { isCatalogueSignalResult } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
+import { ScenarioResponseGuidance, displayActuatorHints } from "@/components/panels/scenario-response-guidance";
 
 // LiveLauncherPanel — the per-app attack launcher with actuator verdicts.
 //
@@ -347,13 +348,12 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                   const run = runs[c.name];
                   const v = verdicts["scn:" + c.name];
                   const verdictNote = verdictNotes["scn:" + c.name];
-                  const matches = !!(v?.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator);
+                  const matches = !!(v?.phorvexAction && displayActuatorHints(c).includes(v.phorvexAction));
                   const signalResult = !!v && isCatalogueSignalResult(v);
                   return (
                     <div key={c.name} className="rounded-md border border-border/60 p-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-[12px]">{c.name}</span>
-                        {c.expectedActuators?.length > 0 && <span className="text-[10px] text-muted-foreground">→ <span className="font-mono">{c.expectedActuators.join(", ")}</span></span>}
                         <span className="ml-auto flex items-center gap-2">
                           {run && (
                             <span className={cn("text-[11px]", run.state === "done" ? "text-success" : run.state === "error" ? "text-danger" : "text-muted-foreground")}>
@@ -368,14 +368,15 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                           </Button>
                         </span>
                       </div>
+                      <div className="mt-1"><ScenarioResponseGuidance item={c} /></div>
                       {(v || firing === "scnlive:" + c.name) && (
                         v ? (
                           signalResult ? <div className="mt-2"><CatalogueSignalResult result={v} compact /></div> :
                             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
                               <span>{v.outcome || (v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
                               <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
-                              <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || c.expectedActuators?.join(", ") || "—"}</span></span>
-                              <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches expected" : "differs from expected") : "no actuation recorded"}</span>
+                              <span className="text-muted-foreground">listed hint <span className="font-mono text-foreground/80">{displayActuatorHints(c).join(", ") || "—"}</span></span>
+                              <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches listed hint" : "differs from listed hint") : "no actuation recorded"}</span>
                             </div>
                         ) : (
                           <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> sending the signal and following its exact result…</div>

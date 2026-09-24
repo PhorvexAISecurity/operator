@@ -189,10 +189,10 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		})
 	}
 
-	// Tier 3 — facts no current moving-target actuator can invalidate. They stay attached to the
-	// observed workload for audit and are permanently absent from CoverByAction. In particular,
-	// projected ServiceAccount-token invalidation is CANNOT-HELP for a pod-scoped actuator: only
-	// issuer-side revocation can invalidate a bound token before its TTL.
+	// Tier 3 — copied knowledge and persistence that no current moving-target
+	// actuator erases. FactCredential remains absent from every cover set even
+	// when an exact-Pod rotate can retire a separate projected-token API-auth
+	// capability. Copied JWT bytes and offline/non-API acceptance may persist.
 	for _, kind := range []string{
 		FactCredential, FactRetrievalState, FactArtifactProvenance, FactControlPlanePersistence,
 	} {

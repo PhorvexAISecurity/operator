@@ -1,0 +1,15 @@
+{
+  "schema": "phorvex.crm-fixture.v1",
+  "crmImage": "REPLACE-WITH-PREPARED-CRM-IMAGE@sha256:REPLACE-WITH-64-HEX-CHARACTERS",
+  "mongoImage": "REPLACE-WITH-DISPOSABLE-MONGO-IMAGE@sha256:REPLACE-WITH-64-HEX-CHARACTERS",
+  "baseImageDigest": "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff",
+  "sourceSHA256": "328f37a8d6d3692fb3bd6d4db2637e72d54becf8e9e4396d5e47f4ab5f909350",
+  "dependencyLockSHA256": "50143dfea339319c70edcc4e37c5d852031446f5e609ef4f538c68a0436f956a",
+  "wheelhouseManifestSHA256": "REPLACE-WITH-SHA256-OF-VERIFIED-WHEELHOUSE-MANIFEST",
+  "dependencies": {
+    "fastapi": "0.115.14",
+    "pydantic": "2.13.4",
+    "pymongo": "4.17.0",
+    "uvicorn": "0.30.6"
+  }
+}

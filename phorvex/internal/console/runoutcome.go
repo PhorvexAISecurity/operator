@@ -90,6 +90,9 @@ func (r runMetricRow) outcome() trialOutcome {
 	}
 	if r.ScenarioBenignControl {
 		out.ClaimClass = "functional"
+		if r.Scenario == limitedV1GuardrailCalibrationID {
+			out.ClaimClass = "calibration"
+		}
 	}
 	if r.NegativeControl || v.Kind() == metricvalidity.TrialNegativeControl {
 		out.ClaimClass = "control"

@@ -18,11 +18,13 @@ import (
 type ProfileID string
 
 const (
-	VoiceMedia    ProfileID = "limited-v1-voice-media"
-	VoiceRecovery ProfileID = "limited-v1-voice-recovery"
-	GPUDrain      ProfileID = "limited-v1-vllm-request-drain"
-	AuthUnauth    ProfileID = "limited-v1-console-unauthenticated"
-	AuthScope     ProfileID = "limited-v1-console-scoped-authorization"
+	VoiceMedia           ProfileID = "limited-v1-voice-media"
+	VoiceRecovery        ProfileID = "limited-v1-voice-recovery"
+	GPUDrain             ProfileID = "limited-v1-vllm-request-drain"
+	AuthUnauth           ProfileID = "limited-v1-console-unauthenticated"
+	AuthScope            ProfileID = "limited-v1-console-scoped-authorization"
+	GuardrailCalibration ProfileID = "limited-v1-vllm-guardrail-calibration"
+	MCPSessionBaseline   ProfileID = "catalogue-mcp-session-baseline"
 )
 
 // Definition is immutable product metadata for a fixed profile.
@@ -40,11 +42,13 @@ type Definition struct {
 
 func DefinitionFor(id ProfileID) (Definition, error) {
 	definitions := map[ProfileID]Definition{
-		VoiceMedia:    {ID: VoiceMedia, Title: "Installed Voice media", Product: "application", Category: "Functional", ClaimLimits: "ordinary installed Pipecat media only; no phone-call, semantic, brain or security claim", FixedTarget: "default", FixedTenant: "voice", MaxDuration: 4 * time.Minute, MaxMutations: 0},
-		VoiceRecovery: {ID: VoiceRecovery, Title: "Installed Voice replacement recovery", Product: "application", Category: "Functional", ClaimLimits: "one PDB-honoring exact-UID eviction and fresh-session recovery; no seamless-session or security claim", FixedTarget: "default", FixedTenant: "voice", MaxDuration: 10 * time.Minute, MaxMutations: 1},
-		GPUDrain:      {ID: GPUDrain, Title: "Owned GPU request drain", Product: "ai", Category: "Functional", ClaimLimits: "owned ordinary-GPU drain/reopen/recovery fixture only; no installed-brain or security claim", FixedTarget: "default", FixedTenant: "vllm-functional", MaxDuration: 12 * time.Minute, MaxMutations: 1},
-		AuthUnauth:    {ID: AuthUnauth, Title: "Console unauthenticated boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API authentication boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
-		AuthScope:     {ID: AuthScope, Title: "Console scoped authorization boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API tenant/target authorization boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
+		VoiceMedia:           {ID: VoiceMedia, Title: "Installed Voice media", Product: "application", Category: "Functional", ClaimLimits: "ordinary installed Pipecat media only; no phone-call, semantic, brain or security claim", FixedTarget: "default", FixedTenant: "voice", MaxDuration: 4 * time.Minute, MaxMutations: 0},
+		VoiceRecovery:        {ID: VoiceRecovery, Title: "Installed Voice replacement recovery", Product: "application", Category: "Functional", ClaimLimits: "one PDB-honoring exact-UID eviction and fresh-session recovery; no seamless-session or security claim", FixedTarget: "default", FixedTenant: "voice", MaxDuration: 10 * time.Minute, MaxMutations: 1},
+		GPUDrain:             {ID: GPUDrain, Title: "Owned GPU request drain", Product: "ai", Category: "Functional", ClaimLimits: "owned ordinary-GPU drain/reopen/recovery fixture only; no installed-brain or security claim", FixedTarget: "default", FixedTenant: "vllm-functional", MaxDuration: 12 * time.Minute, MaxMutations: 1},
+		AuthUnauth:           {ID: AuthUnauth, Title: "Console unauthenticated boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API authentication boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
+		AuthScope:            {ID: AuthScope, Title: "Console scoped authorization boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API tenant/target authorization boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
+		GuardrailCalibration: {ID: GuardrailCalibration, Title: "Installed guardrail benign calibration", Product: "ai", Category: "Calibration", ClaimLimits: "two fixed benign requests to the reviewed non-forwarding classifier endpoint/source contract; loaded process, forwarding behavior, guarded serving, injected response, detector, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
+		MCPSessionBaseline:   {ID: MCPSessionBaseline, Title: "Installed MCP owned session", Product: "application", Category: "Functional", ClaimLimits: "one synthetic MCP tool read and exact in-memory session invalidation with mounted-file/package hash pins; already-loaded Python bytes, business mutation, provider, authorization, brain, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "mcp", MaxDuration: 2 * time.Minute, MaxMutations: 2},
 	}
 	definition, ok := definitions[id]
 	if !ok {
@@ -91,6 +95,33 @@ type GPUFixtureRuntime struct {
 	KubeContext       string `json:"kubeContext"`
 }
 
+// GuardrailCalibrationRuntime is a server-owned, disabled-by-default route and
+// source authority. The browser cannot provide any of these fields.
+type GuardrailCalibrationRuntime struct {
+	Enabled              bool   `json:"enabled"`
+	Namespace            string `json:"namespace"`
+	Service              string `json:"service"`
+	Port                 int32  `json:"port"`
+	Container            string `json:"container"`
+	SourceConfigMap      string `json:"sourceConfigMap"`
+	SourceKey            string `json:"sourceKey"`
+	ExpectedSourceSHA256 string `json:"expectedSourceSHA256"`
+}
+
+// MCPSessionRuntime is fixed by the deployment, never by a launch request.
+type MCPSessionRuntime struct {
+	Enabled              bool   `json:"enabled"`
+	Namespace            string `json:"namespace"`
+	Deployment           string `json:"deployment"`
+	Service              string `json:"service"`
+	Container            string `json:"container"`
+	Port                 int32  `json:"port"`
+	SourceConfigMap      string `json:"sourceConfigMap"`
+	SourceKey            string `json:"sourceKey"`
+	ExpectedImageID      string `json:"expectedImageID"`
+	ExpectedSourceSHA256 string `json:"expectedSourceSHA256"`
+}
+
 // Runtime contains trusted process configuration. It is assembled by the
 // console from chart/startup settings, never decoded from the launch request or
 // the private Job file.
@@ -111,6 +142,8 @@ type Runtime struct {
 	GrantFile       string
 	Voice           VoiceRuntime
 	GPU             GPUFixtureRuntime
+	Guardrail       GuardrailCalibrationRuntime
+	MCP             MCPSessionRuntime
 }
 
 type Outcome string

@@ -18,6 +18,7 @@ import (
 type catalogueSignalExec struct {
 	mu         sync.Mutex
 	created    []string
+	manifests  []string
 	createErr  error
 	deleteCall bool
 }
@@ -62,15 +63,17 @@ func (f *catalogueSignalExec) run(_ time.Duration, bin string, args ...string) (
 		}
 		name := manifestValue(string(raw), "name:")
 		correlation := manifestValue(string(raw), "phorvex.ai/attack-correlation:")
+		targetUID := manifestValue(string(raw), "phorvex.ai/console-target-pod-uid:")
 		rule := manifestValue(string(raw), "type:")
 		f.mu.Lock()
 		f.created = append(f.created, name)
+		f.manifests = append(f.manifests, string(raw))
 		createErr := f.createErr
 		f.mu.Unlock()
 		if createErr != nil {
 			return "lost create acknowledgement", createErr
 		}
-		return `{"metadata":{"name":"` + name + `","uid":"event-uid-` + correlation + `","creationTimestamp":"2026-09-23T19:00:00Z","labels":{"phorvex.ai/attack-correlation":"` + correlation + `","phorvex.ai/console-catalogue":"true"}},"spec":{"targets":["demo/demo-0"],"rule":{"type":"` + rule + `","source":"ExternalDetector"}}}`, nil
+		return `{"metadata":{"name":"` + name + `","uid":"event-uid-` + correlation + `","creationTimestamp":"2026-09-23T19:00:00Z","labels":{"phorvex.ai/attack-correlation":"` + correlation + `","phorvex.ai/console-catalogue":"true"},"annotations":{"phorvex.ai/console-target-pod-uid":"` + targetUID + `"}},"spec":{"targets":["demo/demo-0"],"rule":{"type":"` + rule + `","source":"ExternalDetector"}}}`, nil
 	default:
 		return "", nil
 	}
@@ -150,7 +153,7 @@ func TestCatalogueSignalRouteIsUnscoredAndObservationOptIn(t *testing.T) {
 	reads := 0
 	cluster.podReadHook = func() {
 		reads++
-		if reads == 2 {
+		if reads == 3 {
 			cluster.podUID = "replacement-uid"
 		}
 	}
@@ -210,9 +213,13 @@ func TestCatalogueSignalRouteIsUnscoredAndObservationOptIn(t *testing.T) {
 
 	fx.mu.Lock()
 	created := append([]string(nil), fx.created...)
+	manifests := append([]string(nil), fx.manifests...)
 	fx.mu.Unlock()
 	if len(created) != 1 || created[0] == "redteam-scn-ai1-inference-manipulation" || !strings.HasPrefix(created[0], "redteam-scn-ai1-inference-manipulation-") {
 		t.Fatalf("event name is not unique: %v", created)
+	}
+	if len(manifests) != 1 || !strings.Contains(manifests[0], `phorvex.ai/console-target-pod-uid: "pod-uid"`) {
+		t.Fatalf("legacy-selected catalogue event lacks exact Pod UID binding: %v", manifests)
 	}
 }
 
@@ -263,7 +270,17 @@ func TestCatalogueSignalFailurePersistsExactCandidateAndClearRefuses(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			resetSignalAttackLedger(t)
 			fx := &catalogueSignalExec{createErr: tc.createErr}
-			s := newCatalogueSignalServer(t, fx, &fakeExperimentCluster{podUID: tc.clusterUID, podFound: true})
+			cluster := &fakeExperimentCluster{podUID: "pod-uid", podFound: true}
+			if tc.createErr == nil {
+				reads := 0
+				cluster.podReadHook = func() {
+					reads++
+					if reads == 2 {
+						cluster.podUID = tc.clusterUID
+					}
+				}
+			}
+			s := newCatalogueSignalServer(t, fx, cluster)
 			w := launchCatalogueSignal(t, s, `{"namespace":"demo","scenario":"ai1-inference-manipulation","expected":"guardrail-rotate","action":"fire"}`)
 			if w.Code != http.StatusBadGateway {
 				t.Fatalf("code=%d body=%s", w.Code, w.Body.String())

@@ -1,0 +1,82 @@
+# Preparation template, not an approved runnable case.
+schema: catalogue-campaign-case-draft-v1
+case_id: REQUIRED
+revision: 1
+state: DRAFT
+case_type: REQUIRED  # behavioral-security | mechanism | availability | reporting-control
+owner: REQUIRED
+independent_reviewer: REQUIRED
+
+applicability:
+  workload: REQUIRED
+  stack_and_dependencies: []
+  inventory_evidence: []
+  version_and_configuration_pins: []
+  trust_boundary: REQUIRED
+  threat_objective: REQUIRED
+  cve: null  # Optional; never add a CVE label solely from a scanner or product name.
+  primary_advisory_and_checked_date: null
+  affected_range_and_enabled_preconditions: null
+  verdict: UNKNOWN
+
+input_contract:
+  mode: REQUIRED  # proactive-no-alert | real-detector | injected-response-control
+  expected_brain_observations: []
+  detector_and_rule: null
+  negative_signal_control: null
+  exact_event_identity: null
+  prohibits_detection_claim_from_injection: true
+
+decision_contract:
+  acceptable_defenses: []
+  legitimate_no_action_conditions: []
+  policy_constraints_and_required_telemetry: []
+  candidate_exclusion_evidence: []
+  choice_quality_rule: REQUIRED
+
+execution_contract:
+  current_source_image_policy_target_pins: []
+  operation_identity: REQUIRED
+  authority_and_dispatch_receipt: REQUIRED
+  actuator_completion_receipt: REQUIRED
+  independent_effect_oracle: REQUIRED
+  target_or_source_change_behavior: STOP_AND_REBASELINE
+
+evaluation:
+  independent_attack_oracle: REQUIRED_FOR_SECURITY_CASE
+  legitimate_workload_oracle: REQUIRED
+  positive_negative_controls: []
+  isolated_reference_or_explicit_causality_limit: REQUIRED
+  repetition_and_uncertainty_plan: REQUIRED
+  availability_latency_recovery_measurements: []
+  cost_resource_measurements: []
+  exact_correlation_keys_and_time_window: REQUIRED
+  missing_or_conflicting_evidence: INCONCLUSIVE
+  test_error_is_attack_success: false
+  actuator_execution_is_automatic_defense: false
+  verdict_dimensions:
+    test_execution: NOT_RUN
+    security_outcome: NOT_RUN
+    service_outcome: NOT_RUN
+    cleanup: NOT_RUN
+
+run_bounds:
+  approved_package_reference: REQUIRED
+  fixture_and_synthetic_data_scope: REQUIRED
+  mutation_ledger: REQUIRED
+  reserved_target_dependencies: []
+  time_and_resource_limits: REQUIRED
+  stop_conditions: []
+  cleanup_and_recovery_proof: REQUIRED
+
+result:
+  raw_evidence_manifest: null
+  console_display_and_raw_verdict_agree: null
+  contributing_failure_layers: []
+  confirmed_causes_and_discriminating_evidence: []
+  hypotheses_and_missing_evidence: []
+  intake_or_fix_references: []
+  deployed_repair_rerun: null
+  independent_review: PENDING
+  benchmark_suite_revision: null
+  held_out_or_exploratory: REQUIRED

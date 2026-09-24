@@ -372,12 +372,21 @@ func TestInstalledManagerFixtureAcceptsActualTaggedRuntimeAndImmutableImageID(t 
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("actual tagged manager/imageID shape rejected: %v", err)
 	}
+	v7 := *fixture
+	v7.TraceSchema = "phorvex.decision-trace.v7"
+	valid.InstalledManagerFixture = &v7
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("exact V7 manager trace source rejected: %v", err)
+	}
+	valid.InstalledManagerFixture = fixture
 	for name, mutate := range map[string]func(*InstalledManagerFixtureConfig){
 		"mutable image id": func(f *InstalledManagerFixtureConfig) { f.ImageID = "docker://sha256:latest" },
 		"invented digest brain": func(f *InstalledManagerFixtureConfig) {
 			f.ExpectedBrainImage = f.Image + "@sha256:" + strings.Repeat("4", 64)
 		},
 		"wrong trace":                  func(f *InstalledManagerFixtureConfig) { f.TraceSchema = "phorvex.decision-trace.v5" },
+		"unknown trace":                func(f *InstalledManagerFixtureConfig) { f.TraceSchema = "phorvex.decision-trace.v8" },
+		"absent trace":                 func(f *InstalledManagerFixtureConfig) { f.TraceSchema = "" },
 		"unbounded observer":           func(f *InstalledManagerFixtureConfig) { f.ObservationTimeoutSeconds = 31 },
 		"too-small source budget":      func(f *InstalledManagerFixtureConfig) { f.ObservationMaxBytes = 7_169_228 },
 		"unbounded source budget":      func(f *InstalledManagerFixtureConfig) { f.ObservationMaxBytes = 64<<20 + 1 },

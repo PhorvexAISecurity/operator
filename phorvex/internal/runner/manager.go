@@ -1960,6 +1960,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// P-PHYSICS (UCW): the caller derives one discovered witness map for the shared snapshot.
 	// Honest-absent (NeutralPhysics) when no scan answers.
 	infected := buildInfectedSet(snap) // P-CONTEXT live-beta Tier-1 frontier
+	evidenceEvents := ingest.EvidenceEvents(snap.Events)
 
 	// Select this tenant's pods.
 	var selPods []*model.Pod
@@ -1997,7 +1998,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	for _, pod := range selPods {
 		pol.DecisionAssets[pod.Namespace+"/"+pod.Name] = pod.UID
 	}
-	for _, ev := range snap.Events {
+	for _, ev := range evidenceEvents {
 		if len(ev.Outcomes) > 0 {
 			pol.TrustBoundaryReason = "uncached-boundary-reader-unavailable"
 			if m.BoundaryReader != nil {
@@ -2068,7 +2069,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			NeighborCount:      snap.Graph.NeighborCount(p.Namespace, p.Name),
 			Neighbors:          neighbors,
 			Events:             events,
-			OutcomeEvents:      snap.Events,
+			OutcomeEvents:      evidenceEvents,
 			ExposureByVariable: exp,
 			IntentByVariable:   intent,
 			Physics:            ph,
@@ -2174,7 +2175,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		for _, d := range rejected {
 			m.Audit.Record(d)
 		}
-		inventory := outcomeInventory(snap.Events, pol)
+		inventory := outcomeInventory(evidenceEvents, pol)
 		if inventory != nil {
 			m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
 		}
@@ -2243,7 +2244,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// BEFORE actuation; no later resnapshot or
 	// shared map/slice can rewrite the evidence used for this claim.
 	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
-	representationInventory := outcomeInventory(snap.Events, pol)
+	representationInventory := outcomeInventory(evidenceEvents, pol)
 	versions := make(map[string]string, len(views))
 	for _, v := range views {
 		versions[v.Pod.Namespace+"/"+v.Pod.Name] = v.Pod.UID
@@ -2251,7 +2252,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// No effect has been attempted yet. Stop promptly while preparing the
 	// immutable reporting inputs rather than carrying an expired tick into
 	// actuation. After an attempt, the audit loop below must drain completely.
-	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, snap.Events, snap.Now)
+	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, evidenceEvents, snap.Now)
 	if !complete {
 		return
 	}
@@ -2335,7 +2336,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		ce.RetainStageClock(pol.Owner(), keep)
 	}
-	inventory := outcomeInventory(snap.Events, pol)
+	inventory := outcomeInventory(evidenceEvents, pol)
 	if inventory != nil {
 		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
 	}

@@ -132,6 +132,48 @@ func TestVoiceNormalResultIncludesDeferredCleanup(t *testing.T) {
 	if driver.evictions != 0 {
 		t.Fatalf("normal media dispatched %d evictions", driver.evictions)
 	}
+	projected := projectVoiceResult(NewVoiceMediaHandler().Definition(), result, time.Now())
+	identity := projected.Evidence
+	if result.Target == nil || result.Target.UID != "pod-a" || identity["targetPodUID"] != "pod-a" ||
+		identity["targetImageID"] != driver.baseline.Pods[0].ImageID || identity["targetContainerID"] != driver.baseline.Pods[0].ContainerID ||
+		identity["podSourceFileSHA256"] != voiceExpectedSourceSHA ||
+		identity["session1.callSID"] != result.Sessions[0].CallSID || identity["session1.streamSID"] != result.Sessions[0].StreamSID ||
+		result.sessionIntentsRecorded != 1 {
+		t.Fatalf("durable synthetic session and serving identity projection differs: %#v", identity)
+	}
+	if _, exposed := identity["session1.accountSID"]; exposed {
+		t.Fatal("synthetic account identity leaked to run evidence")
+	}
+	foundIntent := false
+	for _, intent := range recorder.intents {
+		if intent.Step == "voice.session" && intent.Identity["callSID"] == identity["session1.callSID"] && intent.Identity["streamSID"] == identity["session1.streamSID"] {
+			foundIntent = true
+		}
+	}
+	if !foundIntent {
+		t.Fatal("projected synthetic session lacks its durable intent")
+	}
+}
+
+func TestVoiceProjectionRequiresSessionIntentAndObservedSource(t *testing.T) {
+	result := VoiceResult{Outcome: VoiceOutcomeIncomplete, Sessions: []VoiceSession{
+		{Phase: "interrupted", CallSID: "CA-first", StreamSID: "MZ-first"},
+		{Phase: "recovery", CallSID: "CA-unrecorded", StreamSID: "MZ-unrecorded"},
+	}, sessionIntentsRecorded: 1}
+	projected := projectVoiceResult(NewVoiceRecoveryHandler().Definition(), result, time.Now())
+	if projected.Evidence["session1.callSID"] != "CA-first" {
+		t.Fatal("persisted first session identity absent")
+	}
+	for _, key := range []string{"session2.callSID", "session2.streamSID", "podSourceFileSHA256", "targetPodUID"} {
+		if _, exposed := projected.Evidence[key]; exposed {
+			t.Fatalf("unrecorded or unobserved identity projected: %s", key)
+		}
+	}
+	driver := &fakeVoiceDriver{baseline: testVoiceSnapshot(false), source: strings.Repeat("0", 64)}
+	unverified := runVoice(context.Background(), testVoiceConfig(VoiceNormalMedia), driver, &voiceRecorder{})
+	if unverified.PodSourceFileSHA256 != "" || unverified.Target != nil || len(unverified.Sessions) != 0 {
+		t.Fatalf("source mismatch exposed target/session identity: %#v", unverified)
+	}
 }
 
 func TestVoiceCleanupFailureDemotesSuccessfulMedia(t *testing.T) {

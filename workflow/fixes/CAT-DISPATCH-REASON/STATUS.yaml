@@ -1,0 +1,249 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a943643ff4b53baf00b7a0da2792ae48fbbd94e2df03abf84ccfb123c9ddbe3f
+    source_sha: 0c4a11f701b2f10389de031c40b87ab4f642f916
+    at: '2026-09-24T06:27:22+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline.log
+    sha256: f59ac31193f6e0c1b67f8b2f0b416e4b8588d06f11667a63b6896801c12d09aa
+    source_sha: 0c4a11f701b2f10389de031c40b87ab4f642f916
+    at: '2026-09-24T06:41:05+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: fb16560e6a4a9c1055132fb83174887b72fcf4f7a1bca6f5ad3a4f873d9a282e
+    source_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+    at: '2026-09-24T06:56:59+00:00'
+    baseline_sha: 0c4a11f701b2f10389de031c40b87ab4f642f916
+  preflight:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:22+00:00'
+  implementation:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: 04-diff.patch
+    sha256: 93314f59d307c1209fd8f86f38c7fa92d38bc613ee1bcb359b404557b845cfe8
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:22+00:00'
+  l0:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:22+00:00'
+  l1:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/preflight/run-1790232630603548183/go-phorvex.log
+    sha256: ed0423c10c2964da479352230af9d0215c1fd4b2bba34509e9a76e7146bd1cec
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:22+00:00'
+  l2:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/worker/red-green.md
+    sha256: e52e0c8220a979a33d58964242bdd9387fb55cb284107791fe5afd3e6fa05f15
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:22+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/worker/head-packages.log
+    sha256: 25d316a0b84b5bbb3ae3e1e750450d497e182495ab712c3ae9718919423d5688
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:22+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 0ba1f5b735e790fc7cfc0720881fd55687f3ae93e537e1fe737a901695f4f719
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:59:48+00:00'
+    baseline_sha: 0c4a11f701b2f10389de031c40b87ab4f642f916
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: ffa4c1c8a49f5093b9c073746ff7c767721c871595a600c87fc70d62bf2d7883
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:59:48+00:00'
+    incident_sha256: 0ba1f5b735e790fc7cfc0720881fd55687f3ae93e537e1fe737a901695f4f719
+fix_id: CAT-DISPATCH-REASON
+issues:
+- M-191
+title: Preserve closed dispatch refusal reasons in audit records
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-cleanup-audit
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-coverage-20260923
+  code_sha: 0c4a11f701b2f10389de031c40b87ab4f642f916
+  deployed_image: 0.4.154
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  head_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Publish PR323 update; await required CI and deployment for live acceptance
+updated_at: '2026-09-24T07:02:54+00:00'
+configuration_history:
+- at: '2026-09-24T06:27:18+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T06:38:23+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:53:39+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:58:22+00:00'
+  by: campaign-cleanup-audit
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T06:27:20+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T06:27:22+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T06:58:22+00:00'
+  by: campaign-cleanup-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T06:58:24+00:00'
+  by: campaign-cleanup-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T06:59:48+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T06:59:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T07:02:54+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-DISPATCH-REASON:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10

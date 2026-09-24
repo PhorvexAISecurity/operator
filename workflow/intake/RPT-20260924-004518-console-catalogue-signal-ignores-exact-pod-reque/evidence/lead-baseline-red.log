@@ -1,0 +1,21 @@
+--- FAIL: TestExactCatalogueTargetUsesOwnedPodAndDeployment (0.01s)
+    scenario_exact_target_test.go:173: status=502 body={"correlation":"18d81b43199df913-1","error":"target Pod identity changed or became unavailable across catalogue signal creation","eventName":"redteam-scn-c2-persistence-evict-18d81b43199df913-1","eventUID":"event-uid","mutated":true,"restoration":"reconciliation-required"}
+         createdManifests=[apiVersion: amtd.r6security.com/v1beta1
+        kind: SecurityEvent
+        metadata:
+          name: redteam-scn-c2-persistence-evict-18d81b43199df913-1
+          labels:
+            phorvex.ai/redteam: "true"
+            phorvex.ai/console-catalogue: "true"
+            phorvex.ai/attack-correlation: "18d81b43199df913-1"
+        spec:
+          description: "Red-team catalogue scenario c2-persistence-evict fired live at voice/voice-bot-0"
+          targets: ["voice/voice-bot-0"]
+          rule:
+            type: "Panic"
+            threatLevel: "critical"
+            source: "ExternalDetector"
+        ]
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	0.023s
+FAIL

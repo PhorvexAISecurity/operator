@@ -17,6 +17,20 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
+func TestRejectedConsoleTargetCannotEnterOutcomeInventory(t *testing.T) {
+	policy := model.Policy{PolicyUID: "policy-uid", DecisionAssets: map[string]string{"ns/source": "replacement-uid"}}
+	event := model.SecurityEventInfo{Name: "old-event", Trust: "trusted", CreatorIdentity: "detector", ResolvedTargets: []string{"ns/source"},
+		ConsoleTargetPodUID: "original-uid", TargetBindingReason: "console-target-pod-uid-mismatch",
+		Outcomes: []model.ProtectedOutcome{{ID: "claim", PolicyUID: "policy-uid", DecisionAsset: "ns/source", DecisionAssetUID: "replacement-uid", ScopeBasis: "fixture"}}}
+	if inventory := outcomeInventory([]model.SecurityEventInfo{event}, policy); inventory != nil {
+		t.Fatalf("rejected bound event regained outcome inventory: %+v", inventory)
+	}
+	event.TargetBindingReason = ""
+	if inventory := outcomeInventory([]model.SecurityEventInfo{event}, policy); inventory == nil || len(inventory.Records) != 1 {
+		t.Fatalf("current bound positive control lost: %+v", inventory)
+	}
+}
+
 func TestM99UncontainableConditionAndEvent(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = v1alpha1.AddToScheme(scheme)

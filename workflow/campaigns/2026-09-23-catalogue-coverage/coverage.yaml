@@ -1,0 +1,768 @@
+schema_version: 1
+campaign_id: 2026-09-23-catalogue-coverage
+state: candidate-matrix-not-executable-registration
+observed_at: '2026-09-23T22:44:08Z'
+source_head_at_draft: 37ffb0da11fec55218eddad79fbb5851b3dc5987
+evidence:
+  inventory: /home/mehrdad/operator/.git/phorvex-workflow/catalogue-coverage-20260923/inventory/coverage-rows.json
+  inventory_report: /home/mehrdad/operator/.git/phorvex-workflow/catalogue-coverage-20260923/inventory/REPORT.md
+  advisory_ledger: /home/mehrdad/operator/.git/phorvex-workflow/catalogue-coverage-20260923/advisories/LEDGER.md
+  preparation: /home/mehrdad/operator/.git/phorvex-workflow/catalogue-coverage-prep-20260923/coverage-plan/REPORT.md
+  scenario_source: build/test-harness/scenarios
+accounting:
+  unit: workload-trust-boundary-input-mode-effect candidate cell
+  candidate_cells: 33
+  mechanism_or_control_cells: 19
+  behavioral_security_cells: 14
+  admitted_by_this_matrix: 0
+  rule: These are planning cells, not registered scenarios or completed runs. Count every candidate and
+    explicit scoped/excluded area in the coverage ledger. A security success-rate denominator includes
+    only applicable valid executed reviewed S trials; M controls, invalid, blocked, unavailable and not-run
+    trials remain separately counted.
+progress_accounting:
+  through_round: 19
+  interpretation: Exclusive planning-progress buckets. An observed related arm may be only a prerequisite,
+    refusal or configuration baseline; it does not mark the entire candidate completed or security-scored.
+    Blocked means a concrete current source, configuration or infrastructure prerequisite remains; not_run
+    means no admitted candidate-specific trial yet. Round19 supplied a routed fixture and an exact
+    trusted-event-to-selection join, but route preparation refused all six selected quarantine
+    decisions before dispatch; the observed-cell counts do not change.
+  mechanism_or_control:
+    related_arm_observed:
+    - voice-stream-continuity
+    - nats-durable-message
+    - vllm-prefix-cache
+    - litellm-route-availability
+    - mongo-synthetic-state
+    - chroma-vector-state
+    - crm-refund-record-capability
+    - crm-reset-record-capability
+    - phorvex-proactive-decision
+    - phorvex-injected-response
+    - phorvex-console-unauthenticated-boundary
+    - phorvex-console-scoped-authorization
+    - network-policy-packet-effect
+    blocked:
+    - nats-quarantine-route
+    - vllm-request-drain
+    - phorvex-real-detector-chain
+    - ci-report-integrity
+    not_run:
+    - phorvex-console-trace
+    - phorvex-operator-ownership
+  behavioral_security:
+    related_arm_observed_no_defense_credit:
+    - nats-uncredentialed-message-exposure
+    - litellm-proxy-authorization
+    - k8s-credential-reuse
+    blocked:
+    - voice-runner-advisory-boundary
+    - nats-subject-authorization
+    - vllm-guardrail-policy
+    - litellm-routing-override
+    - crm-business-authorization
+    - ci-report-authorization
+    not_run:
+    - voice-session-authorization
+    - mongo-tenant-authorization
+    - chroma-tenant-authorization
+    - mcp-tool-authorization
+    - mcp-response-trust
+  eligible_installed_defense_efficacy_trials: 0
+  installed_source_at_round_19: a50d796af128cd4109875e03eaf429d460126740
+  pending_installed_verification: PR323 contains reviewed source changes for NATS console controls,
+    detector contracts and response tracing; M-184 and CAT-RESOURCE-TRACE source changes are also
+    ahead of the observed installed a50d796a manager/console. No source-only fix is counted as an installed
+    effect or regression closure.
+event_modes:
+  direct: Direct mechanism probe; no installed-manager or attack claim.
+  proactive: Installed decision without an alert; observe actual context and no-action.
+  real_detector_unverified: Requires an independently identified real producer, event and target join.
+  injected_response_only: Injected event tests response wiring, never natural detection.
+  no_current_path: No verified producer or admissible installed path at this baseline.
+  configuration_baseline: Declared synthetic confidentiality objective under current config, with no alert
+    or installed-response claim.
+cells:
+- id: voice-stream-continuity
+  stack: voice
+  kind: M
+  disposition: reuse-and-revise
+  source_ids:
+  - c2-voice-websocket-continuity
+  - c2-installed-manager-session
+  event_mode: direct
+  objective: Establish session completion, fresh admission, interruption and recovery around a scoped
+    target.
+  required_effect: Exact target replacement or explicit PDB refusal with measured session outcome.
+  threat_oracle: No attack objective; distinguish completed, interrupted and censored synthetic streams
+    by frame and close records.
+  service_oracle: Peer and new sessions complete with bounded latency, endpoint identity and no unintended
+    interruption.
+  present_constraints: Sep23 22:22 inventory was 2/3 with one CNI-blocked Pending Pod and PDB allowing
+    zero disruptions. A later Sep24 00:08:57 exact-target read found three Ready Pods and PDB allowing
+    one disruption. Round18 restored three Ready Pods and observed one replacement plus 2/2 minimum
+    Ready Pod/endpoint sparse samples, but its original console result was partial/test-failed/cleanupFAIL.
+  next_step: Preserve original round18 failure and supplemental exact-residue cleanup; review the cleanup
+    source repair and fresh installed authority before a distinct recovery rerun. Do not override the
+    original unsafe-to-retry gate or treat sparse samples as continuous availability.
+  source_gap: A completed, cleanup-verified live recovery control and Phorvex-selected actuator response
+    remain unverified. Provider accounting, speech semantics and CRM side effects are not attested.
+  reviewed_progress: Round15 independently reviewed live early-disconnect then normal media passed with
+    683 input and 72 response frames plus exact transcript/forward cleanup. Round16 installed console
+    v1run-4 reported the same frame counts and functional-pass, corroborated by the retained journal and
+    independent exact transcript/helper absence; helper delete acknowledgement gap retained. Round18
+    recorded a real exact-UID eviction and recovery media, but original terminal cleanup failed with one
+    synthetic transcript remaining. A separate exact CAS cleanup and independent two-SID zero read resolved
+    that residue without changing the original partial result. No security or Phorvex response claim.
+  progress_evidence: rounds/round-15/review.md
+  additional_progress_evidence:
+  - rounds/round-16/review.md
+  - rounds/round-18/analysis.md
+  - rounds/round-18/cleanup.md
+- id: voice-session-authorization
+  stack: voice
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test unauthorized reuse of an owned disposable session identity across a real Voice trust
+    boundary.
+  required_effect: Reject the unauthorized continuation while preserving an authorized session; any Phorvex
+    response needs exact installed attribution.
+  threat_oracle: Independent server-side accepted/rejected session identity and bounded media/control
+    outcome, separated from initial disclosure.
+  service_oracle: Same-time legitimate session establishment, frame continuity and recovery.
+  present_constraints: Actual custom handler passes start-frame call ID into provider-capable pipeline.
+    Rounds15 and16 sent bounded ordinary synthetic media; neither tested unauthorized session reuse.
+    Upstream identity controls remain unverified.
+  next_step: Retain this unresolved cell; proposed isolated session test was automatically rejected
+    for possible cybersecurity risk and remains unexecuted. Do not retry the rejected package.
+  source_gap: No verified unauthorized producer, session oracle or detector-to-brain path.
+    The tool rejection is not proof of inapplicability or a security verdict.
+  progress_evidence: evidence/VOICE-ADVISORY-ROUTES/REPORT.md
+- id: voice-runner-advisory-boundary
+  stack: voice
+  kind: S
+  disposition: source-excluded-current-serving-route
+  source_ids: []
+  event_mode: no_current_path
+  objective: Decide whether Pipecat development-runner file or telephony boundaries exist in the deployed
+    application.
+  required_effect: If present, deny an unauthorized operation without exposing files or invoking an external
+    provider.
+  threat_oracle: In an isolated fixture, owned-file containment or synthetic call-control denial; no live
+    exploit payload.
+  service_oracle: Authorized disposable session/call workflow still completes.
+  present_constraints: Exact sampled PID1 runs python bot.py from /app; both process-bound and
+    installed bot.py hashes match. The custom FastAPI route set has no development-runner import,
+    mount, files endpoint or folder flag. Package version alone does not establish reachability.
+  next_step: Recheck route and entrypoint on image or application-source change. Keep the separate
+    custom-app session authorization candidate unresolved.
+  source_gap: Exclusion applies only to the observed serving path, not all alternate image processes.
+    No vulnerability request or provider call-control test was sent.
+  progress_evidence: evidence/VOICE-ADVISORY-ROUTES/REPORT.md
+- id: nats-durable-message
+  stack: nats
+  kind: M
+  disposition: reuse-and-revise
+  source_ids:
+  - c2-nats-jetstream-durability
+  event_mode: direct
+  objective: Measure synthetic PubAck, consumer ACK, stored hash and bounded member recovery.
+  required_effect: Preserve acknowledged fixture messages across exact member operation, or refuse unsafe
+    disruption.
+  threat_oracle: No attack objective; independent durable-message hash and consumer sequence witness.
+  service_oracle: Publisher/consumer continuity, quorum and peer availability during and after action.
+  present_constraints: StatefulSet is 2/3; nats-0 is a retained AMTD-owned quarantine Pod outside both
+    Service selectors; per-member PVCs exist.
+  next_step: Reconcile quarantine/recovery semantics and quorum health before any member fault; use only
+    owned streams.
+  source_gap: Direct short-retention control passed; durability during failure, actual installed choice
+    and attacker outcome are still unverified.
+  reviewed_progress: 'Round6 installed single-replica owned stream/message direct protocol PASS: PubAck,
+    second uncredentialed subscriber, durable fetch/ACK, retained hash and exact deletion. No restart,
+    quorum or installed Phorvex claim.'
+  progress_evidence: rounds/round-6/evidence/result.json
+- id: nats-quarantine-route
+  stack: nats
+  kind: M
+  disposition: new
+  source_ids:
+  - c2-native-route-cutover
+  - c2-native-endpoint-cutover
+  event_mode: proactive
+  objective: Account for exact NATS member identity, Service membership and restoration after quarantine.
+  required_effect: Correct member exclusion/reentry or justified refusal with no unowned stream loss.
+  threat_oracle: No attack objective; independently compare owner, labels, EndpointSlices, peer and client
+    protocol state.
+  service_oracle: Existing clients retain quorum and acknowledged fixture traffic through the transition.
+  present_constraints: nats-0 exclusion is consistent with source quarantine behavior but its original
+    trigger and desired recovery remain unproved.
+  next_step: Source-review quarantine release and establish a fresh healthy baseline; then design an exact-ordinal
+    fixture.
+  source_gap: Generic route fixtures do not yet model NATS StatefulSet ordinal/PVC semantics.
+- id: nats-subject-authorization
+  stack: nats
+  kind: S
+  disposition: new-conditional
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test a disposable account's denied subscription against an authorized positive control.
+  required_effect: Denied subject never delivered; allowed synthetic traffic remains available.
+  threat_oracle: Independent subscriber receipt/absence for synthetic subjects with exact account identity.
+  service_oracle: Legitimate consumer ACK and message integrity under the same fixture.
+  present_constraints: nats-server 2.10.29 is in GHSA-wh7g-5m82-pmhr range, but fresh selected mounted
+    config has no authentication or overlapping wildcard allow/deny rules. Round6 tested uncredentialed
+    direct protocol delivery; a separate in-cluster client and intended application identity remain unverified.
+  next_step: Define the intended client identity boundary before a synthetic access control. Recheck feature
+    predicates if config/image changes; an isolated affected-versus-fixed fixture would be upstream-only.
+  source_gap: Installed advisory rule predicate is absent; no NATS subject detector or attacker account
+    is evidenced, and no CVE case is admitted.
+- id: nats-uncredentialed-message-exposure
+  stack: nats
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: configuration_baseline
+  objective: Measure whether an independent uncredentialed cluster client obtains one nonce-owned synthetic
+    message designated for the fixture intended consumer.
+  required_effect: Independent remote payload and legitimate consumer observations, then separately attributable
+    response comparison when a response is actually admitted.
+  threat_oracle: Exact remote client PodUID, connected brokerServerID, flushed concrete nonce subject,
+    message nonce header and independently matching payload SHA256. The intended-consumer rule is preregistered
+    fixture intent, not a claimed installed ACL.
+  service_oracle: Same-message real JetStream PubAck, intended consumer DoubleAck and stored readback
+    hash; exact Service membership/readiness and owned cleanup.
+  present_constraints: Installed broker has no client identity or subject ACL; current behavior may therefore
+    expose the synthetic message by configuration. Round14 observed the exact owned message in a separate
+    uncredentialed Pod, with intended-consumer ACK, stored hash and independently verified cleanup. Its
+    manager audit window was not recoverable, so no paired response reason is attributed to that run.
+    No natural detector or active mitigation is established.
+  next_step: Re-pin source and route after PR323 deployment, then run the separately reviewed console
+    baseline with capture-before-publication audit if a causal comparison is admitted. A response trial
+    needs its own declared signal mode and must not borrow round14's missing decision interval.
+  source_gap: Configuration exposure does not close the separate subject-authorization/CVE cell. No permission
+    bypass, existing-customer exposure, natural detection or Phorvex failure is inferred. Keep defense
+    NOT_EVALUATED without the full admitted comparison.
+  reviewed_progress: Round14 valid configuration-exposure observation, exact independent remote payload
+    and legitimate ACK/readback, no SecurityEvent, actuator or security-efficacy claim. Round13's earlier
+    observer error remains INCONCLUSIVE and is not retroactively repaired.
+  progress_evidence: rounds/round-14/review.md
+- id: vllm-prefix-cache
+  stack: vllm
+  kind: M
+  disposition: reuse
+  source_ids:
+  - c2-vllm-prefix-cache-reset
+  event_mode: direct
+  objective: Establish cold, reuse, reset refusal and repopulation on exact ordinary-GPU fixture.
+  required_effect: Confirmed cache miss after safe idle reset, or bounded busy-window refusal.
+  threat_oracle: No attack objective; independent request/metric sequence rather than action receipt alone.
+  service_oracle: Correct ordinary inference responses, latency and running/waiting request continuity.
+  present_constraints: vLLM is singleton with PDB zero; retained KV journal blocks reset/migrate in current
+    manager audit.
+  next_step: Preserve journal and investigate terminal state; run only existing direct safe control until
+    installed eligibility is restored.
+  source_gap: Cache reset effect does not prove session data isolation or installed-manager choice.
+  reviewed_progress: Round1 supplied a benign installed serving baseline only; cache reset/miss/repopulation
+    and the retained KV journal gate remain untested. No security or installed actuator effect is credited.
+  progress_evidence: rounds/round-1/review.md
+- id: vllm-request-drain
+  stack: vllm
+  kind: M
+  disposition: reuse
+  source_ids:
+  - c2-vllm-request-drain
+  event_mode: direct
+  objective: Measure in-flight request disposition and admission across a bounded drain.
+  required_effect: Exact target drains or refuses with no silent loss of accepted work.
+  threat_oracle: No attack objective; request IDs, completion and cancellation are independently joined.
+  service_oracle: Legitimate completion, new admission, latency and recovery on the leader Service.
+  present_constraints: Current manager audit excludes request-drain for absent serving-selector authority;
+    PDB zero excludes rotation.
+  next_step: Establish selector authority and exact serving image/sidecar identity before installed-chain
+    design.
+  source_gap: Direct GPU protocol control does not establish installed action feasibility.
+- id: vllm-guardrail-policy
+  stack: vllm
+  kind: S
+  disposition: revise
+  source_ids:
+  - ai1-prompt-injection
+  - ai1-inference-manipulation
+  event_mode: real_detector_unverified
+  objective: Measure an owned disallowed request and matched legitimate prompt under actual detector and
+    guardrail policy.
+  required_effect: Block the forbidden response or explain no-action; prove real request outcome after
+    an exact guardrail change.
+  threat_oracle: Independent input/output policy grader and request-to-Pod/guardrail variant binding.
+  service_oracle: Matched harmless requests remain correct with measured latency and availability.
+  present_constraints: One vLLM Pod and separate Ready detector Deployments exist; no SecurityEvent object
+    at inventory instant, and guardrail action is hygiene-gated.
+  next_step: Trace real producer/rule and choose a reviewed harmless synthetic prompt set with weak/strong
+    controls.
+  source_gap: Existing unassessed attack IDs and injected events cannot prove natural detection or security
+    efficacy.
+- id: litellm-route-availability
+  stack: litellm
+  kind: M
+  disposition: new
+  source_ids: []
+  event_mode: direct
+  objective: Bind each benign proxy request to its serving image, backend and response during routing/recovery.
+  required_effect: A route or replica change preserves allowed completion, or refuses with explained capacity
+    limits.
+  threat_oracle: No attack objective; exact endpoint and upstream receipt establish request path.
+  service_oracle: Authorized and unauthorized control statuses, latency and backend completion per replica.
+  present_constraints: Two Ready Pods serve 1.95.0 and 1.98.0 from different imageIDs under one mutable
+    tag.
+  next_step: Pin one serving Pod per observation or reconcile rollout; use a dummy upstream and synthetic
+    request.
+  source_gap: Mounted config and exact in-Pod attribution established for listener GETs; provider route/completion
+    during recovery still unverified.
+  reviewed_progress: 'Rounds 7 and 9: each exact installed version has listener 200 and valid existing
+    master-key model-list 200, with stable config/source/identity. No inference or route/recovery change.'
+  progress_evidence: rounds/round-9/evidence/RESULT.json
+- id: litellm-proxy-authorization
+  stack: litellm
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: no_current_path
+  objective: Distinguish unauthorized model/proxy access from allowed scoped key use.
+  required_effect: Deny the unauthorized caller without blocking the allowed model request.
+  threat_oracle: Independent backend receipt and proxy identity/status for a disposable key.
+  service_oracle: Authorized request and ordinary backend response remain healthy on each pinned version.
+  present_constraints: Both installed versions configure a master-key environment reference and no DB.
+    Missing bearer returned 401; generated nonmaster returned 400 with confirmed NO_CONNECTED_DB reason.
+    Existing master-key access returned 200. No unauthorized success observed.
+  next_step: Design an isolated scoped-key/provider case with a declared tenant/model policy and synthetic
+    upstream; current master-only configuration cannot establish virtual-key isolation.
+  source_gap: No verified real producer or forbidden backend effect; do not relabel a patched CVE as active.
+  reviewed_progress: Round 9 confirmed valid 200 and nonmaster 400 NO_CONNECTED_DB on both pinned versions;
+    negative body hashes match round 7. This explains the auth/config branch without changing the original
+    preregistered round 7 failure. Security and Phorvex response remain unverified.
+  progress_evidence: rounds/round-9/evidence/RESULT.json
+- id: litellm-routing-override
+  stack: litellm
+  kind: S
+  disposition: new-conditional
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test whether a scoped caller can redirect a provider request outside allowed destinations.
+  required_effect: Reject override and protect a canary provider key while allowing intended model calls.
+  threat_oracle: Dummy provider and blocked-destination receipts, never real credentials or metadata endpoints.
+  service_oracle: Allowed model completion with stable latency and routing.
+  present_constraints: CVE-2026-84377 affected field and backport list conflict for serving 1.95.0; 1.98.0
+    also serves; override configuration unknown.
+  next_step: Resolve vendor range and installed configuration, then design only an isolated canary-key
+    fixture.
+  source_gap: No supported CVE applicability or request-to-Pod routing claim yet.
+- id: mongo-synthetic-state
+  stack: mongo
+  kind: M
+  disposition: new
+  source_ids:
+  - c2-checkpoint-continuity
+  event_mode: direct
+  objective: Measure acknowledged synthetic document readback across exact process/PVC transition.
+  required_effect: Data retained or unsafe operation refused with explicit state identity.
+  threat_oracle: No attack objective; independent readback hash and acknowledged write sequence.
+  service_oracle: Legitimate synthetic read/write continuity and bounded recovery time.
+  present_constraints: Single PVC-backed Mongo Pod; version 7.0.40 lacks September 7.0.41 fixes; no application
+    PDB.
+  next_step: Use this verified state oracle in a separately reviewed response/recovery comparison. Singleton
+    availability constraints and tenant-authorization semantics remain unresolved.
+  source_gap: Existing checkpoint scenario is a pattern, not a Mongo test; no installed state-transfer
+    capability proven.
+  reviewed_progress: 'Round 8: exact installed Mongo 7.0.40 accepted one nonce collection, inserted/read/updated/read
+    one synthetic document with matching hashes and stable Pod/container/process. Exact collection and
+    database absence plus owned forward closure confirmed. Functional baseline only.'
+  progress_evidence: rounds/round-8/evidence/RESULT.json
+- id: mongo-tenant-authorization
+  stack: mongo
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test cross-tenant document read/write denial for scoped synthetic identities.
+  required_effect: Forbidden data remains unread/unmodified while authorized operation succeeds.
+  threat_oracle: Independent document hash/readback and server authorization decision.
+  service_oracle: Authorized tenant read/write, latency and data consistency.
+  present_constraints: Actual database auth and caller grants were not inspected; single-Pod state makes
+    crash advisories unsuitable for live replay.
+  next_step: Map CRM/MCP-to-Mongo trust path and approved auth configuration; use isolated disposable
+    data.
+  source_gap: CVE-2026-82065/82058 are version-affected only; exact query/privilege reachability unverified.
+- id: chroma-vector-state
+  stack: chroma
+  kind: M
+  disposition: new
+  source_ids:
+  - ai2-embedding-store-tampering
+  event_mode: direct
+  objective: Measure synthetic embedding/document identity and retrieval across safe process replacement.
+  required_effect: Preserve acknowledged collection state or refuse unsafe transfer.
+  threat_oracle: No attack objective; independent vector/document IDs and retrieval ranking witness.
+  service_oracle: Legitimate insert/query response and availability on the same synthetic collection.
+  present_constraints: Exact installed v2 server 0.5.23 pinned by running source/version/image, one PVC-backed
+    Pod. Round 12 owned vector/document get/query and cleanup pass; no restart or recovery tested.
+  next_step: Integrate the verified oracle into a separately admitted response/recovery comparison; preserve
+    singleton availability limits.
+  source_gap: Existing unassessed embedding scenario is only a review lead. Round12 verifies the installed
+    synthetic state oracle, but a reusable catalogue response/recovery case is not yet registered.
+  reviewed_progress: 'Round 11 stopped before mutation on an incorrect generic404 absence expectation.
+    Round 12 uses exact0.5.23 InvalidCollection semantics: one nonce collection and synthetic document,
+    explicit vector, independent get/query/hash/owner checks, UUID-guarded DELETE and exact absence confirmed.'
+  progress_evidence: rounds/round-12/evidence/RESULT.json
+- id: chroma-tenant-authorization
+  stack: chroma
+  kind: S
+  disposition: new-conditional
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test forbidden cross-collection retrieval or update if a real identity boundary exists.
+  required_effect: Deny forbidden access without harming authorized retrieval.
+  threat_oracle: Independent synthetic collection IDs, forbidden read/update result and state hash.
+  service_oracle: Authorized query/insert outcome and latency.
+  present_constraints: Exact server0.5.23, v2 API and supplied-vector path verified. Round12 demonstrates
+    one owned loopback collection lifecycle; no tenant/identity boundary or application caller authorization
+    was exercised.
+  next_step: Inspect effective auth/RBAC and source-faithful caller route before a tenant-boundary case;
+    version/API availability alone is not exploit reachability.
+  source_gap: CVE-2026-45833 package range alone does not establish its `/api/v2` UPDATE_COLLECTION path.
+- id: crm-business-authorization
+  stack: crm
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test a scoped caller's forbidden business-record mutation using only owned synthetic records.
+  required_effect: Reject cross-scope mutation and preserve authorized business operation.
+  threat_oracle: Independent database/readback diff and request actor identity.
+  service_oracle: Authorized record create/read/update and normal latency.
+  present_constraints: Exact source pinned; CRM intentionally trusts the agent and documents missing caller/ownership
+    checks. Two isolated exact-source local controls completed with real Mongo and synthetic records,
+    showing cross-record writes and legitimate reads. They are functional observations, not agent bypass
+    or installed Phorvex defense evidence.
+  next_step: Specify and preserve the source-faithful Voiceagent caller identity/request path, then measure
+    forbidden downstream effect and legitimate continuation in an admitted S case.
+  source_gap: Upstream identity/ownership contract and natural detector-to-brain signal remain unproved;
+    direct CRM HTTP success cannot settle this S cell.
+- id: crm-refund-record-capability
+  stack: crm
+  kind: M
+  disposition: new
+  source_ids:
+  - c2-crm-refund-capability
+  event_mode: direct
+  objective: Measure exact-source refund-record behavior across two owned synthetic orders.
+  required_effect: Record exact own and cross-order refund IDs without corrupting seed account/order state.
+  threat_oracle: No attacker objective; real handler HTTP status plus independent Mongo exact-ID readback.
+  service_oracle: Legitimate A read and refund complete, with four seed record hashes unchanged.
+  present_constraints: Local offline-built UID65532 CRM plus disposable Mongo smoke COMPLETE at 00:44
+    UTC; own and cross writes each had exact count one. No shared-cluster fixture, source-faithful upstream
+    caller identity, Phorvex detector or defense was exercised.
+  next_step: Supply reviewed immutable image digest/manifest for a separately admitted cluster functional
+    fixture only if needed; full authorization S path remains crm-business-authorization.
+  source_gap: Functional cross-record capability is not an authentication bypass or mitigation outcome.
+- id: crm-reset-record-capability
+  stack: crm
+  kind: M
+  disposition: new
+  source_ids:
+  - c2-crm-reset-capability
+  event_mode: direct
+  objective: Measure exact-source reset-record behavior across two owned synthetic accounts.
+  required_effect: Record exact own and cross-account reset IDs without corrupting seed account/order
+    state.
+  threat_oracle: No attacker objective; real handler HTTP status plus independent Mongo exact-ID readback.
+  service_oracle: Legitimate A read and reset complete, with four seed record hashes unchanged.
+  present_constraints: Local offline-built UID65532 CRM plus disposable Mongo smoke COMPLETE at 00:44
+    UTC; own and cross writes each had exact count one. No shared-cluster fixture, source-faithful upstream
+    caller identity, Phorvex detector or defense was exercised.
+  next_step: Preserve local receipt and exact-source image closure; admit a distinct upstream identity
+    scenario before security claims.
+  source_gap: Functional cross-record capability is not an authentication bypass or mitigation outcome.
+- id: mcp-tool-authorization
+  stack: mcp
+  kind: S
+  disposition: revise
+  source_ids:
+  - ai2-mcp-rogue-server
+  - ai2-mcp-tool-poisoning
+  event_mode: no_current_path
+  objective: Test an untrusted tool description or caller against a scoped authorized tool invocation.
+  required_effect: Prevent forbidden tool action and durable privilege change while allowed tool work
+    completes.
+  threat_oracle: Independent tool-side action log/state diff and caller/tool identity.
+  service_oracle: Authorized task and tool result accuracy, latency and rollback.
+  present_constraints: Installed MCP exposes only static store_directory and check_promotions tools. Voice
+    lists/calls them and forwards text; no mutating tool or business-aware detector established.
+  next_step: Use actual source/consumer boundary; do not treat old mock tool-marker cases as installed-agent
+    coverage.
+  source_gap: Existing IDs are unassessed and cannot be counted as tool-boundary evidence.
+  reviewed_progress: Round10 verified actual MCP3.4.7/SDK1.29.0 static tool registry, one source-defined
+    hours result and exact session DELETE followed by404. Direct protocol calibration only; no model/Voice
+    consumer/business action or security response.
+  progress_evidence: rounds/round-10/evidence/RESULT.json
+- id: mcp-response-trust
+  stack: mcp
+  kind: S
+  disposition: revise
+  source_ids:
+  - ai2-mcp-tool-response-injection
+  - ai2-agent-memory-contamination
+  event_mode: no_current_path
+  objective: Test whether untrusted tool output can alter a later owned agent decision or stored state.
+  required_effect: Preserve instruction/data boundary without suppressing a legitimate tool answer.
+  threat_oracle: Independent next-step action and persisted synthetic state, not the presence of text
+    alone.
+  service_oracle: Authorized task completion and correct tool data use.
+  present_constraints: Installed static MCP responses reach Voice model callback; runtime endpoint and
+    model steering unmeasured.
+  next_step: Need source-faithful controlled tool-response consumer and independent owned downstream decision,
+    with legitimate pair; marker presence is insufficient.
+  source_gap: No proven reachable downstream decision or Phorvex signal.
+  reviewed_progress: Round10 verified actual MCP3.4.7/SDK1.29.0 static tool registry, one source-defined
+    hours result and exact session DELETE followed by404. Direct protocol calibration only; no model/Voice
+    consumer/business action or security response.
+  progress_evidence: rounds/round-10/evidence/RESULT.json
+- id: phorvex-proactive-decision
+  stack: phorvex-manager
+  kind: M
+  disposition: reuse-and-revise
+  source_ids:
+  - c2-installed-manager-session
+  - c2-ephemeral-session-rotation
+  event_mode: proactive
+  objective: Observe a fresh no-alert tick, every eligible/excluded action, NOOP or exact selected operation.
+  required_effect: Exact target effect or truthful refusal with independent service outcome.
+  threat_oracle: No attack objective; exact audit input/decision/operation/effect join.
+  service_oracle: Same-time benign target and peer requests with latency and availability.
+  present_constraints: Manager0.4.154 sourcea50d796 now verified; current NATS audit selects NOOP because
+    ready2-minus1 violates minimum2 and quarantine capacityused1/limit1.
+  next_step: Keep eligibility evidence; use an owned healthy fixture for installed decision/actuator effect
+    comparison, without weakening business policy.
+  source_gap: Existing benign controls do not provide attack efficacy; refreshed manager candidate context
+    required.
+  reviewed_progress: A separate current read-only NATS audit window observed two exact policy/asset
+    no-ops with reactive-only/no-direct-foothold reasons and no dispatch. This is not round14's missing
+    historical decision window and does not establish a selected action or service effect.
+  progress_evidence: evidence/NATS-CURRENT-DECISIONS/REPORT.md
+- id: phorvex-real-detector-chain
+  stack: phorvex-manager
+  kind: M
+  disposition: new
+  source_ids:
+  - c2-installed-manager-session
+  event_mode: real_detector_unverified
+  objective: Join a real producer finding to exact SecurityEvent, manager decision, dispatch and target
+    effect.
+  required_effect: Truthful response or refusal to the exact target without collateral service harm.
+  threat_oracle: No attack objective in this M cell; producer, event UID/creator, target UID and effect
+    are independently joined.
+  service_oracle: Protected and peer requests remain available; effect/no-effect is measured outside console
+    labels.
+  present_constraints: Two vLLM detector Deployments exist; zero SecurityEvent objects at inventory instant
+    does not establish absent detection.
+  next_step: Identify a real detector rule and inert owned producer signal, then separately admit a behavioral
+    S cell.
+  source_gap: Real producer/event semantics, timing and negative sensor control are missing.
+    M-187 source repair is reviewed in PR323 but has no installed producer-to-actuator observation.
+- id: phorvex-injected-response
+  stack: phorvex-manager
+  kind: M
+  disposition: reuse-and-revise
+  source_ids:
+  - c2-installed-manager-session
+  event_mode: injected_response_only
+  objective: Test exact event-to-manager-to-actuator response and mismatched/stale/no-execution controls.
+  required_effect: Exact operation and independently observed effect, or explicit refusal; wrong identities
+    must not count.
+  threat_oracle: No attack objective; injected-event receipt is response-wiring evidence only.
+  service_oracle: Benign target/peer request status and availability through the window.
+  present_constraints: Round17 admitted one exact trusted event and joined five downstream no-op
+    decisions. Both enabled actions stopped at missing authoritative Service/EndpointSlice membership;
+    their trace incorrectly labels that refusal no-cover. Round19 supplied real two-Ready-Pod routed
+    Service/EndpointSlice topology, baseline Pod and Service HTTP200, PDB headroom and one exact trusted
+    event. Six joined decisions selected quarantine, but all retained route-preparation-failed and
+    not-attempted; both original tokens and the routed Service remained HTTP200.
+  next_step: Diagnose the exact installed route-preparation refusal with source and bounded read-only
+    runtime evidence before admitting another response trial. Do not force rotate, weaken gates or infer
+    a natural detector from the injected event.
+  source_gap: Wrong/stale identities and actual actuator effect still require their own controls.
+    CAT-RESOURCE-TRACE source correction is integrated but not installed in the observed a50d796a
+    manager; the round19 post-selection route failure has no backend effect or security efficacy credit.
+  reviewed_progress: Round17 completed the missing-topology refusal; round19 removed that fixture
+    prerequisite and established a distinct, historical-audit-confirmed route-preparation refusal after
+    selected quarantine. Neither run demonstrates an installed actuation or credential-specific defense.
+  progress_evidence: rounds/round-19/analysis.md
+- id: phorvex-console-trace
+  stack: phorvex-console
+  kind: M
+  disposition: new
+  source_ids: []
+  event_mode: direct
+  objective: Verify displayed disposition against raw event, decision, operation, effect and behavior
+    identities.
+  required_effect: Missing/mismatched/stale stages remain unknown or failed, not landed/defended.
+  threat_oracle: No attack objective; independent raw receipt join and deliberately mismatched cases.
+  service_oracle: Legitimate console read and report availability after restart.
+  present_constraints: Console0.4.154 exact OCI digest and manager audit source both attest PR318 mergea50d796.
+    Existing predeployment record lacks decision-trace fields and is not rehydrated on GET.
+  next_step: Admit fresh exact-identity installed response case to verify new trace path; historical effect-only
+    record is not a failure or PASS for new trace generation.
+  source_gap: Console label is not an independent outcome witness; report storage remote checks remain
+    blocked. PR323's source trace and NATS console additions await installation and exact installed
+    comparison; round17's manager audit is not a console trace PASS.
+- id: phorvex-console-unauthenticated-boundary
+  stack: phorvex-console
+  kind: M
+  disposition: new
+  source_ids: []
+  event_mode: direct
+  objective: Verify the installed console listener refuses missing and unsigned identity while the exact
+    scoped identity remains usable.
+  required_effect: Fixed 401/401 denials and 200/200 legitimate session controls on one pinned console
+    incarnation.
+  threat_oracle: No application attack objective; validated exact-run request statuses and source/grant
+    hashes returned by the independent evidence route.
+  service_oracle: Two legitimate scoped session reads return 200 with stable subject projection.
+  present_constraints: Limited-v1 profile limited-v1-console-unauthenticated executed as round5 v1run-2
+    on pinned console0.4.154; functional-pass with exact 401/401/200/200 sequence and cleanup PASS. This
+    tested the in-Pod listener, not the ALB/Cognito browser route or Phorvex defense.
+  next_step: Retain round5 exact receipt; use a distinct admitted case for ALB or application boundary
+    claims.
+  source_gap: No attack objective, manager/detector signal, or installed-defense outcome in this control.
+- id: phorvex-console-scoped-authorization
+  stack: phorvex-console
+  kind: M
+  disposition: new
+  source_ids: []
+  event_mode: direct
+  objective: Verify one scoped console identity can read its granted tenant while unrelated tenant and
+    target reads are forbidden.
+  required_effect: Fixed 200/200/403/403/200 sequence with two allowed controls on one pinned console
+    incarnation.
+  threat_oracle: No application attack objective; validated exact-run request statuses and stable source/grant
+    hashes returned by the independent evidence route.
+  service_oracle: Allowed tenant read returns 200 before and after both 403 denials.
+  present_constraints: Limited-v1 profile limited-v1-console-scoped-authorization executed as round5 v1run-3
+    on pinned console0.4.154; functional-pass and cleanup PASS. No Voice/provider workload, ALB/Cognito
+    browser flow, detector or Phorvex response was exercised.
+  next_step: Retain round5 exact receipt and preserve grant/source pins for any future distinct source-faithful
+    boundary case.
+  source_gap: Functional scope isolation alone is not an application attack or mitigation outcome.
+- id: phorvex-operator-ownership
+  stack: phorvex-operator
+  kind: M
+  disposition: new
+  source_ids: []
+  event_mode: direct
+  objective: Verify AMTD/policy selector, owner mutation and recovery against exact Pod/Service membership.
+  required_effect: Quarantine and release are attributable and restore intended owner/selector or report
+    retained isolation.
+  threat_oracle: No attack objective; independent owner/label/EndpointSlice/resourceVersion sequence.
+  service_oracle: Peer workload Service reachability and target recovery.
+  present_constraints: NATS nats-0 is AMTD-owned with app label moved away; operator imageID unchanged
+    from Sep22.
+  next_step: Review release handler and construct an exact disposable owner/selector fixture before any
+    NATS repair claim.
+  source_gap: Current nats-0 original trigger and intended recovery are unknown.
+- id: k8s-credential-reuse
+  stack: kubernetes-identity
+  kind: S
+  disposition: reuse-and-revise
+  source_ids:
+  - c1-credtheft-rbac
+  event_mode: no_current_path
+  objective: Measure continued use of an owned disposable projected SA token after an attributable response.
+  required_effect: Deny the captured token's Pod-list capability after intervention while preserving an
+    authorized fresh identity.
+  threat_oracle: Exact captured token initial and post-window API authorization, with expiry and Pod UID
+    guards.
+  service_oracle: Authorized Pod-list control, target workload availability and response cost.
+  present_constraints: Direct owned round3 confirmed same-token API authentication rejects after binding
+    Pod deletion, legitimate token still200. Round17 generic injected-response trial left both tokens
+    accepted because the fixture lacked required Service membership. Round19 supplied actual routed
+    membership, but selected quarantine stopped at route preparation before dispatch; both captured
+    tokens still worked. Neither trial is credential-specific or natural-detector coverage.
+  next_step: M-184 implements narrow potential API token exposure from actual admitted metadata; retain
+    initial-disclosure and no-detector limits; source implementation is ahead of the observed installed
+    a50d796a manager, so installed verification remains pending.
+  source_gap: No real detector signal; distinguish initial disclosure from later revocation and injected-event
+    mode if used.
+- id: ci-report-integrity
+  stack: ci-reports
+  kind: M
+  disposition: new
+  source_ids: []
+  event_mode: direct
+  objective: Verify immutable report identity, exact run linkage and readback across service/PVC restart.
+  required_effect: Preserve a synthetic report or refuse unsafe mutation; no false green publication.
+  threat_oracle: No attack objective; independent content hash and run-ID join.
+  service_oracle: Authorized report create/read and ordinary route latency.
+  present_constraints: CI-report Service is a single PVC-backed Ready Pod on public Ingress, outside Sep21
+    narrow map; remote report storage was full in PR checks.
+  next_step: Establish report service source and synthetic storage contract without touching existing
+    reports.
+  source_gap: No current report writer/reader identity or retention proof.
+- id: ci-report-authorization
+  stack: ci-reports
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: no_current_path
+  objective: Test forbidden report read/write against authorized synthetic publication.
+  required_effect: Reject cross-run access or tampering while retaining legitimate readback.
+  threat_oracle: Independent synthetic report hash, actor and forbidden operation status.
+  service_oracle: Authorized publication/read latency and availability.
+  present_constraints: Public route and policy/AMTD selector exist, but app auth/source and signal producer
+    are unverified.
+  next_step: Trace service source, role boundary and exact owned report fixture.
+  source_gap: No behavioral attack, detector or installed manager response path established.
+- id: network-policy-packet-effect
+  stack: cluster-network
+  kind: M
+  disposition: scoped-blocked
+  source_ids: []
+  event_mode: direct
+  objective: Measure allowed, blocked and recovery packets around a target-specific network action.
+  required_effect: Exact target traffic blocked while allowed peers remain reachable, or action truthfully
+    unavailable.
+  threat_oracle: No attack objective; independent packet observations from both sides.
+  service_oracle: Authorized client and peer connection availability.
+  present_constraints: Sep24 round4 executed a direct Deployment-owned packet fixture; baseline and rollback
+    both clients received HTTP200, and all three policy-present pairs also returned HTTP200 for the policy-excluded
+    client. The admitted result was NOT_ENFORCED_OWNED_INGRESS with exact cleanup. Selected CNI controller/agent
+    network-policy flags were disabled. No Phorvex event or actuator was tested.
+  next_step: DevOps must separately review and authorize CNI feature enablement. After a reconciled rollout,
+    admit a fresh owned packet calibration; only then test actual Phorvex quarantine on a detached retained
+    target with a legitimate replacement control.
+  source_gap: Round4 establishes no isolation for one Deployment-owned fixture and window. It does not
+    establish post-quarantine detached-Pod enforcement or installed-defense outcome.
+scope_decisions:
+- area: MIG partition and MIG-specific GPU controls
+  disposition: excluded-unavailable-hardware
+  evidence: No MIG allocatable resource in eight-Node inventory; one GPU node's numeric allocation does
+    not prove MIG support.
+  revisit: Only after actual MIG-capable node/resource and exact fixture are observed.
+- area: Argo CD, Grafana/Prometheus, GPU plugin and node infrastructure
+  disposition: scoped-dependency-not-ordinary-attack-target-in-initial-wave
+  evidence: Present among 48 controllers; provide deployment, telemetry and hardware context rather than
+    the sampled application trust boundaries.
+  revisit: Add versioned cells if a specific producer, authority or failure mode materially controls a
+    supported workload case.
+- area: Non-fixture customer data, provider calls, existing NATS streams and shared-cluster crash stimuli
+  disposition: excluded-from-stimulus
+  evidence: Campaign authorization is bounded to owned fixtures and independently measured service outcomes.
+  revisit: No automatic expansion; require a separately reviewed and authorized case.
+updated_at: '2026-09-24T02:32:37.206813+00:00'
+scope_revisions:
+- at: '2026-09-24'
+  change: Add nats-uncredentialed-message-exposure separately from existing subject ACL/advisory cell
+  reason: Observed no-auth broker is a different test boundary; preserve ACL cell and truthful denominator
+  reviewer: campaign-coverage-plan
+  lead: codex-lead
+  effect: 33 candidate cells, no admission or live outcome by matrix change

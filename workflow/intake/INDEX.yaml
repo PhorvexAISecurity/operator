@@ -238,3 +238,61 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude:
+    directory: intake/RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
+    kind: OBSERVATION
+    title: Pod-bound credential invalidation may be excluded from rotation coverage
+    state: FILED
+    issue_id: M-184
+    aliases: []
+  RPT-20260923-234353-catalogue-actuator-hints-are-presented-as-verifi:
+    directory: intake/RPT-20260923-234353-catalogue-actuator-hints-are-presented-as-verifi
+    kind: BUG
+    title: Catalogue actuator hints are presented as verified response capability
+    state: FILED
+    issue_id: M-185
+    aliases: []
+  RPT-20260924-004518-console-catalogue-signal-ignores-exact-pod-reque:
+    directory: intake/RPT-20260924-004518-console-catalogue-signal-ignores-exact-pod-reque
+    kind: BUG
+    title: Console catalogue signal ignores exact Pod request and lacks manager lifetime
+      binding
+    state: FILED
+    issue_id: M-186
+    aliases: []
+  RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible:
+    directory: intake/RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
+    kind: BUG
+    title: Installed adapter detector emits an incompatible manager observation contract
+    state: FILED
+    issue_id: M-187
+    aliases: []
+  RPT-20260924-051842-resource-capacity-refusals-are-mislabeled-as-mis:
+    directory: intake/RPT-20260924-051842-resource-capacity-refusals-are-mislabeled-as-mis
+    kind: BUG
+    title: Resource-capacity refusals are mislabeled as missing recon coverage
+    state: FILED
+    issue_id: M-188
+    aliases: []
+  RPT-20260924-054522-partial-console-runs-hide-validated-terminal-fai:
+    directory: intake/RPT-20260924-054522-partial-console-runs-hide-validated-terminal-fai
+    kind: BUG
+    title: Partial console runs hide validated terminal failure evidence
+    state: FILED
+    issue_id: M-189
+    aliases: []
+  RPT-20260924-060237-voice-cleanup-stops-discovery-after-the-first-tr:
+    directory: intake/RPT-20260924-060237-voice-cleanup-stops-discovery-after-the-first-tr
+    kind: BUG
+    title: Voice cleanup stops discovery after the first transcript and leaves the
+      recovery transcript
+    state: FILED
+    issue_id: M-190
+    aliases: []
+  RPT-20260924-062645-audit-sanitizer-removes-closed-manager-dispatch:
+    directory: intake/RPT-20260924-062645-audit-sanitizer-removes-closed-manager-dispatch
+    kind: BUG
+    title: Audit sanitizer removes closed manager dispatch refusal reasons
+    state: FILED
+    issue_id: M-191
+    aliases: []

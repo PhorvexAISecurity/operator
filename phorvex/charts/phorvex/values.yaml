@@ -369,6 +369,10 @@ phorvex:
   console:
     enabled: false
     allowWorkloadMutations: false
+    # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
+    # create/delete or Secret/RBAC write permissions to the console identity.
+    natsExposure:
+      enabled: false
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
     catalogueV1:
@@ -392,6 +396,28 @@ phorvex:
         pdb: ""
         transcriptSelector: ""
         transcriptContainer: ""
+      # Disabled unless the installed guardrail source digest and fixed route
+      # are explicitly supplied. This only measures two benign classifiers.
+      guardrailCalibration:
+        enabled: false
+        namespace: vllm
+        service: vllm
+        port: 8000
+        container: guardrail
+        sourceConfigMap: guardrail-proxy
+        sourceKey: guardrail_proxy.py
+        sourceSHA256: ""
+      mcpSession:
+        enabled: false
+        namespace: mcp
+        deployment: mcp-server
+        service: mcp-server
+        container: mcp-server
+        port: 8000
+        sourceConfigMap: mcp-code
+        sourceKey: server.py
+        imageID: ""
+        sourceSHA256: ""
       gpu:
         enabled: false
         namespace: ""

@@ -99,7 +99,11 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 		return nil, nil, nil, st, false
 	}
 	if st.ExecutionKind == "fixed-suite" && st.State != "done" && st.State != "error" && st.State != "stopped" {
-		return []RunEvidenceArm{}, []RunEvidenceTrial{}, []RunEvidenceIssue{{Outcome: outcomeUnverified, Reason: "fixed-suite terminal result and cleanup are not yet verified"}}, st, true
+		reason := "fixed-suite terminal result and cleanup are not yet verified"
+		if st.State == "partial" {
+			reason = "partial fixed-suite run is unaccepted; no metric rows are credited"
+		}
+		return []RunEvidenceArm{}, []RunEvidenceTrial{}, []RunEvidenceIssue{{Outcome: outcomeUnverified, Reason: reason}}, st, true
 	}
 	if st.ExecutionKind == "fixed-suite" {
 		if _, err := rm.FunctionalResult(id); err != nil {
@@ -141,6 +145,9 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 		outcome := r.outcome()
 		if st.ExecutionKind == "fixed-suite" && st.Outcome != "" {
 			outcome.ClaimClass = "functional"
+			if st.ClaimClass == "calibration" {
+				outcome.ClaimClass = "calibration"
+			}
 			outcome.Outcome = st.Outcome
 			outcome.OutcomeReason = "fixed-suite terminal result: " + st.Outcome
 		}

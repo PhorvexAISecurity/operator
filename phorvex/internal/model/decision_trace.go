@@ -30,6 +30,9 @@ const (
 	// DecisionTraceSchemaV6 adds the exact typed hard-capacity vector and each
 	// candidate's integer consumption. V2-V5 remain readable unchanged.
 	DecisionTraceSchemaV6 = "phorvex.decision-trace.v6"
+	// DecisionTraceSchemaV7 adds an explicit resource-capacity exclusion kind.
+	// Earlier closed vocabularies remain readable and cannot carry the new kind.
+	DecisionTraceSchemaV7 = "phorvex.decision-trace.v7"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -66,14 +69,15 @@ const (
 // distinct from the ticket's status so a data-quality failure never reads as
 // ordinary infeasibility (p1cost.go's deliberate distinction).
 const (
-	ExclusionNone         = "none"
-	ExclusionNotEnabled   = "not-enabled"
-	ExclusionReconCover   = "recon-cover"
-	ExclusionFeasibility  = "feasibility"
-	ExclusionCostNaN      = "cost-nan"
-	ExclusionSLOGate      = "slo-gate"
-	ExclusionReactiveOnly = "reactive-only"
-	ExclusionSelection    = "selection"
+	ExclusionNone             = "none"
+	ExclusionNotEnabled       = "not-enabled"
+	ExclusionReconCover       = "recon-cover"
+	ExclusionResourceCapacity = "resource-capacity"
+	ExclusionFeasibility      = "feasibility"
+	ExclusionCostNaN          = "cost-nan"
+	ExclusionSLOGate          = "slo-gate"
+	ExclusionReactiveOnly     = "reactive-only"
+	ExclusionSelection        = "selection"
 	// T1-E capability-gate kinds (evaluated before scoring). no-cover reuses
 	// ExclusionReconCover; these three are the genuinely new causes.
 	ExclusionNotInstallable = "not-installable"
@@ -119,8 +123,11 @@ func SafeDispatchReason(reason string) string {
 	}
 	switch parts[0] {
 	case "pending-dispatch", "unselected", "kill-switch", "namespace-dry-run", "policy-dry-run", "actuation-brake",
+		"standing-policy-guard-unavailable", "context-cancelled",
 		"ensure-policy-failed", "inviolability-guard", "route-preparation-failed",
 		"no-tick-view", "emit-boundary-infeasible", "code-exec-unverified",
+		"shared-capacity-refused", "shared-capacity-operation-already-recorded", "shared-capacity-claim-unconfirmed",
+		"quarantine-capacity-refused",
 		"emitted-unconfirmed", "outcome-unknown", "deadline-expired",
 		"definite-no-effect-refusal", "already-satisfied", "reconciled-prior-operation",
 		"declared-without-implementation":
@@ -131,7 +138,8 @@ func SafeDispatchReason(reason string) string {
 	for _, suffix := range parts[1:] {
 		switch suffix {
 		case "fallback-blocked-kill-switch", "fallback-blocked-actuation-brake",
-			"alternative-deferred-reservation-changed", "alternative-deferred-no-admissible-candidate":
+			"alternative-deferred-reservation-changed", "alternative-deferred-no-admissible-candidate",
+			"shared-capacity-release-pending", "shared-capacity-unknown-retention-unconfirmed":
 			if seen[suffix] {
 				return ""
 			}
@@ -785,7 +793,7 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 	type alias DecisionTraceV2
 	canonical := t.Canonical()
 	raw, err := json.Marshal(alias(canonical))
-	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5 && canonical.SchemaVersion != DecisionTraceSchemaV6) {
+	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5 && canonical.SchemaVersion != DecisionTraceSchemaV6 && canonical.SchemaVersion != DecisionTraceSchemaV7) {
 		return raw, err
 	}
 	var object map[string]json.RawMessage
@@ -811,14 +819,16 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 // non-test caller — it is a test-time contract, not a runtime guard; the
 // production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 && t.SchemaVersion != DecisionTraceSchemaV7 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
 	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
 	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
 	isV5 := t.SchemaVersion == DecisionTraceSchemaV5
 	isV6 := t.SchemaVersion == DecisionTraceSchemaV6
-	hasV5 := isV5 || isV6
+	isV7 := t.SchemaVersion == DecisionTraceSchemaV7
+	hasV6 := isV6 || isV7
+	hasV5 := isV5 || hasV6
 	finite := func(values ...float64) bool {
 		for _, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -850,7 +860,7 @@ func (t DecisionTraceV2) Validate() error {
 		}
 	}
 	for _, candidate := range t.Candidates {
-		if !isV6 && len(candidate.Resources) != 0 {
+		if !hasV6 && len(candidate.Resources) != 0 {
 			return fmt.Errorf("historical candidate %q carries V6 resource consumption", candidate.CandidateKey)
 		}
 		values := []OptionalFloat{candidate.GrossFullValue, candidate.MarginalCoverage,
@@ -963,7 +973,7 @@ func (t DecisionTraceV2) Validate() error {
 			return errors.New("dual update is not reconstructable from trace inputs")
 		}
 	} else if isV3 || isV4 || hasV5 {
-		return errors.New("v3/v4/v5/v6 trace must carry the cost representation semantics")
+		return errors.New("v3/v4/v5/v6/v7 trace must carry the cost representation semantics")
 	}
 	if isV4 || hasV5 {
 		if err := t.validateV4(); err != nil {
@@ -975,7 +985,7 @@ func (t DecisionTraceV2) Validate() error {
 			return err
 		}
 	}
-	if isV6 {
+	if hasV6 {
 		if err := t.validateV6(); err != nil {
 			return err
 		}
@@ -1224,7 +1234,7 @@ func (t DecisionTraceV2) validateV3() error {
 		ActionStatusNotInstallable: true, ActionStatusIneligible: true,
 	}
 	kindOK := map[string]bool{
-		ExclusionNone: true, ExclusionNotEnabled: true, ExclusionReconCover: true,
+		ExclusionNone: true, ExclusionNotEnabled: true, ExclusionReconCover: true, ExclusionResourceCapacity: true,
 		ExclusionFeasibility: true, ExclusionCostNaN: true, ExclusionSLOGate: true,
 		ExclusionReactiveOnly: true, ExclusionSelection: true,
 		ExclusionNotInstallable: true, ExclusionNoRBAC: true, ExclusionCapability: true, ExclusionActionFailure: true,
@@ -1240,6 +1250,39 @@ func (t DecisionTraceV2) validateV3() error {
 		}
 		if !kindOK[row.ExclusionKind] {
 			return fmt.Errorf("actionStatus[%d] exclusionKind %q is outside the closed vocabulary", i, row.ExclusionKind)
+		}
+		if row.ExclusionKind == ExclusionResourceCapacity {
+			if t.SchemaVersion != DecisionTraceSchemaV7 {
+				return fmt.Errorf("actionStatus[%d] resource-capacity requires v7 schema", i)
+			}
+			if row.Status != ActionStatusInfeasible || row.Scored {
+				return fmt.Errorf("actionStatus[%d] resource-capacity must be unscored and infeasible", i)
+			}
+			matched := 0
+			for _, c := range t.Candidates {
+				if c.Action != row.Action {
+					continue
+				}
+				matched++
+				if c.ExistingExclusionReason == "" ||
+					c.Selected || c.MarginalCoverage.Present || c.NetGain.Present || c.CNorm.Present || c.CFlow.Present ||
+					c.ExpectedCost.Present || c.CostHigh.Present || c.LambdaContribution.Present ||
+					(c.ObjectiveCostContribution != nil && c.ObjectiveCostContribution.Present) ||
+					c.Feasible.Present || c.ConformalQuantile.Present || c.ConformalCalibrated.Present ||
+					c.GPUEnvelopeApplied.Present || c.GPUEnvelopeSlack.Present || c.SLOGateResult.Present ||
+					c.SelectionRound.Present || len(c.Resources) != 0 || c.FlowRegime != "" ||
+					(c.FlowPredictedMean != nil && c.FlowPredictedMean.Present) ||
+					(c.FlowConservativeFloor != nil && c.FlowConservativeFloor.Present) ||
+					(c.FlowUncertaintyBound != nil && c.FlowUncertaintyBound.Present) ||
+					(c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present) ||
+					(c.ConformalWindowReady != nil && c.ConformalWindowReady.Present) ||
+					(c.ConformalRegimeApplicable != nil && c.ConformalRegimeApplicable.Present) {
+					return fmt.Errorf("actionStatus[%d] resource-capacity candidate carries scored or post-gate fields", i)
+				}
+			}
+			if matched != 1 {
+				return fmt.Errorf("actionStatus[%d] resource-capacity requires one matching exclusion candidate", i)
+			}
 		}
 		// (2) status/kind consistency: a selected row carries no exclusion; a
 		// data-quality exclusion always reads infeasible (never collapsed).
@@ -1319,7 +1362,7 @@ func (t DecisionTraceV2) validateV3() error {
 		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
 			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
 		}
-		if (t.SchemaVersion == DecisionTraceSchemaV5 || t.SchemaVersion == DecisionTraceSchemaV6) && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
+		if (t.SchemaVersion == DecisionTraceSchemaV5 || t.SchemaVersion == DecisionTraceSchemaV6 || t.SchemaVersion == DecisionTraceSchemaV7) && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
 			slack = c.FlowUncertaintySlack.Value
 		}
 		want += slack

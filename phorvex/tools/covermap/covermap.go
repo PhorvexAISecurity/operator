@@ -63,22 +63,26 @@ var declaredOnlyActions = []model.Action{model.ActionNoop, model.ActionDisable}
 // PodSpec is the subset of model.Pod a fixture sets. Every field is copied verbatim
 // onto model.Pod in buildView; unset fields keep the zero value.
 type PodSpec struct {
-	Namespace            string `json:"namespace"`
-	Name                 string `json:"name"`
-	Node                 string `json:"node,omitempty"`
-	HasGPU               bool   `json:"hasGPU,omitempty"`
-	MIGDevice            string `json:"migDevice,omitempty"`
-	ModelID              string `json:"modelID,omitempty"`
-	SuspectAdapter       string `json:"suspectAdapter,omitempty"`
-	RouteService         string `json:"routeService,omitempty"`
-	Stateful             bool   `json:"stateful,omitempty"`
-	ServingEndpointReady bool   `json:"servingEndpointReady,omitempty"`
-	WarmPoolConfigured   bool   `json:"warmPoolConfigured,omitempty"`
-	WarmPoolOwnerUID     string `json:"warmPoolOwnerUID,omitempty"`
-	SwapGroup            string `json:"swapGroup,omitempty"`
-	ModelShard           string `json:"modelShard,omitempty"`
-	ParallelGroup        string `json:"parallelGroup,omitempty"`
-	Role                 string `json:"role,omitempty"`
+	Namespace            string                               `json:"namespace"`
+	Name                 string                               `json:"name"`
+	UID                  string                               `json:"uid,omitempty"`
+	PodResourceVersion   string                               `json:"podResourceVersion,omitempty"`
+	ServiceAccount       string                               `json:"serviceAccount,omitempty"`
+	PodBoundKubeAPIAuth  *model.PodBoundKubeAPIAuthProjection `json:"podBoundKubeAPIAuth,omitempty"`
+	Node                 string                               `json:"node,omitempty"`
+	HasGPU               bool                                 `json:"hasGPU,omitempty"`
+	MIGDevice            string                               `json:"migDevice,omitempty"`
+	ModelID              string                               `json:"modelID,omitempty"`
+	SuspectAdapter       string                               `json:"suspectAdapter,omitempty"`
+	RouteService         string                               `json:"routeService,omitempty"`
+	Stateful             bool                                 `json:"stateful,omitempty"`
+	ServingEndpointReady bool                                 `json:"servingEndpointReady,omitempty"`
+	WarmPoolConfigured   bool                                 `json:"warmPoolConfigured,omitempty"`
+	WarmPoolOwnerUID     string                               `json:"warmPoolOwnerUID,omitempty"`
+	SwapGroup            string                               `json:"swapGroup,omitempty"`
+	ModelShard           string                               `json:"modelShard,omitempty"`
+	ParallelGroup        string                               `json:"parallelGroup,omitempty"`
+	Role                 string                               `json:"role,omitempty"`
 }
 
 // PhysicsSpec is the dispersion witness a fixture supplies. nil means model.NeutralPhysics().
@@ -183,6 +187,17 @@ func Fixtures() []Fixture {
 	gpuCtx := unit
 	gpuCtx.HasGPU = true
 	gpuPod := PodSpec{Namespace: ns, Name: "gpu", Node: "node-a", HasGPU: true, ModelID: "model-x", RouteService: "svc", ServingEndpointReady: true}
+	apiPod := PodSpec{Namespace: ns, Name: "pod-bound-api", UID: "bound-pod-uid", PodResourceVersion: "17", ServiceAccount: "workload", Node: "node-a",
+		PodBoundKubeAPIAuth: &model.PodBoundKubeAPIAuthProjection{
+			PodUID: "bound-pod-uid", PodResourceVersion: "17", ServiceAccountName: "workload", ServiceAccountUID: "sa-uid",
+			VolumeName: "kube-api-access", MountedContainer: "app", AudienceSource: "kube-apiserver-default",
+			EvidenceSource: "admitted-pod-and-serviceaccount",
+		}}
+	staleAPIPod := apiPod
+	staleAPIPod.Name = "pod-bound-api-stale-uid"
+	staleProjection := *apiPod.PodBoundKubeAPIAuth
+	staleProjection.PodUID = "old-pod-uid"
+	staleAPIPod.PodBoundKubeAPIAuth = &staleProjection
 	vector := func(name, why, typ string, targetsPod bool, age float64) Fixture {
 		pod := gpuPod
 		pod.Name = name
@@ -192,6 +207,10 @@ func Fixtures() []Fixture {
 	return []Fixture{
 		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts, rotate process-state grants and the quarantine network grant; route selector changes are coverless.",
 			Pod: PodSpec{Namespace: ns, Name: "plain", Node: "node-a"}, Ctx: unit},
+		{Name: "pod-bound-api", Why: "Exact current Pod UID and resourceVersion, ServiceAccount UID, and admitted mounted default API-audience projection: the separate planned API-auth capability fact appears with rotate-only cover; copied credential knowledge stays audit-only.",
+			Pod: apiPod, Ctx: unit},
+		{Name: "pod-bound-api-stale-uid", Why: "Projection names an old Pod UID: no API-auth capability fact or related rotate grant, despite otherwise complete witness fields.",
+			Pod: staleAPIPod, Ctx: unit},
 		{Name: "stateful", Why: "Stateful CPU pod without a serving endpoint: the session fact reaches full weight but neither endpoint-dependent eraser earns cover.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "neighbors", Why: "Two blast-graph neighbours: one lateralEdge fact per neighbour, quarantine-only cover, weight scales with neighbour value.",
@@ -249,7 +268,8 @@ func Fixtures() []Fixture {
 // buildView turns a fixture into the exact producer inputs.
 func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 	pod := model.Pod{
-		Namespace: f.Pod.Namespace, Name: f.Pod.Name, Node: f.Pod.Node,
+		Namespace: f.Pod.Namespace, Name: f.Pod.Name, UID: f.Pod.UID, PodResourceVersion: f.Pod.PodResourceVersion,
+		ServiceAccount: f.Pod.ServiceAccount, PodBoundKubeAPIAuth: f.Pod.PodBoundKubeAPIAuth, Node: f.Pod.Node,
 		HasGPU: f.Pod.HasGPU, MIGDevice: f.Pod.MIGDevice, ModelID: f.Pod.ModelID,
 		SuspectAdapter: f.Pod.SuspectAdapter, RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
@@ -806,6 +826,18 @@ func steeringRows(rep Report) []steeringRow {
 
 func podSummary(f Fixture) string {
 	var parts []string
+	if f.Pod.UID != "" {
+		parts = append(parts, "uid="+f.Pod.UID)
+	}
+	if f.Pod.PodResourceVersion != "" {
+		parts = append(parts, "podRV="+f.Pod.PodResourceVersion)
+	}
+	if f.Pod.ServiceAccount != "" {
+		parts = append(parts, "serviceAccount="+f.Pod.ServiceAccount)
+	}
+	if w := f.Pod.PodBoundKubeAPIAuth; w != nil {
+		parts = append(parts, "projectionPodUID="+w.PodUID, "projectionSAUID="+w.ServiceAccountUID, "projectionAudience="+w.AudienceSource)
+	}
 	if f.Pod.Node != "" {
 		parts = append(parts, "node="+f.Pod.Node)
 	}

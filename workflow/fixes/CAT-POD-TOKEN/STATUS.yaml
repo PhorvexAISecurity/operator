@@ -1,0 +1,275 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e78342a18f91eb6e4d7b7981b55cb1e07dbd92546e70bbb5171c37b0038490fd
+    source_sha: a50d796af128cd4109875e03eaf429d460126740
+    at: '2026-09-23T23:46:00+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Preserve core tick budget and optional fail-closed capability; no scope
+      expansion or weakened guarantee
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/baseline-final.log
+    sha256: dbcc21665b3961210759dc5457c2269dcfcc3d660f17bd585042e7c43ea8441a
+    source_sha: a50d796af128cd4109875e03eaf429d460126740
+    at: '2026-09-24T00:51:54+00:00'
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 47c5fccd1acf69e4ecb7eb22e4d9f4b54aa4b39be1f3c6ce79f8b92293f986dd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: b6ce2c6721ee362f62015b330cf012094b9e3a66b025fa3d3a3b9d04f422d165
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l0-go-phorvex.log
+    sha256: 5841a13419b313167856c8e8845a6b4739072ce99d166fab6d471ecd8d202ddd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/head-final.log
+    sha256: ec3ace40cd4da66c80de13aed946c017ec570fd45f8b87e9b32ffd881b0eae76
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 05-evidence.md
+    sha256: 159a9ac77f107a8d3195222ad5c4b1b4b438c244eb207ca384c8ed7ae78ddb4e
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/head-final.log
+    sha256: ec3ace40cd4da66c80de13aed946c017ec570fd45f8b87e9b32ffd881b0eae76
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 42b60e15a4cecf7f6d0fb2e360edf23d6dee3ba5309e4541d0cb587adaa84aa4
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:45+00:00'
+    baseline_sha: a50d796af128cd4109875e03eaf429d460126740
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e00b08fb8dda95ea563c314611ee2f11df628dfa662d40b2021b0488d43dda6f
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:45+00:00'
+    incident_sha256: 42b60e15a4cecf7f6d0fb2e360edf23d6dee3ba5309e4541d0cb587adaa84aa4
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: 852db0ee1bde6886726935a85bc85f5a6133651a8408ff0d92ef6ceb77533e4b
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:12:53+00:00'
+fix_id: CAT-POD-TOKEN
+issues:
+- M-184
+title: Model conditional Pod-bound Kubernetes API authentication
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-coverage-plan
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: a50d796af128cd4109875e03eaf429d460126740
+  deployed_image: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: a50d796af128cd4109875e03eaf429d460126740
+  head_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: 7e52748437523ad071fddbbd710713c7791f823a
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Track PR323 external CI availability and subsequent deployed verification
+updated_at: '2026-09-24T01:12:53+00:00'
+configuration_history:
+- at: '2026-09-23T23:29:06+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-23T23:29:07+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-23T23:33:20+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-24T01:05:38+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T01:12:51+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-23T23:33:03+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-23T23:33:39+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T01:05:38+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T01:05:40+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T01:06:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T01:06:47+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T01:12:53+00:00'
+  by: codex-lead
+  artifact: evidence/patch-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 2b1a967dd7392c3226867bef026f8ec46378e28b37f889b4448cbd8a3d5077ed
+  source_sha: a50d796af128cd4109875e03eaf429d460126740
+  at: '2026-09-23T23:33:04+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 2b1a967dd7392c3226867bef026f8ec46378e28b37f889b4448cbd8a3d5077ed
+  source_sha: a50d796af128cd4109875e03eaf429d460126740
+  at: '2026-09-23T23:33:39+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  rationale: Administrative verification matrix correction adds the L3 already required
+    by the signed plan; no weaker guarantee or new scope
+handoff:
+  id: CAT-POD-TOKEN:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

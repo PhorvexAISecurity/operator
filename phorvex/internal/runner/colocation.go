@@ -17,7 +17,7 @@ func colocationInput(snap *ingest.Snapshot, e *policyEntry) recon.ColocationInpu
 		PodsComplete: snap.PodInventoryComplete, PoliciesComplete: snap.PolicyInventoryComplete, EventsComplete: snap.EventInventoryComplete,
 		CoverEnabled: e.spec.Cover.WarmSwap.Enabled, Membership: map[string][]string{},
 	}
-	for _, ev := range snap.Events {
+	for _, ev := range ingest.EvidenceEvents(snap.Events) {
 		if ev.Trust == ingest.TrustTrusted && len(ev.UnresolvedTargets) > 0 {
 			in.UnresolvedEventTargets = true
 		}

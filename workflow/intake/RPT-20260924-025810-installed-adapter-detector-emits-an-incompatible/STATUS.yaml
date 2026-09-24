@@ -1,0 +1,332 @@
+schema_version: 1
+intake_id: RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
+kind: BUG
+title: Installed adapter detector emits an incompatible manager observation contract
+state: FILED
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T02:58:10+00:00'
+updated_at: '2026-09-24T03:10:45+00:00'
+pins:
+  source_main_sha: ebcb7a9ade1b933401617e61aa08bd86a8f4480d
+  source_release: null
+  deployed_image: phorvex:0.4.154
+  deployed_digest: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+  environment: dev-existing-cluster
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 77
+    overlap:
+    - absent
+    - actuator
+    - after
+    - all
+    - attack
+    - before
+    - binding
+    - both
+    - bound
+    - but
+    - cannot
+    - canonical
+    - capture
+    - captured
+    - change
+    - confirmed
+    - decision
+    - does
+    - each
+    - event
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-136
+    score: 68
+    overlap:
+    - absent
+    - add
+    - all
+    - api
+    - attack
+    - belief
+    - both
+    - but
+    - calls
+    - client
+    - cluster
+    - configured
+    - console
+    - container
+    - currently
+    - decision
+    - defense
+    - deployed
+    - deployment
+    - endpoint
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-2
+    score: 67
+    overlap:
+    - actuator
+    - adapter-rotate
+    - add
+    - adds
+    - all
+    - api
+    - both
+    - but
+    - byte-identical
+    - cannot
+    - cluster
+    - confirmed
+    - contract
+    - count
+    - current
+    - deployed
+    - does
+    - empty
+    - every
+    - first
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-140
+    score: 67
+    overlap:
+    - after
+    - all
+    - another
+    - behavior
+    - belief
+    - bound
+    - but
+    - clock
+    - confirmed
+    - does
+    - fact
+    - finding
+    - first
+    - four
+    - fresh
+    - gets
+    - has
+    - high
+    - into
+    - its
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-142
+    score: 67
+    overlap:
+    - before
+    - bytes
+    - cannot
+    - captured
+    - change
+    - checks
+    - controls
+    - decision
+    - deployed
+    - does
+    - every
+    - explicit
+    - first
+    - fixed
+    - found
+    - future
+    - has
+    - head
+    - high
+    - ingest
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-155
+    score: 66
+    overlap:
+    - after
+    - amtd
+    - annotation
+    - api
+    - attack
+    - before
+    - build
+    - client
+    - cluster
+    - com
+    - console
+    - construction
+    - decision
+    - deployed
+    - does
+    - empty
+    - event
+    - events
+    - every
+    - failure
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-9
+    score: 60
+    overlap:
+    - actuator
+    - adapter
+    - adapter-rotate
+    - after
+    - alone
+    - amtd
+    - before
+    - but
+    - cannot
+    - change
+    - changed
+    - cluster
+    - com
+    - creation
+    - currently
+    - decision
+    - deployed
+    - deployment
+    - does
+    - emit
+    title: '`Emitted` is a request-ack, not an effect — the brain never learns what
+      Phoenix did'
+  - issue_id: M-160
+    score: 58
+    overlap:
+    - absent
+    - actuator
+    - all
+    - amtd
+    - api
+    - attack
+    - binding
+    - both
+    - bound
+    - but
+    - capability
+    - com
+    - contract
+    - deployed
+    - each
+    - empty
+    - every
+    - failure
+    - fixed
+    - high
+    title: T1-E's no-rbac leg gates the two Phoenix-routed actions (rotate, quarantine)
+      on the wrong principal's verbs — both are now candidacy-dead in every tenant
+      except litellm/vllm, a live defense-coverage regression
+  - issue_id: M-146
+    score: 51
+    overlap:
+    - absent
+    - after
+    - all
+    - but
+    - cannot
+    - capture
+    - consumer
+    - decision
+    - empty
+    - every
+    - field
+    - fields
+    - file
+    - gets
+    - has
+    - high
+    - internal
+    - key
+    - live
+    - manager
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-145
+    score: 49
+    overlap:
+    - absent
+    - belief
+    - build
+    - clock
+    - console
+    - currently
+    - explicit
+    - has
+    - high
+    - installed
+    - internal
+    - into
+    - key
+    - kubectl
+    - live
+    - must
+    - name
+    - not
+    - object
+    - once
+    title: Live policy editor rewrote `vllm-defense.spec.tenant` to `litellm` — M-140's
+      name-keyed dual, reached through a console PATCH
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-187
+  fix_id: CAT-ADAPTER-DETECTOR
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-187.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T03:03:27+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T03:03:27+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T03:03:28+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T03:03:28+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T03:10:45+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-187.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

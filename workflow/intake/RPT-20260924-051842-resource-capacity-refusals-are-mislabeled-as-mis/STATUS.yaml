@@ -1,0 +1,153 @@
+schema_version: 1
+intake_id: RPT-20260924-051842-resource-capacity-refusals-are-mislabeled-as-mis
+kind: BUG
+title: Resource-capacity refusals are mislabeled as missing recon coverage
+state: FILED
+reporter: codex-lead
+approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T05:18:42+00:00'
+updated_at: '2026-09-24T05:44:17+00:00'
+pins:
+  source_main_sha: ebcb7a9ade1b933401617e61aa08bd86a8f4480d
+  source_release: null
+  deployed_image: 0.4.154
+  deployed_digest: sha256:f83e93ea8e18a6fdcf25ba1704b262da203627b9ac19eb4452fb124c7c645f13
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+  environment: dev
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-146
+    score: 15
+    overlap:
+    - any
+    - claim
+    - evidence
+    - here
+    - inputs
+    - missing
+    - not
+    - raw
+    - reason
+    - record
+    - wrong
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-144
+    score: 13
+    overlap:
+    - any
+    - claim
+    - closed
+    - coverage
+    - evidence
+    - exclusion
+    - first
+    - not
+    - observation
+    - observed
+    - reason
+    - retained
+    - separate
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-25
+    score: 12
+    overlap:
+    - behavior
+    - evidence
+    - no-op
+    - not
+    - raw
+    - recon
+    - separate
+    - stage
+    title: The AI stage classifier overrides — and can downgrade — real detector evidence
+  - issue_id: M-182
+    score: 11
+    overlap:
+    - claim
+    - evidence
+    - exact
+    - identifies
+    - not
+    - observed
+    - raw
+    - required
+    - retained
+    title: Bound memory during calibration evidence export
+  - issue_id: M-2
+    score: 10
+    overlap:
+    - any
+    - closed
+    - contract
+    - evidence
+    - first
+    - invariant
+    - missing
+    - not
+    - observed
+    - reason
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-188
+  fix_id: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-188.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T05:19:51+00:00'
+  by: codex-lead
+  artifact: REPORT.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T05:21:38+00:00'
+  by: codex-lead
+  artifact: REPRO.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T05:42:26+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T05:42:27+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T05:44:17+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-188.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

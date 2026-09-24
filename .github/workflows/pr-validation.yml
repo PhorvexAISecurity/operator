@@ -36,6 +36,7 @@ jobs:
           helm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml -f deploy/helm/phorvex-stack/values-eks.yaml --include-crds > /dev/null
           python tools/check-claim-language.py
       - run: python -m unittest discover -s tools -p 'test_*.py' -v
+      - run: python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py' -v
 
   go-unit:
     runs-on: ubuntu-latest

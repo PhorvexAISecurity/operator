@@ -35,18 +35,19 @@ type CatalogItem struct {
 	// Keeping unknown distinct from false prevents old catalogue data from being
 	// silently upgraded into an attack claim.
 	BenignControl *bool `json:"benignControl,omitempty"`
-	// per-attack guidance (derived): which actuator(s) it should trigger, when it's meaningful,
-	// what it needs to run.
-	ExpectedActuators []string `json:"expectedActuators"`
-	MeaningfulWhen    string   `json:"meaningfulWhen"`
-	RunnableNote      string   `json:"runnableNote"`
-	Prereqs           []string `json:"prereqs"`
-	LaunchKind        string   `json:"launchKind"`
-	ClaimClass        string   `json:"claimClass"`
-	Profile           string   `json:"profile,omitempty"`
-	Available         bool     `json:"available"`
-	UnavailableReason string   `json:"unavailableReason,omitempty"`
-	RuntimeContext    string   `json:"runtimeContext,omitempty"`
+	// Legacy actuator hints remain compatible, with their evidence basis and limits explicit.
+	ExpectedActuators     []string `json:"expectedActuators"`
+	ResponseGuidanceBasis string   `json:"responseGuidanceBasis"`
+	ResponseGuidance      string   `json:"responseGuidance"`
+	MeaningfulWhen        string   `json:"meaningfulWhen"`
+	RunnableNote          string   `json:"runnableNote"`
+	Prereqs               []string `json:"prereqs"`
+	LaunchKind            string   `json:"launchKind"`
+	ClaimClass            string   `json:"claimClass"`
+	Profile               string   `json:"profile,omitempty"`
+	Available             bool     `json:"available"`
+	UnavailableReason     string   `json:"unavailableReason,omitempty"`
+	RuntimeContext        string   `json:"runtimeContext,omitempty"`
 }
 
 // Legacy harnesses used techniques; current harnesses separate declared from exercised.
@@ -56,6 +57,8 @@ var listRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s
 
 func productOf(name string) string {
 	switch {
+	case name == "c2-nats-uncredentialed-exposure":
+		return "application"
 	case strings.HasPrefix(name, "ai1-") || strings.HasPrefix(name, "ai2-") || strings.HasPrefix(name, "c2-vllm-") || strings.HasSuffix(name, "-ai"):
 		return "ai"
 	case strings.HasPrefix(name, "b-") || strings.HasPrefix(name, "e-"):
@@ -88,6 +91,19 @@ func (c *Config) Catalog() []CatalogItem {
 		items[i].Available = true
 		if items[i].BenignControl != nil && *items[i].BenignControl {
 			items[i].ClaimClass = "functional"
+		}
+		if items[i].Name == "c2-nats-uncredentialed-exposure" {
+			items[i].LaunchKind = "named-suite"
+			items[i].Profile = natsBaselineConfig
+			dest, err := (&RunManager{cfg: *c}).SuiteDestination(natsBaselineConfig)
+			items[i].Available = err == nil
+			if err == nil {
+				items[i].RuntimeContext = dest.ScopeTarget
+			}
+			items[i].RunnableNote = "Server-owned NATS no-signal profile; one separate-Pod synthetic message and exact cleanup. This does not test a defense."
+			if !items[i].Available {
+				items[i].UnavailableReason = "NATS server-owned profile is not configured with reviewed source and image pins"
+			}
 		}
 	}
 	return c.sortedLimitedV1Catalogue(items)
@@ -136,7 +152,8 @@ func parseCatalog(out []byte, hasRun map[string]bool) []CatalogItem {
 			Name: name, Product: prod, Category: category, R6Tag: r6,
 			Techniques: declared, ExercisedTechniques: exercised, Caps: caps, HasRun: hasRun[name],
 			Realism: realism, BenignControl: benign,
-			ExpectedActuators: meta.ExpectedActuators, MeaningfulWhen: meta.MeaningfulWhen,
+			ExpectedActuators: meta.ExpectedActuators, ResponseGuidanceBasis: meta.ResponseGuidanceBasis,
+			ResponseGuidance: meta.ResponseGuidance, MeaningfulWhen: meta.MeaningfulWhen,
 			RunnableNote: meta.RunnableNote, Prereqs: meta.Prereqs,
 		})
 	}

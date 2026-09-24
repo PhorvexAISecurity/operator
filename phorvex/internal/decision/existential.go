@@ -16,6 +16,9 @@ func assessOutcomes(v *model.WorkloadView, p model.Policy) *model.ExistentialDec
 	key := v.Pod.Namespace + "/" + v.Pod.Name
 	horizon := p.EffectiveEventAgeHorizon()
 	for _, ev := range v.OutcomeEvents {
+		if ev.TargetBindingReason != "" {
+			continue
+		}
 		if ev.OutcomeParseError != "" {
 			d.Reasons = append(d.Reasons, ev.OutcomeParseError)
 		}

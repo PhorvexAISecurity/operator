@@ -462,10 +462,10 @@ func ensureSAWithRBAC(ctx context.Context, env *core.Env, saName string) error {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{Name: roleName, Namespace: ns, Labels: env.OwnedLabels(nil)},
 		Rules: []rbacv1.PolicyRule{{
-			APIGroups: []string{""}, Resources: []string{"pods", "secrets"}, Verbs: []string{"get", "list"},
+			APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"list"},
 		}},
 	}
-	env.Log.Command(fmt.Sprintf("kubectl create role %s --verb=get,list --resource=pods,secrets -n %s", roleName, ns))
+	env.Log.Command(fmt.Sprintf("kubectl create role %s --verb=list --resource=pods -n %s", roleName, ns))
 	createdRole, err := env.Kube.RbacV1().Roles(ns).Create(ctx, role, metav1.CreateOptions{})
 	if err != nil {
 		return rollback(fmt.Errorf("create role %s (not retried): %w", roleName, err))

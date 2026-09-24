@@ -1,0 +1,17 @@
+{
+  "reviewer": "codex-lead",
+  "at": "2026-09-24T06:20:30.589138+00:00",
+  "base": "7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44",
+  "integrated_initial_fix": "33363972",
+  "final_source": "0c4a11f7",
+  "baseline": "actual kubeVoiceRuntime.CleanupTranscripts algorithm; only execution/pause test seam overlaid",
+  "baseline_result": "late secondSID cleanupFAIL one delete one residual; absent secondSID and ambiguous delete refusal controls PASS",
+  "head_result": "all five cleanup tests PASS including actual embedded Python producer with stateful fake Mongo",
+  "limits": "fake Mongo isolates persistence timing; independent live read confirms incident residual, installed repair still pending",
+  "hashes": {
+    "lead-voice-cleanup-baseline.log": "e75b6463a0c77d978f07512a498b0399d7d0e1c7ad3057770871fbc163db782b",
+    "lead-voice-cleanup-head.log": "67512ee5c0c13bc95c92bc52d29bdb3199c9455f33c1fc1432459e9d5ec79a2f"
+  },
+  "executed_baseline_checkout": "dd9574d7a069ef826213cb59afb1ad754fcd1f2d",
+  "baseline_algorithm_equivalence": "voice_kube.go content identical between7cb7d052 anddd9574d7 before test seam overlay"
+}

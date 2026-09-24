@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,25 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
+
+// ConsoleTargetPodUIDAnnotation binds a newly emitted catalogue signal to the
+// exact Pod lifetime. It is a target check, never detector trust authority.
+const ConsoleTargetPodUIDAnnotation = model.ConsoleTargetPodUIDAnnotation
+
+var consoleTargetUIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+// EvidenceEvents removes UID-rejected catalogue events from inventory consumers
+// that do not use EventByPod (protected outcomes and disclosure ledgers). The
+// original records remain in Snapshot.Events for diagnostics.
+func EvidenceEvents(events []model.SecurityEventInfo) []model.SecurityEventInfo {
+	out := make([]model.SecurityEventInfo, 0, len(events))
+	for _, event := range events {
+		if event.TargetBindingReason == "" {
+			out = append(out, event)
+		}
+	}
+	return out
+}
 
 // collectEvents reads the cluster's SecurityEvent stream (the SAME feed Phoenix
 // ingests) and projects it to per-pod belief evidence. Phorvex's OWN controller
@@ -36,7 +56,7 @@ func collectEvents(ctx context.Context, c client.Reader, now time.Time) ([]model
 	return all, byPod, err
 }
 
-func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Time) ([]model.SecurityEventInfo, map[string][]model.SecurityEventInfo, map[string]model.PhoenixExecutionReceipt, error) {
+func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Time, currentPodUIDs ...map[string]string) ([]model.SecurityEventInfo, map[string][]model.SecurityEventInfo, map[string]model.PhoenixExecutionReceipt, error) {
 	var seList amtdv1beta1.SecurityEventList
 	if err := c.List(ctx, &seList); err != nil {
 		return nil, nil, nil, err
@@ -120,6 +140,19 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			resolved = append(resolved, key)
 		}
 		base.ResolvedTargets = resolved
+		if boundUID, bound := se.Annotations[ConsoleTargetPodUIDAnnotation]; bound {
+			base.ConsoleTargetPodUID = boundUID
+			switch {
+			case !consoleTargetUIDPattern.MatchString(boundUID):
+				base.TargetBindingReason = "console-target-uid-malformed"
+			case len(se.Spec.Targets) != 1 || len(resolved) != 1 || len(base.UnresolvedTargets) != 0:
+				base.TargetBindingReason = "console-target-must-be-one-pod"
+			case len(currentPodUIDs) == 0 || currentPodUIDs[0][resolved[0]] == "":
+				base.TargetBindingReason = "console-target-absent-from-pod-snapshot"
+			case currentPodUIDs[0][resolved[0]] != boundUID:
+				base.TargetBindingReason = "console-target-pod-uid-mismatch"
+			}
+		}
 		if raw := se.Annotations["phorvex.ai/protected-outcomes-v1"]; raw != "" {
 			if err := json.Unmarshal([]byte(raw), &base.Outcomes); err != nil {
 				base.OutcomeParseError = "protected-outcomes-invalid-json"
@@ -134,7 +167,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 		if base.CurrentInventoryRaw != "" && base.Type == model.CurrentInventoryRuleType && base.Source == model.CurrentInventorySource {
 			continue
 		}
-		if trust != TrustTrusted {
+		if trust != TrustTrusted || base.TargetBindingReason != "" {
 			continue // recorded above; an unauthenticated detector supplies no belief evidence
 		}
 		for _, key := range resolved {

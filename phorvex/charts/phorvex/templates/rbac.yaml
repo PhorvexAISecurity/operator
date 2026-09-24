@@ -36,6 +36,12 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
   verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  # Direct APIReader inventory of current ServiceAccount UID/creation identity
+  # for the optional Pod-bound Kubernetes API-token projection. No informer is
+  # started; missing permission or inventory grants no cover.
+  resources: ["serviceaccounts"]
+  verbs: ["list"]
 - apiGroups: ["discovery.k8s.io"]
   # Read-only Service membership inventory for shared availability capacity.
   resources: ["endpointslices"]

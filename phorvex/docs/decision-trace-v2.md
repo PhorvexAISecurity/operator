@@ -1,8 +1,16 @@
-# Decision Trace V2 / V3 / V4 / V5 / V6
+# Decision Trace V2 / V3 / V4 / V5 / V6 / V7
 
-`phorvex.decision-trace.v6` supersedes `v5`, `v4`, `v3`, and `v2`, which remain readable. It is
+`phorvex.decision-trace.v7` supersedes `v6`, `v5`, `v4`, `v3`, and `v2`, which remain readable. It is
 nested under `decisionTrace` in each `phorvex.audit.v2` per-asset decision record.
 It records the current P1 decision path.
+
+**V7 addition (typed resource refusal):** an enabled replica-removing action
+excluded by missing, unknown, or exhausted shared/quarantine capacity records
+`status=infeasible`, `exclusionKind=resource-capacity`, `scored=false`, and the
+unchanged detailed refusal reason. This occurs before cost or selection. A real
+empty recon cover still records `no-cover/recon-cover`. The new exclusion kind is
+valid only in V7; V2–V6 retain their original closed vocabularies. V7 otherwise
+inherits the V6 hard-capacity and V5 economics/flow validation contracts.
 
 **V6 additions (typed hard capacity):** `resources` records each exact integer
 capacity scope, its limit, outstanding durable reservations, and total selected

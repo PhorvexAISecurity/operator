@@ -1,0 +1,62 @@
+{
+  "admitted": {
+    "apiVersion": "amtd.r6security.com/v1beta1",
+    "kind": "SecurityEvent",
+    "metadata": {
+      "annotations": {
+        "phorvex.ai/adapter-name": "owned-neutral-adapter",
+        "phorvex.ai/creator-identity": "system:serviceaccount:owned:adapter-detector",
+        "phorvex.ai/detector-attempt": "9c4f0a9a70a476f23d26d506ed31a934f6ba327bb0218fd69c1b74ff568da151",
+        "phorvex.ai/detector-instance": "owned-proof",
+        "phorvex.ai/target-pod-uid": "pod-uid-1"
+      },
+      "creationTimestamp": "2026-09-24T03:20:00+00:00",
+      "labels": {
+        "phorvex.ai/adapter-detector": "owned-proof"
+      },
+      "name": "adapter-inv-9c4f0a9a70a476f23d26d506",
+      "resourceVersion": "11",
+      "uid": "api-uid-1"
+    },
+    "spec": {
+      "anomalyScore": "1.0000",
+      "description": "one unexpected adapter in exact owned serving inventory",
+      "rule": {
+        "source": "adapter-inventory-detector",
+        "threatLevel": "high",
+        "type": "phorvex.attack.adapter"
+      },
+      "targets": [
+        "owned/engine-0"
+      ]
+    }
+  },
+  "body": {
+    "apiVersion": "amtd.r6security.com/v1beta1",
+    "kind": "SecurityEvent",
+    "metadata": {
+      "annotations": {
+        "phorvex.ai/adapter-name": "owned-neutral-adapter",
+        "phorvex.ai/detector-attempt": "9c4f0a9a70a476f23d26d506ed31a934f6ba327bb0218fd69c1b74ff568da151",
+        "phorvex.ai/detector-instance": "owned-proof",
+        "phorvex.ai/target-pod-uid": "pod-uid-1"
+      },
+      "labels": {
+        "phorvex.ai/adapter-detector": "owned-proof"
+      },
+      "name": "adapter-inv-9c4f0a9a70a476f23d26d506"
+    },
+    "spec": {
+      "anomalyScore": "1.0000",
+      "description": "one unexpected adapter in exact owned serving inventory",
+      "rule": {
+        "source": "adapter-inventory-detector",
+        "threatLevel": "high",
+        "type": "phorvex.attack.adapter"
+      },
+      "targets": [
+        "owned/engine-0"
+      ]
+    }
+  }
+}

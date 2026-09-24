@@ -32,9 +32,9 @@ type catalogueSignalCreateError struct {
 func (e *catalogueSignalCreateError) Error() string { return e.err.Error() }
 func (e *catalogueSignalCreateError) Unwrap() error { return e.err }
 
-// resolveRunningPod picks a Running, not-already-quarantined pod in ns to attack. It prefers an
-// explicit rotation-target pod (the demo apps carry that label) and falls back to any Running pod
-// — safe because the caller has already checked the namespace is governed by a policy.
+// resolveRunningPod preserves the legacy namespace-only selection: it prefers a
+// rotation-labeled Running Pod and otherwise takes another Running Pod. Namespace
+// policy presence alone does not prove that the chosen Pod matches any policy.
 func (s *Server) resolveRunningPod(ns string) (string, error) {
 	pick := func(labelSel string) string {
 		args := []string{"-n", ns, "get", "pod"}
@@ -107,6 +107,8 @@ metadata:
     phorvex.ai/redteam: "true"
     phorvex.ai/console-catalogue: "true"
     phorvex.ai/attack-correlation: %q
+  annotations:
+    %s: %q
 spec:
   description: %q
   targets: ["%s/%s"]
@@ -114,7 +116,7 @@ spec:
     type: %q
     threatLevel: "critical"
     source: "ExternalDetector"
-`, evName, correlation, desc, ns, pod, ruleType)
+`, evName, correlation, model.ConsoleTargetPodUIDAnnotation, candidate.TargetUID, desc, ns, pod, ruleType)
 	f, err := os.CreateTemp("", "phorvex-scn-se-*.yaml")
 	if err != nil {
 		return candidate, err
@@ -142,6 +144,7 @@ spec:
 	}
 	if event.Metadata.Name != evName || event.Metadata.Namespace != "" || event.Metadata.UID == "" || event.Metadata.CreationTimestamp == "" ||
 		event.Metadata.Labels["phorvex.ai/attack-correlation"] != correlation || event.Metadata.Labels["phorvex.ai/console-catalogue"] != "true" ||
+		event.Metadata.Annotations[model.ConsoleTargetPodUIDAnnotation] != candidate.TargetUID ||
 		len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != ns+"/"+pod || event.Spec.Rule.Type != ruleType || event.Spec.Rule.Source != "ExternalDetector" {
 		return candidate, &catalogueSignalCreateError{err: fmt.Errorf("created SecurityEvent reply is incomplete or mismatched; exact resource %q correlation %q requires reconciliation", evName, correlation), dispatched: true}
 	}
@@ -240,14 +243,11 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
 		return
 	}
-	var body struct {
-		Namespace string `json:"namespace"`
-		Scenario  string `json:"scenario"`
-		MITRE     string `json:"mitre"`
-		Expected  string `json:"expected"` // the actuator the caller expects, for the results row
-		Action    string `json:"action"`   // "" | "fire" | "clear"
+	body, decodeErr := decodeScenarioFireRequest(r)
+	if decodeErr != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": decodeErr.Error()})
+		return
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
 	ns := strings.TrimSpace(body.Namespace)
 	scenario := strings.TrimSpace(body.Scenario)
 	if ns == "" || !nsRe.MatchString(ns) {
@@ -285,33 +285,56 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Armed = the namespace is governed by a PhorvexPolicy, so firing at it demonstrates a
-	// real defense. Same gate as the foothold path.
-	if !armedWorkloads[ns] && !s.namespaceHasPolicy(ns) {
+	// Legacy namespace selection remains compatible. Exact mode independently
+	// verifies the one selected Pod, its owner and its matching active policy.
+	if body.TargetPod == "" && !armedWorkloads[ns] && !s.namespaceHasPolicy(ns) {
 		writeJSON(w, 400, map[string]string{"error": "namespace not armed: " + ns +
-			" — it has no PhorvexPolicy, so Phorvex does not govern it and the attack would land " +
-			"with no defense."})
+			" — it has no PhorvexPolicy for a catalogue signal."})
 		return
 	}
 
-	pod, err := s.resolveRunningPod(ns)
+	pod := body.TargetPod
+	var exact scenarioExactTarget
+	if pod != "" {
+		exact, err = s.resolveScenarioExactTarget(ns, pod, body.TargetUID)
+	} else {
+		pod, err = s.resolveRunningPod(ns)
+	}
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// Statefulness (mounted PVC) decides whether Phorvex will rotate or quarantine, and it is
-	// what the results row reports as the expected actuator when the caller didn't supply one.
-	stateful := false
-	if pvc, _ := s.cfg.execText(6*time.Second, "kubectl", "-n", ns, "get", "pod", pod,
-		"-o", "jsonpath={.spec.volumes[*].persistentVolumeClaim.claimName}"); strings.TrimSpace(pvc) != "" {
-		stateful = true
+	// Mounted-PVC state is recorded for the case. The brain's actual action is
+	// independently observed; a catalogue name hint never forces selection.
+	stateful := pod != "" && body.TargetPod != "" && scenarioHasPVC(&exact.pod)
+	if body.TargetPod == "" {
+		if pvc, _ := s.cfg.execText(6*time.Second, "kubectl", "-n", ns, "get", "pod", pod,
+			"-o", "jsonpath={.spec.volumes[*].persistentVolumeClaim.claimName}"); strings.TrimSpace(pvc) != "" {
+			stateful = true
+		}
 	}
 	// Baseline BEFORE applying — the operator can act within ~1s, so a later snapshot would
 	// absorb this attack's own response and misreport the outcome.
-	base := s.snapshotBaseline(ns, pod)
+	base := defenseBaseline{}
+	if body.TargetPod != "" {
+		base = s.snapshotBaselineForOwnerKind(ns, pod, exact.ownerKind, exact.ownerName, exact.ownerUID, string(exact.pod.UID))
+	} else {
+		base = s.snapshotBaseline(ns, pod)
+	}
 	if base.uid == "" {
 		writeJSON(w, 503, map[string]string{"error": "exact target Pod identity is unavailable"})
+		return
+	}
+	// This is the final read before durable signal intent. The manager repeats
+	// the UID check against its own decision Pod snapshot after event creation.
+	if body.TargetPod != "" {
+		if err := s.recheckScenarioExactTarget(ns, pod, base.uid, exact); err != nil {
+			writeJSON(w, 503, map[string]string{"error": err.Error()})
+			return
+		}
+	} else if liveUID, found, readErr := s.experimentCluster().PodUID(r.Context(), ns, pod); readErr != nil || !found || liveUID != base.uid {
+		writeJSON(w, 503, map[string]string{"error": "selected Pod identity changed before catalogue signal intent"})
 		return
 	}
 	mitre := strings.Join(definition.Techniques, ",")

@@ -92,6 +92,9 @@ func recordExistentialEffect(d *model.Decision, attempted bool) {
 func outcomeInventory(events []model.SecurityEventInfo, p model.Policy) *model.ExistentialInventory {
 	inventory := &model.ExistentialInventory{PolicyUID: p.PolicyUID, ScopeComplete: true}
 	for _, event := range events {
+		if event.TargetBindingReason != "" {
+			continue
+		}
 		if event.OutcomeParseError != "" {
 			inventory.ScopeComplete = false
 			inventory.Reasons = append(inventory.Reasons, event.Name+":"+event.OutcomeParseError)

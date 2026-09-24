@@ -139,5 +139,95 @@ subjects:
   name: {{ include "phorvex.consoleServiceAccountName" $ }}
   namespace: {{ $.Release.Namespace }}
 {{- end }}
+{{- if and .enabled .guardrailCalibration.enabled }}
+---
+# Guardrail calibration reads one reviewed namespace. Kubernetes RBAC cannot
+# restrict pods/proxy to the two fixed paths; the worker pins target and paths.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-calibration-v1
+  namespace: {{ required "guardrail calibration namespace is required" .guardrailCalibration.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: [{{ .guardrailCalibration.service | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .guardrailCalibration.sourceConfigMap | quote }}]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+- apiGroups: [""]
+  resources: ["pods/proxy"]
+  verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-calibration-v1
+  namespace: {{ required "guardrail calibration namespace is required" .guardrailCalibration.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-calibration-v1
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- if and .enabled .mcpSession.enabled }}
+---
+# Fixed installed MCP source/read and one in-memory session protocol. The
+# worker constrains the proxy to one Pod, one /mcp path and six fixed requests.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-mcp-session
+  namespace: {{ .mcpSession.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: [{{ .mcpSession.service | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .mcpSession.sourceConfigMap | quote }}]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["pods/proxy"]
+  verbs: ["create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-mcp-session
+  namespace: {{ .mcpSession.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-mcp-session
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
 {{- end }}

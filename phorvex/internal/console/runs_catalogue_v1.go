@@ -40,6 +40,10 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GPUFixtureNamespace)
 	case cataloguev1.AuthUnauth, cataloguev1.AuthScope:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.AllowedTenant)
+	case cataloguev1.GuardrailCalibration:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GuardrailNamespace)
+	case cataloguev1.MCPSessionBaseline:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.MCPNamespace)
 	}
 	if tenant == "" {
 		return runDestination{}, errors.New("fixed suite resolved tenant is unavailable")
@@ -48,7 +52,7 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 }
 
 func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
-	return cataloguev1.RuntimeConfig{Version: cataloguev1.RuntimeConfigVersion, StateDir: c.StateDir,
+	runtime := cataloguev1.RuntimeConfig{Version: cataloguev1.RuntimeConfigVersion, StateDir: c.StateDir,
 		KubeconfigPath: c.CatalogueV1.KubeconfigPath, KubeContext: c.CatalogueV1.KubeContext,
 		FixedLoopback: c.CatalogueV1.LoopbackURL, ScopedTokenFile: c.CatalogueV1.ScopedTokenFile,
 		AllowedTenant: c.CatalogueV1.AllowedTenant, DeniedTenant: c.CatalogueV1.DeniedTenant,
@@ -63,6 +67,22 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Namespace: c.CatalogueV1.GPUFixtureNamespace, FixtureConfigFile: c.CatalogueV1.GPUFixtureConfig,
 			HarnessBinary: c.HarnessBin, HarnessDir: c.HarnessDir,
 			KubeconfigPath: c.CatalogueV1.GPUKubeconfigPath, KubeContext: c.CatalogueV1.GPUKubeContext}}
+	if c.CatalogueV1.GuardrailCalibrationEnabled {
+		runtime.Guardrail = &cataloguev1.GuardrailCalibrationRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.GuardrailNamespace, Service: c.CatalogueV1.GuardrailService,
+			Port: c.CatalogueV1.GuardrailPort, Container: c.CatalogueV1.GuardrailContainer,
+			SourceConfigMap: c.CatalogueV1.GuardrailSourceConfigMap, SourceKey: c.CatalogueV1.GuardrailSourceKey,
+			ExpectedSourceSHA256: c.CatalogueV1.GuardrailSourceSHA256}
+	}
+	if c.CatalogueV1.MCPEnabled {
+		runtime.MCP = &cataloguev1.MCPSessionRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.MCPNamespace, Deployment: c.CatalogueV1.MCPDeployment,
+			Service: c.CatalogueV1.MCPService, Container: c.CatalogueV1.MCPContainer,
+			Port: c.CatalogueV1.MCPPort, SourceConfigMap: c.CatalogueV1.MCPSourceConfigMap,
+			SourceKey: c.CatalogueV1.MCPSourceKey, ExpectedImageID: c.CatalogueV1.MCPImageID,
+			ExpectedSourceSHA256: c.CatalogueV1.MCPSourceSHA256}
+	}
+	return runtime
 }
 
 func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, owner string) (string, error) {
@@ -88,7 +108,7 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 	}
 	rm.mu.Lock()
 	for _, existing := range rm.runs {
-		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry && existing.State != "done" && existing.State != "stopped" {
+		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
 			rm.mu.Unlock()
 			return "", errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 		}
@@ -120,10 +140,14 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 		rm.mu.Unlock()
 		return "", fmt.Errorf("persist fixed-suite job: %w", err)
 	}
+	claimClass := "functional"
+	if profile == cataloguev1.GuardrailCalibration {
+		claimClass = "calibration"
+	}
 	st := &RunStatus{ID: id, Config: string(profile), State: "running", Started: startedAt, Date: tsNow(),
 		ExpectedTrials: 1, Owner: owner, ScopeTarget: destination.ScopeTarget, ScopeTenant: destination.ScopeTenant,
 		Target: rm.cfg.catalogueV1RuntimeContext(profile), TargetLabel: rm.cfg.catalogueV1RuntimeContext(profile), Provider: "Kubernetes",
-		ExecutionKind: "fixed-suite", ClaimClass: "functional"}
+		ExecutionKind: "fixed-suite", ClaimClass: claimClass}
 	rm.runs[id], rm.runOut[id], rm.functional[id] = st, id, job
 	rm.active++
 	rm.lastStart = time.Now()
@@ -248,13 +272,13 @@ func (rm *RunManager) finishFunctional(id string, job cataloguev1.Job, processEr
 		st.State = "partial"
 		st.UnsafeToRetry = true
 		st.Error = "fixed suite exceeded its bounded deadline"
-	case stopping && result.Cleanup.Verified:
+	case stopping && result.Cleanup.Verified && !st.UnsafeToRetry:
 		st.State = "stopped"
 		st.Error = "stopped by user after verified cleanup"
 	case stopping:
 		st.State = "partial"
 		st.UnsafeToRetry = true
-		st.Error = "stopped by user; cleanup unverified"
+		st.Error = "stopped by user; cleanup or effect unresolved"
 	case processErr != nil:
 		st.State = "partial"
 		st.UnsafeToRetry = true
@@ -263,6 +287,9 @@ func (rm *RunManager) finishFunctional(id string, job cataloguev1.Job, processEr
 		st.State = "partial"
 		st.UnsafeToRetry = true
 		st.Error = "fixed suite ended without verified cleanup"
+	case st.UnsafeToRetry:
+		st.State = "partial"
+		st.Error = "fixed suite ended with an unresolved effect; reconciliation required"
 	case result.Outcome == cataloguev1.OutcomeTestFailed:
 		st.State = "error"
 		st.Error = result.Summary
@@ -320,14 +347,14 @@ func (rm *RunManager) reconcileInterruptedFunctional() {
 		rm.mu.Lock()
 		st := rm.runs[id]
 		if st != nil {
-			if err == nil && readErr == nil && result.Cleanup.Verified {
+			if err == nil && readErr == nil && result.Cleanup.Verified && !result.UnsafeToRetry && !result.Cleanup.UnsafeToRetry {
 				st.State = "partial"
 				st.Error = "interrupted fixed suite reconciled; original result remains incomplete"
 				st.CleanupStatus = result.Cleanup.Status
 				st.UnsafeToRetry = false
 			} else {
 				st.State = "partial"
-				st.Error = "interrupted fixed suite reconciliation failed"
+				st.Error = "interrupted fixed suite reconciliation unverified or effect unresolved"
 				st.UnsafeToRetry = true
 			}
 			if persistErr := rm.persistStatus(st, rm.runOut[id]); persistErr != nil {
@@ -371,7 +398,7 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	if !ok || status.ExecutionKind != "fixed-suite" {
 		return nil, nil
 	}
-	if status.State != "done" && status.State != "error" && status.State != "stopped" {
+	if status.State != "done" && status.State != "error" && status.State != "stopped" && status.State != "partial" {
 		return nil, errors.New("fixed-suite terminal result is not yet verified")
 	}
 	dir := rm.cfg.runOutputPath(out)
@@ -396,5 +423,14 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	if string(result.Outcome) != status.Outcome || result.Cleanup.Status != status.CleanupStatus {
 		return nil, errors.New("fixed-suite terminal result differs from the accepted run status")
 	}
+	// A partial run can expose a validated failed observation for diagnosis. It
+	// cannot expose a functional pass as an accepted result; its metric remains
+	// excluded by RunEvidence regardless of the terminal file's contents.
+	if status.State == "partial" && result.Outcome == cataloguev1.OutcomeFunctionalPass {
+		return nil, errors.New("partial fixed-suite functional pass is not accepted")
+	}
+	// The worker result is retained unchanged. A later process/terminal failure
+	// can make the authoritative run unsafe even when worker cleanup succeeded.
+	result.UnsafeToRetry = result.UnsafeToRetry || status.UnsafeToRetry
 	return &result, nil
 }

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -232,6 +233,81 @@ func podBoundToken(t *testing.T, ttl time.Duration) string {
 func newScenario() *c1CredTheftRBAC { return &c1CredTheftRBAC{app: "c1ct-target", sa: "c1ct-sa"} }
 
 // ---------------------------------------------------------------- direct tests
+
+// Exercise the actual Setup path: the captured credential needs only the
+// namespace Pod-list operation, while the fixture's own admin client creates
+// its ServiceAccount, Role, RoleBinding and Pod. The same credential must still
+// drive the initial and post-window API observations.
+func TestCredReplaySetupGrantsOnlyPodListAndReplaysCapturedToken(t *testing.T) {
+	env, kube := ownershipEnv(t)
+	assignCreateUIDs(kube)
+	kube.PrependReactor("create", "serviceaccounts", func(action ktesting.Action) (bool, runtime.Object, error) {
+		action.(ktesting.CreateAction).GetObject().(*corev1.ServiceAccount).UID = types.UID("owned-sa")
+		return false, nil, nil
+	})
+	kube.PrependReactor("create", "roles", func(action ktesting.Action) (bool, runtime.Object, error) {
+		action.(ktesting.CreateAction).GetObject().(*rbacv1.Role).UID = types.UID("owned-role")
+		return false, nil, nil
+	})
+	kube.PrependReactor("create", "rolebindings", func(action ktesting.Action) (bool, runtime.Object, error) {
+		action.(ktesting.CreateAction).GetObject().(*rbacv1.RoleBinding).UID = types.UID("owned-binding")
+		return false, nil, nil
+	})
+
+	api := &ctAPI{}
+	srv := startTLS(t, api)
+	env.Rest = &rest.Config{Host: srv.URL, TLSClientConfig: rest.TLSClientConfig{CAData: caPEM(t, srv)}}
+	s := &c1CredTheftRBAC{}
+	if err := s.Setup(t.Context(), env); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	role, err := kube.RbacV1().Roles(env.Config.Namespace).Get(t.Context(), s.sa+"-role", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRules := []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"list"}}}
+	if !reflect.DeepEqual(role.Rules, wantRules) {
+		t.Fatalf("fixture Role rules=%#v; want only core/pods/list", role.Rules)
+	}
+	binding, err := kube.RbacV1().RoleBindings(env.Config.Namespace).Get(t.Context(), s.sa+"-rb", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.RoleRef.Kind != "Role" || binding.RoleRef.Name != role.Name ||
+		len(binding.Subjects) != 1 || binding.Subjects[0].Kind != "ServiceAccount" || binding.Subjects[0].Name != s.sa {
+		t.Fatalf("fixture binding points outside the owned ServiceAccount/Role: %#v", binding)
+	}
+	pod, err := kube.CoreV1().Pods(env.Config.Namespace).Get(t.Context(), s.app, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pod.Spec.ServiceAccountName != s.sa {
+		t.Fatalf("source Pod serviceAccount=%q, want %q", pod.Spec.ServiceAccountName, s.sa)
+	}
+	token := mintJWT(t, map[string]any{
+		"exp":           time.Now().Add(time.Hour).Unix(),
+		"sub":           "system:serviceaccount:sandbox:" + s.sa,
+		"kubernetes.io": map[string]any{"pod": map[string]any{"name": pod.Name, "uid": string(pod.UID)}},
+	})
+	installExecer(t, token, 0)
+	noSleepWindow(t)
+	attack, err := s.Execute(t.Context(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	result, err := s.SuccessOracle(t.Context(), env)
+	if err != nil || !result.Achieved {
+		t.Fatalf("SuccessOracle=%#v, %v; want post-window authorization", result, err)
+	}
+	requests := api.sawAuth()
+	if len(requests) != 2 || requests[0] != "Bearer "+token || requests[1] != "Bearer "+token {
+		t.Fatalf("initial/final replay did not use only the same captured credential (calls=%d)", len(requests))
+	}
+	if strings.Contains(strings.Join(env.Log.Commands(), "\n"), token) ||
+		strings.Contains(strings.Join(attack.Commands, "\n"), token) {
+		t.Fatal("fixture credential leaked into command provenance")
+	}
+}
 
 // The captured credential — and ONLY it — is replayed in BOTH the initial and the
 // post-window observation, and NO substitute token is ever minted.

@@ -1,9 +1,8 @@
-// Package safety is the mandatory containment layer. It REFUSES any mutating call
-// unless (a) the live current-context equals the configured context, (b) the live
-// apiserver host equals the host of that named context in the kubeconfig, (c) the
-// owned/authorized acknowledgement is set, and (d) the target namespace equals the
-// configured sandbox namespace. Anything else is a hard refusal — the harness
-// NEVER mutates an unintended cluster or namespace.
+// Package safety is the mandatory containment layer. Ordinary suites bind the
+// live kube-context and apiserver host to the named kubeconfig context. The
+// narrow NATS fixture binds an explicit in-cluster transport and checks its
+// kube-system UID before namespace mutation. Both paths require ownedAck and
+// confine object mutations to the configured sandbox namespace.
 package safety
 
 import (
@@ -11,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/r6security/phoenix-test-harness/internal/config"
@@ -55,11 +55,21 @@ func NewGuard(cfg config.TargetConfig, liveContext, liveHost string) (*Guard, er
 	if strings.TrimSpace(cfg.Context) == "" {
 		return nil, &RefuseError{Reason: "config.Context is empty — refusing (no authorized target to assert against)"}
 	}
-	if liveContext != cfg.Context {
+	if liveContext != cfg.Context && !(cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Transport == "in-cluster" && cfg.Kubeconfig == "" && liveContext == "in-cluster") {
 		return nil, &RefuseError{Reason: fmt.Sprintf("live kube-context %q != configured context %q — refusing to target an unauthorized context", liveContext, cfg.Context)}
 	}
 
-	expectedHost, err := hostForContext(cfg.Kubeconfig, cfg.Context)
+	var expectedHost string
+	var err error
+	if cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Transport == "in-cluster" && cfg.Kubeconfig == "" {
+		inCluster, configErr := rest.InClusterConfig()
+		if configErr != nil {
+			return nil, &RefuseError{Reason: "in-cluster NATS identity unavailable: " + configErr.Error()}
+		}
+		expectedHost = inCluster.Host
+	} else {
+		expectedHost, err = hostForContext(cfg.Kubeconfig, cfg.Context)
+	}
 	if err != nil {
 		return nil, &RefuseError{Reason: fmt.Sprintf("cannot resolve apiserver host for context %q: %v", cfg.Context, err)}
 	}
@@ -84,7 +94,7 @@ func (g *Guard) AssertMutationAllowed(targetNS string) error {
 	if !g.cfg.OwnedAck {
 		return &RefuseError{Reason: "ownedAck cleared — refusing"}
 	}
-	if g.liveContext != g.cfg.Context {
+	if g.liveContext != g.cfg.Context && !(g.cfg.NATSExposureFixture != nil && g.cfg.NATSExposureFixture.Transport == "in-cluster" && g.cfg.Kubeconfig == "" && g.liveContext == "in-cluster") {
 		return &RefuseError{Reason: fmt.Sprintf("live context %q drifted from configured %q — refusing", g.liveContext, g.cfg.Context)}
 	}
 	if !hostsEqual(g.expectedHost, g.liveHost) {

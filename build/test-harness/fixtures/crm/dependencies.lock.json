@@ -1,0 +1,27 @@
+{
+  "installedImageID": "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff",
+  "installedPodUID": "47b61903-5dcc-48b2-80a2-6589cf6f86a4",
+  "packages": {
+    "annotated-types": "0.8.0",
+    "anyio": "4.14.2",
+    "click": "8.4.2",
+    "dnspython": "2.8.0",
+    "fastapi": "0.115.14",
+    "h11": "0.16.0",
+    "idna": "3.18",
+    "packaging": "26.3",
+    "pip": "24.0",
+    "pydantic": "2.13.4",
+    "pydantic-core": "2.46.4",
+    "pymongo": "4.17.0",
+    "setuptools": "79.0.1",
+    "starlette": "0.46.2",
+    "typing-extensions": "4.16.0",
+    "typing-inspection": "0.4.4",
+    "uvicorn": "0.30.6",
+    "wheel": "0.46.3"
+  },
+  "python": "3.11.15",
+  "schema": "phorvex.crm-installed-dependencies.v1",
+  "sourceSHA256": "328f37a8d6d3692fb3bd6d4db2637e72d54becf8e9e4396d5e47f4ab5f909350"
+}

@@ -1,0 +1,5 @@
+ok  	github.com/phorvex/phorvex/internal/console	0.060s
+ok  	github.com/phorvex/phorvex/internal/ingest	0.024s
+ok  	github.com/phorvex/phorvex/internal/decision	0.022s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/runner	0.024s
+ok  	github.com/phorvex/phorvex/tools/covermap	0.008s

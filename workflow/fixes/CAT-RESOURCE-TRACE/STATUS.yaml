@@ -1,0 +1,264 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0ba75b5de3cc79d61e3fc6d9413bd0365c3682e148241113571aedd290fa0d38
+    source_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+    at: '2026-09-24T05:21:36+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline.log
+    sha256: 066c2c3ef9d5f1ae8d4f89cc01283ea8f54dab08f88fd541c287feeddf3834a8
+    source_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+    at: '2026-09-24T06:41:04+00:00'
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:49+00:00'
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: 93314f59d307c1209fd8f86f38c7fa92d38bc613ee1bcb359b404557b845cfe8
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:49+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:49+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker/head-phorvex-packages.log
+    sha256: ec4f3f4eed7742828f1766e198694fa58e9d54439a53862b84909d615ffb2751
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:49+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/decision
+    - phorvex/internal/installedauditobserver
+    - phorvex/internal/model
+    inputs_sha256: 466e21ef6f2f06cc98c3e01297b62f5ef55f291c4f51f46198a54e4e1038290f
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker/head-phorvex-packages.log
+    sha256: ec4f3f4eed7742828f1766e198694fa58e9d54439a53862b84909d615ffb2751
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:49+00:00'
+    inputs:
+    - phorvex/internal/actionset
+    - phorvex/internal/decision
+    inputs_sha256: d29e713f800712b65a87bfeb6e19015070da1cdd7060f10b9b2f1dee34706c23
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker/head-python-validator.log
+    sha256: 015bafa3967d8d98fcd9caff3830ea29c7645896ce9f5e419a956e0f8f7a6a42
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:49+00:00'
+    inputs:
+    - workflow/fixes/T0-C/validator
+    inputs_sha256: 53112b1dc7224a6bcef4ecc92defd04b9b74b0501d88a7494d6c66fefd0e4a9c
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 58739f03bf808f023ecb5c562b032ebd6aee0c8ee6437d2ed38322b2a91a63cc
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:06+00:00'
+    baseline_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 437a9ff8419b8f73ed15d41e06501a201757e0351a62a06ef6a5ffcae430184b
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:58:06+00:00'
+    incident_sha256: 58739f03bf808f023ecb5c562b032ebd6aee0c8ee6437d2ed38322b2a91a63cc
+fix_id: CAT-RESOURCE-TRACE
+issues:
+- M-188
+title: Report resource-capacity refusals without false no-cover attribution
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-coverage-plan
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-coverage-20260923
+  code_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  deployed_image: 0.4.154
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  head_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Publish PR323 update; await required CI and deployment for live acceptance
+updated_at: '2026-09-24T07:02:47+00:00'
+configuration_history:
+- at: '2026-09-24T05:21:32+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T05:45:21+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:21:50+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:38:19+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:53:34+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:57:48+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T05:21:34+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T05:21:36+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T06:57:49+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T06:57:51+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T06:58:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T06:58:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T07:02:47+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-RESOURCE-TRACE:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

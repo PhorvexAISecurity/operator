@@ -1,0 +1,61 @@
+{
+  "observedAtUTC": "2026-09-23T23:14:38.587035+00:00",
+  "scope": "direct-Kubernetes-Pod-bound-token-mechanism-control",
+  "securityOutcome": "NOT_EVALUATED",
+  "installedDefense": "NOT_EVALUATED",
+  "mechanismResult": "POD_BOUND_TOKEN_AUTHENTICATION_REJECTED",
+  "sourceExecutableSHA256": "4a32e922ccc9776671bfe203d89c1c8b9e8e25d0410e3058a65b2227c4114c86",
+  "namespace": "phorvex-cred-proof-b74b00c4e9",
+  "nodeName": "ip-172-27-12-250.us-east-2.compute.internal",
+  "nodeUID": "700350f5-cb26-4436-b7fd-19d0ca9e9f03",
+  "createdUIDs": {
+    "Namespace/phorvex-cred-proof-b74b00c4e9": "bf04e32b-fee6-49be-b0c8-1169bb28f71f",
+    "ServiceAccount/reader": "aca557bc-a9d3-41a4-9148-714090039704",
+    "Role/reader": "d48e5f31-44a8-4b0f-8a0a-619722173a3e",
+    "RoleBinding/reader": "3b887ea7-2dc3-44a7-8c88-dc108842f6eb",
+    "Pod/legitimate": "a51e4251-7985-4406-ad54-2b951a360d58",
+    "Pod/source": "a9e172ee-34ba-4fbc-b751-2ca5eacf2705"
+  },
+  "initialSource": {
+    "class": "authorized",
+    "httpStatus": 200,
+    "at": "2026-09-23T23:10:59.571777+00:00"
+  },
+  "initialLegitimate": {
+    "class": "authorized",
+    "httpStatus": 200
+  },
+  "noActionSource": {
+    "class": "authorized",
+    "httpStatus": 200,
+    "at": "2026-09-23T23:12:08.941896+00:00"
+  },
+  "evictionAcceptedAt": "2026-09-23T23:12:14.599753+00:00",
+  "sourceAbsentAt": "2026-09-23T23:12:19.467868+00:00",
+  "finalSource": {
+    "class": "denied",
+    "httpStatus": 401,
+    "at": "2026-09-23T23:13:32.843633+00:00"
+  },
+  "finalLegitimate": {
+    "class": "authorized",
+    "httpStatus": 200
+  },
+  "secondsAfterSourceAbsence": 73.376,
+  "minimumNaturalExpiryMarginSecondsAtFinal": 433.156,
+  "httpsReplayCount": 5,
+  "credentialExecCount": 2,
+  "evictionCount": 1,
+  "cleanupComplete": true,
+  "independentNamespaceAbsent": true,
+  "sshExitCode": 0,
+  "ambiguousKubectlDispatches": 0,
+  "interpretation": "Initial owned API access was achieved. The exact captured Pod-bound source token still worked after the no-action interval; after direct UID-bound source-Pod eviction and observed absence, it received HTTP401 while the separate legitimate Pod token received HTTP200. This calibrates Kubernetes API authentication for this fixture only; no installed Phorvex decision or security mitigation was evaluated.",
+  "evidenceFiles": [
+    "source/pod_bound_token_control.py",
+    "source/test_pod_bound_token_control.py",
+    "stdout.jsonl",
+    "stderr.txt",
+    "transport.json"
+  ]
+}

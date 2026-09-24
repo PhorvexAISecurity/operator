@@ -1346,7 +1346,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 	}
 	trace := &model.DecisionTraceV2{
-		SchemaVersion:             model.DecisionTraceSchemaV6,
+		SchemaVersion:             model.DecisionTraceSchemaV7,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
@@ -1786,8 +1786,8 @@ func buildActionStatus(pol model.Policy, assetKey string, attackBacked bool,
 			row.ExclusionKind = model.ExclusionNotEnabled
 		case wasExcluded:
 			// Structural mapping from the exclusion's own fields — no string sniffing:
-			// Category set ⇒ data-quality fail-close; feasibility never evaluated ⇒
-			// recon-cover; infeasible ⇒ Layer-A; costed+feasible ⇒ the SLO gate.
+			// Category set ⇒ data-quality fail-close; typed capacity ⇒ hard
+			// resource refusal; then true empty cover, Layer-A and SLO in order.
 			row.Reason = ex.Reason
 			switch {
 			case ex.EligibilityKind != "":
@@ -1797,6 +1797,9 @@ func buildActionStatus(pol model.Policy, assetKey string, attackBacked bool,
 			case ex.Category != "":
 				row.Status = model.ActionStatusInfeasible
 				row.ExclusionKind = model.ExclusionCostNaN
+			case ex.StructuralKind == model.ExclusionResourceCapacity:
+				row.Status = model.ActionStatusInfeasible
+				row.ExclusionKind = model.ExclusionResourceCapacity
 			case !ex.FeasibilityEvaluated:
 				row.Status = model.ActionStatusNoCover
 				row.ExclusionKind = model.ExclusionReconCover

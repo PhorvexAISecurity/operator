@@ -316,11 +316,33 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	guardrailCalibrationEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_CALIBRATION_ENABLED")
+	if err != nil {
+		return err
+	}
+	mcpEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_MCP_ENABLED")
+	if err != nil {
+		return err
+	}
 	port := int64(0)
 	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
 		port, err = strconv.ParseInt(raw, 10, 32)
 		if err != nil || port < 1 || port > 65535 || raw != strconv.FormatInt(port, 10) {
 			return errors.New("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT must be a canonical port")
+		}
+	}
+	guardrailPort := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_PORT"); raw != "" {
+		guardrailPort, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || guardrailPort < 1 || guardrailPort > 65535 || raw != strconv.FormatInt(guardrailPort, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_PORT must be a canonical port")
+		}
+	}
+	mcpPort := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_MCP_PORT"); raw != "" {
+		mcpPort, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || mcpPort < 1 || mcpPort > 65535 || raw != strconv.FormatInt(mcpPort, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_MCP_PORT must be a canonical port")
 		}
 	}
 	executable, _ := os.Executable()
@@ -341,7 +363,25 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		VoiceServicePort: int32(port), VoicePDB: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PDB"),
 		TranscriptSelector: read("PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_SELECTOR"), TranscriptContainer: read("PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_CONTAINER"),
 		GPUEnabled: gpuEnabled, GPUFixtureNamespace: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_NAMESPACE"),
-		GPUFixtureConfig: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_CONFIG"), GPUKubeconfigPath: gpuKubeconfigPath, GPUKubeContext: gpuKubeContext}
+		GPUFixtureConfig: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_CONFIG"), GPUKubeconfigPath: gpuKubeconfigPath, GPUKubeContext: gpuKubeContext,
+		GuardrailCalibrationEnabled: guardrailCalibrationEnabled,
+		GuardrailNamespace:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_NAMESPACE"),
+		GuardrailService:            read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SERVICE"),
+		GuardrailPort:               int32(guardrailPort),
+		GuardrailContainer:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_CONTAINER"),
+		GuardrailSourceConfigMap:    read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_CONFIGMAP"),
+		GuardrailSourceKey:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_KEY"),
+		GuardrailSourceSHA256:       read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_SHA256")}
+	cfg.CatalogueV1.MCPEnabled = mcpEnabled
+	cfg.CatalogueV1.MCPNamespace = read("PHORVEX_CONSOLE_CATALOGUE_MCP_NAMESPACE")
+	cfg.CatalogueV1.MCPDeployment = read("PHORVEX_CONSOLE_CATALOGUE_MCP_DEPLOYMENT")
+	cfg.CatalogueV1.MCPService = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SERVICE")
+	cfg.CatalogueV1.MCPContainer = read("PHORVEX_CONSOLE_CATALOGUE_MCP_CONTAINER")
+	cfg.CatalogueV1.MCPPort = int32(mcpPort)
+	cfg.CatalogueV1.MCPSourceConfigMap = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_CONFIGMAP")
+	cfg.CatalogueV1.MCPSourceKey = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_KEY")
+	cfg.CatalogueV1.MCPImageID = read("PHORVEX_CONSOLE_CATALOGUE_MCP_IMAGE_ID")
+	cfg.CatalogueV1.MCPSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_SHA256")
 	if cfg.CatalogueV1.KubeconfigPath != "" && cfg.CatalogueV1.KubeContext == "" {
 		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.KubeconfigPath}
 		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
@@ -380,23 +420,10 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		log.Printf("catalogue v1 job: %v", err)
 		return 2
 	}
-	var restConfig *rest.Config
-	var kube kubernetes.Interface
-	if job.Profile == cataloguev1.VoiceMedia || job.Profile == cataloguev1.VoiceRecovery {
-		if runtimeConfig.KubeconfigPath != "" {
-			loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: runtimeConfig.KubeconfigPath}
-			overrides := &clientcmd.ConfigOverrides{CurrentContext: runtimeConfig.KubeContext}
-			restConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, overrides).ClientConfig()
-		} else {
-			restConfig, err = rest.InClusterConfig()
-		}
-		if err == nil {
-			kube, err = kubernetes.NewForConfig(restConfig)
-		}
-		if err != nil {
-			log.Printf("catalogue v1 Kubernetes runtime: %v", err)
-			return 2
-		}
+	restConfig, kube, err := workerKubernetesRuntime(job.Profile, runtimeConfig)
+	if err != nil {
+		log.Printf("catalogue v1 Kubernetes runtime: %v", err)
+		return 2
 	}
 	runtime, err := runtimeConfig.Runtime(restConfig, kube, &http.Client{Timeout: 30 * time.Second})
 	if err != nil {
@@ -406,7 +433,8 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 	runner, err := cataloguev1.New(runtime,
 		cataloguev1.NewVoiceMediaHandler(), cataloguev1.NewVoiceRecoveryHandler(),
 		cataloguev1.NewGPUDrainHandler(),
-		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler())
+		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler(),
+		cataloguev1.NewGuardrailCalibrationHandler(), cataloguev1.NewMCPSessionHandler())
 	if err != nil {
 		log.Printf("catalogue v1 registry: %v", err)
 		return 2
@@ -433,6 +461,27 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		return 1
 	}
 	return 0
+}
+
+func workerKubernetesRuntime(profile cataloguev1.ProfileID, runtimeConfig cataloguev1.RuntimeConfig) (*rest.Config, kubernetes.Interface, error) {
+	if profile != cataloguev1.VoiceMedia && profile != cataloguev1.VoiceRecovery &&
+		profile != cataloguev1.GuardrailCalibration && profile != cataloguev1.MCPSessionBaseline {
+		return nil, nil, nil
+	}
+	var restConfig *rest.Config
+	var err error
+	if runtimeConfig.KubeconfigPath != "" {
+		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: runtimeConfig.KubeconfigPath}
+		overrides := &clientcmd.ConfigOverrides{CurrentContext: runtimeConfig.KubeContext}
+		restConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, overrides).ClientConfig()
+	} else {
+		restConfig, err = rest.InClusterConfig()
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	kube, err := kubernetes.NewForConfig(restConfig)
+	return restConfig, kube, err
 }
 
 func auditGate(next http.Handler, source *audittransport.Client) http.Handler {
