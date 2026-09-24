@@ -1,0 +1,252 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 5e1a1e44c92f1f6587c62643f7775a1ab774a2b3df5f32e395829399be009c5f
+    source_sha: ed8df1f3d42d54d05e4eb6b5f73133aef142d0a6
+    at: '2026-09-24T15:06:15+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-review/BASELINE-RECEIPT.json
+    sha256: 88e028ade12dd1962f6427e7962f2a3e91e63731addf8ef2f749643b02e059fa
+    source_sha: ed8df1f3d42d54d05e4eb6b5f73133aef142d0a6
+    at: '2026-09-24T16:01:44+00:00'
+  preflight:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 0ec371231eac9925165bd30a3f703ec3f9398b987cb3d386f185c3db58b9ac4a
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:08:39+00:00'
+  implementation:
+    result: PASS
+    by: litellm-cases
+    artifact: 04-diff.patch
+    sha256: 27ccf4a7b51946c6eddfb548a8364a44e4bf3f0253ee26245ac4d601b901d12b
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:08:39+00:00'
+  l0:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/run-1790265583577884379/go-phorvex.log
+    sha256: 7026395302629e14c25c5efd7717db537e537ec729149e46faa32e5dc5683b9c
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:08:39+00:00'
+  l1:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker/focused.log
+    sha256: 3187fbef56413b2525d898afe567312b2c84dc9d99465334686cfb23aa54953e
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:08:39+00:00'
+  l2:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/historical-shape.md
+    sha256: 5ac684bbd6c962d99087d71a6118ea0589f17322c48d2f0d2a40bd75aa5116b8
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:08:39+00:00'
+  positive_control:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker/positive-control.md
+    sha256: a1e6fb194a85ebc0aba7e8fcfbb4a55390ca889cb73c84bca9d1eab3928de3f1
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:08:39+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e57f347faf701c9190e38b769d8785dd0a26062bcba39f20b4e7d5746bf03a1d
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:09:14+00:00'
+    baseline_sha: ed8df1f3d42d54d05e4eb6b5f73133aef142d0a6
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 6b1673eba8336173c7a5f4e2476449373fa98e9bb8971b2b4cfe21fd7e41caa1
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T16:09:14+00:00'
+    incident_sha256: e57f347faf701c9190e38b769d8785dd0a26062bcba39f20b4e7d5746bf03a1d
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/main-merge-equivalence.md
+    sha256: c2b1052baf8d1c89942ffb9c18a4280553a7d4912e691fda6582c479da7312ff
+    source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+    at: '2026-09-24T17:15:21+00:00'
+fix_id: CAT-DISJOINT-ADMISSION
+issues: []
+title: Admit isolated catalogue controls while preserving unrelated Voice cleanup
+  debt
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: litellm-cases
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-disjoint-admission-20260924
+  code_sha: ed8df1f3d42d54d05e4eb6b5f73133aef142d0a6
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-disjoint-admission-20260924
+  base_sha: ed8df1f3d42d54d05e4eb6b5f73133aef142d0a6
+  head_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/329
+  reviewed_head: 94c2b9a0723a91b8da26ba13e1485f351d9b1400
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Inspect remote checks and track installed admission verification; preserve
+    original Voice cleanup debt
+updated_at: '2026-09-24T17:15:21+00:00'
+follow_up_to: CAT-CATALOGUE-BATCH
+configuration_history:
+- at: '2026-09-24T15:05:48+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T16:08:39+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T16:49:00+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T15:06:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T15:06:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T16:08:39+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T16:08:41+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T16:09:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T16:09:17+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T16:49:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-DISJOINT-ADMISSION:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
+check_history:
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: 792d1e308c5b212fb7ded6552c96b5ba02baf1f9ab86603f18f67a68108a5e7a
+  source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+  at: '2026-09-24T16:14:34+00:00'

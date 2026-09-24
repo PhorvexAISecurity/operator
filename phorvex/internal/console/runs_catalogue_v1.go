@@ -227,11 +227,21 @@ func (rm *RunManager) fixedSuiteAdmissionLocked(profile cataloguev1.ProfileID, d
 	if rm.loadErr != nil {
 		return functionalRetainedUnavailable, errors.New("retained fixed-suite run state unavailable; exact reconciliation required")
 	}
+	var unsafe []*RunStatus
 	for _, existing := range rm.runs {
 		if existing == nil {
 			return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 		}
-		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
+		if existing.UnsafeToRetry {
+			unsafe = append(unsafe, existing)
+		}
+	}
+	if disjointVoiceCandidate(profile) && len(unsafe) > 0 {
+		if len(unsafe) != 1 || !rm.disjointVoiceAdmissionLocked(profile, destination, unsafe[0]) {
+			return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
+		}
+	} else {
+		for _, existing := range unsafe {
 			if !rm.consoleReadBesideVoiceLocked(profile, destination, existing) {
 				return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 			}
