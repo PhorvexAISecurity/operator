@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -19,10 +19,10 @@ checks:
   red:
     result: PASS
     by: codex-lead
-    artifact: evidence/BASELINE-RENDER.json
-    sha256: aca8b3f313cc64a4d4affa04d3ac8f98aee6636710a07359cb1a3bba9b330203
+    artifact: evidence/BASELINE-FOUR-RENDER.json
+    sha256: eff5a58ad58137c33f9579e4a57e3d30ed16113640c0fa3295f7586438a1bbc7
     source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
-    at: '2026-09-24T18:12:52+00:00'
+    at: '2026-09-24T18:21:25+00:00'
 fix_id: CAT-PROFILE-MOUNTS
 issues: []
 title: Make fixed Mongo and static guardrail profiles configurable through reviewed
@@ -92,7 +92,7 @@ next_action:
   owner: implementer
   action: Implement signed fixed profile mount plan, preserve defaults and cleanup
     gates, test and submit review without live calls
-updated_at: '2026-09-24T18:20:28+00:00'
+updated_at: '2026-09-24T18:21:25+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -130,3 +130,10 @@ check_history:
   at: '2026-09-24T18:10:24+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/BASELINE-RENDER.json
+  sha256: aca8b3f313cc64a4d4affa04d3ac8f98aee6636710a07359cb1a3bba9b330203
+  source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  at: '2026-09-24T18:12:52+00:00'
