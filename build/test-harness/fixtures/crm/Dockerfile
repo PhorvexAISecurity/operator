@@ -3,9 +3,9 @@ FROM docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801
 WORKDIR /app
 ENV PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
-COPY app.py /app/app.py
-COPY dependencies.lock.json requirements.pinned.txt verify_wheelhouse.py verify_runtime_closure.py /opt/crm/
-COPY wheelhouse.sha256 /opt/crm/wheelhouse.sha256
+COPY --chmod=0644 app.py /app/app.py
+COPY --chmod=0644 dependencies.lock.json requirements.pinned.txt verify_wheelhouse.py verify_runtime_closure.py /opt/crm/
+COPY --chmod=0644 wheelhouse.sha256 /opt/crm/wheelhouse.sha256
 COPY wheelhouse/ /opt/crm/wheelhouse/
 
 RUN python /opt/crm/verify_wheelhouse.py /opt/crm/requirements.pinned.txt /opt/crm/wheelhouse.sha256 /opt/crm/wheelhouse \
