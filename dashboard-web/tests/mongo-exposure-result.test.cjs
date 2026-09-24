@@ -36,6 +36,9 @@ test("accepted configuration finding keeps the manager decision distinct from ef
   assert.match(html, /Legitimate before:.*EXACT_READ/);
   assert.match(html, /Owned cleanup:.*CONFIRMED_ABSENT/);
   assert.match(html, /selected noop · action status not-attempted · dispatch not-attempted/);
+  assert.match(html, /observed policy generation 4/);
+  assert.match(html, /pinned policy API snapshot/);
+  assert.match(html, /DecisionTraceV2 did not record which generation this manager decision consumed/);
   assert.match(html, /Policy requires a qualifying direct event for this workload; none was observed in this decision, so no action was attempted/);
   assert.match(html, /source reason SHA-256.*b{64}/);
   assert.match(html, /Actual candidate statuses \(15\)/);

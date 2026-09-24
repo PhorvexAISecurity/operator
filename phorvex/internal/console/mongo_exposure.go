@@ -57,6 +57,8 @@ type MongoExposureResult struct {
 type mongoExposureDecision struct {
 	DecisionID        string                 `json:"decisionID"`
 	PolicyUID         string                 `json:"policyUID"`
+	// PolicyGeneration is copied from the pinned policy API source snapshot.
+	// DecisionTraceV2 does not record the generation consumed by this decision.
 	PolicyGeneration  int64                  `json:"policyGeneration"`
 	TargetPodUID      string                 `json:"targetPodUID"`
 	Action            string                 `json:"action"`
