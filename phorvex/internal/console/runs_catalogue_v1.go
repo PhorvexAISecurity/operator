@@ -85,39 +85,127 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 	return runtime
 }
 
-func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, owner string) (string, error) {
+type functionalAdmissionReason string
+
+const (
+	functionalReady               functionalAdmissionReason = "READY"
+	functionalConfigUnavailable   functionalAdmissionReason = "CONFIG_UNAVAILABLE"
+	functionalRuntimeUnavailable  functionalAdmissionReason = "RUNTIME_UNAVAILABLE"
+	functionalRetainedUnavailable functionalAdmissionReason = "RETAINED_STATE_UNAVAILABLE"
+	functionalPriorUnsafe         functionalAdmissionReason = "PRIOR_UNSAFE_FIXED_SUITE"
+	functionalConcurrent          functionalAdmissionReason = "CONCURRENCY_LIMIT"
+	functionalRateLimited         functionalAdmissionReason = "RATE_LIMIT"
+)
+
+// FunctionalAdmission is a scoped, advisory snapshot. It contains no identity
+// from a prior run. StartFunctional independently repeats the same locked gate.
+type FunctionalAdmission struct {
+	Profile    string `json:"profile"`
+	ObservedAt string `json:"observedAt"`
+	Launchable bool   `json:"launchable"`
+	ReasonCode string `json:"reasonCode"`
+	Message    string `json:"message"`
+}
+
+func functionalAdmissionMessage(reason functionalAdmissionReason) string {
+	switch reason {
+	case functionalReady:
+		return "Ready at the observed time; launch checks again."
+	case functionalConfigUnavailable:
+		return "This fixed-suite profile is not configured for launch."
+	case functionalRuntimeUnavailable:
+		return "The fixed-suite runtime is unavailable."
+	case functionalRetainedUnavailable:
+		return "Retained fixed-suite state is unavailable; launch is blocked."
+	case functionalPriorUnsafe:
+		return "A previous fixed suite requires reconciliation before another can start."
+	case functionalConcurrent:
+		return "The fixed-suite launch limit is currently reached."
+	case functionalRateLimited:
+		return "A recent launch is rate-limited; refresh admission shortly."
+	default:
+		return "Fixed-suite launch admission is unavailable."
+	}
+}
+
+type functionalInputs struct {
+	definition     cataloguev1.Definition
+	definitionHash string
+	destination    runDestination
+	runtime        cataloguev1.RuntimeConfig
+	runtimeHash    string
+}
+
+// functionalInputs is the profile and runtime validation shared by the
+// advisory projection and the authoritative POST, in the same order.
+func (rm *RunManager) functionalInputs(profile cataloguev1.ProfileID) (functionalInputs, functionalAdmissionReason, error) {
 	definition, err := cataloguev1.DefinitionFor(profile)
 	if err != nil {
-		return "", err
+		return functionalInputs{}, functionalConfigUnavailable, err
 	}
 	if available, reason := rm.cfg.functionalProfileAvailable(profile); !available {
-		return "", fmt.Errorf("fixed suite %q unavailable: %s", profile, reason)
+		return functionalInputs{}, functionalConfigUnavailable, fmt.Errorf("fixed suite %q unavailable: %s", profile, reason)
 	}
 	definitionHash, err := cataloguev1.DefinitionSHA256(definition)
 	if err != nil {
-		return "", err
+		return functionalInputs{}, functionalRuntimeUnavailable, err
 	}
 	destination, err := rm.FunctionalDestination(profile)
 	if err != nil {
-		return "", err
+		return functionalInputs{}, functionalRuntimeUnavailable, err
 	}
-	runtimeConfig := rm.cfg.catalogueV1RuntimeConfig()
-	runtimeHash, err := runtimeConfig.SHA256()
+	runtime := rm.cfg.catalogueV1RuntimeConfig()
+	runtimeHash, err := runtime.SHA256()
 	if err != nil {
-		return "", fmt.Errorf("validate fixed-suite runtime: %w", err)
+		return functionalInputs{}, functionalRuntimeUnavailable, fmt.Errorf("validate fixed-suite runtime: %w", err)
 	}
-	rm.mu.Lock()
+	return functionalInputs{definition: definition, definitionHash: definitionHash, destination: destination, runtime: runtime, runtimeHash: runtimeHash}, functionalReady, nil
+}
+
+// Caller holds rm.mu. Keep the order and errors shared with StartFunctional.
+func (rm *RunManager) fixedSuiteAdmissionLocked(now time.Time) (functionalAdmissionReason, error) {
 	if rm.loadErr != nil {
-		rm.mu.Unlock()
-		return "", errors.New("retained fixed-suite run state unavailable; exact reconciliation required")
+		return functionalRetainedUnavailable, errors.New("retained fixed-suite run state unavailable; exact reconciliation required")
 	}
 	for _, existing := range rm.runs {
 		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
-			rm.mu.Unlock()
-			return "", errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
+			return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 		}
 	}
-	if err = rm.guard(time.Now()); err != nil {
+	if err := rm.guard(now); err != nil {
+		if rm.active >= maxConcurrentRuns {
+			return functionalConcurrent, err
+		}
+		return functionalRateLimited, err
+	}
+	return functionalReady, nil
+}
+
+func (rm *RunManager) CurrentFunctionalAdmission(profile cataloguev1.ProfileID) FunctionalAdmission {
+	result := FunctionalAdmission{Profile: string(profile)}
+	_, reason, err := rm.functionalInputs(profile)
+	if err == nil {
+		rm.mu.Lock()
+		now := time.Now()
+		reason, _ = rm.fixedSuiteAdmissionLocked(now)
+		result.ObservedAt = now.UTC().Format(time.RFC3339Nano)
+		rm.mu.Unlock()
+	} else {
+		result.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	result.ReasonCode = string(reason)
+	result.Launchable = reason == functionalReady
+	result.Message = functionalAdmissionMessage(reason)
+	return result
+}
+
+func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, owner string) (string, error) {
+	inputs, _, err := rm.functionalInputs(profile)
+	if err != nil {
+		return "", err
+	}
+	rm.mu.Lock()
+	if _, err = rm.fixedSuiteAdmissionLocked(time.Now()); err != nil {
 		rm.mu.Unlock()
 		return "", err
 	}
@@ -131,12 +219,12 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 	ownerSum := sha256.Sum256([]byte(owner))
 	now := time.Now().UTC()
 	job := cataloguev1.Job{Version: cataloguev1.JobVersion, RunID: id, Profile: profile, OutputDir: outDir,
-		DefinitionSHA256: definitionHash, OwnerDigest: hex.EncodeToString(ownerSum[:]),
-		ResolvedTarget: destination.ScopeTarget, ResolvedTenant: destination.ScopeTenant, RuntimeConfigSHA256: runtimeHash,
-		CreatedAt: now, Deadline: now.Add(definition.MaxDuration)}
+		DefinitionSHA256: inputs.definitionHash, OwnerDigest: hex.EncodeToString(ownerSum[:]),
+		ResolvedTarget: inputs.destination.ScopeTarget, ResolvedTenant: inputs.destination.ScopeTenant, RuntimeConfigSHA256: inputs.runtimeHash,
+		CreatedAt: now, Deadline: now.Add(inputs.definition.MaxDuration)}
 	jobPath := filepath.Join(outDir, "job.json")
 	runtimePath := filepath.Join(outDir, "runtime.json")
-	if err = cataloguev1.WriteRuntimeConfig(runtimePath, runtimeConfig); err != nil {
+	if err = cataloguev1.WriteRuntimeConfig(runtimePath, inputs.runtime); err != nil {
 		rm.mu.Unlock()
 		return "", fmt.Errorf("persist fixed-suite runtime: %w", err)
 	}
@@ -149,7 +237,7 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 		claimClass = "calibration"
 	}
 	st := &RunStatus{ID: id, Config: string(profile), State: "running", Started: startedAt, Date: tsNow(),
-		ExpectedTrials: 1, Owner: owner, ScopeTarget: destination.ScopeTarget, ScopeTenant: destination.ScopeTenant,
+		ExpectedTrials: 1, Owner: owner, ScopeTarget: inputs.destination.ScopeTarget, ScopeTenant: inputs.destination.ScopeTenant,
 		Target: rm.cfg.catalogueV1RuntimeContext(profile), TargetLabel: rm.cfg.catalogueV1RuntimeContext(profile), Provider: "Kubernetes",
 		ExecutionKind: "fixed-suite", ClaimClass: claimClass}
 	rm.runs[id], rm.runOut[id], rm.functional[id] = st, id, job

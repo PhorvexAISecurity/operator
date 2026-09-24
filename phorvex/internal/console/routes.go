@@ -24,6 +24,7 @@ package console
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/phorvex/phorvex/internal/cataloguev1"
@@ -134,6 +135,7 @@ func (s *Server) apiRoutes() []route {
 		control("/api/runs/start", s.startRun, routeSpec{destination: suiteRunDestination}),
 		control("/api/runs/scenario", s.startScenario, routeSpec{targetBody: []string{"target"}, destination: scenarioRunDestination}),
 		control("/api/runs/functional", s.startFunctional, routeSpec{destination: functionalRunDestination}),
+		control("/api/runs/functional/admission", s.functionalAdmission, routeSpec{methods: getOnly, destination: functionalAdmissionDestination}),
 		control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true}),
 		control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true}),
 		read("/api/runs/list", s.runsList, routeSpec{}),
@@ -189,6 +191,33 @@ func functionalRunDestination(s *Server, _ *http.Request, body scopedBody) (runD
 		return runDestination{}, fmt.Errorf("profile is required")
 	}
 	return s.runs.FunctionalDestination(cataloguev1.ProfileID(body.Profile))
+}
+
+func functionalAdmissionProfile(r *http.Request) (cataloguev1.ProfileID, error) {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || len(query) != 1 || r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+		return "", fmt.Errorf("one exact fixed-suite profile is required")
+	}
+	values := query["profile"]
+	if len(values) != 1 || values[0] == "" || strings.TrimSpace(values[0]) != values[0] {
+		return "", fmt.Errorf("one exact fixed-suite profile is required")
+	}
+	profile := cataloguev1.ProfileID(values[0])
+	if _, err := cataloguev1.DefinitionFor(profile); err != nil {
+		return "", fmt.Errorf("unknown fixed-suite profile")
+	}
+	return profile, nil
+}
+
+func functionalAdmissionDestination(s *Server, r *http.Request, body scopedBody) (runDestination, error) {
+	if body.Profile != "" {
+		return runDestination{}, fmt.Errorf("one exact fixed-suite profile is required in the query")
+	}
+	profile, err := functionalAdmissionProfile(r)
+	if err != nil {
+		return runDestination{}, err
+	}
+	return s.runs.FunctionalDestination(profile)
 }
 
 // costDestination resolves the ONE cluster /api/cost will actually price and read, so the

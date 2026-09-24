@@ -540,6 +540,15 @@ func (s *Server) startFunctional(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "context": status.Target})
 }
 
+func (s *Server) functionalAdmission(w http.ResponseWriter, r *http.Request) {
+	profile, err := functionalAdmissionProfile(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "one known fixed-suite profile is required"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.runs.CurrentFunctionalAdmission(profile))
+}
+
 // targets lists the cluster targets this identity may select — filtered by the target scope in
 // its grant, so the selector never advertises a cluster the caller cannot reach.
 func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
