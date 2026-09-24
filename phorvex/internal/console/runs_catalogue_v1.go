@@ -162,14 +162,40 @@ func (rm *RunManager) functionalInputs(profile cataloguev1.ProfileID) (functiona
 	return functionalInputs{definition: definition, definitionHash: definitionHash, destination: destination, runtime: runtime, runtimeHash: runtimeHash}, functionalReady, nil
 }
 
+// Only these two handlers make fixed console GETs without a Kubernetes client.
+// A Voice cleanup failure cannot affect their workload, but it remains unsafe
+// and continues to block every other fixed suite.
+func (rm *RunManager) consoleReadBesideVoiceLocked(profile cataloguev1.ProfileID, destination runDestination, prior *RunStatus) bool {
+	if profile != cataloguev1.AuthUnauth && profile != cataloguev1.AuthScope {
+		return false
+	}
+	voiceTenant := strings.TrimSpace(rm.cfg.CatalogueV1.VoiceNamespace)
+	if voiceTenant == "" || destination.ScopeTarget != defaultTargetID ||
+		destination.ScopeTenant == "" || destination.ScopeTenant == voiceTenant ||
+		prior == nil || (prior.Config != string(cataloguev1.VoiceMedia) && prior.Config != string(cataloguev1.VoiceRecovery)) ||
+		prior.State != "partial" || prior.Outcome != string(cataloguev1.OutcomeTestFailed) ||
+		prior.CleanupStatus != "FAIL" || prior.Finished == "" ||
+		prior.ScopeTarget != defaultTargetID || prior.ScopeTenant != voiceTenant ||
+		rm.procs[prior.ID] != nil || rm.stopping[prior.ID] ||
+		strings.Contains(prior.Error, "reconciliation pending") {
+		return false
+	}
+	return true
+}
+
 // Caller holds rm.mu. Keep the order and errors shared with StartFunctional.
-func (rm *RunManager) fixedSuiteAdmissionLocked(now time.Time) (functionalAdmissionReason, error) {
+func (rm *RunManager) fixedSuiteAdmissionLocked(profile cataloguev1.ProfileID, destination runDestination, now time.Time) (functionalAdmissionReason, error) {
 	if rm.loadErr != nil {
 		return functionalRetainedUnavailable, errors.New("retained fixed-suite run state unavailable; exact reconciliation required")
 	}
 	for _, existing := range rm.runs {
-		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
+		if existing == nil {
 			return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
+		}
+		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
+			if !rm.consoleReadBesideVoiceLocked(profile, destination, existing) {
+				return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
+			}
 		}
 	}
 	if err := rm.guard(now); err != nil {
@@ -183,11 +209,11 @@ func (rm *RunManager) fixedSuiteAdmissionLocked(now time.Time) (functionalAdmiss
 
 func (rm *RunManager) CurrentFunctionalAdmission(profile cataloguev1.ProfileID) FunctionalAdmission {
 	result := FunctionalAdmission{Profile: string(profile)}
-	_, reason, err := rm.functionalInputs(profile)
+	inputs, reason, err := rm.functionalInputs(profile)
 	if err == nil {
 		rm.mu.Lock()
 		now := time.Now()
-		reason, _ = rm.fixedSuiteAdmissionLocked(now)
+		reason, _ = rm.fixedSuiteAdmissionLocked(profile, inputs.destination, now)
 		result.ObservedAt = now.UTC().Format(time.RFC3339Nano)
 		rm.mu.Unlock()
 	} else {
@@ -205,7 +231,7 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 		return "", err
 	}
 	rm.mu.Lock()
-	if _, err = rm.fixedSuiteAdmissionLocked(time.Now()); err != nil {
+	if _, err = rm.fixedSuiteAdmissionLocked(profile, inputs.destination, time.Now()); err != nil {
 		rm.mu.Unlock()
 		return "", err
 	}
