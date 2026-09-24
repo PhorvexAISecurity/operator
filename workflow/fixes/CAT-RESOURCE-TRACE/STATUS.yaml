@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -99,7 +99,7 @@ issues:
 - M-188
 title: Report resource-capacity refusals without false no-cover attribution
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -126,8 +126,8 @@ implementation:
   head_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -160,10 +160,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T06:58:10+00:00'
+  owner: codex-lead
+  action: Publish PR323 update; await required CI and deployment for live acceptance
+updated_at: '2026-09-24T07:02:47+00:00'
 configuration_history:
 - at: '2026-09-24T05:21:32+00:00'
   by: codex-lead
@@ -247,6 +246,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T07:02:47+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-RESOURCE-TRACE:11:review
