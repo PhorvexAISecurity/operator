@@ -226,11 +226,15 @@ func TestUnsafeFixedSuiteBlocksNewLaunch(t *testing.T) {
 	}
 	cfg := Config{StateDir: state, CatalogueV1: CatalogueV1Config{Enabled: true, LoopbackURL: "http://127.0.0.1:8090", ScopedTokenFile: token,
 		AllowedTenant: "vllm", DeniedTenant: "other", DeniedTarget: "other-target", ExpectedSubject: "subject", GrantFile: grant}}
-	rm := NewRunManager(cfg)
-	rm.mu.Lock()
-	rm.runs["v1run-1"] = &RunStatus{ID: "v1run-1", State: "partial", ExecutionKind: "fixed-suite", UnsafeToRetry: true}
-	rm.mu.Unlock()
-	if _, err := rm.StartFunctional(cataloguev1.AuthUnauth, tsNow(), "owner"); err == nil || !strings.Contains(err.Error(), "requires reconciliation") {
-		t.Fatalf("unsafe prior job did not block launch: %v", err)
+	for _, state := range []string{"partial", "done", "stopped", "error"} {
+		t.Run(state, func(t *testing.T) {
+			rm := NewRunManager(cfg)
+			rm.mu.Lock()
+			rm.runs["v1run-1"] = &RunStatus{ID: "v1run-1", State: state, ExecutionKind: "fixed-suite", UnsafeToRetry: true}
+			rm.mu.Unlock()
+			if _, err := rm.StartFunctional(cataloguev1.AuthUnauth, tsNow(), "owner"); err == nil || !strings.Contains(err.Error(), "requires reconciliation") {
+				t.Fatalf("unsafe prior %s job did not block launch: %v", state, err)
+			}
+		})
 	}
 }

@@ -16,6 +16,10 @@ import (
 )
 
 func partialFunctionalFixture(t *testing.T, outcome cataloguev1.Outcome, cleanup cataloguev1.Cleanup, processErr error) (*RunManager, string, cataloguev1.Result) {
+	return partialFunctionalFixtureForProfile(t, cataloguev1.AuthUnauth, outcome, cleanup, processErr)
+}
+
+func partialFunctionalFixtureForProfile(t *testing.T, profile cataloguev1.ProfileID, outcome cataloguev1.Outcome, cleanup cataloguev1.Cleanup, processErr error) (*RunManager, string, cataloguev1.Result) {
 	t.Helper()
 	state := t.TempDir()
 	cfg := Config{StateDir: state}
@@ -25,7 +29,7 @@ func partialFunctionalFixture(t *testing.T, outcome cataloguev1.Outcome, cleanup
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	definition, err := cataloguev1.DefinitionFor(cataloguev1.AuthUnauth)
+	definition, err := cataloguev1.DefinitionFor(profile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +38,7 @@ func partialFunctionalFixture(t *testing.T, outcome cataloguev1.Outcome, cleanup
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	job := cataloguev1.Job{Version: cataloguev1.JobVersion, RunID: id, Profile: cataloguev1.AuthUnauth, OutputDir: dir,
+	job := cataloguev1.Job{Version: cataloguev1.JobVersion, RunID: id, Profile: profile, OutputDir: dir,
 		DefinitionSHA256: definitionHash, OwnerDigest: strings.Repeat("a", 64), ResolvedTarget: "default", ResolvedTenant: "vllm",
 		RuntimeConfigSHA256: strings.Repeat("b", 64), CreatedAt: now, Deadline: now.Add(time.Minute)}
 	if err := cataloguev1.WriteJob(filepath.Join(dir, "job.json"), state, job); err != nil {
@@ -44,7 +48,7 @@ func partialFunctionalFixture(t *testing.T, outcome cataloguev1.Outcome, cleanup
 		DefinitionSHA256: definitionHash, OwnerDigest: job.OwnerDigest, ResolvedTarget: job.ResolvedTarget,
 		ResolvedTenant: job.ResolvedTenant, RuntimeConfigSHA256: job.RuntimeConfigSHA256,
 		Outcome: outcome, Summary: "Voice owned cleanup was not verified", Evidence: map[string]string{"error": "owned Voice cleanup was not verified"},
-		Cleanup: cleanup, UnsafeToRetry: !cleanup.Verified, StartedAt: now, FinishedAt: now.Add(time.Second)}
+		Cleanup: cleanup, UnsafeToRetry: !cleanup.Verified || cleanup.UnsafeToRetry, StartedAt: now, FinishedAt: now.Add(time.Second)}
 	if outcome == cataloguev1.OutcomeFunctionalPass {
 		result.Summary = "bounded functional oracle completed"
 		result.Evidence = map[string]string{"oracle": "complete"}
@@ -182,6 +186,34 @@ func TestPartialFixedSuiteProjectsAuthoritativeRunUnsafeWithoutRewritingResult(t
 	rawAfter, err := os.ReadFile(filepath.Join(dir, "result.json"))
 	if err != nil || string(rawAfter) != string(rawBefore) {
 		t.Fatalf("read-only projection rewrote original producer result: err=%v", err)
+	}
+}
+
+func TestVoiceUnknownEvictionWithVerifiedTranscriptCleanupCannotBeReplayed(t *testing.T) {
+	// This is the terminal shape produced by VoiceRecovery after an uncertain
+	// eviction and successful owned transcript cleanup: cleanup is verified,
+	// while the original workload effect remains unknown.
+	rm, _, result := partialFunctionalFixtureForProfile(t, cataloguev1.VoiceRecovery,
+		cataloguev1.OutcomeInconclusive,
+		cataloguev1.Cleanup{Attempted: true, Verified: true, Status: "cleanup-pass-effect-unknown", UnsafeToRetry: true}, nil)
+	if !result.Cleanup.Verified || !result.Cleanup.UnsafeToRetry || !result.UnsafeToRetry {
+		t.Fatalf("Voice producer-shaped terminal fixture lost effect uncertainty: %+v", result)
+	}
+	status, ok := rm.Status("v1run-1")
+	if !ok || status.State != "partial" || !status.UnsafeToRetry || status.Outcome != "inconclusive" {
+		t.Fatalf("uncertain Voice effect promoted to a completed run: %+v", status)
+	}
+	// Configure only the named Voice entry; a successful baseline launch would
+	// execute this inert local worker, never contact Kubernetes or a provider.
+	executable := filepath.Join(t.TempDir(), "inert-worker")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rm.cfg.CatalogueV1 = CatalogueV1Config{Enabled: true, Executable: executable, VoiceEnabled: true,
+		VoiceNamespace: "owned-voice", VoiceDeployment: "voice-bot", VoiceService: "voice-bot", VoiceContainer: "bot",
+		VoiceServicePort: 8080, VoicePDB: "voice-bot", TranscriptSelector: "app=voice-bot", TranscriptContainer: "bot"}
+	if _, err := rm.StartFunctional(cataloguev1.VoiceRecovery, tsNow(), "owner"); err == nil || !strings.Contains(err.Error(), "requires reconciliation") {
+		t.Fatalf("a second Voice eviction launch was not blocked after unknown effect: %v", err)
 	}
 }
 

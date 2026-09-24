@@ -261,7 +261,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           {fixedEvidence?.functionalResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
             <div>typed outcome: <span className="font-medium text-foreground">{fixedEvidence.functionalResult.outcome}</span> · cleanup: <span className="text-foreground">{fixedEvidence.functionalResult.cleanup.status}</span></div>
             <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
-            {fixedEvidence.functionalResult.unsafeToRetry && <div className="text-warning">This run remains unsafe to retry; inspect its partial status and exact cleanup evidence.</div>}
+            {fixedEvidence.functionalResult.unsafeToRetry && <div className="text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
             {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}

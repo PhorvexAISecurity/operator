@@ -108,7 +108,7 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 	}
 	rm.mu.Lock()
 	for _, existing := range rm.runs {
-		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry && existing.State != "done" && existing.State != "stopped" {
+		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
 			rm.mu.Unlock()
 			return "", errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 		}
@@ -272,13 +272,13 @@ func (rm *RunManager) finishFunctional(id string, job cataloguev1.Job, processEr
 		st.State = "partial"
 		st.UnsafeToRetry = true
 		st.Error = "fixed suite exceeded its bounded deadline"
-	case stopping && result.Cleanup.Verified:
+	case stopping && result.Cleanup.Verified && !st.UnsafeToRetry:
 		st.State = "stopped"
 		st.Error = "stopped by user after verified cleanup"
 	case stopping:
 		st.State = "partial"
 		st.UnsafeToRetry = true
-		st.Error = "stopped by user; cleanup unverified"
+		st.Error = "stopped by user; cleanup or effect unresolved"
 	case processErr != nil:
 		st.State = "partial"
 		st.UnsafeToRetry = true
@@ -287,6 +287,9 @@ func (rm *RunManager) finishFunctional(id string, job cataloguev1.Job, processEr
 		st.State = "partial"
 		st.UnsafeToRetry = true
 		st.Error = "fixed suite ended without verified cleanup"
+	case st.UnsafeToRetry:
+		st.State = "partial"
+		st.Error = "fixed suite ended with an unresolved effect; reconciliation required"
 	case result.Outcome == cataloguev1.OutcomeTestFailed:
 		st.State = "error"
 		st.Error = result.Summary
