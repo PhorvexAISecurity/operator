@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -23,11 +23,53 @@ checks:
     sha256: 4804dffb6b774f8c62ac3e2f411c9c3dc8c1a58abd3a37c7cd91d874c7de01ef
     source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
     at: '2026-09-24T17:24:15+00:00'
+  preflight:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/preflight/receipt.json
+    sha256: 2c2e38a1b0bc179b84838a98f8c06fb7ea856f8f12b07a83403451d1d07c1ea1
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  implementation:
+    result: PASS
+    by: mongo-finish
+    artifact: 04-diff.patch
+    sha256: 67c99703fc6703003186165d944648ba2cc194ad0773249f5b2321df715fc5cf
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  l0:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/preflight/receipt.json
+    sha256: 2c2e38a1b0bc179b84838a98f8c06fb7ea856f8f12b07a83403451d1d07c1ea1
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  l1:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/implementer/l1.md
+    sha256: 0c202729b88e22c58ad117a267326ee2d9decc522a1ec3ebc10d1f3ede58127a
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  l2:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/implementer/l2.md
+    sha256: 4b5b8bcb5530d7af56aaf1c2bacaf4af2964a9cc2de0cc1dbc2974713b1bf8cd
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
+  positive_control:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/implementer/positive-control.md
+    sha256: 0873d0e148fd816baa5c4bf2907da819100afdfd838ee61c493322c404ec8c4a
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:57:49+00:00'
 fix_id: CAT-POD-TOKEN-CASE
 issues: []
 title: Add a causal Pod-bound credential response catalogue suite
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -49,9 +91,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-pod-token-case-20260924
+  base_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  head_sha: e411b7cf61edf5246048f889b7f4963136b5b990
   stacked_on: []
 pull_request:
   url: null
@@ -73,12 +115,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -88,9 +130,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed causal catalogue case in parallel owned files
-updated_at: '2026-09-24T17:24:15+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-24T17:57:55+00:00'
 follow_up_to: CAT-POD-TOKEN-VECTOR
 configuration_history:
 - at: '2026-09-24T15:52:24+00:00'
@@ -106,6 +149,11 @@ configuration_history:
   fields:
   - verification
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T17:57:48+00:00'
+  by: mongo-finish
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -121,6 +169,22 @@ transitions:
   by: codex-lead
   artifact: null
   note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T17:57:49+00:00'
+  by: mongo-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T17:57:52+00:00'
+  by: mongo-finish
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -151,3 +215,10 @@ check_history:
   at: '2026-09-24T16:13:41+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+handoff:
+  id: CAT-POD-TOKEN-CASE:10:submit
+  from: mongo-finish
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 10
