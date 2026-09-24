@@ -267,3 +267,10 @@ intakes:
     state: FILED
     issue_id: M-187
     aliases: []
+  RPT-20260924-051842-resource-capacity-refusals-are-mislabeled-as-mis:
+    directory: intake/RPT-20260924-051842-resource-capacity-refusals-are-mislabeled-as-mis
+    kind: BUG
+    title: Resource-capacity refusals are mislabeled as missing recon coverage
+    state: VERIFYING
+    issue_id: null
+    aliases: []

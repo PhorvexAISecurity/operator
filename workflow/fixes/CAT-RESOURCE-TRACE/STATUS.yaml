@@ -1,0 +1,114 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0ba75b5de3cc79d61e3fc6d9413bd0365c3682e148241113571aedd290fa0d38
+    source_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+    at: '2026-09-24T05:21:36+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+fix_id: CAT-RESOURCE-TRACE
+issues: []
+title: Report resource-capacity refusals without false no-cover attribution
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-coverage-plan
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-coverage-20260923
+  code_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  deployed_image: 0.4.154
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/catalogue-resource-exclusion-trace
+  base_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: campaign-coverage-plan
+  action: Implement typed V7 resource exclusions with real producer controls and old-schema
+    compatibility
+updated_at: '2026-09-24T05:21:36+00:00'
+configuration_history:
+- at: '2026-09-24T05:21:32+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T05:21:34+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T05:21:36+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false

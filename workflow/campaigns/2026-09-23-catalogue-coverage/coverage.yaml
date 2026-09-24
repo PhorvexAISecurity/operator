@@ -73,13 +73,15 @@ cells:
   present_constraints: Actual custom handler passes start-frame call ID into provider-capable pipeline.
     Rounds15 and16 sent bounded ordinary synthetic media; neither tested unauthorized session reuse.
     Upstream identity controls remain unverified.
-  next_step: Preserve real handler with provider fakes and denied external egress; verify legitimate versus
-    forbidden session identities separately. A101 handshake alone is not a security case.
+  next_step: Retain this unresolved cell; proposed isolated session test was automatically rejected
+    for possible cybersecurity risk and remains unexecuted. Do not retry the rejected package.
   source_gap: No verified unauthorized producer, session oracle or detector-to-brain path.
+    The tool rejection is not proof of inapplicability or a security verdict.
+  progress_evidence: evidence/VOICE-ADVISORY-ROUTES/REPORT.md
 - id: voice-runner-advisory-boundary
   stack: voice
   kind: S
-  disposition: new-conditional
+  disposition: source-excluded-current-serving-route
   source_ids: []
   event_mode: no_current_path
   objective: Decide whether Pipecat development-runner file or telephony boundaries exist in the deployed
@@ -89,12 +91,14 @@ cells:
   threat_oracle: In an isolated fixture, owned-file containment or synthetic call-control denial; no live
     exploit payload.
   service_oracle: Authorized disposable session/call workflow still completes.
-  present_constraints: Installed pipecat-ai 0.0.94 is in advisory version ranges, but Deployment shows
-    no command/args and runner, folder and telephony modes are unknown.
-  next_step: Bind image entrypoint and route/config provenance to the Pipecat vendor advisories before
-    case admission.
-  source_gap: CVE-2026-44716 and CVE-2026-54695 feature predicates are unproved; no CVE applicability
-    claim.
+  present_constraints: Exact sampled PID1 runs python bot.py from /app; both process-bound and
+    installed bot.py hashes match. The custom FastAPI route set has no development-runner import,
+    mount, files endpoint or folder flag. Package version alone does not establish reachability.
+  next_step: Recheck route and entrypoint on image or application-source change. Keep the separate
+    custom-app session authorization candidate unresolved.
+  source_gap: Exclusion applies only to the observed serving path, not all alternate image processes.
+    No vulnerability request or provider call-control test was sent.
+  progress_evidence: evidence/VOICE-ADVISORY-ROUTES/REPORT.md
 - id: nats-durable-message
   stack: nats
   kind: M
@@ -501,11 +505,14 @@ cells:
     must not count.
   threat_oracle: No attack objective; injected-event receipt is response-wiring evidence only.
   service_oracle: Benign target/peer request status and availability through the window.
-  present_constraints: PR318 now installed in exact pinned manager/console; no new signal experiment run
-    in this campaign.
-  next_step: Owned fixture with a fresh exact event/target identity and independent effect/legitimate
-    controls; never claim natural detection from injected signal.
-  source_gap: Never promote injected response to natural detection or security efficacy.
+  present_constraints: Round17 admitted one exact trusted event and joined five downstream no-op
+    decisions. Both enabled actions stopped at missing authoritative Service/EndpointSlice membership;
+    their trace incorrectly labels that refusal no-cover. Source and legitimate peer access both stayed200.
+  next_step: Repair typed resource-capacity attribution and preregister a Service-bound owned fixture
+    revision; do not weaken capacity gates or claim natural detection from the injected event.
+  source_gap: Wrong/stale identities and actual actuator effect still require their own controls.
+    CAT-RESOURCE-TRACE source work is active; no natural detection or security efficacy credit.
+  progress_evidence: rounds/round-17/evidence/SOURCE-DIAGNOSIS.md
 - id: phorvex-console-trace
   stack: phorvex-console
   kind: M
@@ -591,7 +598,9 @@ cells:
     guards.
   service_oracle: Authorized Pod-list control, target workload availability and response cost.
   present_constraints: Direct owned round3 confirmed same-token API authentication rejects after binding
-    Pod deletion, legitimate token still200; no installed manager response evaluated.
+    Pod deletion, legitimate token still200. Round17 generic injected-response trial left both tokens
+    accepted because the fixture lacked required Service membership; no actuator ran. This is not
+    credential-specific or natural-detector coverage, and M184 alone cannot clear the topology gate.
   next_step: M-184 implements narrow potential API token exposure from actual admitted metadata; retain
     initial-disclosure and no-detector limits; installed source verification pending.
   source_gap: No real detector signal; distinguish initial disclosure from later revocation and injected-event
