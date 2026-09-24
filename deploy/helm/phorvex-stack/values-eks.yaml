@@ -147,6 +147,10 @@ phorvex:
           enabled: true
         litellm:
           enabled: true
+        mcpSession:
+          enabled: true
+          imageID: docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff
+          sourceSHA256: 483009cd01640e9f604a21f16aa890539566f53a25fd7dc478bc43c1831212c5
         gpu:
           enabled: false
           namespace: vllm-functional
