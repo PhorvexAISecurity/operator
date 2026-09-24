@@ -41,7 +41,7 @@ type suite struct{ File, OutDir, Desc, Namespace string }
 
 // allowedConfigs is the whitelist of attack-agent suites the console may trigger.
 var allowedConfigs = map[string]suite{
-	"mongo-exposure-baseline":         {File: "config.mongo-exposure-baseline.yaml", OutDir: "out-mongo-exposure-baseline", Desc: "Owned Mongo Service configuration exposure control"},
+	"mongo-exposure-baseline":          {File: "config.mongo-exposure-baseline.yaml", OutDir: "out-mongo-exposure-baseline", Desc: "Owned Mongo Service configuration exposure control"},
 	"nats-exposure-baseline":           {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
 	"nats-client-response":             {File: "config.nats-client-response.yaml", OutDir: "out-nats-client-response", Desc: "Owned NATS client response and exact-event observation"},
 	"guardrail-confidentiality-static": {File: "config.guardrail-confidentiality-static.yaml", OutDir: "out-guardrail-confidentiality-static", Desc: "Fixed synthetic raw-versus-guarded vLLM confidentiality comparison"},
@@ -598,6 +598,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		}
 		if s == "c2-mongo-uncredentialed-service-exposure" {
 			return "", fmt.Errorf("Mongo exposure requires the server-owned named suite mongo-exposure-baseline")
+		}
+		if s == string(cataloguev1.CRMRefund) || s == string(cataloguev1.CRMReset) {
+			return "", fmt.Errorf("CRM capability %s requires the server-owned fixed-suite profile", s)
 		}
 		if !scenarioRe.MatchString(s) {
 			return "", fmt.Errorf("invalid scenario name %q", s)

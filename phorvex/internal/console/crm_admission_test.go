@@ -153,3 +153,34 @@ func TestCRMAdmissionGETAndPOSTShareCurrentAuthorityAndUnsafeBlock(t *testing.T)
 		t.Fatalf("wrong namespace UID POST allocated run: %d %s", post.Code, post.Body.String())
 	}
 }
+
+func TestCRMCapabilityCannotUseGenericScenarioRoute(t *testing.T) {
+	cfg, _, _ := crmAdmissionConfig(t)
+	f := newAuthFixture(t, cfg, operatorGrant("op", []string{wildcardScope}, []string{wildcardScope}))
+	for _, id := range []cataloguev1.ProfileID{cataloguev1.CRMRefund, cataloguev1.CRMReset} {
+		t.Run(string(id), func(t *testing.T) {
+			code, admission, _ := readAdmission(t, f, "/api/runs/functional/admission?profile="+string(id))
+			if code != http.StatusOK || !admission.Launchable {
+				t.Fatalf("fixed CRM route unavailable: %d %+v", code, admission)
+			}
+			if _, err := f.srv.runs.StartScenario([]string{string(id)}, false, false, "", "", "", "op"); err == nil || !strings.Contains(err.Error(), "fixed-suite profile") {
+				t.Fatalf("generic manager route admitted %s: %v", id, err)
+			}
+			for _, body := range []string{
+				`{"scenario":"` + string(id) + `"}`,
+				`{"scenarios":["` + string(id) + `"]}`,
+			} {
+				response := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/scenario", body, "op"))
+				if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "fixed-suite profile") {
+					t.Fatalf("generic API route admitted %s: %d %s", id, response.Code, response.Body.String())
+				}
+			}
+			if f.srv.runs.seq != 0 || len(f.srv.runs.runs) != 0 {
+				t.Fatalf("generic CRM refusal allocated a run: seq=%d runs=%d", f.srv.runs.seq, len(f.srv.runs.runs))
+			}
+			if _, err := os.Stat(f.srv.runs.cfg.statePath("run-events.jsonl")); !os.IsNotExist(err) {
+				t.Fatalf("generic CRM refusal wrote a run intent: %v", err)
+			}
+		})
+	}
+}
