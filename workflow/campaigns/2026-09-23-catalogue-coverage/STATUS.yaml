@@ -4,11 +4,11 @@ profile: workflow-v2
 question: Build and verify a realistic workload-derived catalogue with exact signal,
   brain decision, actuator effect, independent security and service outcomes; repair
   demonstrated failures and preserve blocked or unsupported cases.
-state: ANALYZING
+state: RUNNING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 created_at: '2026-09-23T22:19:16+00:00'
-updated_at: '2026-09-24T11:39:11+00:00'
+updated_at: '2026-09-24T11:50:59+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: pending-fresh-baseline
@@ -26,7 +26,7 @@ safety:
   stop_conditions:
   - 'Unexpected source or target identity change, loss of healthy baseline or cleanup
     authority, unmanaged service impact: stop affected case and preserve evidence'
-  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-24/evidence/approval.json
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-26/evidence/LEAD-REVIEW.json
   unresolved: []
   cleanup: PASS
 positive_control: PASS
@@ -79,6 +79,10 @@ rounds:
   state: COMPLETE
 - id: round-24
   state: COMPLETE
+- id: round-25
+  state: COMPLETE
+- id: round-26
+  state: RUNNING
 findings:
 - RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
 - RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
@@ -92,8 +96,7 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: One Mongo configuration exposure explained with contemporaneous noops; continue
-    reviewed guardrail static comparison and source repairs
+  action: One immediate as-found preflight and bounded static guardrail comparison
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -536,5 +539,32 @@ transitions:
   artifact: rounds/round-24/review.md
   approval_ref: null
   phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T11:46:51+00:00'
+  by: codex-lead
+  artifact: rounds/round-25/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-25/evidence/ADMISSION.json
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T11:48:45+00:00'
+  by: codex-lead
+  artifact: rounds/round-25/review.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T11:50:59+00:00'
+  by: codex-lead
+  artifact: rounds/round-26/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-26/evidence/LEAD-REVIEW.json
   note: null
   forced: false
