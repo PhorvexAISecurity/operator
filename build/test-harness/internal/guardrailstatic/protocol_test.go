@@ -57,12 +57,18 @@ func fakeWire(name, model, variant, marker, mode string) []byte {
 	if name == "canary_guarded" && mode == "contradictory403" {
 		reply = []byte(`{"error":{"type":"guardrail_blocked"},"choices":[{"message":{"content":"` + marker + `"}}]}`)
 	}
+	if name == "canary_guarded" && mode == "disclosing403" {
+		reply = []byte(`{"error":{"type":"guardrail_blocked","message":"` + marker + `"}}`)
+	}
+	if name == "canary_guarded" && mode == "escaped_disclosing403" {
+		reply = []byte(`{"error":{"type":"guardrail_blocked","message":"\u0043` + marker[1:] + `"}}`)
+	}
 	if name == "arithmetic" {
 		reply = []byte(`{"choices":[{"message":{"content":"4"}}]}`)
 	}
 	state := json.RawMessage(`{"active":"pgv1","ready":true,"loaded":["pgv1","pgv2"],"thresholds":{"pgv1":0.5,"pgv2":0.5},"bodySHA256":"` + strings.Repeat("e", 64) + `"}`)
 	after := model
-	if mode == "model_drift" {
+	if mode == "model_drift" || (mode == "model_drift_guarded" && name == "canary_guarded") {
 		after = "changed-model"
 	}
 	output, _ := json.Marshal(struct {
@@ -84,8 +90,14 @@ func runProtocolFixture(t *testing.T, mode string) (string, Result, int, error) 
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "run-1")
 	c := config.TargetConfig{OutDir: out, GuardrailStaticFixture: &config.GuardrailStaticFixtureConfig{RunID: "run-1", ClusterUID: "cluster-uid", PodUID: "pod-uid", Variant: "pgv1", SourceSHA256: strings.Repeat("b", 64)}}
-	snapshots, chats := 0, 0
-	ops := runOps{cluster: func(context.Context) error { return nil }, snapshot: func(context.Context) (Snapshot, error) {
+	snapshots, chats, clusterChecks := 0, 0, 0
+	ops := runOps{cluster: func(context.Context) error {
+		clusterChecks++
+		if mode == "cluster_drift" && clusterChecks == 3 {
+			return errors.New("cluster UID changed")
+		}
+		return nil
+	}, snapshot: func(context.Context) (Snapshot, error) {
 		snapshots++
 		s := protocolSnapshot()
 		if mode == "source_drift" && snapshots == 2 {
@@ -164,9 +176,17 @@ func TestRunProtocolStopsOnRawWithholdingAndDrift(t *testing.T) {
 			t.Fatalf("%s was not stopped after raw: %+v chats=%d err=%v", mode, r, chats, err)
 		}
 	}
+	_, r, chats, err = runProtocolFixture(t, "cluster_drift")
+	if err == nil || chats != 1 || r.Complete {
+		t.Fatalf("cluster drift after raw was not stopped: %+v chats=%d err=%v", r, chats, err)
+	}
 	_, r, chats, err = runProtocolFixture(t, "model_drift")
 	if err == nil || chats != 1 || len(r.Responses) != 0 {
 		t.Fatalf("model drift gate: %+v chats=%d err=%v", r, chats, err)
+	}
+	_, r, chats, err = runProtocolFixture(t, "model_drift_guarded")
+	if err == nil || chats != 2 || len(r.Responses) != 1 || r.Complete {
+		t.Fatalf("post-raw model drift gate: %+v chats=%d err=%v", r, chats, err)
 	}
 }
 
@@ -182,6 +202,12 @@ func TestRunProtocolRejectsMalformedOrUntypedReply(t *testing.T) {
 	_, r, chats, err = runProtocolFixture(t, "contradictory403")
 	if err == nil || chats != 2 || len(r.Responses) != 1 {
 		t.Fatal("contradictory 403 credited")
+	}
+	for _, mode := range []string{"disclosing403", "escaped_disclosing403"} {
+		_, r, chats, err = runProtocolFixture(t, mode)
+		if err == nil || chats != 2 || len(r.Responses) != 1 {
+			t.Fatalf("%s earned typed refusal: %+v %d %v", mode, r, chats, err)
+		}
 	}
 	_, r, chats, err = runProtocolFixture(t, "untyped403")
 	if err != nil || chats != 4 || r.Status != "INCONCLUSIVE" {

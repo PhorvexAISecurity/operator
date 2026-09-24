@@ -209,3 +209,35 @@ func TestGuardrailStaticRejectsNonhexMarkerAndMissingCompletion(t *testing.T) {
 		t.Fatal("missing content accepted")
 	}
 }
+
+func TestGuardrailStaticRejectsTyped403ThatDisclosesMarker(t *testing.T) {
+	for _, escaped := range []bool{false, true} {
+		out, cfg, a := staticFixture(t)
+		markerRaw, err := os.ReadFile(filepath.Join(out, "marker.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		marker := string(markerRaw)
+		if escaped {
+			marker = `\u0043` + marker[1:]
+		}
+		reply := []byte(`{"error":{"type":"guardrail_blocked","message":"` + marker + `"}}`)
+		if err = os.WriteFile(filepath.Join(out, "reply-2.json"), reply, 0600); err != nil {
+			t.Fatal(err)
+		}
+		a.Responses[1].ReplySHA256 = hashStatic(reply)
+		progress, err := os.ReadFile(filepath.Join(out, "progress.jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		progress = []byte(strings.Replace(string(progress), `"replySHA256":"`+hashStatic([]byte(`{"error":{"type":"guardrail_blocked"}}`))+`"`, `"replySHA256":"`+hashStatic(reply)+`"`, 1))
+		if err = os.WriteFile(filepath.Join(out, "progress.jsonl"), progress, 0600); err != nil {
+			t.Fatal(err)
+		}
+		a.ProgressSHA256 = hashStatic(progress)
+		writeStaticArtifact(t, out, a)
+		if _, err = readGuardrailStaticResult(out, "run-1", cfg); err == nil {
+			t.Fatalf("disclosing typed 403 accepted escaped=%v", escaped)
+		}
+	}
+}

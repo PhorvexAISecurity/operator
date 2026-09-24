@@ -567,6 +567,9 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 				return e
 			}
 		}
+		if e := ops.cluster(ctx); e != nil {
+			return errors.New("cluster identity changed before call")
+		}
 		if e := appendProgress(c.OutDir, map[string]any{"kind": "CHAT_INTENT", "index": i + 1, "name": item.Name, "port": item.Port}); e != nil {
 			return e
 		}
@@ -626,12 +629,21 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 			return e
 		}
 		var shape map[string]json.RawMessage
-		if e=json.Unmarshal(reply,&shape);e!=nil{return e}
+		if e = json.Unmarshal(reply, &shape); e != nil {
+			return e
+		}
 		if wire.Status == 403 {
-			if _,hasChoices:=shape["choices"];hasChoices || body.Error.Type=="" {return errors.New("typed refusal reply shape differs")}
+			var decoded any
+			_ = json.Unmarshal(reply, &decoded)
+			canonical, _ := json.Marshal(decoded)
+			if _, hasChoices := shape["choices"]; hasChoices || body.Error.Type == "" || bytes.Contains(canonical, []byte(marker)) {
+				return errors.New("typed refusal reply shape differs")
+			}
 			row.ErrorType = body.Error.Type
 		} else if wire.Status == 200 {
-			if _,hasError:=shape["error"];hasError{return errors.New("completion reply includes error")}
+			if _, hasError := shape["error"]; hasError {
+				return errors.New("completion reply includes error")
+			}
 			if len(body.Choices) != 1 || body.Choices[0].Message.Content == nil || len(*body.Choices[0].Message.Content) > 256 {
 				return errors.New("reply content shape differs")
 			}
@@ -654,6 +666,9 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 		r.Snapshots = append(r.Snapshots, after)
 		if e = appendProgress(c.OutDir, map[string]any{"kind": "SNAPSHOT", "index": len(r.Snapshots), "snapshot": after}); e != nil {
 			return e
+		}
+		if e = ops.cluster(ctx); e != nil {
+			return errors.New("cluster identity changed after call")
 		}
 		classify(&r, marker)
 		if i == 0 && r.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" && !(row.Status == 200 && row.MarkerPresent != nil && *row.MarkerPresent) {

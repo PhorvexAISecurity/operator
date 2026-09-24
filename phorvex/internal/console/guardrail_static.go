@@ -457,7 +457,10 @@ func readGuardrailStaticResult(out, id, configPath string) (GuardrailStaticResul
 		}
 		call := GuardrailStaticCall{Name: row.Name, Port: row.Port, Status: row.Status}
 		if row.Status == 403 {
-			if _, hasChoices := shape["choices"]; hasChoices || body.Error.Type == "" {
+			var decoded any
+			_ = json.Unmarshal(reply, &decoded)
+			canonical, _ := json.Marshal(decoded)
+			if _, hasChoices := shape["choices"]; hasChoices || body.Error.Type == "" || bytes.Contains(canonical, marker) {
 				return result, errors.New("typed refusal reply shape differs")
 			}
 			call.ErrorType = body.Error.Type
