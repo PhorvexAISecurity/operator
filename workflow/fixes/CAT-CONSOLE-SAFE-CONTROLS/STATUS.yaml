@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-24T11:24:35+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 97365c5ec6513606b5a23ac444f373256820d46e33f5353634f41fb5605a2fa8
+    source_sha: d49ed44906f7364b726c4dedf9a8477ee56d0305
+    at: '2026-09-24T11:45:16+00:00'
 fix_id: CAT-CONSOLE-SAFE-CONTROLS
 issues:
 - M-194
@@ -85,7 +92,7 @@ next_action:
   owner: campaign-cleanup-audit
   action: Implement closed admission predicate and real persisted producer tests;
     retain unsafe Voice history
-updated_at: '2026-09-24T11:24:41+00:00'
+updated_at: '2026-09-24T11:45:16+00:00'
 follow_up_to: CAT-ADMISSION-VISIBILITY
 configuration_history:
 - at: '2026-09-24T11:24:11+00:00'
@@ -113,3 +120,11 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: b3598496c82f66b0f05db97aea3edd5b5b075681ed185c015688221045931ed9
+  source_sha: d49ed44906f7364b726c4dedf9a8477ee56d0305
+  at: '2026-09-24T11:28:42+00:00'
