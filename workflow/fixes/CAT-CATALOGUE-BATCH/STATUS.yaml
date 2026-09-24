@@ -1,0 +1,257 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: db4aa13ef08816f638967912ac464e69b048a81f43adb0d95dd55717332df446
+    source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+    at: '2026-09-24T14:15:12+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/red.md
+    sha256: eeee8dd063691b6065636324a8100e4c4ec724d056b91ea6a6d25b6d156f4c15
+    source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+    at: '2026-09-24T15:00:00+00:00'
+  preflight:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/preflight/receipt.json
+    sha256: eb3f9209f72b616c7fa76f2dec02ffab9b2dcd4075752b2d6c44d04685c81bf3
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  implementation:
+    result: PASS
+    by: stack-integration
+    artifact: 04-diff.patch
+    sha256: da60c7a07a9af8944fbbce0f9fcbf846c0c66494a4bc167472d0170101ba9a6f
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  l0:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l0.md
+    sha256: 9a9ee78a96889d37cf218a8bad837c25976e4ed8ebe0b3de2f91da20911bce74
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  l1:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l1.md
+    sha256: fa8eecf0c0adb1227cb3acbae3711466d5241396dd10fa8a3b7af739b9f711ff
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  l2:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l2.md
+    sha256: ea19a92f54c11eb7d0cea0ec90e3b7e36dfe9f30e721ed8494cb63a480ca3113
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  positive_control:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/positive-control.md
+    sha256: 2f674d1dc5b322edcc55afee1b6b35204b4bf7670fcb108282bfbbf0a674a3f6
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1018720a4370595a4a17454f300fd204962bcf93c901dc86f04d2e1a3c785486
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:02:39+00:00'
+    baseline_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b554df16d2928a4b37c3fab5238348d10f8a4a4896d8c5f1bb6e0e527221c0d0
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:02:39+00:00'
+    incident_sha256: 1018720a4370595a4a17454f300fd204962bcf93c901dc86f04d2e1a3c785486
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 11f3dc0f21565afced1475af32afdf7e995fc0b69a8a1bf6ba5c3f5f102425e7
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:09:29+00:00'
+fix_id: CAT-CATALOGUE-BATCH
+issues: []
+title: Integrate reviewed causal catalogue controls for installed application stacks
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: stack-integration
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-controls-batch-20260924
+  code_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-controls-batch-20260924
+  base_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  head_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/328
+  reviewed_head: d3defb468fbd8822ba490a39f474d81a3d6040bf
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Inspect remote validation and deployment prerequisites; retain separate
+    live debt
+updated_at: '2026-09-24T15:09:32+00:00'
+configuration_history:
+- at: '2026-09-24T14:14:47+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T15:00:07+00:00'
+  by: stack-integration
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T15:09:30+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T14:15:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T14:15:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T15:00:07+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T15:00:10+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T15:02:40+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T15:02:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T15:09:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: red
+  result: FAIL
+  by: stack-integration
+  artifact: evidence/red.md
+  sha256: eeee8dd063691b6065636324a8100e4c4ec724d056b91ea6a6d25b6d156f4c15
+  source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  at: '2026-09-24T14:49:41+00:00'
+- check: red
+  result: PASS
+  by: stack-integration
+  artifact: evidence/red.md
+  sha256: eeee8dd063691b6065636324a8100e4c4ec724d056b91ea6a6d25b6d156f4c15
+  source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  at: '2026-09-24T14:59:50+00:00'
+handoff:
+  id: CAT-CATALOGUE-BATCH:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

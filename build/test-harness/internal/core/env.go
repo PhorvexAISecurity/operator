@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -234,13 +235,16 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 		if e.Config.NATSExposureFixture != nil && ns.Labels["phorvex.ai/nats-exposure-fixture"] != "true" {
 			return fmt.Errorf("NATS fixture namespace %q lacks the installed ownership label", e.Config.Namespace)
 		}
+		if e.Config.CRMCapabilityFixture != nil && ns.Labels["phorvex.ai/crm-capability-fixture"] != "true" {
+			return fmt.Errorf("CRM fixture namespace %q lacks the dedicated ownership label", e.Config.Namespace)
+		}
 		return e.bindNamespaceUID(ns)
 	}
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
-	if e.Config.NATSExposureFixture != nil {
-		return fmt.Errorf("dedicated NATS fixture namespace %q is absent; refusing to create it", e.Config.Namespace)
+	if e.Config.NATSExposureFixture != nil || e.Config.CRMCapabilityFixture != nil {
+		return fmt.Errorf("dedicated fixture namespace %q is absent; refusing to create it", e.Config.Namespace)
 	}
 	if e.Config.ExpectedNamespaceUID != "" {
 		return fmt.Errorf("sandbox namespace %q expectedNamespaceUID %q is absent; refusing to create or adopt a replacement",
@@ -350,6 +354,12 @@ func (r CleanupResidue) String() string {
 func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	if err := e.Guard.AssertMutationAllowed(e.Config.Namespace); err != nil {
 		return err
+	}
+	if e.Config.CRMCapabilityFixture != nil {
+		if deleteNamespace {
+			return errors.New("CRM fixture cleanup cannot delete its pre-existing namespace")
+		}
+		return e.VerifyCRMFixtureClean(ctx)
 	}
 	if e.Config.NATSExposureFixture != nil {
 		if deleteNamespace {
@@ -580,6 +590,43 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	if len(problems) > 0 {
 		return fmt.Errorf("cleanup of owned objects in namespace %s did not verify (%d problem(s)): %s",
 			ns, len(problems), strings.Join(problems, "; "))
+	}
+	return nil
+}
+
+// VerifyCRMFixtureClean never lists or deletes by the shared harness-owned
+// label. Other controls may retain objects with that label in this namespace.
+func (e *Env) VerifyCRMFixtureClean(ctx context.Context) error {
+	f := e.Config.CRMCapabilityFixture
+	if f == nil {
+		return errors.New("CRM fixture authority absent")
+	}
+	current, err := e.NamespaceCurrent(ctx)
+	if err != nil || !current {
+		return fmt.Errorf("CRM fixture namespace identity unavailable: %v", err)
+	}
+	if e.NamespaceUID() != types.UID(f.NamespaceUID) {
+		return errors.New("CRM fixture namespace UID differs")
+	}
+	e.createdMu.RLock()
+	pending := len(e.createdUIDs)
+	e.createdMu.RUnlock()
+	if pending != 0 {
+		return fmt.Errorf("CRM fixture has %d unretired create-response UIDs", pending)
+	}
+	if len(e.Config.ScenarioFilter) != 1 {
+		return errors.New("CRM fixture exact scenario filter unavailable")
+	}
+	kind := "refund"
+	if e.Config.ScenarioFilter[0] == "c2-crm-reset-capability" {
+		kind = "reset"
+	}
+	name := "c2-crm-" + kind + "-" + f.RunID
+	if _, err := e.Kube.CoreV1().Pods(e.Config.Namespace).Get(ctx, name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		return fmt.Errorf("CRM fixture Pod absence unverified: %v", err)
+	}
+	if _, err := e.Kube.CoreV1().ConfigMaps(e.Config.Namespace).Get(ctx, name+"-code", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		return fmt.Errorf("CRM fixture ConfigMap absence unverified: %v", err)
 	}
 	return nil
 }

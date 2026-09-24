@@ -87,6 +87,10 @@ spec:
           value: {{ .Values.phorvex.console.state.historyMinFreeBytes | quote }}
         - name: PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS
           value: {{ .Values.phorvex.console.state.historyRetentionDays | default 0 | quote }}
+        # The opt-in Role alone is not readiness; the server also validates the
+        # fixed baked config and current installed source before admission.
+        - name: PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED
+          value: {{ .Values.phorvex.console.mongoExposure.enabled | default false | quote }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
           value: {{ .enabled | default false | quote }}
@@ -175,6 +179,52 @@ spec:
           value: {{ required "console.catalogueV1.mcpSession.sourceSHA256 is required" .sourceSHA256 | quote }}
         {{- end }}
         {{- end }}
+        {{- with .chroma }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_NAMESPACE
+          value: {{ required "console.catalogueV1.chroma.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_DEPLOYMENT
+          value: {{ required "console.catalogueV1.chroma.deployment is required" .deployment | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVICE
+          value: {{ required "console.catalogueV1.chroma.service is required" .service | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_CONTAINER
+          value: {{ required "console.catalogueV1.chroma.container is required" .container | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_PORT
+          value: {{ .port | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_IMAGE_ID
+          value: {{ required "console.catalogueV1.chroma.imageID is required" .imageID | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_VERSION_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.chroma.versionSourceSHA256 is required" .versionSourceSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVER_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.chroma.serverSourceSHA256 is required" .serverSourceSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_SCHEMA_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.chroma.schemaSourceSHA256 is required" .schemaSourceSHA256 | quote }}
+        {{- end }}
+        {{- end }}
+        {{- with .litellm }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_NAMESPACE
+          value: {{ required "console.catalogueV1.litellm.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_DEPLOYMENT
+          value: {{ required "console.catalogueV1.litellm.deployment is required" .deployment | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_SERVICE
+          value: {{ required "console.catalogueV1.litellm.service is required" .service | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONTAINER
+          value: {{ required "console.catalogueV1.litellm.container is required" .container | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_PORT
+          value: {{ .port | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIGMAP
+          value: {{ required "console.catalogueV1.litellm.configMap is required" .configMap | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_KEY
+          value: {{ required "console.catalogueV1.litellm.configKey is required" .configKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_SHA256
+          value: {{ required "console.catalogueV1.litellm.configSHA256 is required" .configSHA256 | quote }}
+        {{- end }}
+        {{- end }}
         {{- with .gpu }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_ENABLED
           value: {{ .enabled | default false | quote }}
@@ -189,6 +239,30 @@ spec:
           value: {{ printf "%s/%s" .runtimeMountPath .kubeconfigKey | quote }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_KUBE_CONTEXT
           value: {{ required "console.catalogueV1.gpu.kubeContext is required when runtimeSecret is set" .kubeContext | quote }}
+        {{- end }}
+        {{- end }}
+        {{- with .crm }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_NAMESPACE
+          value: {{ required "console.catalogueV1.crm.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_NAMESPACE_UID
+          value: {{ required "console.catalogueV1.crm.namespaceUID is required" .namespaceUID | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_SERVICE_ACCOUNT
+          value: {{ required "console.catalogueV1.crm.serviceAccountName is required" .serviceAccountName | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_MANIFEST_FILE
+          value: {{ printf "%s/%s" .manifestMountPath .manifestKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_MANIFEST_SHA256
+          value: {{ required "console.catalogueV1.crm.manifestSHA256 is required" .manifestSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_HARNESS_SHA256
+          value: {{ required "console.catalogueV1.crm.harnessSHA256 is required" .harnessSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_KUBECONFIG
+          value: {{ printf "%s/%s" .runtimeMountPath .kubeconfigKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_KUBECONFIG_SHA256
+          value: {{ required "console.catalogueV1.crm.kubeconfigSHA256 is required" .kubeconfigSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CRM_KUBE_CONTEXT
+          value: {{ required "console.catalogueV1.crm.kubeContext is required" .kubeContext | quote }}
         {{- end }}
         {{- end }}
         {{- end }}
@@ -305,6 +379,16 @@ spec:
           readOnly: true
         {{- end }}
         {{- end }}
+        {{- with .crm }}
+        {{- if .enabled }}
+        - name: catalogue-v1-crm-manifest
+          mountPath: {{ .manifestMountPath }}
+          readOnly: true
+        - name: catalogue-v1-crm-runtime
+          mountPath: {{ .runtimeMountPath }}
+          readOnly: true
+        {{- end }}
+        {{- end }}
         {{- end }}
         {{- end }}
       volumes:
@@ -362,6 +446,24 @@ spec:
             path: {{ .kubeconfigKey }}
           - key: {{ .bearerTokenKey }}
             path: {{ .bearerTokenKey }}
+      {{- end }}
+      {{- end }}
+      {{- with .crm }}
+      {{- if .enabled }}
+      - name: catalogue-v1-crm-manifest
+        configMap:
+          name: {{ required "console.catalogueV1.crm.manifestConfigMap is required" .manifestConfigMap }}
+          defaultMode: 0440
+          items:
+          - key: {{ .manifestKey }}
+            path: {{ .manifestKey }}
+      - name: catalogue-v1-crm-runtime
+        secret:
+          secretName: {{ required "console.catalogueV1.crm.runtimeSecret is required" .runtimeSecret }}
+          defaultMode: 0440
+          items:
+          - key: {{ .kubeconfigKey }}
+            path: {{ .kubeconfigKey }}
       {{- end }}
       {{- end }}
       {{- end }}

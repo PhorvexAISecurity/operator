@@ -1,0 +1,25 @@
+# Server-owned named suite template. This remains unavailable until the exact
+# installed cluster, Pod, Service, source, and journals are independently pinned.
+kubeconfig: ""
+context: "__SET_LOGICAL_CLUSTER_TARGET__"
+namespace: vllm
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+outDir: out-guardrail-confidentiality-static
+defenderFilter: []
+scenarioFilter: []
+guardrailStaticFixture:
+  runID: run-1
+  transport: in-cluster
+  clusterUID: "__SET_REVIEWED_KUBE_SYSTEM_UID__"
+  podName: "__SET_REVIEWED_VLLM_POD_NAME__"
+  podUID: "__SET_REVIEWED_VLLM_POD_UID__"
+  variant: pgv1
+  serviceUID: "__SET_REVIEWED_VLLM_SERVICE_UID__"
+  sourceSHA256: "__SET_REVIEWED_GUARDRAIL_SOURCE_SHA256__"
+  guardrailJournalName: "__SET_REVIEWED_GUARDRAIL_JOURNAL_NAME__"
+  guardrailJournalUID: "__SET_REVIEWED_GUARDRAIL_JOURNAL_UID__"
+  kvJournalName: "__SET_REVIEWED_KV_JOURNAL_NAME__"
+  kvJournalUID: "__SET_REVIEWED_KV_JOURNAL_UID__"
+  maxRunSeconds: 600

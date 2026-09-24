@@ -1,0 +1,233 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 7
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 2cbcee47ebf339f4ca9e34f758c43a41f122411eb54462a25eb6f36d4fa25cef
+    source_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+    at: '2026-09-24T13:06:23+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/preflight/receipt.json
+    sha256: fa74c7cbfcbd1816ca0db3c6bc5490b17047776e0f3a296310039574d7c9118f
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T13:59:54+00:00'
+  implementation:
+    result: PASS
+    by: stack-integration
+    artifact: 04-diff.patch
+    sha256: d788539542a90c97c830b9d0c59caa2e68160d6fb9a23318d2b44037bb851e1e
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T13:59:54+00:00'
+  red:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/red.md
+    sha256: afd45d70af44b3cda87fa006e62663ebf1e5b88252c465452a327dfa20ec7eae
+    source_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+    at: '2026-09-24T13:59:54+00:00'
+  l0:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l0.md
+    sha256: 3c7e8aa5b01c9bcde51247d4c355d763c741749a9c88d5a6872066ebf88da216
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T13:59:54+00:00'
+  l1:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l1.md
+    sha256: ece49af8401f5db5fe7bc49becc65655397b9da86146b9c48129c913a908c361
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T13:59:54+00:00'
+  l2:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l2.md
+    sha256: ebaa6d915d6ba5c90b61570f0a2cd1142bedf61aa527c2521d41834f5d5ba5f4
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T13:59:54+00:00'
+  positive_control:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/positive-control.md
+    sha256: 087f41700cd6c042831026ad016385f5c01e8c111fd575f7d76190f45be98b09
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T13:59:54+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: d3c7e35990f0834f109ca22a4aebb5f7191843f797f72f93eef6ff0e327e6c14
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T14:12:22+00:00'
+    baseline_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: ad8d0808cd4fd2adc1f28d9e51b62b77053dd36973caa73b423d665127bba3e6
+    source_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+    at: '2026-09-24T14:12:22+00:00'
+    incident_sha256: d3c7e35990f0834f109ca22a4aebb5f7191843f797f72f93eef6ff0e327e6c14
+fix_id: CAT-STACK-CASES
+issues: []
+title: Add permanent workload-derived Chroma and LiteLLM catalogue controls with causal
+  evidence
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: stack-integration
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-stack-cases-20260924
+  code_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-stack-cases-20260924
+  base_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+  head_sha: 594a2326d71ea528cac2a34bfd31f2e0589653bd
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T14:12:26+00:00'
+configuration_history:
+- at: '2026-09-24T12:58:18+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T13:59:53+00:00'
+  by: stack-integration
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T12:58:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T12:58:57+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T13:59:54+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T13:59:57+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T14:12:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T14:12:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 98f573d53f54ad8efc90cb5bd8e56d8390b391598e0d4aa1232892095a6b9cae
+  source_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+  at: '2026-09-24T12:58:57+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+handoff:
+  id: CAT-STACK-CASES:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7

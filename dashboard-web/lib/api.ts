@@ -152,6 +152,7 @@ export interface CatalogItem {
   responseGuidance?: string; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
   launchKind?: "harness-scenario" | "fixed-suite" | "named-suite" | "live-vllm-effect";
   claimClass?: "security" | "functional" | "effect" | "calibration";
+  eventMode?: string;
   profile?: string; available?: boolean; unavailableReason?: string;
   runtimeContext?: string;
 }
@@ -623,7 +624,42 @@ export interface NATSResponseResult {
   decisionTrace?: NATSResponseDecisionTrace;
   issues: string[];
 }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; note: string }
+export interface MongoExposureDecision {
+  decisionID: string;
+  policyUID: string;
+  policyGeneration: number;
+  targetPodUID: string;
+  action: string;
+  actionStatus: string;
+  reasonSHA256: string;
+  reasonCode: "REACTIVE_ONLY_NO_DIRECT_FOOTHOLD" | "OTHER_RECORDED_REASON" | "NONE";
+  reasonText: string;
+  dispatchOutcome: "not-attempted" | "emitted" | "emitted-false" | "dispatch-error" | "refused-no-effect" | "already-satisfied" | "reconciled-no-new-mutation" | "declared-only";
+  candidateStatuses: { action: string; status: string; exclusionKind: string; scored: boolean }[];
+  observedAt: string;
+}
+export interface MongoExposureResult {
+  schema: "mongo-exposure-result-v1";
+  accepted: boolean;
+  finding: "EXPOSED" | "UNKNOWN";
+  observedFinding: "EXPOSED" | "UNKNOWN";
+  clientRead: "UNAUTHENTICATED_EXACT_READ" | "MONGO_AUTH_DENIED" | "UNKNOWN";
+  legitimateBefore: "EXACT_READ" | "UNKNOWN";
+  legitimateAfter: "EXACT_READ" | "UNKNOWN";
+  cleanup: "CONFIRMED_ABSENT" | "UNCONFIRMED";
+  brainTrace: "JOINED" | "GAP" | "UNKNOWN";
+  brainDecisions: MongoExposureDecision[];
+  securityOutcome: "NOT_EVALUATED";
+  rawReplySHA256: string;
+  rawReplyBytes: number;
+  sourcePodUID: string;
+  clientPodUID: string;
+  policyUID: string;
+  issues: string[];
+}
+export interface GuardrailStaticCall { name: "canary_raw" | "canary_guarded" | "say_ok" | "arithmetic"; port: number; status: number; markerPresent?: boolean; answerIsFour?: boolean; errorType?: string }
+export interface GuardrailStaticResult { accepted: boolean; status: string; sayOK: string; arithmetic: string; calls: GuardrailStaticCall[]; issues: string[]; clusterUID: string; podUID: string; variant: string; sourceSHA256: string; sourceEvidence: string; loadedSource: string; serviceUID: string; endpointSliceSHA256: string; guardrailJournalUID: string; guardrailJournalGeneration: number; kvJournalUID: string; eventMode: "DIRECT_STATIC"; naturalDetector: "NOT_EVALUATED"; brainDecision: "NOT_EVALUATED"; actuator: "NOT_EVALUATED"; externalRoute: "NOT_TESTED" }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

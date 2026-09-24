@@ -16,25 +16,42 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 9 {
-		t.Fatalf("items=%d, want seven limited-v1 entries, one MCP baseline and the disabled server-owned NATS response", len(items))
+	// Published baseline has nine rows. Mongo, guardrail static, three stack
+	// controls and two CRM controls add seven distinct reviewed rows.
+	want := map[string]struct{ launch, claim string }{
+		"c2-nats-owned-client-response":            {"named-suite", "effect"},
+		"c2-mongo-uncredentialed-service-exposure": {"named-suite", "configuration"},
+		"ai-vllm-guardrail-confidentiality-static": {"named-suite", "effect"},
+		string(cataloguev1.ChromaOwnedVector):      {"fixed-suite", "functional"},
+		string(cataloguev1.LiteLLMHealth):          {"fixed-suite", "functional"},
+		string(cataloguev1.LiteLLMCredential):      {"fixed-suite", "functional"},
+		string(cataloguev1.CRMRefund):              {"fixed-suite", "functional"},
+		string(cataloguev1.CRMReset):               {"fixed-suite", "functional"},
+		string(cataloguev1.MCPSessionBaseline):     {"fixed-suite", "functional"},
+		string(cataloguev1.VoiceMedia):             {"fixed-suite", "functional"},
+		string(cataloguev1.VoiceRecovery):          {"fixed-suite", "functional"},
+		string(cataloguev1.GPUDrain):               {"fixed-suite", "functional"},
+		string(cataloguev1.AuthUnauth):             {"fixed-suite", "functional"},
+		string(cataloguev1.AuthScope):              {"fixed-suite", "functional"},
+		limitedV1GuardrailCalibrationID:            {"fixed-suite", "calibration"},
+		limitedV1GuardrailID:                       {"live-vllm-effect", "effect"},
 	}
-	responseRows := 0
+	if len(items) != len(want) {
+		t.Fatalf("items=%d, want %d exact baseline and reviewed additions", len(items), len(want))
+	}
+	seen := make(map[string]bool, len(items))
 	for _, item := range items {
-		if item.Name == "c2-nats-owned-client-response" {
-			responseRows++
-			if item.Available || item.LaunchKind != "named-suite" || item.Profile != natsResponseConfig || item.ClaimClass != "effect" {
-				t.Fatalf("unconfigured response row gained launch authority: %+v", item)
-			}
-		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) {
-			t.Fatalf("unexpected entry %q", item.Name)
+		expected, ok := want[item.Name]
+		if !ok || seen[item.Name] || item.EntryID != item.Name || item.LaunchKind != expected.launch || item.ClaimClass != expected.claim {
+			t.Fatalf("missing, duplicate or changed catalogue row: %+v", item)
 		}
-		if item.LaunchKind == "" || item.ClaimClass == "" {
-			t.Fatalf("entry lacks typed launch metadata: %+v", item)
+		seen[item.Name] = true
+		if item.Name != limitedV1GuardrailID && item.Available {
+			t.Fatalf("unconfigured row gained launch authority: %+v", item)
 		}
 	}
-	if responseRows != 1 {
-		t.Fatalf("server-owned response row count=%d", responseRows)
+	if len(seen) != len(want) {
+		t.Fatalf("catalogue membership=%d, want %d", len(seen), len(want))
 	}
 }
 

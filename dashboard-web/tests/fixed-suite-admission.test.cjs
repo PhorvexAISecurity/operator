@@ -13,7 +13,7 @@ const compiled = ts.transpileModule(source, {
 const subject = { exports: {} };
 const requireSource = (id) => id.startsWith("@/") || id.startsWith("./") || id === "lucide-react" ? {} : require(id);
 new Function("require", "module", "exports", compiled)(requireSource, subject, subject.exports);
-const { FixedSuiteAdmissionNotice, fixedSuiteAdmissionReady } = subject.exports;
+const { FixedSuiteAdmissionNotice, fixedSuiteAdmissionReady, CRMCapabilityResult } = subject.exports;
 const render = (state, refreshes = 0, configured = true) => renderToStaticMarkup(React.createElement(FixedSuiteAdmissionNotice, { configured, state, refreshes, onRefresh: () => {} }));
 
 test("exact profile and request key are required for fixed-suite launch", () => {
@@ -40,4 +40,16 @@ test("configuration and current admission render separately with bounded refresh
   assert.match(failed, /Admission check failed or was refused. Launch stays disabled/);
   assert.match(render(null), /checking the current server gate/i);
   assert.match(render(null, 0, false), /Profile configuration is unavailable/);
+});
+
+test("CRM fixed result keeps A/B record counts distinct from security claims", () => {
+  const html = renderToStaticMarkup(React.createElement(CRMCapabilityResult, { evidence: {
+    ownExactCount: "1", crossExactCount: "1", crossHTTPStatus: "403", seedHashesUnchanged: "true",
+  } }));
+  assert.match(html, /Synthetic A\/B record control/);
+  assert.match(html, /A legitimate write: 1 exact Mongo record/);
+  assert.match(html, /B cross-record write: 1 exact Mongo record/);
+  assert.match(html, /HTTP status: 403/);
+  assert.match(html, /DIRECT; no alert is required/);
+  assert.match(html, /not an authentication bypass or defense score/);
 });

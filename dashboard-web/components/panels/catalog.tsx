@@ -14,6 +14,8 @@ import { setSelectedTarget } from "@/lib/provider-store";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailCalibrationResult } from "@/components/panels/guardrail-calibration-result";
 import { NATSClientResponseResult } from "@/components/panels/nats-client-response-result";
+import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
+import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 
@@ -31,6 +33,18 @@ const admissionMessage = (reason?: FunctionalAdmissionReason) => {
     default: return "Current launch admission could not be verified.";
   }
 };
+
+export function CRMCapabilityResult({ evidence }: { evidence: Record<string, string> }) {
+  const own = evidence.ownExactCount;
+  const cross = evidence.crossExactCount;
+  return <div data-crm-functional-result className="rounded-md border border-border bg-muted/20 p-3 text-[12px] space-y-1">
+    <div className="font-medium text-foreground">Synthetic A/B record control</div>
+    <div>A legitimate write: {own === undefined ? "unverified" : `${own} exact Mongo record`} · B cross-record write: {cross === undefined ? "unverified" : `${cross} exact Mongo record`}</div>
+    <div>Cross-record HTTP status: {evidence.crossHTTPStatus || "unverified"} · original seed hashes: {evidence.seedHashesUnchanged === "true" ? "unchanged" : "unverified"}</div>
+    <div>Event mode: DIRECT; no alert is required. Detector, actuator, brain and installed defense: not evaluated.</div>
+    <div className="text-muted-foreground">A and B label synthetic records, not callers. This is a functional capability observation, not an authentication bypass or defense score.</div>
+  </div>;
+}
 
 export function fixedSuiteAdmissionReady(key: string, profile: string, state: FixedAdmissionState | null): boolean {
   return !!state && state.key === key && state.profile === profile && state.phase === "ready" && state.reasonCode === "READY" && !!profile;
@@ -113,7 +127,7 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
             <span className="font-mono text-[13px] text-foreground">{it.name}</span>
             <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>
             {it.hasRun && <Badge variant="accent">ran</Badge>}
-            {it.benignControl ? <Badge variant="neutral">{it.claimClass === "calibration" ? "benign calibration" : "benign functional"}</Badge> : it.product === "ai" && <Badge variant="pending">SP-0</Badge>}
+            {it.benignControl ? <Badge variant="neutral">{it.claimClass === "calibration" ? "benign calibration" : "benign functional"}</Badge> : it.product === "ai" && it.profile !== "guardrail-confidentiality-static" && <Badge variant="pending">SP-0</Badge>}
             {it.launchKind === "fixed-suite" && it.available === true ? <Badge variant="neutral">configured · admission checked on open</Badge> : it.available === false && <Badge variant="pending">unavailable</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
@@ -138,7 +152,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   const [effectRecordId, setEffectRecordId] = React.useState("");
   const [effectResult, setEffectResult] = React.useState<AttackResult | null>(null);
   const [effectReadError, setEffectReadError] = React.useState("");
-  const [natsLaunchUncertain, setNatsLaunchUncertain] = React.useState(false);
+  const [namedLaunchUncertain, setNamedLaunchUncertain] = React.useState(false);
   const [admissionRefreshes, setAdmissionRefreshes] = React.useState(0);
   const [fixedAdmission, setFixedAdmission] = React.useState<FixedAdmissionState | null>(null);
   const admissionGeneration = React.useRef(0);
@@ -239,8 +253,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     const selectedContext = requestContext;
     const request = ++requestGeneration.current;
     setRunning(withPX ? "px" : "nopx"); setMsg("");
-    let natsLaunchSent = false;
-    let natsLaunchConfirmed = false;
+    let namedLaunchSent = false;
+    let namedLaunchConfirmed = false;
     if (selectedTarget?.context) clearLiveSelection(selectedLens, selectedTarget.context);
     try {
       if (item!.launchKind === "fixed-suite") {
@@ -252,17 +266,19 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         return;
       }
       if (item!.launchKind === "named-suite") {
-        if (item!.profile !== "nats-exposure-baseline" && item!.profile !== "nats-client-response") throw new Error("NATS named suite profile differs from the server-owned case");
-        natsLaunchSent = true;
+        if (item!.profile !== "nats-exposure-baseline" && item!.profile !== "nats-client-response" && item!.profile !== "mongo-exposure-baseline" && item!.profile !== "guardrail-confidentiality-static") throw new Error("Named suite profile differs from the server-owned case");
+        namedLaunchSent = true;
         const { id } = await api.startRun(item!.profile, false, selectedLens);
-        natsLaunchConfirmed = true;
-        setNatsLaunchUncertain(false);
+        namedLaunchConfirmed = true;
+        setNamedLaunchUncertain(false);
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
         const context = item!.runtimeContext || selectedTarget?.context || "";
         setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
-        setMsg(item!.profile === "nats-client-response"
+        setMsg(item!.profile === "guardrail-confidentiality-static" ? `Started ${id}. This fixed synthetic raw-versus-guarded comparison reports static filter behavior and separate legitimate controls; natural detector, brain and actuator are not evaluated.` : item!.profile === "nats-client-response"
           ? `Started ${id}. The result separately reports the injected signal, installed response, continuing-client and legitimate-peer observations; no defense verdict is inferred from silence.`
+          : item!.profile === "mongo-exposure-baseline"
+          ? `Started ${id}. The result compares one owned synthetic document against a no-credential Mongo Service read, legitimate controls, manager audit, and exact cleanup; defense efficacy is not evaluated.`
           : `Started ${id}. The result is a synthetic no-signal configuration finding, not a defense verdict.`);
         return;
       }
@@ -285,14 +301,14 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     }
     catch (e: any) {
       if (item!.launchKind === "fixed-suite" && request === requestGeneration.current) setFixedAdmission({ key: admissionKey, profile: fixedProfile, phase: "error" });
-      if (natsLaunchSent && !natsLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)) setNatsLaunchUncertain(true);
-      if (request === requestGeneration.current && selectedContext === currentContext.current) setMsg(natsLaunchSent && !natsLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)
-        ? "NATS launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly."
+      if (namedLaunchSent && !namedLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)) setNamedLaunchUncertain(true);
+      if (request === requestGeneration.current && selectedContext === currentContext.current) setMsg(namedLaunchSent && !namedLaunchConfirmed && !(e instanceof ApiError && e.status >= 400 && e.status < 500)
+        ? item!.profile === "guardrail-confidentiality-static" ? "Guardrail comparison launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly." : "Named-suite launch response is uncertain. Inspect Run History for the exact run before any new attempt; do not retry this request blindly."
         : String(e.message || e));
     }
     finally { if (request === requestGeneration.current && selectedContext === currentContext.current) setRunning(""); }
   }
-  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && natsLaunchUncertain) && (item.launchKind === "fixed-suite" ? fixedSuiteAdmissionReady(admissionKey, fixedProfile, fixedAdmission) : item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
+  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && namedLaunchUncertain) && (item.launchKind === "fixed-suite" ? fixedSuiteAdmissionReady(admissionKey, fixedProfile, fixedAdmission) : item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
   return (
     <Dialog open={!!item} onClose={() => { requestGeneration.current++; setRunning(""); setMsg(""); onClose(); }} title={item.name}>
       <div className="space-y-4">
@@ -308,12 +324,14 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         </div>
         {item.benignControl
           ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
+          : item.profile === "guardrail-confidentiality-static" ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.meaningfulWhen}</div>
           : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
+        {item.eventMode && <div className="text-[12px] text-muted-foreground">Event mode: <span className="text-foreground">{item.eventMode}</span> · brain: NOT_EVALUATED · actuator: NOT_EVALUATED</div>}
         {item.launchKind === "fixed-suite" && <FixedSuiteAdmissionNotice configured={item.available !== false} state={fixedAdmission?.key === admissionKey ? fixedAdmission : null} refreshes={admissionRefreshes} onRefresh={() => setAdmissionRefreshes((count) => Math.min(3, count + 1))} />}
-        {item.launchKind === "named-suite" && natsLaunchUncertain && <div className="text-[11px] text-warning">The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one. This button stays disabled for this page session.</div>}
+        {item.launchKind === "named-suite" && namedLaunchUncertain && <div className="text-[11px] text-warning">{item.profile === "guardrail-confidentiality-static" ? "The last comparison launch response was indeterminate. Inspect Run History for the exact run before starting a new one." : "The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one."} This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === "nats-client-response" ? "Run NATS client response" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
+          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === "guardrail-confidentiality-static" ? "Run fixed confidentiality comparison" : item.profile === "nats-client-response" ? "Run NATS client response" : item.profile === "mongo-exposure-baseline" ? "Run Mongo Service exposure control" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
           <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           </>}
@@ -330,6 +348,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
             {fixedEvidence.functionalResult.unsafeToRetry && <div className="text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
             {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
+            {item.eventMode && <div className="space-y-1 border-t border-border pt-2">{Object.entries(fixedEvidence.functionalResult.evidence || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => <div key={key}><span className="font-mono text-foreground/80">{key}:</span> {value}</div>)}</div>}
+            {(fixedProfile === "c2-crm-refund-capability" || fixedProfile === "c2-crm-reset-capability") && <CRMCapabilityResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}
           {fixedEvidence?.configurationResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
@@ -341,8 +361,11 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             {(fixedEvidence.configurationResult.issues || []).map((issue, index) => <div key={`${index}-${issue}`} className="text-warning">{issue}</div>)}
           </div>}
           {fixedEvidence?.natsResponseResult && <div className="mt-2 border-t border-border pt-2"><NATSClientResponseResult result={fixedEvidence.natsResponseResult} unsafeToRetry={fixedStatus?.unsafeToRetry} /></div>}
+          {fixedEvidence?.mongoExposureResult && <div className="mt-2 border-t border-border pt-2"><MongoExposureResult result={fixedEvidence.mongoExposureResult} unsafeToRetry={fixedStatus?.unsafeToRetry} /></div>}
+          {item.profile === "mongo-exposure-baseline" && fixedEvidence && !fixedEvidence.mongoExposureResult && <div className="mt-1 text-warning">Exact Mongo synthetic-document evidence is unavailable or incomplete. No configuration exposure finding or defense result is accepted.</div>}
+          {fixedEvidence?.guardrailStaticResult && <div className="mt-2 border-t border-border pt-2"><GuardrailStaticResultPanel result={fixedEvidence.guardrailStaticResult} /></div>}
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
-          {fixedEvidence && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && !fixedEvidence.natsResponseResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
+          {fixedEvidence && item.profile !== "mongo-exposure-baseline" && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && !fixedEvidence.natsResponseResult && !fixedEvidence.mongoExposureResult && !fixedEvidence.guardrailStaticResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
           {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
         </div>}
         {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">

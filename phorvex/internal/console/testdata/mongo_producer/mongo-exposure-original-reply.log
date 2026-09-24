@@ -1,0 +1,1 @@
+CAT_MONGO_JSON={"ok":true,"code":0,"codeName":"","rows":[{"_id":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","nonce":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","state":"initial","payload":"synthetic-mongo-exposure-v1"}]}

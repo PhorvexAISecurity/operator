@@ -34,8 +34,11 @@ type Config struct {
 	// AuditSourceIdentity binds durable history to the configured endpoint. Production sets this
 	// to the remote origin and TLS server identity; it contains no credential material.
 	AuditSourceIdentity string
-	Addr                string // http listen address
-	Web                 string // static SPA dir (dashboard-web/out) served at / alongside /api
+	// MongoExposureEnabled is set only by the opt-in chart installation that
+	// grants the fixed document-store fixture permissions.
+	MongoExposureEnabled bool
+	Addr                 string // http listen address
+	Web                  string // static SPA dir (dashboard-web/out) served at / alongside /api
 	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
 	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
 	MetricsAllow []string
@@ -105,6 +108,35 @@ type CatalogueV1Config struct {
 	MCPSourceKey                string
 	MCPImageID                  string
 	MCPSourceSHA256             string
+	ChromaEnabled               bool
+	ChromaNamespace             string
+	ChromaDeployment            string
+	ChromaService               string
+	ChromaContainer             string
+	ChromaPort                  int32
+	ChromaImageID               string
+	ChromaVersionSourceSHA256   string
+	ChromaServerSourceSHA256    string
+	ChromaSchemaSourceSHA256    string
+	LiteLLMEnabled              bool
+	LiteLLMNamespace            string
+	LiteLLMDeployment           string
+	LiteLLMService              string
+	LiteLLMContainer            string
+	LiteLLMPort                 int32
+	LiteLLMConfigMap            string
+	LiteLLMConfigKey            string
+	LiteLLMConfigSHA256         string
+	CRMEnabled                  bool
+	CRMNamespace                string
+	CRMServiceAccountName       string
+	CRMNamespaceUID             string
+	CRMManifestFile             string
+	CRMManifestSHA256           string
+	CRMHarnessSHA256            string
+	CRMKubeconfigPath           string
+	CRMKubeconfigSHA256         string
+	CRMKubeContext              string
 }
 
 const (

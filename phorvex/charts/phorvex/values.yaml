@@ -369,6 +369,13 @@ phorvex:
   console:
     enabled: false
     allowWorkloadMutations: false
+    # Extra read grants for the fixed synthetic vLLM comparison. The shipped
+    # harness profile also requires exact reviewed pins before launch.
+    guardrailStatic:
+      enabled: false
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
+      kvJournalName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:
@@ -377,6 +384,11 @@ phorvex:
       # alongside natsExposure.enabled. Existing baseline grants stay narrow.
       clientResponse:
         enabled: false
+    # Opt-in authority for the fixed, unscored Mongo synthetic-document
+    # configuration exposure control. The existing document-store namespace,
+    # Service and server-owned harness config are not browser-selectable.
+    mongoExposure:
+      enabled: false
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
     catalogueV1:
@@ -422,6 +434,28 @@ phorvex:
         sourceKey: server.py
         imageID: ""
         sourceSHA256: ""
+      # Fixed direct controls; enabled only against the reviewed installed routes.
+      chroma:
+        enabled: false
+        namespace: document-store
+        deployment: chroma
+        service: chroma
+        container: chroma
+        port: 8000
+        imageID: docker.io/chromadb/chroma@sha256:18e67eecc172abbcd9413d751bde64983b3d167fe497c98f979083eb24c0c942
+        versionSourceSHA256: 5458a79347d19a5d15966a76a3a5e02bdac384ef670ff0612cc93fc788c41f44
+        serverSourceSHA256: 8dae4ea1f3357edf75ac446bbe0e3973151a542dc6de184c7be3b6be82925c41
+        schemaSourceSHA256: 2b6ec7c5796309be91f9af97e3bb4379a42652550146b2dda226c801894570b1
+      litellm:
+        enabled: false
+        namespace: litellm
+        deployment: litellm
+        service: litellm
+        container: litellm
+        port: 4000
+        configMap: litellm-config
+        configKey: config.yaml
+        configSHA256: 14ebebce3b18a492a7aadb5c011bfcd71d8d16d8e8745e305b4f2336664daafb
       gpu:
         enabled: false
         namespace: ""
@@ -432,6 +466,23 @@ phorvex:
         kubeconfigKey: kubeconfig
         bearerTokenKey: bearer-token
         runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
+        kubeContext: ""
+      # Synthetic CRM functional controls. Owner provisions a dedicated labelled
+      # namespace and scoped kubeconfig. RBAC binds only the dedicated fixture SA.
+      crm:
+        enabled: false
+        namespace: ""
+        namespaceUID: ""
+        serviceAccountName: ""
+        manifestConfigMap: ""
+        manifestKey: manifest.json
+        manifestMountPath: /etc/phorvex-catalogue-v1-crm
+        manifestSHA256: ""
+        harnessSHA256: ""
+        runtimeSecret: ""
+        kubeconfigKey: kubeconfig
+        runtimeMountPath: /etc/phorvex-catalogue-v1-crm-runtime
+        kubeconfigSHA256: ""
         kubeContext: ""
     auditTransport:
       port: 8445

@@ -1,0 +1,27 @@
+# Default-off server-owned Mongo configuration exposure control. Replace every
+# source placeholder with reviewed installed pins before enabling the profile.
+# The named-suite server replaces runID, nonce and outDir with one private
+# absolute run path before harness validation; this file cannot launch itself.
+kubeconfig: ""
+context: "__SET_LOGICAL_CLUSTER_TARGET__"
+namespace: document-store
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+outDir: out-mongo-exposure-baseline
+scenarioFilter: [c2-mongo-uncredentialed-service-exposure]
+defenderFilter: []
+mongoExposureFixture:
+  runID: run-1
+  nonce: "00000000000000000000000000000000"
+  transport: in-cluster
+  clusterUID: "__SET_KUBE_SYSTEM_UID__"
+  mongoDeployment: mongo
+  mongoService: mongo
+  mongoImageID: "__SET_MONGO_IMAGE_DIGEST__"
+  policyName: mongo-defense
+  managerNamespace: phorvex-system
+  managerDeployment: phorvex-phorvex
+  managerImageID: "__SET_MANAGER_IMAGE_DIGEST__"
+  allowedNodeNames: ["__SET_REVIEWED_CPU_NODE_NAME__"]
+  maxRunSeconds: 600
