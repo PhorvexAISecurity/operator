@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -65,11 +65,27 @@ checks:
     sha256: 0873d0e148fd816baa5c4bf2907da819100afdfd838ee61c493322c404ec8c4a
     source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
     at: '2026-09-24T17:57:49+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4b73242d843a4a2a1796eaa3648da659e29ee3ee2c2f31f14c06b3f5d813f4d6
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:59:02+00:00'
+    baseline_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: a3fb9de973d86a253e34a7042521e5bff9353345eb9897a3f1fd52270940e699
+    source_sha: e411b7cf61edf5246048f889b7f4963136b5b990
+    at: '2026-09-24T17:59:02+00:00'
+    incident_sha256: 4b73242d843a4a2a1796eaa3648da659e29ee3ee2c2f31f14c06b3f5d813f4d6
 fix_id: CAT-POD-TOKEN-CASE
 issues: []
 title: Add a causal Pod-bound credential response catalogue suite
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -114,7 +130,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -130,10 +146,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-24T17:57:55+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T17:59:07+00:00'
 follow_up_to: CAT-POD-TOKEN-VECTOR
 configuration_history:
 - at: '2026-09-24T15:52:24+00:00'
@@ -187,6 +203,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T17:59:03+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T17:59:05+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -216,9 +248,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 handoff:
-  id: CAT-POD-TOKEN-CASE:10:submit
-  from: mongo-finish
+  id: CAT-POD-TOKEN-CASE:11:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
