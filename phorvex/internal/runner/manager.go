@@ -1844,6 +1844,12 @@ func buildInfectedSet(snap *ingest.Snapshot) map[string]bool {
 	inf := map[string]bool{}
 	for key, evs := range snap.EventByPod {
 		for i := range evs {
+			// A copied Pod-bound bearer may be usable off-Pod. It identifies an
+			// exact source for credential response, but does not establish an
+			// exploit foothold on that Pod or its graph neighbors.
+			if evs[i].Type == model.AttackVectorPodBoundAPIAuth {
+				continue
+			}
 			if isHighSeverity(evs[i].ThreatLevel) {
 				inf[key] = true
 				break
