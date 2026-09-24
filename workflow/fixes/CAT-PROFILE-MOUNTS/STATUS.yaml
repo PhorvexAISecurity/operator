@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -65,12 +65,28 @@ checks:
     sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
     source_sha: f71f16529769e26d55725ee798d774c5f74d0808
     at: '2026-09-24T18:50:23+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:51:07+00:00'
+    baseline_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 586cebe59fef820f2de27b54768dbbdcb69779aff537b14b5829c0b3f3fd236a
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:51:07+00:00'
+    incident_sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
 fix_id: CAT-PROFILE-MOUNTS
 issues: []
 title: Make fixed Mongo and static guardrail profiles configurable through reviewed
   chart mounts
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -115,7 +131,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -131,10 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-24T18:50:28+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T18:51:12+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -183,6 +199,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T18:51:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T18:51:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -201,9 +233,9 @@ check_history:
   source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
   at: '2026-09-24T18:12:52+00:00'
 handoff:
-  id: CAT-PROFILE-MOUNTS:8:submit
-  from: audit-window-repair
+  id: CAT-PROFILE-MOUNTS:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9
