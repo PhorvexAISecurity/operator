@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -22,12 +22,78 @@ checks:
     sha256: d5f870217933ac6bd0c2e7cf617762b865c1a4d4052ae50bf4f87bd67b3993a9
     source_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
     at: '2026-09-24T09:43:30+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 751dbe1cd449e49fdc99dc37998112b63ce93622cb81ab83ed72594c1fcc538f
+    source_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+    at: '2026-09-24T10:01:01+00:00'
+    baseline_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  preflight:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/preflight/receipt.json
+    sha256: 0148ea284e5e6d1afc8a122fd2972af091eb0b36ec10b3845cecec07fa277f58
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:24+00:00'
+  implementation:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: 04-diff.patch
+    sha256: d30eb11c750bb9fc0c9babc38a002dce287bebf8beafcca56062e5bf25e2fa4d
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:25+00:00'
+  l0:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/preflight/run-1790243290101444217/go-phorvex.log
+    sha256: 4668af4a6e242f489b8f77d8c46b169c90a3659cf9674ec8321fa17896dd50d2
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:25+00:00'
+  l1:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/lead/head.log
+    sha256: 78378f8b831daf6409780768e0f90194b828a5c89b9a674a68ff4082dff9a853
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:25+00:00'
+  l2:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/worker/red-green.md
+    sha256: f48929cbf640ea33691da2ce915f8e1c00ca49ca5a1fb8a8a1eb7644ad17bf77
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:25+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/lead/RESULT.json
+    sha256: 285cd0a1fdbf6607d7c9981fdb8cb48e127246bda799af949dd56aff253ff131
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:25+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: d5f870217933ac6bd0c2e7cf617762b865c1a4d4052ae50bf4f87bd67b3993a9
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:47+00:00'
+    baseline_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 344820ee6536b857dc18a6ec7b64eb452e034f19610f4defa90d68711664ac2b
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:01:47+00:00'
+    incident_sha256: d5f870217933ac6bd0c2e7cf617762b865c1a4d4052ae50bf4f87bd67b3993a9
 fix_id: CAT-PERSISTED-FSGROUP
 issues:
 - M-192
 title: Load private catalogue records after fsGroup remount
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -49,9 +115,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-causal-response-20260924
+  base_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+  head_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
   stacked_on: []
 pull_request:
   url: null
@@ -72,13 +138,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -88,9 +154,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: campaign-cleanup-audit
-  action: Integrate reviewed repair and complete preflight for source handoff.
-updated_at: '2026-09-24T09:43:30+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T10:01:51+00:00'
 configuration_history:
 - at: '2026-09-24T08:50:14+00:00'
   by: codex-lead
@@ -100,6 +167,16 @@ configuration_history:
   - next_action
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-24T10:00:27+00:00'
+  by: campaign-cleanup-audit
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T10:01:24+00:00'
+  by: campaign-cleanup-audit
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -118,3 +195,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T10:01:25+00:00'
+  by: campaign-cleanup-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T10:01:27+00:00'
+  by: campaign-cleanup-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T10:01:47+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T10:01:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-PERSISTED-FSGROUP:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
