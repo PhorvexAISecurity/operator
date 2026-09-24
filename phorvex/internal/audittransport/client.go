@@ -48,7 +48,11 @@ func (c *Client) request(ctx context.Context, method, path string, body io.Reade
 	if e != nil {
 		return nil, e
 	}
-	tr := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca, ServerName: c.cfg.ServerDNSName, Certificates: []tls.Certificate{cert}}, DisableKeepAlives: true, ResponseHeaderTimeout: 5 * time.Second}
+	headerTimeout := 5 * time.Second
+	if timeout > 10*time.Second {
+		headerTimeout = timeout - time.Second
+	}
+	tr := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca, ServerName: c.cfg.ServerDNSName, Certificates: []tls.Certificate{cert}}, DisableKeepAlives: true, ResponseHeaderTimeout: headerTimeout}
 	defer tr.CloseIdleConnections()
 	req, e := http.NewRequestWithContext(ctx, method, c.cfg.URL+path, body)
 	if e != nil {

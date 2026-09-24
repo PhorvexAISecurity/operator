@@ -169,6 +169,30 @@ func (c ServerConfig) openPinned(prefix, g, anchor string, target int64) (*os.Fi
 	return nil, 0, errors.New("audit generation no longer retained")
 }
 
+func decodeExactRequest(r *http.Request) (ExactWindowRequest, error) {
+	if r.ContentLength < 1 || r.ContentLength > 2048 {
+		return ExactWindowRequest{}, errors.New("invalid exact request size")
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, 2049))
+	if err != nil || len(raw) != int(r.ContentLength) || len(raw) > 2048 {
+		return ExactWindowRequest{}, errors.New("invalid exact request body")
+	}
+	if _, err := strictObject(raw); err != nil {
+		return ExactWindowRequest{}, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var q ExactWindowRequest
+	if err := dec.Decode(&q); err != nil {
+		return ExactWindowRequest{}, err
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		return ExactWindowRequest{}, errors.New("trailing exact request")
+	}
+	return q, validExactRequest(q)
+}
+
 func (c ServerConfig) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/manifest", func(w http.ResponseWriter, r *http.Request) {
@@ -245,29 +269,9 @@ func (c ServerConfig) Handler() http.Handler {
 		}
 	})
 	mux.HandleFunc("POST /v1/exact-window", func(w http.ResponseWriter, r *http.Request) {
-		if r.ContentLength < 1 || r.ContentLength > 2048 {
-			http.Error(w, "invalid exact audit request size", http.StatusBadRequest)
-			return
-		}
-		rawRequest, readErr := io.ReadAll(io.LimitReader(r.Body, 2049))
-		if readErr != nil || len(rawRequest) != int(r.ContentLength) || len(rawRequest) > 2048 {
-			http.Error(w, "invalid exact audit request size", http.StatusBadRequest)
-			return
-		}
-		if _, err := strictObject(rawRequest); err != nil {
-			http.Error(w, "ambiguous exact audit request", http.StatusBadRequest)
-			return
-		}
-		dec := json.NewDecoder(bytes.NewReader(rawRequest))
-		dec.DisallowUnknownFields()
-		var q ExactWindowRequest
-		if err := dec.Decode(&q); err != nil || validExactRequest(q) != nil {
+		q, err := decodeExactRequest(r)
+		if err != nil || validExactCommitment(q) != nil {
 			http.Error(w, "invalid exact audit request", http.StatusBadRequest)
-			return
-		}
-		var trailing any
-		if err := dec.Decode(&trailing); err != io.EOF {
-			http.Error(w, "trailing exact audit request", http.StatusBadRequest)
 			return
 		}
 		path, ok := c.segmentPath(q.Segment.ID)
@@ -291,8 +295,11 @@ func (c ServerConfig) Handler() http.Handler {
 			return
 		}
 		seal, err := scanExact(r.Context(), f, q)
+		if err == nil && seal.ScanSHA256 != q.Commitment.WindowSHA256 {
+			err = errors.New("audit window differs from observation-end commitment")
+		}
 		if err == nil {
-			err = verifyExactWindow(r.Context(), f, q, seal.ScanSHA256)
+			err = verifyExactWindow(r.Context(), f, q, q.Commitment.WindowSHA256)
 		}
 		after, statErr := f.Stat()
 		if err == nil && (statErr != nil || !os.SameFile(before, after) || after.Size() < q.Segment.Size) {
@@ -315,6 +322,52 @@ func (c ServerConfig) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Audit-Generation", q.Segment.Generation)
 		_ = json.NewEncoder(w).Encode(seal)
+	})
+	mux.HandleFunc("POST /v1/exact-commit", func(w http.ResponseWriter, r *http.Request) {
+		q, err := decodeExactRequest(r)
+		if err != nil || q.Commitment != nil {
+			http.Error(w, "invalid exact audit commitment request", http.StatusBadRequest)
+			return
+		}
+		path, ok := c.segmentPath(q.Segment.ID)
+		if !ok || path == "" {
+			http.Error(w, "unknown audit segment", http.StatusBadRequest)
+			return
+		}
+		prefix := ""
+		if strings.HasPrefix(q.Segment.ID, "vcluster-") {
+			prefix = "vcluster-"
+		}
+		f, _, err := c.openPinned(prefix, q.Segment.Generation, q.Segment.Anchor, q.Segment.Size)
+		if err != nil {
+			http.Error(w, "audit generation changed", http.StatusConflict)
+			return
+		}
+		defer f.Close()
+		before, err := f.Stat()
+		if err != nil || !lineBoundary(f, q.StartOffset) || !lineBoundary(f, q.EndOffset) {
+			http.Error(w, "exact audit boundary unavailable", http.StatusConflict)
+			return
+		}
+		first, err := hashExactWindow(r.Context(), f, q)
+		if err == nil {
+			err = verifyExactWindow(r.Context(), f, q, first)
+		}
+		after, statErr := f.Stat()
+		if err != nil || statErr != nil || !os.SameFile(before, after) || after.Size() < q.Segment.Size {
+			http.Error(w, "exact audit commitment changed", http.StatusConflict)
+			return
+		}
+		current, openErr := regular(path)
+		if openErr != nil || !func() bool { defer current.Close(); st, e := current.Stat(); return e == nil && os.SameFile(after, st) }() {
+			http.Error(w, "audit source rotated", http.StatusConflict)
+			return
+		}
+		commitment := ExactWindowCommitment{Segment: q.Segment, StartOffset: q.StartOffset, EndOffset: q.EndOffset,
+			WindowSHA256: first, CapturedAtUnixNano: time.Now().UnixNano()}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Audit-Generation", q.Segment.Generation)
+		_ = json.NewEncoder(w).Encode(commitment)
 	})
 	mux.HandleFunc("GET /v1/parameter-material/{kind}/{digest}", func(w http.ResponseWriter, r *http.Request) {
 		kind, digest := r.PathValue("kind"), r.PathValue("digest")
@@ -358,7 +411,7 @@ func (c ServerConfig) Handler() http.Handler {
 			http.Error(w, "audit reader limit reached", http.StatusServiceUnavailable)
 			return
 		}
-		if r.URL.Path == "/v1/exact-window" {
+		if r.URL.Path == "/v1/exact-window" || r.URL.Path == "/v1/exact-commit" {
 			exactBounded.ServeHTTP(w, r)
 		} else {
 			bounded.ServeHTTP(w, r)

@@ -32,13 +32,23 @@ func exactRequest(t *testing.T, path string, start, end int64) ExactWindowReques
 		StartOffset: start, EndOffset: end, Namespace: "voice", PodName: "source", PodUID: "pod-uid", PolicyUID: "policy-uid"}
 }
 
+func committedExact(t *testing.T, client *Client, q ExactWindowRequest) ExactWindowRequest {
+	t.Helper()
+	c, err := client.CaptureExactWindow(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Commitment = &c
+	return q
+}
+
 func TestExactWindowAuthenticatedProducerAndClient(t *testing.T) {
 	_, client, path, _, _, _ := fixture(t)
 	all, target, start, end := exactFixtureRows()
 	if err := os.WriteFile(path, all, 0600); err != nil {
 		t.Fatal(err)
 	}
-	q := exactRequest(t, path, start, end)
+	q := committedExact(t, client, exactRequest(t, path, start, end))
 	seal, err := client.SelectExact(context.Background(), q)
 	if err != nil {
 		t.Fatal(err)
@@ -58,26 +68,32 @@ func TestExactWindowAuthenticatedProducerAndClient(t *testing.T) {
 		copySeal.Rows = append([]ExactRow(nil), seal.Rows...)
 		copySeal.Rows[0].Raw = bytes.Clone(seal.Rows[0].Raw)
 		change(&copySeal)
-		if err := validateExactSeal(ExactWindowRequest{Segment: seal.Segment, StartOffset: start, EndOffset: end,
-			Namespace: "voice", PodName: "source", PodUID: "pod-uid", PolicyUID: "policy-uid"}, copySeal); err == nil {
+		if err := validateExactSeal(q, copySeal); err == nil {
 			t.Fatal("forged exact audit seal accepted")
 		}
 	}
-	q.StartOffset++
-	if _, err := client.SelectExact(context.Background(), q); err == nil {
+	partial := q
+	partial.Commitment = nil
+	partial.StartOffset++
+	if _, err := client.CaptureExactWindow(context.Background(), partial); err == nil {
 		t.Fatal("partial start boundary accepted")
 	}
-	q.StartOffset = start
-	q.EndOffset--
-	if _, err := client.SelectExact(context.Background(), q); err == nil {
+	partial = q
+	partial.Commitment = nil
+	partial.EndOffset--
+	if _, err := client.CaptureExactWindow(context.Background(), partial); err == nil {
 		t.Fatal("partial end boundary accepted")
+	}
+	if _, err := client.SelectExact(context.Background(), ExactWindowRequest{Segment: q.Segment,
+		StartOffset: start, EndOffset: end, Namespace: "voice", PodName: "source", PodUID: "pod-uid", PolicyUID: "policy-uid"}); err == nil {
+		t.Fatal("selection without observation-end commitment accepted")
 	}
 }
 
 func TestExactWindowMalformedAmbiguousAndRotation(t *testing.T) {
 	_, client, path, _, _, _ := fixture(t)
 	all, _, start, end := exactFixtureRows()
-	q := exactRequest(t, path, 0, 1) // replaced after writing producer bytes
+	var q ExactWindowRequest
 	for _, tc := range []struct {
 		name string
 		body []byte
@@ -87,12 +103,16 @@ func TestExactWindowMalformedAmbiguousAndRotation(t *testing.T) {
 		{"target-other-policy", bytes.Replace(all, []byte(`"policyUID":"policy-uid"`), []byte(`"policyUID":"foreign"`), 1)},
 		{"same-name-replacement", append([]byte(`{"kind":"phorvex.decision","namespace":"voice","pod":"source","decisionTrace":{"assetNamespace":"voice","assetUID":"replacement-uid","policyUID":"policy-uid"}}`+"\n"), all...)},
 		{"duplicate-target-identity", bytes.Replace(all, []byte(`"assetUID":"pod-uid"`), []byte(`"assetUID":"pod-uid","assetUID":"peer-uid"`), 1)},
+		{"casefold-alias", bytes.Replace(all, []byte(`"namespace":"voice"`), []byte(`"namespace":"voice","Namespace":"other"`), 1)},
+		{"unicode-casefold-alias", bytes.Replace(all, []byte(`"namespace":"voice"`), []byte(`"namespace":"voice","nameſpace":"other"`), 1)},
+		{"cross-namespace-trace", bytes.Replace(all, []byte(`"namespace":"voice","pod":"source"`), []byte(`"namespace":"other","pod":"source"`), 1)},
+		{"foreign-namespace-target-uid", bytes.Replace(all, []byte(`"namespace":"voice","pod":"source","decisionTrace":{"decisionID":"decision-1","assetNamespace":"voice"`), []byte(`"namespace":"other","pod":"source","decisionTrace":{"decisionID":"decision-1","assetNamespace":"other"`), 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := os.WriteFile(path, tc.body, 0600); err != nil {
 				t.Fatal(err)
 			}
-			q = exactRequest(t, path, 0, int64(len(tc.body)))
+			q = committedExact(t, client, exactRequest(t, path, 0, int64(len(tc.body))))
 			if _, err := client.SelectExact(context.Background(), q); err == nil {
 				t.Fatal("ambiguous source accepted")
 			}
@@ -101,7 +121,7 @@ func TestExactWindowMalformedAmbiguousAndRotation(t *testing.T) {
 	if err := os.WriteFile(path, all, 0600); err != nil {
 		t.Fatal(err)
 	}
-	q = exactRequest(t, path, start, end)
+	q = committedExact(t, client, exactRequest(t, path, start, end))
 	if err := os.WriteFile(path, []byte("{}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +131,7 @@ func TestExactWindowMalformedAmbiguousAndRotation(t *testing.T) {
 	if err := os.WriteFile(path, all, 0600); err != nil {
 		t.Fatal(err)
 	}
-	q = exactRequest(t, path, start, end)
+	q = committedExact(t, client, exactRequest(t, path, start, end))
 	if err := os.Rename(path, path+".1"); err != nil {
 		t.Fatal(err)
 	}
@@ -168,5 +188,52 @@ func TestExactWindowBoundsAndClientRowValidation(t *testing.T) {
 	cancel()
 	if _, err := scanExact(canceled, f, q); err == nil {
 		t.Fatal("canceled scan accepted")
+	}
+}
+
+func TestExactWindowCommitmentRejectsPrescanRewriteAndAllowsAppend(t *testing.T) {
+	_, client, path, _, _, _ := fixture(t)
+	_, target, _, _ := exactFixtureRows()
+	pad := []byte(`{"kind":"phorvex.maintenance","pad":"` + strings.Repeat("x", 320) + `"}` + "\n")
+	original := append(append(bytes.Clone(pad), target...), '\n')
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	q := committedExact(t, client, exactRequest(t, path, int64(len(pad)), int64(len(original))))
+	changed := bytes.Replace(original, []byte(`"decisionID":"decision-1"`), []byte(`"decisionID":"decision-2"`), 1)
+	if len(changed) != len(original) || bytes.Equal(changed, original) {
+		t.Fatal("invalid rewrite fixture")
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, changed, 0600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("rewrite did not preserve inode")
+	}
+	if _, err := client.SelectExact(context.Background(), q); err == nil {
+		t.Fatal("pre-scan same-inode rewrite accepted")
+	}
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	q = committedExact(t, client, exactRequest(t, path, int64(len(pad)), int64(len(original))))
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write([]byte(`{"kind":"phorvex.maintenance","note":"later"}` + "\n")); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.SelectExact(context.Background(), q); err != nil {
+		t.Fatalf("ordinary append after committed end was rejected: %v", err)
 	}
 }

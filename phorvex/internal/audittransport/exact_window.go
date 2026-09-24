@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 )
 
 const MaxExactScanBytes int64 = 128 << 20
@@ -21,13 +22,25 @@ const maxExactLineBytes = 256 << 10
 // ExactWindowRequest is one immutable, newline-aligned interval within one
 // manifest generation. Rotation across segments is an audit gap for this API.
 type ExactWindowRequest struct {
-	Segment     Segment `json:"segment"`
-	StartOffset int64   `json:"startOffset"`
-	EndOffset   int64   `json:"endOffset"`
-	Namespace   string  `json:"namespace"`
-	PodName     string  `json:"podName"`
-	PodUID      string  `json:"podUID"`
-	PolicyUID   string  `json:"policyUID"`
+	Segment     Segment                `json:"segment"`
+	StartOffset int64                  `json:"startOffset"`
+	EndOffset   int64                  `json:"endOffset"`
+	Namespace   string                 `json:"namespace"`
+	PodName     string                 `json:"podName"`
+	PodUID      string                 `json:"podUID"`
+	PolicyUID   string                 `json:"policyUID"`
+	Commitment  *ExactWindowCommitment `json:"commitment,omitempty"`
+}
+
+// ExactWindowCommitment is the authenticated source's observation-end digest.
+// It is captured and retained before later selection, not inferred from a
+// subsequent SelectExact response.
+type ExactWindowCommitment struct {
+	Segment            Segment `json:"segment"`
+	StartOffset        int64   `json:"startOffset"`
+	EndOffset          int64   `json:"endOffset"`
+	WindowSHA256       string  `json:"windowSHA256"`
+	CapturedAtUnixNano int64   `json:"capturedAtUnixNano"`
 }
 
 type ExactRow struct {
@@ -67,6 +80,18 @@ func validExactRequest(q ExactWindowRequest) error {
 	return nil
 }
 
+func validExactCommitment(q ExactWindowRequest) error {
+	c := q.Commitment
+	if c == nil || c.Segment != q.Segment || c.StartOffset != q.StartOffset || c.EndOffset != q.EndOffset ||
+		c.CapturedAtUnixNano <= 0 || len(c.WindowSHA256) != 64 || strings.ToLower(c.WindowSHA256) != c.WindowSHA256 {
+		return errors.New("exact observation-end commitment unavailable")
+	}
+	if _, err := hex.DecodeString(c.WindowSHA256); err != nil {
+		return errors.New("invalid exact commitment digest")
+	}
+	return nil
+}
+
 func lineBoundary(f *os.File, off int64) bool {
 	if off == 0 {
 		return true
@@ -74,6 +99,20 @@ func lineBoundary(f *os.File, off int64) bool {
 	var b [1]byte
 	_, err := f.ReadAt(b[:], off-1)
 	return err == nil && b[0] == '\n'
+}
+
+func foldedJSONKey(key string) string {
+	var folded strings.Builder
+	for _, r := range key {
+		lowest := r
+		for next := unicode.SimpleFold(r); next != r; next = unicode.SimpleFold(next) {
+			if next < lowest {
+				lowest = next
+			}
+		}
+		folded.WriteRune(lowest)
+	}
+	return folded.String()
 }
 
 // strictObject rejects duplicate JSON keys, including nested keys. A malformed
@@ -92,6 +131,7 @@ func strictObject(raw []byte) (map[string]json.RawMessage, error) {
 		switch tok {
 		case json.Delim('{'):
 			m := map[string]any{}
+			folded := map[string]bool{}
 			for d.More() {
 				key, err := d.Token()
 				if err != nil {
@@ -101,9 +141,11 @@ func strictObject(raw []byte) (map[string]json.RawMessage, error) {
 				if !ok {
 					return nil, errors.New("non-string JSON key")
 				}
-				if _, exists := m[k]; exists {
-					return nil, errors.New("duplicate JSON key")
+				fold := foldedJSONKey(k)
+				if folded[fold] {
+					return nil, errors.New("case-insensitive duplicate JSON key")
 				}
+				folded[fold] = true
 				v, err := walk(depth + 1)
 				if err != nil {
 					return nil, err
@@ -171,22 +213,25 @@ func exactTarget(raw []byte, q ExactWindowRequest) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if namespace != q.Namespace {
-		return false, nil
-	}
 	podName, err := requiredExactString(fields, "pod")
 	if err != nil {
 		return false, err
 	}
 	var trace map[string]json.RawMessage
 	if err := json.Unmarshal(fields["decisionTrace"], &trace); err != nil || trace == nil {
-		return false, errors.New("same-namespace decision lacks exact trace identity")
+		return false, errors.New("decision lacks exact trace identity")
 	}
 	assetNS := exactString(trace, "assetNamespace")
 	assetUID := exactString(trace, "assetUID")
 	policyUID := exactString(trace, "policyUID")
-	if assetNS == "" || assetUID == "" || policyUID == "" || assetNS != q.Namespace {
-		return false, errors.New("same-namespace decision has ambiguous identity")
+	if assetNS == "" || assetUID == "" || policyUID == "" || assetNS != namespace {
+		return false, errors.New("decision has contradictory or ambiguous identity")
+	}
+	if assetUID == q.PodUID && namespace != q.Namespace {
+		return false, errors.New("target Pod UID appears in different namespace")
+	}
+	if namespace != q.Namespace {
+		return false, nil
 	}
 	if podName == q.PodName && assetUID != q.PodUID {
 		return false, errors.New("same-name replacement in exact audit window")
@@ -251,15 +296,30 @@ func scanExact(ctx context.Context, f *os.File, q ExactWindowRequest) (ExactWind
 }
 
 func verifyExactWindow(ctx context.Context, f *os.File, q ExactWindowRequest, want string) error {
-	if err := ctx.Err(); err != nil {
+	got, err := hashExactWindow(ctx, f, q)
+	if err != nil {
 		return err
 	}
-	h := sha256.New()
-	if _, err := io.Copy(h, io.NewSectionReader(f, q.StartOffset, q.EndOffset-q.StartOffset)); err != nil {
-		return err
-	}
-	if hex.EncodeToString(h.Sum(nil)) != want {
+	if got != want {
 		return errors.New("audit bytes changed during exact scan")
 	}
 	return nil
+}
+
+func hashExactWindow(ctx context.Context, f *os.File, q ExactWindowRequest) (string, error) {
+	h := sha256.New()
+	buf := make([]byte, 64<<10)
+	for off := q.StartOffset; off < q.EndOffset; {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		chunk := min(int64(len(buf)), q.EndOffset-off)
+		n, err := f.ReadAt(buf[:chunk], off)
+		if err != nil || int64(n) != chunk {
+			return "", errors.New("audit window became incomplete while hashing")
+		}
+		_, _ = h.Write(buf[:n])
+		off += int64(n)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
