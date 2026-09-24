@@ -1,0 +1,7 @@
+=== RUN   TestCatalogueAdmissionVisibilityPrivateBaseline
+    admission_visibility_private_test.go:39: observed: authenticated catalogue says configured available=true; authenticated functional POST refuses prior unsafe run
+    admission_visibility_private_test.go:44: expected scoped admission projection, got HTTP 404 (baseline RED)
+--- FAIL: TestCatalogueAdmissionVisibilityPrivateBaseline (0.03s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	0.055s
+FAIL

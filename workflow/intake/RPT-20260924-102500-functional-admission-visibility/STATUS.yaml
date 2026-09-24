@@ -1,0 +1,165 @@
+schema_version: 1
+intake_id: RPT-20260924-102500-functional-admission-visibility
+kind: BUG
+title: Fixed-suite catalogue hides current launch admission blockers
+state: FILED
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T10:18:54+00:00'
+updated_at: '2026-09-24T10:24:00+00:00'
+pins:
+  source_main_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: isolated-console-api
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-193
+    score: 24
+    overlap:
+    - admission
+    - any
+    - evidence
+    - fixed-suite
+    - history
+    - launch
+    - launches
+    - logs
+    - prior
+    - raw
+    - required
+    - retained
+    - run
+    - startfunctional
+    - state
+    - unsafe
+    title: Fixed-suite launch ignores retained run ledger load failure
+  - issue_id: M-140
+    score: 15
+    overlap:
+    - all
+    - any
+    - behavior
+    - distinct
+    - evidence
+    - first
+    - not
+    - observation
+    - prior
+    - raw
+    - result
+    - state
+    - whether
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-136
+    score: 14
+    overlap:
+    - all
+    - any
+    - configured
+    - evidence
+    - gate
+    - logs
+    - mutation
+    - not
+    - state
+    - surface
+    - unreadable
+    - unsafe
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-146
+    score: 14
+    overlap:
+    - all
+    - any
+    - claim
+    - evidence
+    - here
+    - inputs
+    - not
+    - raw
+    - record
+    - surface
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-149
+    score: 14
+    overlap:
+    - admission
+    - all
+    - evidence
+    - first
+    - gate
+    - not
+    - required
+    - such
+    - surface
+    - without
+    title: Post-T1-A, the `model-theft` stage is unreachable on GPU fleets without
+      DCGM profiling — the leakage gate's only activity input is honest-absent
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-194
+  fix_id: CAT-ADMISSION-VISIBILITY
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: campaign-cleanup-audit
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-194.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T10:23:54+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T10:23:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T10:23:55+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T10:23:56+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T10:24:00+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-194.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

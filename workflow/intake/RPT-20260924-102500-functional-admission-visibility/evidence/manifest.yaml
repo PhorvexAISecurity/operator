@@ -1,0 +1,29 @@
+schema_version: 2
+subject:
+  kind: intake
+  id: RPT-20260924-102500-functional-admission-visibility
+artifacts:
+- id: worker-baseline
+  path: evidence/worker-baseline.log
+  bytes: 467
+  sha256: 2d1bc25aab5205e5e82d6ed775eafc43878779cbc81f0e15a2196a66a016ece0
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git
+- id: worker-source
+  path: evidence/worker-admission_visibility_private_test.go
+  bytes: 2426
+  sha256: d1190c8c7cdb21f84e48de71012153aa95f54d2133e818be5a647ffd6d7b681d
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git
+- id: worker-overlay
+  path: evidence/worker-overlay.json
+  bytes: 282
+  sha256: e957d86f90a9295dbcfbe97384feae1239b63a113acab5689f9c03921f38c2dc
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git

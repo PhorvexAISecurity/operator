@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "/home/mehrdad/operator-catalogue-campaign/phorvex/internal/console/admission_visibility_private_test.go": "/home/mehrdad/operator/.git/phorvex-workflow/catalogue-coverage-20260923/reconciliation/admission-visibility/admission_visibility_private_test.go"
+  }
+}
