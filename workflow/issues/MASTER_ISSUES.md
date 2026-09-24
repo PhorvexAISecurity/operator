@@ -2825,7 +2825,7 @@ Severity: HIGH · Tier: unassigned · Fixes: POST25-VOICE-PDB
 
 ### M-184 · Pod-bound credential invalidation may be excluded from rotation coverage · **OPEN** · `PHYSICS`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: CAT-POD-TOKEN
+Severity: MEDIUM · Tier: unassigned · Fixes: CAT-POD-TOKEN, CAT-POD-TOKEN-VECTOR
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `PHYSICS` — anatomy locus review required.
