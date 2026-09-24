@@ -20,7 +20,7 @@ accounting:
     only applicable valid executed reviewed S trials; M controls, invalid, blocked, unavailable and not-run
     trials remain separately counted.
 progress_accounting:
-  through_round: 21
+  through_round: 22
   interpretation: Exclusive planning-progress buckets. An observed related arm may be only a prerequisite,
     refusal or configuration baseline; it does not mark the entire candidate completed or security-scored.
     Blocked means a concrete current source, configuration or infrastructure prerequisite remains; not_run
@@ -29,7 +29,9 @@ progress_accounting:
     used a unique tenant and observed one emitted quarantine, AMTD-bound source and deny-policy object,
     service200 and continuing source-token200; the observed-cell counts do not change and packet isolation
     was not tested. Round21 stopped before any serving request because guardrail variant/journal changed;
-    zero additional observed arms or security credit.
+    zero additional observed arms or security credit. Round22 observed a stable pgv1 guarded-serving
+    false positive for Say OK plus successful arithmetic control; this is calibration evidence, not
+    additional security efficacy.
   mechanism_or_control:
     related_arm_observed:
     - voice-stream-continuity
@@ -770,7 +772,7 @@ scope_decisions:
   disposition: excluded-from-stimulus
   evidence: Campaign authorization is bounded to owned fixtures and independently measured service outcomes.
   revisit: No automatic expansion; require a separately reviewed and authorized case.
-updated_at: '2026-09-24T02:32:37.206813+00:00'
+updated_at: '2026-09-24T09:05:03.389864+00:00'
 scope_revisions:
 - at: '2026-09-24'
   change: Add nats-uncredentialed-message-exposure separately from existing subject ACL/advisory cell

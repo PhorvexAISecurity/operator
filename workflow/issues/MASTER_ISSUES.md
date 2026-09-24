@@ -1190,6 +1190,10 @@ T8-M116 at source `04cdeca79adbe047c695eb26e9e98785a596c7e1` adds explicit start
 
 The classifier-quality part remains OPEN. Actual deployed PGv1/PGv2 scores on 16 labelled synthetic cases still include benign false positives; the corpus is too small to establish representative calibration or justify a new production threshold. See [independent review](../../fixes/T8-M116/evidence/p3/verdict.md) and [retained score evaluation](../../fixes/T8-M116/evidence/lead/retained-score-evaluation.json). Observe mode makes measurement possible while forwarding requests; it is not an enforcement guarantee or evidence of correct classification.
 
+## 2026-09-24 current serving recheck
+
+The [independently reviewed campaign round22](../../campaigns/2026-09-23-catalogue-coverage/rounds/round-22/analysis.md) reproduced the classifier-quality residual through the installed guarded serving path. With active `pgv1`, stable source/Pod/container/route/journal identity and exactly two fixed benign requests, “Say OK” returned403 `guardrail_blocked`, while the arithmetic control returned200 with answer4. This is an observed availability false positive, not an attack defended, a guardrail rotation failure or a population false-positive estimate. Enforcement/observe-mode implementation does not resolve classifier quality. No threshold was tuned from these two examples.
+
 ### M-24 · The emit-boundary re-gate is a tautology · **CLOSED** · `ACTUATION`
 
 Severity: MINOR · Tier: parallel · Fixes: none
@@ -1801,7 +1805,7 @@ Severity: HIGH/MINOR · Tier: parallel · Fixes: T3-M132
 
 ### M-53 · Label-value mangling can exceed the 63-char cap (three sites) · **OPEN** · `CONTRACT`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: CAT-PHOENIX-LABEL
 
 > Anatomy join review: **complete**.
 > `V2` **AFFECTS** (below operation granularity) — see §V2-A.

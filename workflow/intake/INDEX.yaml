@@ -303,3 +303,10 @@ intakes:
     state: FILED
     issue_id: M-192
     aliases: []
+  RPT-20260924-090229-phoenix-quarantine-long-name:
+    directory: intake/RPT-20260924-090229-phoenix-quarantine-long-name
+    kind: BUG
+    title: Phoenix quarantine names overflow the Kubernetes label limit
+    state: DUPLICATE
+    issue_id: null
+    aliases: []
