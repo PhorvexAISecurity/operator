@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,11 +81,18 @@ checks:
     source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
     at: '2026-09-24T20:09:58+00:00'
     incident_sha256: 47e27265831f3c2cbe1e867e7359c2c7d7bac7855301391ed62482381d4d6cbf
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 74291824a8f1808c8e507790ee9689179d84032dcae0cd0aa86f5b6354893421
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:11:48+00:00'
 fix_id: CAT-CRM-PACKAGE
 issues: []
 title: Make the disposable CRM catalogue fixture reproducible from checkout
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -112,11 +119,11 @@ implementation:
   head_sha: c5e47773baacaefa642db0a7eb6308361798ed64
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/333
+  reviewed_head: 5ac770259828239bb6132dd733a21af143d6cdea
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -147,9 +154,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T20:10:03+00:00'
+  action: PR333 open; await normal merge/deployment, publish fixture image and execute
+    named CRM controls under reviewed campaign
+updated_at: '2026-09-24T20:12:16+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T19:49:36+00:00'
@@ -165,6 +172,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-24T20:12:04+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: operations/AUTONOMY.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -213,6 +225,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T20:12:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-CRM-PACKAGE:7:review
