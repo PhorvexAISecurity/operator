@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -53,6 +54,15 @@ class BackendHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response)))
         self.end_headers()
+        if self.server.behavior == "trickle":
+            for byte in response:
+                try:
+                    self.wfile.write(bytes((byte,)))
+                    self.wfile.flush()
+                except OSError:
+                    break
+                time.sleep(0.12)
+            return
         self.wfile.write(response)
 
 
@@ -278,6 +288,90 @@ class BridgeTests(unittest.TestCase):
         self.f.start()
         self.assertEqual(self.f.request("disclosure", body=altered)[0], 409)
         self.assertEqual(self.f.backend.calls, [])
+
+    def test_owned_fifo_manifest_is_refused_without_blocking_open(self):
+        (self.f.dir / "manifest.json").unlink()
+        os.mkfifo(self.f.dir / "manifest.json", 0o600)
+        code = (
+            "import bridge, pathlib, sys\n"
+            "try: bridge.load_manifest(pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], test_loopback=True)\n"
+            "except bridge.Refused: sys.exit(0)\n"
+            "sys.exit(1)\n"
+        )
+        child = subprocess.run(
+            [sys.executable, "-c", code, str(self.f.dir), self.f.manifest_sha,
+             self.f.manifest["fixture"]["podUID"]],
+            cwd=Path(__file__).parent, timeout=1, capture_output=True, check=False)
+        self.assertEqual(child.returncode, 0, child.stderr)
+
+    def test_idle_and_slow_trickle_clients_release_all_handlers(self):
+        self.f.attest("say_ok", "before")
+        self.f.start()
+        original = bridge.REQUEST_INTAKE_SECONDS
+        bridge.REQUEST_INTAKE_SECONDS = 0.4
+        clients = []
+        try:
+            for _ in range(3):
+                sock = socket.create_connection(("127.0.0.1", self.f.server.server_port), timeout=1)
+                clients.append(sock)
+            # Trickle bytes frequently enough to defeat an idle-only timeout.
+            start = time.monotonic()
+            while time.monotonic() - start < 0.8:
+                try:
+                    clients[0].sendall(b"P")
+                except OSError:
+                    break
+                time.sleep(0.08)
+            time.sleep(0.1)
+            self.assertEqual(self.f.request("say_ok")[0], 200)
+            self.assertEqual(len(self.f.backend.calls), 1)
+        finally:
+            bridge.REQUEST_INTAKE_SECONDS = original
+            for sock in clients:
+                sock.close()
+
+    def test_incomplete_headers_and_body_each_hit_absolute_intake_limit(self):
+        self.f.attest("say_ok", "before")
+        self.f.start()
+        original = bridge.REQUEST_INTAKE_SECONDS
+        bridge.REQUEST_INTAKE_SECONDS = 0.35
+        body = self.f.bodies["say_ok"]
+        head = (f"POST {bridge.FIXED_PATH} HTTP/1.1\r\n"
+                f"Host: 127.0.0.1:{self.f.server.server_port}\r\n"
+                "Content-Type: application/json\r\n"
+                f"X-Canary-Run: {self.f.manifest['runNonce']}\r\n"
+                "X-Canary-Slot: say_ok\r\n"
+                f"Content-Length: {len(body)}\r\n").encode()
+        try:
+            for partial in (head, head + b"\r\n" + body[:1]):
+                with self.subTest(partial_bytes=len(partial)):
+                    sock = socket.create_connection(("127.0.0.1", self.f.server.server_port), timeout=1)
+                    try:
+                        sock.sendall(partial)
+                        time.sleep(0.55)
+                    finally:
+                        sock.close()
+                    self.assertEqual(self.f.backend.calls, [])
+            self.assertEqual(self.f.request("say_ok")[0], 200)
+            self.assertEqual(len(self.f.backend.calls), 1)
+        finally:
+            bridge.REQUEST_INTAKE_SECONDS = original
+
+    def test_upstream_slow_trickle_hits_absolute_deadline_without_replay(self):
+        self.f.backend.behavior = "trickle"
+        self.f.attest("arithmetic", "before")
+        self.f.start()
+        original = bridge.UPSTREAM_TIMEOUT_SECONDS
+        bridge.UPSTREAM_TIMEOUT_SECONDS = 0.5
+        try:
+            started = time.monotonic()
+            self.assertEqual(self.f.request("arithmetic")[0], 502)
+            self.assertLess(time.monotonic() - started, 1.5)
+        finally:
+            bridge.UPSTREAM_TIMEOUT_SECONDS = original
+        self.assertEqual(self.f.request("arithmetic")[0], 409)
+        self.assertEqual(len(self.f.backend.calls), 1)
+        self.assertIn(b"UPSTREAM_DEADLINE", (self.f.dir / "bridge-journal.jsonl").read_bytes())
 
 
 if __name__ == "__main__":

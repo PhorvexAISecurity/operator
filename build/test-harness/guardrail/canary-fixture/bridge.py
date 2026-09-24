@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
 import stat
 import sys
 import threading
@@ -47,6 +48,7 @@ MAX_JOURNAL = 16384
 MAX_RUN_SECONDS = 600
 MAX_PRE_AGE_SECONDS = 10
 UPSTREAM_TIMEOUT_SECONDS = 30
+REQUEST_INTAKE_SECONDS = 5
 FIXED_PATH = "/v1/chat/completions"
 
 
@@ -148,7 +150,8 @@ def _secure_dir(path: Path) -> None:
 def _secure_read(path: Path, limit: int) -> bytes:
     if path.parent != path.parent.resolve():
         raise Refused("run path is not canonical")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    # O_NONBLOCK prevents a FIFO from hanging in open() before fstat can reject it.
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
     except OSError as exc:
@@ -338,22 +341,63 @@ def _incoming_headers(handler: BaseHTTPRequestHandler, manifest: Manifest, slot:
 class BridgeHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    def handle_one_request(self) -> None:
+        # BaseHTTPRequestHandler reads the request line and headers before
+        # do_POST. A socket idle timeout alone does not bound a slow trickle.
+        self.intake_deadline = time.monotonic() + REQUEST_INTAKE_SECONDS
+        self.intake_lock = threading.Lock()
+        self.intake_open = True
+        self.intake_expired = False
+        self.connection.settimeout(REQUEST_INTAKE_SECONDS)
+        self.intake_timer = threading.Timer(REQUEST_INTAKE_SECONDS, self._expire_intake)
+        self.intake_timer.daemon = True
+        self.intake_timer.start()
+        try:
+            super().handle_one_request()
+        except (OSError, TimeoutError):
+            pass  # closed/slow client; no upstream request or raw-content log
+        finally:
+            with self.intake_lock:
+                self.intake_open = False
+                self.intake_timer.cancel()
+            self.intake_timer.join()
+
+    def _expire_intake(self) -> None:
+        with self.intake_lock:
+            if not self.intake_open:
+                return
+            self.intake_expired = True
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    def _finish_intake(self) -> None:
+        with self.intake_lock:
+            if self.intake_expired or time.monotonic() >= self.intake_deadline:
+                raise Refused("request intake deadline exceeded")
+            self.intake_open = False
+            self.intake_timer.cancel()
+        self.intake_timer.join()
+
     def log_message(self, _format, *_args):
         return  # never log body, query, headers, canary or user text
 
     def _reply(self, status: int, body: bytes) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(body)
+        except OSError:
+            pass  # disconnected client; terminal evidence still controls outcome
         self.close_connection = True
 
     def do_POST(self) -> None:
         state: BridgeState = self.server.bridge_state
         try:
-            self.connection.settimeout(5)
             if self.path != FIXED_PATH or _now() >= state.manifest.expires:
                 raise Refused("path or deadline refused")
             slot = self.headers.get("X-Canary-Slot", "")
@@ -365,25 +409,56 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 raise Refused("incomplete request body")
             check_request(state.manifest, slot, raw)
             _, before_sha = _attestation(state.run_dir, state.manifest, slot, "before", _now())
+            self._finish_intake()
             state.claim(slot, _sha(raw), before_sha)
         except (Refused, OSError):
             self._reply(409, b'{"error":"fixture_request_refused"}')
             return
 
         result, status, response = "AMBIGUOUS_DISPATCH", 502, b'{"error":"upstream_outcome_unknown"}'
-        conn = http.client.HTTPConnection(state.manifest.target["podIP"], state.manifest.target["port"],
-                                          timeout=UPSTREAM_TIMEOUT_SECONDS)
+        deadline = time.monotonic() + min(UPSTREAM_TIMEOUT_SECONDS,
+                                          max(0.0, (state.manifest.expires - _now()).total_seconds()))
+        conn = None
+        upstream_socket = None
+        cutoff = None
+        expired = threading.Event()
         try:
-            if _now() >= state.manifest.expires:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 result = "DEADLINE_BEFORE_SEND"
             else:
+                # Connect against the remaining absolute budget, then force a
+                # shutdown at that deadline. Per-recv socket timeouts alone let
+                # a peer trickle bytes forever through http.client's reader.
+                upstream_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                upstream_socket.settimeout(remaining)
+                upstream_socket.connect((state.manifest.target["podIP"], state.manifest.target["port"]))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("upstream deadline after connect")
+
+                def expire_upstream() -> None:
+                    expired.set()
+                    try:
+                        upstream_socket.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+
+                cutoff = threading.Timer(remaining, expire_upstream)
+                cutoff.daemon = True
+                cutoff.start()
+                conn = http.client.HTTPConnection(state.manifest.target["podIP"],
+                                                  state.manifest.target["port"], timeout=remaining)
+                conn.sock = upstream_socket
                 # Construct headers anew; never forward client Host, auth or proxy headers.
                 conn.request("POST", FIXED_PATH, body=raw,
                              headers={"Content-Type": "application/json",
                                       "X-Canary-Request-ID": _sha((state.manifest.raw["runNonce"] + slot).encode())[:24]})
                 upstream = conn.getresponse()
                 received = upstream.read(MAX_RESPONSE + 1)
-                if len(received) > MAX_RESPONSE:
+                if expired.is_set() or time.monotonic() >= deadline:
+                    result = "UPSTREAM_DEADLINE"
+                elif len(received) > MAX_RESPONSE:
                     result = "RESPONSE_OVER_BOUND"
                 elif 300 <= upstream.status < 400 or upstream.getheader("Location") is not None:
                     result = "UPSTREAM_REDIRECT"
@@ -392,9 +467,19 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 else:
                     result, status, response = "RESPONSE_OBSERVED", upstream.status, received
         except (OSError, TimeoutError, http.client.HTTPException):
-            pass  # the durable intent already makes this slot non-replayable
+            if expired.is_set() or time.monotonic() >= deadline:
+                result = "UPSTREAM_DEADLINE"
+            # The durable intent makes a failed/ambiguous send non-replayable.
         finally:
-            conn.close()
+            if cutoff is not None:
+                cutoff.cancel()
+                cutoff.join()
+            if conn is not None:
+                conn.close()
+            if upstream_socket is not None:
+                upstream_socket.close()
+        if result == "RESPONSE_OBSERVED" and (expired.is_set() or time.monotonic() >= deadline):
+            result, status, response = "UPSTREAM_DEADLINE", 502, b'{"error":"upstream_outcome_unknown"}'
         try:
             state.append({"kind": "TERMINAL", "slot": slot, "at": _stamp(), "result": result,
                           "httpStatus": status if result == "RESPONSE_OBSERVED" else None,
@@ -452,7 +537,7 @@ def finalize(run_dir: Path, manifest_sha256: str, pod_uid: str, slot: str, *, te
                    "beforeAttestationSHA256", "targetPodUID"}
     terminal_keys = {"schema", "manifestSHA256", "kind", "slot", "at", "result",
                      "httpStatus", "responseSHA256", "responseBytes"}
-    terminal_results = {"AMBIGUOUS_DISPATCH", "DEADLINE_BEFORE_SEND", "RESPONSE_OVER_BOUND",
+    terminal_results = {"AMBIGUOUS_DISPATCH", "DEADLINE_BEFORE_SEND", "UPSTREAM_DEADLINE", "RESPONSE_OVER_BOUND",
                         "UPSTREAM_REDIRECT", "UPSTREAM_CONTENT_TYPE", "RESPONSE_OBSERVED"}
     seen: dict[str, list[dict]] = {}
     for row in rows:
