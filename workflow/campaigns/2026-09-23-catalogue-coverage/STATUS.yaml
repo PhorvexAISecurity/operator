@@ -8,7 +8,7 @@ state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 created_at: '2026-09-23T22:19:16+00:00'
-updated_at: '2026-09-24T09:00:31+00:00'
+updated_at: '2026-09-24T11:04:43+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: pending-fresh-baseline
@@ -19,14 +19,14 @@ scope:
     one mutating live package at a time with per-case ceilings
   permission: attack
 pins:
-  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.154
-  digest: sha256:f83e93ea8e18a6fdcf25ba1704b262da203627b9ac19eb4452fb124c7c645f13
-  embedded_git_sha: a50d796af128cd4109875e03eaf429d460126740
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.156
+  digest: sha256:4d4e9709e66ce75bd169db1979667b9113ac236dacfb343206b79fda02f07829
+  embedded_git_sha: 6f61cf6ac7b0c524497871f14dc795d95f4c55bf
 safety:
   stop_conditions:
   - 'Unexpected source or target identity change, loss of healthy baseline or cleanup
     authority, unmanaged service impact: stop affected case and preserve evidence'
-  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-23/evidence/approval.json
   unresolved: []
   cleanup: pending
 positive_control: PASS
@@ -74,7 +74,9 @@ rounds:
 - id: round-21
   state: COMPLETE
 - id: round-22
-  state: PLANNED
+  state: COMPLETE
+- id: round-23
+  state: COMPLETE
 findings:
 - RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
 - RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
@@ -88,8 +90,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Complete NATS response source review and current deployment/guardrail causal
-    checks
+  action: Deliver reviewed admission fix; continue owned causal packages with existing
+    blockers retained
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -495,4 +497,24 @@ transitions:
   phase_approval_ref: null
   note: Eight GETs then pre-dispatch stop on changed variant/journal; zero chats,
     no writes or cleanup; no serving/security result
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T11:00:43+00:00'
+  by: codex-lead
+  artifact: rounds/round-23/spec.md
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/rounds/round-23/evidence/approval.json
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T11:04:43+00:00'
+  by: codex-lead
+  artifact: rounds/round-23/review.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Round23 independently reviewed retained-unsafe refusal. Round22 bookkeeping
+    reconciled now to its already-recorded observations/review; no backdated RUNNING
+    transition is claimed.
   forced: false

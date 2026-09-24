@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -23,12 +23,70 @@ checks:
     sha256: 7f418d5e7df599f3a5372cb9c2bd8a2e402ed97b05b2b621c64be3fa5877cc7c
     source_sha: 6a2a47fcc316fa661dded8f117f6db2d5e2e1988
     at: '2026-09-24T10:25:39+00:00'
+  preflight:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/preflight-complete.json
+    sha256: 849830db50e23e0196b667c386cad5a085585f98461342e095531ce276199f96
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:03:31+00:00'
+  implementation:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: 04-diff.patch
+    sha256: 54f2dc75969300fa726eeb0d182a23fd625ff587e4d95c94297c52ce8a7d9af7
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:03:31+00:00'
+  l0:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/run-1790247396692570342/go-phorvex.log
+    sha256: 82010a49a54f327d5bf799e4e3dc4112969d93165f382338d593e4a5f43b9193
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:03:31+00:00'
+  l1:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/worker-offline.log
+    sha256: 3f59b752802ca68712992bc5047bc7a39fd21d510d16a17a01a9aa750f505978
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:03:31+00:00'
+  l2:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/worker-red-green.md
+    sha256: 4eff9de40a7ab5834c300483b0be699044c187eb2d5fee529d0d801609566857
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:03:31+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-cleanup-audit
+    artifact: evidence/lead-head.log
+    sha256: dac8c40e56857bdcf4f03f1eac1c39c7f11c5b4b3afbaf26e1652de213c27130
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:03:31+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 7f418d5e7df599f3a5372cb9c2bd8a2e402ed97b05b2b621c64be3fa5877cc7c
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:04:44+00:00'
+    baseline_sha: 6a2a47fcc316fa661dded8f117f6db2d5e2e1988
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 15e62865beca618ebfbcb746998ae09eeab625a60ca0adbd19a92e9cf945a61e
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:04:44+00:00'
+    incident_sha256: 7f418d5e7df599f3a5372cb9c2bd8a2e402ed97b05b2b621c64be3fa5877cc7c
 fix_id: CAT-ADMISSION-VISIBILITY
 issues:
 - M-194
 title: Fixed-suite catalogue hides current launch admission blockers
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -50,9 +108,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-admission-and-guardrail-20260924
+  base_sha: 6a2a47fcc316fa661dded8f117f6db2d5e2e1988
+  head_sha: 46f8ec86acdd544fcded760811bda57534f953f1
   stacked_on: []
 pull_request:
   url: null
@@ -73,13 +131,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -89,9 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: campaign-cleanup-audit
-  action: Implement scoped current admission API and UI per signed lead plan
-updated_at: '2026-09-24T10:25:39+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T11:04:48+00:00'
 configuration_history:
 - at: '2026-09-24T10:24:56+00:00'
   by: codex-lead
@@ -100,6 +159,11 @@ configuration_history:
   - change_class
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-24T11:03:31+00:00'
+  by: campaign-cleanup-audit
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -118,3 +182,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T11:03:31+00:00'
+  by: campaign-cleanup-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T11:03:33+00:00'
+  by: campaign-cleanup-audit
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T11:04:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T11:04:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-ADMISSION-VISIBILITY:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
