@@ -318,7 +318,7 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 	// absorb this attack's own response and misreport the outcome.
 	base := defenseBaseline{}
 	if body.TargetPod != "" {
-		base = s.snapshotBaselineForOwner(ns, pod, exact.ownerName, exact.ownerUID, string(exact.pod.UID))
+		base = s.snapshotBaselineForOwnerKind(ns, pod, exact.ownerKind, exact.ownerName, exact.ownerUID, string(exact.pod.UID))
 	} else {
 		base = s.snapshotBaseline(ns, pod)
 	}

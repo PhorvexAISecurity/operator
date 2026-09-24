@@ -61,6 +61,7 @@ type attackRecord struct {
 	Pod          string            `json:"pod"`
 	TargetUID    string            `json:"targetUid,omitempty"`
 	Deploy       string            `json:"deploy"`
+	OwnerKind    string            `json:"ownerKind,omitempty"`
 	OwnerUID     string            `json:"ownerUid,omitempty"`
 	Attack       string            `json:"attack"`
 	AttackID     string            `json:"attackId"`
@@ -233,6 +234,7 @@ type decisionActionEvidence struct {
 type defenseBaseline struct {
 	uid           string
 	deploy        string
+	ownerKind     string
 	ownerUID      string
 	epoch         string
 	kvEpoch       string
@@ -258,15 +260,25 @@ func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
 // Exact catalogue targets use the selected Deployment. A namespace-first
 // Deployment would silently report an unrelated business workload's uptime.
 func (s *Server) snapshotBaselineForOwner(ns, pod, deploy, ownerUID, podUID string) defenseBaseline {
+	return s.snapshotBaselineForOwnerKind(ns, pod, "Deployment", deploy, ownerUID, podUID)
+}
+
+// Exact catalogue targets keep their controller kind through every availability read.
+// The empty UID path retains the namespace-only compatibility behavior.
+func (s *Server) snapshotBaselineForOwnerKind(ns, pod, ownerKind, ownerName, ownerUID, podUID string) defenseBaseline {
+	if ownerUID == "" {
+		ownerKind = ""
+	}
 	return defenseBaseline{
-		uid:      podUID,
-		deploy:   deploy,
-		ownerUID: ownerUID,
-		uptime:   s.workloadUptimeBound(ns, deploy, ownerUID),
-		epoch:    s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
-		kvEpoch:  s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
-		quar:     s.quarantineEvents(ns),
-		nps:      s.quarantineNPs(ns),
+		uid:       podUID,
+		deploy:    ownerName,
+		ownerKind: ownerKind,
+		ownerUID:  ownerUID,
+		uptime:    s.workloadUptimeBoundKind(ns, ownerName, ownerKind, ownerUID),
+		epoch:     s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
+		kvEpoch:   s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
+		quar:      s.quarantineEvents(ns),
+		nps:       s.quarantineNPs(ns),
 	}
 }
 
@@ -554,7 +566,7 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 	r := &attackRecord{
 		ID:      "atk-" + strconv.FormatInt(started.UnixNano(), 36),
 		FiredAt: started.UTC().Format(time.RFC3339Nano),
-		Service: service, Namespace: ns, Pod: pod, Deploy: deploy, OwnerUID: base.ownerUID,
+		Service: service, Namespace: ns, Pod: pod, Deploy: deploy, OwnerKind: base.ownerKind, OwnerUID: base.ownerUID,
 		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful, EvidenceKind: evidenceKind,
 		TargetUID:        base.uid,
 		StimulusEvidence: base.stimulus,
@@ -570,7 +582,7 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 			if base.uptime >= 0 {
 				return base.uptime
 			}
-			return s.workloadUptimeBound(ns, deploy, base.ownerUID)
+			return s.workloadUptimeBoundKind(ns, deploy, base.ownerKind, base.ownerUID)
 		}(),
 		started:     started,
 		accepted:    accepted,
@@ -653,7 +665,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if !s.cfg.now().Before(deadline) {
 			break
 		}
-		if up := s.workloadUptimeBound(r.Namespace, r.Deploy, r.OwnerUID); up >= 0 && up < minUp {
+		if up := s.workloadUptimeBoundKind(r.Namespace, r.Deploy, r.OwnerKind, r.OwnerUID); up >= 0 && up < minUp {
 			minUp = up
 		}
 		if r.Outcome != "" || r.ResponseObserved || r.EffectEvidence != nil {
@@ -810,7 +822,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		classifyContainment(r, round2(s.cfg.now().Sub(r.started).Seconds()))
 	}
 	r.UptimeDip = minUp
-	r.UptimeAfter = s.workloadUptimeBound(r.Namespace, r.Deploy, r.OwnerUID)
+	r.UptimeAfter = s.workloadUptimeBoundKind(r.Namespace, r.Deploy, r.OwnerKind, r.OwnerUID)
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
@@ -969,14 +981,36 @@ func (s *Server) podAnno(ns, pod, key string) string {
 // workloadUptime = readyReplicas/replicas * 100 for the Deployment OR StatefulSet (real availability).
 // -1 if unknown.
 func (s *Server) workloadUptimeBound(ns, deploy, ownerUID string) float64 {
+	ownerKind := "Deployment"
+	if ownerUID == "" {
+		ownerKind = ""
+	}
+	return s.workloadUptimeBoundKind(ns, deploy, ownerKind, ownerUID)
+}
+
+func (s *Server) workloadUptimeBoundKind(ns, name, ownerKind, ownerUID string) float64 {
 	if ownerUID != "" {
-		var live appsv1.Deployment
-		if err := s.scenarioObject(ns, "deployment", deploy, &live); err != nil || live.Namespace != ns || live.Name != deploy || string(live.UID) != ownerUID || live.DeletionTimestamp != nil || live.Spec.Replicas == nil || *live.Spec.Replicas <= 0 {
+		switch ownerKind {
+		case "", "Deployment": // Empty kind belongs to persisted Deployment records.
+			var live appsv1.Deployment
+			if err := s.scenarioObject(ns, "deployment", name, &live); err != nil || live.Namespace != ns || live.Name != name || string(live.UID) != ownerUID || live.ResourceVersion == "" || live.DeletionTimestamp != nil || live.Spec.Replicas == nil || *live.Spec.Replicas <= 0 {
+				return -1
+			}
+			return round2(float64(live.Status.ReadyReplicas) / float64(*live.Spec.Replicas) * 100)
+		case "StatefulSet":
+			var live appsv1.StatefulSet
+			if err := s.scenarioObject(ns, "statefulset", name, &live); err != nil || live.Namespace != ns || live.Name != name || string(live.UID) != ownerUID || live.ResourceVersion == "" || live.DeletionTimestamp != nil || live.Spec.Replicas == nil || *live.Spec.Replicas <= 0 {
+				return -1
+			}
+			return round2(float64(live.Status.ReadyReplicas) / float64(*live.Spec.Replicas) * 100)
+		default:
 			return -1
 		}
-		return round2(float64(live.Status.ReadyReplicas) / float64(*live.Spec.Replicas) * 100)
 	}
-	return s.workloadUptime(ns, deploy)
+	if ownerKind != "" {
+		return -1
+	}
+	return s.workloadUptime(ns, name)
 }
 
 func (s *Server) workloadUptime(ns, deploy string) float64 {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,12 +91,15 @@ func decodeScenarioFireRequest(r *http.Request) (scenarioFireRequest, error) {
 }
 
 type scenarioExactTarget struct {
-	pod        corev1.Pod
-	ownerName  string
-	ownerUID   string
-	policyUID  string
-	policyGen  int64
-	policyName string
+	pod           corev1.Pod
+	ownerKind     string
+	ownerName     string
+	ownerUID      string
+	ownerGen      int64
+	ownerRevision string
+	policyUID     string
+	policyGen     int64
+	policyName    string
 }
 
 func (s *Server) scenarioObject(ns, kind, name string, out any) error {
@@ -131,31 +135,71 @@ func (s *Server) resolveScenarioExactTarget(ns, name, uid string) (scenarioExact
 		return t, fmt.Errorf("exact target Pod is not Ready")
 	}
 	if len(p.OwnerReferences) != 1 {
-		return t, fmt.Errorf("exact target requires one ReplicaSet controller")
+		return t, fmt.Errorf("exact target requires one authoritative controller")
 	}
-	rsRef := metav1.GetControllerOf(p)
-	if rsRef == nil || rsRef.APIVersion != "apps/v1" || rsRef.Kind != "ReplicaSet" || rsRef.UID == "" {
-		return t, fmt.Errorf("exact target requires an authoritative ReplicaSet owner")
+	ownerRef := metav1.GetControllerOf(p)
+	if ownerRef == nil || ownerRef.APIVersion != "apps/v1" || ownerRef.Name == "" || ownerRef.UID == "" {
+		return t, fmt.Errorf("exact target requires an authoritative apps/v1 owner")
 	}
-	var rs appsv1.ReplicaSet
-	if err := s.scenarioObject(ns, "replicaset", rsRef.Name, &rs); err != nil {
-		return t, err
+	switch ownerRef.Kind {
+	case "ReplicaSet":
+		var rs appsv1.ReplicaSet
+		if err := s.scenarioObject(ns, "replicaset", ownerRef.Name, &rs); err != nil {
+			return t, err
+		}
+		if rs.Namespace != ns || rs.Name != ownerRef.Name || rs.UID != ownerRef.UID || rs.ResourceVersion == "" || rs.DeletionTimestamp != nil || len(rs.OwnerReferences) != 1 {
+			return t, fmt.Errorf("exact target ReplicaSet identity changed")
+		}
+		depRef := metav1.GetControllerOf(&rs)
+		if depRef == nil || depRef.APIVersion != "apps/v1" || depRef.Kind != "Deployment" || depRef.UID == "" {
+			return t, fmt.Errorf("exact target requires an authoritative Deployment owner")
+		}
+		var dep appsv1.Deployment
+		if err := s.scenarioObject(ns, "deployment", depRef.Name, &dep); err != nil {
+			return t, err
+		}
+		if dep.Namespace != ns || dep.Name != depRef.Name || dep.UID != depRef.UID || dep.ResourceVersion == "" || dep.DeletionTimestamp != nil {
+			return t, fmt.Errorf("exact target Deployment identity changed")
+		}
+		t.ownerKind, t.ownerName, t.ownerUID, t.ownerGen, t.ownerRevision = "Deployment", dep.Name, string(dep.UID), dep.Generation, string(rs.UID)
+	case "StatefulSet":
+		var set appsv1.StatefulSet
+		if err := s.scenarioObject(ns, "statefulset", ownerRef.Name, &set); err != nil {
+			return t, err
+		}
+		if set.Namespace != ns || set.Name != ownerRef.Name || set.UID != ownerRef.UID || set.ResourceVersion == "" || set.DeletionTimestamp != nil ||
+			set.Generation <= 0 || set.Status.ObservedGeneration != set.Generation || set.Spec.Replicas == nil || *set.Spec.Replicas <= 0 ||
+			set.Spec.ServiceName == "" || set.Spec.Selector == nil ||
+			(len(set.Spec.Selector.MatchLabels) == 0 && len(set.Spec.Selector.MatchExpressions) == 0) {
+			return t, fmt.Errorf("exact target StatefulSet identity or observed spec is unavailable")
+		}
+		selector, err := metav1.LabelSelectorAsSelector(set.Spec.Selector)
+		if err != nil || !selector.Matches(labels.Set(p.Labels)) {
+			return t, fmt.Errorf("exact target Pod is outside StatefulSet selector")
+		}
+		start := int64(0)
+		if set.Spec.Ordinals != nil {
+			start = int64(set.Spec.Ordinals.Start)
+		}
+		ordinal := strings.TrimPrefix(p.Name, set.Name+"-")
+		parsed, parseErr := strconv.ParseInt(ordinal, 10, 32)
+		if start < 0 || !strings.HasPrefix(p.Name, set.Name+"-") || parseErr != nil || strconv.FormatInt(parsed, 10) != ordinal ||
+			parsed < start || parsed >= start+int64(*set.Spec.Replicas) ||
+			p.Labels["statefulset.kubernetes.io/pod-name"] != p.Name {
+			return t, fmt.Errorf("exact target Pod ordinal or name is outside StatefulSet")
+		}
+		if index := p.Labels["apps.kubernetes.io/pod-index"]; index != "" && index != ordinal {
+			return t, fmt.Errorf("exact target Pod index differs from StatefulSet ordinal")
+		}
+		if set.Status.CurrentRevision == "" || set.Status.CurrentRevision != set.Status.UpdateRevision ||
+			set.Status.Replicas <= 0 || set.Status.CurrentReplicas != set.Status.Replicas || set.Status.UpdatedReplicas != set.Status.Replicas ||
+			p.Labels["controller-revision-hash"] != set.Status.CurrentRevision {
+			return t, fmt.Errorf("exact target StatefulSet revision is ambiguous or Pod revision differs")
+		}
+		t.ownerKind, t.ownerName, t.ownerUID, t.ownerGen, t.ownerRevision = "StatefulSet", set.Name, string(set.UID), set.Generation, set.Status.CurrentRevision
+	default:
+		return t, fmt.Errorf("exact target owner kind is unsupported")
 	}
-	if rs.Namespace != ns || rs.Name != rsRef.Name || rs.UID != rsRef.UID || rs.ResourceVersion == "" || rs.DeletionTimestamp != nil || len(rs.OwnerReferences) != 1 {
-		return t, fmt.Errorf("exact target ReplicaSet identity changed")
-	}
-	depRef := metav1.GetControllerOf(&rs)
-	if depRef == nil || depRef.APIVersion != "apps/v1" || depRef.Kind != "Deployment" || depRef.UID == "" {
-		return t, fmt.Errorf("exact target requires an authoritative Deployment owner")
-	}
-	var dep appsv1.Deployment
-	if err := s.scenarioObject(ns, "deployment", depRef.Name, &dep); err != nil {
-		return t, err
-	}
-	if dep.Namespace != ns || dep.Name != depRef.Name || dep.UID != depRef.UID || dep.ResourceVersion == "" || dep.DeletionTimestamp != nil {
-		return t, fmt.Errorf("exact target Deployment identity changed")
-	}
-	t.ownerName, t.ownerUID = dep.Name, string(dep.UID)
 	var policies v1alpha1.PhorvexPolicyList
 	if err := s.scenarioObject(ns, "phorvexpolicy", "", &policies); err != nil {
 		return t, err
@@ -194,7 +238,10 @@ func (s *Server) recheckScenarioExactTarget(ns, name, uid string, original scena
 	if err != nil {
 		return err
 	}
-	if current.ownerUID != original.ownerUID || current.ownerName != original.ownerName || current.policyUID != original.policyUID || current.policyName != original.policyName || current.policyGen != original.policyGen || current.pod.Labels["phorvex.ai/quarantined"] != "" {
+	if current.ownerKind != original.ownerKind || current.ownerUID != original.ownerUID || current.ownerName != original.ownerName ||
+		current.ownerGen != original.ownerGen || current.ownerRevision != original.ownerRevision ||
+		current.policyUID != original.policyUID || current.policyName != original.policyName || current.policyGen != original.policyGen ||
+		current.pod.Labels["phorvex.ai/quarantined"] != "" {
 		return fmt.Errorf("exact target owner or policy changed before signal creation")
 	}
 	return nil
