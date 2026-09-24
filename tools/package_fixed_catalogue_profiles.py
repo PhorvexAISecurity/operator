@@ -84,6 +84,16 @@ def strict_yaml(raw):
     return yaml.load(raw, Loader=UniqueLoader)
 
 
+def has_unfilled_scalar(value):
+    if isinstance(value, str):
+        return "__SET_" in value
+    if isinstance(value, dict):
+        return any(has_unfilled_scalar(key) or has_unfilled_scalar(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(has_unfilled_scalar(item) for item in value)
+    return False
+
+
 def pod_manifest(raw, build_raw, review_raw, pods_raw, rollout, rollout_sha, overlay):
     manifest = strict_json(raw)
     need(isinstance(manifest, dict) and set(manifest) == {
@@ -317,8 +327,9 @@ def package(args):
                 raw = raw.replace(PLACEHOLDER.encode(), digest(manifest_raw).encode())
             need(block.get("scrapeApproved") is True or block["enabled"] is False,
                  "enabled Pod-token profile lacks scrape approval")
-        need(b"__SET_" not in raw and b"/home/" not in raw, "unfilled or private profile bytes: " + kind)
+        need(b"/home/" not in raw, "private profile bytes: " + kind)
         profile = strict_yaml(raw)
+        need(not has_unfilled_scalar(profile), "unfilled profile scalar: " + kind)
         need(isinstance(profile, dict) and profile.get("namespace") == namespace and
              profile.get("context") not in (None, "", "in-cluster") and
              profile.get("kubeconfig", "") == "" and profile.get("ownedAck") is True and

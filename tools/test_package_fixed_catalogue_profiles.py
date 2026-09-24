@@ -92,6 +92,25 @@ class PackageProfiles(unittest.TestCase):
             pack.package(self.args("nats-baseline", enabled=True))
         self.assertFalse((self.root / "output").exists())
 
+    def test_nats_response_template_comment_with_filled_scalars(self):
+        base = ("context: reviewed-cluster\nnamespace: phorvex-nats-exposure-fixture\n"
+                "kubeconfig: ''\nownedAck: true\ntrialsPerArm: 1\nnatsExposureFixture:\n"
+                f"  transport: in-cluster\n  clusterUID: {CLUSTER}\n  observerImage: {CONSOLE}\n")
+        (self.input / "config.nats-exposure-baseline.yaml").write_text(base)
+        response = ("# Replace __SET_OBSERVER_IMAGE__ in the value below; this instruction is a comment.\n"
+                    + base)
+        path = self.input / "config.nats-client-response.yaml"
+        path.write_text(response)
+        self.write_overlay({"natsExposure": {"enabled": False, "clientResponse": {"enabled": False}}})
+        pack.package(self.args("nats-baseline", "nats-response"))
+        maps = list(yaml.safe_load_all((self.root / "output/configmaps.yaml").read_text()))
+        self.assertEqual(maps[1]["data"]["config.nats-client-response.yaml"], response)
+        (self.root / "output").rename(self.root / "accepted")
+        path.write_text(response.replace(f"observerImage: {CONSOLE}", "observerImage: __SET_OBSERVER_IMAGE__"))
+        with self.assertRaisesRegex(ValueError, "unfilled profile scalar"):
+            pack.package(self.args("nats-baseline", "nats-response"))
+        self.assertFalse((self.root / "output").exists())
+
     def test_duplicate_yaml_and_changed_or_symlink_evidence_refuse(self):
         self.write_overlay({"natsExposure": {"enabled": False}})
         values = self.input / "values-overlay.reviewed.yaml"
