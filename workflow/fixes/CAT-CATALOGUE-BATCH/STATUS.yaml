@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,11 +16,60 @@ checks:
     at: '2026-09-24T14:15:12+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/red.md
+    sha256: eeee8dd063691b6065636324a8100e4c4ec724d056b91ea6a6d25b6d156f4c15
+    source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+    at: '2026-09-24T15:00:00+00:00'
+  preflight:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/preflight/receipt.json
+    sha256: eb3f9209f72b616c7fa76f2dec02ffab9b2dcd4075752b2d6c44d04685c81bf3
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  implementation:
+    result: PASS
+    by: stack-integration
+    artifact: 04-diff.patch
+    sha256: da60c7a07a9af8944fbbce0f9fcbf846c0c66494a4bc167472d0170101ba9a6f
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  l0:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l0.md
+    sha256: 9a9ee78a96889d37cf218a8bad837c25976e4ed8ebe0b3de2f91da20911bce74
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  l1:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l1.md
+    sha256: fa8eecf0c0adb1227cb3acbae3711466d5241396dd10fa8a3b7af739b9f711ff
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  l2:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/l2.md
+    sha256: ea19a92f54c11eb7d0cea0ec90e3b7e36dfe9f30e721ed8494cb63a480ca3113
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
+  positive_control:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/positive-control.md
+    sha256: 2f674d1dc5b322edcc55afee1b6b35204b4bf7670fcb108282bfbbf0a674a3f6
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:00:07+00:00'
 fix_id: CAT-CATALOGUE-BATCH
 issues: []
 title: Integrate reviewed causal catalogue controls for installed application stacks
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -42,9 +91,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-controls-batch-20260924
+  base_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  head_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
   stacked_on: []
 pull_request:
   url: null
@@ -66,12 +115,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -81,10 +130,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Integrate reviewed source heads, verify conflict seams and run complete
-    preflight
-updated_at: '2026-09-24T14:15:12+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-24T15:00:12+00:00'
 configuration_history:
 - at: '2026-09-24T14:14:47+00:00'
   by: codex-lead
@@ -93,6 +142,11 @@ configuration_history:
   - change_class
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-24T15:00:07+00:00'
+  by: stack-integration
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -111,3 +165,41 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T15:00:07+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T15:00:10+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: red
+  result: FAIL
+  by: stack-integration
+  artifact: evidence/red.md
+  sha256: eeee8dd063691b6065636324a8100e4c4ec724d056b91ea6a6d25b6d156f4c15
+  source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  at: '2026-09-24T14:49:41+00:00'
+- check: red
+  result: PASS
+  by: stack-integration
+  artifact: evidence/red.md
+  sha256: eeee8dd063691b6065636324a8100e4c4ec724d056b91ea6a6d25b6d156f4c15
+  source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+  at: '2026-09-24T14:59:50+00:00'
+handoff:
+  id: CAT-CATALOGUE-BATCH:8:submit
+  from: stack-integration
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8
