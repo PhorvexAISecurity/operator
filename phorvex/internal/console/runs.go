@@ -535,6 +535,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		if s == "c2-nats-uncredentialed-exposure" {
 			return "", fmt.Errorf("NATS exposure requires the server-owned named suite nats-exposure-baseline")
 		}
+		if s == "c2-nats-owned-client-response" {
+			return "", fmt.Errorf("NATS client response requires the server-owned named suite nats-client-response")
+		}
 		if !scenarioRe.MatchString(s) {
 			return "", fmt.Errorf("invalid scenario name %q", s)
 		}

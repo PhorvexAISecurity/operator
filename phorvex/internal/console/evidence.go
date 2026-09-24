@@ -110,6 +110,7 @@ func (c *Config) Catalog() []CatalogItem {
 }
 
 func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
+	items = append(items, c.natsResponseCatalogueItem())
 	items = append(items, c.limitedV1Catalogue()...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Product != items[j].Product {
@@ -118,6 +119,30 @@ func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 		return items[i].Name < items[j].Name
 	})
 	return items
+}
+
+// The response control is a server-owned named suite, not a generic harness
+// scenario. Its payload and signal are synthetic; a selected action is never
+// predeclared by the catalogue row and packet behavior is measured separately.
+func (c *Config) natsResponseCatalogueItem() CatalogItem {
+	dest, err := (&RunManager{cfg: *c}).SuiteDestination(natsResponseConfig)
+	item := CatalogItem{
+		EntryID: "c2-nats-owned-client-response", Name: "c2-nats-owned-client-response", Product: "application",
+		Category: "Injected response control", R6Tag: "not-applicable", Techniques: []string{}, ExercisedTechniques: []string{},
+		Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false), ExpectedActuators: []string{},
+		ResponseGuidanceBasis: "explicit-response-control",
+		ResponseGuidance:      "A console-injected trusted SecurityEvent may produce an exact no-op or an observed quarantine object effect; the catalogue does not predict or force an action. Packet containment requires the separate original-client M1 and legitimate-peer receipts.",
+		MeaningfulWhen:        "Compares one owned synthetic NATS payload before and after the exact event-bound manager decision. A no-op, object effect, or missing receipt is not proof of defense; a negative containment finding requires independent continuing packet access after confirmed response.",
+		RunnableNote:          "One-use server-owned response suite with fixed broker and fixture destinations, dual grants, exact event/audit joins, bounded packet receipts and cleanup. No natural detector or scored security win is asserted.",
+		Prereqs:               []string{"reviewed named NATS response profile and broker route", "dual broker and fixture-namespace grants", "current singleton manager and owned observer image pins"},
+		LaunchKind:            "named-suite", ClaimClass: "effect", Profile: natsResponseConfig, Available: err == nil,
+	}
+	if err == nil {
+		item.RuntimeContext = dest.ScopeTarget
+	} else {
+		item.UnavailableReason = "NATS response profile has no reviewed fixed context and fixture destination; launch also rechecks current source pins"
+	}
+	return item
 }
 
 func parseCatalog(out []byte, hasRun map[string]bool) []CatalogItem {
