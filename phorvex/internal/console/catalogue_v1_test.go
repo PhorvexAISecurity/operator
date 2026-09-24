@@ -16,15 +16,20 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 9 {
-		t.Fatalf("items=%d, want seven limited-v1 entries, one MCP baseline and the disabled server-owned NATS response", len(items))
+	if len(items) != 10 {
+		t.Fatalf("items=%d, want seven limited-v1 entries, one MCP baseline and disabled server-owned NATS and Mongo entries", len(items))
 	}
-	responseRows := 0
+	responseRows, mongoRows := 0, 0
 	for _, item := range items {
 		if item.Name == "c2-nats-owned-client-response" {
 			responseRows++
 			if item.Available || item.LaunchKind != "named-suite" || item.Profile != natsResponseConfig || item.ClaimClass != "effect" {
 				t.Fatalf("unconfigured response row gained launch authority: %+v", item)
+			}
+		} else if item.Name == "c2-mongo-uncredentialed-service-exposure" {
+			mongoRows++
+			if item.Available || item.LaunchKind != "named-suite" || item.Profile != mongoExposureConfig || item.ClaimClass != "configuration" {
+				t.Fatalf("unconfigured Mongo row gained launch authority: %+v", item)
 			}
 		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) {
 			t.Fatalf("unexpected entry %q", item.Name)
@@ -35,6 +40,9 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	}
 	if responseRows != 1 {
 		t.Fatalf("server-owned response row count=%d", responseRows)
+	}
+	if mongoRows != 1 {
+		t.Fatalf("server-owned Mongo row count=%d", mongoRows)
 	}
 }
 
