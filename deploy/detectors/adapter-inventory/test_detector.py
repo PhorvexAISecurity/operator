@@ -15,6 +15,10 @@ LOCK_UID = "00000000-0000-4000-8000-000000000001"
 CFG = detector.Config("owned", "models", 8001, "engine", frozenset(), "owned-proof", "adapter-detector", LOCK_UID)
 
 
+def run(api, cfg, now):
+    return detector.run_once(api, cfg, lambda: now)
+
+
 def models(adapters=("owned-neutral-adapter",)):
     data = [{"id": "base", "parent": None}]
     data += [{"id": name, "parent": "base"} for name in adapters]
@@ -48,6 +52,7 @@ class FakeAPI:
         self.bind_reject_before_write = False
         self.after_models = None
         self.uncertain = False
+        self.event_time_offset = 0
         self.replace_after_create = False
 
     def get(self, kind, namespace, name, allow_missing=False):
@@ -107,7 +112,7 @@ class FakeAPI:
             raise detector.Conflict()
         created = copy.deepcopy(body)
         created["metadata"].update({"uid": "api-uid-" + str(len(self.posts)), "resourceVersion": str(10 + len(self.posts)),
-                                    "creationTimestamp": datetime.fromtimestamp(self.now, timezone.utc).isoformat()})
+                                    "creationTimestamp": datetime.fromtimestamp(self.now + self.event_time_offset, timezone.utc).isoformat()})
         created["metadata"]["annotations"]["phorvex.ai/creator-identity"] = "system:serviceaccount:owned:adapter-detector"
         self.events[name] = created
         if self.uncertain:
@@ -135,14 +140,31 @@ class DetectorContract(unittest.TestCase):
 
     def test_saved_consumer_fixture_is_actual_current_producer_output(self):
         api = FakeAPI()
-        detector.run_once(api, CFG, NOW)
+        run(api, CFG, NOW)
         saved = json.loads(Path(__file__).with_name("producer_envelope.json").read_text())
         self.assertEqual(saved["body"], api.posts[0])
         self.assertEqual(saved["admitted"], next(iter(api.events.values())))
 
+    def test_event_time_is_sampled_after_observation_not_at_poll_start(self):
+        api = FakeAPI()
+        api.after_models = lambda: setattr(api, "now", NOW + 2)
+        self.assertEqual(detector.run_once(api, CFG, lambda: api.now)["status"], "created")
+        self.assertEqual(api.lock["data"]["phase"], "BOUND")
+        self.assertEqual(api.lock["data"]["eventUID"], "api-uid-1")
+
+    def test_real_future_or_stale_api_event_time_refuses_uid_binding(self):
+        for offset, reason in ((60, "future"), (-901, "outside manager evidence horizon")):
+            with self.subTest(offset=offset):
+                api = FakeAPI()
+                api.event_time_offset = offset
+                with self.assertRaisesRegex(detector.Inconclusive, reason):
+                    detector.run_once(api, CFG, lambda: api.now)
+                self.assertEqual(len(api.posts), 1)
+                self.assertEqual(api.lock["data"]["phase"], "CLAIMED")
+
     def test_one_exact_target_emits_canonical_uid_bound_event_once(self):
         api = FakeAPI()
-        first = detector.run_once(api, CFG, NOW)
+        first = run(api, CFG, NOW)
         self.assertEqual(first["status"], "created")
         self.assertEqual(len(api.posts), 1)
         self.assertEqual(len(api.lock_updates), 2)
@@ -153,15 +175,15 @@ class DetectorContract(unittest.TestCase):
         self.assertEqual(body["metadata"]["annotations"]["phorvex.ai/adapter-name"], "owned-neutral-adapter")
         self.assertEqual(body["metadata"]["annotations"]["phorvex.ai/target-pod-uid"], "pod-uid-1")
         self.assertNotIn("phorvex.ai/creator-identity", body["metadata"]["annotations"])
-        self.assertEqual(detector.run_once(api, CFG, NOW + 20)["status"], "retained")
+        self.assertEqual(run(api, CFG, NOW + 20)["status"], "retained")
         self.assertEqual(len(api.posts), 1)
         self.assertEqual(len(api.lock_updates), 2)
 
     def test_clearance_keeps_event_until_protected_terminal_review(self):
         api = FakeAPI()
-        detector.run_once(api, CFG, NOW)
+        run(api, CFG, NOW)
         api.inventory = models(())
-        self.assertEqual(detector.run_once(api, CFG, NOW + 20)["status"], "cleared-await-terminal")
+        self.assertEqual(run(api, CFG, NOW + 20)["status"], "cleared-await-terminal")
         self.assertEqual(len(api.events), 1)
         self.assertEqual(len(api.posts), 1)
 
@@ -169,21 +191,21 @@ class DetectorContract(unittest.TestCase):
         for change in ("adapter", "pod"):
             with self.subTest(change=change):
                 api = FakeAPI()
-                detector.run_once(api, CFG, NOW)
+                run(api, CFG, NOW)
                 if change == "adapter":
                     api.inventory = models(("different-neutral",))
                 else:
                     api.pod["metadata"]["uid"] = "replacement-uid"
                     api.slice["endpoints"][0]["targetRef"]["uid"] = "replacement-uid"
                 with self.assertRaises(detector.Inconclusive):
-                    detector.run_once(api, CFG, NOW + 20)
+                    run(api, CFG, NOW + 20)
                 self.assertEqual(len(api.posts), 1)
 
     def test_expiry_refuses_renewal_and_duplicate_mitigation(self):
         api = FakeAPI()
-        detector.run_once(api, CFG, NOW)
+        run(api, CFG, NOW)
         with self.assertRaisesRegex(detector.Inconclusive, "expired"):
-            detector.run_once(api, CFG, NOW + 901)
+            run(api, CFG, NOW + 901)
         self.assertEqual(len(api.posts), 1)
 
     def test_route_and_incarnation_ambiguity_prevents_event(self):
@@ -210,7 +232,7 @@ class DetectorContract(unittest.TestCase):
                     original_list = api.list
                     api.list = lambda kind, ns, selector: {"items": [api.pod, api.pod]} if kind == "pods" else original_list(kind, ns, selector)
                 with self.assertRaises(detector.Inconclusive):
-                    detector.run_once(api, CFG, NOW)
+                    run(api, CFG, NOW)
                 self.assertEqual(api.posts, [])
 
     def test_inventory_ambiguity_prevents_event(self):
@@ -229,7 +251,7 @@ class DetectorContract(unittest.TestCase):
                 api = FakeAPI()
                 api.inventory = inventory
                 with self.assertRaises(detector.Inconclusive):
-                    detector.run_once(api, CFG, NOW)
+                    run(api, CFG, NOW)
                 self.assertEqual(api.posts, [])
 
     def test_multiple_path_shaped_base_ids_still_bind_one_adapter(self):
@@ -238,14 +260,14 @@ class DetectorContract(unittest.TestCase):
             {"id": "org/model", "parent": None},
             {"id": "/models/another-base", "parent": None},
             {"id": "owned-neutral-adapter", "parent": "org/model"}]}).encode()
-        self.assertEqual(detector.run_once(api, CFG, NOW)["status"], "created")
+        self.assertEqual(run(api, CFG, NOW)["status"], "created")
         self.assertEqual(api.posts[0]["metadata"]["annotations"]["phorvex.ai/adapter-name"], "owned-neutral-adapter")
 
     def test_explicit_expected_adapter_is_clean_without_claim(self):
         api = FakeAPI()
         expected_cfg = detector.Config("owned", "models", 8001, "engine", frozenset({"owned-neutral-adapter"}),
                                        "owned-proof", "adapter-detector", LOCK_UID)
-        self.assertEqual(detector.run_once(api, expected_cfg, NOW)["status"], "clean")
+        self.assertEqual(run(api, expected_cfg, NOW)["status"], "clean")
         self.assertEqual(api.posts, [])
         self.assertEqual(api.lock_updates, [])
 
@@ -253,13 +275,13 @@ class DetectorContract(unittest.TestCase):
         api = FakeAPI()
         api.uncertain = True
         with self.assertRaises(detector.DispatchUncertain):
-            detector.run_once(api, CFG, NOW)
+            run(api, CFG, NOW)
         self.assertEqual(len(api.posts), 1)
         self.assertEqual(len(api.events), 1)
         self.assertEqual(len(api.lock_updates), 1)
         api.uncertain = False
         with self.assertRaisesRegex(detector.Inconclusive, "CLAIMED"):
-            detector.run_once(api, CFG, NOW + 10)
+            run(api, CFG, NOW + 10)
         self.assertEqual(len(api.posts), 1)
 
     def test_missing_or_foreign_operator_lock_refuses_event(self):
@@ -277,7 +299,7 @@ class DetectorContract(unittest.TestCase):
                 else:
                     api.lock["data"] = {"unexpected": "claim"}
                 with self.assertRaises(detector.Inconclusive):
-                    detector.run_once(api, CFG, NOW)
+                    run(api, CFG, NOW)
                 self.assertEqual(api.posts, [])
                 self.assertEqual(api.lock_updates, [])
 
@@ -285,19 +307,19 @@ class DetectorContract(unittest.TestCase):
         api = FakeAPI()
         api.lock_uncertain = True
         with self.assertRaises(detector.DispatchUncertain):
-            detector.run_once(api, CFG, NOW)
+            run(api, CFG, NOW)
         self.assertEqual(len(api.lock_updates), 1)
         self.assertEqual(api.posts, [])
         with self.assertRaisesRegex(detector.Inconclusive, "CLAIMED"):
-            detector.run_once(api, CFG, NOW + 10)
+            run(api, CFG, NOW + 10)
         self.assertEqual(api.posts, [])
 
     def test_event_deleted_after_claim_cannot_rearm_on_restart(self):
         api = FakeAPI()
-        detector.run_once(api, CFG, NOW)
+        run(api, CFG, NOW)
         api.events.clear()
         with self.assertRaisesRegex(detector.Inconclusive, "without event"):
-            detector.run_once(api, CFG, NOW + 10)
+            run(api, CFG, NOW + 10)
         self.assertEqual(len(api.lock_updates), 2)
         self.assertEqual(len(api.posts), 1)
 
@@ -305,54 +327,54 @@ class DetectorContract(unittest.TestCase):
         api = FakeAPI()
         api.bind_reject_before_write = True
         with self.assertRaises(detector.DispatchUncertain):
-            detector.run_once(api, CFG, NOW)
+            run(api, CFG, NOW)
         self.assertEqual(len(api.posts), 1)
         self.assertEqual(api.lock["data"]["phase"], "CLAIMED")
         api.bind_reject_before_write = False
         with self.assertRaisesRegex(detector.Inconclusive, "CLAIMED"):
-            detector.run_once(api, CFG, NOW + 10)
+            run(api, CFG, NOW + 10)
         self.assertEqual(len(api.posts), 1)
 
     def test_successful_post_uid_replaced_before_readback_refuses(self):
         api = FakeAPI()
         api.replace_after_create = True
         with self.assertRaisesRegex(detector.DispatchUncertain, "readback identity"):
-            detector.run_once(api, CFG, NOW)
+            run(api, CFG, NOW)
         self.assertEqual(len(api.posts), 1)
         self.assertEqual(api.lock["data"]["phase"], "CLAIMED")
         self.assertEqual(len(api.lock_updates), 1)
         with self.assertRaisesRegex(detector.Inconclusive, "CLAIMED"):
-            detector.run_once(api, CFG, NOW + 10)
+            run(api, CFG, NOW + 10)
         self.assertEqual(len(api.posts), 1)
 
     def test_same_name_new_uid_cannot_replace_bound_event(self):
         api = FakeAPI()
-        detector.run_once(api, CFG, NOW)
+        run(api, CFG, NOW)
         event = next(iter(api.events.values()))
         event["metadata"]["uid"] = "api-replacement-uid"
         event["metadata"]["creationTimestamp"] = datetime.fromtimestamp(NOW + 10, timezone.utc).isoformat()
         with self.assertRaisesRegex(detector.Inconclusive, "UID differs"):
-            detector.run_once(api, CFG, NOW + 20)
+            run(api, CFG, NOW + 20)
         self.assertEqual(len(api.posts), 1)
 
     def test_second_cas_ambiguous_stops_even_if_server_bound_it(self):
         api = FakeAPI()
         api.bind_uncertain = True
         with self.assertRaises(detector.DispatchUncertain):
-            detector.run_once(api, CFG, NOW)
+            run(api, CFG, NOW)
         self.assertEqual(api.lock["data"]["phase"], "BOUND")
         self.assertEqual(api.lock["data"]["eventUID"], "api-uid-1")
         api.bind_uncertain = False
-        self.assertEqual(detector.run_once(api, CFG, NOW + 10)["status"], "retained")
+        self.assertEqual(run(api, CFG, NOW + 10)["status"], "retained")
         self.assertEqual(len(api.posts), 1)
 
     def test_conflicting_own_event_cannot_be_deleted_or_overridden(self):
         api = FakeAPI()
-        detector.run_once(api, CFG, NOW)
+        run(api, CFG, NOW)
         event = next(iter(api.events.values()))
         event["metadata"]["annotations"]["phorvex.ai/target-pod-uid"] = "forged-uid"
         with self.assertRaises(detector.Inconclusive):
-            detector.run_once(api, CFG, NOW + 10)
+            run(api, CFG, NOW + 10)
         self.assertEqual(len(api.posts), 1)
 
 

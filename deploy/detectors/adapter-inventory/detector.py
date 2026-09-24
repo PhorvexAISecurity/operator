@@ -361,7 +361,7 @@ def _own_event(event: dict, cfg: Config) -> tuple[str, str, str]:
     return target, pod_uid, adapter
 
 
-def _create_verified(api, cfg: Config, body: dict, now: float) -> dict:
+def _create_verified(api, cfg: Config, body: dict, wall_clock) -> dict:
     name = body["metadata"]["name"]
     known = api.get_event(name)
     if known is not None:
@@ -389,7 +389,7 @@ def _create_verified(api, cfg: Config, body: dict, now: float) -> dict:
     target, uid, adapter = _own_event(created, cfg)
     if target != body["spec"]["targets"][0] or uid != body["metadata"]["annotations"]["phorvex.ai/target-pod-uid"] or adapter != body["metadata"]["annotations"]["phorvex.ai/adapter-name"]:
         raise Inconclusive("event create/readback contract differs")
-    if _event_age(created, now) >= 900:
+    if _event_age(created, wall_clock()) >= 900:
         raise DispatchUncertain("event API time outside manager evidence horizon; UID not bound")
     return created
 
@@ -451,7 +451,9 @@ class Conflict(Exception):
     pass
 
 
-def run_once(api, cfg: Config, now: float) -> dict:
+def run_once(api, cfg: Config, wall_clock) -> dict:
+    if not callable(wall_clock):
+        raise Inconclusive("fresh wall clock callable required")
     before = target_snapshot(api, cfg)
     raw = api.models(before.pod_ip, cfg.port)
     adapter = unexpected_adapter(raw, cfg.expected)
@@ -472,7 +474,7 @@ def run_once(api, cfg: Config, now: float) -> dict:
             return {"status": "clean", "podUID": before.pod_uid, "event": None}
         body = event_body(cfg, before, adapter)
         claimed = _claim_lock_verified(api, cfg, lock, lock_body(cfg, before, adapter, lock, "CLAIMED"))
-        created = _create_verified(api, cfg, body, now)
+        created = _create_verified(api, cfg, body, wall_clock)
         _bind_lock_verified(api, cfg, claimed, created["metadata"]["uid"])
         return {"status": "created", "podUID": before.pod_uid, "event": created["metadata"]["uid"]}
     if phase == "CLAIMED":
@@ -486,7 +488,7 @@ def run_once(api, cfg: Config, now: float) -> dict:
             raise Inconclusive("event UID differs from immutable detector intent")
         if (event["metadata"]["name"], target_name, uid, name) != (intent["eventName"], cfg.namespace + "/" + intent["podName"], intent["podUID"], intent["adapter"]):
             raise Inconclusive("event differs from durable detector intent")
-        age = _event_age(event, now)
+        age = _event_age(event, wall_clock())
         if age >= 900:
             raise Inconclusive("incident event expired; protected operation review required")
         if (target_name, uid) != (cfg.namespace + "/" + before.pod_name, before.pod_uid):
@@ -598,7 +600,7 @@ def main():
     api = ClusterAPI(cfg)
     while True:
         try:
-            result = run_once(api, cfg, time.time())
+            result = run_once(api, cfg, time.time)
             print("adapter detector: " + result["status"], flush=True)
         except Inconclusive as exc:
             print("adapter detector: inconclusive " + str(exc), flush=True)
