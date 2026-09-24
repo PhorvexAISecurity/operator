@@ -55,16 +55,16 @@ func NewGuard(cfg config.TargetConfig, liveContext, liveHost string) (*Guard, er
 	if strings.TrimSpace(cfg.Context) == "" {
 		return nil, &RefuseError{Reason: "config.Context is empty — refusing (no authorized target to assert against)"}
 	}
-	if liveContext != cfg.Context && !(cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Transport == "in-cluster" && cfg.Kubeconfig == "" && liveContext == "in-cluster") {
+	if liveContext != cfg.Context && !(fixedInClusterFixture(cfg) && liveContext == "in-cluster") {
 		return nil, &RefuseError{Reason: fmt.Sprintf("live kube-context %q != configured context %q — refusing to target an unauthorized context", liveContext, cfg.Context)}
 	}
 
 	var expectedHost string
 	var err error
-	if cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Transport == "in-cluster" && cfg.Kubeconfig == "" {
+	if fixedInClusterFixture(cfg) {
 		inCluster, configErr := rest.InClusterConfig()
 		if configErr != nil {
-			return nil, &RefuseError{Reason: "in-cluster NATS identity unavailable: " + configErr.Error()}
+			return nil, &RefuseError{Reason: "fixed in-cluster fixture identity unavailable: " + configErr.Error()}
 		}
 		expectedHost = inCluster.Host
 	} else {
@@ -94,7 +94,7 @@ func (g *Guard) AssertMutationAllowed(targetNS string) error {
 	if !g.cfg.OwnedAck {
 		return &RefuseError{Reason: "ownedAck cleared — refusing"}
 	}
-	if g.liveContext != g.cfg.Context && !(g.cfg.NATSExposureFixture != nil && g.cfg.NATSExposureFixture.Transport == "in-cluster" && g.cfg.Kubeconfig == "" && g.liveContext == "in-cluster") {
+	if g.liveContext != g.cfg.Context && !(fixedInClusterFixture(g.cfg) && g.liveContext == "in-cluster") {
 		return &RefuseError{Reason: fmt.Sprintf("live context %q drifted from configured %q — refusing", g.liveContext, g.cfg.Context)}
 	}
 	if !hostsEqual(g.expectedHost, g.liveHost) {
@@ -104,6 +104,13 @@ func (g *Guard) AssertMutationAllowed(targetNS string) error {
 		return &RefuseError{Reason: fmt.Sprintf("object target namespace %q != sandbox namespace %q — refusing to act outside the sandbox", targetNS, g.cfg.Namespace)}
 	}
 	return nil
+}
+
+// Only these separately validated named suites may use the console ServiceAccount
+// transport while preserving the logical cluster target used for authorization.
+func fixedInClusterFixture(cfg config.TargetConfig) bool {
+	return cfg.Kubeconfig == "" && ((cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Transport == "in-cluster") ||
+		(cfg.MongoExposureFixture != nil && cfg.MongoExposureFixture.Transport == "in-cluster"))
 }
 
 // LiveHost exposes the resolved live apiserver host (provenance).

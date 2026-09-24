@@ -137,6 +137,10 @@ type TargetConfig struct {
 	// NATSExposureFixture permits one credential-free, independently observed
 	// synthetic broker-message control. It never enables an injected signal.
 	NATSExposureFixture *NATSExposureFixtureConfig `json:"natsExposureFixture,omitempty"`
+	// MongoExposureFixture is a single unscored, no-signal observation of an
+	// owned document through the installed Mongo Service. It never enters the
+	// generic scenario matrix or its namespace-wide cleanup.
+	MongoExposureFixture *MongoExposureFixtureConfig `json:"mongoExposureFixture,omitempty"`
 
 	// InstalledManagerFixture attaches one catalogue arm to an already installed
 	// manager and its existing authenticated audit API. It is a complete runtime
@@ -424,6 +428,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateNATSExposureFixture(c); err != nil {
 			return err
 		}
+		if err := validateMongoExposureFixture(c); err != nil {
+			return err
+		}
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
@@ -454,6 +461,9 @@ func (c TargetConfig) Validate() error {
 		return err
 	}
 	if err := validateNATSExposureFixture(c); err != nil {
+		return err
+	}
+	if err := validateMongoExposureFixture(c); err != nil {
 		return err
 	}
 	if err := validateGPUFunctionalFixture(c); err != nil {

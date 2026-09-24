@@ -57,7 +57,7 @@ var listRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s
 
 func productOf(name string) string {
 	switch {
-	case name == "c2-nats-uncredentialed-exposure":
+	case name == "c2-nats-uncredentialed-exposure" || name == "c2-mongo-uncredentialed-service-exposure":
 		return "application"
 	case strings.HasPrefix(name, "ai1-") || strings.HasPrefix(name, "ai2-") || strings.HasPrefix(name, "c2-vllm-") || strings.HasSuffix(name, "-ai"):
 		return "ai"
@@ -105,12 +105,25 @@ func (c *Config) Catalog() []CatalogItem {
 				items[i].UnavailableReason = "NATS server-owned profile is not configured with reviewed source and image pins"
 			}
 		}
+		if items[i].Name == "c2-mongo-uncredentialed-service-exposure" {
+			items[i] = c.mongoExposureCatalogueItem()
+		}
 	}
 	return c.sortedLimitedV1Catalogue(items)
 }
 
 func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 	items = append(items, c.natsResponseCatalogueItem())
+	hasMongo := false
+	for _, item := range items {
+		if item.Name == "c2-mongo-uncredentialed-service-exposure" {
+			hasMongo = true
+			break
+		}
+	}
+	if !hasMongo {
+		items = append(items, c.mongoExposureCatalogueItem())
+	}
 	items = append(items, c.limitedV1Catalogue()...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Product != items[j].Product {
@@ -119,6 +132,26 @@ func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 		return items[i].Name < items[j].Name
 	})
 	return items
+}
+
+func (c *Config) mongoExposureCatalogueItem() CatalogItem {
+	dest, err := (&RunManager{cfg: *c}).SuiteDestination(mongoExposureConfig)
+	item := CatalogItem{
+		EntryID: "c2-mongo-uncredentialed-service-exposure", Name: "c2-mongo-uncredentialed-service-exposure", Product: "application",
+		Category: "Configuration exposure control", R6Tag: "not-applicable", Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{},
+		Realism: "executable-mechanism", BenignControl: boolPtr(false), ExpectedActuators: []string{},
+		ResponseGuidanceBasis: "configuration-baseline", ResponseGuidance: "An uncredentialed exact-ID read of one run-owned synthetic document characterizes the installed Mongo Service. Manager audit rows show actual choices without implying a response or defense.",
+		MeaningfulWhen: "Requires one separately scheduled no-credential client, legitimate exact document reads before and after, a complete same-window authenticated audit and exact UUID/Pod cleanup.",
+		RunnableNote:   "Server-owned, default-off named suite in the existing document-store namespace. No SecurityEvent, customer collection, authentication bypass, or actuator efficacy is claimed.",
+		Prereqs:        []string{"reviewed installed Mongo and manager source pins", "opt-in fixed document-store Role and tenant grant", "current authenticated manager audit source and schedulable CPU node"},
+		LaunchKind:     "named-suite", ClaimClass: "configuration", Profile: mongoExposureConfig, Available: err == nil,
+	}
+	if err == nil {
+		item.RuntimeContext = dest.ScopeTarget
+	} else {
+		item.UnavailableReason = "Mongo named suite is disabled or has no reviewed source, image, target and audit pins"
+	}
+	return item
 }
 
 // The response control is a server-owned named suite, not a generic harness

@@ -377,6 +377,11 @@ phorvex:
       # alongside natsExposure.enabled. Existing baseline grants stay narrow.
       clientResponse:
         enabled: false
+    # Opt-in authority for the fixed, unscored Mongo synthetic-document
+    # configuration exposure control. The existing document-store namespace,
+    # Service and server-owned harness config are not browser-selectable.
+    mongoExposure:
+      enabled: false
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
     catalogueV1:
