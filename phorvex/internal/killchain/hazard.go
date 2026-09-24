@@ -249,10 +249,11 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 	switch e.Type {
 	case v1beta1.TypePanic: // container escape / breakout
 		return StagePersist
-	case model.AttackVectorKV, model.AttackVectorGuardrail, model.AttackVectorInflight, model.AttackVectorAdapter:
-		// A named attack vector is an established, actionable foothold — same persist-stage weight
-		// as Panic. The vector ALSO steers the surgical actuator over in recon (ucw); here it only
-		// needs to count as a real threat so the engine engages at all.
+	case model.AttackVectorKV, model.AttackVectorGuardrail, model.AttackVectorInflight, model.AttackVectorAdapter,
+		model.AttackVectorPodBoundAPIAuth:
+		// A named attack vector is an actionable observed capability — same persist-stage
+		// weight as Panic. The vector also steers the relevant fact in recon (ucw);
+		// it does not by itself establish an on-Pod exploit or select an actuator.
 		return StagePersist
 	case v1beta1.TypeDrift: // image/baseline drift => implant established
 		return StagePersist
@@ -294,7 +295,7 @@ func leakageOf(ph model.PhysicsWitness) float64 {
 	return ph.SMOccupancy
 }
 
-func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
+func aiStageFromView(view *model.WorkloadView, eventHorizon time.Duration) (Stage, bool) {
 	p := view.Pod
 	if p.ModelID == "" && !p.HasGPU {
 		return 0, false
@@ -303,6 +304,10 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 	persistEvent, exploitEvent := false, false
 	for _, e := range view.Events {
 		if !e.TargetsPod {
+			continue
+		}
+		if e.Type == model.AttackVectorPodBoundAPIAuth &&
+			!model.PodBoundAPIAuthEventEligible(e, p, eventHorizon) {
 			continue
 		}
 		switch stageFromEvent(e) {
@@ -366,6 +371,10 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 		if !e.TimestampMissing {
 			w = model.EventAgeWeight(e.Age, eventAgeHorizon(pol))
 		}
+		if e.Type == model.AttackVectorPodBoundAPIAuth &&
+			!model.PodBoundAPIAuthEventEligible(e, view.Pod, eventAgeHorizon(pol)) {
+			w = 0
+		}
 		targetPodUID := ""
 		if e.TargetsPod {
 			targetPodUID = view.Pod.UID
@@ -378,7 +387,8 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 		if w <= 0 {
 			// M-163: an aged-out event is an operational observation of the REAL tick. A
 			// counterfactual re-reading of the same event stream must not count it again.
-			if mode.Commits() {
+			if mode.Commits() && (e.Type != model.AttackVectorPodBoundAPIAuth ||
+				e.Age >= eventAgeHorizon(pol)) {
 				metrics.RecordEventAgedOut(pol.Tenant)
 			}
 			continue
@@ -402,7 +412,7 @@ func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureS
 	// generic stage when an AI signature matches; honest-absent for non-AI workloads. ---
 	aiClassified := false
 	aiStageName := ""
-	if ai, ok := aiStageFromView(view); ok {
+	if ai, ok := aiStageFromView(view, eventAgeHorizon(pol)); ok {
 		// M-25: the AI/topology chain may RAISE the stage, never lower it. A detector-derived
 		// (event) stage is a floor (P-BELIEF); the merge is max-consequence over the shared Stage
 		// ordinal, symmetric with the eventStage merge just above (:347). This is the merge ONLY —

@@ -115,6 +115,14 @@ func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextS
 	// neighbors (discounted), age-decayed over the proactive-floor horizon.
 	posture := 0.0
 	for _, e := range view.Events {
+		// The credential vector is meaningful only for the current, independently
+		// observed Pod-bound API token. Keep this context scalar on the same
+		// admission boundary as recon and kill-chain; other event types retain
+		// their established handling.
+		if e.Type == model.AttackVectorPodBoundAPIAuth &&
+			!model.PodBoundAPIAuthEventEligible(e, view.Pod, pol.EffectiveEventAgeHorizon()) {
+			continue
+		}
 		rank := v1beta1.ThreatLevelRank(e.ThreatLevel)
 		if rank < 0 {
 			// FAIL-CLOSED. An UNKNOWN threat level is not a harmless one. This used to clamp to 0,
