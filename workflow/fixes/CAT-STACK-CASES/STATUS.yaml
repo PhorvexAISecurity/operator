@@ -2,17 +2,26 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 4
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 98f573d53f54ad8efc90cb5bd8e56d8390b391598e0d4aa1232892095a6b9cae
+    source_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+    at: '2026-09-24T12:58:57+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 fix_id: CAT-STACK-CASES
 issues: []
 title: Add permanent workload-derived Chroma and LiteLLM catalogue controls with causal
   evidence
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -73,10 +82,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Assign participants and pins; deliver independently reviewed PR under standing
-    scope.
-updated_at: '2026-09-24T12:58:18+00:00'
+  owner: stack-integration
+  action: Parallel Chroma/LiteLLM implementation with one shared integration writer
+updated_at: '2026-09-24T12:58:57+00:00'
 configuration_history:
 - at: '2026-09-24T12:58:18+00:00'
   by: codex-lead
@@ -86,3 +94,20 @@ configuration_history:
   - roles
   - verification
   approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T12:58:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T12:58:57+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
