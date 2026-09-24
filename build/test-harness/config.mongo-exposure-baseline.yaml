@@ -20,7 +20,7 @@ mongoExposureFixture:
   mongoService: mongo
   mongoImageID: "__SET_MONGO_IMAGE_DIGEST__"
   policyName: mongo-defense
-  managerNamespace: phorvex
+  managerNamespace: phorvex-system
   managerDeployment: phorvex-phorvex
   managerImageID: "__SET_MANAGER_IMAGE_DIGEST__"
   allowedNodeNames: ["__SET_REVIEWED_CPU_NODE_NAME__"]
