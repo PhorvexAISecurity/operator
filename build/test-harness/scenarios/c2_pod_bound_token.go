@@ -481,7 +481,11 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 			}
 		}
 	}
-	podTokenStageSet(&result, 6, "CONFIRMED", barrier.Operation.ReceiptSHA256, "actual selected action and exact operation receipt")
+	operationReason := "no native request dispatched"
+	if barrier.Operation.TerminationStatus == "REQUEST_CONFIRMED" {
+		operationReason = "exact native request receipt"
+	}
+	podTokenStageSet(&result, 6, "CONFIRMED", barrier.Operation.ReceiptSHA256, operationReason)
 	replayErr := podTokenOutcomeReplay(ctx, env, fixture, source, peer, barrier, &result)
 	if replayErr == nil {
 		podTokenStageSet(&result, 7, "CONFIRMED", podTokenHash([]byte(result.Replay.SourceAfterAt+result.Replay.ServiceAfterAt)), "same captured handles and routed Service rechecked")

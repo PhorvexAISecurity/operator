@@ -45,6 +45,8 @@ class PodBoundTokenChart(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         docs = [d for d in yaml.safe_load_all(result.stdout) if d]
         self.assertFalse([d for d in docs if "pod-bound-token" in d["metadata"]["name"]])
+        self.assertFalse([d for d in docs if d.get("kind") in {"ClusterRole", "ClusterRoleBinding"}
+                          and "creator-policy-read" in d["metadata"]["name"]])
         console = object_named(docs, "Deployment", "phorvex-phorvex-console")
         env = {v["name"]: v["value"] for v in console["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED"], "false")
@@ -60,6 +62,18 @@ class PodBoundTokenChart(unittest.TestCase):
         docs = [d for d in yaml.safe_load_all(result.stdout) if d]
         fixture = object_named(docs, "Role", "phorvex-phorvex-pod-bound-token-fixture")
         creator = object_named(docs, "Role", "phorvex-phorvex-pod-bound-token-creator")
+        creator_policy = object_named(docs, "ClusterRole", "phorvex-phorvex-pod-bound-token-creator-policy-read")
+        self.assertEqual(creator_policy["rules"], [
+            {"apiGroups": ["admissionregistration.k8s.io"],
+             "resources": ["validatingadmissionpolicies", "validatingadmissionpolicybindings"],
+             "resourceNames": ["phorvex-phorvex-e2e-detector"], "verbs": ["get"]},
+        ])
+        policy_binding = object_named(docs, "ClusterRoleBinding", "phorvex-phorvex-pod-bound-token-creator-policy-read")
+        self.assertEqual(policy_binding["roleRef"], {
+            "apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole",
+            "name": "phorvex-phorvex-pod-bound-token-creator-policy-read"})
+        self.assertEqual(policy_binding["subjects"], [{
+            "kind": "ServiceAccount", "name": "phorvex-phorvex-console", "namespace": "phorvex-system"}])
         ledger = object_named(docs, "Role", "phorvex-phorvex-pod-bound-token-capacity-ledger")
         self.assertEqual(fixture["metadata"]["namespace"], "voice")
         self.assertEqual(creator["metadata"]["namespace"], "phorvex-system")

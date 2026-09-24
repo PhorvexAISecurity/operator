@@ -73,6 +73,32 @@ subjects:
   name: {{ include "phorvex.consoleServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
+# The console verifies the installed E2E creator's admission guard before it
+# requests a token. These policies are cluster-scoped, so a namespaced Role
+# cannot grant the two exact GETs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: [{{ printf "%s-e2e-detector" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
 # The console may mint a short-lived token only for the existing admitted
 # E2E creator. That token carries event CREATE/GET/DELETE from e2e-detector's
 # separate ClusterRole and remains subject to both admission policies.
