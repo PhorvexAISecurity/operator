@@ -1,0 +1,245 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 205232740d0c45a83e252f2351728d7ec2226fafe5619c467e9311fe032e56cf
+    source_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+    at: '2026-09-24T12:06:09+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/RED.md
+    sha256: 088c2048b231056bb9152129025e1fa47de0e2d56e4a4d881a3cb087cf9a78a1
+    source_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+    at: '2026-09-24T12:52:18+00:00'
+  preflight:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/preflight/receipt.json
+    sha256: 3ac1b20c416b5574a2195c48c39cd7ea5446a40ea059499de7923261ae5e25d9
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T12:52:51+00:00'
+  implementation:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: 04-diff.patch
+    sha256: 5a6ab861c60af0d5a32bb453c7c7f8833090e1eb302198832b423e3bd916b1a8
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T12:52:51+00:00'
+  l0:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/preflight/run-1790253723228767460/go-phorvex.log
+    sha256: 04d1da0d0b8441a082c2f3634fbcea7f0eb4a74be90b3b577c102e61d1b29b4a
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T12:52:51+00:00'
+  l1:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/verify-offline.log
+    sha256: 6d7a4b72c09e8f37491fe6d2e2a5225ead76ff0ee756af4ba8adacf545c46e1f
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T12:52:52+00:00'
+  l2:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: 05-evidence.md
+    sha256: 771e7135a132e663ae81375ed16aaad735da8051034469cee457f230ebca32d4
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T12:52:52+00:00'
+  positive_control:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/positive-controls.md
+    sha256: 74423954b580ef164011970eae03bf839e7cb254fb2ab1a5d7806da79025c64a
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T12:52:52+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 69e9bd6bd3d3afe1e9a74efe22b29de2feb0d816abeeb604aec4b9c6db42d0ed
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T13:03:35+00:00'
+    baseline_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 48e2a80c38c52ed7121aa597e511d86e6e44644a5ba0e4d098366e6b9b0e6909
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T13:03:35+00:00'
+    incident_sha256: 69e9bd6bd3d3afe1e9a74efe22b29de2feb0d816abeeb604aec4b9c6db42d0ed
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-delta/EQUIVALENCE.json
+    sha256: c3831c262873973c434ba87ef9fd7e2df66135fcc221372d0660540ae627cb15
+    source_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+    at: '2026-09-24T13:11:00+00:00'
+fix_id: CAT-POD-TOKEN-VECTOR
+issues:
+- M-184
+title: Attribute trusted Pod-bound API credential observations to their revocable
+  capability
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: catalogue-reference-review
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/pod-token-response-20260924
+  code_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/pod-token-response-20260924
+  base_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  head_sha: 757e2c5b85614dbf2a50760636648c01077fb364
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/327
+  reviewed_head: 744435b493c9b85f1d5a2979f1e5075ee766142a
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Observe reviewed PR checks and deployment then independently verify exact
+    injected response chain
+updated_at: '2026-09-24T13:11:00+00:00'
+follow_up_to: CAT-POD-TOKEN
+configuration_history:
+- at: '2026-09-24T12:06:05+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T12:52:51+00:00'
+  by: catalogue-reference-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T13:10:58+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T12:06:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T12:06:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T12:52:52+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T12:52:54+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T13:03:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T13:03:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T13:11:00+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-POD-TOKEN-VECTOR:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7

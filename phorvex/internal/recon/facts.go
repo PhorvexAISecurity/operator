@@ -14,7 +14,11 @@
 // value x P(hold) x stage-urgency (x blast for lateral edges).
 package recon
 
-import "github.com/phorvex/phorvex/internal/model"
+import (
+	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
 
 // FactScope identifies the physical ownership domain of a fact. Only pod-scoped facts can enter
 // the current pod-partition decision objective. Node/model/service facts are retained as audit
@@ -149,14 +153,15 @@ type NeighborRef struct {
 // FactContext is the per-asset conditioning the recon profile needs, supplied by the
 // context + kill-chain layers (so the recon profile stays a pure fact/cover map).
 type FactContext struct {
-	AssetValue     float64
-	PHold          float64 // P(attacker still holds) in [0,1]
-	StageUrgency   float64 // [0,1] urgency from the predictive belief horizon
-	LateralUrgency float64 // [0,1] specifically for lateral-movement-stage urgency
-	BlastRadius    float64 // [0,1] normalized graph blast radius
-	Neighbors      []NeighborRef
-	HasGPU         bool
-	Stateful       bool
+	AssetValue      float64
+	PHold           float64       // P(attacker still holds) in [0,1]
+	EventAgeHorizon time.Duration // effective policy horizon for the narrow Pod-bound API-auth vector
+	StageUrgency    float64       // [0,1] urgency from the predictive belief horizon
+	LateralUrgency  float64       // [0,1] specifically for lateral-movement-stage urgency
+	BlastRadius     float64       // [0,1] normalized graph blast radius
+	Neighbors       []NeighborRef
+	HasGPU          bool
+	Stateful        bool
 }
 
 // AssetFacts is the recon profile's output for one asset: the facts it exposes and,
