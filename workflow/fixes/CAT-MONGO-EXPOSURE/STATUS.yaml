@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,11 +16,76 @@ checks:
     at: '2026-09-24T11:55:25+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 344c8d3ca9fc61e473b40f14763addd059d1c395e1b48858dfd0a5a0c903e01b
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:03:31+00:00'
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: 8df3e6ef467224c2eee13fd3ad225d48882cfce83716ad36f307077157233855
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:03:31+00:00'
+  red:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker-red.md
+    sha256: 0be3331ec705dd43cee733f6b9c7ac2ada4ae390bd50b5a20f2a1f1075b2281a
+    source_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+    at: '2026-09-24T14:03:31+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/go-rerun/run-1790257959109033321/go-phorvex.log
+    sha256: 5841a13419b313167856c8e8845a6b4739072ce99d166fab6d471ecd8d202ddd
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:03:31+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker-offline.log
+    sha256: adcd6606ec690ca823883a0cd7030575d0ec540e04eae1c38cec3a5ad69744ea
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:03:31+00:00'
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker-offline.log
+    sha256: adcd6606ec690ca823883a0cd7030575d0ec540e04eae1c38cec3a5ad69744ea
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:03:31+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/worker-positive.md
+    sha256: 0d07bcb369386ff3f895c9e136af1ffa7869e44942ed1dc014431dabc469728e
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:03:31+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 622e1ca3e101b094a475ba42d1c815f07865fa7fa7fdddf91adab05c3809f0c1
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:12:42+00:00'
+    baseline_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e0fa785bdde4549cd425ba76ee72c5282b06c2022afecbc6c55608cb2445fdc1
+    source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+    at: '2026-09-24T14:12:43+00:00'
+    incident_sha256: 622e1ca3e101b094a475ba42d1c815f07865fa7fa7fdddf91adab05c3809f0c1
 fix_id: CAT-MONGO-EXPOSURE
 issues: []
 title: Add causal Mongo configuration exposure catalogue item
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -42,9 +107,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-mongo-exposure-20260924
+  base_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  head_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
   stacked_on: []
 pull_request:
   url: null
@@ -65,13 +130,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -81,10 +146,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: campaign-coverage-plan
-  action: Implement complete named Mongo catalogue item with strict source and cleanup
-    evidence
-updated_at: '2026-09-24T11:55:25+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T14:12:47+00:00'
 configuration_history:
 - at: '2026-09-24T11:55:21+00:00'
   by: codex-lead
@@ -93,6 +158,21 @@ configuration_history:
   - change_class
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-24T14:00:56+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T14:02:29+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T14:03:30+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -111,3 +191,141 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T14:00:57+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T14:00:59+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T14:12:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T14:12:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-MONGO-EXPOSURE:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
+check_history:
+- check: preflight
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/preflight/receipt.json
+  sha256: 344c8d3ca9fc61e473b40f14763addd059d1c395e1b48858dfd0a5a0c903e01b
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:00:56+00:00'
+- check: implementation
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: 04-diff.patch
+  sha256: 8df3e6ef467224c2eee13fd3ad225d48882cfce83716ad36f307077157233855
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:00:56+00:00'
+- check: red
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-red.md
+  sha256: 0be3331ec705dd43cee733f6b9c7ac2ada4ae390bd50b5a20f2a1f1075b2281a
+  source_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  at: '2026-09-24T14:00:57+00:00'
+- check: l0
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/preflight/run-1790257093068243571/go-phorvex.log
+  sha256: a51f1c3de8c0cf501f049ad57cec848dc697af2af33e65ddf56d2793059ab252
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:00:57+00:00'
+- check: l1
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-offline.log
+  sha256: adcd6606ec690ca823883a0cd7030575d0ec540e04eae1c38cec3a5ad69744ea
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:00:57+00:00'
+- check: l2
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-offline.log
+  sha256: adcd6606ec690ca823883a0cd7030575d0ec540e04eae1c38cec3a5ad69744ea
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:00:57+00:00'
+- check: positive_control
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-positive.md
+  sha256: 0d07bcb369386ff3f895c9e136af1ffa7869e44942ed1dc014431dabc469728e
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:00:57+00:00'
+- check: preflight
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/preflight/receipt.json
+  sha256: 344c8d3ca9fc61e473b40f14763addd059d1c395e1b48858dfd0a5a0c903e01b
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:02:29+00:00'
+- check: implementation
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: 04-diff.patch
+  sha256: 8df3e6ef467224c2eee13fd3ad225d48882cfce83716ad36f307077157233855
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:02:29+00:00'
+- check: red
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-red.md
+  sha256: 0be3331ec705dd43cee733f6b9c7ac2ada4ae390bd50b5a20f2a1f1075b2281a
+  source_sha: 7ec25f291d917b2b9af0532d102e933f19ece361
+  at: '2026-09-24T14:02:29+00:00'
+- check: l0
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/preflight/go-rerun/run-1790257959109033321/go-phorvex.log
+  sha256: 5841a13419b313167856c8e8845a6b4739072ce99d166fab6d471ecd8d202ddd
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:02:29+00:00'
+- check: l1
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-offline.log
+  sha256: adcd6606ec690ca823883a0cd7030575d0ec540e04eae1c38cec3a5ad69744ea
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:02:29+00:00'
+- check: l2
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-offline.log
+  sha256: adcd6606ec690ca823883a0cd7030575d0ec540e04eae1c38cec3a5ad69744ea
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:02:29+00:00'
+- check: positive_control
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/worker-positive.md
+  sha256: 0d07bcb369386ff3f895c9e136af1ffa7869e44942ed1dc014431dabc469728e
+  source_sha: 95d5e50d00c4b9abe228e2a67fe47df4d62a2835
+  at: '2026-09-24T14:02:29+00:00'
