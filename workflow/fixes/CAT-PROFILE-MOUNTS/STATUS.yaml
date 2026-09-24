@@ -1,0 +1,345 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 17
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 8199604d7ba53e67f97ae3a58967fb095a2b29fb2c89e0a06b04b6cae2c83b02
+    source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+    at: '2026-09-24T20:45:01+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/BASELINE-FOUR-RENDER.json
+    sha256: eff5a58ad58137c33f9579e4a57e3d30ed16113640c0fa3295f7586438a1bbc7
+    source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+    at: '2026-09-24T18:21:25+00:00'
+  preflight:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/receipt-delivery.json
+    sha256: 05a337a416316c3f13c1b39a0e35cc90b4fdd4b0ad88b69e5374bf8a977ef27f
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
+  implementation:
+    result: PASS
+    by: audit-window-repair
+    artifact: 04-diff.patch
+    sha256: 5c4ce95fa5f98d5373b4491a9808f7624c40a695418450f05a2c31b720c9bd7f
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
+  l0:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/receipt-delivery.json
+    sha256: 05a337a416316c3f13c1b39a0e35cc90b4fdd4b0ad88b69e5374bf8a977ef27f
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
+  l1:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/delivery-render.json
+    sha256: f5c75f7552aebb06daa876f34108117240681115ddf12a1fdd2fa5f19edfd6ee
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
+  l2:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/package-delivery-test.log
+    sha256: 18acdd71356dac684667355d509df04f481f64ca4b924bdfec1b3d9d4e550765
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
+  positive_control:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/all-five-smoke.log
+    sha256: 9b1617f1f4c1a0823b305f279a49a1745cb4235a59f210c8d04902ce660e4f1c
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 5831b6e3c1782974548dd70dc48dbaf950822cfc33fca542a879ada2f52ed6ab
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:19:24+00:00'
+    baseline_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 674e9c44dc857d19ecb6067c41b845d0a9ee1e6fabdd03e3a0da71a8abd167ec
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:19:24+00:00'
+    incident_sha256: 5831b6e3c1782974548dd70dc48dbaf950822cfc33fca542a879ada2f52ed6ab
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/portable-publication-equivalence.md
+    sha256: 79df43b38be809291c5aa45dd06e93e992a3816459d71f7c8941d50237f59b41
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:20:14+00:00'
+fix_id: CAT-PROFILE-MOUNTS
+issues: []
+title: Make fixed Mongo and static guardrail profiles configurable through reviewed
+  chart mounts
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: audit-window-repair
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-profile-mounts-20260924
+  code_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-profile-mounts-20260924
+  base_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  head_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/332
+  reviewed_head: 7a19602a2c9630db39eef0b7f5f643d77633885e
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T21:20:14+00:00'
+follow_up_to: CAT-CATALOGUE-BATCH
+configuration_history:
+- at: '2026-09-24T18:09:55+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T18:50:22+00:00'
+  by: audit-window-repair
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T18:52:59+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T21:18:07+00:00'
+  by: audit-window-repair
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T21:20:14+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T18:10:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T18:10:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T18:50:23+00:00'
+  by: audit-window-repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T18:50:25+00:00'
+  by: audit-window-repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T18:51:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T18:51:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T18:53:01+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 1030dab64e5967a3663229c740ebbdd08a6e88c095704a26b15bf8611c08d132
+  source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  at: '2026-09-24T18:10:24+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/BASELINE-RENDER.json
+  sha256: aca8b3f313cc64a4d4affa04d3ac8f98aee6636710a07359cb1a3bba9b330203
+  source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  at: '2026-09-24T18:12:52+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: e123854a0355fb8ec1661cccc3c4c22cbc12e965acabeda35e90e1dbdbf212b3
+  source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  at: '2026-09-24T18:20:28+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: preflight
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/preflight/receipt.json
+  sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: implementation
+  result: PASS
+  by: audit-window-repair
+  artifact: 04-diff.patch
+  sha256: bbb725b6b3e777679f2fc457c90a94b53e55c15b36a43c4890b8bab71de977f5
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: l0
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/preflight/receipt.json
+  sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: l1
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/worker/chart-render.log
+  sha256: 287ffbc005e8918df3473c16f651907658bd7dc5e510fd2eb1eef2e186481b80
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: l2
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/worker/offline-verify.log
+  sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: positive_control
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/worker/offline-verify.log
+  sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:51:07+00:00'
+  baseline_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 586cebe59fef820f2de27b54768dbbdcb69779aff537b14b5829c0b3f3fd236a
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:51:07+00:00'
+  incident_sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: cbe8f7655cdcf6365ae766816a39539292951e88b0fa75cf2236f124a74974a1
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:52:07+00:00'
+handoff:
+  id: CAT-PROFILE-MOUNTS:15:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 15

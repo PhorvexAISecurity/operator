@@ -1,3 +1,6 @@
+{{- if and .Values.phorvex.console.guardrailStatic.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "guardrailStatic.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount

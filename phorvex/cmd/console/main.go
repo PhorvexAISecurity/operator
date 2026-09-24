@@ -330,6 +330,44 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return err
 	}
 	cfg.MongoExposureEnabled = mongoExposureEnabled
+	mongoExposureProfileSHA256, _ := lookup("PHORVEX_CONSOLE_MONGO_EXPOSURE_PROFILE_SHA256")
+	if mongoExposureEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(mongoExposureProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_MONGO_EXPOSURE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.MongoExposureProfileSHA256 = mongoExposureProfileSHA256
+	natsExposureEnabled, err := readBool("PHORVEX_CONSOLE_NATS_EXPOSURE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.NATSExposureEnabled = natsExposureEnabled
+	natsExposureProfileSHA256, _ := lookup("PHORVEX_CONSOLE_NATS_EXPOSURE_PROFILE_SHA256")
+	if natsExposureEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(natsExposureProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_NATS_EXPOSURE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.NATSExposureProfileSHA256 = natsExposureProfileSHA256
+	natsResponseEnabled, err := readBool("PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_ENABLED")
+	if err != nil {
+		return err
+	}
+	if natsResponseEnabled && !natsExposureEnabled {
+		return errors.New("PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_ENABLED requires NATS exposure baseline")
+	}
+	cfg.NATSClientResponseEnabled = natsResponseEnabled
+	natsResponseProfileSHA256, _ := lookup("PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_PROFILE_SHA256")
+	if natsResponseEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(natsResponseProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.NATSClientResponseProfileSHA256 = natsResponseProfileSHA256
+	guardrailStaticEnabled, err := readBool("PHORVEX_CONSOLE_GUARDRAIL_STATIC_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.GuardrailStaticEnabled = guardrailStaticEnabled
+	guardrailStaticProfileSHA256, _ := lookup("PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256")
+	if guardrailStaticEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(guardrailStaticProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.GuardrailStaticProfileSHA256 = guardrailStaticProfileSHA256
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err

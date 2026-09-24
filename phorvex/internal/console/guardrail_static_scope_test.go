@@ -1,6 +1,8 @@
 package console
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +39,8 @@ func TestGuardrailStaticSuiteDestinationRejectsIncompleteProfile(t *testing.T) {
 	rm := NewRunManager(Config{Root: dir, HarnessDir: dir})
 	path := filepath.Join(dir, allowedConfigs[guardrailStaticConfig].File)
 	raw := pinnedStaticProfile(t)
+	rm.cfg.GuardrailStaticEnabled = true
+	rm.cfg.GuardrailStaticProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256(raw))
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +57,7 @@ func TestGuardrailStaticSuiteDestinationRejectsIncompleteProfile(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := []byte(strings.Replace(string(raw), tc.old, tc.new, 1))
+			rm.cfg.GuardrailStaticProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256(changed))
 			if err := os.WriteFile(path, changed, 0600); err != nil {
 				t.Fatal(err)
 			}

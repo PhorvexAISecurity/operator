@@ -373,6 +373,8 @@ phorvex:
     # harness profile also requires exact reviewed pins before launch.
     guardrailStatic:
       enabled: false
+      configMapName: ""
+      profileSHA256: ""
       sourceConfigMap: guardrail-proxy
       guardrailJournalName: ""
       kvJournalName: ""
@@ -380,15 +382,21 @@ phorvex:
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:
       enabled: false
+      configMapName: ""
+      profileSHA256: ""
       # Adds only fixed-namespace response fixture verbs when explicitly enabled
       # alongside natsExposure.enabled. Existing baseline grants stay narrow.
       clientResponse:
         enabled: false
+        configMapName: ""
+        profileSHA256: ""
     # Opt-in authority for the fixed, unscored Mongo synthetic-document
     # configuration exposure control. The existing document-store namespace,
     # Service and server-owned harness config are not browser-selectable.
     mongoExposure:
       enabled: false
+      configMapName: ""
+      profileSHA256: ""
     # One fixed, injected Pod-bound API bearer response case. Enabling this
     # grants Voice fixture mutations, a name-bound E2E TokenRequest, and a
     # read-only exact protected-reservation ledger check.
