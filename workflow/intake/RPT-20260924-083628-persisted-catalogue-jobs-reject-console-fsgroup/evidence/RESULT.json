@@ -1,0 +1,38 @@
+[
+  {
+    "name": "baseline",
+    "command": [
+      "/home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go",
+      "test",
+      "-overlay",
+      "/home/mehrdad/operator/.git/phorvex-workflow/catalogue-coverage-20260923/persisted-reader-lead/baseline-overlay.json",
+      "./internal/cataloguev1",
+      "-run",
+      "^TestPersistedJobAndRuntimeLoadAfterFSGroupMode$",
+      "-count=1"
+    ],
+    "exit_code": 1,
+    "logSHA256": "445ee9115021bcc9a3093256e5c86d0f350f914329c11b5ef0e7ed5c3d3803ef"
+  },
+  {
+    "name": "head",
+    "command": [
+      "/home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go",
+      "test",
+      "./internal/cataloguev1",
+      "-count=1"
+    ],
+    "exit_code": 0,
+    "logSHA256": "78378f8b831daf6409780768e0f90194b828a5c89b9a674a68ff4082dff9a853"
+  },
+  {
+    "name": "vet",
+    "command": [
+      "/home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go",
+      "vet",
+      "./internal/cataloguev1"
+    ],
+    "exit_code": 0,
+    "logSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

@@ -1,0 +1,230 @@
+schema_version: 1
+intake_id: RPT-20260924-083628-persisted-catalogue-jobs-reject-console-fsgroup
+kind: BUG
+title: Persisted catalogue jobs reject console fsGroup permissions after rollout
+state: FILED
+reporter: codex-lead
+approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T08:36:28+00:00'
+updated_at: '2026-09-24T08:48:29+00:00'
+pins:
+  source_main_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  source_release: 0.4.155
+  deployed_image: phorvex-console:0.4.155
+  deployed_digest: sha256:efd516d3f3afdc8a2160a8b2a08e944cf6d073a175ea3313af2f4969982595fe
+  deployed_git_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  environment: dev-existing-cluster
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-140
+    score: 41
+    overlap:
+    - after
+    - all
+    - already
+    - any
+    - but
+    - confirmed
+    - deletion
+    - does
+    - evidence
+    - exactly
+    - explanation
+    - fact
+    - fresh
+    - intended
+    - into
+    - its
+    - must
+    - not
+    - 'null'
+    - one
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-144
+    score: 41
+    overlap:
+    - after
+    - all
+    - already
+    - any
+    - but
+    - capture
+    - confirmed
+    - does
+    - each
+    - evidence
+    - exactly
+    - explicit
+    - file
+    - followed
+    - gap
+    - gate
+    - its
+    - must
+    - not
+    - observed
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-136
+    score: 40
+    overlap:
+    - all
+    - already
+    - any
+    - api
+    - but
+    - chart
+    - console
+    - default
+    - endpoint
+    - evidence
+    - files
+    - gap
+    - gate
+    - identity
+    - into
+    - its
+    - mode
+    - not
+    - one
+    - only
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-168
+    score: 37
+    overlap:
+    - after
+    - bounded
+    - changes
+    - cleanup
+    - completed
+    - console
+    - does
+    - evidence
+    - explicit
+    - failed
+    - failure
+    - identity
+    - its
+    - journal
+    - mode
+    - not
+    - observed
+    - partial
+    - policy
+    - read
+    title: Console availability experiment claims attack results despite failed stimulus
+      and unsafe restart recovery
+  - issue_id: M-2
+    score: 34
+    overlap:
+    - adds
+    - all
+    - already
+    - any
+    - api
+    - but
+    - completed
+    - confirmed
+    - does
+    - evidence
+    - fail
+    - fresh
+    - gate
+    - implementation
+    - installed
+    - its
+    - metadata
+    - not
+    - observed
+    - one
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-142
+    score: 28
+    overlap:
+    - already
+    - any
+    - does
+    - evidence
+    - exactly
+    - explicit
+    - historical
+    - independent
+    - into
+    - its
+    - not
+    - observed
+    - one
+    - only
+    - owned
+    - remains
+    - repair
+    - resolved
+    - sets
+    - state
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-192
+  fix_id: CAT-PERSISTED-FSGROUP
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: campaign-cleanup-audit
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-192.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T08:43:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T08:43:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T08:47:11+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T08:48:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T08:48:29+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-192.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

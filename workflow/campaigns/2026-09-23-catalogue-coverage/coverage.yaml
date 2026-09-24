@@ -74,10 +74,11 @@ progress_accounting:
   eligible_installed_defense_efficacy_trials: 0
   installed_source_at_round_19: a50d796af128cd4109875e03eaf429d460126740
   installed_source_at_round_20: a50d796af128cd4109875e03eaf429d460126740
-  pending_installed_verification: PR323 contains reviewed source changes for NATS console controls, detector
-    contracts and response tracing; M-184 and CAT-RESOURCE-TRACE source changes are also ahead of the
-    observed installed a50d796a manager/console. No source-only fix is counted as an installed effect
-    or regression closure.
+  pending_installed_verification: At Sep24 08:21–08:24 the manager and console were bound to PR323 merge
+    e2ee94315828a180a83902f6eb61e37a66bce22d through exact build digests and manager audit source.
+    Issue-specific behavioral reruns remain pending; the adapter detector producer is still the old
+    source. Earlier rounds keep their own installed-source pins and no old result is upgraded by rollout.
+
 event_modes:
   direct: Direct mechanism probe; no installed-manager or attack claim.
   proactive: Installed decision without an alert; observe actual context and no-action.

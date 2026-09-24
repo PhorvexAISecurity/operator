@@ -1,0 +1,113 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 488a0b1db1a1bd0bc2b80400f2db723d7f943d0b4fe8ddb23b7b7c504f355eab
+    source_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+    at: '2026-09-24T08:51:12+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+fix_id: CAT-PERSISTED-FSGROUP
+issues:
+- M-192
+title: Load private catalogue records after fsGroup remount
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-cleanup-audit
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+  deployed_image: phorvex-console:0.4.155
+  deployed_git_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: null
+  base_sha: null
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: campaign-cleanup-audit
+  action: Integrate reviewed repair and complete preflight for source handoff.
+updated_at: '2026-09-24T08:51:12+00:00'
+configuration_history:
+- at: '2026-09-24T08:50:14+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T08:51:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T08:51:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false

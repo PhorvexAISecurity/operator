@@ -296,3 +296,10 @@ intakes:
     state: FILED
     issue_id: M-191
     aliases: []
+  RPT-20260924-083628-persisted-catalogue-jobs-reject-console-fsgroup:
+    directory: intake/RPT-20260924-083628-persisted-catalogue-jobs-reject-console-fsgroup
+    kind: BUG
+    title: Persisted catalogue jobs reject console fsGroup permissions after rollout
+    state: FILED
+    issue_id: M-192
+    aliases: []
