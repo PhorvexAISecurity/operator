@@ -41,6 +41,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -334,6 +335,11 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return err
 	}
 	cfg.PodBoundTokenEnabled = podBoundTokenEnabled
+	podBoundTokenProfileSHA256, _ := lookup("PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256")
+	if podBoundTokenEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(podBoundTokenProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.PodBoundTokenProfileSHA256 = podBoundTokenProfileSHA256
 	chromaEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_CHROMA_ENABLED")
 	if err != nil {
 		return err
