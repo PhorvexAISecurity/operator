@@ -45,6 +45,26 @@ func TestNATSResponseEndpointSliceRequiresExactTwoOriginalReadyMembers(t *testin
 	if err := natsResponseEndpointMembersAfter([]discoveryv1.EndpointSlice{*peerOnly}, name, "service-uid", client, peer); err != nil {
 		t.Fatalf("legitimate peer-only route after source quarantine refused: %v", err)
 	}
+	replacement := natsResponsePodIdentity{Name: "replacement", UID: "replacement-uid", IP: "192.0.2.9",
+		ContainerID: "containerd://replacement", ImageID: "image@sha256:replacement"}
+	withReplacement := peerOnly.DeepCopy()
+	withReplacement.Endpoints = append(withReplacement.Endpoints, discoveryv1.Endpoint{Addresses: []string{replacement.IP},
+		Conditions: discoveryv1.EndpointConditions{Ready: &yes, Serving: &yes, Terminating: new(bool)},
+		TargetRef:  &corev1.ObjectReference{Kind: "Pod", Name: replacement.Name, Namespace: natsResponseFixtureNamespace, UID: replacement.UID}})
+	if err := natsResponseEndpointMembersAfterWithReplacements([]discoveryv1.EndpointSlice{*withReplacement}, name,
+		"service-uid", client, peer, []natsResponsePodIdentity{replacement}); err != nil {
+		t.Fatalf("API-attested same-RS replacement endpoint refused: %v", err)
+	}
+	if err := natsResponseEndpointMembersAfter([]discoveryv1.EndpointSlice{*withReplacement}, name,
+		"service-uid", client, peer); err == nil {
+		t.Fatal("unattested replacement endpoint accepted")
+	}
+	changedReplacement := replacement
+	changedReplacement.UID = "other-uid"
+	if err := natsResponseEndpointMembersAfterWithReplacements([]discoveryv1.EndpointSlice{*withReplacement}, name,
+		"service-uid", client, peer, []natsResponsePodIdentity{changedReplacement}); err == nil {
+		t.Fatal("wrong-UID replacement endpoint accepted")
+	}
 	peerMissing := slice.DeepCopy()
 	peerMissing.Endpoints = peerMissing.Endpoints[:1]
 	if err := natsResponseEndpointMembersAfter([]discoveryv1.EndpointSlice{*peerMissing}, name, "service-uid", client, peer); err == nil {
@@ -102,6 +122,58 @@ func TestNATSResponseReadyPodPinsOriginalOwnerProcessAndHealth(t *testing.T) {
 			mutate(bad)
 			if _, err := natsResponseReadyPod(bad, "rs-uid", name+"-rs", nonce, env.Config.NATSExposureFixture.NodeName, env.Config.NATSExposureFixture.ObserverImage); err == nil {
 				t.Fatal("changed consumer authority accepted")
+			}
+		})
+	}
+}
+
+func TestNATSResponseReplacementMemberRequiresCurrentReplicaSetAndObserverSource(t *testing.T) {
+	env := responseManifestEnv()
+	nonce := env.Config.NATSExposureFixture.Nonce
+	name := natsResponseName(nonce)
+	dep := natsResponseDeployment(env, name)
+	yes := true
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name + "-replacement-0", Namespace: env.Config.Namespace,
+		UID: "replacement-uid", Labels: dep.Spec.Template.Labels,
+		OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: name + "-rs", UID: "rs-uid", Controller: &yes}}},
+		Spec: dep.Spec.Template.Spec,
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, PodIP: "192.0.2.9",
+			Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+			ContainerStatuses: []corev1.ContainerStatus{{Name: "observer", Ready: true, RestartCount: 0,
+				ContainerID: "containerd://replacement", ImageID: env.Config.NATSExposureFixture.ObserverImage}}}}
+	slice := discoveryv1.EndpointSlice{Endpoints: []discoveryv1.Endpoint{{TargetRef: &corev1.ObjectReference{
+		Kind: "Pod", Namespace: env.Config.Namespace, Name: pod.Name, UID: pod.UID}}}}
+	check := func(p *corev1.Pod) error {
+		env.Kube = fake.NewSimpleClientset(p)
+		got, pods, err := natsResponseReplacementMembers(t.Context(), env,
+			natsResponseFixture{Name: name,
+				Client:        natsResponsePodIdentity{UID: "source-uid", IP: "192.0.2.7", ContainerID: "containerd://source"},
+				Peer:          natsResponsePodIdentity{UID: "peer-uid", IP: "192.0.2.8", ContainerID: "containerd://peer"},
+				ReplicaSetUID: "rs-uid"}, []discoveryv1.EndpointSlice{slice}, name+"-rs")
+		if err == nil && (len(got) != 1 || got[0].UID != p.UID || pods[p.UID] == nil) {
+			t.Fatal("replacement identity not retained")
+		}
+		return err
+	}
+	if err := check(pod); err != nil {
+		t.Fatalf("actual same-RS observer replacement refused: %v", err)
+	}
+	for label, mutate := range map[string]func(*corev1.Pod){
+		"foreign-rs":    func(p *corev1.Pod) { p.OwnerReferences[0].UID = "other-rs" },
+		"foreign-name":  func(p *corev1.Pod) { p.Name = "unrelated-replacement" },
+		"config-shadow": func(p *corev1.Pod) { p.Spec.Containers[0].VolumeMounts[0].SubPath = "other" },
+		"restarted":     func(p *corev1.Pod) { p.Status.ContainerStatuses[0].RestartCount = 1 },
+		"foreign-image": func(p *corev1.Pod) { p.Status.ContainerStatuses[0].ImageID = "foreign" },
+		"source-ip":     func(p *corev1.Pod) { p.Status.PodIP = "192.0.2.7" },
+		"peer-process":  func(p *corev1.Pod) { p.Status.ContainerStatuses[0].ContainerID = "containerd://peer" },
+		"foreign-role":  func(p *corev1.Pod) { p.Labels[natsResponseRoleLabel] = "source" },
+		"wrong-uid":     func(p *corev1.Pod) { p.UID = "same-name-replacement" },
+	} {
+		t.Run(label, func(t *testing.T) {
+			bad := pod.DeepCopy()
+			mutate(bad)
+			if err := check(bad); err == nil {
+				t.Fatal("unowned replacement admitted")
 			}
 		})
 	}

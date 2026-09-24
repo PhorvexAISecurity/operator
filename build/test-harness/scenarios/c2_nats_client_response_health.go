@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"reflect"
 	"sort"
 	"time"
 
@@ -21,9 +22,14 @@ func natsResponseProbeHealth(ctx context.Context, addressKind, ip, nonce string,
 	return natsResponseProbeHealthPort(ctx, addressKind, ip, 8080, nonce, serviceUID, expectedPodUID, otherOriginalUID, serverIDs)
 }
 
-// The Service may route either original consumer, but the observed answer
-// must still be a current, serving endpoint. The direct peer probe supplies
-// the independent legitimate-consumer availability control.
+func natsResponseProbeHealthMembers(ctx context.Context, addressKind, ip, nonce string, serviceUID, expectedPodUID types.UID,
+	allowedServiceMembers map[types.UID]bool, serverIDs map[string]bool) (natsResponseServiceReceipt, error) {
+	return natsResponseProbeHealthPortMembers(ctx, addressKind, ip, 8080, nonce, serviceUID, expectedPodUID, allowedServiceMembers, serverIDs)
+}
+
+// The Service may route any exact current, API-attested serving member,
+// including one admitted ReplicaSet replacement after quarantine. The direct
+// original-peer probe supplies the independent legitimate availability control.
 func natsResponseBindServiceReceipt(receipt *natsResponseServiceReceipt, before, after natsResponseCurrentControl) error {
 	if receipt == nil {
 		return errors.New("NATS response Service HTTP receipt absent")
@@ -36,21 +42,37 @@ func natsResponseBindServiceReceipt(receipt *natsResponseServiceReceipt, before,
 	}
 	receipt.EndpointSliceUID = after.EndpointSliceUID
 	receipt.EndpointMemberUIDs = nil
+	receipt.EndpointMembers = nil
 	for uid := range after.Members {
-		if !before.Members[uid] {
-			return errors.New("NATS response Service membership grew during HTTP probe")
+		proof := after.MemberDetails[uid]
+		if !before.Members[uid] || !reflect.DeepEqual(before.MemberDetails[uid], proof) ||
+			proof.PodUID != uid || proof.PodName == "" || proof.PodIP == "" || proof.OwnerKind == "" ||
+			proof.OwnerUID == "" || proof.ContainerID == "" || proof.ImageID == "" || !proof.Ready || proof.RestartCount != 0 {
+			return errors.New("NATS response Service membership or member process changed during HTTP probe")
 		}
 		receipt.EndpointMemberUIDs = append(receipt.EndpointMemberUIDs, uid)
+		receipt.EndpointMembers = append(receipt.EndpointMembers, proof)
 	}
 	sort.Slice(receipt.EndpointMemberUIDs, func(i, j int) bool { return receipt.EndpointMemberUIDs[i] < receipt.EndpointMemberUIDs[j] })
+	sort.Slice(receipt.EndpointMembers, func(i, j int) bool { return receipt.EndpointMembers[i].PodUID < receipt.EndpointMembers[j].PodUID })
 	return nil
 }
 
 func natsResponseProbeHealthPort(ctx context.Context, addressKind, ip string, port int, nonce string, serviceUID, expectedPodUID, otherOriginalUID types.UID, serverIDs map[string]bool) (natsResponseServiceReceipt, error) {
+	allowed := map[types.UID]bool{expectedPodUID: true}
+	if addressKind == "SERVICE" && otherOriginalUID != "" {
+		allowed[otherOriginalUID] = true
+	}
+	return natsResponseProbeHealthPortMembers(ctx, addressKind, ip, port, nonce, serviceUID, expectedPodUID, allowed, serverIDs)
+}
+
+func natsResponseProbeHealthPortMembers(ctx context.Context, addressKind, ip string, port int, nonce string,
+	serviceUID, expectedPodUID types.UID, allowedServiceMembers map[types.UID]bool, serverIDs map[string]bool) (natsResponseServiceReceipt, error) {
 	receipt := natsResponseServiceReceipt{AddressKind: addressKind, ServiceUID: serviceUID,
 		Status: "UNKNOWN", ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if (addressKind != "SERVICE" && addressKind != "PEER_DIRECT") || net.ParseIP(ip) == nil ||
-		port < 1 || port > 65535 || !natsResponseNonce.MatchString(nonce) || serviceUID == "" || expectedPodUID == "" || len(serverIDs) == 0 {
+		port < 1 || port > 65535 || !natsResponseNonce.MatchString(nonce) || serviceUID == "" || expectedPodUID == "" ||
+		len(serverIDs) == 0 || (addressKind == "SERVICE" && len(allowedServiceMembers) == 0) {
 		return receipt, errors.New("NATS response health target authority incomplete")
 	}
 	address := net.JoinHostPort(ip, fmt.Sprint(port))
@@ -88,18 +110,11 @@ func natsResponseProbeHealthPort(ctx context.Context, addressKind, ip string, po
 				if json.Unmarshal(body, &got) != nil || got.Nonce != nonce || !serverIDs[got.ServerID] {
 					return receipt, errors.New("NATS response HTTP health answered from wrong Pod or broker")
 				}
-				if got.PodUID == string(otherOriginalUID) && addressKind == "SERVICE" && otherOriginalUID != expectedPodUID {
-					// The Service can route either original member. Record the
-					// actual source response; separate PEER_DIRECT must still prove
-					// the legitimate peer and current EndpointSlice membership.
-					receipt.PodUID, receipt.ServerID, receipt.Status = otherOriginalUID, got.ServerID, "HTTP_200"
-					receipt.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
-					return receipt, nil
-				}
-				if got.PodUID != string(expectedPodUID) {
+				if (addressKind == "PEER_DIRECT" && got.PodUID != string(expectedPodUID)) ||
+					(addressKind == "SERVICE" && !allowedServiceMembers[types.UID(got.PodUID)]) {
 					return receipt, errors.New("NATS response HTTP health answered from wrong Pod")
 				}
-				receipt.PodUID, receipt.ServerID, receipt.Status = expectedPodUID, got.ServerID, "HTTP_200"
+				receipt.PodUID, receipt.ServerID, receipt.Status = types.UID(got.PodUID), got.ServerID, "HTTP_200"
 				receipt.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
 				return receipt, nil
 			}

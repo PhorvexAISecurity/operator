@@ -346,22 +346,38 @@ func natsResponseReadyPod(p *corev1.Pod, rsUID types.UID, name, nonce, node, ima
 // every packet actually traversed kube-proxy. Later HTTP checks separately
 // exercise the real Service address and exact peer response identity.
 func natsResponseEndpointMembers(slices []discoveryv1.EndpointSlice, serviceName string, serviceUID types.UID, client, peer natsResponsePodIdentity) error {
-	return natsResponseEndpointMembersForPhase(slices, serviceName, serviceUID, client, peer, true)
+	return natsResponseEndpointMembersForPhase(slices, serviceName, serviceUID, client, peer, true, nil)
 }
 
 func natsResponseEndpointMembersAfter(slices []discoveryv1.EndpointSlice, serviceName string, serviceUID types.UID, client, peer natsResponsePodIdentity) error {
-	return natsResponseEndpointMembersForPhase(slices, serviceName, serviceUID, client, peer, false)
+	return natsResponseEndpointMembersAfterWithReplacements(slices, serviceName, serviceUID, client, peer, nil)
 }
 
-func natsResponseEndpointMembersForPhase(slices []discoveryv1.EndpointSlice, serviceName string, serviceUID types.UID, client, peer natsResponsePodIdentity, requireClient bool) error {
+func natsResponseEndpointMembersAfterWithReplacements(slices []discoveryv1.EndpointSlice, serviceName string,
+	serviceUID types.UID, client, peer natsResponsePodIdentity, replacements []natsResponsePodIdentity) error {
+	if len(replacements) > 1 {
+		return errors.New("NATS response Service has more than one replacement")
+	}
+	return natsResponseEndpointMembersForPhase(slices, serviceName, serviceUID, client, peer, false, replacements)
+}
+
+func natsResponseEndpointMembersForPhase(slices []discoveryv1.EndpointSlice, serviceName string, serviceUID types.UID, client, peer natsResponsePodIdentity, requireClient bool, replacements []natsResponsePodIdentity) error {
 	if serviceName == "" || serviceUID == "" || client.UID == "" || peer.UID == "" || client.UID == peer.UID || len(slices) != 1 {
 		return errors.New("NATS response EndpointSlice authority incomplete")
 	}
 	expected := map[types.UID]natsResponsePodIdentity{client.UID: client, peer.UID: peer}
+	for _, replacement := range replacements {
+		if replacement.UID == "" || replacement.Name == "" || replacement.IP == "" || replacement.ContainerID == "" ||
+			replacement.ImageID == "" || expected[replacement.UID].UID != "" {
+			return errors.New("NATS response replacement identity incomplete or duplicate")
+		}
+		expected[replacement.UID] = replacement
+	}
 	seen := map[types.UID]bool{}
 	for _, slice := range slices {
 		if slice.UID == "" || slice.DeletionTimestamp != nil || slice.Labels[discoveryv1.LabelServiceName] != serviceName ||
-			slice.AddressType != discoveryv1.AddressTypeIPv4 || len(slice.Ports) != 1 || len(slice.OwnerReferences) != 1 {
+			slice.AddressType != discoveryv1.AddressTypeIPv4 || len(slice.Ports) != 1 || len(slice.OwnerReferences) != 1 ||
+			len(slice.Endpoints) > 2 {
 			return errors.New("NATS response EndpointSlice identity differs")
 		}
 		owner := slice.OwnerReferences[0]
@@ -391,6 +407,11 @@ func natsResponseEndpointMembersForPhase(slices []discoveryv1.EndpointSlice, ser
 	}
 	if !seen[peer.UID] || requireClient && !seen[client.UID] {
 		return errors.New("NATS response Service lacks required original consumer endpoints")
+	}
+	for _, replacement := range replacements {
+		if !seen[replacement.UID] {
+			return errors.New("NATS response admitted replacement not a serving endpoint")
+		}
 	}
 	return nil
 }

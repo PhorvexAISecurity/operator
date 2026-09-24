@@ -15,8 +15,15 @@ import (
 )
 
 func TestNATSResponseServiceAnswerRequiresStableEndpointMembership(t *testing.T) {
-	before := natsResponseCurrentControl{ServiceIP: "10.0.0.1", EndpointSliceUID: "slice-uid", Members: map[types.UID]bool{"source-uid": true, "peer-uid": true}}
-	after := natsResponseCurrentControl{ServiceIP: "10.0.0.1", EndpointSliceUID: "slice-uid", Members: map[types.UID]bool{"peer-uid": true}}
+	proof := func(uid types.UID) natsResponseServiceMember {
+		return natsResponseServiceMember{PodUID: uid, PodName: string(uid), PodIP: "192.0.2.8", OwnerKind: "ReplicaSet",
+			OwnerUID: "rs-uid", ContainerID: "containerd://" + string(uid), ImageID: "image@sha256:owned", Ready: true}
+	}
+	before := natsResponseCurrentControl{ServiceIP: "10.0.0.1", EndpointSliceUID: "slice-uid",
+		Members:       map[types.UID]bool{"source-uid": true, "peer-uid": true},
+		MemberDetails: map[types.UID]natsResponseServiceMember{"source-uid": proof("source-uid"), "peer-uid": proof("peer-uid")}}
+	after := natsResponseCurrentControl{ServiceIP: "10.0.0.1", EndpointSliceUID: "slice-uid",
+		Members: map[types.UID]bool{"peer-uid": true}, MemberDetails: map[types.UID]natsResponseServiceMember{"peer-uid": proof("peer-uid")}}
 	receipt := natsResponseServiceReceipt{AddressKind: "SERVICE", Status: "HTTP_200", PodUID: "source-uid"}
 	if err := natsResponseBindServiceReceipt(&receipt, before, after); err == nil {
 		t.Fatal("source HTTP response retained availability credit after exact source endpoint left Service")
@@ -28,6 +35,42 @@ func TestNATSResponseServiceAnswerRequiresStableEndpointMembership(t *testing.T)
 	after.Members = map[types.UID]bool{"replacement-uid": true}
 	if err := natsResponseBindServiceReceipt(&receipt, before, after); err == nil {
 		t.Fatal("same-name replacement endpoint accepted")
+	}
+	before.Members, after.Members = map[types.UID]bool{"peer-uid": true, "replacement-uid": true}, map[types.UID]bool{"peer-uid": true, "replacement-uid": true}
+	before.MemberDetails["replacement-uid"], after.MemberDetails["replacement-uid"] = proof("replacement-uid"), proof("replacement-uid")
+	receipt.PodUID = "replacement-uid"
+	if err := natsResponseBindServiceReceipt(&receipt, before, after); err != nil || len(receipt.EndpointMembers) != 2 {
+		t.Fatalf("attested replacement Service answer refused: %+v %v", receipt, err)
+	}
+	after.MemberDetails["replacement-uid"] = natsResponseServiceMember{PodUID: "replacement-uid", OwnerKind: "ReplicaSet", OwnerUID: "other-rs"}
+	if err := natsResponseBindServiceReceipt(&receipt, before, after); err == nil {
+		t.Fatal("changed replacement process accepted between snapshots")
+	}
+}
+
+func TestNATSResponseServiceProbeAdmitsOnlyCurrentReplacementUID(t *testing.T) {
+	const nonce = "0123456789abcdef01234567"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"nonce":%q,"podUID":"replacement-uid","serverID":"NATS-A"}`, nonce)
+	}))
+	defer srv.Close()
+	ip, rawPort, err := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, _ := strconv.Atoi(rawPort)
+	allowed := map[types.UID]bool{"peer-uid": true, "replacement-uid": true}
+	good, err := natsResponseProbeHealthPortMembers(t.Context(), "SERVICE", ip, port, nonce, "service-uid", "peer-uid", allowed, map[string]bool{"NATS-A": true})
+	if err != nil || good.PodUID != "replacement-uid" {
+		t.Fatalf("current replacement Service answer refused: %+v %v", good, err)
+	}
+	if _, err := natsResponseProbeHealthPortMembers(t.Context(), "SERVICE", ip, port, nonce, "service-uid", "peer-uid",
+		map[types.UID]bool{"peer-uid": true}, map[string]bool{"NATS-A": true}); err == nil {
+		t.Fatal("unadmitted replacement Service response accepted")
+	}
+	if _, err := natsResponseProbeHealthPortMembers(t.Context(), "PEER_DIRECT", ip, port, nonce, "service-uid", "peer-uid",
+		allowed, map[string]bool{"NATS-A": true}); err == nil {
+		t.Fatal("replacement substituted for exact legitimate peer")
 	}
 }
 

@@ -5,7 +5,28 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/types"
 )
+
+func TestNATSResponseServiceReceiptNeedsBoundCurrentMemberProof(t *testing.T) {
+	proof := natsResponseServiceMember{PodUID: "peer-uid", PodName: "peer", PodIP: "192.0.2.8",
+		OwnerKind: "ReplicaSet", OwnerUID: "rs-uid", ContainerID: "containerd://peer", ImageID: "image@sha256:owned", Ready: true}
+	r := natsResponseServiceReceipt{AddressKind: "SERVICE", PodUID: "peer-uid", EndpointSliceUID: "slice-uid",
+		EndpointMemberUIDs: []types.UID{"peer-uid"}, EndpointMembers: []natsResponseServiceMember{proof}}
+	if !natsResponseServiceEvidenceComplete(r) {
+		t.Fatal("complete API-attested member receipt refused")
+	}
+	r.EndpointMembers = nil
+	if natsResponseServiceEvidenceComplete(r) {
+		t.Fatal("UID-only membership credited as Service proof")
+	}
+	r.EndpointMembers = []natsResponseServiceMember{proof}
+	r.EndpointMembers[0].PodUID = "replacement-uid"
+	if natsResponseServiceEvidenceComplete(r) {
+		t.Fatal("swapped member UID credited as Service proof")
+	}
+}
 
 func TestNATSResponseArtifactRetainsPartialEvidenceAndBindsExclusiveTerminal(t *testing.T) {
 	out := t.TempDir()
