@@ -1,0 +1,152 @@
+"""Offline adverse and positive controls for fixed profile packaging."""
+
+import hashlib
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
+import yaml
+
+import package_fixed_catalogue_profiles as pack
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+MANAGER = "registry.example/manager@sha256:" + "a" * 64
+CONSOLE = "registry.example/console@sha256:" + "b" * 64
+CLUSTER = "11111111-1111-4111-8111-111111111111"
+COMMIT = "c" * 40
+
+
+class PackageProfiles(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.input = self.root / "input"
+        (self.input / "evidence").mkdir(parents=True)
+        self.build = {"schema": "catalogue-pr330-source-build-v1",
+                      "release": {"sha": "d" * 40, "messageSubject": "release: v0.4.162 [skip ci]"},
+                      "run": {"headSHA": COMMIT, "deployJob": {"conclusion": "success"}, "jobs": {
+                          "manager": {"sourceTagAndManifestListPushConfirmed": True, "manifestListDigest": "a" * 64},
+                          "console": {"manifestListDigest": "b" * 64}}}}
+        self.build_raw = (json.dumps(self.build, sort_keys=True) + "\n").encode()
+        (self.input / "evidence/SOURCE-BUILD.json").write_bytes(self.build_raw)
+        self.join = {"schema": "reviewed-rollout-join-v1", "clusterUID": CLUSTER,
+                     "releaseSHA": "d" * 40, "sourceSHA256": sha(self.build_raw),
+                     "components": {kind: {"allPodsReady": True, "allImageIDsMatchSourceBuild": True,
+                                          "podCount": 1, "readyReplicas": 1, "podImageIDs": [image],
+                                          "podUIDs": ["22222222-2222-4222-8222-222222222222"]}
+                                    for kind, image in (("manager", MANAGER), ("console", CONSOLE))}}
+        self.join_raw = (json.dumps(self.join, sort_keys=True) + "\n").encode()
+        (self.input / "evidence/JOIN.json").write_bytes(self.join_raw)
+
+    def write_overlay(self, console, **others):
+        console.setdefault("image", {"tag": "0.4.162"})
+        inner = {"image": {"tag": "0.4.162"}, "console": console, **others}
+        values = {"phorvex": {"phorvex": inner}}
+        (self.input / "values-overlay.reviewed.yaml").write_text(yaml.safe_dump(values, sort_keys=False))
+
+    def args(self, *kinds, enabled=False):
+        return SimpleNamespace(input=self.input, overlay="values-overlay.reviewed.yaml",
+                               rollout_join="evidence/JOIN.json", output=self.root / "output",
+                               namespace="phorvex-system", profile=list(kinds), allow_enabled=enabled)
+
+    def test_nats_exact_bytes_and_disabled_default(self):
+        raw = ("context: reviewed-cluster\nnamespace: phorvex-nats-exposure-fixture\n"
+               "kubeconfig: ''\nownedAck: true\ntrialsPerArm: 1\nnatsExposureFixture:\n"
+               f"  transport: in-cluster\n  clusterUID: {CLUSTER}\n  observerImage: {CONSOLE}\n").encode()
+        (self.input / "config.nats-exposure-baseline.yaml").write_bytes(raw)
+        self.write_overlay({"natsExposure": {"enabled": False, "clientResponse": {"enabled": False}}},
+                           image={"tag": "0.4.160"})
+        with self.assertRaisesRegex(ValueError, "desired tags differ"):
+            pack.package(self.args("nats-baseline"))
+        self.write_overlay({"natsExposure": {"enabled": False, "clientResponse": {"enabled": False}}})
+        pack.package(self.args("nats-baseline"))
+        cm = next(yaml.safe_load_all((self.root / "output/configmaps.yaml").read_text()))
+        self.assertEqual(cm["data"]["config.nats-exposure-baseline.yaml"].encode(), raw)
+        values = yaml.safe_load((self.root / "output/values-overlay.yaml").read_text())
+        block = values["phorvex"]["phorvex"]["console"]["natsExposure"]
+        self.assertFalse(block["enabled"])
+        self.assertEqual(block["profileSHA256"], sha(raw))
+        self.assertEqual((self.root / "output/evidence/JOIN.json").read_bytes(), self.join_raw)
+        self.assertEqual((self.root / "output/evidence/SOURCE-BUILD.json").read_bytes(), self.build_raw)
+        with self.assertRaisesRegex(ValueError, "input/output directory unavailable"):
+            pack.package(self.args("nats-baseline"))
+
+    def test_enabled_profile_requires_explicit_ack_and_complete_bytes(self):
+        self.write_overlay({"natsExposure": {"enabled": True}})
+        with self.assertRaisesRegex(ValueError, "enabled delivery requires explicit"):
+            pack.package(self.args("nats-baseline"))
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            pack.package(self.args("nats-baseline", enabled=True))
+        self.assertFalse((self.root / "output").exists())
+
+    def test_duplicate_yaml_and_changed_or_symlink_evidence_refuse(self):
+        self.write_overlay({"natsExposure": {"enabled": False}})
+        values = self.input / "values-overlay.reviewed.yaml"
+        values.write_text(values.read_text().replace("    image:\n", "    IMAGE:\n      tag: 0.4.162\n    image:\n", 1))
+        with self.assertRaisesRegex(ValueError, "duplicate YAML field"):
+            pack.package(self.args("nats-baseline"))
+        self.write_overlay({"natsExposure": {"enabled": False}})
+        join = self.input / "evidence/JOIN.json"
+        join.unlink()
+        join.symlink_to(self.input / "evidence/SOURCE-BUILD.json")
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            pack.package(self.args("nats-baseline"))
+        join.unlink()
+        join.write_bytes(self.join_raw.replace(sha(self.build_raw).encode(), ("0" * 64).encode()))
+        with self.assertRaisesRegex(ValueError, "rollout/build receipt join differs"):
+            pack.package(self.args("nats-baseline"))
+        join.unlink()
+        with self.assertRaises(FileNotFoundError):
+            pack.package(self.args("nats-baseline"))
+        self.assertFalse((self.root / "output").exists())
+
+    def test_pod_source_review_and_release_tags(self):
+        review = {"approved": True, "sourceCommit": COMMIT, "managerImageID": MANAGER,
+                  "consoleImageID": CONSOLE, "buildEvidenceSHA256": sha(self.build_raw),
+                  "rolloutJoinSHA256": sha(self.join_raw), "reviewer": "independent-reviewer",
+                  "reviewedAtUTC": "2026-09-24T20:26:54Z"}
+        review_raw = (json.dumps(review, sort_keys=True) + "\n").encode()
+        (self.input / "evidence/source-review.json").write_bytes(review_raw)
+        manifest = {"schema": "phorvex.manager-source-image.v1", "sourceCommit": COMMIT,
+                    "managerImageID": MANAGER, "buildEvidenceRef": "evidence/SOURCE-BUILD.json",
+                    "buildEvidenceSHA256": sha(self.build_raw), "reviewRecordRef": "evidence/source-review.json",
+                    "reviewRecordSHA256": sha(review_raw)}
+        manifest_raw = (json.dumps(manifest, sort_keys=True) + "\n").encode()
+        (self.input / "manifest.json").write_bytes(manifest_raw)
+        profile = ("context: reviewed-cluster\nnamespace: voice\nkubeconfig: ''\n"
+                   "ownedAck: true\ntrialsPerArm: 1\npodBoundTokenFixture:\n"
+                   f"  transport: in-cluster\n  clusterUID: {CLUSTER}\n  managerImageID: {MANAGER}\n"
+                   "  sourceManifestPath: /etc/phorvex-catalogue-pod-bound-token/manifest.json\n"
+                   f"  sourceManifestSHA256: {pack.PLACEHOLDER}\n")
+        (self.input / "config.pod-bound-api-auth-response.yaml").write_text(profile)
+        console = {"image": {"tag": "0.4.162"}, "podBoundToken": {"enabled": True, "scrapeApproved": True}}
+        self.write_overlay(console, image={"tag": "0.4.160"}, prometheusUrl="http://prometheus.example",
+                           eventIdentityPolicy={"enabled": True}, e2eDetector={"enabled": True, "targetNamespace": "voice"})
+        with self.assertRaisesRegex(ValueError, "desired tags differ"):
+            pack.package(self.args("pod-token", enabled=True))
+        self.write_overlay(console, image={"tag": "0.4.162"}, prometheusUrl="http://prometheus.example",
+                           eventIdentityPolicy={"enabled": True}, e2eDetector={"enabled": True, "targetNamespace": "voice"})
+        pack.package(self.args("pod-token", enabled=True))
+        cm = next(yaml.safe_load_all((self.root / "output/configmaps.yaml").read_text()))
+        self.assertEqual(cm["data"]["manifest.json"].encode(), manifest_raw)
+        self.assertIn(sha(manifest_raw), cm["data"]["config.pod-bound-api-auth-response.yaml"])
+        self.assertEqual((self.root / "output/evidence/source-review.json").read_bytes(), review_raw)
+        for ref in ("receipt.json", "../escape.json"):
+            manifest["reviewRecordRef"] = ref
+            (self.input / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
+            args = self.args("pod-token", enabled=True)
+            args.output = self.root / ("collision-" + ref.replace("/", "-"))
+            with self.assertRaisesRegex(ValueError, "fixed portable paths"):
+                pack.package(args)
+            self.assertFalse(args.output.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()
