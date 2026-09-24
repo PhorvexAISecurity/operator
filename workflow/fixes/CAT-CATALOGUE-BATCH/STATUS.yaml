@@ -2,16 +2,25 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 4
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: db4aa13ef08816f638967912ac464e69b048a81f43adb0d95dd55717332df446
+    source_sha: 2f334fcf3d6850ed451f9e386707149dfc53fe70
+    at: '2026-09-24T14:15:12+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 fix_id: CAT-CATALOGUE-BATCH
 issues: []
 title: Integrate reviewed causal catalogue controls for installed application stacks
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -72,10 +81,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Assign participants and pins; deliver independently reviewed PR under standing
-    scope.
-updated_at: '2026-09-24T14:14:47+00:00'
+  owner: implementer
+  action: Integrate reviewed source heads, verify conflict seams and run complete
+    preflight
+updated_at: '2026-09-24T14:15:12+00:00'
 configuration_history:
 - at: '2026-09-24T14:14:47+00:00'
   by: codex-lead
@@ -85,3 +94,20 @@ configuration_history:
   - roles
   - verification
   approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T14:15:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T14:15:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
