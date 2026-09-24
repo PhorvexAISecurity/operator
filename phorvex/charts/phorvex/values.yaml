@@ -396,6 +396,12 @@ phorvex:
     # fresh per-Pod samples are still checked by the case at runtime.
     podBoundToken:
       enabled: false
+      # Existing, operator-reviewed ConfigMap with exactly these two data keys:
+      # config.pod-bound-api-auth-response.yaml and manifest.json. The profile
+      # pins manifest bytes via podBoundTokenFixture.sourceManifestSHA256.
+      # Its own raw bytes are checked against profileSHA256 by the console.
+      configMapName: ""
+      profileSHA256: ""
       scrapeApproved: false
       scrapeNamespace: voice
       podSelectorLabel: fixture.phorvex.ai/token-response

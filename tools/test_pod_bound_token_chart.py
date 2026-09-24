@@ -18,6 +18,8 @@ BASE = [HELM, "template", "phorvex", str(CHART), "--namespace", "phorvex-system"
         "--set", "phorvex.console.auditTransport.clientDNSName=console.example",
         "--set", "phorvex.console.auditTransport.serverDNSName=source.example"]
 OPT_IN = ["--set", "phorvex.console.podBoundToken.enabled=true",
+          "--set", "phorvex.console.podBoundToken.configMapName=reviewed-pod-bound-token-source",
+          "--set-string", "phorvex.console.podBoundToken.profileSHA256=" + "a" * 64,
           "--set", "phorvex.console.podBoundToken.scrapeApproved=true",
           "--set", "phorvex.e2eDetector.enabled=true",
           "--set", "phorvex.e2eDetector.targetNamespace=voice",
@@ -46,6 +48,11 @@ class PodBoundTokenChart(unittest.TestCase):
         console = object_named(docs, "Deployment", "phorvex-phorvex-console")
         env = {v["name"]: v["value"] for v in console["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED"], "false")
+        self.assertNotIn("PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256", env)
+        self.assertFalse([v for v in console["spec"]["template"]["spec"]["volumes"]
+                          if v["name"] == "pod-bound-token-reviewed-source"])
+        self.assertFalse([v for v in console["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
+                          if v["name"] == "pod-bound-token-reviewed-source"])
 
     def test_opt_in_has_voice_fixture_and_exact_creator_token_authority(self):
         result = render(*OPT_IN)
@@ -84,10 +91,34 @@ class PodBoundTokenChart(unittest.TestCase):
         console = object_named(docs, "Deployment", "phorvex-phorvex-console")
         env = {v["name"]: v["value"] for v in console["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED"], "true")
+        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256"], "a" * 64)
+        volume = next(v for v in console["spec"]["template"]["spec"]["volumes"]
+                      if v["name"] == "pod-bound-token-reviewed-source")
+        self.assertEqual(volume["configMap"], {
+            "name": "reviewed-pod-bound-token-source", "defaultMode": 0o440,
+            "items": [
+                {"key": "config.pod-bound-api-auth-response.yaml", "path": "config.pod-bound-api-auth-response.yaml"},
+                {"key": "manifest.json", "path": "manifest.json"},
+            ],
+        })
+        mounts = [v for v in console["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
+                  if v["name"] == "pod-bound-token-reviewed-source"]
+        self.assertEqual(mounts, [
+            {"name": "pod-bound-token-reviewed-source",
+             "mountPath": "/data/build/test-harness/config.pod-bound-api-auth-response.yaml",
+             "subPath": "config.pod-bound-api-auth-response.yaml", "readOnly": True},
+            {"name": "pod-bound-token-reviewed-source",
+             "mountPath": "/etc/phorvex-catalogue-pod-bound-token/manifest.json",
+             "subPath": "manifest.json", "readOnly": True},
+        ])
 
     def test_incomplete_authority_fails_closed(self):
         for name, args, expected in [
             ("scrape", ["--set", "phorvex.console.podBoundToken.scrapeApproved=false"], "scrape approval"),
+            ("configmap missing", ["--set", "phorvex.console.podBoundToken.configMapName="], "configMapName is required"),
+            ("configmap invalid", ["--set", "phorvex.console.podBoundToken.configMapName=INVALID"], "DNS subdomain name"),
+            ("profile hash missing", ["--set-string", "phorvex.console.podBoundToken.profileSHA256="], "profileSHA256 is required"),
+            ("profile hash malformed", ["--set-string", "phorvex.console.podBoundToken.profileSHA256=" + "A" * 64], "64 lowercase hex"),
             ("creator", ["--set", "phorvex.e2eDetector.enabled=false"], "e2eDetector identity"),
             ("target", ["--set", "phorvex.e2eDetector.targetNamespace=other"], "target voice"),
             ("selector", ["--set", "phorvex.console.podBoundToken.podSelectorLabel=other"], "fixed nonce label"),

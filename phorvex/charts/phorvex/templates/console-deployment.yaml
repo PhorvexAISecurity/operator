@@ -8,6 +8,16 @@
 {{- if and (not .Values.phorvex.console.state.persistence.enabled) (not .Values.phorvex.console.state.allowEphemeral) }}
 {{- fail "console state persistence is required; set console.state.allowEphemeral=true explicitly for nondurable development use" }}
 {{- end }}
+{{- if .Values.phorvex.console.podBoundToken.enabled }}
+{{- $sourceName := required "console.podBoundToken.configMapName is required" .Values.phorvex.console.podBoundToken.configMapName }}
+{{- if or (gt (len $sourceName) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" $sourceName)) }}
+{{- fail "console.podBoundToken.configMapName must be a DNS subdomain name" }}
+{{- end }}
+{{- $profileSHA := required "console.podBoundToken.profileSHA256 is required" .Values.phorvex.console.podBoundToken.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $profileSHA) }}
+{{- fail "console.podBoundToken.profileSHA256 must be 64 lowercase hex characters" }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -93,6 +103,10 @@ spec:
           value: {{ .Values.phorvex.console.mongoExposure.enabled | default false | quote }}
         - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED
           value: {{ .Values.phorvex.console.podBoundToken.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.podBoundToken.enabled }}
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.podBoundToken.profileSHA256 | quote }}
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
           value: {{ .enabled | default false | quote }}
@@ -360,6 +374,17 @@ spec:
           mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.podBoundToken.enabled }}
+        # SubPath presents regular files to the profile/manifest no-symlink gates.
+        - name: pod-bound-token-reviewed-source
+          mountPath: {{ printf "%s/build/test-harness/config.pod-bound-api-auth-response.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.pod-bound-api-auth-response.yaml
+          readOnly: true
+        - name: pod-bound-token-reviewed-source
+          mountPath: /etc/phorvex-catalogue-pod-bound-token/manifest.json
+          subPath: manifest.json
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -414,6 +439,17 @@ spec:
         configMap:
           name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
           defaultMode: 0440
+      {{- end }}
+      {{- if .Values.phorvex.console.podBoundToken.enabled }}
+      - name: pod-bound-token-reviewed-source
+        configMap:
+          name: {{ .Values.phorvex.console.podBoundToken.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.pod-bound-api-auth-response.yaml
+            path: config.pod-bound-api-auth-response.yaml
+          - key: manifest.json
+            path: manifest.json
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}
