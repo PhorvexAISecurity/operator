@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 1030dab64e5967a3663229c740ebbdd08a6e88c095704a26b15bf8611c08d132
+    sha256: e123854a0355fb8ec1661cccc3c4c22cbc12e965acabeda35e90e1dbdbf212b3
     source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
-    at: '2026-09-24T18:10:24+00:00'
+    at: '2026-09-24T18:20:28+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   red:
@@ -92,7 +92,7 @@ next_action:
   owner: implementer
   action: Implement signed fixed profile mount plan, preserve defaults and cleanup
     gates, test and submit review without live calls
-updated_at: '2026-09-24T18:12:52+00:00'
+updated_at: '2026-09-24T18:20:28+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -120,3 +120,13 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 1030dab64e5967a3663229c740ebbdd08a6e88c095704a26b15bf8611c08d132
+  source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  at: '2026-09-24T18:10:24+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
