@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -90,14 +89,7 @@ func WriteRuntimeConfig(path string, c RuntimeConfig) error {
 }
 
 func LoadRuntimeConfig(path string) (RuntimeConfig, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return RuntimeConfig{}, err
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() <= 0 || info.Size() > maxRecordBytes {
-		return RuntimeConfig{}, errors.New("catalogue v1 runtime file is not a private bounded regular file")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := readPrivateRecord(path)
 	if err != nil {
 		return RuntimeConfig{}, err
 	}
