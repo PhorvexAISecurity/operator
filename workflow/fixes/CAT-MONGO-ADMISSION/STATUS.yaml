@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -92,7 +92,7 @@ fix_id: CAT-MONGO-ADMISSION
 issues: []
 title: Admit exact Mongo controls on valid EKS nodes beside bounded prior Voice debt
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -119,11 +119,11 @@ implementation:
   head_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/334
+  reviewed_head: 32f3eb3cd0863b9faee96abcbd4042e350650724
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -154,9 +154,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T20:52:15+00:00'
+  action: PR334 open main; normal deployment and current profile config then independently
+    verify console admission and actual behavior without clearing original Voice history
+updated_at: '2026-09-24T20:53:20+00:00'
 follow_up_to: CAT-MONGO-EXPOSURE
 configuration_history:
 - at: '2026-09-24T20:13:30+00:00'
@@ -172,6 +172,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-24T20:53:18+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -220,6 +225,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T20:53:20+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
