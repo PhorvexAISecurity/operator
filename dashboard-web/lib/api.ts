@@ -659,7 +659,20 @@ export interface MongoExposureResult {
 }
 export interface GuardrailStaticCall { name: "canary_raw" | "canary_guarded" | "say_ok" | "arithmetic"; port: number; status: number; markerPresent?: boolean; answerIsFour?: boolean; errorType?: string }
 export interface GuardrailStaticResult { accepted: boolean; status: string; sayOK: string; arithmetic: string; calls: GuardrailStaticCall[]; issues: string[]; clusterUID: string; podUID: string; variant: string; sourceSHA256: string; sourceEvidence: string; loadedSource: string; serviceUID: string; endpointSliceSHA256: string; guardrailJournalUID: string; guardrailJournalGeneration: number; kvJournalUID: string; eventMode: "DIRECT_STATIC"; naturalDetector: "NOT_EVALUATED"; brainDecision: "NOT_EVALUATED"; actuator: "NOT_EVALUATED"; externalRoute: "NOT_TESTED" }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; note: string }
+export interface PodBoundTokenStage { name: string; status: "CONFIRMED" | "REFUSED" | "UNKNOWN"; observedAt?: string; evidenceSHA256?: string; reason?: string }
+export interface PodBoundTokenResult {
+  schema: "pod-bound-token-result-v1";
+  runID?: string; nonce?: string; terminalStatus: "COMPLETE" | "INCOMPLETE" | "UNSAFE"; mechanismObserved: boolean;
+  securityEfficacy: "NOT_EVALUATED"; signalMode: "explicit-injected-typed-event";
+  stages?: PodBoundTokenStage[];
+  admission?: { clusterUID?: string; namespace?: string; namespaceUID?: string; managerPodUID?: string; policyUID?: string; policyGeneration?: number; policySpecSHA256?: string; sourcePodUID?: string; peerPodUID?: string; serviceUID?: string; profileSHA256?: string; available?: boolean; unavailableReason?: string };
+  event?: { uid?: string; kind?: string; creator?: string; sourcePodUID?: string; trustVerified?: boolean };
+  decision?: { id?: string; selectedAction?: string; dispatchOutcome?: string; costCeiling?: number; rotateStatus?: string; rotateReason?: string; rotateExpectedCost?: number; rotateHighCost?: number; requestRateStatus?: "MEASURED_FRESH" | "MISSING_REQUEST_RATE" | "STALE_REQUEST_RATE" | "UNKNOWN"; flowRegime?: string; quarantineStatus?: string; quarantineReason?: string; quarantineUsed?: number; quarantineLimit?: number; auditCoverage?: string };
+  operation?: { terminationStatus?: "REQUEST_CONFIRMED" | "NOT_DISPATCHED" | "UNCONFIRMED"; originalPodAbsent?: boolean; receiptSHA256?: string };
+  replay?: { sourceBeforeHTTP?: number; sourceAfterHTTP?: number; sourceExpiry?: string; sourceAfterAt?: string; peerBeforeHTTP?: number; peerAfterHTTP?: number; serviceBeforeHTTP?: number; serviceAfterHTTP?: number; sameSourceHandle?: boolean; samePeerHandle?: boolean };
+  cleanup?: { status?: string; inventorySHA256?: string; absent?: boolean };
+}
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; podBoundTokenResult?: PodBoundTokenResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];
