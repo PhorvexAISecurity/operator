@@ -32,7 +32,7 @@ export function NATSClientResponseResult({ result, unsafeToRetry = false }: { re
     <dl className="mt-2 grid gap-x-4 gap-y-1 md:grid-cols-2">{rows.map(([label, value]) => <div key={label} className="flex min-w-0 gap-2"><dt className="shrink-0 text-muted-foreground">{label}:</dt><dd className="break-all font-mono text-foreground">{value || "UNKNOWN"}</dd></div>)}</dl>
     {trace && <div className="mt-3 space-y-1 border-t border-border pt-2">
       <div className="font-medium text-foreground">Exact event-bound brain trace</div>
-      <div className="text-muted-foreground">decision <span className="font-mono text-foreground">{trace.decisionId}</span> · input {trace.inputPhase || "unknown"}/{trace.inputStage || "unknown"} · source {trace.gitSHA || "unavailable"}</div>
+      <div className="text-muted-foreground">decision <span className="font-mono text-foreground">{trace.decisionId}</span> · input {trace.inputPhase || "unknown"}/{trace.inputStage || "unknown"} · source {trace.gitSHA || "unavailable"} · image SHA-256 {trace.brainImageSHA256 || "unavailable"}</div>
       <div className="text-muted-foreground">pHold {measured(trace.pHold)} · threat {measured(trace.threatPosture)} · SLO headroom {measured(trace.sloHeadroom)}</div>
       <div className="text-muted-foreground">NOOP reason: {trace.noopReason || "none recorded"} · dispatch reason: {trace.dispatchReason || "none recorded"}</div>
       {Array.isArray(trace.facts) && trace.facts.length > 0 && <div>Inputs: {trace.facts.slice(0, 16).map((fact) => `${fact.type} (${fact.source}, weight ${fact.weight})`).join(" · ")}</div>}

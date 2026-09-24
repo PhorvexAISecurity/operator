@@ -19,7 +19,7 @@ const observed = {
   effectStatus: "OBJECT_EFFECT_OBSERVED_PACKET_UNVERIFIED", m1Status: "CONTINUING_EXPOSURE",
   peerStatus: "READY_AND_RESPONSIVE", cleanupStatus: "CONFIRMED_ABSENT", securityEfficacy: "NOT_EVALUATED", issues: [],
   decisionTrace: { schema: "nats-client-response-decision-evidence-v1", decisionId: "decision-1", tickId: "tick-1",
-    eventName: "event-1", eventUID: "event-uid-1", brainImage: "manager@sha256:abc", gitSHA: "git-1",
+    eventName: "event-1", eventUID: "event-uid-1", brainImage: "manager@sha256:abc", brainImageSHA256: "a".repeat(64), gitSHA: "git-1",
     inputPhase: "delivery", inputStage: "execution", pHold: { present: false, value: 0 },
     threatPosture: { present: true, value: 0 }, sloHeadroom: { present: true, value: 0.5 },
     selectedAction: "quarantine", noopReason: "",
@@ -43,6 +43,7 @@ test("joined source and object effects remain separate from packet isolation", (
   assert.match(html, /Exact event-bound brain trace/);
   assert.match(html, /rotate: capacity/);
   assert.match(html, /peer capacity gate/);
+  assert.match(html, /image SHA-256 a{64}/);
   assert.match(html, /pHold unavailable · threat 0 · SLO headroom 0\.5/);
   assert.match(html, /marginal 0, cost 0, net gain unavailable/);
   assert.match(html, /Continuing access observed/);

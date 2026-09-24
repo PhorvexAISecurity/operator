@@ -577,6 +577,7 @@ export interface NATSResponseDecisionTrace {
   eventUID: string;
   decisionTraceSHA256: string;
   brainImage: string;
+  brainImageSHA256: string;
   gitSHA: string;
   inputPhase: string;
   inputStage: string;
