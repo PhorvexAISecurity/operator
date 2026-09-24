@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +92,210 @@ func TestFunctionalAdmissionRealRouterAndRetainedUnsafeHistory(t *testing.T) {
 	}
 	if f.srv.runs.seq != 5 || len(f.srv.runs.runs) != 1 {
 		t.Fatal("admission GET or refused POST changed retained run history")
+	}
+}
+
+func TestFunctionalAdmissionConsoleReadsBesideExactUnsafeVoice(t *testing.T) {
+	for _, tc := range []struct{ profile, prior cataloguev1.ProfileID }{
+		{cataloguev1.AuthUnauth, cataloguev1.VoiceMedia},
+		{cataloguev1.AuthScope, cataloguev1.VoiceRecovery},
+	} {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			cfg := functionalLedgerTestConfig(t)
+			cfg.CatalogueV1.VoiceNamespace = "voice"
+			seed := NewRunManager(cfg)
+			prior := &RunStatus{ID: "v1run-5", Config: string(tc.prior), State: "partial",
+				ExecutionKind: "fixed-suite", ScopeTarget: defaultTargetID, ScopeTenant: "voice",
+				Outcome: "test-failed", CleanupStatus: "FAIL", UnsafeToRetry: true, Finished: tsNow()}
+			if err := seed.persistStatus(prior, prior.ID); err != nil {
+				t.Fatal(err)
+			}
+			ledger := filepath.Join(cfg.StateDir, "run-events.jsonl")
+			original, err := os.ReadFile(ledger)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := admissionFixture(t, cfg)
+			path := "/api/runs/functional/admission?profile=" + string(tc.profile)
+			code, admission, body := readAdmission(t, f, path)
+			if code != http.StatusOK || !admission.Launchable || admission.ReasonCode != string(functionalReady) ||
+				strings.Contains(body, prior.ID) || strings.Contains(body, prior.ScopeTenant) {
+				t.Fatalf("disjoint console GET admission: code=%d admission=%+v", code, admission)
+			}
+			if f.srv.runs.seq != 5 || len(f.srv.runs.runs) != 1 {
+				t.Fatal("admission GET changed retained history")
+			}
+			post := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/functional", `{"profile":"`+string(tc.profile)+`"}`, "op"))
+			if post.Code != http.StatusOK || !strings.Contains(post.Body.String(), "v1run-6") {
+				t.Fatalf("disjoint console POST refused: code=%d body=%s", post.Code, post.Body.String())
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for {
+				status, ok := f.srv.runs.Status("v1run-6")
+				if ok && status.State != "running" {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("inert worker did not finish")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			current, ok := f.srv.runs.Status(prior.ID)
+			if !ok || !reflect.DeepEqual(*current, *prior) {
+				t.Fatalf("unsafe Voice history changed: %+v", current)
+			}
+			appended, err := os.ReadFile(ledger)
+			if err != nil || !strings.HasPrefix(string(appended), string(original)) {
+				t.Fatalf("original retained ledger bytes changed: %v", err)
+			}
+			reloaded := NewRunManager(cfg)
+			if reloaded.loadErr != nil {
+				t.Fatal(reloaded.loadErr)
+			}
+			current, ok = reloaded.Status(prior.ID)
+			if !ok || !reflect.DeepEqual(*current, *prior) {
+				t.Fatalf("unsafe Voice status changed after restart: %+v", current)
+			}
+		})
+	}
+}
+
+func TestFunctionalAdmissionConsoleExceptionFailsClosed(t *testing.T) {
+	base := func() *RunStatus {
+		return &RunStatus{ID: "v1run-5", Config: string(cataloguev1.VoiceRecovery), State: "partial",
+			ExecutionKind: "fixed-suite", ScopeTarget: defaultTargetID, ScopeTenant: "voice",
+			Outcome: "test-failed", CleanupStatus: "FAIL", UnsafeToRetry: true, Finished: tsNow()}
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*RunStatus, *Config)
+	}{
+		{"unknown-profile", func(p *RunStatus, _ *Config) { p.Config = "unknown" }},
+		{"unsafe-auth", func(p *RunStatus, _ *Config) { p.Config = string(cataloguev1.AuthScope) }},
+		{"unknown-outcome", func(p *RunStatus, _ *Config) { p.Outcome = "" }},
+		{"unknown-cleanup", func(p *RunStatus, _ *Config) { p.CleanupStatus = "UNVERIFIED" }},
+		{"missing-finish", func(p *RunStatus, _ *Config) { p.Finished = "" }},
+		{"wrong-tenant", func(p *RunStatus, _ *Config) { p.ScopeTenant = "other" }},
+		{"same-tenant", func(_ *RunStatus, c *Config) { c.CatalogueV1.AllowedTenant = "voice" }},
+		{"missing-voice-tenant", func(_ *RunStatus, c *Config) { c.CatalogueV1.VoiceNamespace = "" }},
+		{"wrong-target", func(p *RunStatus, _ *Config) { p.ScopeTarget = "other-target" }},
+		{"nonterminal", func(p *RunStatus, _ *Config) { p.State = "queued" }},
+		{"reconciling", func(p *RunStatus, _ *Config) { p.Error = "reconciliation pending" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := functionalLedgerTestConfig(t)
+			cfg.CatalogueV1.VoiceNamespace = "voice"
+			prior := base()
+			tc.edit(prior, &cfg)
+			seed := NewRunManager(cfg)
+			if err := seed.persistStatus(prior, prior.ID); err != nil {
+				t.Fatal(err)
+			}
+			rm := NewRunManager(cfg)
+			admission := rm.CurrentFunctionalAdmission(cataloguev1.AuthUnauth)
+			if admission.Launchable || admission.ReasonCode != string(functionalPriorUnsafe) {
+				t.Fatalf("unknown predecessor admitted: %+v", admission)
+			}
+			id, err := rm.StartFunctional(cataloguev1.AuthUnauth, tsNow(), "op")
+			if err == nil || id != "" || rm.seq != 5 {
+				t.Fatalf("unsafe POST admitted: id=%q err=%v seq=%d", id, err, rm.seq)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name string
+		mark func(*RunManager)
+	}{
+		{"live-process", func(rm *RunManager) { rm.procs["v1run-5"] = &exec.Cmd{} }},
+		{"stopping", func(rm *RunManager) { rm.stopping["v1run-5"] = true }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := functionalLedgerTestConfig(t)
+			cfg.CatalogueV1.VoiceNamespace = "voice"
+			rm := NewRunManager(cfg)
+			rm.runs["v1run-5"] = base()
+			tc.mark(rm)
+			if got := rm.CurrentFunctionalAdmission(cataloguev1.AuthUnauth); got.Launchable || got.ReasonCode != string(functionalPriorUnsafe) {
+				t.Fatalf("active predecessor admitted: %+v", got)
+			}
+		})
+	}
+}
+
+func TestFunctionalAdmissionConsoleExceptionDoesNotGeneralize(t *testing.T) {
+	cfg := functionalLedgerTestConfig(t)
+	cfg.CatalogueV1.VoiceNamespace = "voice"
+	rm := NewRunManager(cfg)
+	rm.runs["v1run-5"] = &RunStatus{ID: "v1run-5", Config: string(cataloguev1.VoiceRecovery), State: "partial",
+		ExecutionKind: "fixed-suite", ScopeTarget: defaultTargetID, ScopeTenant: "voice",
+		Outcome: "test-failed", CleanupStatus: "FAIL", UnsafeToRetry: true, Finished: tsNow()}
+	destination := runDestination{ScopeTarget: defaultTargetID, ScopeTenant: "vllm"}
+	for _, profile := range []cataloguev1.ProfileID{cataloguev1.VoiceMedia, cataloguev1.VoiceRecovery,
+		cataloguev1.GPUDrain, cataloguev1.GuardrailCalibration, cataloguev1.MCPSessionBaseline} {
+		rm.mu.Lock()
+		reason, err := rm.fixedSuiteAdmissionLocked(profile, destination, time.Now())
+		rm.mu.Unlock()
+		if reason != functionalPriorUnsafe || err == nil {
+			t.Fatalf("workload profile %q bypassed unsafe Voice: reason=%q err=%v", profile, reason, err)
+		}
+	}
+	rm.mu.Lock()
+	rm.runs["v1run-6"] = &RunStatus{ID: "v1run-6", Config: string(cataloguev1.AuthScope), ExecutionKind: "fixed-suite", UnsafeToRetry: true}
+	rm.mu.Unlock()
+	if got := rm.CurrentFunctionalAdmission(cataloguev1.AuthUnauth); got.Launchable || got.ReasonCode != string(functionalPriorUnsafe) {
+		t.Fatalf("second unsafe predecessor ignored: %+v", got)
+	}
+}
+
+func TestFunctionalAdmissionConsoleExceptionKeepsSharedLimits(t *testing.T) {
+	cfg := functionalLedgerTestConfig(t)
+	cfg.CatalogueV1.VoiceNamespace = "voice"
+	rm := NewRunManager(cfg)
+	rm.runs["v1run-5"] = &RunStatus{ID: "v1run-5", Config: string(cataloguev1.VoiceRecovery), State: "partial",
+		ExecutionKind: "fixed-suite", ScopeTarget: defaultTargetID, ScopeTenant: "voice",
+		Outcome: "test-failed", CleanupStatus: "FAIL", UnsafeToRetry: true, Finished: tsNow()}
+	rm.mu.Lock()
+	rm.active = maxConcurrentRuns
+	rm.mu.Unlock()
+	if got := rm.CurrentFunctionalAdmission(cataloguev1.AuthScope); got.Launchable || got.ReasonCode != string(functionalConcurrent) {
+		t.Fatalf("shared concurrency cap bypassed: %+v", got)
+	}
+	rm.mu.Lock()
+	rm.active = 0
+	rm.lastStart = time.Now()
+	rm.mu.Unlock()
+	if got := rm.CurrentFunctionalAdmission(cataloguev1.AuthScope); got.Launchable || got.ReasonCode != string(functionalRateLimited) {
+		t.Fatalf("shared rate limit bypassed: %+v", got)
+	}
+}
+
+func TestFunctionalAdmissionUnsafeVoiceStillBlocksConfiguredVoiceRoute(t *testing.T) {
+	cfg := functionalLedgerTestConfig(t)
+	cfg.CatalogueV1.VoiceEnabled = true
+	cfg.CatalogueV1.VoiceNamespace = "voice"
+	cfg.CatalogueV1.VoiceDeployment = "voice-bot"
+	cfg.CatalogueV1.VoiceService = "voice-bot"
+	cfg.CatalogueV1.VoiceContainer = "voice"
+	cfg.CatalogueV1.VoiceServicePort = 8080
+	cfg.CatalogueV1.VoicePDB = "voice-bot"
+	cfg.CatalogueV1.TranscriptSelector = "app=voice-bot"
+	cfg.CatalogueV1.TranscriptContainer = "mongo"
+	seed := NewRunManager(cfg)
+	prior := &RunStatus{ID: "v1run-5", Config: string(cataloguev1.VoiceRecovery), State: "partial",
+		ExecutionKind: "fixed-suite", ScopeTarget: defaultTargetID, ScopeTenant: "voice",
+		Outcome: "test-failed", CleanupStatus: "FAIL", UnsafeToRetry: true, Finished: tsNow()}
+	if err := seed.persistStatus(prior, prior.ID); err != nil {
+		t.Fatal(err)
+	}
+	f := newAuthFixture(t, cfg, operatorGrant("op", []string{"voice", "vllm"}, []string{defaultTargetID}))
+	path := "/api/runs/functional/admission?profile=" + string(cataloguev1.VoiceMedia)
+	code, admission, _ := readAdmission(t, f, path)
+	if code != http.StatusOK || admission.Launchable || admission.ReasonCode != string(functionalPriorUnsafe) {
+		t.Fatalf("configured Voice GET admission bypassed unsafe history: code=%d result=%+v", code, admission)
+	}
+	post := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/functional", `{"profile":"limited-v1-voice-media"}`, "op"))
+	if post.Code != http.StatusBadRequest || f.srv.runs.seq != 5 {
+		t.Fatalf("configured Voice POST bypassed unsafe history: code=%d seq=%d", post.Code, f.srv.runs.seq)
 	}
 }
 

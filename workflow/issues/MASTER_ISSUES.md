@@ -2981,7 +2981,7 @@ Severity: HIGH · Tier: unassigned · Fixes: CAT-FIXED-LEDGER
 
 ### M-194 · Fixed-suite catalogue hides current launch admission blockers · **OPEN** · `VERIFICATION`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: CAT-ADMISSION-VISIBILITY
+Severity: MEDIUM · Tier: unassigned · Fixes: CAT-ADMISSION-VISIBILITY, CAT-CONSOLE-SAFE-CONTROLS
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

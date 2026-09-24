@@ -11,16 +11,16 @@ evidence:
   scenario_source: build/test-harness/scenarios
 accounting:
   unit: workload-trust-boundary-input-mode-effect candidate cell
-  candidate_cells: 33
+  candidate_cells: 34
   mechanism_or_control_cells: 19
-  behavioral_security_cells: 14
+  behavioral_security_cells: 15
   admitted_by_this_matrix: 0
   rule: These are planning cells, not registered scenarios or completed runs. Count every candidate and
     explicit scoped/excluded area in the coverage ledger. A security success-rate denominator includes
     only applicable valid executed reviewed S trials; M controls, invalid, blocked, unavailable and not-run
     trials remain separately counted.
 progress_accounting:
-  through_round: 22
+  through_round: 26
   interpretation: Exclusive planning-progress buckets. An observed related arm may be only a prerequisite,
     refusal or configuration baseline; it does not mark the entire candidate completed or security-scored.
     Blocked means a concrete current source, configuration or infrastructure prerequisite remains; not_run
@@ -32,6 +32,9 @@ progress_accounting:
     zero additional observed arms or security credit. Round22 observed a stable pgv1 guarded-serving
     false positive for Say OK plus successful arithmetic control; this is calibration evidence, not
     additional security efficacy.
+    Round24 observed Mongo configuration exposure with 21 exact-target no-op decisions. Round26
+    measured a fixed static guardrail rejection and a benign false positive. Neither proves that
+    brain-selected adaptation improved protection.
   mechanism_or_control:
     related_arm_observed:
     - voice-stream-continuity
@@ -60,10 +63,11 @@ progress_accounting:
     - nats-uncredentialed-message-exposure
     - litellm-proxy-authorization
     - k8s-credential-reuse
+    - vllm-guardrail-policy
+    - mongo-uncredentialed-document-exposure
     blocked:
     - voice-runner-advisory-boundary
     - nats-subject-authorization
-    - vllm-guardrail-policy
     - litellm-routing-override
     - crm-business-authorization
     - ci-report-authorization
@@ -76,10 +80,10 @@ progress_accounting:
   eligible_installed_defense_efficacy_trials: 0
   installed_source_at_round_19: a50d796af128cd4109875e03eaf429d460126740
   installed_source_at_round_20: a50d796af128cd4109875e03eaf429d460126740
-  pending_installed_verification: At Sep24 08:21–08:24 the manager and console were bound to PR323 merge
-    e2ee94315828a180a83902f6eb61e37a66bce22d through exact build digests and manager audit source.
-    Issue-specific behavioral reruns remain pending; the adapter detector producer is still the old
-    source. Earlier rounds keep their own installed-source pins and no old result is upgraded by rollout.
+  pending_installed_verification: September24 manager and console source 6f61cf6 (PR324) is pinned
+    by exact build digests. Retained unsafe Voice result readability and negative admission are verified.
+    Phoenix and adapter detector rollout remain outstanding. PR325 and safe-control follow-up are not
+    installed. Earlier rounds retain their own source pins; deployment alone earns no efficacy credit.
 
 event_modes:
   direct: Direct mechanism probe; no installed-manager or attack claim.
@@ -306,10 +310,15 @@ cells:
   service_oracle: Matched harmless requests remain correct with measured latency and availability.
   present_constraints: One vLLM Pod and separate Ready detector Deployments exist; no SecurityEvent object
     at inventory instant, and guardrail action is hygiene-gated.
-  next_step: Trace real producer/rule and choose a reviewed harmless synthetic prompt set with weak/strong
-    controls.
+  next_step: Publish the reproducible static control separately; complete an owned variant/brain/actuator
+    comparison and held-out calibration before claiming adaptation benefit.
   source_gap: Existing unassessed attack IDs and injected events cannot prove natural detection or security
     efficacy.
+  reviewed_progress: 'Round26: raw HTTP200 disclosed a synthetic confidential marker; the byte-identical
+    guarded request returned typed403 with naturally active pgv1. Arithmetic worked; Say OK was falsely
+    blocked. No event or rotation was injected. Loopback only; loaded memory is not attested and original
+    wire answers were not retained.'
+  progress_evidence: rounds/round-26/review.md
 - id: litellm-route-availability
   stack: litellm
   kind: M
@@ -756,6 +765,30 @@ cells:
     target with a legitimate replacement control.
   source_gap: Round4 establishes no isolation for one Deployment-owned fixture and window. It does not
     establish post-quarantine detached-Pod enforcement or installed-defense outcome.
+- id: mongo-uncredentialed-document-exposure
+  stack: mongodb
+  kind: S
+  disposition: new-configuration-baseline
+  source_ids: []
+  event_mode: configuration_baseline
+  objective: A separate no-credential client attempts to read exactly one run-owned synthetic document
+    through installed Mongo Service.
+  required_effect: Independent exact document receipt or valid denial, legitimate exact-ID reads, same-window
+    target decisions and exact UUID/UID cleanup.
+  threat_oracle: Exact synthetic document received without credentials is configuration exposure; no tenant-grant
+    bypass or Phorvex defense assertion. Transport/fixture failure is unknown.
+  service_oracle: Owned legitimate before/after reads match; installed source/route preserved.
+  reviewed_progress: 'Round24 read the exact document from a separate CPU node. All 21 decisions for the
+    Mongo UID and policy chose no action: reactive-only, no direct foothold. Independent result review
+    and exact cleanup passed. Original client and Pod replies remain unavailable beyond producer projections
+    and hashes.'
+  progress_evidence: rounds/round-24/review.md
+  present_constraints: Current no-auth configuration; permanent named console item not implemented/deployed
+    at this observation. Original tenant-auth cell remains unresolved.
+  next_step: Implement reviewed CAT-MONGO-EXPOSURE in the static Go harness, retaining bounded raw replies,
+    opt-in configuration and exact cleanup. Verify the deployed console item in a fresh run.
+  source_gap: Private trial is not yet a permanent catalogue registration; no detection or response behavior
+    proved.
 scope_decisions:
 - area: MIG partition and MIG-specific GPU controls
   disposition: excluded-unavailable-hardware
@@ -772,7 +805,7 @@ scope_decisions:
   disposition: excluded-from-stimulus
   evidence: Campaign authorization is bounded to owned fixtures and independently measured service outcomes.
   revisit: No automatic expansion; require a separately reviewed and authorized case.
-updated_at: '2026-09-24T09:05:03.389864+00:00'
+updated_at: '2026-09-24T11:59:51.047453+00:00'
 scope_revisions:
 - at: '2026-09-24'
   change: Add nats-uncredentialed-message-exposure separately from existing subject ACL/advisory cell
@@ -780,3 +813,9 @@ scope_revisions:
   reviewer: campaign-coverage-plan
   lead: codex-lead
   effect: 33 candidate cells, no admission or live outcome by matrix change
+- at: '2026-09-24'
+  change: Add mongo-uncredentialed-document-exposure separately from tenant authorization
+  reason: Round24 observed unauthenticated synthetic Service exposure, not tenant-grant bypass
+  reviewer: campaign-cleanup-audit (round24 evidence review)
+  lead: codex-lead
+  effect: 34 candidate cells; no installed-defense efficacy credit

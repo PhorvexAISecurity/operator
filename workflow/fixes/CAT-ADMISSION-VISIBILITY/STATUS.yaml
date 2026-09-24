@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,12 +81,19 @@ checks:
     source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
     at: '2026-09-24T11:04:44+00:00'
     incident_sha256: 7f418d5e7df599f3a5372cb9c2bd8a2e402ed97b05b2b621c64be3fa5877cc7c
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 32fe92a1f71dd4c0e978e6b7174fabc1d2d5cd619d512c35b653befc2d62684c
+    source_sha: 46f8ec86acdd544fcded760811bda57534f953f1
+    at: '2026-09-24T11:07:34+00:00'
 fix_id: CAT-ADMISSION-VISIBILITY
 issues:
 - M-194
 title: Fixed-suite catalogue hides current launch admission blockers
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -113,8 +120,8 @@ implementation:
   head_sha: 46f8ec86acdd544fcded760811bda57534f953f1
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/325
+  reviewed_head: 67bd20637be7ecdd1772ba0512371d2da1da4b7f
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -147,10 +154,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T11:04:48+00:00'
+  owner: codex-lead
+  action: Observe PR325 checks and deployment, then verify scoped admission; continue
+    independent campaign source work
+updated_at: '2026-09-24T11:07:34+00:00'
 configuration_history:
 - at: '2026-09-24T10:24:56+00:00'
   by: codex-lead
@@ -164,6 +171,11 @@ configuration_history:
   by: campaign-cleanup-audit
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-24T11:07:32+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -213,6 +225,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T11:07:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-ADMISSION-VISIBILITY:7:review
