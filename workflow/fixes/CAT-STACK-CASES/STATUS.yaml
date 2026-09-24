@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 98f573d53f54ad8efc90cb5bd8e56d8390b391598e0d4aa1232892095a6b9cae
+    sha256: 2cbcee47ebf339f4ca9e34f758c43a41f122411eb54462a25eb6f36d4fa25cef
     source_sha: 84c40318b508a5fa459290358d7d1545f4a78223
-    at: '2026-09-24T12:58:57+00:00'
+    at: '2026-09-24T13:06:23+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 fix_id: CAT-STACK-CASES
@@ -84,7 +84,7 @@ residuals: []
 next_action:
   owner: stack-integration
   action: Parallel Chroma/LiteLLM implementation with one shared integration writer
-updated_at: '2026-09-24T12:58:57+00:00'
+updated_at: '2026-09-24T13:06:23+00:00'
 configuration_history:
 - at: '2026-09-24T12:58:18+00:00'
   by: codex-lead
@@ -111,3 +111,13 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 98f573d53f54ad8efc90cb5bd8e56d8390b391598e0d4aa1232892095a6b9cae
+  source_sha: 84c40318b508a5fa459290358d7d1545f4a78223
+  at: '2026-09-24T12:58:57+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
