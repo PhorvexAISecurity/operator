@@ -623,7 +623,36 @@ export interface NATSResponseResult {
   decisionTrace?: NATSResponseDecisionTrace;
   issues: string[];
 }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; note: string }
+export interface MongoExposureDecision {
+  decisionID: string;
+  policyUID: string;
+  policyGeneration: number;
+  targetPodUID: string;
+  action: string;
+  actionStatus: string;
+  reasonSHA256: string;
+  observedAt: string;
+}
+export interface MongoExposureResult {
+  schema: "mongo-exposure-result-v1";
+  accepted: boolean;
+  finding: "EXPOSED" | "UNKNOWN";
+  observedFinding: "EXPOSED" | "UNKNOWN";
+  clientRead: "UNAUTHENTICATED_EXACT_READ" | "MONGO_AUTH_DENIED" | "UNKNOWN";
+  legitimateBefore: "EXACT_READ" | "UNKNOWN";
+  legitimateAfter: "EXACT_READ" | "UNKNOWN";
+  cleanup: "CONFIRMED_ABSENT" | "UNCONFIRMED";
+  brainTrace: "JOINED" | "GAP" | "UNKNOWN";
+  brainDecisions: MongoExposureDecision[];
+  securityOutcome: "NOT_EVALUATED";
+  rawReplySHA256: string;
+  rawReplyBytes: number;
+  sourcePodUID: string;
+  clientPodUID: string;
+  policyUID: string;
+  issues: string[];
+}
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];
