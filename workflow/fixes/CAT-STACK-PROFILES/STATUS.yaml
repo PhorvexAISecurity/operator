@@ -1,0 +1,133 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 6
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6f9eeea95f52683c60ecd541c95452b9c1b13f1aca5a165000b63e93cd081ba1
+    source_sha: 2e7f45afe84d7fe3c20cbc779377e3cac3af5029
+    at: '2026-09-24T17:51:56+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+fix_id: CAT-STACK-PROFILES
+issues: []
+title: Enable reviewed Chroma and LiteLLM catalogue profiles in dev
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: audit-window-repair
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-profile-activation-20260924
+  code_sha: 2e7f45afe84d7fe3c20cbc779377e3cac3af5029
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: null
+  base_sha: null
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: audit-window-repair
+  action: Apply four-line dev profile activation,retain render proof and run selected
+    preflight
+updated_at: '2026-09-24T17:51:56+00:00'
+follow_up_to: CAT-CATALOGUE-BATCH
+configuration_history:
+- at: '2026-09-24T17:50:54+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T17:50:56+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T17:50:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 5cbc81fa25e716c547ab65b2a540db9a3b96a97131efe11d08049346c9172286
+  source_sha: 2e7f45afe84d7fe3c20cbc779377e3cac3af5029
+  at: '2026-09-24T17:50:58+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 0867fd5f2be37468a681960092edb08107ccb47d0a770efaa23d69ee57f6e8b1
+  source_sha: 2e7f45afe84d7fe3c20cbc779377e3cac3af5029
+  at: '2026-09-24T17:51:41+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
