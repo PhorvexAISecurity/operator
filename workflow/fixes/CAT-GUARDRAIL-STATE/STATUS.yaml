@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -92,7 +92,7 @@ fix_id: CAT-GUARDRAIL-STATE
 issues: []
 title: Read legacy and current guardrail calibration state without overstating enforcement
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -119,11 +119,11 @@ implementation:
   head_sha: 28378a127dfc7cce7c88e7c3da91ae0aea8e9a6d
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/335
+  reviewed_head: 38be8256644ae07628663d11b85772bc330f3b29
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -154,9 +154,10 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T22:21:11+00:00'
+  action: PR335 open on main, independently reviewed; pending required remote checks
+    and normal deployment/profile setup, then exact source-bound live calibration/static
+    controls. No shared deployment changes.
+updated_at: '2026-09-24T22:22:04+00:00'
 configuration_history:
 - at: '2026-09-24T21:51:34+00:00'
   by: codex-lead
@@ -171,6 +172,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-24T22:22:02+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -219,6 +225,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T22:22:04+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
