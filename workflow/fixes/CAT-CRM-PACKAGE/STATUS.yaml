@@ -1,0 +1,121 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 5
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0ddf2b767a80bd9110b0538e0bf795127ca553957d4adc52c053eb36ffe1fcd2
+    source_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+    at: '2026-09-24T19:49:52+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/BASELINE.json
+    sha256: 395369df7fbe457df200b790a7fdcec95bfb5ad37c1f3985315ff56375fe5091
+    source_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+    at: '2026-09-24T19:50:40+00:00'
+fix_id: CAT-CRM-PACKAGE
+issues: []
+title: Make the disposable CRM catalogue fixture reproducible from checkout
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: litellm-cases
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-crm-package-20260924
+  code_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: null
+  base_sha: null
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: implementer
+  action: Implement signed executable CRM packaging plan, verify real context, run
+    selected checks, submit review without shared writes
+updated_at: '2026-09-24T19:50:40+00:00'
+follow_up_to: CAT-CATALOGUE-BATCH
+configuration_history:
+- at: '2026-09-24T19:49:36+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T19:49:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T19:49:52+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
