@@ -13,6 +13,7 @@ import { useCatalog, useTargets } from "@/lib/query";
 import { setSelectedTarget } from "@/lib/provider-store";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailCalibrationResult } from "@/components/panels/guardrail-calibration-result";
+import { NATSClientResponseResult } from "@/components/panels/nats-client-response-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 
@@ -189,7 +190,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         return;
       }
       if (item!.launchKind === "named-suite") {
-        if (item!.profile !== "nats-exposure-baseline") throw new Error("NATS named suite profile differs from the server-owned case");
+        if (item!.profile !== "nats-exposure-baseline" && item!.profile !== "nats-client-response") throw new Error("NATS named suite profile differs from the server-owned case");
         natsLaunchSent = true;
         const { id } = await api.startRun(item!.profile, false, selectedLens);
         natsLaunchConfirmed = true;
@@ -198,7 +199,9 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         const context = item!.runtimeContext || selectedTarget?.context || "";
         setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
-        setMsg(`Started ${id}. The result is a synthetic no-signal configuration finding, not a defense verdict.`);
+        setMsg(item!.profile === "nats-client-response"
+          ? `Started ${id}. The result separately reports the injected signal, installed response, continuing-client and legitimate-peer observations; no defense verdict is inferred from silence.`
+          : `Started ${id}. The result is a synthetic no-signal configuration finding, not a defense verdict.`);
         return;
       }
       if (item!.launchKind === "live-vllm-effect") {
@@ -246,7 +249,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
         {item.launchKind === "named-suite" && natsLaunchUncertain && <div className="text-[11px] text-warning">The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one. This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
+          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === "nats-client-response" ? "Run NATS client response" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
           <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           </>}
@@ -273,8 +276,9 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             <div>brain: {fixedEvidence.configurationResult.brainMode} · defense efficacy: {fixedEvidence.configurationResult.securityEfficacy}</div>
             {(fixedEvidence.configurationResult.issues || []).map((issue, index) => <div key={`${index}-${issue}`} className="text-warning">{issue}</div>)}
           </div>}
+          {fixedEvidence?.natsResponseResult && <div className="mt-2 border-t border-border pt-2"><NATSClientResponseResult result={fixedEvidence.natsResponseResult} unsafeToRetry={fixedStatus?.unsafeToRetry} /></div>}
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
-          {fixedEvidence && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
+          {fixedEvidence && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && !fixedEvidence.natsResponseResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
           {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
         </div>}
         {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">
