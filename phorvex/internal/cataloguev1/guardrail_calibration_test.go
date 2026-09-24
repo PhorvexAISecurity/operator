@@ -233,13 +233,13 @@ func TestGuardrailCalibrationRefusesBeforeClassifierOnAuthorityFailure(t *testin
 func TestGuardrailCalibrationMalformedScoreStopsWithoutSecondDispatch(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		fixture guardrailFixture
+		fixture *guardrailFixture
 	}{
-		{"malformed score", guardrailFixture{malformedScore: true}},
-		{"oversize response", guardrailFixture{oversizeBody: true}},
+		{"malformed score", &guardrailFixture{malformedScore: true}},
+		{"oversize response", &guardrailFixture{oversizeBody: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fixture := &tc.fixture
+			fixture := tc.fixture
 			runtime, recorder, closeServer := fixture.setup(t)
 			defer closeServer()
 			result := NewGuardrailCalibrationHandler().Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
