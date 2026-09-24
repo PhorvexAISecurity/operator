@@ -1,6 +1,11 @@
 import type { MongoExposureResult } from "@/lib/api";
 
 const sha256 = /^[0-9a-f]{64}$/;
+const reactiveOnlyReason = "Policy requires a qualifying direct event for this workload; none was observed in this decision, so no action was attempted.";
+const dispatchOutcomes = new Set([
+  "not-attempted", "emitted", "emitted-false", "dispatch-error", "refused-no-effect",
+  "already-satisfied", "reconciled-no-new-mutation", "declared-only",
+]);
 
 // One synthetic document and one uncredentialed Service-path read. This panel
 // does not turn a Mongo authorization response or a manager audit row into a
@@ -17,10 +22,17 @@ export function MongoExposureResult({ result, unsafeToRetry = false }: { result:
   if (result.schema !== "mongo-exposure-result-v1" || result.securityOutcome !== "NOT_EVALUATED" ||
       typeof result.accepted !== "boolean" || (result.accepted ? !acceptedShape : result.finding !== "UNKNOWN") ||
       !Array.isArray(result.brainDecisions) || decisions.length > 64 ||
-      decisions.some((row) => !row.decisionID || !row.policyUID || !row.targetPodUID ||
+      (result.brainTrace === "JOINED" && decisions.length === 0) ||
+      decisions.some((row) => !row || !row.decisionID || !row.policyUID || !row.targetPodUID ||
         row.policyUID !== result.policyUID || row.targetPodUID !== result.sourcePodUID ||
         !Number.isInteger(row.policyGeneration) || row.policyGeneration < 0 ||
-        !sha256.test(row.reasonSHA256)) || !Array.isArray(result.issues)) {
+        !sha256.test(row.reasonSHA256) || !dispatchOutcomes.has(row.dispatchOutcome) ||
+        !(["REACTIVE_ONLY_NO_DIRECT_FOOTHOLD", "OTHER_RECORDED_REASON", "NONE"] as string[]).includes(row.reasonCode) ||
+        row.reasonText !== (row.reasonCode === "REACTIVE_ONLY_NO_DIRECT_FOOTHOLD" ? reactiveOnlyReason : "") ||
+        !Array.isArray(row.candidateStatuses) || row.candidateStatuses.length !== 15 ||
+        row.candidateStatuses.some((candidate) => !candidate || !candidate.action || !candidate.status ||
+          typeof candidate.exclusionKind !== "string" || typeof candidate.scored !== "boolean")) ||
+      !Array.isArray(result.issues)) {
     return <div className="text-warning">Mongo exposure evidence has an incompatible claim contract; no finding is accepted.</div>;
   }
   const reply = sha256.test(result.rawReplySHA256) && Number.isInteger(result.rawReplyBytes) && result.rawReplyBytes > 0 && result.rawReplyBytes <= 4096;
@@ -42,7 +54,14 @@ export function MongoExposureResult({ result, unsafeToRetry = false }: { result:
     <div className="mt-2 break-all text-muted-foreground">Exact Pod UIDs: source <span className="font-mono text-foreground">{result.sourcePodUID || "unverified"}</span> · client <span className="font-mono text-foreground">{result.clientPodUID || "unverified"}</span> · policy <span className="font-mono text-foreground">{result.policyUID || "unverified"}</span>.</div>
     <div className="mt-3 border-t border-border pt-2">
       <div className="font-medium text-foreground">Same-window manager audit · {result.brainTrace}</div>
-      {decisions.length ? <div className="mt-1 space-y-1">{decisions.map((row) => <div key={`${row.decisionID}-${row.targetPodUID}`} className="break-all text-muted-foreground">decision <span className="font-mono text-foreground">{row.decisionID}</span> · policy generation {row.policyGeneration} · action {row.action || "unavailable"} · status {row.actionStatus || "unavailable"} · reason SHA-256 <span className="font-mono text-foreground">{row.reasonSHA256}</span> · {row.observedAt || "time unavailable"}</div>)}</div>
+      {decisions.length ? <div className="mt-1 space-y-2">{decisions.map((row) => <div key={`${row.decisionID}-${row.targetPodUID}`} className="rounded border border-border/70 p-2 text-muted-foreground">
+        <div className="break-all">decision <span className="font-mono text-foreground">{row.decisionID}</span> · policy generation {row.policyGeneration} · selected {row.action || "unavailable"} · action status {row.actionStatus || "unavailable"} · dispatch {row.dispatchOutcome} · {row.observedAt || "time unavailable"}</div>
+        <div className="mt-1 text-foreground">{row.reasonCode === "REACTIVE_ONLY_NO_DIRECT_FOOTHOLD" ? row.reasonText : row.reasonCode === "NONE" ? "No manager reason was recorded for this decision." : "The manager recorded a reason without a closed public explanation; use the private audit record to inspect it."}</div>
+        <div className="mt-1 break-all">Reason code {row.reasonCode} · source reason SHA-256 <span className="font-mono text-foreground">{row.reasonSHA256}</span></div>
+        <details className="mt-1"><summary className="cursor-pointer">Actual candidate statuses ({row.candidateStatuses.length})</summary>
+          <div className="mt-1 space-y-1">{row.candidateStatuses.map((candidate) => <div key={candidate.action} className="break-all">{candidate.action}: {candidate.status} · scored {candidate.scored ? "yes" : "no"}{candidate.exclusionKind ? ` · exclusion ${candidate.exclusionKind}` : ""}</div>)}</div>
+        </details>
+      </div>)}</div>
         : <div className="mt-1 text-muted-foreground">No exact decision row is projected for this owned target. A complete audit window alone does not establish detection or a defense action.</div>}
       <div className="mt-1 text-muted-foreground">These rows describe the manager’s actual choices for the pinned target; they do not explain Mongo authentication or prove mitigation.</div>
     </div>

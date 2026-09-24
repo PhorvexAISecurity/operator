@@ -631,6 +631,10 @@ export interface MongoExposureDecision {
   action: string;
   actionStatus: string;
   reasonSHA256: string;
+  reasonCode: "REACTIVE_ONLY_NO_DIRECT_FOOTHOLD" | "OTHER_RECORDED_REASON" | "NONE";
+  reasonText: string;
+  dispatchOutcome: "not-attempted" | "emitted" | "emitted-false" | "dispatch-error" | "refused-no-effect" | "already-satisfied" | "reconciled-no-new-mutation" | "declared-only";
+  candidateStatuses: { action: string; status: string; exclusionKind: string; scored: boolean }[];
   observedAt: string;
 }
 export interface MongoExposureResult {
