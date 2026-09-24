@@ -105,6 +105,25 @@ type CatalogueV1Config struct {
 	MCPSourceKey                string
 	MCPImageID                  string
 	MCPSourceSHA256             string
+	ChromaEnabled               bool
+	ChromaNamespace             string
+	ChromaDeployment            string
+	ChromaService               string
+	ChromaContainer             string
+	ChromaPort                  int32
+	ChromaImageID               string
+	ChromaVersionSourceSHA256   string
+	ChromaServerSourceSHA256    string
+	ChromaSchemaSourceSHA256    string
+	LiteLLMEnabled              bool
+	LiteLLMNamespace            string
+	LiteLLMDeployment           string
+	LiteLLMService              string
+	LiteLLMContainer            string
+	LiteLLMPort                 int32
+	LiteLLMConfigMap            string
+	LiteLLMConfigKey            string
+	LiteLLMConfigSHA256         string
 }
 
 const (

@@ -16,8 +16,8 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 9 {
-		t.Fatalf("items=%d, want seven limited-v1 entries, one MCP baseline and the disabled server-owned NATS response", len(items))
+	if len(items) != 12 {
+		t.Fatalf("items=%d, want ten fixed-suite entries, one guardrail effect and the disabled server-owned NATS response", len(items))
 	}
 	responseRows := 0
 	for _, item := range items {
@@ -26,7 +26,8 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 			if item.Available || item.LaunchKind != "named-suite" || item.Profile != natsResponseConfig || item.ClaimClass != "effect" {
 				t.Fatalf("unconfigured response row gained launch authority: %+v", item)
 			}
-		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) {
+		} else if !strings.HasPrefix(item.Name, "limited-v1-") && item.Name != string(cataloguev1.MCPSessionBaseline) &&
+			item.Name != string(cataloguev1.ChromaOwnedVector) && item.Name != string(cataloguev1.LiteLLMHealth) && item.Name != string(cataloguev1.LiteLLMCredential) {
 			t.Fatalf("unexpected entry %q", item.Name)
 		}
 		if item.LaunchKind == "" || item.ClaimClass == "" {

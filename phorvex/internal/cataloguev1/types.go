@@ -25,6 +25,9 @@ const (
 	AuthScope            ProfileID = "limited-v1-console-scoped-authorization"
 	GuardrailCalibration ProfileID = "limited-v1-vllm-guardrail-calibration"
 	MCPSessionBaseline   ProfileID = "catalogue-mcp-session-baseline"
+	ChromaOwnedVector    ProfileID = "catalogue-chroma-owned-vector"
+	LiteLLMHealth        ProfileID = "catalogue-litellm-route-health"
+	LiteLLMCredential    ProfileID = "catalogue-litellm-credential-boundary"
 )
 
 // Definition is immutable product metadata for a fixed profile.
@@ -49,6 +52,9 @@ func DefinitionFor(id ProfileID) (Definition, error) {
 		AuthScope:            {ID: AuthScope, Title: "Console scoped authorization boundary", Product: "platform", Category: "Boundary", ClaimLimits: "installed API tenant/target authorization boundary only; no application attack, brain or actuator claim", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: time.Minute, MaxMutations: 0},
 		GuardrailCalibration: {ID: GuardrailCalibration, Title: "Installed guardrail benign calibration", Product: "ai", Category: "Calibration", ClaimLimits: "two fixed benign requests to the reviewed non-forwarding classifier endpoint/source contract; loaded process, forwarding behavior, guarded serving, injected response, detector, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "vllm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 		MCPSessionBaseline:   {ID: MCPSessionBaseline, Title: "Installed MCP owned session", Product: "application", Category: "Functional", ClaimLimits: "one synthetic MCP tool read and exact in-memory session invalidation with mounted-file/package hash pins; already-loaded Python bytes, business mutation, provider, authorization, brain, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "mcp", MaxDuration: 2 * time.Minute, MaxMutations: 2},
+		ChromaOwnedVector:    {ID: ChromaOwnedVector, Title: "Chroma owned vector state", Product: "application", Category: "Functional", ClaimLimits: "one fresh synthetic collection and document on the exact installed Chroma route; no customer data, authorization bypass, SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "document-store", MaxDuration: 3 * time.Minute, MaxMutations: 3},
+		LiteLLMHealth:        {ID: LiteLLMHealth, Title: "LiteLLM route availability", Product: "ai", Category: "Functional", ClaimLimits: "fixed listener liveliness on each exact serving Pod; no authenticated model serving, SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
+		LiteLLMCredential:    {ID: LiteLLMCredential, Title: "LiteLLM credential configuration boundary", Product: "ai", Category: "Boundary", ClaimLimits: "missing and generated invalid bearer on reviewed GET /v1/models authentication route for each exact serving Pod; NO_CONNECTED_DB is configuration-limited, not a verified denial or bypass; no SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 	}
 	definition, ok := definitions[id]
 	if !ok {
@@ -144,6 +150,8 @@ type Runtime struct {
 	GPU             GPUFixtureRuntime
 	Guardrail       GuardrailCalibrationRuntime
 	MCP             MCPSessionRuntime
+	Chroma          ChromaRuntime
+	LiteLLM         LiteLLMRuntime
 }
 
 type Outcome string

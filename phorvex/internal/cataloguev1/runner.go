@@ -242,6 +242,10 @@ func validateResolvedAuthority(job Job, definition Definition, runtime Runtime) 
 		wantTenant = runtime.Guardrail.Namespace
 	case MCPSessionBaseline:
 		wantTenant = runtime.MCP.Namespace
+	case ChromaOwnedVector:
+		wantTenant = runtime.Chroma.Namespace
+	case LiteLLMHealth, LiteLLMCredential:
+		wantTenant = runtime.LiteLLM.Namespace
 	}
 	if strings.TrimSpace(wantTenant) == "" || job.ResolvedTenant != wantTenant {
 		return errors.New("catalogue v1 resolved tenant differs from the fixed runtime profile")
@@ -250,7 +254,7 @@ func validateResolvedAuthority(job Job, definition Definition, runtime Runtime) 
 }
 
 func validateDefinition(definition Definition) error {
-	known := map[ProfileID]bool{VoiceMedia: true, VoiceRecovery: true, GPUDrain: true, AuthUnauth: true, AuthScope: true, GuardrailCalibration: true, MCPSessionBaseline: true}
+	known := map[ProfileID]bool{VoiceMedia: true, VoiceRecovery: true, GPUDrain: true, AuthUnauth: true, AuthScope: true, GuardrailCalibration: true, MCPSessionBaseline: true, ChromaOwnedVector: true, LiteLLMHealth: true, LiteLLMCredential: true}
 	if !known[definition.ID] {
 		return fmt.Errorf("unknown catalogue v1 profile %q", definition.ID)
 	}

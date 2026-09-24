@@ -21,8 +21,8 @@ func TestLegacyRuntimeConfigHashSurvivesGuardrailField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Guardrail != nil {
-		t.Fatal("absent legacy guardrail field became nonnil")
+	if config.Guardrail != nil || config.MCP != nil || config.Chroma != nil || config.LiteLLM != nil {
+		t.Fatal("absent legacy optional runtime field became nonnil")
 	}
 	got, err := config.SHA256()
 	if err != nil || got != legacyRuntimeSHA {

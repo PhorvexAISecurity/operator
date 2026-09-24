@@ -152,6 +152,7 @@ export interface CatalogItem {
   responseGuidance?: string; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
   launchKind?: "harness-scenario" | "fixed-suite" | "named-suite" | "live-vllm-effect";
   claimClass?: "security" | "functional" | "effect" | "calibration";
+  eventMode?: string;
   profile?: string; available?: boolean; unavailableReason?: string;
   runtimeContext?: string;
 }

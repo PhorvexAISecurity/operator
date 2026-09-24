@@ -324,6 +324,14 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	chromaEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_CHROMA_ENABLED")
+	if err != nil {
+		return err
+	}
+	liteLLMEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_LITELLM_ENABLED")
+	if err != nil {
+		return err
+	}
 	port := int64(0)
 	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
 		port, err = strconv.ParseInt(raw, 10, 32)
@@ -343,6 +351,20 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		mcpPort, err = strconv.ParseInt(raw, 10, 32)
 		if err != nil || mcpPort < 1 || mcpPort > 65535 || raw != strconv.FormatInt(mcpPort, 10) {
 			return errors.New("PHORVEX_CONSOLE_CATALOGUE_MCP_PORT must be a canonical port")
+		}
+	}
+	chromaPort := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_PORT"); raw != "" {
+		chromaPort, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || chromaPort < 1 || chromaPort > 65535 || raw != strconv.FormatInt(chromaPort, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_CHROMA_PORT must be a canonical port")
+		}
+	}
+	liteLLMPort := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_PORT"); raw != "" {
+		liteLLMPort, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || liteLLMPort < 1 || liteLLMPort > 65535 || raw != strconv.FormatInt(liteLLMPort, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_LITELLM_PORT must be a canonical port")
 		}
 	}
 	executable, _ := os.Executable()
@@ -382,6 +404,25 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	cfg.CatalogueV1.MCPSourceKey = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_KEY")
 	cfg.CatalogueV1.MCPImageID = read("PHORVEX_CONSOLE_CATALOGUE_MCP_IMAGE_ID")
 	cfg.CatalogueV1.MCPSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_MCP_SOURCE_SHA256")
+	cfg.CatalogueV1.ChromaEnabled = chromaEnabled
+	cfg.CatalogueV1.ChromaNamespace = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_NAMESPACE")
+	cfg.CatalogueV1.ChromaDeployment = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_DEPLOYMENT")
+	cfg.CatalogueV1.ChromaService = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVICE")
+	cfg.CatalogueV1.ChromaContainer = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_CONTAINER")
+	cfg.CatalogueV1.ChromaPort = int32(chromaPort)
+	cfg.CatalogueV1.ChromaImageID = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_IMAGE_ID")
+	cfg.CatalogueV1.ChromaVersionSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_VERSION_SOURCE_SHA256")
+	cfg.CatalogueV1.ChromaServerSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVER_SOURCE_SHA256")
+	cfg.CatalogueV1.ChromaSchemaSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_SCHEMA_SOURCE_SHA256")
+	cfg.CatalogueV1.LiteLLMEnabled = liteLLMEnabled
+	cfg.CatalogueV1.LiteLLMNamespace = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_NAMESPACE")
+	cfg.CatalogueV1.LiteLLMDeployment = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_DEPLOYMENT")
+	cfg.CatalogueV1.LiteLLMService = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_SERVICE")
+	cfg.CatalogueV1.LiteLLMContainer = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONTAINER")
+	cfg.CatalogueV1.LiteLLMPort = int32(liteLLMPort)
+	cfg.CatalogueV1.LiteLLMConfigMap = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIGMAP")
+	cfg.CatalogueV1.LiteLLMConfigKey = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_KEY")
+	cfg.CatalogueV1.LiteLLMConfigSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_SHA256")
 	if cfg.CatalogueV1.KubeconfigPath != "" && cfg.CatalogueV1.KubeContext == "" {
 		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.KubeconfigPath}
 		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
@@ -434,7 +475,8 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		cataloguev1.NewVoiceMediaHandler(), cataloguev1.NewVoiceRecoveryHandler(),
 		cataloguev1.NewGPUDrainHandler(),
 		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler(),
-		cataloguev1.NewGuardrailCalibrationHandler(), cataloguev1.NewMCPSessionHandler())
+		cataloguev1.NewGuardrailCalibrationHandler(), cataloguev1.NewMCPSessionHandler(),
+		cataloguev1.NewChromaHandler(), cataloguev1.NewLiteLLMHealthHandler(), cataloguev1.NewLiteLLMCredentialHandler())
 	if err != nil {
 		log.Printf("catalogue v1 registry: %v", err)
 		return 2
@@ -465,7 +507,8 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 
 func workerKubernetesRuntime(profile cataloguev1.ProfileID, runtimeConfig cataloguev1.RuntimeConfig) (*rest.Config, kubernetes.Interface, error) {
 	if profile != cataloguev1.VoiceMedia && profile != cataloguev1.VoiceRecovery &&
-		profile != cataloguev1.GuardrailCalibration && profile != cataloguev1.MCPSessionBaseline {
+		profile != cataloguev1.GuardrailCalibration && profile != cataloguev1.MCPSessionBaseline &&
+		profile != cataloguev1.ChromaOwnedVector && profile != cataloguev1.LiteLLMHealth && profile != cataloguev1.LiteLLMCredential {
 		return nil, nil, nil
 	}
 	var restConfig *rest.Config
