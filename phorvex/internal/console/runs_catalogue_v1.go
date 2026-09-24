@@ -232,7 +232,7 @@ func (rm *RunManager) fixedSuiteAdmissionLocked(profile cataloguev1.ProfileID, d
 		if existing == nil {
 			return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 		}
-		if existing.ExecutionKind == "fixed-suite" && existing.UnsafeToRetry {
+		if existing.UnsafeToRetry {
 			unsafe = append(unsafe, existing)
 		}
 	}

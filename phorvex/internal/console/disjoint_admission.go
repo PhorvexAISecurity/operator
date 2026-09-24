@@ -26,6 +26,31 @@ var voiceSID = regexp.MustCompile(`^(AC|CA|MZ)[0-9a-f]{32}$`)
 var voiceUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var voiceHex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
+// The reviewed Voice result producers project only these fields. Optional
+// fields may be absent on a failing run, but extra effect claims must not
+// silently widen the predecessor's possible footprint.
+var priorVoiceEvidenceKeys = map[string]bool{
+	"voiceOutcome": true, "operationID": true, "sessions": true, "evictionDispatches": true,
+	"sampleCount": true, "error": true, "authoritySHA256": true,
+	"targetPodName": true, "targetPodUID": true, "targetImageID": true,
+	"targetContainerID": true, "podSourceFileSHA256": true, "replacementPodUID": true,
+	"evictionDisposition": true, "evictionRequestSHA256": true,
+	"availabilityMinimumReadyPods": true, "availabilityMinimumReadyEndpoints": true,
+	"availabilityMaximumSampleGapSeconds": true, "availabilityScope": true,
+	"session1.callSID": true, "session1.streamSID": true, "session1.phase": true,
+	"session1.mediaFramesSent": true, "session1.mediaFramesReceived": true,
+	"session1.mediaBytesReceived": true, "session1.receivedAudioSHA256": true,
+	"session1.closeCode": true, "session1.stopSent": true, "session1.forwardClosed": true,
+	"session2.callSID": true, "session2.streamSID": true, "session2.phase": true,
+	"session2.mediaFramesSent": true, "session2.mediaFramesReceived": true,
+	"session2.mediaBytesReceived": true, "session2.receivedAudioSHA256": true,
+	"session2.closeCode": true, "session2.stopSent": true, "session2.forwardClosed": true,
+}
+
+var priorVoiceCleanupKeys = map[string]bool{
+	"forwardsClosed": true, "documentsFound": true, "documentsRemaining": true,
+}
+
 var priorVoiceJournalKeys = map[string][]string{
 	"intent/voice.prepare":           {"operationID", "ownerDigest", "mode", "namespace"},
 	"event/voice.authority":          {"authoritySHA256", "namespaceUID", "deploymentUID", "replicaSetUID", "serviceUID", "pdbUID"},
@@ -78,6 +103,10 @@ func (rm *RunManager) disjointVoiceAdmissionLocked(profile cataloguev1.ProfileID
 		}
 	case cataloguev1.CRMRefund, cataloguev1.CRMReset:
 		if destination.ScopeTenant != rm.cfg.CatalogueV1.CRMNamespace || destination.ScopeTenant == "crm" ||
+			// The installed console lives in phorvex-system. The chart also
+			// rejects its release namespace, while this direct Config path
+			// must reject the installed console namespace itself.
+			destination.ScopeTenant == "phorvex-system" ||
 			destination.ScopeTenant == rm.cfg.CatalogueV1.AllowedTenant ||
 			rm.cfg.CatalogueV1.CRMNamespaceUID == "" || rm.cfg.CatalogueV1.CRMServiceAccountName == "" {
 			return false
@@ -157,6 +186,16 @@ func validatePriorVoiceFilesAt(prior *RunStatus, storageDir, expectedDir, stateD
 	}
 	if err := cataloguev1.ValidateResult(job, result); err != nil {
 		return err
+	}
+	for key := range result.Evidence {
+		if !priorVoiceEvidenceKeys[key] {
+			return errors.New("prior Voice result has an unknown evidence field")
+		}
+	}
+	for key := range result.Cleanup.Details {
+		if !priorVoiceCleanupKeys[key] {
+			return errors.New("prior Voice result has an unknown cleanup field")
+		}
 	}
 	if err := cataloguev1.ValidateTerminalArtifactBytes(job, result, raw["metrics.jsonl"]); err != nil {
 		return err

@@ -346,6 +346,44 @@ func TestDisjointAdmissionLegacyVoiceRecoveryProjection(t *testing.T) {
 		admit bool
 	}{
 		{"complete-old-projection", nil, true},
+		{"unknown-effect-evidence", func(t *testing.T, cfg Config) {
+			path := filepath.Join(cfg.runOutputPath("v1run-5"), "result.json")
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result cataloguev1.Result
+			if err := json.Unmarshal(raw, &result); err != nil {
+				t.Fatal(err)
+			}
+			result.Evidence["foreignEffect"] = "write observed outside Voice footprint"
+			raw, err = json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}, false},
+		{"unknown-cleanup-detail", func(t *testing.T, cfg Config) {
+			path := filepath.Join(cfg.runOutputPath("v1run-5"), "result.json")
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result cataloguev1.Result
+			if err := json.Unmarshal(raw, &result); err != nil {
+				t.Fatal(err)
+			}
+			result.Cleanup.Details["otherNamespaceRemaining"] = "1"
+			raw, err = json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}, false},
 		{"mixed-projection", func(t *testing.T, cfg Config) {
 			path := filepath.Join(cfg.runOutputPath("v1run-5"), "result.json")
 			raw, err := os.ReadFile(path)
@@ -478,44 +516,58 @@ func TestDisjointAdmissionRetainsSecondUnsafeAndSharedLimits(t *testing.T) {
 	if post.Code != http.StatusBadRequest || f.srv.runs.seq != 5 {
 		t.Fatalf("second unsafe predecessor POST: %d seq=%d", post.Code, f.srv.runs.seq)
 	}
+	f.srv.runs.mu.Lock()
+	f.srv.runs.runs["v1run-7"].ExecutionKind = "unknown"
+	f.srv.runs.mu.Unlock()
+	if _, got, _ := readAdmission(t, f, path); got.Launchable || got.ReasonCode != string(functionalPriorUnsafe) {
+		t.Fatalf("second unsafe unknown-kind predecessor bypassed: %+v", got)
+	}
+	post = f.do(f.albReqAs(t, http.MethodPost, "/api/runs/functional", `{"profile":"catalogue-litellm-route-health"}`, "op"))
+	if post.Code != http.StatusBadRequest || f.srv.runs.seq != 5 {
+		t.Fatalf("second unsafe unknown-kind predecessor POST: %d seq=%d", post.Code, f.srv.runs.seq)
+	}
 }
 
 func TestDisjointAdmissionCRMVoiceNamespaceCollision(t *testing.T) {
-	cfg := disjointFixtureConfig(t)
-	writeVoiceFailureRun(t, cfg, cataloguev1.VoiceRecovery)
-	// Build a currently valid scoped CRM authority in the Voice namespace.
-	// The disjointness gate, not a failed Kubernetes lookup, must refuse it.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/apis/authentication.k8s.io/v1/selfsubjectreviews":
-			fmt.Fprint(w, `{"apiVersion":"authentication.k8s.io/v1","kind":"SelfSubjectReview","status":{"userInfo":{"username":"system:serviceaccount:voice:fixture-sa"}}}`)
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/namespaces/voice":
-			fmt.Fprint(w, `{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"voice","uid":"11111111-1111-4111-8111-111111111111","labels":{"phorvex.ai/crm-capability-fixture":"true"}}}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-	cfg.CatalogueV1.CRMNamespace = "voice"
-	kube := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: fixture\n  cluster:\n    server: %s\ncontexts:\n- name: fixture\n  context:\n    cluster: fixture\n    user: fixture\ncurrent-context: fixture\nusers:\n- name: fixture\n  user:\n    token: fixture-token\n", server.URL)
-	if err := os.WriteFile(cfg.CatalogueV1.CRMKubeconfigPath, []byte(kube), 0600); err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256([]byte(kube))
-	cfg.CatalogueV1.CRMKubeconfigSHA256 = hex.EncodeToString(sum[:])
-	if _, _, err := NewRunManager(cfg).functionalInputs(cataloguev1.CRMRefund); err != nil {
-		t.Fatalf("CRM authority counterexample did not reach disjoint predicate: %v", err)
-	}
-	f := newAuthFixture(t, cfg, operatorGrant("op", []string{"voice"}, []string{wildcardScope}))
-	path := "/api/runs/functional/admission?profile=" + string(cataloguev1.CRMRefund)
-	code, got, _ := readAdmission(t, f, path)
-	if code != http.StatusOK || got.Launchable || got.ReasonCode != string(functionalPriorUnsafe) {
-		t.Fatalf("CRM Voice namespace collision admitted by GET: %d %+v", code, got)
-	}
-	post := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/functional", `{"profile":"c2-crm-refund-capability"}`, "op"))
-	if post.Code != http.StatusBadRequest || f.srv.runs.seq != 5 {
-		t.Fatalf("CRM Voice namespace collision admitted by POST: %d seq=%d", post.Code, f.srv.runs.seq)
+	for _, namespace := range []string{"voice", "phorvex-system"} {
+		t.Run(namespace, func(t *testing.T) {
+			cfg := disjointFixtureConfig(t)
+			writeVoiceFailureRun(t, cfg, cataloguev1.VoiceRecovery)
+			// Build a currently valid scoped CRM authority in a forbidden namespace.
+			// The disjointness gate, not a failed Kubernetes lookup, must refuse it.
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodPost && r.URL.Path == "/apis/authentication.k8s.io/v1/selfsubjectreviews":
+					fmt.Fprintf(w, `{"apiVersion":"authentication.k8s.io/v1","kind":"SelfSubjectReview","status":{"userInfo":{"username":"system:serviceaccount:%s:fixture-sa"}}}`, namespace)
+				case r.Method == http.MethodGet && r.URL.Path == "/api/v1/namespaces/"+namespace:
+					fmt.Fprintf(w, `{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"%s","uid":"11111111-1111-4111-8111-111111111111","labels":{"phorvex.ai/crm-capability-fixture":"true"}}}`, namespace)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(server.Close)
+			cfg.CatalogueV1.CRMNamespace = namespace
+			kube := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: fixture\n  cluster:\n    server: %s\ncontexts:\n- name: fixture\n  context:\n    cluster: fixture\n    user: fixture\ncurrent-context: fixture\nusers:\n- name: fixture\n  user:\n    token: fixture-token\n", server.URL)
+			if err := os.WriteFile(cfg.CatalogueV1.CRMKubeconfigPath, []byte(kube), 0600); err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256([]byte(kube))
+			cfg.CatalogueV1.CRMKubeconfigSHA256 = hex.EncodeToString(sum[:])
+			if _, _, err := NewRunManager(cfg).functionalInputs(cataloguev1.CRMRefund); err != nil {
+				t.Fatalf("CRM authority counterexample did not reach disjoint predicate: %v", err)
+			}
+			f := newAuthFixture(t, cfg, operatorGrant("op", []string{namespace}, []string{wildcardScope}))
+			path := "/api/runs/functional/admission?profile=" + string(cataloguev1.CRMRefund)
+			code, got, _ := readAdmission(t, f, path)
+			if code != http.StatusOK || got.Launchable || got.ReasonCode != string(functionalPriorUnsafe) {
+				t.Fatalf("CRM forbidden namespace collision admitted by GET: %d %+v", code, got)
+			}
+			post := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/functional", `{"profile":"c2-crm-refund-capability"}`, "op"))
+			if post.Code != http.StatusBadRequest || f.srv.runs.seq != 5 {
+				t.Fatalf("CRM forbidden namespace collision admitted by POST: %d seq=%d", post.Code, f.srv.runs.seq)
+			}
+		})
 	}
 }
 
