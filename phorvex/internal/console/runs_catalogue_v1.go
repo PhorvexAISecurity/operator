@@ -347,14 +347,14 @@ func (rm *RunManager) reconcileInterruptedFunctional() {
 		rm.mu.Lock()
 		st := rm.runs[id]
 		if st != nil {
-			if err == nil && readErr == nil && result.Cleanup.Verified {
+			if err == nil && readErr == nil && result.Cleanup.Verified && !result.UnsafeToRetry && !result.Cleanup.UnsafeToRetry {
 				st.State = "partial"
 				st.Error = "interrupted fixed suite reconciled; original result remains incomplete"
 				st.CleanupStatus = result.Cleanup.Status
 				st.UnsafeToRetry = false
 			} else {
 				st.State = "partial"
-				st.Error = "interrupted fixed suite reconciliation failed"
+				st.Error = "interrupted fixed suite reconciliation unverified or effect unresolved"
 				st.UnsafeToRetry = true
 			}
 			if persistErr := rm.persistStatus(st, rm.runOut[id]); persistErr != nil {

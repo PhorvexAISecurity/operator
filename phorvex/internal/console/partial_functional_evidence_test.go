@@ -217,6 +217,49 @@ func TestVoiceUnknownEvictionWithVerifiedTranscriptCleanupCannotBeReplayed(t *te
 	}
 }
 
+func TestStartupReconcileRetainsUnknownVoiceEffectAfterVerifiedCleanup(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		unsafe bool
+	}{
+		{name: "unknown-eviction", unsafe: true},
+		{name: "definite-effect-and-cleanup", unsafe: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanup := cataloguev1.Cleanup{Attempted: true, Verified: true, Status: "PASS", UnsafeToRetry: tc.unsafe}
+			if tc.unsafe {
+				cleanup.Status = "cleanup-pass-effect-unknown"
+			}
+			rm, dir, _ := partialFunctionalFixtureForProfile(t, cataloguev1.VoiceRecovery,
+				cataloguev1.OutcomeInconclusive, cleanup, nil)
+			original, err := os.ReadFile(filepath.Join(dir, "result.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			worker := filepath.Join(t.TempDir(), "inert-reconciler")
+			if err := os.WriteFile(worker, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			rm.cfg.CatalogueV1.Executable = worker
+			rm.mu.Lock()
+			st := rm.runs["v1run-1"]
+			st.State = "partial"
+			st.UnsafeToRetry = true
+			st.Error = "reconciliation pending after restart"
+			rm.mu.Unlock()
+			rm.reconcileInterruptedFunctional()
+			status, _ := rm.Status("v1run-1")
+			if status.State != "partial" || status.UnsafeToRetry != tc.unsafe {
+				t.Fatalf("startup reconciliation changed effect uncertainty: %+v", status)
+			}
+			current, err := os.ReadFile(filepath.Join(dir, "result.json"))
+			if err != nil || string(current) != string(original) {
+				t.Fatalf("startup status reconciliation rewrote original result: %v", err)
+			}
+		})
+	}
+}
+
 func TestPartialFixedSuiteRejectsMissingStaleAndPassArtifacts(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
