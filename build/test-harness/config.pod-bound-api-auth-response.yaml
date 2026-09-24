@@ -1,0 +1,29 @@
+# Disabled until each source, authority and scrape pin is independently reviewed.
+# The console alone replaces runID, nonce and outDir. No bearer belongs here.
+kubeconfig: ""
+context: "__SET_LOGICAL_CLUSTER_TARGET__"
+namespace: voice
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+outDir: out-pod-bound-api-auth-response
+defenderFilter: []
+scenarioFilter: [c2-pod-bound-api-auth-response]
+podBoundTokenFixture:
+  runID: run-1
+  nonce: "000000000000000000000000"
+  transport: in-cluster
+  clusterUID: "__SET_REVIEWED_KUBE_SYSTEM_UID__"
+  managerNamespace: phorvex-system
+  managerDeployment: phorvex-phorvex
+  managerImageID: "__SET_REVIEWED_MANAGER_IMAGE_ID_DIGEST__"
+  fixtureImageID: "__SET_REVIEWED_FIXTURE_IMAGE_DIGEST__"
+  sourceManifestPath: "__SET_ABSOLUTE_REVIEWED_SOURCE_MANIFEST_PATH__"
+  sourceManifestSHA256: "__SET_REVIEWED_SOURCE_MANIFEST_SHA256__"
+  protectedLedgerName: "__SET_REVIEWED_VOICE_CAPACITY_LEDGER_NAME__"
+  eventCreator: "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector"
+  prometheusURL: "__SET_REVIEWED_PROMETHEUS_URL__"
+  scrapeKind: "__SET_REVIEWED_SCRAPE_KIND__"
+  scrapeNamespace: voice
+  allowedNodeName: "__SET_REVIEWED_HEALTHY_NODE_NAME__"
+  maxRunSeconds: 900

@@ -141,6 +141,12 @@ type TargetConfig struct {
 	// owned document through the installed Mongo Service. It never enters the
 	// generic scenario matrix or its namespace-wide cleanup.
 	MongoExposureFixture *MongoExposureFixtureConfig `json:"mongoExposureFixture,omitempty"`
+	// PodBoundTokenFixture is one server-owned, explicitly injected response
+	// observation. It never enters the scored scenario matrix.
+	PodBoundTokenFixture *PodBoundTokenFixtureConfig `json:"podBoundTokenFixture,omitempty"`
+	// ProfileSHA256 is the digest of the exact run-private YAML bytes. The
+	// launcher sets it after Load; it is never accepted from profile YAML.
+	ProfileSHA256 string `json:"-"`
 	// GuardrailStaticFixture selects the fixed, read-only installed vLLM comparison.
 	GuardrailStaticFixture *GuardrailStaticFixtureConfig `json:"guardrailStaticFixture,omitempty"`
 
@@ -252,6 +258,26 @@ type NATSExposureFixtureConfig struct {
 	ManagerNamespace  string `json:"managerNamespace,omitempty"`
 	ManagerDeployment string `json:"managerDeployment,omitempty"`
 	ManagerImageID    string `json:"managerImageID,omitempty"`
+}
+
+type PodBoundTokenFixtureConfig struct {
+	RunID                string `json:"runID"`
+	Nonce                string `json:"nonce"`
+	Transport            string `json:"transport"`
+	ClusterUID           string `json:"clusterUID"`
+	ManagerNamespace     string `json:"managerNamespace"`
+	ManagerDeployment    string `json:"managerDeployment"`
+	ManagerImageID       string `json:"managerImageID"`
+	FixtureImageID       string `json:"fixtureImageID"`
+	SourceManifestPath   string `json:"sourceManifestPath"`
+	SourceManifestSHA256 string `json:"sourceManifestSHA256"`
+	ProtectedLedgerName  string `json:"protectedLedgerName"`
+	EventCreator         string `json:"eventCreator"`
+	PrometheusURL        string `json:"prometheusURL"`
+	ScrapeKind           string `json:"scrapeKind"`
+	ScrapeNamespace      string `json:"scrapeNamespace"`
+	AllowedNodeName      string `json:"allowedNodeName"`
+	MaxRunSeconds        int    `json:"maxRunSeconds"`
 }
 
 type GuardrailStaticFixtureConfig struct {
@@ -463,6 +489,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateMongoExposureFixture(c); err != nil {
 			return err
 		}
+		if err := validatePodBoundTokenFixture(c); err != nil {
+			return err
+		}
 		if err := validateGuardrailStaticFixture(c); err != nil {
 			return err
 		}
@@ -499,6 +528,9 @@ func (c TargetConfig) Validate() error {
 		return err
 	}
 	if err := validateMongoExposureFixture(c); err != nil {
+		return err
+	}
+	if err := validatePodBoundTokenFixture(c); err != nil {
 		return err
 	}
 	if err := validateGuardrailStaticFixture(c); err != nil {
@@ -634,6 +666,38 @@ var natsExposureNonce = regexp.MustCompile(`^[0-9a-f]{24}$`)
 var natsExposureDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var natsExposureImage = regexp.MustCompile(`^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$`)
 var natsExposureRunID = regexp.MustCompile(`^run-[1-9][0-9]*$`)
+
+func validatePodBoundTokenFixture(c TargetConfig) error {
+	f := c.PodBoundTokenFixture
+	if f == nil {
+		return nil
+	}
+	if !c.OwnedAck || c.Namespace != "voice" || c.ExpectedNamespaceUID != "" ||
+		c.Context == "" || c.Context == "in-cluster" || c.Kubeconfig != "" ||
+		c.TrialsPerArm != 1 || len(c.DefenderFilter) != 0 ||
+		len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-pod-bound-api-auth-response" ||
+		c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
+		c.GuardrailStaticFixture != nil || c.InstalledManagerFixture != nil ||
+		c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil ||
+		!natsExposureRunID.MatchString(f.RunID) || !natsExposureNonce.MatchString(f.Nonce) ||
+		!kubernetesUIDPattern.MatchString(f.ClusterUID) || f.Transport != "in-cluster" ||
+		f.ManagerNamespace != "phorvex-system" || f.ManagerDeployment == "" ||
+		len(validation.IsDNS1123Subdomain(f.ManagerDeployment)) != 0 ||
+		!natsExposureImage.MatchString(f.ManagerImageID) ||
+		!natsExposureImage.MatchString(f.FixtureImageID) ||
+		!filepath.IsAbs(f.SourceManifestPath) || filepath.Clean(f.SourceManifestPath) != f.SourceManifestPath ||
+		!natsExposureDigest.MatchString(f.SourceManifestSHA256) ||
+		!regexp.MustCompile(`^phorvex-quarantine-capacity-[0-9a-f]{40}$`).MatchString(f.ProtectedLedgerName) ||
+		f.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" ||
+		f.ScrapeNamespace != c.Namespace ||
+		f.ScrapeKind != "podmonitor" ||
+		f.PrometheusURL == "" || f.AllowedNodeName == "" ||
+		len(validation.IsDNS1123Subdomain(f.AllowedNodeName)) != 0 ||
+		f.MaxRunSeconds < 300 || f.MaxRunSeconds > 900 {
+		return errors.New("config: Pod-bound token case requires one fixed, pinned, measured, trusted-creator in-cluster response profile")
+	}
+	return nil
+}
 
 func validateGuardrailStaticFixture(c TargetConfig) error {
 	f := c.GuardrailStaticFixture

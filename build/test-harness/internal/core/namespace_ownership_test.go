@@ -36,6 +36,19 @@ func TestEnsureNamespaceCapturesCreatedUID(t *testing.T) {
 	}
 }
 
+func TestPodBoundTokenRequiresExistingVoiceNamespace(t *testing.T) {
+	kube := fake.NewSimpleClientset()
+	env := &Env{Kube: kube, Config: config.TargetConfig{Namespace: "voice", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{}}, Log: &nopLogger{}, Guard: refusingGuard{allow: "voice"}}
+	if err := env.EnsureNamespace(context.Background()); err == nil || !strings.Contains(err.Error(), "refusing to create") {
+		t.Fatalf("missing Voice namespace was not refused: %v", err)
+	}
+	for _, action := range kube.Actions() {
+		if action.GetVerb() != "get" {
+			t.Fatalf("Pod token fixture mutated missing Voice namespace: %#v", action)
+		}
+	}
+}
+
 func TestEnsureNamespaceRefusesConcurrentAlreadyExists(t *testing.T) {
 	kube := fake.NewSimpleClientset()
 	kube.PrependReactor("create", "namespaces", func(ktest.Action) (bool, runtime.Object, error) {

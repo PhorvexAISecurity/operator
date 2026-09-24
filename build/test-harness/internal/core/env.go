@@ -224,8 +224,8 @@ func sanitizeLabel(s string) string {
 }
 
 // EnsureNamespace creates an ordinary sandbox namespace (labeled owned) if
-// missing. The NATS fixture instead requires its precreated labelled namespace
-// and never creates one. The safety guard runs before either path.
+// missing. Named in-cluster fixtures require their existing namespaces and
+// never create one. The safety guard runs before either path.
 func (e *Env) EnsureNamespace(ctx context.Context) error {
 	if err := e.Guard.AssertMutationAllowed(e.Config.Namespace); err != nil {
 		return err
@@ -243,7 +243,7 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
-	if e.Config.NATSExposureFixture != nil || e.Config.CRMCapabilityFixture != nil {
+	if e.Config.NATSExposureFixture != nil || e.Config.CRMCapabilityFixture != nil || e.Config.PodBoundTokenFixture != nil {
 		return fmt.Errorf("dedicated fixture namespace %q is absent; refusing to create it", e.Config.Namespace)
 	}
 	if e.Config.ExpectedNamespaceUID != "" {
