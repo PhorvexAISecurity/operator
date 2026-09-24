@@ -31,7 +31,9 @@ SOURCE_HASHES = {
 WHEEL_MANIFEST_SHA256 = "ae935ca590efe1dbc41fbd81e6f7c79940a1d1a6db6e808d42d834879fc06070"
 BASE_IMAGE = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
 DEPENDENCIES = {"fastapi": "0.115.14", "pydantic": "2.13.4", "pymongo": "4.17.0", "uvicorn": "0.30.6"}
-IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-f]{64}$")
+IMAGE_DIGEST = re.compile(r"^[0-9a-f]{64}$")
+HOST_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
+REPOSITORY_SEGMENT = re.compile(r"^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*$")
 
 
 class PackageError(Exception):
@@ -149,6 +151,30 @@ def canonical_json(value):
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def immutable_image_ref(reference):
+    """Require an explicit registry, lowercase repository and one SHA-256 digest."""
+    if reference.count("@sha256:") != 1 or "://" in reference:
+        return False
+    repository, image_digest = reference.split("@sha256:")
+    if not IMAGE_DIGEST.fullmatch(image_digest):
+        return False
+    parts = repository.split("/")
+    if len(parts) < 2 or any(not REPOSITORY_SEGMENT.fullmatch(part) for part in parts[1:]):
+        return False
+    registry = parts[0]
+    if registry.count(":") > 1:
+        return False
+    if ":" in registry:
+        host, port = registry.split(":")
+        if not port.isascii() or not port.isdigit() or not 1 <= int(port) <= 65535:
+            return False
+    else:
+        host = registry
+        if host != "localhost" and "." not in host:
+            return False
+    return all(HOST_LABEL.fullmatch(label) for label in host.split("."))
+
+
 def prepare(output, wheel_dir=None, download=False, python="python3.11"):
     new_output(output)
     source_hashes = reviewed_source()
@@ -203,7 +229,7 @@ def manifest(output, crm_image, mongo_image):
         raise PackageError("manifest output path must be absolute")
     if not output.parent.is_dir():
         raise PackageError("manifest output parent directory does not exist")
-    if not IMAGE_REF.fullmatch(crm_image) or not IMAGE_REF.fullmatch(mongo_image):
+    if not immutable_image_ref(crm_image) or not immutable_image_ref(mongo_image):
         raise PackageError("both images must be immutable repository@sha256 digests")
     reviewed_source()
     document = {

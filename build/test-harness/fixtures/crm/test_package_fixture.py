@@ -166,7 +166,7 @@ class PackageFixtureTests(unittest.TestCase):
             run.assert_called_once()
 
     def test_owner_manifest_is_closed_and_refuses_mutable_or_existing(self):
-        crm = "registry.example/crm@sha256:" + "a" * 64
+        crm = "registry.example:5000/team/crm@sha256:" + "a" * 64
         mongo = "docker.io/library/mongo@sha256:" + "b" * 64
         output = self.root / "owner-manifest.json"
         actual_sha = package.manifest(output, crm, mongo)
@@ -185,7 +185,12 @@ class PackageFixtureTests(unittest.TestCase):
         with self.assertRaisesRegex(package.PackageError, "already exists"):
             package.manifest(output, crm, mongo)
         for bad in ("registry.example/crm:latest", "sha256:" + "a" * 64,
-                    "REPLACE-WITH-IMAGE@sha256:REPLACE", "registry.example/crm@sha256:" + "A" * 64):
+                    "REPLACE-WITH-IMAGE@sha256:REPLACE", "registry.example/crm@sha256:" + "A" * 64,
+                    "https://registry.example/crm@sha256:" + "a" * 64,
+                    "registry.example//crm@sha256:" + "a" * 64,
+                    "registry.example/crm:latest@sha256:" + "a" * 64,
+                    "registry.example/CRM@sha256:" + "a" * 64,
+                    "registry.example:70000/crm@sha256:" + "a" * 64):
             with self.subTest(bad=bad):
                 with self.assertRaisesRegex(package.PackageError, "immutable repository"):
                     package.manifest(self.root / "bad.json", bad, mongo)
