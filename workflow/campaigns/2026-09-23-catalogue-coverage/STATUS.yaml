@@ -8,7 +8,7 @@ state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 created_at: '2026-09-23T22:19:16+00:00'
-updated_at: '2026-09-24T00:56:25+00:00'
+updated_at: '2026-09-24T02:05:55+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: pending-fresh-baseline
@@ -41,6 +41,20 @@ rounds:
   state: COMPLETE
 - id: round-5
   state: COMPLETE
+- id: round-6
+  state: COMPLETE
+- id: round-7
+  state: COMPLETE
+- id: round-8
+  state: COMPLETE
+- id: round-9
+  state: COMPLETE
+- id: round-10
+  state: COMPLETE
+- id: round-11
+  state: COMPLETE
+- id: round-12
+  state: COMPLETE
 findings:
 - RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
 verdict:
@@ -53,8 +67,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Publish reviewed source repairs and continue workload cases; retain network/deployment
-    prerequisites
+  action: Review StatefulSet target repair and NATS protocol oracle; finish bounded
+    guardrail observation
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -154,4 +168,137 @@ transitions:
   phase_approval_ref: null
   note: Two installed console auth profiles FUNCTIONAL_PASS with exact IDs/status/evidence;
     forward cleanup complete; no security or installed defense outcome claimed
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T01:28:54+00:00'
+  by: codex-lead
+  artifact: rounds/round-6/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T01:30:39+00:00'
+  by: codex-lead
+  artifact: rounds/round-6/evidence/result.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: One installed owned NATS message control passed with exact stream deletion
+    and forward cleanup; no security or installed Phorvex defense credit
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T01:36:25+00:00'
+  by: codex-lead
+  artifact: rounds/round-7/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T01:38:29+00:00'
+  by: codex-lead
+  artifact: rounds/round-7/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Six bounded installed GETs observed200/401/400 in both exactversions; no functional/securityPASS,
+    source diagnosis of400 pending
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T01:48:28+00:00'
+  by: codex-lead
+  artifact: rounds/round-8/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T01:49:29+00:00'
+  by: codex-lead
+  artifact: rounds/round-8/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Installed owned Mongo insert/read/update/read passed with exact collection/database
+    absence and forward cleanup; security NOT_EVALUATED
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T01:50:13+00:00'
+  by: codex-lead
+  artifact: rounds/round-9/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T01:51:41+00:00'
+  by: codex-lead
+  artifact: rounds/round-9/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: LiteLLM valid200 and nonmaster400 NO_CONNECTED_DB confirmed on both versions;
+    no unauthorized success or Phorvex defense claim
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T01:55:23+00:00'
+  by: codex-lead
+  artifact: rounds/round-10/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T01:58:38+00:00'
+  by: codex-lead
+  artifact: rounds/round-10/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Installed static MCP tool returned exact source-defined result; session DELETE
+    then404 confirmed; no security/Phorvex claim
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T01:58:39+00:00'
+  by: codex-lead
+  artifact: rounds/round-11/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T02:00:50+00:00'
+  by: codex-lead
+  artifact: rounds/round-11/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Chroma first exact-name GET400 rejected by preregistered404/success-shape
+    oracle; stopped before mutation; no attack or vector-state outcome
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T02:04:06+00:00'
+  by: codex-lead
+  artifact: rounds/round-12/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T02:05:55+00:00'
+  by: codex-lead
+  artifact: rounds/round-12/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Installed synthetic Chroma get/query passed; exact UUID/nonce cleanup and
+    source-specific absence confirmed; no security/Phorvex credit
   forced: false

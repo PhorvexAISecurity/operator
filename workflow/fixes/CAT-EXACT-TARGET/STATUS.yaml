@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -83,11 +83,18 @@ checks:
     source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
     at: '2026-09-24T01:06:50+00:00'
     incident_sha256: 4f239b906aee79681b64f5ade50502472151947c1c2d44b6bd47806982d7aabc
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: 852db0ee1bde6886726935a85bc85f5a6133651a8408ff0d92ef6ceb77533e4b
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:12:56+00:00'
 fix_id: CAT-EXACT-TARGET
 issues: []
 title: Bind catalogue signal targeting and manager evidence to exact Pod identity
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -114,8 +121,8 @@ implementation:
   head_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: 7e52748437523ad071fddbbd710713c7791f823a
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -148,10 +155,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T01:06:54+00:00'
+  owner: codex-lead
+  action: Track PR323 external CI availability and subsequent deployed verification
+updated_at: '2026-09-24T01:12:57+00:00'
 configuration_history:
 - at: '2026-09-24T00:20:45+00:00'
   by: codex-lead
@@ -166,6 +172,11 @@ configuration_history:
   by: campaign-coverage-plan
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-24T01:12:55+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -215,6 +226,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T01:12:57+00:00'
+  by: codex-lead
+  artifact: evidence/patch-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision

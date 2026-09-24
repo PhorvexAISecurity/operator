@@ -1,0 +1,177 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 2561342af11597901491146d21bf70966d35889e9c818f1f62c18cd433f0c4d5
+    source_sha: 7e52748437523ad071fddbbd710713c7791f823a
+    at: '2026-09-24T02:02:11+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Carry authoritative controller kind into readiness observations; prevents
+      same-name Deployment substitution
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: 113b1400a6f846a40cc484a043002ef2f64e4712c70e2c18671e31fb9279cc1b
+    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+    at: '2026-09-24T02:15:32+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 88a8b50dc95ae8fb861bdd0d78e1898e5e4fe5e39145f997e4ed242c48a977bd
+    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+    at: '2026-09-24T02:20:25+00:00'
+    baseline_sha: 7e52748437523ad071fddbbd710713c7791f823a
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-baseline.log
+    sha256: 389cd48b4d7886dc5eb196debfea321366e28d66d1c05263d716b4d1aa2fb759
+    source_sha: 7e52748437523ad071fddbbd710713c7791f823a
+    at: '2026-09-24T02:20:25+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/head-focused.log
+    sha256: 754b348177e0dfbd32bb531f19814e1bd8b2b5a3901f34caa3d6ecf8f19d0c02
+    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+    at: '2026-09-24T02:21:23+00:00'
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 0207aae0e90b9059efa3b40a18a4d9cf0cdb1dc7d67dd5bd6d0665e6363f6242
+    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+    at: '2026-09-24T02:21:49+00:00'
+    incident_sha256: 88a8b50dc95ae8fb861bdd0d78e1898e5e4fe5e39145f997e4ed242c48a977bd
+fix_id: CAT-STATEFUL-TARGET
+issues: []
+title: Support authoritative StatefulSet Pods in exact-target catalogue runs
+profile: standard
+state: IMPLEMENTED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-coverage-plan
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-coverage-20260923
+  code_sha: 7e52748437523ad071fddbbd710713c7791f823a
+  deployed_image: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: 7e52748437523ad071fddbbd710713c7791f823a
+  head_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+  stacked_on:
+  - CAT-EXACT-TARGET
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Review committed StatefulSet source and focused evidence; run final shared
+    preflight after NATS exposure and guardrail source freeze
+updated_at: '2026-09-24T02:21:49+00:00'
+configuration_history:
+- at: '2026-09-24T01:56:35+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T02:15:10+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T01:57:25+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T01:57:27+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T02:15:36+00:00'
+  by: campaign-coverage-plan
+  artifact: 04-diff.patch
+  note: null
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 051aa73dc0ee29bf062b175bc09c64056072c63e2a97b90c3149db78b91811b4
+  source_sha: 7e52748437523ad071fddbbd710713c7791f823a
+  at: '2026-09-24T01:57:27+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
