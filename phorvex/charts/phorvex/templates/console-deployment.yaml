@@ -179,6 +179,52 @@ spec:
           value: {{ required "console.catalogueV1.mcpSession.sourceSHA256 is required" .sourceSHA256 | quote }}
         {{- end }}
         {{- end }}
+        {{- with .chroma }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_NAMESPACE
+          value: {{ required "console.catalogueV1.chroma.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_DEPLOYMENT
+          value: {{ required "console.catalogueV1.chroma.deployment is required" .deployment | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVICE
+          value: {{ required "console.catalogueV1.chroma.service is required" .service | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_CONTAINER
+          value: {{ required "console.catalogueV1.chroma.container is required" .container | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_PORT
+          value: {{ .port | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_IMAGE_ID
+          value: {{ required "console.catalogueV1.chroma.imageID is required" .imageID | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_VERSION_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.chroma.versionSourceSHA256 is required" .versionSourceSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVER_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.chroma.serverSourceSHA256 is required" .serverSourceSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_CHROMA_SCHEMA_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.chroma.schemaSourceSHA256 is required" .schemaSourceSHA256 | quote }}
+        {{- end }}
+        {{- end }}
+        {{- with .litellm }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_NAMESPACE
+          value: {{ required "console.catalogueV1.litellm.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_DEPLOYMENT
+          value: {{ required "console.catalogueV1.litellm.deployment is required" .deployment | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_SERVICE
+          value: {{ required "console.catalogueV1.litellm.service is required" .service | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONTAINER
+          value: {{ required "console.catalogueV1.litellm.container is required" .container | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_PORT
+          value: {{ .port | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIGMAP
+          value: {{ required "console.catalogueV1.litellm.configMap is required" .configMap | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_KEY
+          value: {{ required "console.catalogueV1.litellm.configKey is required" .configKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_CONFIG_SHA256
+          value: {{ required "console.catalogueV1.litellm.configSHA256 is required" .configSHA256 | quote }}
+        {{- end }}
+        {{- end }}
         {{- with .gpu }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_ENABLED
           value: {{ .enabled | default false | quote }}

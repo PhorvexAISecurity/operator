@@ -229,5 +229,91 @@ subjects:
   name: {{ include "phorvex.consoleServiceAccountName" $ }}
   namespace: {{ $.Release.Namespace }}
 {{- end }}
+{{- if and .enabled .chroma.enabled }}
+---
+# One reviewed Chroma namespace. The worker fixes the Pod route and only
+# creates/deletes its nonce-owned synthetic collection over exact Pod exec loopback.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-chroma-control
+  namespace: {{ required "chroma namespace is required" .chroma.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: [{{ .chroma.service | quote }}]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-chroma-control
+  namespace: {{ required "chroma namespace is required" .chroma.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-chroma-control
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- if and .enabled .litellm.enabled }}
+---
+# LiteLLM direct GET controls use exact Pod exec loopback, so Kubernetes
+# credentials never become application Authorization headers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-control
+  namespace: {{ required "litellm namespace is required" .litellm.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: [{{ .litellm.service | quote }}]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .litellm.configMap | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-control
+  namespace: {{ required "litellm namespace is required" .litellm.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-control
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
 {{- end }}

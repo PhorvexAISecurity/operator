@@ -44,6 +44,10 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GuardrailNamespace)
 	case cataloguev1.MCPSessionBaseline:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.MCPNamespace)
+	case cataloguev1.ChromaOwnedVector:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.ChromaNamespace)
+	case cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.LiteLLMNamespace)
 	}
 	if tenant == "" {
 		return runDestination{}, errors.New("fixed suite resolved tenant is unavailable")
@@ -81,6 +85,22 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Port: c.CatalogueV1.MCPPort, SourceConfigMap: c.CatalogueV1.MCPSourceConfigMap,
 			SourceKey: c.CatalogueV1.MCPSourceKey, ExpectedImageID: c.CatalogueV1.MCPImageID,
 			ExpectedSourceSHA256: c.CatalogueV1.MCPSourceSHA256}
+	}
+	if c.CatalogueV1.ChromaEnabled {
+		runtime.Chroma = &cataloguev1.ChromaRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.ChromaNamespace, Deployment: c.CatalogueV1.ChromaDeployment,
+			Service: c.CatalogueV1.ChromaService, Container: c.CatalogueV1.ChromaContainer,
+			Port: c.CatalogueV1.ChromaPort, ExpectedImageID: c.CatalogueV1.ChromaImageID,
+			ExpectedVersionSourceSHA256: c.CatalogueV1.ChromaVersionSourceSHA256,
+			ExpectedServerSourceSHA256:  c.CatalogueV1.ChromaServerSourceSHA256,
+			ExpectedSchemaSourceSHA256:  c.CatalogueV1.ChromaSchemaSourceSHA256}
+	}
+	if c.CatalogueV1.LiteLLMEnabled {
+		runtime.LiteLLM = &cataloguev1.LiteLLMRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.LiteLLMNamespace, Deployment: c.CatalogueV1.LiteLLMDeployment,
+			Service: c.CatalogueV1.LiteLLMService, Container: c.CatalogueV1.LiteLLMContainer,
+			Port: c.CatalogueV1.LiteLLMPort, ConfigMap: c.CatalogueV1.LiteLLMConfigMap,
+			ConfigKey: c.CatalogueV1.LiteLLMConfigKey, ExpectedConfigSHA256: c.CatalogueV1.LiteLLMConfigSHA256}
 	}
 	return runtime
 }

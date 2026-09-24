@@ -44,6 +44,7 @@ type CatalogItem struct {
 	Prereqs               []string `json:"prereqs"`
 	LaunchKind            string   `json:"launchKind"`
 	ClaimClass            string   `json:"claimClass"`
+	EventMode             string   `json:"eventMode,omitempty"`
 	Profile               string   `json:"profile,omitempty"`
 	Available             bool     `json:"available"`
 	UnavailableReason     string   `json:"unavailableReason,omitempty"`
