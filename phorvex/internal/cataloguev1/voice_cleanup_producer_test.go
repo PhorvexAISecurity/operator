@@ -3,6 +3,7 @@ package cataloguev1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,5 +119,81 @@ func TestVoiceCleanupActualPythonProducerDelayedSecondSID(t *testing.T) {
 	}
 	if outcome.Status != "PASS" || outcome.UnsafeToRetry || state.Deletes != 2 || len(state.Docs) != 0 || intents != 2 || results != 2 || state.Queries < 10 {
 		t.Fatalf("actual producer did not clean both exact SIDs: outcome=%+v state=%+v intents=%d results=%d", outcome, state, intents, results)
+	}
+}
+
+func TestVoiceCleanupEmbeddedDeleteRejectsContentDriftWithoutMutation(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("Python is needed to exercise the embedded cleanup producer")
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pymongo.py"), []byte(fakeVoiceMongo), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "bson"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bson", "__init__.py"), []byte("class ObjectId(str): pass\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bson", "json_util.py"), []byte("import json\ndef dumps(value,**kwargs):return json.dumps(value,**kwargs)\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(root, "db.json")
+	objectID := strings.Repeat("1", 24)
+	writeState := func(synthetic string, queries int) {
+		t.Helper()
+		raw, err := json.Marshal(map[string]any{"queries": queries, "deletes": 0, "secondAdded": true,
+			"docs": []any{map[string]string{"_id": objectID, "call_sid": cleanupFirstSID, "synthetic": synthetic}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(statePath, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeState("before", 0)
+	run := func(program string, args ...string) ([]byte, error) {
+		t.Helper()
+		cmd := exec.Command(python, append([]string{"-c", program}, args...)...)
+		cmd.Env = append(os.Environ(), "PYTHONPATH="+root, "FAKE_VOICE_DB="+statePath, "MONGO_URI=memory")
+		return cmd.CombinedOutput()
+	}
+	queryOut, err := run(transcriptQueryProgram, cleanupFirstSID)
+	if err != nil {
+		t.Fatalf("owned query failed: %v", err)
+	}
+	refs, err := parseTranscriptRefs(string(queryOut), []string{cleanupFirstSID})
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("owned query shape differs: %v, count=%d", err, len(refs))
+	}
+	writeState("after", 1)
+	deleteOut, err := run(transcriptDeleteProgram, cleanupFirstSID, objectID, refs[0].ContentSHA256)
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 42 || !strings.Contains(string(deleteOut), `"content-hash-drift"`) {
+		t.Fatalf("drift was not rejected by embedded producer: exit=%v output=%q", err, deleteOut)
+	}
+	stateRaw, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state struct {
+		Deletes int               `json:"deletes"`
+		Docs    []json.RawMessage `json:"docs"`
+	}
+	if err := json.Unmarshal(stateRaw, &state); err != nil {
+		t.Fatal(err)
+	}
+	var remaining struct {
+		Synthetic string `json:"synthetic"`
+	}
+	if len(state.Docs) == 1 {
+		if err := json.Unmarshal(state.Docs[0], &remaining); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if state.Deletes != 0 || len(state.Docs) != 1 || remaining.Synthetic != "after" {
+		t.Fatalf("drift mutated the exact owned document: deletes=%d docs=%d", state.Deletes, len(state.Docs))
 	}
 }

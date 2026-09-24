@@ -29,12 +29,18 @@ type voiceCleanupObservation struct {
 }
 
 func runVoiceCleanupSchedule(t *testing.T, secondAt int, deleteError bool) voiceCleanupObservation {
+	return runVoiceCleanupScheduleWithReappearance(t, secondAt, deleteError, false)
+}
+
+func runVoiceCleanupScheduleWithReappearance(t *testing.T, secondAt int, deleteError, reappear bool) voiceCleanupObservation {
 	t.Helper()
 	firstRef := TranscriptRef{CallSID: cleanupFirstSID, ObjectID: strings.Repeat("1", 24), ContentSHA256: strings.Repeat("a", 64)}
 	secondRef := TranscriptRef{CallSID: cleanupSecondSID, ObjectID: strings.Repeat("2", 24), ContentSHA256: strings.Repeat("b", 64)}
 	present := map[string]TranscriptRef{cleanupFirstSID: firstRef}
 	observed := voiceCleanupObservation{}
 	secondAdded := false
+	firstDeleted := false
+	firstReappeared := false
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "voice-bot-a", Namespace: "voice", UID: types.UID("pod-a"), Labels: map[string]string{"app": "voice-bot"}}}
 	runtime := &kubeVoiceRuntime{kube: kfake.NewSimpleClientset(pod), voice: VoiceRuntime{TranscriptPodSelector: "app=voice-bot", TranscriptContainer: "bot"}}
 	runtime.execOverride = func(_ context.Context, namespace, name, container string, command []string) (string, error) {
@@ -44,6 +50,10 @@ func runVoiceCleanupSchedule(t *testing.T, secondAt int, deleteError bool) voice
 		switch command[2] {
 		case transcriptQueryProgram:
 			observed.queries++
+			if reappear && firstDeleted && !firstReappeared {
+				present[cleanupFirstSID] = firstRef
+				firstReappeared = true
+			}
 			if observed.queries >= secondAt && !secondAdded {
 				present[cleanupSecondSID] = secondRef
 				secondAdded = true
@@ -71,6 +81,9 @@ func runVoiceCleanupSchedule(t *testing.T, secondAt int, deleteError bool) voice
 			}
 			observed.deletes = append(observed.deletes, sid)
 			delete(present, sid)
+			if sid == cleanupFirstSID {
+				firstDeleted = true
+			}
 			return "OWNED_DELETE={\"deletedCount\":1,\"alreadyAbsent\":false,\"remaining\":0}\n", nil
 		default:
 			return "", fmt.Errorf("unexpected fixed script")
@@ -114,5 +127,44 @@ func TestVoiceCleanupAmbiguousDeleteNeverRetries(t *testing.T) {
 	if observed.outcome.Status != "FAIL" || !observed.outcome.UnsafeToRetry || observed.deleteAttempts != 1 ||
 		len(observed.intents) != 1 || len(observed.results) != 0 {
 		t.Fatalf("ambiguous exact delete was retried or accepted: %+v", observed)
+	}
+}
+
+func TestVoiceCleanupAcknowledgedObjectReappearsWithoutSecondDelete(t *testing.T) {
+	observed := runVoiceCleanupScheduleWithReappearance(t, 100, false, true)
+	if observed.outcome.Status != "FAIL" || !observed.outcome.UnsafeToRetry || observed.deleteAttempts != 1 ||
+		len(observed.intents) != 1 || len(observed.results) != 1 || observed.outcome.Error != "acknowledged Voice transcript reappeared" {
+		t.Fatalf("acknowledged object reappearance triggered another delete or was accepted: %+v", observed)
+	}
+}
+
+func TestVoiceCleanupCancelledAfterFirstResultStopsNextDelete(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	refs := []TranscriptRef{
+		{CallSID: cleanupFirstSID, ObjectID: strings.Repeat("1", 24), ContentSHA256: strings.Repeat("a", 64)},
+		{CallSID: cleanupSecondSID, ObjectID: strings.Repeat("2", 24), ContentSHA256: strings.Repeat("b", 64)},
+	}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "voice-bot-a", Namespace: "voice", UID: types.UID("pod-a"), Labels: map[string]string{"app": "voice-bot"}}}
+	runtime := &kubeVoiceRuntime{kube: kfake.NewSimpleClientset(pod), voice: VoiceRuntime{TranscriptPodSelector: "app=voice-bot", TranscriptContainer: "bot"}}
+	deleteAttempts := 0
+	runtime.execOverride = func(_ context.Context, _, _, _ string, command []string) (string, error) {
+		switch command[2] {
+		case transcriptQueryProgram:
+			raw, _ := json.Marshal(refs)
+			return "OWNED_TRANSCRIPTS=" + string(raw) + "\n", nil
+		case transcriptDeleteProgram:
+			deleteAttempts++
+			return "OWNED_DELETE={\"deletedCount\":1,\"alreadyAbsent\":false,\"remaining\":1}\n", nil
+		default:
+			return "", errors.New("unexpected fixed script")
+		}
+	}
+	runtime.pauseOverride = func(context.Context, time.Duration) error { return nil }
+	results := 0
+	outcome := runtime.CleanupTranscripts(ctx, testVoiceConfig(VoiceReplacementRecovery), VoicePod{Name: "voice-bot-a", UID: "pod-a"}, []string{cleanupFirstSID, cleanupSecondSID},
+		func(TranscriptRef) error { return nil }, func(TranscriptRef) error { results++; cancel(); return nil })
+	if outcome.Status != "FAIL" || !outcome.UnsafeToRetry || deleteAttempts != 1 || results != 1 {
+		t.Fatalf("cancelled cleanup dispatched another delete: outcome=%+v deletes=%d results=%d", outcome, deleteAttempts, results)
 	}
 }

@@ -729,6 +729,10 @@ func (r *kubeVoiceRuntime) CleanupTranscripts(ctx context.Context, cfg VoiceConf
 			return cleanup
 		}
 		for _, ref := range refs {
+			if err = ctx.Err(); err != nil {
+				cleanup.Error = err.Error()
+				return cleanup
+			}
 			key := ref.CallSID + "\x00" + ref.ObjectID
 			if deleted[key] {
 				cleanup.Error = "acknowledged Voice transcript reappeared"
