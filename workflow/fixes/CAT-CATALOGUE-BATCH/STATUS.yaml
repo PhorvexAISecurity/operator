@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,11 +81,18 @@ checks:
     source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
     at: '2026-09-24T15:02:39+00:00'
     incident_sha256: 1018720a4370595a4a17454f300fd204962bcf93c901dc86f04d2e1a3c785486
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 11f3dc0f21565afced1475af32afdf7e995fc0b69a8a1bf6ba5c3f5f102425e7
+    source_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
+    at: '2026-09-24T15:09:29+00:00'
 fix_id: CAT-CATALOGUE-BATCH
 issues: []
 title: Integrate reviewed causal catalogue controls for installed application stacks
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -112,11 +119,11 @@ implementation:
   head_sha: b37ec3b3904c6b9553fac9156ad4105db0b5c697
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/328
+  reviewed_head: d3defb468fbd8822ba490a39f474d81a3d6040bf
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -147,9 +154,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T15:02:43+00:00'
+  action: Inspect remote validation and deployment prerequisites; retain separate
+    live debt
+updated_at: '2026-09-24T15:09:32+00:00'
 configuration_history:
 - at: '2026-09-24T14:14:47+00:00'
   by: codex-lead
@@ -163,6 +170,11 @@ configuration_history:
   by: stack-integration
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-24T15:09:30+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -212,6 +224,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T15:09:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: red
