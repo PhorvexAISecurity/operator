@@ -148,6 +148,43 @@ func TestCompletedFixedSuiteStillExposesValidatedFunctionalPass(t *testing.T) {
 	}
 }
 
+func TestPartialFixedSuiteProjectsAuthoritativeRunUnsafeWithoutRewritingResult(t *testing.T) {
+	rm, dir, _ := partialFunctionalFixture(t, cataloguev1.OutcomeTestFailed,
+		cataloguev1.Cleanup{Attempted: true, Verified: true, Status: "PASS"},
+		errors.New("worker exited after terminal result"))
+	status, _ := rm.Status("v1run-1")
+	if status.State != "partial" || status.Outcome != "test-failed" || status.CleanupStatus != "PASS" || !status.UnsafeToRetry {
+		t.Fatalf("real process failure did not retain unsafe partial status: %+v", status)
+	}
+	rawBefore, err := os.ReadFile(filepath.Join(dir, "result.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var original cataloguev1.Result
+	if err := json.Unmarshal(rawBefore, &original); err != nil || original.UnsafeToRetry {
+		t.Fatalf("fixture did not retain producer's false unsafe flag: %+v err=%v", original, err)
+	}
+	projected, err := rm.FunctionalResult("v1run-1")
+	if err != nil || projected == nil || !projected.UnsafeToRetry || projected.Cleanup.Status != "PASS" {
+		t.Fatalf("authoritative unsafe state lost in typed projection: result=%+v err=%v", projected, err)
+	}
+	api := partialFunctionalAPI(t, rm, "v1run-1")
+	var functional struct {
+		UnsafeToRetry bool `json:"unsafeToRetry"`
+	}
+	if err := json.Unmarshal(api["functionalResult"], &functional); err != nil || !functional.UnsafeToRetry {
+		t.Fatalf("HTTP projection hid partial retry risk: %s err=%v", api["functionalResult"], err)
+	}
+	var trials []json.RawMessage
+	if err := json.Unmarshal(api["trials"], &trials); err != nil || len(trials) != 0 {
+		t.Fatalf("partial failed result gained metric credit: trials=%s err=%v", api["trials"], err)
+	}
+	rawAfter, err := os.ReadFile(filepath.Join(dir, "result.json"))
+	if err != nil || string(rawAfter) != string(rawBefore) {
+		t.Fatalf("read-only projection rewrote original producer result: err=%v", err)
+	}
+}
+
 func TestPartialFixedSuiteRejectsMissingStaleAndPassArtifacts(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

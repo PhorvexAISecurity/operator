@@ -426,5 +426,8 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	if status.State == "partial" && result.Outcome == cataloguev1.OutcomeFunctionalPass {
 		return nil, errors.New("partial fixed-suite functional pass is not accepted")
 	}
+	// The worker result is retained unchanged. A later process/terminal failure
+	// can make the authoritative run unsafe even when worker cleanup succeeded.
+	result.UnsafeToRetry = result.UnsafeToRetry || status.UnsafeToRetry
 	return &result, nil
 }
