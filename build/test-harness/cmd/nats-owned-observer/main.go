@@ -230,9 +230,13 @@ func observe(ctx context.Context, cfg config, emit func(receipt) error) error {
 }
 
 func main() {
-	if len(os.Args) != 3 || os.Args[1] != "--config" {
-		fmt.Fprintln(os.Stderr, "observer: exactly --config <path> is required")
+	if len(os.Args) != 3 || (os.Args[1] != "--config" && os.Args[1] != "--response-config") {
+		fmt.Fprintln(os.Stderr, "observer: exactly --config or --response-config <path> is required")
 		os.Exit(2)
+	}
+	if os.Args[1] == "--response-config" {
+		runResponseMain(os.Args[2])
+		return
 	}
 	cfg, err := loadConfig(os.Args[2])
 	if err != nil {
