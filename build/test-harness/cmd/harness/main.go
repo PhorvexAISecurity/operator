@@ -174,6 +174,11 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 			}
 		}()
 	}
+	if f := cfg.MongoExposureFixture; f != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(f.MaxRunSeconds)*time.Second)
+		defer cancel()
+	}
 	// The exact local PV authority is one-use: the registered scenario owns one
 	// ordinary trial and cannot be expanded into runner-generated negative or
 	// adaptive arms over the same external volumes.
@@ -189,10 +194,13 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if cfg.NATSExposureFixture != nil && (negControl || adaptive || resume) {
 		return errors.New("natsExposureFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
 	}
+	if cfg.MongoExposureFixture != nil && (negControl || adaptive || resume) {
+		return errors.New("mongoExposureFixture requires one nonadaptive, nonnegative, nonresumed trial before Kubernetes clients are built")
+	}
 	// 1) Build clients PINNED to the configured context.
 	var clients *kube.Clients
 	var err error
-	if cfg.NATSExposureFixture != nil {
+	if cfg.NATSExposureFixture != nil || cfg.MongoExposureFixture != nil {
 		clients, err = kube.BuildNATSInCluster()
 	} else {
 		clients, err = kube.Build(cfg.Kubeconfig, cfg.Context)
@@ -209,6 +217,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	fmt.Printf("Safety guard OK: context=%s host=%s namespace=%s ownedAck=%v\n", clients.LiveContext, clients.LiveHost, cfg.Namespace, cfg.OwnedAck)
 	if err := assertNATSClusterPin(ctx, cfg, clients.Kube); err != nil {
+		return err
+	}
+	if err := assertMongoClusterPin(ctx, cfg, clients.Kube); err != nil {
 		return err
 	}
 
@@ -240,6 +251,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	if cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Mode == "client-response" {
 		return runNATSResponseCase(ctx, cfg, clients, guard, caps, natsFenceIdentity)
+	}
+	if cfg.MongoExposureFixture != nil {
+		return runMongoExposureCase(ctx, cfg, clients, guard, caps)
 	}
 
 	// 4) Prepare output dirs + metrics writer.

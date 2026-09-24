@@ -1,0 +1,1 @@
+{"schema":"mongo-exposure-terminal-v1","runId":"run-1","nonce":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","namespaceUID":"ns-uid","artifactSHA256":"8e61971c4933d6a5fe977c6740f9797996080d22122d006e28924ab629af9dfb","collectionAbsent":true,"clientPodAbsent":true,"namespacePreserved":true,"cleanup":"CONFIRMED_ABSENT","observedAt":"2026-09-24T13:10:42.335038366Z"}

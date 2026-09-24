@@ -41,13 +41,14 @@ type suite struct{ File, OutDir, Desc, Namespace string }
 
 // allowedConfigs is the whitelist of attack-agent suites the console may trigger.
 var allowedConfigs = map[string]suite{
-	"nats-exposure-baseline": {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
-	"nats-client-response":   {File: "config.nats-client-response.yaml", OutDir: "out-nats-client-response", Desc: "Owned NATS client response and exact-event observation"},
-	"p3-v3":                  {File: "config.p3.v3.yaml", OutDir: "out-p3-v3", Desc: "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
-	"pactuator":              {File: "config.pactuator.yaml", OutDir: "out-pactuator", Desc: "Lead demo: native actuator preserves the stateful job"},
-	"p3-verify":              {File: "config.p3.verify.yaml", OutDir: "out-p3-verify", Desc: "P3 verification suite"},
-	"fpprobe":                {File: "config.fpprobe.yaml", OutDir: "out-fpprobe", Desc: "False-positive / controls probe"},
-	"p3deep-smoke":           {File: "config.p3deep.smoke.yaml", OutDir: "out-p3deep-smoke", Desc: "Structural zero-day smoke (recon-validity)"},
+	"mongo-exposure-baseline": {File: "config.mongo-exposure-baseline.yaml", OutDir: "out-mongo-exposure-baseline", Desc: "Owned Mongo Service configuration exposure control"},
+	"nats-exposure-baseline":  {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
+	"nats-client-response":    {File: "config.nats-client-response.yaml", OutDir: "out-nats-client-response", Desc: "Owned NATS client response and exact-event observation"},
+	"p3-v3":                   {File: "config.p3.v3.yaml", OutDir: "out-p3-v3", Desc: "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
+	"pactuator":               {File: "config.pactuator.yaml", OutDir: "out-pactuator", Desc: "Lead demo: native actuator preserves the stateful job"},
+	"p3-verify":               {File: "config.p3.verify.yaml", OutDir: "out-p3-verify", Desc: "P3 verification suite"},
+	"fpprobe":                 {File: "config.fpprobe.yaml", OutDir: "out-fpprobe", Desc: "False-positive / controls probe"},
+	"p3deep-smoke":            {File: "config.p3deep.smoke.yaml", OutDir: "out-p3deep-smoke", Desc: "Structural zero-day smoke (recon-validity)"},
 }
 
 // RunStatus is the live state of a triggered attack-agent run.
@@ -179,7 +180,7 @@ func (rm *RunManager) loadStatuses() error {
 		}
 		cp := p.Run
 		if cp.State == "running" || cp.State == "queued" {
-			if (cp.ExecutionKind == "fixed-suite" || cp.Config == natsBaselineConfig || cp.Config == natsResponseConfig) && cp.State == "running" {
+			if (cp.ExecutionKind == "fixed-suite" || cp.Config == natsBaselineConfig || cp.Config == natsResponseConfig || cp.Config == mongoExposureConfig) && cp.State == "running" {
 				cp.State = "partial"
 				cp.Error = "named suite interrupted by console restart; exact cleanup reconciliation pending"
 				cp.UnsafeToRetry = true
@@ -298,7 +299,22 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	if (name == natsBaselineConfig || name == natsResponseConfig) && (nativeActuator || dest.ScopeTenant != "nats" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 2 || dest.Tenants[0] != "nats" || dest.Tenants[1] != natsFixtureNamespace || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget) {
 		return "", fmt.Errorf("named NATS suite requires authorized broker and owned fixture destinations")
 	}
+	if name == mongoExposureConfig && (!rm.cfg.MongoExposureEnabled || nativeActuator || dest.ScopeTenant != mongoExposureNamespace || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 1 || dest.Tenants[0] != mongoExposureNamespace || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "") {
+		return "", fmt.Errorf("named Mongo suite requires opt-in fixed tenant, reviewed target and authenticated audit")
+	}
 	rm.mu.Lock()
+	if name == mongoExposureConfig {
+		if rm.loadErr != nil {
+			rm.mu.Unlock()
+			return "", fmt.Errorf("prior run state unavailable; Mongo exposure launch refused")
+		}
+		for _, prior := range rm.runs {
+			if prior.UnsafeToRetry {
+				rm.mu.Unlock()
+				return "", fmt.Errorf("prior run has unresolved cleanup; Mongo exposure launch refused")
+			}
+		}
+	}
 	if name == natsBaselineConfig || name == natsResponseConfig {
 		if rm.loadErr != nil {
 			rm.mu.Unlock()
@@ -339,15 +355,26 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	// Both halves are recorded so a later run-id lookup is authorized against the cluster AND the
 	// namespace this run actually drives.
 	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator, Owner: owner, ScopeTarget: normalizeTargetID(dest.ScopeTarget), ScopeTenant: dest.ScopeTenant}
-	if name == natsBaselineConfig || name == natsResponseConfig {
+	if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig {
 		st.Namespace = runtimeSuite.Namespace
-		st.FixtureTenant = runtimeSuite.Namespace
+		if name != mongoExposureConfig {
+			st.FixtureTenant = runtimeSuite.Namespace
+		}
 		st.Target = dest.ScopeTarget
 		st.TargetLabel = dest.ScopeTarget
 		st.Provider = "Kubernetes"
 	}
 	rm.runs[id] = st
 	rm.runOut[id] = su.OutDir
+	if name == mongoExposureConfig {
+		if err := rm.captureMongoAuditStart(id, su.OutDir); err != nil {
+			delete(rm.runs, id)
+			delete(rm.runOut, id)
+			rm.active--
+			rm.mu.Unlock()
+			return "", fmt.Errorf("Mongo pre-mutation audit checkpoint: %w", err)
+		}
+	}
 	if name == natsResponseConfig {
 		copy := *principal[0]
 		copy.Roles = append([]Role(nil), copy.Roles...)
@@ -395,12 +422,26 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 			return suite{}, fmt.Errorf("allocate owned fixture nonce: %w", err)
 		}
 		nonce := hex.EncodeToString(random)
-		fixture, ok := doc["natsExposureFixture"].(map[string]any)
-		if !ok {
-			return suite{}, fmt.Errorf("named NATS fixture missing")
+		if su.File == "config.mongo-exposure-baseline.yaml" {
+			more := make([]byte, 4)
+			if _, err := rand.Read(more); err != nil {
+				return suite{}, err
+			}
+			nonce += hex.EncodeToString(more)
+			fixture, ok := doc["mongoExposureFixture"].(map[string]any)
+			if !ok {
+				return suite{}, fmt.Errorf("named Mongo fixture missing")
+			}
+			fixture["nonce"], fixture["runID"] = nonce, id
+			su.Namespace = mongoExposureNamespace
+		} else {
+			fixture, ok := doc["natsExposureFixture"].(map[string]any)
+			if !ok {
+				return suite{}, fmt.Errorf("named NATS fixture missing")
+			}
+			fixture["nonce"], fixture["runID"] = nonce, id
+			su.Namespace = natsFixtureNamespace
 		}
-		fixture["nonce"], fixture["runID"] = nonce, id
-		su.Namespace = natsFixtureNamespace
 	}
 	raw, err = yaml.Marshal(doc)
 	if err != nil {
@@ -537,6 +578,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		}
 		if s == "c2-nats-owned-client-response" {
 			return "", fmt.Errorf("NATS client response requires the server-owned named suite nats-client-response")
+		}
+		if s == "c2-mongo-uncredentialed-service-exposure" {
+			return "", fmt.Errorf("Mongo exposure requires the server-owned named suite mongo-exposure-baseline")
 		}
 		if !scenarioRe.MatchString(s) {
 			return "", fmt.Errorf("invalid scenario name %q", s)
@@ -683,7 +727,7 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 	dest := runDestination{Targets: []string{hostTargetID}, ScopeTarget: hostTargetID, RequireTenantWildcard: true}
 	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
 	if err != nil {
-		if name == natsBaselineConfig || name == natsResponseConfig {
+		if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig {
 			return dest, err
 		}
 		return dest, nil
@@ -705,6 +749,50 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 		}
 		h := sha256.Sum256(raw)
 		return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{"nats", cfg.Namespace}, ScopeTarget: cfg.Context, ScopeTenant: "nats", SuiteSHA256: hex.EncodeToString(h[:])}, nil
+	}
+	if name == mongoExposureConfig {
+		if !rm.cfg.MongoExposureEnabled || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "" || bytes.Contains(raw, []byte("__SET_")) {
+			return dest, fmt.Errorf("named Mongo suite is disabled or lacks reviewed source and authenticated audit pins")
+		}
+		var cfg struct {
+			Context              string   `json:"context"`
+			Namespace            string   `json:"namespace"`
+			Kubeconfig           string   `json:"kubeconfig"`
+			ExpectedNamespaceUID string   `json:"expectedNamespaceUID"`
+			OwnedAck             bool     `json:"ownedAck"`
+			TrialsPerArm         int      `json:"trialsPerArm"`
+			ScenarioFilter       []string `json:"scenarioFilter"`
+			DefenderFilter       []string `json:"defenderFilter"`
+			MongoExposureFixture *struct {
+				Transport         string   `json:"transport"`
+				ClusterUID        string   `json:"clusterUID"`
+				MongoDeployment   string   `json:"mongoDeployment"`
+				MongoService      string   `json:"mongoService"`
+				MongoImageID      string   `json:"mongoImageID"`
+				PolicyName        string   `json:"policyName"`
+				ManagerNamespace  string   `json:"managerNamespace"`
+				ManagerDeployment string   `json:"managerDeployment"`
+				ManagerImageID    string   `json:"managerImageID"`
+				AllowedNodeNames  []string `json:"allowedNodeNames"`
+				MaxRunSeconds     int      `json:"maxRunSeconds"`
+			} `json:"mongoExposureFixture"`
+		}
+		if yaml.Unmarshal(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")), &cfg) != nil || cfg.Context == "" || cfg.Context == "in-cluster" || cfg.Kubeconfig != "" || cfg.Namespace != mongoExposureNamespace || cfg.ExpectedNamespaceUID != "" || !cfg.OwnedAck || cfg.TrialsPerArm != 1 || len(cfg.ScenarioFilter) != 1 || cfg.ScenarioFilter[0] != "c2-mongo-uncredentialed-service-exposure" || len(cfg.DefenderFilter) != 0 || cfg.MongoExposureFixture == nil || cfg.MongoExposureFixture.Transport != "in-cluster" {
+			return dest, fmt.Errorf("named Mongo suite requires logical target, in-cluster transport and fixed document-store namespace")
+		}
+		f := cfg.MongoExposureFixture
+		if !mongoKubeUID.MatchString(f.ClusterUID) || f.MongoDeployment != "mongo" || f.MongoService != "mongo" || f.PolicyName != "mongo-defense" || !nsRe.MatchString(f.ManagerNamespace) || !nsRe.MatchString(f.ManagerDeployment) || !mongoPinnedImage.MatchString(f.MongoImageID) || !mongoPinnedImage.MatchString(f.ManagerImageID) || len(f.AllowedNodeNames) < 1 || len(f.AllowedNodeNames) > 4 || f.MaxRunSeconds < 120 || f.MaxRunSeconds > 600 {
+			return dest, fmt.Errorf("named Mongo suite source, image, policy or runtime pins incomplete")
+		}
+		seenNodes := map[string]bool{}
+		for _, name := range f.AllowedNodeNames {
+			if !nsRe.MatchString(name) || seenNodes[name] {
+				return dest, fmt.Errorf("named Mongo suite CPU node list invalid")
+			}
+			seenNodes[name] = true
+		}
+		h := sha256.Sum256(raw)
+		return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{mongoExposureNamespace}, ScopeTarget: cfg.Context, ScopeTenant: mongoExposureNamespace, SuiteSHA256: hex.EncodeToString(h[:])}, nil
 	}
 	var cfg suiteConfig
 	// The shipped configs carry a UTF-8 BOM; strip it so the destination is actually parsed
@@ -892,7 +980,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	rm.mu.Lock()
 	if st := rm.runs[id]; st != nil && st.Compare3 {
 		cap = 12 * time.Minute
-	} else if st != nil && (st.Config == natsBaselineConfig || st.Config == natsResponseConfig) {
+	} else if st != nil && (st.Config == natsBaselineConfig || st.Config == natsResponseConfig || st.Config == mongoExposureConfig) {
 		cap = 10 * time.Minute
 		isNATS = true
 	}
@@ -951,6 +1039,10 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		err = cmd.Wait()
 	}
 	responseCancel()
+	var mongoSealErr error
+	if started && su.Namespace == mongoExposureNamespace {
+		mongoSealErr = rm.sealMongoAudit(id, outAbs)
+	}
 	var responseErr error
 	if responseDone != nil {
 		select {
@@ -979,7 +1071,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	}()
 	if rm.stopping[id] {
 		delete(rm.stopping, id)
-		if st.Config == natsBaselineConfig || st.Config == natsResponseConfig {
+		if st.Config == natsBaselineConfig || st.Config == natsResponseConfig || st.Config == mongoExposureConfig {
 			st.State, st.CleanupStatus, st.UnsafeToRetry = "partial", "UNVERIFIED", true
 			st.Finished, st.Error = tsNow(), "NATS run stopped before exact terminal cleanup; read-only reconciliation required"
 			return
@@ -1017,6 +1109,25 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if st.Config == natsResponseConfig {
 		result, evidenceErr := readNATSResponseResult(outAbs, id, st.Namespace)
 		finishNATSResponseStatus(st, result, evidenceErr, responseErr, err, ctx.Err())
+		return
+	}
+	if st.Config == mongoExposureConfig {
+		result, evidenceErr := rm.readMongoExposureResult(id, outAbs)
+		st.Finished = tsNow()
+		if !started {
+			st.State, st.CleanupStatus, st.UnsafeToRetry = "error", "NO_EFFECT", false
+			st.Error = "Mongo harness process did not start: " + err.Error()
+			return
+		}
+		if evidenceErr == nil && mongoSealErr == nil && result.Accepted && err == nil && ctx.Err() == nil {
+			st.State, st.CleanupStatus, st.UnsafeToRetry = "done", "VERIFIED", false
+			return
+		}
+		st.State, st.CleanupStatus, st.UnsafeToRetry = "partial", "UNVERIFIED", true
+		if evidenceErr == nil && result.Cleanup == "CONFIRMED_ABSENT" {
+			st.CleanupStatus, st.UnsafeToRetry = "VERIFIED", false
+		}
+		st.Error = "Mongo measurement, audit join or exact cleanup unverified; original result remains partial"
 		return
 	}
 	if err != nil && ctx.Err() == nil {

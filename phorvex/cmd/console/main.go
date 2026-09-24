@@ -324,6 +324,11 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	mongoExposureEnabled, err := readBool("PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.MongoExposureEnabled = mongoExposureEnabled
 	port := int64(0)
 	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
 		port, err = strconv.ParseInt(raw, 10, 32)

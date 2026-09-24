@@ -474,7 +474,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// The named broker baseline reads a server-owned file at authorization and
 	// launch. Recheck the second snapshot against this verified principal; Start
 	// also requires its digest still to match the exact file it copies.
-	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig {
+	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig {
 		p := principalOf(r)
 		for _, target := range dest.Targets {
 			if p == nil || !p.AllowsTarget(target) {
@@ -643,6 +643,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var functional any
 	var configuration any
 	var natsResponse any
+	var mongoExposure any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -652,6 +653,11 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		natsResponse = result
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "NATS response terminal artifact unavailable: " + err.Error()})
+	}
+	if result, err := s.runs.MongoExposureResult(id); err == nil && result != nil {
+		mongoExposure = result
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "Mongo exposure terminal or audit evidence unavailable: " + err.Error()})
 	}
 	if result, err := s.runs.FunctionalResult(id); err == nil && result != nil {
 		functional = map[string]any{"outcome": result.Outcome, "summary": result.Summary, "evidence": result.Evidence,
@@ -666,6 +672,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"functionalResult":    functional,
 		"configurationResult": configuration,
 		"natsResponseResult":  natsResponse,
+		"mongoExposureResult": mongoExposure,
 		"note":                "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }
