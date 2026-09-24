@@ -212,6 +212,7 @@ func TestCrossTenantMutationRefusedBeforeDispatch(t *testing.T) {
 		{"/api/policy/edit", `{"namespace":"litellm","name":"litellm-defense","mode":"active"}`},
 		{"/api/workload/attack", `{"namespace":"litellm","action":"foothold"}`},
 		{"/api/workload/fire-scenario", `{"namespace":"litellm","scenario":"kv-poison"}`},
+		{"/api/workload/fire-scenario", `{"namespace":"litellm","scenario":"kv-poison","targetPod":"owned-0","targetUid":"owned-uid"}`},
 		{"/api/availability-arms/run", `{"namespace":"litellm","attack":"foothold"}`},
 	}
 	for _, c := range cases {

@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -59,6 +61,7 @@ type attackRecord struct {
 	Pod          string            `json:"pod"`
 	TargetUID    string            `json:"targetUid,omitempty"`
 	Deploy       string            `json:"deploy"`
+	OwnerUID     string            `json:"ownerUid,omitempty"`
 	Attack       string            `json:"attack"`
 	AttackID     string            `json:"attackId"`
 	MITRE        string            `json:"mitre"`
@@ -229,6 +232,8 @@ type decisionActionEvidence struct {
 // watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
 type defenseBaseline struct {
 	uid           string
+	deploy        string
+	ownerUID      string
 	epoch         string
 	kvEpoch       string
 	quar          map[string]bool
@@ -247,13 +252,21 @@ type defenseBaseline struct {
 
 // snapshotBaseline captures the defense baseline for a namespace/pod. Call BEFORE applying the attack.
 func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
+	return s.snapshotBaselineForOwner(ns, pod, s.firstDeploy(ns), "", s.podAnno(ns, pod, "metadata.uid"))
+}
+
+// Exact catalogue targets use the selected Deployment. A namespace-first
+// Deployment would silently report an unrelated business workload's uptime.
+func (s *Server) snapshotBaselineForOwner(ns, pod, deploy, ownerUID, podUID string) defenseBaseline {
 	return defenseBaseline{
-		uid:     s.podAnno(ns, pod, "metadata.uid"),
-		uptime:  s.workloadUptime(ns, s.firstDeploy(ns)),
-		epoch:   s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
-		kvEpoch: s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
-		quar:    s.quarantineEvents(ns),
-		nps:     s.quarantineNPs(ns),
+		uid:      podUID,
+		deploy:   deploy,
+		ownerUID: ownerUID,
+		uptime:   s.workloadUptimeBound(ns, deploy, ownerUID),
+		epoch:    s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
+		kvEpoch:  s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
+		quar:     s.quarantineEvents(ns),
+		nps:      s.quarantineNPs(ns),
 	}
 }
 
@@ -534,11 +547,14 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 	if err := s.loadAttacks(); err != nil {
 		s.recordStateError(err)
 	}
-	deploy := s.firstDeploy(ns)
+	deploy := base.deploy
+	if deploy == "" && base.ownerUID == "" {
+		deploy = s.firstDeploy(ns)
+	}
 	r := &attackRecord{
 		ID:      "atk-" + strconv.FormatInt(started.UnixNano(), 36),
 		FiredAt: started.UTC().Format(time.RFC3339Nano),
-		Service: service, Namespace: ns, Pod: pod, Deploy: deploy,
+		Service: service, Namespace: ns, Pod: pod, Deploy: deploy, OwnerUID: base.ownerUID,
 		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful, EvidenceKind: evidenceKind,
 		TargetUID:        base.uid,
 		StimulusEvidence: base.stimulus,
@@ -554,7 +570,7 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 			if base.uptime >= 0 {
 				return base.uptime
 			}
-			return s.workloadUptime(ns, deploy)
+			return s.workloadUptimeBound(ns, deploy, base.ownerUID)
 		}(),
 		started:     started,
 		accepted:    accepted,
@@ -637,7 +653,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if !s.cfg.now().Before(deadline) {
 			break
 		}
-		if up := s.workloadUptime(r.Namespace, r.Deploy); up >= 0 && up < minUp {
+		if up := s.workloadUptimeBound(r.Namespace, r.Deploy, r.OwnerUID); up >= 0 && up < minUp {
 			minUp = up
 		}
 		if r.Outcome != "" || r.ResponseObserved || r.EffectEvidence != nil {
@@ -794,7 +810,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		classifyContainment(r, round2(s.cfg.now().Sub(r.started).Seconds()))
 	}
 	r.UptimeDip = minUp
-	r.UptimeAfter = s.workloadUptime(r.Namespace, r.Deploy)
+	r.UptimeAfter = s.workloadUptimeBound(r.Namespace, r.Deploy, r.OwnerUID)
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
@@ -952,6 +968,17 @@ func (s *Server) podAnno(ns, pod, key string) string {
 
 // workloadUptime = readyReplicas/replicas * 100 for the Deployment OR StatefulSet (real availability).
 // -1 if unknown.
+func (s *Server) workloadUptimeBound(ns, deploy, ownerUID string) float64 {
+	if ownerUID != "" {
+		var live appsv1.Deployment
+		if err := s.scenarioObject(ns, "deployment", deploy, &live); err != nil || live.Namespace != ns || live.Name != deploy || string(live.UID) != ownerUID || live.DeletionTimestamp != nil || live.Spec.Replicas == nil || *live.Spec.Replicas <= 0 {
+			return -1
+		}
+		return round2(float64(live.Status.ReadyReplicas) / float64(*live.Spec.Replicas) * 100)
+	}
+	return s.workloadUptime(ns, deploy)
+}
+
 func (s *Server) workloadUptime(ns, deploy string) float64 {
 	if deploy == "" {
 		return -1

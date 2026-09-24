@@ -546,6 +546,8 @@ func AttackVectorForActuator(actuator string) string {
 
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
+const ConsoleTargetPodUIDAnnotation = "phorvex.ai/console-target-pod-uid"
+
 type SecurityEventInfo struct {
 	CreatedAt         time.Time
 	Outcomes          []ProtectedOutcome
@@ -572,6 +574,11 @@ type SecurityEventInfo struct {
 	// CreatorIdentity is the authenticated identity the admission stamp recorded, e.g.
 	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
 	CreatorIdentity string
+	// ConsoleTargetPodUID is the event's original Pod lifetime binding, not a
+	// UID inferred from a later Pod with the same name. A nonempty
+	// TargetBindingReason keeps the event in diagnostic inventory only.
+	ConsoleTargetPodUID string
+	TargetBindingReason string
 	// CompletedDisclosureRaw is an admission-validated producer payload candidate.
 	// It still requires current boundary, API UID, policy epoch and exact admission
 	// authority before durable retention. The owner chain was frozen by the

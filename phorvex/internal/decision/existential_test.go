@@ -79,6 +79,9 @@ func TestM99EvidenceClassificationAndBinding(t *testing.T) {
 			v.OutcomeEvents[0].Source = "TrustedDetector"
 		}, false, false},
 		{"missing-stamp", func(v *model.WorkloadView, p *model.Policy) { v.OutcomeEvents[0].CreatorIdentity = "" }, false, false},
+		{"target-binding-rejected", func(v *model.WorkloadView, p *model.Policy) {
+			v.OutcomeEvents[0].TargetBindingReason = "console-target-pod-uid-mismatch"
+		}, false, false},
 		{"missing-time", func(v *model.WorkloadView, p *model.Policy) { v.OutcomeEvents[0].TimestampMissing = true }, false, false},
 		{"expired-evidence", func(v *model.WorkloadView, p *model.Policy) { v.OutcomeEvents[0].Age = 2 * time.Hour }, false, false},
 		{"boundary-absent", func(v *model.WorkloadView, p *model.Policy) {

@@ -279,13 +279,25 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	for i := range snap.Pods {
 		snap.PodByKey[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name] = &snap.Pods[i]
 	}
+	// Bind catalogue events against the very Pod list projected into this
+	// decision snapshot. A separate live GET could disagree with this list and
+	// accidentally attach an old event to a same-name replacement.
+	currentPodUIDs := make(map[string]string, len(snap.Pods))
+	for i := range snap.Pods {
+		key := snap.Pods[i].Namespace + "/" + snap.Pods[i].Name
+		if _, duplicate := currentPodUIDs[key]; duplicate {
+			currentPodUIDs[key] = "" // ambiguous inventory cannot admit bound evidence
+		} else {
+			currentPodUIDs[key] = snap.Pods[i].UID
+		}
+	}
 
 	// SecurityEvent stream.
 	eventReader := client.Reader(c)
 	if receiptBoundary != nil {
 		eventReader = receiptBoundary
 	}
-	events, byPod, receipts, err := collectEventsAndReceipts(ctx, eventReader, now)
+	events, byPod, receipts, err := collectEventsAndReceipts(ctx, eventReader, now, currentPodUIDs)
 	if err == nil {
 		snap.EventInventoryComplete = true
 		snap.PhoenixReceiptInventoryComplete = true
