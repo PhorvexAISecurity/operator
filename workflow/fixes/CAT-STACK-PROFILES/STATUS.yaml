@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 17
+revision: 20
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -108,15 +108,15 @@ checks:
   patch_equivalence:
     result: PASS
     by: codex-lead
-    artifact: evidence/publication-equivalence.md
-    sha256: b8efbb4eed7be32e1d77a7f34c1197ab5092d56ba699fb56bfeea1f04b1176e4
-    source_sha: 8689b52abc7b7c37e4353b5fd66450ce3b1440a8
-    at: '2026-09-24T18:06:52+00:00'
+    artifact: evidence/publication-equivalence-mcp.md
+    sha256: 58373fe21e362767792323cc8b266ba6b5670de8e0f12826e5a1253697ab02bd
+    source_sha: 79ed9b456ddec9608b42d78d761f4db10ced419b
+    at: '2026-09-24T20:25:02+00:00'
 fix_id: CAT-STACK-PROFILES
 issues: []
 title: Enable reviewed Chroma and LiteLLM catalogue profiles in dev
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -144,7 +144,7 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/331
-  reviewed_head: f936d2c06f1bac00e9251d33ae71e9dfe4573cfb
+  reviewed_head: 5819a5cb2005e71a2bf20e72dde390b967afc83b
   merge_sha: null
   checks: pending
   patch_equivalence: PASS
@@ -178,9 +178,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T20:21:43+00:00'
+  action: PR331 updated with Chroma LiteLLM and exact pinned MCP config; normal deployment
+    then admission and behavioral verification
+updated_at: '2026-09-24T20:25:21+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T17:50:54+00:00'
@@ -206,6 +206,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-24T20:25:19+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: operations/AUTONOMY.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -295,6 +300,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T20:25:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision
@@ -412,6 +425,13 @@ check_history:
   source_sha: 8689b52abc7b7c37e4353b5fd66450ce3b1440a8
   at: '2026-09-24T18:02:38+00:00'
   incident_sha256: e7d6808e9fc9bf4b65d4c6ac16c8dbec4f2ee3eace5ca3e564b0b1b01770a9e0
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: b8efbb4eed7be32e1d77a7f34c1197ab5092d56ba699fb56bfeea1f04b1176e4
+  source_sha: 8689b52abc7b7c37e4353b5fd66450ce3b1440a8
+  at: '2026-09-24T18:06:52+00:00'
 handoff:
   id: CAT-STACK-PROFILES:17:review
   from: codex-lead
