@@ -1,0 +1,45 @@
+schema_version: 2
+subject:
+  kind: intake
+  id: RPT-20260924-093000-functional-ledger-load
+artifacts:
+- id: lead-baseline
+  path: evidence/lead-baseline.log
+  bytes: 289
+  sha256: ddaeb10a86986879ad01319cd36c2d6a9ec22c18e1e232e5ebe338044e215f67
+  producer: codex-lead
+  created_at: null
+  evidence_class: INTAKE
+  retention: git
+- id: positive
+  path: evidence/positive.log
+  bytes: 56
+  sha256: 7e3298c5ba7ced7cd286effd8d8fbcd621c8c785b8967adf03cfa268a3fa2390
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git
+- id: worker-REPORT
+  path: evidence/worker-REPORT.md
+  bytes: 2586
+  sha256: 15af3d484a92dc6b54f6ad78bd6fcec04c9e7fd184f621db4ee159b37bd5ac8c
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git
+- id: worker-baseline
+  path: evidence/worker-baseline.log
+  bytes: 292
+  sha256: 3bb834fe63e4ee1ffa31427039782eab858ddd8f5aeb1deca717f2dc67da29ff
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git
+- id: worker-functional_load_error_test
+  path: evidence/worker-functional_load_error_test.go
+  bytes: 1913
+  sha256: b874f5fd242b1c74823b95dc89ddea83e54345f09dd13b7c0f3e1c2a823ee058
+  producer: campaign-cleanup-audit
+  created_at: null
+  evidence_class: INTAKE
+  retention: git

@@ -310,3 +310,10 @@ intakes:
     state: DUPLICATE
     issue_id: null
     aliases: []
+  RPT-20260924-093000-functional-ledger-load:
+    directory: intake/RPT-20260924-093000-functional-ledger-load
+    kind: BUG
+    title: Fixed-suite launch ignores retained run ledger load failure
+    state: FILED
+    issue_id: M-193
+    aliases: []

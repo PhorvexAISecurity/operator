@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,6 +15,13 @@ checks:
     source_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
     at: '2026-09-24T08:51:12+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: d5f870217933ac6bd0c2e7cf617762b865c1a4d4052ae50bf4f87bd67b3993a9
+    source_sha: e2ee94315828a180a83902f6eb61e37a66bce22d
+    at: '2026-09-24T09:43:30+00:00'
 fix_id: CAT-PERSISTED-FSGROUP
 issues:
 - M-192
@@ -83,7 +90,7 @@ residuals: []
 next_action:
   owner: campaign-cleanup-audit
   action: Integrate reviewed repair and complete preflight for source handoff.
-updated_at: '2026-09-24T08:51:12+00:00'
+updated_at: '2026-09-24T09:43:30+00:00'
 configuration_history:
 - at: '2026-09-24T08:50:14+00:00'
   by: codex-lead

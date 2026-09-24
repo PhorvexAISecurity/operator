@@ -1,0 +1,136 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 7
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 21a69c0823a54b2b1ea4c55b950a73bc25f79aff7d7856f07aaf96b1c2ed6900
+    source_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+    at: '2026-09-24T09:42:04+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Administrative completion during DESIGNING under existing delegated
+      repair authority; decision text and bounded source/live plan unchanged
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4938ab219c7640a8c9642a84011f3cddc74e5c2dd597ec4db48b34779558d55c
+    source_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+    at: '2026-09-24T09:43:11+00:00'
+fix_id: CAT-FIXED-LEDGER
+issues:
+- M-193
+title: Refuse fixed-suite launch when retained run history is unreadable
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-cleanup-audit
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: null
+  base_sha: null
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: campaign-cleanup-audit
+  action: Implement locked retained-ledger refusal and permanent producer controls
+updated_at: '2026-09-24T09:43:11+00:00'
+configuration_history:
+- at: '2026-09-24T09:40:57+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T09:41:33+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T09:41:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T09:42:04+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 21a69c0823a54b2b1ea4c55b950a73bc25f79aff7d7856f07aaf96b1c2ed6900
+  source_sha: cac8f84b91636f48437f7a667f1ceb1d81aed816
+  at: '2026-09-24T09:41:16+00:00'
+  contract_sha256: 9b711176a47a37e1a4bbb1ef4d14d730974bc084bd568ecbb1c7911a0eee5c2e
