@@ -37,9 +37,11 @@ import (
 )
 
 type kubeVoiceRuntime struct {
-	rest  *rest.Config
-	kube  kubernetes.Interface
-	voice VoiceRuntime
+	rest          *rest.Config
+	kube          kubernetes.Interface
+	voice         VoiceRuntime
+	execOverride  func(context.Context, string, string, string, []string) (string, error)
+	pauseOverride func(context.Context, time.Duration) error
 }
 
 func newKubeVoiceRuntime(runtime Runtime) (VoiceDriver, error) {
@@ -270,6 +272,9 @@ func (r *kubeVoiceRuntime) CanEvict(ctx context.Context, cfg VoiceConfig) error 
 }
 
 func (r *kubeVoiceRuntime) exec(ctx context.Context, namespace, pod, container string, command []string) (string, error) {
+	if r.execOverride != nil {
+		return r.execOverride(ctx, namespace, pod, container, command)
+	}
 	bounded, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	req := r.kube.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec").VersionedParams(&corev1.PodExecOptions{Container: container, Command: command, Stdout: true, Stderr: true}, scheme.ParameterCodec)
@@ -632,11 +637,11 @@ func (r *kubeVoiceRuntime) Evict(ctx context.Context, cfg VoiceConfig, pod Voice
 const transcriptQueryProgram = `import hashlib,json,os,sys
 from bson import json_util
 from pymongo import MongoClient
-c=MongoClient(os.environ["MONGO_URI"],serverSelectionTimeoutMS=3000)
+c=MongoClient(os.environ["MONGO_URI"],serverSelectionTimeoutMS=3000,connectTimeoutMS=3000,socketTimeoutMS=3000,retryWrites=False)
 col=c[os.environ.get("MONGO_DB","voice")][os.environ.get("MONGO_COLLECTION","transcripts")]
 out=[]
 for sid in sys.argv[1:]:
- for d in col.find({"call_sid":sid}):
+ for d in col.find({"call_sid":sid}).max_time_ms(3000).limit(5):
   oid=str(d["_id"]);d["_id"]=oid
   raw=json_util.dumps(d,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
   out.append({"callSid":sid,"objectID":oid,"contentSHA256":hashlib.sha256(raw).hexdigest()})
@@ -646,7 +651,7 @@ const transcriptDeleteProgram = `import hashlib,json,os,sys
 from bson import ObjectId,json_util
 from pymongo import MongoClient
 sid,oid,want=sys.argv[1:4]
-c=MongoClient(os.environ["MONGO_URI"],serverSelectionTimeoutMS=3000)
+c=MongoClient(os.environ["MONGO_URI"],serverSelectionTimeoutMS=3000,connectTimeoutMS=3000,socketTimeoutMS=3000,retryWrites=False)
 col=c[os.environ.get("MONGO_DB","voice")][os.environ.get("MONGO_COLLECTION","transcripts")]
 d=col.find_one({"_id":ObjectId(oid),"call_sid":sid})
 if d is None: print("OWNED_DELETE="+json.dumps({"deletedCount":0,"alreadyAbsent":True,"remaining":col.count_documents({"call_sid":sid})},sort_keys=True));sys.exit(0)
@@ -657,6 +662,8 @@ print("OWNED_DELETE="+json.dumps({"deletedCount":r.deleted_count,"alreadyAbsent"
 
 func (r *kubeVoiceRuntime) CleanupTranscripts(ctx context.Context, cfg VoiceConfig, pod VoicePod, callSIDs []string, onIntent func(TranscriptRef) error, onResult func(TranscriptRef) error) VoiceCleanup {
 	cleanup := VoiceCleanup{Status: "FAIL", ForwardsClosed: true, UnsafeToRetry: true}
+	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
 	if len(callSIDs) == 0 || len(callSIDs) > 2 {
 		cleanup.Error = "Voice transcript cleanup session set is outside bounds"
 		return cleanup
@@ -673,76 +680,124 @@ func (r *kubeVoiceRuntime) CleanupTranscripts(ctx context.Context, cfg VoiceConf
 	}
 	query := []string{"python3", "-c", transcriptQueryProgram}
 	query = append(query, callSIDs...)
+	readRefs := func() ([]TranscriptRef, error) {
+		out, readErr := r.exec(ctx, cfg.Namespace, pod.Name, r.voice.TranscriptContainer, query)
+		if readErr != nil {
+			return nil, readErr
+		}
+		return parseTranscriptRefs(out, callSIDs)
+	}
+	// Both sessions can persist after their WebSocket closes. Complete the finite
+	// settling window even when the first session's document arrives early.
 	var refs []TranscriptRef
-	var out string
-	// Transcript persistence is asynchronous. Hold a bounded settling window so
-	// a zero immediately after WebSocket close is not mistaken for final absence.
+	observed := map[string]bool{}
 	for observation := 0; observation < 10; observation++ {
-		var queryErr error
-		out, queryErr = r.exec(ctx, cfg.Namespace, pod.Name, r.voice.TranscriptContainer, query)
-		if queryErr != nil {
-			cleanup.Error = queryErr.Error()
+		if err = ctx.Err(); err != nil {
+			cleanup.Error = err.Error()
 			return cleanup
 		}
-		refs, err = parseTranscriptRefs(out, callSIDs)
+		refs, err = readRefs()
 		if err != nil {
 			cleanup.Error = err.Error()
 			return cleanup
 		}
-		if len(refs) > 0 || observation == 9 {
-			break
+		for _, ref := range refs {
+			observed[ref.CallSID+"\x00"+ref.ObjectID] = true
 		}
-		select {
-		case <-ctx.Done():
-			cleanup.Error = ctx.Err().Error()
-			return cleanup
-		case <-time.After(time.Second):
-		}
-	}
-	cleanup.DocumentsFound = len(refs)
-	for _, ref := range refs {
-		if err = onIntent(ref); err != nil {
-			cleanup.Error = "persist transcript delete intent: " + err.Error()
-			return cleanup
-		}
-		deleteOut, deleteErr := r.exec(ctx, cfg.Namespace, pod.Name, r.voice.TranscriptContainer, []string{"python3", "-c", transcriptDeleteProgram, ref.CallSID, ref.ObjectID, ref.ContentSHA256})
-		deleted, alreadyAbsent, receiptErr := parseTranscriptDelete(deleteOut)
-		if deleteErr != nil || receiptErr != nil || deleted != 1 && !alreadyAbsent {
-			cleanup.Error = "exact Voice transcript deletion was not acknowledged"
-			return cleanup
-		}
-		if err = onResult(ref); err != nil {
-			cleanup.Error = "persist transcript delete result: " + err.Error()
-			return cleanup
-		}
-	}
-	for observation := 0; observation < 3; observation++ {
-		out, err := r.exec(ctx, cfg.Namespace, pod.Name, r.voice.TranscriptContainer, query)
-		if err != nil {
-			cleanup.Error = err.Error()
-			return cleanup
-		}
-		remaining, parseErr := parseTranscriptRefs(out, callSIDs)
-		if parseErr != nil {
-			cleanup.Error = parseErr.Error()
-			return cleanup
-		}
-		cleanup.DocumentsRemaining = len(remaining)
-		if len(remaining) != 0 {
-			cleanup.Error = "owned Voice transcripts remain"
-			return cleanup
-		}
-		if observation < 2 {
-			select {
-			case <-ctx.Done():
-				cleanup.Error = ctx.Err().Error()
+		if observation < 9 {
+			if err = r.pauseVoiceCleanup(ctx, time.Second); err != nil {
+				cleanup.Error = err.Error()
 				return cleanup
-			case <-time.After(2 * time.Second):
 			}
 		}
 	}
-	cleanup.Status, cleanup.UnsafeToRetry = "PASS", false
+	const maxOwnedDocuments = 4
+	cleanup.DocumentsFound = len(observed)
+	cleanup.DocumentsRemaining = len(refs)
+	deleted := map[string]bool{}
+	zeroSamples := 0
+	// A new owned document discovered during zero checks receives its own
+	// persisted intent and fresh content-hash CAS. Never repeat an acknowledged
+	// deletion, and stop after a fixed observation/document ceiling.
+	for observation := 0; observation < 20; observation++ {
+		if err = ctx.Err(); err != nil {
+			cleanup.Error = err.Error()
+			return cleanup
+		}
+		if len(observed) > maxOwnedDocuments {
+			cleanup.Error = "Voice transcript count exceeds bound"
+			return cleanup
+		}
+		for _, ref := range refs {
+			key := ref.CallSID + "\x00" + ref.ObjectID
+			if deleted[key] {
+				cleanup.Error = "acknowledged Voice transcript reappeared"
+				return cleanup
+			}
+			if err = onIntent(ref); err != nil {
+				cleanup.Error = "persist transcript delete intent: " + err.Error()
+				return cleanup
+			}
+			deleteOut, deleteErr := r.exec(ctx, cfg.Namespace, pod.Name, r.voice.TranscriptContainer, []string{"python3", "-c", transcriptDeleteProgram, ref.CallSID, ref.ObjectID, ref.ContentSHA256})
+			if deleteErr != nil {
+				cleanup.Error = "exact Voice transcript deletion outcome is unknown"
+				return cleanup
+			}
+			deletedCount, alreadyAbsent, receiptErr := parseTranscriptDelete(deleteOut)
+			if receiptErr != nil || deletedCount != 1 && !alreadyAbsent {
+				cleanup.Error = "exact Voice transcript deletion was not acknowledged"
+				return cleanup
+			}
+			if err = onResult(ref); err != nil {
+				cleanup.Error = "persist transcript delete result: " + err.Error()
+				return cleanup
+			}
+			deleted[key] = true
+		}
+		refs, err = readRefs()
+		if err != nil {
+			cleanup.Error = err.Error()
+			return cleanup
+		}
+		cleanup.DocumentsRemaining = len(refs)
+		for _, ref := range refs {
+			observed[ref.CallSID+"\x00"+ref.ObjectID] = true
+		}
+		if len(observed) > maxOwnedDocuments {
+			cleanup.Error = "Voice transcript count exceeds bound"
+			return cleanup
+		}
+		cleanup.DocumentsFound = len(observed)
+		if len(refs) == 0 {
+			zeroSamples++
+			if zeroSamples == 3 {
+				cleanup.Status, cleanup.UnsafeToRetry = "PASS", false
+				return cleanup
+			}
+			if err = r.pauseVoiceCleanup(ctx, 2*time.Second); err != nil {
+				cleanup.Error = err.Error()
+				return cleanup
+			}
+		} else {
+			zeroSamples = 0
+		}
+	}
+	cleanup.Error = "Voice transcript verification exceeded observation bound"
 	return cleanup
+}
+
+func (r *kubeVoiceRuntime) pauseVoiceCleanup(ctx context.Context, duration time.Duration) error {
+	if r.pauseOverride != nil {
+		return r.pauseOverride(ctx, duration)
+	}
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func parseTranscriptRefs(output string, callSIDs []string) ([]TranscriptRef, error) {
