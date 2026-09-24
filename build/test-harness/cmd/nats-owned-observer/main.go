@@ -27,6 +27,14 @@ var noncePattern = regexp.MustCompile(`^[a-f0-9]{24}$`)
 var subjectPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$`)
 var serverIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
+// phaseError is a fixed diagnostic code. It never formats a broker URL,
+// transport error, response body, or credential into stderr.
+type phaseError struct{ code string }
+
+func (e *phaseError) Error() string { return e.code }
+
+func failedPhase(code string) error { return &phaseError{code: code} }
+
 type config struct {
 	BrokerURL             string   `json:"brokerURL"`
 	Subject               string   `json:"subject"`
@@ -148,22 +156,22 @@ func observe(ctx context.Context, cfg config, emit func(receipt) error) error {
 	nc, err := nats.Connect(cfg.BrokerURL,
 		nats.Name("phorvex-owned-subject-observer"),
 		nats.Timeout(time.Duration(cfg.ConnectTimeoutMillis)*time.Millisecond),
-		nats.NoReconnect(), nats.MaxReconnects(0), nats.RetryOnFailedConnect(false), nats.DontRandomize(),
+		nats.NoReconnect(), nats.MaxReconnects(0), nats.RetryOnFailedConnect(false), nats.DontRandomize(), nats.SkipHostLookup(),
 		nats.SetCustomDialer(fixedDialer{address: parsed.Host, timeout: time.Duration(cfg.ConnectTimeoutMillis) * time.Millisecond}),
 		nats.PermissionErrOnSubscribe(true), nats.NoCallbacksAfterClientClose(),
 		nats.ErrorHandler(func(*nats.Conn, *nats.Subscription, error) {}),
 	)
 	if err != nil {
-		return errors.New("one broker connection failed")
+		return failedPhase("CONNECT_FAILED")
 	}
 	defer nc.Close()
 	serverID := nc.ConnectedServerId()
 	if nc.Status() != nats.CONNECTED || !admitted(serverID, cfg.AllowedServerIDs) {
-		return errors.New("connected broker ID outside admitted set")
+		return failedPhase("BROKER_ID_MISMATCH")
 	}
 	sub, subscribeErr := nc.SubscribeSync(cfg.Subject)
 	if subscribeErr != nil && !errors.Is(subscribeErr, nats.ErrPermissionViolation) {
-		return errors.New("subscription failed before flush")
+		return failedPhase("SUBSCRIBE_FAILED")
 	}
 	if sub != nil {
 		defer sub.Unsubscribe()
@@ -172,26 +180,26 @@ func observe(ctx context.Context, cfg config, emit func(receipt) error) error {
 	flushErr := nc.FlushWithContext(flushCtx)
 	cancel()
 	if flushErr != nil || nc.Status() != nats.CONNECTED || nc.ConnectedServerId() != serverID {
-		return errors.New("subscription flush or broker identity failed")
+		return failedPhase("FLUSH_OR_IDENTITY_FAILED")
 	}
 	status := "READY"
 	if errors.Is(subscribeErr, nats.ErrPermissionViolation) {
 		status = "SUBSCRIPTION_DENIED"
 	}
 	if err := emit(receipt{Kind: "subscription", Status: status, Subject: cfg.Subject, Nonce: cfg.Nonce, ServerID: serverID, Flushed: true}); err != nil {
-		return errors.New("subscription receipt emission failed")
+		return failedPhase("SUBSCRIPTION_RECEIPT_FAILED")
 	}
 	if status == "SUBSCRIPTION_DENIED" {
 		return emit(receipt{Kind: "observation", Status: "PERMISSION_DENIED", Subject: cfg.Subject, Nonce: cfg.Nonce, ServerID: serverID})
 	}
 	if sub == nil {
-		return errors.New("subscription missing after flush")
+		return failedPhase("SUBSCRIPTION_MISSING")
 	}
 	waitCtx, waitCancel := context.WithTimeout(ctx, time.Duration(cfg.ObserveTimeoutMillis)*time.Millisecond)
 	message, receiveErr := sub.NextMsgWithContext(waitCtx)
 	waitCancel()
 	if nc.Status() != nats.CONNECTED || nc.ConnectedServerId() != serverID {
-		return errors.New("broker identity changed during observation")
+		return failedPhase("OBSERVATION_BROKER_DRIFT")
 	}
 	out := receipt{Kind: "observation", Subject: cfg.Subject, Nonce: cfg.Nonce, ServerID: serverID}
 	switch {
@@ -216,7 +224,7 @@ func observe(ctx context.Context, cfg config, emit func(receipt) error) error {
 		}
 	}
 	if err := emit(out); err != nil {
-		return errors.New("observation receipt emission failed")
+		return failedPhase("OBSERVATION_RECEIPT_FAILED")
 	}
 	return nil
 }
@@ -233,7 +241,12 @@ func main() {
 	}
 	encoder := json.NewEncoder(os.Stdout)
 	if err := observe(context.Background(), cfg, func(r receipt) error { return encoder.Encode(r) }); err != nil {
-		fmt.Fprintln(os.Stderr, "observer: protocol observation incomplete")
+		var phase *phaseError
+		if errors.As(err, &phase) {
+			fmt.Fprintln(os.Stderr, "observer:", phase.code)
+		} else {
+			fmt.Fprintln(os.Stderr, "observer: PROTOCOL_INCOMPLETE")
+		}
 		os.Exit(1)
 	}
 }
