@@ -20,13 +20,15 @@ accounting:
     only applicable valid executed reviewed S trials; M controls, invalid, blocked, unavailable and not-run
     trials remain separately counted.
 progress_accounting:
-  through_round: 19
+  through_round: 20
   interpretation: Exclusive planning-progress buckets. An observed related arm may be only a prerequisite,
     refusal or configuration baseline; it does not mark the entire candidate completed or security-scored.
     Blocked means a concrete current source, configuration or infrastructure prerequisite remains; not_run
     means no admitted candidate-specific trial yet. Round19 supplied a routed fixture and an exact
     trusted-event-to-selection join, but route preparation refused all six selected quarantine
-    decisions before dispatch; the observed-cell counts do not change.
+    decisions before dispatch. Round20 used a unique tenant and observed one emitted quarantine,
+    AMTD-bound source and deny-policy object, service200 and continuing source-token200;
+    the observed-cell counts do not change and packet isolation was not tested.
   mechanism_or_control:
     related_arm_observed:
     - voice-stream-continuity
@@ -70,6 +72,7 @@ progress_accounting:
     - mcp-response-trust
   eligible_installed_defense_efficacy_trials: 0
   installed_source_at_round_19: a50d796af128cd4109875e03eaf429d460126740
+  installed_source_at_round_20: a50d796af128cd4109875e03eaf429d460126740
   pending_installed_verification: PR323 contains reviewed source changes for NATS console controls,
     detector contracts and response tracing; M-184 and CAT-RESOURCE-TRACE source changes are also
     ahead of the observed installed a50d796a manager/console. No source-only fix is counted as an installed
@@ -588,16 +591,21 @@ cells:
     Service/EndpointSlice topology, baseline Pod and Service HTTP200, PDB headroom and one exact trusted
     event. Six joined decisions selected quarantine, but all retained route-preparation-failed and
     not-attempted; both original tokens and the routed Service remained HTTP200.
-  next_step: Diagnose the exact installed route-preparation refusal with source and bounded read-only
-    runtime evidence before admitting another response trial. Do not force rotate, weaken gates or infer
-    a natural detector from the injected event.
-  source_gap: Wrong/stale identities and actual actuator effect still require their own controls.
+  next_step: Retain round20 unique-tenant response evidence; after deployment verify the repaired trace
+    and narrow token-capability representation without forcing a winner. Network-isolation acceptance
+    requires actual packet controls after the shared CNI prerequisite is resolved.
+  source_gap: Wrong/stale identity controls and packet isolation still require their own witnesses.
     CAT-RESOURCE-TRACE source correction is integrated but not installed in the observed a50d796a
-    manager; the round19 post-selection route failure has no backend effect or security efficacy credit.
+    manager. Round20 proves a bounded object-level actuation, not security efficacy.
   reviewed_progress: Round17 completed the missing-topology refusal; round19 removed that fixture
     prerequisite and established a distinct, historical-audit-confirmed route-preparation refusal after
-    selected quarantine. Neither run demonstrates an installed actuation or credential-specific defense.
-  progress_evidence: rounds/round-19/analysis.md
+    selected quarantine. Round20 removed tenant-owner overlap, observed current route preparation,
+    and joined one exact selected quarantine to its generated Phoenix event and owned target/deny
+    policy. Both retained tokens and legitimate Service remained200. Independent cleanup passed;
+    no natural detection, credential-specific defense or packet-isolation result is credited.
+  progress_evidence: rounds/round-20/review.md
+  additional_progress_evidence:
+  - rounds/round-19/analysis.md
 - id: phorvex-console-trace
   stack: phorvex-console
   kind: M
@@ -687,7 +695,9 @@ cells:
     Pod deletion, legitimate token still200. Round17 generic injected-response trial left both tokens
     accepted because the fixture lacked required Service membership. Round19 supplied actual routed
     membership, but selected quarantine stopped at route preparation before dispatch; both captured
-    tokens still worked. Neither trial is credential-specific or natural-detector coverage.
+    tokens still worked. Round20 emitted quarantine and retained the source Pod; the captured token
+    continued to work while legitimate Service stayed200. These generic injected-response trials
+    are not credential-specific or natural-detector coverage.
   next_step: M-184 implements narrow potential API token exposure from actual admitted metadata; retain
     initial-disclosure and no-detector limits; source implementation is ahead of the observed installed
     a50d796a manager, so installed verification remains pending.
