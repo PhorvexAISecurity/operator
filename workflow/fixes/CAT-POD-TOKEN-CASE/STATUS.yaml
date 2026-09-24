@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-24T17:14:44+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-review/red.md
+    sha256: 4804dffb6b774f8c62ac3e2f411c9c3dc8c1a58abd3a37c7cd91d874c7de01ef
+    source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+    at: '2026-09-24T17:24:15+00:00'
 fix_id: CAT-POD-TOKEN-CASE
 issues: []
 title: Add a causal Pod-bound credential response catalogue suite
@@ -83,7 +90,7 @@ residuals: []
 next_action:
   owner: implementer
   action: Implement signed causal catalogue case in parallel owned files
-updated_at: '2026-09-24T17:14:44+00:00'
+updated_at: '2026-09-24T17:24:15+00:00'
 follow_up_to: CAT-POD-TOKEN-VECTOR
 configuration_history:
 - at: '2026-09-24T15:52:24+00:00'
