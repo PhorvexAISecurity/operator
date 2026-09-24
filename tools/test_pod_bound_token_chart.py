@@ -10,6 +10,7 @@ import yaml
 
 CHART = Path(__file__).resolve().parents[1] / "phorvex/charts/phorvex"
 HELM = os.environ.get("HELM", "/home/mehrdad/.local/share/phorvex-tools/helm/3.16.4/helm")
+LEDGER = "phorvex-quarantine-capacity-" + "a" * 40
 BASE = [HELM, "template", "phorvex", str(CHART), "--namespace", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",
         "--set", "phorvex.console.auditTransport.serverSecretName=audit-server",
@@ -21,6 +22,7 @@ OPT_IN = ["--set", "phorvex.console.podBoundToken.enabled=true",
           "--set", "phorvex.e2eDetector.enabled=true",
           "--set", "phorvex.e2eDetector.targetNamespace=voice",
           "--set", "phorvex.prometheusUrl=http://prometheus.monitoring.svc:9090",
+          "--set-string", "phorvex.console.podBoundToken.quarantineCapacityLedgerName=" + LEDGER,
           "--api-versions", "monitoring.coreos.com/v1/PodMonitor"]
 
 
@@ -51,6 +53,7 @@ class PodBoundTokenChart(unittest.TestCase):
         docs = [d for d in yaml.safe_load_all(result.stdout) if d]
         fixture = object_named(docs, "Role", "phorvex-phorvex-pod-bound-token-fixture")
         creator = object_named(docs, "Role", "phorvex-phorvex-pod-bound-token-creator")
+        ledger = object_named(docs, "Role", "phorvex-phorvex-pod-bound-token-capacity-ledger")
         self.assertEqual(fixture["metadata"]["namespace"], "voice")
         self.assertEqual(creator["metadata"]["namespace"], "phorvex-system")
         self.assertIn({"apiGroups": [""], "resources": ["pods"],
@@ -62,10 +65,14 @@ class PodBoundTokenChart(unittest.TestCase):
              "resourceNames": ["phorvex-phorvex-e2e-detector"], "verbs": ["get"]},
             {"apiGroups": [""], "resources": ["serviceaccounts/token"],
              "resourceNames": ["phorvex-phorvex-e2e-detector"], "verbs": ["create"]}])
-        for role in [fixture, creator]:
+        self.assertEqual(ledger["metadata"]["namespace"], "phorvex-system")
+        self.assertEqual(ledger["rules"], [{"apiGroups": [""], "resources": ["configmaps"],
+                                          "resourceNames": [LEDGER], "verbs": ["get"]}])
+        for role in [fixture, creator, ledger]:
             self.assertFalse([r for r in role["rules"] if "impersonate" in r["verbs"] or
                               "securityevents" in r["resources"] or "secrets" in r["resources"]])
-        for name, namespace in [("fixture", "voice"), ("creator", "phorvex-system")]:
+        for name, namespace in [("fixture", "voice"), ("creator", "phorvex-system"),
+                                ("capacity-ledger", "phorvex-system")]:
             binding = object_named(docs, "RoleBinding", "phorvex-phorvex-pod-bound-token-" + name)
             self.assertEqual(binding["metadata"]["namespace"], namespace)
             self.assertEqual(binding["subjects"], [{"kind": "ServiceAccount",
@@ -85,6 +92,10 @@ class PodBoundTokenChart(unittest.TestCase):
             ("target", ["--set", "phorvex.e2eDetector.targetNamespace=other"], "target voice"),
             ("selector", ["--set", "phorvex.console.podBoundToken.podSelectorLabel=other"], "fixed nonce label"),
             ("metrics", ["--set", "phorvex.prometheusUrl="], "Prometheus URL"),
+            ("ledger missing", ["--set-string", "phorvex.console.podBoundToken.quarantineCapacityLedgerName="], "quarantineCapacityLedgerName"),
+            ("ledger arbitrary", ["--set-string", "phorvex.console.podBoundToken.quarantineCapacityLedgerName=some-configmap"], "quarantineCapacityLedgerName"),
+            ("ledger uppercase", ["--set-string", "phorvex.console.podBoundToken.quarantineCapacityLedgerName=phorvex-quarantine-capacity-" + "A" * 40], "quarantineCapacityLedgerName"),
+            ("ledger short", ["--set-string", "phorvex.console.podBoundToken.quarantineCapacityLedgerName=phorvex-quarantine-capacity-" + "a" * 39], "quarantineCapacityLedgerName"),
         ]:
             with self.subTest(name=name):
                 result = render(*OPT_IN, *args)

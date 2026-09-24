@@ -10,6 +10,8 @@
 {{- if ne .Values.phorvex.console.podBoundToken.podSelectorLabel "fixture.phorvex.ai/token-response" }}{{ fail "podBoundToken PodMonitor must select the fixed nonce label" }}{{ end }}
 {{- if not .Values.phorvex.prometheusUrl }}{{ fail "podBoundToken requires the manager Prometheus URL" }}{{ end }}
 {{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor") }}{{ fail "podBoundToken requires the installed PodMonitor API" }}{{ end }}
+{{- $ledger := .Values.phorvex.console.podBoundToken.quarantineCapacityLedgerName }}
+{{- if not (regexMatch "^phorvex-quarantine-capacity-[0-9a-f]{40}$" $ledger) }}{{ fail "podBoundToken requires an exact reviewed quarantineCapacityLedgerName" }}{{ end }}
 ---
 # The console launches the in-cluster harness under its own ServiceAccount.
 # Kubernetes RBAC cannot scope these generated names by nonce; the fixed case
@@ -98,6 +100,33 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The harness derives the protected reservation name from the live Voice
+# Namespace UID. The reviewed value limits this read to that single ledger.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ $ledger | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
 subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.consoleServiceAccountName" . }}
