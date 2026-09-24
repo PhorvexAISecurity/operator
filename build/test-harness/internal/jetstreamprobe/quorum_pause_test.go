@@ -133,6 +133,41 @@ func processStartTicks(t *testing.T, pid int) uint64 {
 	return value
 }
 
+func quorumProcessStopped(member *quorumProcessMember) (bool, error) {
+	raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", member.cmd.Process.Pid))
+	if err != nil {
+		return false, err
+	}
+	end := strings.LastIndexByte(string(raw), ')')
+	if end < 0 {
+		return false, errors.New("quorum member process stat is malformed")
+	}
+	fields := strings.Fields(string(raw[end+1:]))
+	if len(fields) < 20 {
+		return false, errors.New("quorum member process stat lacks start time")
+	}
+	startTicks, err := strconv.ParseUint(fields[19], 10, 64)
+	if err != nil || startTicks != member.startTicks {
+		return false, errors.New("quorum member process incarnation changed")
+	}
+	return fields[0] == "T", nil
+}
+
+func waitQuorumProcessStopped(member *quorumProcessMember, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		stopped, err := quorumProcessStopped(member)
+		if err != nil {
+			return err
+		}
+		if stopped {
+			return nil
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	return fmt.Errorf("quorum member %s did not enter kernel-stopped state", member.name)
+}
+
 func TestQuorumPublicationsDisableSDKNoResponderRetries(t *testing.T) {
 	srv := startServer(t)
 	cfg := testConfig(srv.ClientURL())
@@ -217,6 +252,9 @@ func TestRealThreeProcessClusterReconcilesAmbiguousPublicationAfterQuorumPause(t
 			if err := member.cmd.Process.Signal(syscall.SIGSTOP); err != nil {
 				return boundary, observation, err
 			}
+			if err := waitQuorumProcessStopped(member, 300*time.Millisecond); err != nil {
+				return boundary, observation, err
+			}
 			entry.PauseConfirmed = true
 			entry.PausedAtUTC = time.Now().UTC().Format(time.RFC3339Nano)
 			boundary.Members = append(boundary.Members, entry)
@@ -228,6 +266,10 @@ func TestRealThreeProcessClusterReconcilesAmbiguousPublicationAfterQuorumPause(t
 		})
 		observation, resultErr = observe(ctx)
 		for i, member := range members[1:] {
+			stopped, err := quorumProcessStopped(member)
+			if err != nil || !stopped {
+				return boundary, observation, fmt.Errorf("quorum member %s resumed before observation ended: stopped=%v error=%v", member.name, stopped, err)
+			}
 			boundary.Members[i].StillPausedAtUTC = time.Now().UTC().Format(time.RFC3339Nano)
 			_ = member.cmd.Process.Signal(syscall.SIGCONT)
 			boundary.Members[i].ResumeRequested = true
