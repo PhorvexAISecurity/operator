@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -84,10 +84,10 @@ checks:
   patch_equivalence:
     result: PASS
     by: codex-lead
-    artifact: evidence/publication-equivalence.md
-    sha256: 792d1e308c5b212fb7ded6552c96b5ba02baf1f9ab86603f18f67a68108a5e7a
+    artifact: evidence/main-merge-equivalence.md
+    sha256: c2b1052baf8d1c89942ffb9c18a4280553a7d4912e691fda6582c479da7312ff
     source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
-    at: '2026-09-24T16:14:34+00:00'
+    at: '2026-09-24T17:15:21+00:00'
 fix_id: CAT-DISJOINT-ADMISSION
 issues: []
 title: Admit isolated catalogue controls while preserving unrelated Voice cleanup
@@ -157,7 +157,7 @@ next_action:
   owner: coordinator
   action: Inspect remote checks and track installed admission verification; preserve
     original Voice cleanup debt
-updated_at: '2026-09-24T16:49:02+00:00'
+updated_at: '2026-09-24T17:15:21+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T15:05:48+00:00'
@@ -242,3 +242,11 @@ handoff:
   role: coordinator
   kind: review
   revision: 7
+check_history:
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: 792d1e308c5b212fb7ded6552c96b5ba02baf1f9ab86603f18f67a68108a5e7a
+  source_sha: 6ca238edd2e89e49fec30b37d8e1c05941358008
+  at: '2026-09-24T16:14:34+00:00'
