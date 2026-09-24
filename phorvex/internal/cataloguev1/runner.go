@@ -410,12 +410,16 @@ func ValidateMetricFile(path string) error {
 	if err != nil {
 		return err
 	}
+	return validateMetricBytes(raw)
+}
+
+func validateMetricBytes(raw []byte) error {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || len(raw) > maxMetricBytes+1 || raw[len(raw)-1] != '\n' || bytes.Contains(trimmed, []byte{'\n'}) {
 		return errors.New("catalogue v1 metric file is empty, incomplete, multi-row, or exceeds its bound")
 	}
 	var projection Metric
-	if err = json.Unmarshal(trimmed, &projection); err != nil {
+	if err := json.Unmarshal(trimmed, &projection); err != nil {
 		return err
 	}
 	if strings.TrimSpace(projection.Scenario) == "" || strings.TrimSpace(projection.Defender) == "" || projection.Validity == nil {
@@ -425,11 +429,17 @@ func ValidateMetricFile(path string) error {
 }
 
 func ValidateTerminalArtifacts(job Job, result Result, metricPath string) error {
-	if err := ValidateMetricFile(metricPath); err != nil {
-		return err
-	}
 	raw, err := os.ReadFile(metricPath)
 	if err != nil {
+		return err
+	}
+	return ValidateTerminalArtifactBytes(job, result, raw)
+}
+
+// ValidateTerminalArtifactBytes applies the same terminal metric consumer to
+// bytes read through a caller-owned private, bounded descriptor.
+func ValidateTerminalArtifactBytes(job Job, result Result, raw []byte) error {
+	if err := validateMetricBytes(raw); err != nil {
 		return err
 	}
 	trimmed := bytes.TrimSpace(raw)
@@ -440,7 +450,7 @@ func ValidateTerminalArtifacts(job Job, result Result, metricPath string) error 
 		}
 	}
 	var metric Metric
-	if err = json.Unmarshal(trimmed, &metric); err != nil {
+	if err := json.Unmarshal(trimmed, &metric); err != nil {
 		return err
 	}
 	wantScenario, wantDefender := string(job.Profile), "d-functional"
