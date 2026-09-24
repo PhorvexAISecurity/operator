@@ -198,6 +198,15 @@ func TestNATSResponseCleanupQuarantinedSourceAuthorityIsExact(t *testing.T) {
 	if !natsResponseCleanupPodOwned(peer, f, "owned-rs", e, nonce) {
 		t.Fatal("exact original peer refused")
 	}
+	replacement := peer.DeepCopy()
+	replacement.Name, replacement.UID = "replacement", "replacement-uid"
+	if !natsResponseCleanupPodOwned(replacement, f, "owned-rs", e, nonce) {
+		t.Fatal("same-ReplicaSet replacement refused")
+	}
+	replacement.OwnerReferences[0].UID = "other-rs"
+	if natsResponseCleanupPodOwned(replacement, f, "owned-rs", e, nonce) {
+		t.Fatal("unrelated replacement ReplicaSet adopted")
+	}
 	peer.Labels = source.Labels
 	peer.OwnerReferences = source.OwnerReferences
 	if natsResponseCleanupPodOwned(peer, f, "owned-rs", e, nonce) {
@@ -260,6 +269,7 @@ func testNATSResponseCleanupFullFixture(t *testing.T, selected bool) {
 	source := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name + "-a", Namespace: ns, UID: "source-uid", ResourceVersion: "1", Labels: sourceLabels, OwnerReferences: owners}}
 	peer := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name + "-b", Namespace: ns, UID: "peer-uid", ResourceVersion: "1", Labels: peerLabels, OwnerReferences: owners}}
 	var effect *natsResponseEffectID
+	var replacement *corev1.Pod
 	var objects []runtime.Object
 	objects = append(objects, namespace, cm, svc, pdb, dep, rs, source, peer)
 	if selected {
@@ -270,6 +280,9 @@ func testNATSResponseCleanupFullFixture(t *testing.T, selected bool) {
 		source.Annotations = map[string]string{core.OwnedLabelKey: core.OwnedLabelValue, core.ScenarioLabelKey: natsResponseScenario,
 			core.TrialLabelKey: "0", natsResponseComponentLabel: "consumer"}
 		source.OwnerReferences = []metav1.OwnerReference{{APIVersion: "amtd.r6security.com/v1beta1", Kind: "AdaptiveMovingTargetDefense", Name: effect.AMTDName, UID: effect.AMTDUID, Controller: &yes}}
+		replacement = &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name + "-c", Namespace: ns, UID: "replacement-uid", ResourceVersion: "1",
+			Labels: peerLabels, OwnerReferences: owners}}
+		objects = append(objects, replacement)
 		objects = append(objects, &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: effect.PhoenixNetworkPolicyName, Namespace: ns, UID: effect.PhoenixNetworkPolicyUID,
 			ResourceVersion: "1", OwnerReferences: []metav1.OwnerReference{{APIVersion: "amtd.r6security.com/v1beta1", Kind: "AdaptiveMovingTargetDefense", Name: effect.AMTDName, UID: effect.AMTDUID, Controller: &yes}}},
 			Spec: networkingv1.NetworkPolicySpec{PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"amtd.r6security.com/network-policy": effect.PhoenixNetworkPolicyName}},
@@ -368,5 +381,10 @@ func testNATSResponseCleanupFullFixture(t *testing.T, selected bool) {
 	}
 	if _, err := kube.CoreV1().ConfigMaps(ns).Get(context.Background(), name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Fatalf("owned fixture remains: %v", err)
+	}
+	if replacement != nil {
+		if _, err := kube.CoreV1().Pods(ns).Get(context.Background(), replacement.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("same-ReplicaSet replacement remains: %v", err)
+		}
 	}
 }
