@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -194,4 +196,39 @@ func TestResponseConfigRejectsAliasesDuplicatesReplayAndNoPodUID(t *testing.T) {
 	if podUIDPattern.MatchString("") || podUIDPattern.MatchString("foreign uid") {
 		t.Fatal("missing or malformed Pod UID accepted")
 	}
+}
+
+func TestResponseServiceHealthRequiresFreshBrokerRoundTrip(t *testing.T) {
+	srv := testServer(t, "")
+	conn, err := nats.Connect(srv.ClientURL(), nats.NoReconnect(), nats.MaxReconnects(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	h := &responseHealth{nonce: "0123456789abcdef01234567", podUID: "owned-pod-uid", checks: make(chan struct{}, 1)}
+	request := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	check := func(want int) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, request)
+		if w.Code != want {
+			t.Fatalf("health status %d want %d: %s", w.Code, want, w.Body.String())
+		}
+		return w.Body.String()
+	}
+	check(http.StatusServiceUnavailable)
+	h.set(conn, srv.ID())
+	body := check(http.StatusOK)
+	if !strings.Contains(body, `"podUID":"owned-pod-uid"`) || !strings.Contains(body, `"serverID":"`+srv.ID()+`"`) {
+		t.Fatalf("healthy response identity differs: %s", body)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/ready", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("write method reached health route: %d", w.Code)
+	}
+	srv.Shutdown()
+	check(http.StatusServiceUnavailable)
+	h.clear()
+	check(http.StatusServiceUnavailable)
 }

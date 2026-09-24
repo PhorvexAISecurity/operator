@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -153,43 +154,56 @@ func validateNATSResponseLog(raw []byte, id natsResponseObserverIdentity, want i
 }
 
 type natsResponseSignalRequest struct {
-	Schema             string    `json:"schema"`
-	RunID              string    `json:"runId"`
-	Nonce              string    `json:"nonce"`
-	Namespace          string    `json:"namespace"`
-	NamespaceUID       types.UID `json:"namespaceUID"`
-	ClientPod          string    `json:"clientPod"`
-	ClientPodUID       types.UID `json:"clientPodUID"`
-	PeerPodUID         types.UID `json:"peerPodUID"`
-	PolicyName         string    `json:"policyName"`
-	PolicyUID          types.UID `json:"policyUID"`
-	PolicyGeneration   int64     `json:"policyGeneration"`
-	ManagerPodUID      types.UID `json:"managerPodUID"`
-	ManagerContainerID string    `json:"managerContainerID"`
-	M0ReceiptSHA256    string    `json:"m0ReceiptSHA256"`
-}
-
-type natsResponseSignalDecision struct {
 	Schema              string    `json:"schema"`
 	RunID               string    `json:"runId"`
 	Nonce               string    `json:"nonce"`
+	Namespace           string    `json:"namespace"`
+	NamespaceUID        types.UID `json:"namespaceUID"`
+	ClientPod           string    `json:"clientPod"`
 	ClientPodUID        types.UID `json:"clientPodUID"`
+	PeerPodUID          types.UID `json:"peerPodUID"`
+	PolicyName          string    `json:"policyName"`
 	PolicyUID           types.UID `json:"policyUID"`
-	EventName           string    `json:"eventName"`
-	EventUID            types.UID `json:"eventUID"`
-	AttackID            string    `json:"attackId"`
-	DecisionID          string    `json:"decisionId"`
-	DecisionTraceSHA256 string    `json:"decisionTraceSHA256"`
-	SelectedAction      string    `json:"selectedAction"`
-	DispatchOutcome     string    `json:"dispatchOutcome"`
-	EffectStatus        string    `json:"effectStatus"`
+	PolicyGeneration    int64     `json:"policyGeneration"`
+	ManagerPodUID       types.UID `json:"managerPodUID"`
+	ManagerContainerID  string    `json:"managerContainerID"`
+	M0ReceiptSHA256     string    `json:"m0ReceiptSHA256"`
+	PeerM0ReceiptSHA256 string    `json:"peerM0ReceiptSHA256"`
+}
+
+type natsResponseSignalDecision struct {
+	Schema                 string    `json:"schema"`
+	RunID                  string    `json:"runId"`
+	Nonce                  string    `json:"nonce"`
+	NamespaceUID           types.UID `json:"namespaceUID"`
+	ClientPodUID           types.UID `json:"clientPodUID"`
+	PeerPodUID             types.UID `json:"peerPodUID"`
+	PolicyUID              types.UID `json:"policyUID"`
+	PolicyGeneration       int64     `json:"policyGeneration"`
+	ManagerPodUID          types.UID `json:"managerPodUID"`
+	ManagerContainerID     string    `json:"managerContainerID"`
+	M0ReceiptSHA256        string    `json:"m0ReceiptSHA256"`
+	PeerM0ReceiptSHA256    string    `json:"peerM0ReceiptSHA256"`
+	EventName              string    `json:"eventName"`
+	EventUID               types.UID `json:"eventUID"`
+	AttackID               string    `json:"attackId"`
+	DecisionID             string    `json:"decisionId"`
+	DecisionTraceSHA256    string    `json:"decisionTraceSHA256"`
+	DecisionEvidenceSHA256 string    `json:"decisionEvidenceSHA256"`
+	SelectedAction         string    `json:"selectedAction"`
+	DispatchOutcome        string    `json:"dispatchOutcome"`
+	EffectStatus           string    `json:"effectStatus"`
+	EventCleanupStatus     string    `json:"eventCleanupStatus"`
 }
 
 var natsResponseDecisionKeys = map[string]bool{
 	"schema": true, "runId": true, "nonce": true, "clientPodUID": true,
-	"policyUID": true, "eventName": true, "eventUID": true, "attackId": true,
-	"decisionId": true, "decisionTraceSHA256": true, "selectedAction": true,
+	"namespaceUID": true, "peerPodUID": true, "policyUID": true, "policyGeneration": true,
+	"managerPodUID": true, "managerContainerID": true, "m0ReceiptSHA256": true, "peerM0ReceiptSHA256": true,
+	"eventName": true, "eventUID": true, "attackId": true,
+	"decisionId": true, "decisionTraceSHA256": true, "decisionEvidenceSHA256": true, "selectedAction": true,
 	"dispatchOutcome": true, "effectStatus": true,
+	"eventCleanupStatus": true,
 }
 
 func strictNATSResponseObject(raw []byte, keys map[string]bool) error {
@@ -232,11 +246,14 @@ func validateNATSResponseRequest(r natsResponseSignalRequest) error {
 		r.NamespaceUID == "" || r.ClientPod == "" || r.ClientPodUID == "" || r.PeerPodUID == "" ||
 		r.ClientPodUID == r.PeerPodUID || r.PolicyName != "nats-response-"+r.Nonce ||
 		r.PolicyUID == "" || r.PolicyGeneration < 1 || r.ManagerPodUID == "" ||
-		r.ManagerContainerID == "" || len(r.M0ReceiptSHA256) != 64 {
+		r.ManagerContainerID == "" || len(r.M0ReceiptSHA256) != 64 || len(r.PeerM0ReceiptSHA256) != 64 {
 		return errors.New("NATS response barrier identity incomplete")
 	}
 	if _, err := hex.DecodeString(r.M0ReceiptSHA256); err != nil || strings.ToLower(r.M0ReceiptSHA256) != r.M0ReceiptSHA256 {
 		return errors.New("NATS response M0 digest invalid")
+	}
+	if _, err := hex.DecodeString(r.PeerM0ReceiptSHA256); err != nil || strings.ToLower(r.PeerM0ReceiptSHA256) != r.PeerM0ReceiptSHA256 {
+		return errors.New("NATS response peer M0 digest invalid")
 	}
 	return nil
 }
@@ -320,6 +337,10 @@ func readNATSResponseFile(out, name string) ([]byte, error) {
 	if err != nil || !os.SameFile(info, opened) || !opened.Mode().IsRegular() {
 		return nil, errors.New("NATS response barrier file changed during read")
 	}
+	stat, ok := opened.Sys().(*syscall.Stat_t)
+	if !ok || stat.Nlink != 1 {
+		return nil, errors.New("NATS response barrier has another hard link")
+	}
 	raw, err := io.ReadAll(io.LimitReader(file, 4097))
 	if err != nil || len(raw) != int(info.Size()) {
 		return nil, errors.New("NATS response barrier file changed or exceeded bound")
@@ -346,10 +367,23 @@ func readNATSResponseDecision(out string, request natsResponseSignalRequest) (na
 		return d, errors.New("NATS response decision trailing data")
 	}
 	if d.Schema != natsResponseSchema || d.RunID != request.RunID || d.Nonce != request.Nonce ||
-		d.ClientPodUID != request.ClientPodUID || d.PolicyUID != request.PolicyUID || d.EventName == "" ||
+		d.NamespaceUID != request.NamespaceUID || d.ClientPodUID != request.ClientPodUID ||
+		d.PeerPodUID != request.PeerPodUID || d.PolicyUID != request.PolicyUID ||
+		d.PolicyGeneration != request.PolicyGeneration || d.ManagerPodUID != request.ManagerPodUID ||
+		d.ManagerContainerID != request.ManagerContainerID || d.M0ReceiptSHA256 != request.M0ReceiptSHA256 ||
+		d.PeerM0ReceiptSHA256 != request.PeerM0ReceiptSHA256 || d.EventName == "" ||
 		d.EventUID == "" || d.AttackID == "" || d.DecisionID == "" || d.DecisionTraceSHA256 == "" ||
-		d.SelectedAction == "" || d.DispatchOutcome == "" || d.EffectStatus == "" {
+		len(d.DecisionEvidenceSHA256) != 64 || strings.ToLower(d.DecisionEvidenceSHA256) != d.DecisionEvidenceSHA256 ||
+		d.SelectedAction == "" || d.DispatchOutcome == "" || d.EffectStatus == "" ||
+		d.EventCleanupStatus != "CONFIRMED_ABSENT" {
 		return d, fmt.Errorf("NATS response decision not joined to exact run")
+	}
+	if _, err := hex.DecodeString(d.DecisionEvidenceSHA256); err != nil {
+		return d, errors.New("NATS response decision evidence digest invalid")
+	}
+	if !((d.SelectedAction == "noop" && d.DispatchOutcome == "not-attempted" && d.EffectStatus == "NOT_DISPATCHED") ||
+		(d.SelectedAction == "quarantine" && d.DispatchOutcome == "emitted" && d.EffectStatus == "OBJECT_EFFECT_OBSERVED_PACKET_UNVERIFIED")) {
+		return d, errors.New("NATS response decision action/effect is not an admitted terminal barrier")
 	}
 	return d, nil
 }

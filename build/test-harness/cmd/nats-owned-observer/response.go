@@ -9,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -49,6 +52,56 @@ type responseReceipt struct {
 	PayloadSHA256      string `json:"payloadSHA256,omitempty"`
 	NonceHeaderMatches bool   `json:"nonceHeaderMatches,omitempty"`
 	PayloadHashMatches bool   `json:"payloadHashMatches,omitempty"`
+}
+
+// The response-mode consumer's Service has a real broker-dependent health
+// contract. A process that merely started, or kept a stale TCP socket, is not
+// a healthy consumer. The no-signal observer never opens this endpoint.
+type responseHealth struct {
+	mu       sync.RWMutex
+	conn     *nats.Conn
+	serverID string
+	nonce    string
+	podUID   string
+	ready    bool
+	checks   chan struct{}
+}
+
+func (h *responseHealth) set(conn *nats.Conn, serverID string) {
+	h.mu.Lock()
+	h.conn, h.serverID, h.ready = conn, serverID, true
+	h.mu.Unlock()
+}
+
+func (h *responseHealth) clear() {
+	h.mu.Lock()
+	h.ready = false
+	h.mu.Unlock()
+}
+
+func (h *responseHealth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet || r.URL.Path != "/ready" || r.URL.RawQuery != "" {
+		http.Error(w, "route unavailable", http.StatusNotFound)
+		return
+	}
+	select {
+	case h.checks <- struct{}{}:
+		defer func() { <-h.checks }()
+	default:
+		http.Error(w, "health check busy", http.StatusServiceUnavailable)
+		return
+	}
+	h.mu.RLock()
+	conn, id, ready := h.conn, h.serverID, h.ready
+	h.mu.RUnlock()
+	if !ready || conn == nil || conn.Status() != nats.CONNECTED || conn.ConnectedServerId() != id ||
+		conn.FlushTimeout(500*time.Millisecond) != nil || conn.Status() != nats.CONNECTED || conn.ConnectedServerId() != id {
+		http.Error(w, "broker connection unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]string{"nonce": h.nonce, "podUID": h.podUID, "serverID": id})
 }
 
 // Security-relevant keys are checked before struct decoding because
@@ -107,9 +160,9 @@ func loadResponseConfig(path string) (responseConfig, error) {
 func validateResponse(cfg responseConfig) error {
 	if len(cfg.Subjects) != 2 || len(cfg.ExpectedPayloadSHA256) != 2 ||
 		cfg.Subjects[0] == cfg.Subjects[1] || cfg.ExpectedPayloadSHA256[0] == cfg.ExpectedPayloadSHA256[1] ||
-		cfg.M0TimeoutMillis < 1 || cfg.M0TimeoutMillis > 45000 ||
-		cfg.M1TimeoutMillis < 1 || cfg.M1TimeoutMillis > 210000 ||
-		cfg.M0TimeoutMillis+cfg.M1TimeoutMillis+cfg.ConnectTimeoutMillis+cfg.FlushTimeoutMillis > 270000 {
+		cfg.M0TimeoutMillis < 1 || cfg.M0TimeoutMillis > 120000 ||
+		cfg.M1TimeoutMillis < 1 || cfg.M1TimeoutMillis > 300000 ||
+		cfg.M0TimeoutMillis+cfg.M1TimeoutMillis+cfg.ConnectTimeoutMillis+cfg.FlushTimeoutMillis > 360000 {
 		return errors.New("two distinct bounded response phases required")
 	}
 	for i := 0; i < 2; i++ {
@@ -172,6 +225,10 @@ func observeResponsePhase(ctx context.Context, nc *nats.Conn, sub *nats.Subscrip
 // observeResponse preflushes both subjects before M0. The same connection and
 // Pod container then wait for M1; a missing M1 remains UNKNOWN, never denial.
 func observeResponse(ctx context.Context, cfg responseConfig, podUID string, emit func(responseReceipt) error) error {
+	return observeResponseWithHealth(ctx, cfg, podUID, emit, nil, 0)
+}
+
+func observeResponseWithHealth(ctx context.Context, cfg responseConfig, podUID string, emit func(responseReceipt) error, health *responseHealth, hold time.Duration) error {
 	if validateResponse(cfg) != nil || !podUIDPattern.MatchString(podUID) || emit == nil {
 		return failedPhase("RESPONSE_IDENTITY_INVALID")
 	}
@@ -216,6 +273,10 @@ func observeResponse(ctx context.Context, cfg responseConfig, podUID string, emi
 			return failedPhase("SUBSCRIPTION_RECEIPT_FAILED")
 		}
 	}
+	if health != nil {
+		health.set(nc, serverID)
+		defer health.clear()
+	}
 	first := observeResponsePhase(ctx, nc, subs[0], cfg, podUID, serverID, 0)
 	if err := emit(first); err != nil {
 		return failedPhase("M0_RECEIPT_FAILED")
@@ -226,6 +287,13 @@ func observeResponse(ctx context.Context, cfg responseConfig, podUID string, emi
 	second := observeResponsePhase(ctx, nc, subs[1], cfg, podUID, serverID, 1)
 	if err := emit(second); err != nil {
 		return failedPhase("M1_RECEIPT_FAILED")
+	}
+	if health != nil && hold > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(hold):
+		}
 	}
 	return nil
 }
@@ -238,8 +306,35 @@ func runResponseMain(path string) {
 		os.Exit(2)
 	}
 	encoder := json.NewEncoder(os.Stdout)
-	if err := observeResponse(context.Background(), cfg, podUID,
-		func(r responseReceipt) error { return encoder.Encode(r) }); err != nil {
+	// The installed Deployment declares this literal env value and a readiness
+	// probe. Local protocol probes may omit it; they cannot masquerade as an
+	// admitted serviced consumer because the Pod spec is independently checked.
+	var health *responseHealth
+	hold := time.Duration(0)
+	if os.Getenv("NATS_RESPONSE_SERVICE") == "1" {
+		listener, listenErr := net.Listen("tcp", ":8080")
+		if listenErr != nil {
+			fmt.Fprintln(os.Stderr, "observer: HEALTH_BIND_FAILED")
+			os.Exit(2)
+		}
+		health = &responseHealth{nonce: cfg.Nonce, podUID: podUID, checks: make(chan struct{}, 1)}
+		server := &http.Server{Handler: health, ReadHeaderTimeout: time.Second, IdleTimeout: time.Second, MaxHeaderBytes: 1024}
+		go func() { _ = server.Serve(listener) }()
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_ = server.Shutdown(ctx)
+		}()
+		// Keep the same first-incarnation process available for the bounded
+		// post-M1 Service check and exact Deployment teardown. Deployment Pods
+		// may restart after this hold; replacements never become evidence.
+		hold = 90 * time.Second
+	} else if value := os.Getenv("NATS_RESPONSE_SERVICE"); value != "" {
+		fmt.Fprintln(os.Stderr, "observer: HEALTH_MODE_INVALID")
+		os.Exit(2)
+	}
+	if err := observeResponseWithHealth(context.Background(), cfg, podUID,
+		func(r responseReceipt) error { return encoder.Encode(r) }, health, hold); err != nil {
 		var phase *phaseError
 		if errors.As(err, &phase) {
 			fmt.Fprintln(os.Stderr, "observer:", phase.code)

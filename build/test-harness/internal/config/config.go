@@ -219,16 +219,22 @@ type NATSJetStreamFixtureConfig struct {
 }
 
 type NATSExposureFixtureConfig struct {
-	RunID         string `json:"runID"`
-	Nonce         string `json:"nonce"`
-	Transport     string `json:"transport"`
-	ClusterUID    string `json:"clusterUID"`
-	ConfigSHA256  string `json:"configSHA256"`
-	NodeName      string `json:"nodeName"`
-	ObserverImage string `json:"observerImage"`
-	BrokerImageID string `json:"brokerImageID"`
-	BrokerVersion string `json:"brokerVersion"`
-	MaxRunSeconds int    `json:"maxRunSeconds"`
+	// Mode is empty for the original no-signal control. The one other admitted
+	// value runs a separate, unscored injected-response lifecycle.
+	Mode              string `json:"mode,omitempty"`
+	RunID             string `json:"runID"`
+	Nonce             string `json:"nonce"`
+	Transport         string `json:"transport"`
+	ClusterUID        string `json:"clusterUID"`
+	ConfigSHA256      string `json:"configSHA256"`
+	NodeName          string `json:"nodeName"`
+	ObserverImage     string `json:"observerImage"`
+	BrokerImageID     string `json:"brokerImageID"`
+	BrokerVersion     string `json:"brokerVersion"`
+	MaxRunSeconds     int    `json:"maxRunSeconds"`
+	ManagerNamespace  string `json:"managerNamespace,omitempty"`
+	ManagerDeployment string `json:"managerDeployment,omitempty"`
+	ManagerImageID    string `json:"managerImageID,omitempty"`
 }
 
 type InstalledManagerFixtureConfig struct {
@@ -592,8 +598,23 @@ func validateNATSExposureFixture(c TargetConfig) error {
 	if !natsExposureNonce.MatchString(f.Nonce) || !natsExposureRunID.MatchString(f.RunID) {
 		return errors.New("config: natsExposureFixture requires a server-generated run ID and lowercase 96-bit nonce")
 	}
-	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-nats-uncredentialed-exposure" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" || f.MaxRunSeconds < 60 || f.MaxRunSeconds > 600 {
-		return errors.New("config: natsExposureFixture requires one bounded c2-nats-uncredentialed-exposure/d-nomtd trial")
+	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || f.MaxRunSeconds < 60 || f.MaxRunSeconds > 600 {
+		return errors.New("config: natsExposureFixture requires one bounded trial or dedicated case")
+	}
+	switch f.Mode {
+	case "":
+		if c.ScenarioFilter[0] != "c2-nats-uncredentialed-exposure" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-nomtd" || f.ManagerNamespace != "" || f.ManagerDeployment != "" || f.ManagerImageID != "" {
+			return errors.New("config: no-signal NATS fixture requires the original single d-nomtd control")
+		}
+	case "client-response":
+		if c.ScenarioFilter[0] != "c2-nats-owned-client-response" || len(c.DefenderFilter) != 0 ||
+			f.ManagerNamespace == "" || len(validation.IsDNS1123Subdomain(f.ManagerNamespace)) != 0 ||
+			f.ManagerDeployment == "" || len(validation.IsDNS1123Subdomain(f.ManagerDeployment)) != 0 ||
+			!natsExposureImage.MatchString(f.ManagerImageID) {
+			return errors.New("config: NATS response requires one unscored fixed case and exact manager source pins")
+		}
+	default:
+		return errors.New("config: NATS exposure mode unsupported")
 	}
 	if c.NATSJetStreamFixture != nil || c.InstalledManagerFixture != nil || c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: natsExposureFixture cannot share another external fixture")
