@@ -119,6 +119,13 @@ func (s *Server) scenarioObject(ns, kind, name string, out any) error {
 }
 
 func (s *Server) resolveScenarioExactTarget(ns, name, uid string) (scenarioExactTarget, error) {
+	return s.resolveScenarioExactTargetForTenant(ns, name, uid, ns)
+}
+
+// The named NATS response fixture uses a fresh, server-owned policy tenant to
+// avoid colliding with another policy in its precreated namespace. All Pod,
+// owner, selector and policy checks remain identical to ordinary exact mode.
+func (s *Server) resolveScenarioExactTargetForTenant(ns, name, uid, tenant string) (scenarioExactTarget, error) {
 	var t scenarioExactTarget
 	if err := s.scenarioObject(ns, "pod", name, &t.pod); err != nil {
 		return t, err
@@ -222,7 +229,7 @@ func (s *Server) resolveScenarioExactTarget(ns, name, uid string) (scenarioExact
 		if t.policyUID != "" {
 			return t, fmt.Errorf("exact target matches multiple policies")
 		}
-		if policy.UID == "" || policy.ResourceVersion == "" || policy.Generation <= 0 || policy.Spec.EffectiveMode() != v1alpha1.ModeActive || policy.EffectiveTenant() != ns {
+		if policy.UID == "" || policy.ResourceVersion == "" || policy.Generation <= 0 || policy.Spec.EffectiveMode() != v1alpha1.ModeActive || policy.EffectiveTenant() != tenant {
 			return t, fmt.Errorf("exact target matching policy is not active for this tenant")
 		}
 		t.policyName, t.policyUID, t.policyGen = policy.Name, string(policy.UID), policy.Generation
@@ -234,7 +241,11 @@ func (s *Server) resolveScenarioExactTarget(ns, name, uid string) (scenarioExact
 }
 
 func (s *Server) recheckScenarioExactTarget(ns, name, uid string, original scenarioExactTarget) error {
-	current, err := s.resolveScenarioExactTarget(ns, name, uid)
+	return s.recheckScenarioExactTargetForTenant(ns, name, uid, ns, original)
+}
+
+func (s *Server) recheckScenarioExactTargetForTenant(ns, name, uid, tenant string, original scenarioExactTarget) error {
+	current, err := s.resolveScenarioExactTargetForTenant(ns, name, uid, tenant)
 	if err != nil {
 		return err
 	}

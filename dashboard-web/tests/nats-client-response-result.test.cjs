@@ -17,7 +17,7 @@ const observed = {
   accepted: true, cleanupVerified: true, m0Status: "EXPOSED", signalStatus: "INJECTED_EVENT_UID_JOINED",
   decisionStatus: "EXACT_EVENT_DECISION", selectedAction: "quarantine", dispatchOutcome: "emitted",
   effectStatus: "OBJECT_EFFECT_OBSERVED_PACKET_UNVERIFIED", m1Status: "CONTINUING_EXPOSURE",
-  peerStatus: "READY_AND_RESPONSIVE", cleanupStatus: "CONFIRMED_ABSENT", securityEfficacy: "NOT_EVALUATED", issues: [],
+  peerStatus: "READY_AND_RESPONSIVE", cleanupStatus: "CONFIRMED_ABSENT", capacityReservationStatus: "UNRECONCILED_POSSIBLE", repeatability: "UNKNOWN", securityEfficacy: "NOT_EVALUATED", issues: [],
   decisionTrace: { schema: "nats-client-response-decision-evidence-v1", decisionId: "decision-1", tickId: "tick-1",
     eventName: "event-1", eventUID: "event-uid-1", brainImage: "manager@sha256:abc", brainImageSHA256: "a".repeat(64), gitSHA: "git-1",
     inputPhase: "delivery", inputStage: "execution", pHold: { present: false, value: 0 },
@@ -40,6 +40,9 @@ test("joined source and object effects remain separate from packet isolation", (
   assert.match(html, /Selected action/);
   assert.match(html, /Same-connection M1/);
   assert.match(html, /Legitimate peer/);
+  assert.match(html, /Owned fixture cleanup/);
+  assert.match(html, /Protected capacity reservation/);
+  assert.match(html, /reservation may remain; repeatability is unverified/);
   assert.match(html, /Exact event-bound brain trace/);
   assert.match(html, /rotate: capacity/);
   assert.match(html, /peer capacity gate/);
@@ -61,6 +64,15 @@ test("missing M1 or cleanup leaves original observation unaccepted and unsafe", 
   assert.doesNotMatch(html, />DEFENDED</);
 });
 
+test("partial run retains bounded WHY without a terminal-barrier or repeatability claim", () => {
+  const html = render({ ...observed, accepted: false, cleanupVerified: true, decisionStatus: "RUN_OWNED_WHY_BARRIER_UNVERIFIED",
+    m1Status: "UNKNOWN", capacityReservationStatus: "UNKNOWN", repeatability: "UNKNOWN", securityEfficacy: "NOT_EVALUATED" });
+  assert.match(html, /Run-owned decision projection · terminal barrier unverified/);
+  assert.match(html, /Protected capacity reservation status is unknown/);
+  assert.match(html, /data-nats-response-result="unverified"/);
+  assert.doesNotMatch(html, /Security outcome: CONTAINMENT NOT ACHIEVED/);
+});
+
 test("a terminal negative containment outcome names continuing access without defense credit", () => {
   const html = render({ ...observed, securityEfficacy: "CONTAINMENT_NOT_ACHIEVED" });
   assert.match(html, /CONTAINMENT NOT ACHIEVED in this owned trial/);
@@ -76,4 +88,11 @@ test("incompatible security claim is refused by the presentation boundary", () =
   assert.match(mismatch, /incompatible claim contract/);
   const unbound = render({ ...observed, decisionTrace: { ...observed.decisionTrace, selectedAction: "rotate" } });
   assert.match(unbound, /incompatible claim contract/);
+});
+
+test("all bounded action exclusions remain visible", () => {
+  const gates = Array.from({ length: 17 }, (_, index) => ({ action: `action-${index}`, status: "ineligible", exclusionKind: "capacity", reason: `reason-${index}` }));
+  const html = render({ ...observed, decisionTrace: { ...observed.decisionTrace, actionStatus: gates } });
+  assert.match(html, /action-16: ineligible/);
+  assert.match(html, /reason-16/);
 });

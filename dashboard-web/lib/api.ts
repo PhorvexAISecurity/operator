@@ -571,6 +571,7 @@ export interface NATSResponseDecisionTrace {
   managerPodUID: string;
   managerContainerID: string;
   m0ReceiptSHA256: string;
+  peerM0ReceiptSHA256: string;
   decisionId: string;
   tickId: string;
   eventName: string;
@@ -591,7 +592,7 @@ export interface NATSResponseDecisionTrace {
   noopReason: string;
   dispatchOutcome: string;
   dispatchReason: string;
-  objectEffect?: { generatedEventName: string; generatedEventUID: string; operationID: string; amtdName: string; amtdUID: string; phoenixNetworkPolicyName: string; phoenixNetworkPolicyUID: string; canonicalNetworkPolicyName: string; canonicalNetworkPolicyUID: string; sourcePodUID: string; peerPodUID: string };
+  objectEffect?: { generatedEventName: string; generatedEventUID: string; operationID: string; amtdName: string; amtdUID: string; phoenixNetworkPolicyName: string; phoenixNetworkPolicyUID: string; sourcePodUID: string; peerPodUID: string };
   claim: string;
 }
 export interface NATSResponseResult {
@@ -606,6 +607,8 @@ export interface NATSResponseResult {
   m1Status: string;
   peerStatus: string;
   cleanupStatus: string;
+  capacityReservationStatus: "UNKNOWN" | "NOT_APPLICABLE" | "UNRECONCILED_POSSIBLE";
+  repeatability: "UNKNOWN" | "NOT_EVALUATED";
   securityEfficacy: "NOT_EVALUATED" | "CONTAINMENT_NOT_ACHIEVED";
   decisionTrace?: NATSResponseDecisionTrace;
   issues: string[];
