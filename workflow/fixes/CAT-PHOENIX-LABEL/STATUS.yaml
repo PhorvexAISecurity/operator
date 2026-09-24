@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -109,12 +109,19 @@ checks:
     source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
     at: '2026-09-24T10:01:31+00:00'
     incident_sha256: 44eb6c0cf860f7a95c451f4586a945344eb2214d0356eb82178897a0fb9aa8e6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: c6d8cfda1ba0f18abc07aa31ab0f2c22fed5eaed2a59e0124325b31a99e83485
+    source_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
+    at: '2026-09-24T10:07:33+00:00'
 fix_id: CAT-PHOENIX-LABEL
 issues:
 - M-53
 title: Bound Phoenix quarantine names for Kubernetes labels
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -141,8 +148,8 @@ implementation:
   head_sha: 36f5eada3f1abce23555736e3fc1f87dbd4bb615
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/324
+  reviewed_head: bc5099677d5e9897786bf5fde814988bcd44419a
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -175,10 +182,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T10:01:36+00:00'
+  owner: codex-lead
+  action: Inspect required remote checks; merge own reviewed PR when eligible; retain
+    separate installed verification
+updated_at: '2026-09-24T10:07:34+00:00'
 configuration_history:
 - at: '2026-09-24T09:03:05+00:00'
   by: codex-lead
@@ -197,6 +204,11 @@ configuration_history:
   by: catalogue-reference-review
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-24T10:07:32+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -246,6 +258,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T10:07:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-PHOENIX-LABEL:9:review

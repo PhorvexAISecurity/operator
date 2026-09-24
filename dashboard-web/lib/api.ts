@@ -155,6 +155,14 @@ export interface CatalogItem {
   profile?: string; available?: boolean; unavailableReason?: string;
   runtimeContext?: string;
 }
+export type FunctionalAdmissionReason = "READY" | "CONFIG_UNAVAILABLE" | "RUNTIME_UNAVAILABLE" | "RETAINED_STATE_UNAVAILABLE" | "PRIOR_UNSAFE_FIXED_SUITE" | "CONCURRENCY_LIMIT" | "RATE_LIMIT";
+export interface FunctionalAdmission {
+  profile: string;
+  observedAt: string;
+  launchable: boolean;
+  reasonCode: FunctionalAdmissionReason;
+  message: string;
+}
 export interface BenchArm { defender: string; disruption: CI; dwell: CI; harmRate: CI; trials: number }
 export interface BenchGroup { scenario: string; source: string; arms: BenchArm[] }
 export interface CoverageTechnique { technique: string; scenarios: string[]; product: string; covered: boolean }
@@ -264,6 +272,8 @@ export const api = {
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
   startFunctional: (profile: string, lens: Lens) =>
     post<{ id: string; context: string }>("/api/runs/functional", { profile, startedAt: new Date().toLocaleTimeString() }, lens),
+  functionalAdmission: (profile: string, lens: Lens, signal?: AbortSignal) =>
+    get<FunctionalAdmission>(`/api/runs/functional/admission?profile=${encodeURIComponent(profile)}`, lens, signal),
   version: (lens: Lens, signal?: AbortSignal) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens, signal),
   vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),

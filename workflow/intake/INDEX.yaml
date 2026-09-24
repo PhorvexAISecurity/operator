@@ -317,3 +317,10 @@ intakes:
     state: FILED
     issue_id: M-193
     aliases: []
+  RPT-20260924-102500-functional-admission-visibility:
+    directory: intake/RPT-20260924-102500-functional-admission-visibility
+    kind: BUG
+    title: Fixed-suite catalogue hides current launch admission blockers
+    state: FILED
+    issue_id: M-194
+    aliases: []
