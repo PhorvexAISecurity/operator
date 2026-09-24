@@ -11,9 +11,9 @@ evidence:
   scenario_source: build/test-harness/scenarios
 accounting:
   unit: workload-trust-boundary-input-mode-effect candidate cell
-  candidate_cells: 32
+  candidate_cells: 33
   mechanism_or_control_cells: 19
-  behavioral_security_cells: 13
+  behavioral_security_cells: 14
   admitted_by_this_matrix: 0
   rule: These are planning cells, not registered scenarios or completed runs. Count every candidate and
     explicit scoped/excluded area in the coverage ledger. A security success-rate denominator includes
@@ -25,6 +25,8 @@ event_modes:
   real_detector_unverified: Requires an independently identified real producer, event and target join.
   injected_response_only: Injected event tests response wiring, never natural detection.
   no_current_path: No verified producer or admissible installed path at this baseline.
+  configuration_baseline: Declared synthetic confidentiality objective under current config, with no alert
+    or installed-response claim.
 cells:
 - id: voice-stream-continuity
   stack: voice
@@ -146,6 +148,29 @@ cells:
     predicates if config/image changes; an isolated affected-versus-fixed fixture would be upstream-only.
   source_gap: Installed advisory rule predicate is absent; no NATS subject detector or attacker account
     is evidenced, and no CVE case is admitted.
+- id: nats-uncredentialed-message-exposure
+  stack: nats
+  kind: S
+  disposition: new
+  source_ids: []
+  event_mode: configuration_baseline
+  objective: Measure whether an independent uncredentialed cluster client obtains one nonce-owned synthetic
+    message designated for the fixture intended consumer.
+  required_effect: Independent remote payload and legitimate consumer observations, then separately attributable
+    response comparison when a response is actually admitted.
+  threat_oracle: Exact remote client PodUID, connected brokerServerID, flushed concrete nonce subject,
+    message nonce header and independently matching payload SHA256. The intended-consumer rule is preregistered
+    fixture intent, not a claimed installed ACL.
+  service_oracle: Same-message real JetStream PubAck, intended consumer DoubleAck and stored readback
+    hash; exact Service membership/readiness and owned cleanup.
+  present_constraints: Installed broker has no client identity or subject ACL; current behavior may therefore
+    expose the synthetic message by configuration. Source protocol tests pass locally; remote client baseline
+    is not yet executed. No natural detector or active mitigation is established.
+  next_step: Review separately executable observer and bounded owned-Pod coordinator, re-pin current route/source
+    identities and admit a no-signal baseline with its explicit synthetic confidentiality objective.
+  source_gap: Configuration exposure does not close the separate subject-authorization/CVE cell. No permission
+    bypass, existing-customer exposure, natural detection or Phorvex failure is inferred. Keep defense
+    NOT_EVALUATED without the full admitted comparison.
 - id: vllm-prefix-cache
   stack: vllm
   kind: M
@@ -632,4 +657,11 @@ scope_decisions:
   disposition: excluded-from-stimulus
   evidence: Campaign authorization is bounded to owned fixtures and independently measured service outcomes.
   revisit: No automatic expansion; require a separately reviewed and authorized case.
-updated_at: '2026-09-24T02:07:30.623162+00:00'
+updated_at: '2026-09-24T02:32:37.206813+00:00'
+scope_revisions:
+- at: '2026-09-24'
+  change: Add nats-uncredentialed-message-exposure separately from existing subject ACL/advisory cell
+  reason: Observed no-auth broker is a different test boundary; preserve ACL cell and truthful denominator
+  reviewer: campaign-coverage-plan
+  lead: codex-lead
+  effect: 33 candidate cells, no admission or live outcome by matrix change
