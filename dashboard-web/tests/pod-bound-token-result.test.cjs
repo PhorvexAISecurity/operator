@@ -19,11 +19,13 @@ const observation = {
   schema: "pod-bound-token-result-v1", runID: "run-1", nonce: "owned-nonce", terminalStatus: "COMPLETE",
   mechanismObserved: false, securityEfficacy: "NOT_EVALUATED", signalMode: "explicit-injected-typed-event",
   stages,
-  admission: { clusterUID: "cluster-uid", namespace: "voice", namespaceUID: "namespace-uid", managerPodUID: "manager-uid", policyUID: "policy-uid", policyGeneration: 4, policySpecSHA256: "b".repeat(64), profileSHA256: "c".repeat(64), sourcePodUID: "source-uid", peerPodUID: "peer-uid", serviceUID: "service-uid", available: true, unavailableReason: "" },
-  event: { uid: "event-uid", kind: "phorvex.attack.pod-bound-api-auth", creator: "admitted-creator", sourcePodUID: "source-uid", trustVerified: true },
+  admission: { clusterUID: "cluster-uid", namespace: "voice", namespaceUID: "namespace-uid", managerPodUID: "manager-uid", managerContainerID: "containerd://manager", managerImageID: "manager@sha256:abc", policyUID: "policy-uid", policyGeneration: 4, policySpecSHA256: "b".repeat(64), profileSHA256: "c".repeat(64), sourcePodUID: "source-uid", peerPodUID: "peer-uid", serviceUID: "service-uid", deploymentUID: "deployment-uid", replicaSetUID: "replicaset-uid", available: true, unavailableReason: "" },
+  event: { uid: "event-uid", kind: "phorvex.attack.pod-bound-api-auth", creator: "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector", sourcePodUID: "source-uid", trustVerified: true },
   decision: { id: "decision-id", selectedAction: "noop", dispatchOutcome: "not-attempted", costCeiling: 1.2, rotateStatus: "conformal-slo", rotateReason: "conformal-slo: worst-case cost 1.60 > ceiling 1.20", rotateExpectedCost: 0.82, rotateHighCost: 1.6, requestRateStatus: "MISSING_REQUEST_RATE", flowRegime: "missing-load", quarantineStatus: "infeasible", quarantineReason: "quarantine-capacity-exhausted: used=1 limit=1", quarantineUsed: 1, quarantineLimit: 1, auditCoverage: "COMPLETE" },
   operation: { terminationStatus: "NOT_DISPATCHED", originalPodAbsent: false, receiptSHA256: "" },
-  replay: { sourceBeforeHTTP: 200, sourceAfterHTTP: 200, sourceExpiry: "2026-09-24T15:10:00Z", sourceAfterAt: "2026-09-24T15:00:06.500Z", peerBeforeHTTP: 200, peerAfterHTTP: 200, serviceBeforeHTTP: 200, serviceAfterHTTP: 200, sameSourceHandle: true, samePeerHandle: true },
+  replay: { sourceBeforeHTTP: 200, sourceAfterHTTP: 200, sourceExpiry: "2026-09-24T15:10:00Z", sourceAfterAt: "2026-09-24T15:00:06.500Z", peerBeforeHTTP: 200, peerAfterHTTP: 200, serviceBeforeHTTP: 200, serviceAfterHTTP: 200, sameSourceHandle: true, samePeerHandle: true,
+    sourceBeforeCaptureID: "capture-source", sourceAfterCaptureID: "capture-source", peerBeforeCaptureID: "capture-peer", peerAfterCaptureID: "capture-peer", serviceMemberPodUID: "peer-uid", serviceAfterAt: "2026-09-24T15:00:06.700Z", serviceAfterServiceUID: "service-uid", serviceAfterEndpointSliceUID: "slice-uid", serviceMemberReady: true, serviceMemberOwnerDeploymentUID: "deployment-uid" },
+  telemetry: { producerStatus: "MEASURED_FRESH", firstAt: "2026-09-24T15:00:02.500Z", secondAt: "2026-09-24T15:00:03.500Z", firstValue: 20, secondValue: 27, sourcePodName: "source-pod", podMonitorUID: "monitor-uid", querySHA256: "f".repeat(64) },
   cleanup: { status: "CONFIRMED_ABSENT", inventorySHA256: "d".repeat(64), absent: true },
 };
 
@@ -34,6 +36,10 @@ test("complete injected no-op shows real cost, capacity and telemetry causes wit
   for (const code of ["NOOP_COST_GATE_AND_CAPACITY", "MISSING_REQUEST_RATE", "NOT_DISPATCHED", "source-uid", "peer-uid", "service-uid", "policy-uid", "1\.6", "1\.2"]) assert.match(html, new RegExp(code));
   assert.match(html, /explicitly injected/);
   assert.match(html, /Natural detection and calibrated defense efficacy are NOT EVALUATED/);
+  assert.match(html, /This-run cleanup does not certify that unrelated earlier Voice or quarantine reservations are absent/);
+  assert.match(html, /Fixture scrape:.*MEASURED_FRESH/);
+  assert.match(html, /manager decision: MISSING_REQUEST_RATE/);
+  assert.match(html, /fixture recorded fresh source-Pod samples, but the manager did not record a fresh request-rate input/);
   assert.doesNotMatch(html, /ROTATE_CREDENTIAL_MECHANISM_OBSERVED|data-pod-bound-token-result="mechanism-observed"/);
 });
 
@@ -47,8 +53,17 @@ test("only full same-handle 200-to-401 before-expiry chain displays mechanism ob
   assert.match(html, /ROTATE_CREDENTIAL_MECHANISM_OBSERVED/);
   for (const changed of [
     { ...positive, decision: { ...positive.decision, dispatchOutcome: "not-attempted" } },
+    { ...positive, decision: { ...positive.decision, selectedAction: "noop" } },
     { ...positive, decision: { ...positive.decision, requestRateStatus: "MISSING_REQUEST_RATE" } },
+    { ...positive, telemetry: { ...positive.telemetry, producerStatus: "MISSING_REQUEST_RATE" } },
+    { ...positive, telemetry: { ...positive.telemetry, secondAt: "2026-09-24T15:00:05Z" } },
     { ...positive, admission: { ...positive.admission, peerPodUID: "source-uid" } },
+    { ...positive, replay: { ...positive.replay, sourceAfterCaptureID: "recaptured-source" } },
+    { ...positive, replay: { ...positive.replay, peerAfterCaptureID: "recaptured-peer" } },
+    { ...positive, replay: { ...positive.replay, serviceAfterServiceUID: "foreign-service" } },
+    { ...positive, replay: { ...positive.replay, serviceMemberOwnerDeploymentUID: "foreign-deployment" } },
+    { ...positive, replay: { ...positive.replay, serviceMemberReady: false } },
+    { ...positive, replay: { ...positive.replay, serviceAfterAt: "2026-09-24T15:00:08.500Z" } },
     { ...positive, operation: { ...positive.operation, originalPodAbsent: false } },
     { ...positive, replay: { ...positive.replay, sourceAfterHTTP: 403 } },
     { ...positive, replay: { ...positive.replay, sourceAfterAt: "2026-09-24T15:11:00Z" } },
@@ -76,10 +91,15 @@ test("missing witnesses stay visibly UNKNOWN with no credential claim", () => {
     securityEfficacy: "NOT_EVALUATED", signalMode: "explicit-injected-typed-event", stages: [] }, true);
   assert.match(html, /data-pod-bound-token-result="observation-only"/);
   assert.match(html, /UNKNOWN: no stage receipts projected/);
-  assert.match(html, /Cleanup or protected capacity may remain unresolved/);
+  assert.match(html, /This run&#x27;s exact cleanup or source reservation remains unresolved/);
   assert.doesNotMatch(html, /ROTATE_CREDENTIAL_MECHANISM_OBSERVED/);
   const unsafe = render({ ...observation, terminalStatus: "UNSAFE" });
-  assert.match(unsafe, /Do not retry this run until exact reconciliation confirms safety/);
+  assert.match(unsafe, /Do not retry until exact reconciliation confirms safety/);
+  const priorDebt = render(observation, true);
+  assert.match(priorDebt, /this-run owned graph and source reservation absent: yes/);
+  assert.match(priorDebt, /Run status forbids retry/);
+  assert.match(priorDebt, /Prior debt is checked separately by server admission/);
+  assert.doesNotMatch(priorDebt, /ROTATE_CREDENTIAL_MECHANISM_OBSERVED/);
 });
 
 test("wrong schema or asserted defense efficacy is never rendered as accepted", () => {
