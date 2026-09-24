@@ -13,6 +13,7 @@ import { LIVE_SELECTION_EVENT, LiveSelectionEvent, clearLiveSelection, readLiveS
 import { useExactRecord, useQueryScope, useRunEvidence } from "@/lib/query";
 import { emitQueryChange } from "@/lib/query-events";
 import { trialOutcomeDisplay } from "@/lib/trial-outcome";
+import { NATSClientResponseResult } from "@/components/panels/nats-client-response-result";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -58,7 +59,7 @@ function NATSReconcileAction({ run, lens }: { run: RunStatus; lens: Lens }) {
 }
 
 // Full per-run evidence ledger (per-arm aggregates + per-trial rows with attack command steps).
-function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?: string }) {
+function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: string; lens: Lens; runErr?: string; runConfig?: string; unsafeToRetry?: boolean }) {
   const [openTrial, setOpenTrial] = React.useState<string>("");
   const evidence = useRunEvidence(id, lens);
   if (evidence.error) return <div className="text-[12px] text-danger">{String((evidence.error as Error).message || evidence.error)} <button className="text-primary" onClick={() => evidence.refetch()}>Retry</button></div>;
@@ -86,6 +87,8 @@ function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?:
         <div className="mt-1 text-muted-foreground">Separate Pod: {ev.configurationResult.remoteStatus} · legitimate ACK: {ev.configurationResult.legitimateAcked ? "confirmed" : "unverified"} · stream: {ev.configurationResult.streamCleanup} · observer: {ev.configurationResult.observerCleanup} · fixture resources: {ev.configurationResult.fixtureResourcesCleanup}</div>
         {ev.configurationResult.issues?.map((issue) => <div key={issue} className="mt-1 text-warning">unverified: {issue}</div>)}
       </div>}
+      {ev.natsResponseResult && <NATSClientResponseResult result={ev.natsResponseResult} unsafeToRetry={unsafeToRetry} />}
+      {runConfig === "nats-client-response" && !ev.natsResponseResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact NATS response evidence is unavailable or incomplete. No injected-signal outcome, packet isolation, or defense result is accepted.</div>}
 
       {/* per-arm evidence ledger */}
       <div className="overflow-x-auto">
@@ -289,7 +292,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                         <tr className="border-t border-border/20 bg-elevated/20">
                           <td colSpan={8} className="px-4 py-3">
                             <NATSReconcileAction run={r} lens={lens} />
-                            <EvidenceDetail id={r.id} lens={lens} runErr={r.error} />
+                            <EvidenceDetail id={r.id} lens={lens} runErr={r.error} runConfig={r.config} unsafeToRetry={r.unsafeToRetry} />
                           </td>
                         </tr>
                       )}

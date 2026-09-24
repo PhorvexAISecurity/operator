@@ -168,7 +168,7 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		defer fence.Close()
 		natsFenceIdentity = identity
 		defer func() {
-			if runErr != nil && !enteredMatrix {
+			if runErr != nil && !enteredMatrix && f.Mode != "client-response" {
 				writeErr := scenarios.WriteNATSNoEffect(cfg.OutDir, scenarios.NATSNoEffectReceipt{Schema: "nats-baseline-no-effect-v1", RunID: f.RunID, Nonce: f.Nonce, Namespace: cfg.Namespace, ClusterUID: types.UID(f.ClusterUID), Phase: "PRE_MATRIX_REFUSED"})
 				runErr = errors.Join(runErr, writeErr)
 			}
@@ -237,6 +237,9 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 			fmt.Printf("  %s: %s\n", k, v)
 		}
 		return nil
+	}
+	if cfg.NATSExposureFixture != nil && cfg.NATSExposureFixture.Mode == "client-response" {
+		return runNATSResponseCase(ctx, cfg, clients, guard, caps, natsFenceIdentity)
 	}
 
 	// 4) Prepare output dirs + metrics writer.
@@ -446,6 +449,31 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		state, outcome.PlannedTrials, outcome.ExecutedTrials, outcome.WrittenTrials, len(metrics), metricsPath, repPath, provPath, mitrePath, inventoryPath, dollarsPath)
 	// Both failures matter and neither masks the other.
 	return errors.Join(matrixErr, finalErr)
+}
+
+// The fixed injected-response profile is one causal case, not a scored
+// scenario x defender matrix. In particular it cannot inherit d-nomtd or
+// synthesize an actuator-success metric from a response hint.
+func runNATSResponseCase(ctx context.Context, cfg config.TargetConfig, clients *kube.Clients,
+	guard core.SafetyGuard, caps core.Capabilities, fenceIdentity string) (runErr error) {
+	if err := scenarios.ClaimNATSResponseRun(cfg.OutDir, cfg.NATSExposureFixture.RunID, cfg.NATSExposureFixture.Nonce); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.OutDir, "raw"), 0700); err != nil {
+		return err
+	}
+	logger, err := core.NewTrialLogger(filepath.Join(cfg.OutDir, "raw", "nats-client-response.log"), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { runErr = errors.Join(runErr, closeLogger(logger)) }()
+	env := &core.Env{Ctrl: clients.Ctrl, Kube: clients.Kube, Rest: clients.Rest, Config: cfg,
+		Caps: caps, Log: logger, Guard: guard, Trial: 0, ScenarioName: "c2-nats-owned-client-response",
+		DefenderName: "injected-response", RestConfigHost: clients.LiveHost, NATSFenceIdentity: fenceIdentity}
+	if err := env.EnsureNamespace(ctx); err != nil {
+		return err
+	}
+	return scenarios.RunNATSClientResponse(ctx, env)
 }
 
 func natsRunContext(parent context.Context, fixture *config.NATSExposureFixtureConfig) (context.Context, context.CancelFunc) {

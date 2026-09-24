@@ -40,3 +40,39 @@ func TestNATSExposureConfigOneUseContract(t *testing.T) {
 		})
 	}
 }
+
+func TestNATSResponseConfigIsOneUnscoredCase(t *testing.T) {
+	base := validNATSExposureConfig()
+	base.NATSExposureFixture.Mode = "client-response"
+	base.NATSExposureFixture.ManagerNamespace = "phorvex-system"
+	base.NATSExposureFixture.ManagerDeployment = "phorvex-phorvex"
+	base.NATSExposureFixture.ManagerImageID = "docker.io/phorvex/manager@sha256:" + strings.Repeat("d", 64)
+	base.ScenarioFilter = []string{"c2-nats-owned-client-response"}
+	base.DefenderFilter = nil
+	if err := validateNATSExposureFixture(base); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*TargetConfig)
+	}{
+		{"generic no-MTD arm", func(c *TargetConfig) { c.DefenderFilter = []string{"d-nomtd"} }},
+		{"wrong scenario", func(c *TargetConfig) { c.ScenarioFilter = []string{"c2-nats-uncredentialed-exposure"} }},
+		{"manager tag instead of image ID", func(c *TargetConfig) { c.NATSExposureFixture.ManagerImageID = "manager:latest" }},
+		{"missing manager namespace", func(c *TargetConfig) { c.NATSExposureFixture.ManagerNamespace = "" }},
+		{"unsupported mode", func(c *TargetConfig) { c.NATSExposureFixture.Mode = "other" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			copy := base
+			fixture := *base.NATSExposureFixture
+			copy.NATSExposureFixture = &fixture
+			tc.change(&copy)
+			if err := validateNATSExposureFixture(copy); err == nil {
+				t.Fatal("response fixture variation accepted")
+			}
+		})
+	}
+	if err := validateNATSExposureFixture(validNATSExposureConfig()); err != nil {
+		t.Fatalf("original no-signal config regressed: %v", err)
+	}
+}
