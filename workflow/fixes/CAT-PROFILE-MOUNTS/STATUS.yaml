@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 15
+revision: 17
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -84,10 +84,10 @@ checks:
   patch_equivalence:
     result: PASS
     by: codex-lead
-    artifact: evidence/publication-equivalence.md
-    sha256: cbe8f7655cdcf6365ae766816a39539292951e88b0fa75cf2236f124a74974a1
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:52:07+00:00'
+    artifact: evidence/portable-publication-equivalence.md
+    sha256: 79df43b38be809291c5aa45dd06e93e992a3816459d71f7c8941d50237f59b41
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:20:14+00:00'
 fix_id: CAT-PROFILE-MOUNTS
 issues: []
 title: Make fixed Mongo and static guardrail profiles configurable through reviewed
@@ -121,7 +121,7 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/332
-  reviewed_head: b695741be38111211a1756f1b05585057e1b99f9
+  reviewed_head: 7a19602a2c9630db39eef0b7f5f643d77633885e
   merge_sha: null
   checks: pending
   patch_equivalence: PASS
@@ -157,7 +157,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-24T21:19:24+00:00'
+updated_at: '2026-09-24T21:20:14+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -183,6 +183,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-24T21:20:14+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -324,6 +329,13 @@ check_history:
   source_sha: f71f16529769e26d55725ee798d774c5f74d0808
   at: '2026-09-24T18:51:07+00:00'
   incident_sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: cbe8f7655cdcf6365ae766816a39539292951e88b0fa75cf2236f124a74974a1
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:52:07+00:00'
 handoff:
   id: CAT-PROFILE-MOUNTS:15:review
   from: codex-lead
