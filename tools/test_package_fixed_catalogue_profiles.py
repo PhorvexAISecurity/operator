@@ -9,7 +9,10 @@ from types import SimpleNamespace
 
 import yaml
 
-import package_fixed_catalogue_profiles as pack
+if __package__:
+    from . import package_fixed_catalogue_profiles as pack
+else:
+    import package_fixed_catalogue_profiles as pack
 
 
 def sha(raw):
