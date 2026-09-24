@@ -1,0 +1,5 @@
+--- FAIL: TestFunctionalLaunchRefusesUnknownRetainedRunState (0.00s)
+    functional_load_error_overlay_test.go:47: unknown retained fixed-suite state admitted or changed: id="v1run-1" err=<nil> seq=1 runs=1 ledgerChanged=true
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	0.022s
+FAIL
