@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -93,7 +93,7 @@ issues: []
 title: Make fixed Mongo and static guardrail profiles configurable through reviewed
   chart mounts
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -120,11 +120,11 @@ implementation:
   head_sha: f71f16529769e26d55725ee798d774c5f74d0808
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/332
+  reviewed_head: b695741be38111211a1756f1b05585057e1b99f9
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -155,9 +155,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-24T18:52:07+00:00'
+  action: Track PR332 checks and normal deployment; verify mounted exact profiles
+    and named scenarios after current source and configuration are installed
+updated_at: '2026-09-24T18:53:01+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -173,6 +173,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-24T18:52:59+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -221,6 +226,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T18:53:01+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision
