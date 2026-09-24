@@ -1,0 +1,234 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 8
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 563c40d33700111190f5869a9501e92415263cf845aab2e0e1d6f8d5bedad738
+    source_sha: a50d796af128cd4109875e03eaf429d460126740
+    at: '2026-09-24T00:57:13+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Align redundant fixture count with minimal independently reproduced
+      counterexample; no target guarantee, predicate coverage or evidence level waived
+  red:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/implementer-baseline-red.log
+    sha256: 2f8be0e236020169b59c743c9cab2a660f8db3efcb1cad0adc2ae92a4f5fc73a
+    source_sha: a50d796af128cd4109875e03eaf429d460126740
+    at: '2026-09-24T00:47:42+00:00'
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 47c5fccd1acf69e4ecb7eb22e4d9f4b54aa4b39be1f3c6ce79f8b92293f986dd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:55+00:00'
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: b6ce2c6721ee362f62015b330cf012094b9e3a66b025fa3d3a3b9d04f422d165
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:55+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l0-go-phorvex.log
+    sha256: 5841a13419b313167856c8e8845a6b4739072ce99d166fab6d471ecd8d202ddd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:55+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/implementer-head-focused.log
+    sha256: 2a110627ef3697f3c7d85a1d72fbfca751bac19caac4668934cda658594a3063
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:55+00:00'
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l2-behavioral-comparison.md
+    sha256: 538a95d7433298b5505ff20c5b95106c16f33d3aca3cc713812885584f5ed4e8
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:55+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/implementer-head-focused.log
+    sha256: 2a110627ef3697f3c7d85a1d72fbfca751bac19caac4668934cda658594a3063
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:55+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4f239b906aee79681b64f5ade50502472151947c1c2d44b6bd47806982d7aabc
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:50+00:00'
+    baseline_sha: a50d796af128cd4109875e03eaf429d460126740
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 74a886154c94efcb4b2622e7eee319f9174a254df6fb8fa275e4d776c97e7f42
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:50+00:00'
+    incident_sha256: 4f239b906aee79681b64f5ade50502472151947c1c2d44b6bd47806982d7aabc
+fix_id: CAT-EXACT-TARGET
+issues: []
+title: Bind catalogue signal targeting and manager evidence to exact Pod identity
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: campaign-coverage-plan
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: a50d796af128cd4109875e03eaf429d460126740
+  deployed_image: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: a50d796af128cd4109875e03eaf429d460126740
+  head_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T01:06:54+00:00'
+configuration_history:
+- at: '2026-09-24T00:20:45+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T01:05:54+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T00:20:47+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T00:20:49+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T01:05:55+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T01:05:57+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T01:06:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T01:06:52+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 8f9efb33253e1dff53209151592684c72c9c4e514bc16c6574816e729ed59b30
+  source_sha: a50d796af128cd4109875e03eaf429d460126740
+  at: '2026-09-24T00:20:48+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+handoff:
+  id: CAT-EXACT-TARGET:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8

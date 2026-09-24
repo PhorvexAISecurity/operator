@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -18,12 +18,77 @@ checks:
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
     rationale: Preserve core tick budget and optional fail-closed capability; no scope
       expansion or weakened guarantee
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/baseline-final.log
+    sha256: dbcc21665b3961210759dc5457c2269dcfcc3d660f17bd585042e7c43ea8441a
+    source_sha: a50d796af128cd4109875e03eaf429d460126740
+    at: '2026-09-24T00:51:54+00:00'
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 47c5fccd1acf69e4ecb7eb22e4d9f4b54aa4b39be1f3c6ce79f8b92293f986dd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  implementation:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 04-diff.patch
+    sha256: b6ce2c6721ee362f62015b330cf012094b9e3a66b025fa3d3a3b9d04f422d165
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l0-go-phorvex.log
+    sha256: 5841a13419b313167856c8e8845a6b4739072ce99d166fab6d471ecd8d202ddd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/head-final.log
+    sha256: ec3ace40cd4da66c80de13aed946c017ec570fd45f8b87e9b32ffd881b0eae76
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: 05-evidence.md
+    sha256: 159a9ac77f107a8d3195222ad5c4b1b4b438c244eb207ca384c8ed7ae78ddb4e
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  positive_control:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/head-final.log
+    sha256: ec3ace40cd4da66c80de13aed946c017ec570fd45f8b87e9b32ffd881b0eae76
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:05:38+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 42b60e15a4cecf7f6d0fb2e360edf23d6dee3ba5309e4541d0cb587adaa84aa4
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:45+00:00'
+    baseline_sha: a50d796af128cd4109875e03eaf429d460126740
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e00b08fb8dda95ea563c314611ee2f11df628dfa662d40b2021b0488d43dda6f
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:45+00:00'
+    incident_sha256: 42b60e15a4cecf7f6d0fb2e360edf23d6dee3ba5309e4541d0cb587adaa84aa4
 fix_id: CAT-POD-TOKEN
 issues:
 - M-184
 title: Model conditional Pod-bound Kubernetes API authentication
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -47,7 +112,7 @@ blind_derivation:
 implementation:
   branch: campaign/catalogue-coverage-20260923
   base_sha: a50d796af128cd4109875e03eaf429d460126740
-  head_sha: null
+  head_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
   stacked_on: []
 pull_request:
   url: null
@@ -68,13 +133,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -84,9 +149,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: campaign-coverage-plan
-  action: Complete implementation and submit exact source/tests for independent review
-updated_at: '2026-09-23T23:46:00+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T01:06:49+00:00'
 configuration_history:
 - at: '2026-09-23T23:29:06+00:00'
   by: codex-lead
@@ -107,6 +173,11 @@ configuration_history:
   fields:
   - verification
   approval_ref: null
+- at: '2026-09-24T01:05:38+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -122,6 +193,38 @@ transitions:
   by: codex-lead
   artifact: 03-decision.md
   note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T01:05:38+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T01:05:40+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T01:06:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T01:06:47+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -144,3 +247,10 @@ check_history:
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   rationale: Administrative verification matrix correction adds the L3 already required
     by the signed plan; no weaker guarantee or new scope
+handoff:
+  id: CAT-POD-TOKEN:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

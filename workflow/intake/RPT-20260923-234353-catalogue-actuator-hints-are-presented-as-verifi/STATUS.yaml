@@ -1,0 +1,324 @@
+schema_version: 1
+intake_id: RPT-20260923-234353-catalogue-actuator-hints-are-presented-as-verifi
+kind: BUG
+title: Catalogue actuator hints are presented as verified response capability
+state: FILED
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-23T23:43:53+00:00'
+updated_at: '2026-09-23T23:53:27+00:00'
+pins:
+  source_main_sha: a50d796af128cd4109875e03eaf429d460126740
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+  environment: dev-existing-cluster
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-140
+    score: 29
+    overlap:
+    - any
+    - because
+    - below
+    - campaign
+    - correct
+    - decisions
+    - defect
+    - does
+    - evidence
+    - 'false'
+    - its
+    - live
+    - name
+    - new
+    - not
+    - owner
+    - pod
+    - policy
+    - see
+    - should
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-144
+    score: 28
+    overlap:
+    - actuator
+    - any
+    - attack
+    - because
+    - below
+    - both
+    - campaign
+    - decision
+    - defect
+    - does
+    - even
+    - every
+    - evidence
+    - its
+    - live
+    - nats
+    - not
+    - phorvex
+    - policy
+    - see
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-2
+    score: 27
+    overlap:
+    - actually
+    - actuator
+    - any
+    - api
+    - because
+    - both
+    - current
+    - does
+    - every
+    - evidence
+    - installed
+    - its
+    - list
+    - live
+    - not
+    - phorvex
+    - policy
+    - quarantine
+    - should
+    - source
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-155
+    score: 27
+    overlap:
+    - any
+    - api
+    - attack
+    - decision
+    - does
+    - even
+    - every
+    - evidence
+    - its
+    - live
+    - not
+    - phorvex
+    - pod
+    - source
+    - that
+    - this
+    - though
+    - what
+    - while
+    - workload
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-160
+    score: 25
+    overlap:
+    - actuator
+    - api
+    - attack
+    - both
+    - capability
+    - every
+    - evidence
+    - live
+    - nats
+    - not
+    - quarantine
+    - routing
+    - that
+    - this
+    - used
+    - what
+    - while
+    title: T1-E's no-rbac leg gates the two Phoenix-routed actions (rotate, quarantine)
+      on the wrong principal's verbs — both are now candidacy-dead in every tenant
+      except litellm/vllm, a live defense-coverage regression
+  - issue_id: M-168
+    score: 24
+    overlap:
+    - attack
+    - claims
+    - does
+    - establish
+    - every
+    - evidence
+    - its
+    - live
+    - new
+    - not
+    - policy
+    - see
+    - source
+    - stimulus
+    - this
+    - verified
+    - what
+    - while
+    title: Console availability experiment claims attack results despite failed stimulus
+      and unsafe restart recovery
+  - issue_id: M-9
+    score: 23
+    overlap:
+    - actually
+    - actuator
+    - decision
+    - does
+    - every
+    - execution
+    - its
+    - live
+    - name
+    - not
+    - phorvex
+    - pod
+    - policy
+    - quarantine
+    - that
+    - this
+    - what
+    - whether
+    - would
+    title: '`Emitted` is a request-ack, not an effect — the brain never learns what
+      Phoenix did'
+  - issue_id: M-136
+    score: 23
+    overlap:
+    - any
+    - api
+    - attack
+    - both
+    - decision
+    - defense
+    - every
+    - evidence
+    - its
+    - live
+    - name
+    - not
+    - phorvex
+    - pod
+    - that
+    - this
+    - token
+    - verified
+    - what
+    - while
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-142
+    score: 23
+    overlap:
+    - any
+    - campaign
+    - decision
+    - defect
+    - does
+    - establish
+    - every
+    - evidence
+    - its
+    - list
+    - live
+    - not
+    - phorvex
+    - pod
+    - ready
+    - see
+    - that
+    - this
+    - token
+    - verified
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-143
+    score: 22
+    overlap:
+    - any
+    - available
+    - below
+    - every
+    - evidence
+    - its
+    - live
+    - mitigation
+    - not
+    - phorvex
+    - pod
+    - policy
+    - rotation
+    - scope
+    - that
+    - this
+    - what
+    - while
+    title: pHold is algebraically pinned to 1 by pod age — the Bayesian belief layer
+      is annihilated, not outweighed
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-185
+  fix_id: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-185.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-23T23:53:01+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-23T23:53:01+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-23T23:53:01+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-23T23:53:02+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-23T23:53:27+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-185.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-24T00:48:46.537388+00:00",
+  "baseline": "a50d796af128cd4109875e03eaf429d460126740",
+  "head": "af23ae24395c4f4f9f292dd7fe594b05a5d290e4",
+  "baseline_command": "go test ./internal/console -run ^TestExactCatalogueTargetUsesOwnedPodAndDeployment$ -count=1",
+  "baseline_exit": 1,
+  "head_command": "go test ./internal/console ./internal/ingest ./internal/decision ./internal/runner ./tools/covermap -run TestExactCatalogue|TestExactBound|TestConsoleBound|TestRejectedConsole|TestCoverMapDocumentIsCurrent -count=1",
+  "head_exit": 0,
+  "toolchain": "go1.26.3",
+  "overlay_sha256": "1fa61f6ca3b69a15229a0b9abcf5c511f1396792e10ee12019ffe59abd559fcc",
+  "executed_by": "codex-lead"
+}

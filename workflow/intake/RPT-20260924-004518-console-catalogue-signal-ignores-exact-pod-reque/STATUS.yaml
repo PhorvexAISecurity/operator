@@ -1,0 +1,174 @@
+schema_version: 1
+intake_id: RPT-20260924-004518-console-catalogue-signal-ignores-exact-pod-reque
+kind: BUG
+title: Console catalogue signal ignores exact Pod request and lacks manager lifetime
+  binding
+state: FILED
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T00:45:18+00:00'
+updated_at: '2026-09-24T00:51:18+00:00'
+pins:
+  source_main_sha: a50d796af128cd4109875e03eaf429d460126740
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+  environment: dev
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-140
+    score: 20
+    overlap:
+    - another
+    - any
+    - behavior
+    - can
+    - evidence
+    - first
+    - lifetime
+    - manager
+    - name
+    - namespace
+    - not
+    - observation
+    - only
+    - pod
+    - prior
+    - raw
+    - test
+    - whether
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-9
+    score: 19
+    overlap:
+    - can
+    - consume
+    - emitted
+    - event
+    - events
+    - first
+    - name
+    - not
+    - only
+    - pod
+    - prior
+    - record
+    - target
+    - test
+    - whether
+    title: '`Emitted` is a request-ack, not an effect — the brain never learns what
+      Phoenix did'
+  - issue_id: M-155
+    score: 18
+    overlap:
+    - any
+    - can
+    - console
+    - event
+    - events
+    - evidence
+    - lifetime
+    - not
+    - observed
+    - only
+    - pod
+    - target
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-25
+    score: 17
+    overlap:
+    - behavior
+    - can
+    - event
+    - evidence
+    - not
+    - pod
+    - raw
+    - real
+    - separate
+    - signal
+    - test
+    title: The AI stage classifier overrides — and can downgrade — real detector evidence
+  - issue_id: M-136
+    score: 16
+    overlap:
+    - any
+    - can
+    - console
+    - evidence
+    - logs
+    - mutation
+    - name
+    - not
+    - only
+    - pod
+    - real
+    - request
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-186
+  fix_id: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-186.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T00:48:46+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T00:48:47+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T00:48:47+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T00:48:47+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T00:51:18+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-186.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

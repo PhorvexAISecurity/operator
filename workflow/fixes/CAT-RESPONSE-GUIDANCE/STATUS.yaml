@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,11 +15,76 @@ checks:
     source_sha: a50d796af128cd4109875e03eaf429d460126740
     at: '2026-09-23T23:45:58+00:00'
     contract_sha256: 93974797acc9b2e17a4896dd230b1331b971a822742437e0eb971eb5ecebeb6e
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/m185-lead-baseline-red.log
+    sha256: f93520ac64fe590c82967d26f5e5c71aead7600af111075a0ec2d3cab41b99dc
+    source_sha: a50d796af128cd4109875e03eaf429d460126740
+    at: '2026-09-24T00:52:30+00:00'
+  preflight:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/preflight/receipt.json
+    sha256: 47c5fccd1acf69e4ecb7eb22e4d9f4b54aa4b39be1f3c6ce79f8b92293f986dd
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:56+00:00'
+  implementation:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: 04-diff.patch
+    sha256: b6ce2c6721ee362f62015b330cf012094b9e3a66b025fa3d3a3b9d04f422d165
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:56+00:00'
+  l0:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/m185-head-green.log
+    sha256: 68d9c34811f9cca44cc516e009bc6a39082795b9131db638ca463d3d1f34f91b
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:56+00:00'
+  l1:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker-ui-frozen.log
+    sha256: 15b4216ae929992008a7efbde6096b5f702531c2898c2c03adbb311e28d0aeff
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:56+00:00'
+  l2:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker-tsc-frozen.json
+    sha256: f7c1b76de61f81d1e16885e5ff44a6a1ff75ac76934bde815ba8904e1fa72e28
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:56+00:00'
+  positive_control:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker-ui-frozen.log
+    sha256: 15b4216ae929992008a7efbde6096b5f702531c2898c2c03adbb311e28d0aeff
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:06:56+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: cbdb8d8b900fac10c30aa0a188bef0f98e4da75adc3c889a944db9d0d7e44d0a
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:07:31+00:00'
+    baseline_sha: a50d796af128cd4109875e03eaf429d460126740
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d5debddd3b75b7858f42dfb277efc80a016b151e62cb1b45a24727ca9148c37c
+    source_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
+    at: '2026-09-24T01:07:31+00:00'
+    incident_sha256: cbdb8d8b900fac10c30aa0a188bef0f98e4da75adc3c889a944db9d0d7e44d0a
 fix_id: CAT-RESPONSE-GUIDANCE
 issues: []
 title: Distinguish catalogue actuator hints from verified responses
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -43,7 +108,7 @@ blind_derivation:
 implementation:
   branch: campaign/catalogue-coverage-20260923
   base_sha: a50d796af128cd4109875e03eaf429d460126740
-  head_sha: null
+  head_sha: eec96867ab16a1d516a4352aa34256050ebf7e1b
   stacked_on: []
 pull_request:
   url: null
@@ -63,13 +128,13 @@ verification:
   - L2
   live_required: false
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -79,9 +144,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: catalogue-reference-review
-  action: Submit tested guidance implementation for independent review
-updated_at: '2026-09-23T23:45:58+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T01:07:35+00:00'
 configuration_history:
 - at: '2026-09-23T23:45:55+00:00'
   by: codex-lead
@@ -91,6 +157,11 @@ configuration_history:
   - implementation
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-24T01:06:55+00:00'
+  by: catalogue-reference-review
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -109,3 +180,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T01:06:56+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T01:06:58+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T01:07:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T01:07:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-RESPONSE-GUIDANCE:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7

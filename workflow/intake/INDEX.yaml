@@ -242,6 +242,21 @@ intakes:
     directory: intake/RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
     kind: OBSERVATION
     title: Pod-bound credential invalidation may be excluded from rotation coverage
-    state: REPORTED
-    issue_id: null
+    state: FILED
+    issue_id: M-184
+    aliases: []
+  RPT-20260923-234353-catalogue-actuator-hints-are-presented-as-verifi:
+    directory: intake/RPT-20260923-234353-catalogue-actuator-hints-are-presented-as-verifi
+    kind: BUG
+    title: Catalogue actuator hints are presented as verified response capability
+    state: FILED
+    issue_id: M-185
+    aliases: []
+  RPT-20260924-004518-console-catalogue-signal-ignores-exact-pod-reque:
+    directory: intake/RPT-20260924-004518-console-catalogue-signal-ignores-exact-pod-reque
+    kind: BUG
+    title: Console catalogue signal ignores exact Pod request and lacks manager lifetime
+      binding
+    state: FILED
+    issue_id: M-186
     aliases: []

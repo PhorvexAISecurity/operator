@@ -1,32 +1,11 @@
 # 05 — Evidence summary
 
-## Version anchors
+Base source is `a50d796af128cd4109875e03eaf429d460126740`; integrated implementation head is `eec96867ab16a1d516a4352aa34256050ebf7e1b` on `campaign/catalogue-coverage-20260923`. This is source/UI guidance only; no new image, deployment or live security result exists.
 
-- Base:
-- Head:
-- Toolchain:
-- Deployed image / embedded SHA:
+The patch retains `expectedActuators` compatibility while adding a provenance basis and bounded response guidance to catalogue API rows and both UI consumers. Exact C1 emits conditional `rotate` only; the UI suppresses stale legacy `quarantine` for that row. `evidence/worker-report.md` explains the patch; `evidence/lead-review.json` records independent source review and source-file hashes.
 
-## Scope and diff
+The lead signed an actual baseline RED from `a50`: C1 serialized `[rotate, quarantine]` while the benign empty-hint control passed. The identical source-bound regression is GREEN against the implementation producer. Exact commands, overlay source pins and logs are in `evidence/m185-baseline-command.json`, `evidence/m185-head-command.json`, `evidence/m185-source-red-green.md`, and the matching logs. The tested console producer files at integrated head `eec96867` have the same SHA-256 as the prior tested head `a3b041ae`. This parses actual catalogue rows and serialized API data; it does not mock the final response flag.
 
-## RED controls
+L0 is that source-bound Go producer/serialization regression, `evidence/m185-head-green.log`. L1 is a fresh five-case React server render at `eec96867`, `evidence/worker-ui-frozen.log`, including benign, legacy and explicit-effect controls. L2 is `tsc --noEmit`, exit 0 with empty output, recorded in `evidence/worker-tsc-frozen.json`; the temporary dependency symlink was removed and generated tsbuildinfo restored to HEAD. The exact-head selected local preflight separately passed all 11 selected jobs: diff, workflow, chart and Go build/test/vet (`evidence/preflight/receipt.json` with raw logs). The lead also ran the full console Go suite independently (`evidence/lead-full-go.log`). Formal P3 attestation remains the independent reviewer's step after this submission.
 
-Incident trace and independent reproduction: `evidence/incident.md`.
-
-## L0
-
-## L1
-
-## L2
-
-## P3
-
-## L3/L4
-
-## Positive controls
-
-## Pre-existing failures
-
-## Evidence manifest
-
-Raw artifacts and exact commands are indexed in `evidence/manifest.yaml`.
+No live stimulus is required to falsify the earlier blanket copy. Deployed UI/API verification remains pending after an authorized rollout. These source checks establish no installed detector, selected actuator or mitigation efficacy. Raw artifacts and commands are indexed in `evidence/manifest.yaml`.
