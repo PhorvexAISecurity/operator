@@ -373,6 +373,10 @@ phorvex:
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:
       enabled: false
+      # Adds only fixed-namespace response fixture verbs when explicitly enabled
+      # alongside natsExposure.enabled. Existing baseline grants stay narrow.
+      clientResponse:
+        enabled: false
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
     catalogueV1:
