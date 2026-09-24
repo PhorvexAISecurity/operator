@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 15
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: e123854a0355fb8ec1661cccc3c4c22cbc12e965acabeda35e90e1dbdbf212b3
+    sha256: 8199604d7ba53e67f97ae3a58967fb095a2b29fb2c89e0a06b04b6cae2c83b02
     source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
-    at: '2026-09-24T18:20:28+00:00'
+    at: '2026-09-24T20:45:01+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   red:
@@ -26,61 +26,61 @@ checks:
   preflight:
     result: PASS
     by: audit-window-repair
-    artifact: evidence/preflight/receipt.json
-    sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:50:23+00:00'
+    artifact: evidence/preflight/receipt-delivery.json
+    sha256: 05a337a416316c3f13c1b39a0e35cc90b4fdd4b0ad88b69e5374bf8a977ef27f
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
   implementation:
     result: PASS
     by: audit-window-repair
     artifact: 04-diff.patch
-    sha256: bbb725b6b3e777679f2fc457c90a94b53e55c15b36a43c4890b8bab71de977f5
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:50:23+00:00'
+    sha256: 5c4ce95fa5f98d5373b4491a9808f7624c40a695418450f05a2c31b720c9bd7f
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
   l0:
     result: PASS
     by: audit-window-repair
-    artifact: evidence/preflight/receipt.json
-    sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:50:23+00:00'
+    artifact: evidence/preflight/receipt-delivery.json
+    sha256: 05a337a416316c3f13c1b39a0e35cc90b4fdd4b0ad88b69e5374bf8a977ef27f
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
   l1:
     result: PASS
     by: audit-window-repair
-    artifact: evidence/worker/chart-render.log
-    sha256: 287ffbc005e8918df3473c16f651907658bd7dc5e510fd2eb1eef2e186481b80
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:50:23+00:00'
+    artifact: evidence/worker/delivery-render.json
+    sha256: f5c75f7552aebb06daa876f34108117240681115ddf12a1fdd2fa5f19edfd6ee
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
   l2:
     result: PASS
     by: audit-window-repair
-    artifact: evidence/worker/offline-verify.log
-    sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:50:23+00:00'
+    artifact: evidence/worker/package-delivery-test.log
+    sha256: 18acdd71356dac684667355d509df04f481f64ca4b924bdfec1b3d9d4e550765
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
   positive_control:
     result: PASS
     by: audit-window-repair
-    artifact: evidence/worker/offline-verify.log
-    sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:50:23+00:00'
+    artifact: evidence/worker/all-five-smoke.log
+    sha256: 9b1617f1f4c1a0823b305f279a49a1745cb4235a59f210c8d04902ce660e4f1c
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:18:08+00:00'
   incident:
     result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:51:07+00:00'
+    sha256: 5831b6e3c1782974548dd70dc48dbaf950822cfc33fca542a879ada2f52ed6ab
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:19:24+00:00'
     baseline_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
   p3:
     result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 586cebe59fef820f2de27b54768dbbdcb69779aff537b14b5829c0b3f3fd236a
-    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
-    at: '2026-09-24T18:51:07+00:00'
-    incident_sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
+    sha256: 674e9c44dc857d19ecb6067c41b845d0a9ee1e6fabdd03e3a0da71a8abd167ec
+    source_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
+    at: '2026-09-24T21:19:24+00:00'
+    incident_sha256: 5831b6e3c1782974548dd70dc48dbaf950822cfc33fca542a879ada2f52ed6ab
   patch_equivalence:
     result: PASS
     by: codex-lead
@@ -117,7 +117,7 @@ blind_derivation:
 implementation:
   branch: campaign/catalogue-profile-mounts-20260924
   base_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
-  head_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  head_sha: 2fe46ef32219bf2d8d9bf43fba9e6357378ccfd5
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/332
@@ -155,9 +155,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Track PR332 checks and normal deployment; verify mounted exact profiles
-    and named scenarios after current source and configuration are installed
-updated_at: '2026-09-24T18:53:01+00:00'
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T21:19:24+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -178,6 +178,11 @@ configuration_history:
   fields:
   - pull_request
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T21:18:07+00:00'
+  by: audit-window-repair
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -252,10 +257,77 @@ check_history:
   sha256: aca8b3f313cc64a4d4affa04d3ac8f98aee6636710a07359cb1a3bba9b330203
   source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
   at: '2026-09-24T18:12:52+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: e123854a0355fb8ec1661cccc3c4c22cbc12e965acabeda35e90e1dbdbf212b3
+  source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  at: '2026-09-24T18:20:28+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: preflight
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/preflight/receipt.json
+  sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: implementation
+  result: PASS
+  by: audit-window-repair
+  artifact: 04-diff.patch
+  sha256: bbb725b6b3e777679f2fc457c90a94b53e55c15b36a43c4890b8bab71de977f5
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: l0
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/preflight/receipt.json
+  sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: l1
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/worker/chart-render.log
+  sha256: 287ffbc005e8918df3473c16f651907658bd7dc5e510fd2eb1eef2e186481b80
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: l2
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/worker/offline-verify.log
+  sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: positive_control
+  result: PASS
+  by: audit-window-repair
+  artifact: evidence/worker/offline-verify.log
+  sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:50:23+00:00'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:51:07+00:00'
+  baseline_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 586cebe59fef820f2de27b54768dbbdcb69779aff537b14b5829c0b3f3fd236a
+  source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+  at: '2026-09-24T18:51:07+00:00'
+  incident_sha256: cb1de6eab1815b9530f8286eacea5d350d9bd0b79c51444e44b4ae4ab10047bb
 handoff:
-  id: CAT-PROFILE-MOUNTS:9:review
+  id: CAT-PROFILE-MOUNTS:15:review
   from: codex-lead
   to: codex-lead
   role: coordinator
   kind: review
-  revision: 9
+  revision: 15
