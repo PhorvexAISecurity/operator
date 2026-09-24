@@ -134,6 +134,7 @@ func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 	if !hasMongo {
 		items = append(items, c.mongoExposureCatalogueItem())
 	}
+	items = append(items, c.guardrailStaticCatalogueItem())
 	items = append(items, c.limitedV1Catalogue()...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Product != items[j].Product {
@@ -160,6 +161,23 @@ func (c *Config) mongoExposureCatalogueItem() CatalogItem {
 		item.RuntimeContext = dest.ScopeTarget
 	} else {
 		item.UnavailableReason = "Mongo named suite is disabled or has no reviewed source, image, target and audit pins"
+	}
+	return item
+}
+
+func (c *Config) guardrailStaticCatalogueItem() CatalogItem {
+	dest, err := (&RunManager{cfg: *c}).SuiteDestination(guardrailStaticConfig)
+	item := CatalogItem{EntryID: "ai-vllm-guardrail-confidentiality-static", Name: "ai-vllm-guardrail-confidentiality-static", Product: "ai", Category: "Fixed synthetic confidentiality comparison", R6Tag: "not-applicable",
+		Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false), ExpectedActuators: []string{},
+		ResponseGuidanceBasis: "none", ResponseGuidance: "Direct static filter comparison only. Natural detector, brain decision and actuator are not evaluated.",
+		MeaningfulWhen: "One fixed synthetic confidential marker is sent to the same exact Pod model through raw and guarded loopback ports. Say OK and arithmetic remain separate legitimate controls. This does not establish general defense efficacy.",
+		RunnableNote:   "Server-owned named suite; exact installed Pod, source, route and journals must be pinned. Private original replies are independently checked before any public classification.",
+		Prereqs:        []string{"reviewed installed local vLLM source and target pins", "vllm and phorvex-system tenant grants"},
+		LaunchKind:     "named-suite", ClaimClass: "effect", Profile: guardrailStaticConfig, Available: err == nil}
+	if err == nil {
+		item.RuntimeContext = dest.ScopeTarget
+	} else {
+		item.UnavailableReason = "Guardrail comparison is disabled until exact installed source and target pins are configured"
 	}
 	return item
 }

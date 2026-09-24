@@ -369,6 +369,13 @@ phorvex:
   console:
     enabled: false
     allowWorkloadMutations: false
+    # Extra read grants for the fixed synthetic vLLM comparison. The shipped
+    # harness profile also requires exact reviewed pins before launch.
+    guardrailStatic:
+      enabled: false
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
+      kvJournalName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

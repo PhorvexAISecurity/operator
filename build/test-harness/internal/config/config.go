@@ -141,6 +141,8 @@ type TargetConfig struct {
 	// owned document through the installed Mongo Service. It never enters the
 	// generic scenario matrix or its namespace-wide cleanup.
 	MongoExposureFixture *MongoExposureFixtureConfig `json:"mongoExposureFixture,omitempty"`
+	// GuardrailStaticFixture selects the fixed, read-only installed vLLM comparison.
+	GuardrailStaticFixture *GuardrailStaticFixtureConfig `json:"guardrailStaticFixture,omitempty"`
 
 	// InstalledManagerFixture attaches one catalogue arm to an already installed
 	// manager and its existing authenticated audit API. It is a complete runtime
@@ -250,6 +252,22 @@ type NATSExposureFixtureConfig struct {
 	ManagerNamespace  string `json:"managerNamespace,omitempty"`
 	ManagerDeployment string `json:"managerDeployment,omitempty"`
 	ManagerImageID    string `json:"managerImageID,omitempty"`
+}
+
+type GuardrailStaticFixtureConfig struct {
+	RunID                string `json:"runID"`
+	Transport            string `json:"transport"`
+	ClusterUID           string `json:"clusterUID"`
+	PodName              string `json:"podName"`
+	PodUID               string `json:"podUID"`
+	Variant              string `json:"variant"`
+	ServiceUID           string `json:"serviceUID"`
+	SourceSHA256         string `json:"sourceSHA256"`
+	GuardrailJournalName string `json:"guardrailJournalName"`
+	GuardrailJournalUID  string `json:"guardrailJournalUID"`
+	KVJournalName        string `json:"kvJournalName"`
+	KVJournalUID         string `json:"kvJournalUID"`
+	MaxRunSeconds        int    `json:"maxRunSeconds"`
 }
 
 type InstalledManagerFixtureConfig struct {
@@ -445,6 +463,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateMongoExposureFixture(c); err != nil {
 			return err
 		}
+		if err := validateGuardrailStaticFixture(c); err != nil {
+			return err
+		}
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
@@ -478,6 +499,9 @@ func (c TargetConfig) Validate() error {
 		return err
 	}
 	if err := validateMongoExposureFixture(c); err != nil {
+		return err
+	}
+	if err := validateGuardrailStaticFixture(c); err != nil {
 		return err
 	}
 	if err := validateGPUFunctionalFixture(c); err != nil {
@@ -610,6 +634,24 @@ var natsExposureNonce = regexp.MustCompile(`^[0-9a-f]{24}$`)
 var natsExposureDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var natsExposureImage = regexp.MustCompile(`^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$`)
 var natsExposureRunID = regexp.MustCompile(`^run-[1-9][0-9]*$`)
+
+func validateGuardrailStaticFixture(c TargetConfig) error {
+	f := c.GuardrailStaticFixture
+	if f == nil {
+		return nil
+	}
+	if !c.OwnedAck || c.Namespace != "vllm" || c.Context == "" || c.Context == "in-cluster" || c.Kubeconfig != "" || c.ExpectedNamespaceUID != "" ||
+		c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 0 || len(c.DefenderFilter) != 0 || f.Transport != "in-cluster" ||
+		!natsExposureRunID.MatchString(f.RunID) || !kubernetesUIDPattern.MatchString(f.ClusterUID) ||
+		f.PodName == "" || len(validation.IsDNS1123Subdomain(f.PodName)) != 0 || !kubernetesUIDPattern.MatchString(f.PodUID) || f.Variant != "pgv1" ||
+		!kubernetesUIDPattern.MatchString(f.ServiceUID) || !natsExposureDigest.MatchString(f.SourceSHA256) ||
+		f.GuardrailJournalName == "" || len(validation.IsDNS1123Subdomain(f.GuardrailJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.GuardrailJournalUID) ||
+		f.KVJournalName == "" || len(validation.IsDNS1123Subdomain(f.KVJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.KVJournalUID) ||
+		f.MaxRunSeconds != 600 || c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.InstalledManagerFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+		return errors.New("config: guardrailStaticFixture requires exact installed source and target pins, one 600-second in-cluster vLLM comparison, and no other fixture")
+	}
+	return nil
+}
 
 func validateNATSExposureFixture(c TargetConfig) error {
 	f := c.NATSExposureFixture

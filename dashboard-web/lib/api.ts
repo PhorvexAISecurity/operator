@@ -657,7 +657,9 @@ export interface MongoExposureResult {
   policyUID: string;
   issues: string[];
 }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; note: string }
+export interface GuardrailStaticCall { name: "canary_raw" | "canary_guarded" | "say_ok" | "arithmetic"; port: number; status: number; markerPresent?: boolean; answerIsFour?: boolean; errorType?: string }
+export interface GuardrailStaticResult { accepted: boolean; status: string; sayOK: string; arithmetic: string; calls: GuardrailStaticCall[]; issues: string[]; clusterUID: string; podUID: string; variant: string; sourceSHA256: string; sourceEvidence: string; loadedSource: string; serviceUID: string; endpointSliceSHA256: string; guardrailJournalUID: string; guardrailJournalGeneration: number; kvJournalUID: string; eventMode: "DIRECT_STATIC"; naturalDetector: "NOT_EVALUATED"; brainDecision: "NOT_EVALUATED"; actuator: "NOT_EVALUATED"; externalRoute: "NOT_TESTED" }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

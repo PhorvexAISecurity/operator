@@ -32,6 +32,7 @@ import (
 	"github.com/r6security/phoenix-test-harness/internal/capability"
 	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	"github.com/r6security/phoenix-test-harness/internal/guardrailstatic"
 	"github.com/r6security/phoenix-test-harness/internal/kube"
 	"github.com/r6security/phoenix-test-harness/internal/report"
 	"github.com/r6security/phoenix-test-harness/internal/safety"
@@ -97,6 +98,22 @@ func main() {
 	if cfg.NATSExposureFixture != nil && (*natsSafetyID != cfg.NATSExposureFixture.RunID || filepath.Clean(*natsSafetyOut) != filepath.Clean(cfg.OutDir)) {
 		fmt.Fprintln(os.Stderr, "ERROR: NATS safety receipt destination differs from generated run config")
 		os.Exit(2)
+	}
+	if cfg.GuardrailStaticFixture != nil {
+		if *dryRun || *resume || *negControl || *adaptive || *natsReconcile || *natsSafetyOut != "" || *natsSafetyID != "" {
+			fmt.Fprintln(os.Stderr, "ERROR: guardrail static comparison requires one fixed nonadaptive run")
+			os.Exit(2)
+		}
+		clients, clientErr := kube.BuildNATSInCluster()
+		if clientErr != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", clientErr)
+			os.Exit(2)
+		}
+		if runErr := guardrailstatic.Run(context.Background(), cfg, clients.Kube, clients.Rest); runErr != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", runErr)
+			os.Exit(1)
+		}
+		return
 	}
 	if *natsReconcile {
 		if cfg.NATSExposureFixture == nil || *natsSafetyOut == "" || *natsSafetyID == "" {
