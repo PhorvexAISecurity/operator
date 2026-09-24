@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -23,12 +23,54 @@ checks:
     sha256: eff5a58ad58137c33f9579e4a57e3d30ed16113640c0fa3295f7586438a1bbc7
     source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
     at: '2026-09-24T18:21:25+00:00'
+  preflight:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/receipt.json
+    sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:50:23+00:00'
+  implementation:
+    result: PASS
+    by: audit-window-repair
+    artifact: 04-diff.patch
+    sha256: bbb725b6b3e777679f2fc457c90a94b53e55c15b36a43c4890b8bab71de977f5
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:50:23+00:00'
+  l0:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/receipt.json
+    sha256: 233ab594bd9e2aedfa872e889d9ea4f25ac7f3b8bc498128e2bb90c4ba01d5c7
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:50:23+00:00'
+  l1:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/chart-render.log
+    sha256: 287ffbc005e8918df3473c16f651907658bd7dc5e510fd2eb1eef2e186481b80
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:50:23+00:00'
+  l2:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/offline-verify.log
+    sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:50:23+00:00'
+  positive_control:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/offline-verify.log
+    sha256: 2c8b5790fead4e48bf1ae694c34f5302dedef47b68cd05d222cc1f158ff45f2a
+    source_sha: f71f16529769e26d55725ee798d774c5f74d0808
+    at: '2026-09-24T18:50:23+00:00'
 fix_id: CAT-PROFILE-MOUNTS
 issues: []
 title: Make fixed Mongo and static guardrail profiles configurable through reviewed
   chart mounts
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -50,9 +92,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-profile-mounts-20260924
+  base_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
+  head_sha: f71f16529769e26d55725ee798d774c5f74d0808
   stacked_on: []
 pull_request:
   url: null
@@ -74,12 +116,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -89,10 +131,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed fixed profile mount plan, preserve defaults and cleanup
-    gates, test and submit review without live calls
-updated_at: '2026-09-24T18:21:25+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-24T18:50:28+00:00'
 follow_up_to: CAT-CATALOGUE-BATCH
 configuration_history:
 - at: '2026-09-24T18:09:55+00:00'
@@ -103,6 +145,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T18:50:22+00:00'
+  by: audit-window-repair
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -118,6 +165,22 @@ transitions:
   by: codex-lead
   artifact: null
   note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T18:50:23+00:00'
+  by: audit-window-repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T18:50:25+00:00'
+  by: audit-window-repair
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -137,3 +200,10 @@ check_history:
   sha256: aca8b3f313cc64a4d4affa04d3ac8f98aee6636710a07359cb1a3bba9b330203
   source_sha: ac65e5b8772e2f8b6c23800ab5d1951c396a99a2
   at: '2026-09-24T18:12:52+00:00'
+handoff:
+  id: CAT-PROFILE-MOUNTS:8:submit
+  from: audit-window-repair
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8
