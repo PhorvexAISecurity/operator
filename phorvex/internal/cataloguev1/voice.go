@@ -122,7 +122,13 @@ func projectVoiceResult(def Definition, vr VoiceResult, started time.Time) Resul
 	}
 	out.Evidence["authoritySHA256"] = vr.AuthoritySHA256
 	if vr.Target != nil {
+		out.Evidence["targetPodName"] = vr.Target.Name
 		out.Evidence["targetPodUID"] = vr.Target.UID
+		out.Evidence["targetImageID"] = vr.Target.ImageID
+		out.Evidence["targetContainerID"] = vr.Target.ContainerID
+	}
+	if vr.PodSourceFileSHA256 != "" {
+		out.Evidence["podSourceFileSHA256"] = vr.PodSourceFileSHA256
 	}
 	if vr.Replacement != nil {
 		out.Evidence["replacementPodUID"] = vr.Replacement.UID
@@ -133,6 +139,10 @@ func projectVoiceResult(def Definition, vr VoiceResult, started time.Time) Resul
 	}
 	for i, session := range vr.Sessions {
 		prefix := "session" + strconv.Itoa(i+1) + "."
+		if i < vr.sessionIntentsRecorded {
+			out.Evidence[prefix+"callSID"] = session.CallSID
+			out.Evidence[prefix+"streamSID"] = session.StreamSID
+		}
 		out.Evidence[prefix+"phase"] = session.Phase
 		out.Evidence[prefix+"mediaFramesSent"] = strconv.Itoa(session.MediaFramesSent)
 		out.Evidence[prefix+"mediaFramesReceived"] = strconv.Itoa(session.MediaFramesReceived)
@@ -207,6 +217,7 @@ func runVoice(ctx context.Context, cfg VoiceConfig, runtime VoiceDriver, recorde
 			return result
 		}
 	}
+	result.PodSourceFileSHA256 = cfg.BotSourceSHA256
 	if cfg.Mode == VoiceReplacementRecovery {
 		if err = runtime.CanEvict(ctx, cfg); err != nil {
 			voiceFailure(&result, fmt.Errorf("Voice eviction authority unavailable: %w", err))
@@ -281,6 +292,8 @@ func runVoice(ctx context.Context, cfg VoiceConfig, runtime VoiceDriver, recorde
 	}()
 
 	if cfg.Mode == VoiceNormalMedia {
+		target := baseline.Pods[0]
+		result.Target = &target
 		session, newErr := newVoiceSession("normal")
 		if newErr != nil {
 			voiceFailure(&result, newErr)
@@ -291,7 +304,8 @@ func runVoice(ctx context.Context, cfg VoiceConfig, runtime VoiceDriver, recorde
 			voiceFailure(&result, err)
 			return result
 		}
-		sessions[0] = runtime.RunMedia(ctx, cfg, baseline.Pods[0], session, audio, nil)
+		result.sessionIntentsRecorded = 1
+		sessions[0] = runtime.RunMedia(ctx, cfg, target, session, audio, nil)
 		result.Sessions = sessions
 		if err = recordSessionResult(recorder, sessions[0]); err != nil {
 			voiceFailure(&result, err)
@@ -332,6 +346,7 @@ func runVoiceRecovery(ctx context.Context, cfg VoiceConfig, runtime VoiceDriver,
 		voiceFailure(result, err)
 		return *result
 	}
+	result.sessionIntentsRecorded = 1
 
 	watchCtx, stopWatch := context.WithCancel(ctx)
 	var watchWG sync.WaitGroup
@@ -452,6 +467,7 @@ func runVoiceRecovery(ctx context.Context, cfg VoiceConfig, runtime VoiceDriver,
 		voiceFailure(result, err)
 		return *result
 	}
+	result.sessionIntentsRecorded = 2
 	(*sessions)[1] = runtime.RunMedia(ctx, cfg, replacement, second, audio, nil)
 	result.Sessions = *sessions
 	if err = recordSessionResult(recorder, (*sessions)[1]); err != nil {

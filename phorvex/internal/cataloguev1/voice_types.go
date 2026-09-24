@@ -197,22 +197,27 @@ type AvailabilitySample struct {
 }
 
 type VoiceResult struct {
-	SchemaVersion      string               `json:"schemaVersion"`
-	OperationID        string               `json:"operationID"`
-	Mode               VoiceMode            `json:"mode"`
-	StartedAt          time.Time            `json:"startedAt"`
-	FinishedAt         time.Time            `json:"finishedAt"`
-	Outcome            string               `json:"outcome"`
-	Error              string               `json:"error,omitempty"`
-	AuthoritySHA256    string               `json:"authoritySHA256,omitempty"`
-	Target             *VoicePod            `json:"target,omitempty"`
-	Replacement        *VoicePod            `json:"replacement,omitempty"`
-	Sessions           []VoiceSession       `json:"sessions,omitempty"`
-	Eviction           *VoiceEviction       `json:"eviction,omitempty"`
-	EvictionDispatches int                  `json:"evictionDispatches"`
-	Availability       []AvailabilitySample `json:"availability,omitempty"`
-	Cleanup            VoiceCleanup         `json:"cleanup"`
-	RecoveryRequired   bool                 `json:"recoveryRequired"`
+	SchemaVersion   string    `json:"schemaVersion"`
+	OperationID     string    `json:"operationID"`
+	Mode            VoiceMode `json:"mode"`
+	StartedAt       time.Time `json:"startedAt"`
+	FinishedAt      time.Time `json:"finishedAt"`
+	Outcome         string    `json:"outcome"`
+	Error           string    `json:"error,omitempty"`
+	AuthoritySHA256 string    `json:"authoritySHA256,omitempty"`
+	// Populated only after every initial Pod source file was read and matched.
+	PodSourceFileSHA256 string               `json:"podSourceFileSHA256,omitempty"`
+	Target              *VoicePod            `json:"target,omitempty"`
+	Replacement         *VoicePod            `json:"replacement,omitempty"`
+	Sessions            []VoiceSession       `json:"sessions,omitempty"`
+	Eviction            *VoiceEviction       `json:"eviction,omitempty"`
+	EvictionDispatches  int                  `json:"evictionDispatches"`
+	Availability        []AvailabilitySample `json:"availability,omitempty"`
+	Cleanup             VoiceCleanup         `json:"cleanup"`
+	RecoveryRequired    bool                 `json:"recoveryRequired"`
+	// Sessions can be allocated ahead of their durable intents. Never project an
+	// allocated synthetic SID before its matching intent has been persisted.
+	sessionIntentsRecorded int
 }
 
 type VoiceDriver interface {
