@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -49,6 +50,8 @@ type guardrailFixture struct {
 	mutatingCalls  int
 	serviceReads   int
 	requestPaths   []string
+	stateRaw       []byte
+	stateAfterRaw  []byte
 }
 
 func (f *guardrailFixture) setup(t *testing.T) (Runtime, *guardrailTestRecorder, func()) {
@@ -123,6 +126,15 @@ func (f *guardrailFixture) setup(t *testing.T) (Runtime, *guardrailTestRecorder,
 				return
 			}
 			f.proxyState++
+			if len(f.stateRaw) > 0 {
+				state := f.stateRaw
+				if f.proxyState > 1 && len(f.stateAfterRaw) > 0 {
+					state = f.stateAfterRaw
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write(state)
+				return
+			}
 			write(w, map[string]any{"ready": true, "active": f.active, "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]float64{"pgv1": 0.5, "pgv2": 0.5}})
 		case "/api/v1/namespaces/vllm/pods/http:vllm-1:8000/proxy/v1/guardrail/classify":
 			if r.Method != http.MethodPost {
@@ -190,6 +202,9 @@ func TestGuardrailCalibrationBenignFindingAndExactRequests(t *testing.T) {
 			}
 			if result.Evidence["activeVariant"] != active || result.Evidence["servingOutcome"] != "NOT_MEASURED" || result.Evidence["injectedResponse"] != "NOT_RUN" || result.Evidence["securityEfficacy"] != "NOT_EVALUATED" {
 				t.Fatalf("calibration claim crossed boundary: %+v", result.Evidence)
+			}
+			if result.Evidence["stateShape"] != "legacy" || result.Evidence["declaredMode"] != "UNREPORTED" || result.Evidence["declaredProvenance"] != "UNREPORTED" {
+				t.Fatalf("legacy state invented a mode or provenance: %+v", result.Evidence)
 			}
 			if strings.Join(fixture.classifyTexts, "|") != guardrailSayOK+"|"+guardrailArithmetic || fixture.proxyState != 2 || fixture.mutatingCalls != 0 || len(recorder.intents) != 2 || len(recorder.events) != 2 {
 				t.Fatalf("unexpected requests or journal: texts=%v state=%d mutations=%d intents=%d events=%d", fixture.classifyTexts, fixture.proxyState, fixture.mutatingCalls, len(recorder.intents), len(recorder.events))
@@ -287,5 +302,147 @@ func TestGuardrailCalibrationStateParserRejectsAmbiguousJSON(t *testing.T) {
 		if state, err := parseGuardrailState([]byte(raw), "pgv2"); err == nil {
 			t.Fatalf("ambiguous state accepted: %+v", state)
 		}
+	}
+}
+
+// These exact JSON bytes are emitted by tools/guardrail_state_fixture.py from
+// the checked-in Python GuardrailRuntime.public_state with classifier doubles.
+func guardrailProducerFixture(t *testing.T, mode string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/guardrail_state_" + mode + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func editGuardrailState(t *testing.T, raw []byte, edit func(map[string]any)) []byte {
+	t.Helper()
+	var state map[string]any
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatal(err)
+	}
+	edit(state)
+	changed, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return changed
+}
+
+func TestGuardrailCalibrationActualProducerStateAndHandler(t *testing.T) {
+	for _, mode := range []string{"enforce", "observe"} {
+		t.Run(mode, func(t *testing.T) {
+			raw := guardrailProducerFixture(t, mode)
+			state, err := parseGuardrailState(raw, "pgv2")
+			if err != nil || state.Shape != "current" || state.Mode != mode ||
+				state.Models["pgv1"].Model != guardrailModelPGV1 || state.Models["pgv2"].Model != guardrailModelPGV2 ||
+				state.Models["pgv1"].Revision != "unknown" || state.Models["pgv2"].Revision != "fixture-revision-2" ||
+				state.Runtime.Python == "" || len(state.Runtime.Packages) != 5 {
+				t.Fatalf("actual producer state rejected or misread: %+v err=%v", state, err)
+			}
+			if mode == "enforce" && (state.Thresholds["pgv1"] != 0 || state.Thresholds["pgv2"] != 1) {
+				t.Fatalf("producer's zero/one threshold boundaries differ: %+v", state.Thresholds)
+			}
+			fixture := &guardrailFixture{stateRaw: raw}
+			runtime, recorder, closeServer := fixture.setup(t)
+			defer closeServer()
+			result := NewGuardrailCalibrationHandler().Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
+			if result.Outcome != OutcomeFunctionalPass || !result.Cleanup.Verified || fixture.proxyState != 2 || len(fixture.classifyTexts) != 2 || len(recorder.events) != 2 {
+				t.Fatalf("actual producer response failed real handler: %+v", result)
+			}
+			e := result.Evidence
+			if e["stateShape"] != "current" || e["declaredMode"] != mode || e["declaredProvenance"] != "PROXY_RESPONSE_NOT_ATTESTED" ||
+				e["pgv1DeclaredModel"] != guardrailModelPGV1 || e["pgv2DeclaredRevision"] != "fixture-revision-2" ||
+				e["declaredPythonVersion"] != state.Runtime.Python || e["declaredPackageVersion.fastapi"] != state.Runtime.Packages["fastapi"] ||
+				e["loadedSource"] != "NOT_ATTESTED" || e["modelRevision"] != "NOT_ATTESTED" ||
+				e["classifierOnly"] != "true" || e["servingOutcome"] != "NOT_MEASURED" || e["securityEfficacy"] != "NOT_EVALUATED" {
+				t.Fatalf("declared provenance or classifier-only limit differs: %+v", e)
+			}
+		})
+	}
+}
+
+func TestGuardrailCalibrationCurrentStateClosedMetadataAndThresholds(t *testing.T) {
+	base := guardrailProducerFixture(t, "enforce")
+	tests := []struct {
+		name string
+		edit func(map[string]any)
+	}{
+		{"missing mode", func(s map[string]any) { delete(s, "mode") }},
+		{"missing models", func(s map[string]any) { delete(s, "models") }},
+		{"missing runtime", func(s map[string]any) { delete(s, "runtime") }},
+		{"unknown top field", func(s map[string]any) { s["extra"] = "x" }},
+		{"load error", func(s map[string]any) { s["load_error"] = "unavailable" }},
+		{"unready", func(s map[string]any) { s["ready"] = false }},
+		{"null ready", func(s map[string]any) { s["ready"] = nil }},
+		{"unknown active", func(s map[string]any) { s["active"] = "pgv3" }},
+		{"bad roster", func(s map[string]any) { s["loaded"] = []string{"pgv1", "pgv1"} }},
+		{"unknown mode", func(s map[string]any) { s["mode"] = "audit" }},
+		{"null mode", func(s map[string]any) { s["mode"] = nil }},
+		{"missing model", func(s map[string]any) { delete(s["models"].(map[string]any), "pgv1") }},
+		{"wrong model name", func(s map[string]any) { s["models"].(map[string]any)["pgv1"].(map[string]any)["model"] = "other/model" }},
+		{"null model revision", func(s map[string]any) { s["models"].(map[string]any)["pgv2"].(map[string]any)["revision"] = nil }},
+		{"extra model field", func(s map[string]any) { s["models"].(map[string]any)["pgv1"].(map[string]any)["loaded"] = true }},
+		{"missing python", func(s map[string]any) { delete(s["runtime"].(map[string]any), "python") }},
+		{"null python", func(s map[string]any) { s["runtime"].(map[string]any)["python"] = nil }},
+		{"missing package", func(s map[string]any) { delete(s["runtime"].(map[string]any)["packages"].(map[string]any), "torch") }},
+		{"null package version", func(s map[string]any) { s["runtime"].(map[string]any)["packages"].(map[string]any)["torch"] = nil }},
+		{"extra package", func(s map[string]any) { s["runtime"].(map[string]any)["packages"].(map[string]any)["numpy"] = "1" }},
+		{"null zero threshold", func(s map[string]any) { s["thresholds"].(map[string]any)["pgv1"] = nil }},
+		{"bool zero threshold", func(s map[string]any) { s["thresholds"].(map[string]any)["pgv1"] = false }},
+		{"negative threshold", func(s map[string]any) { s["thresholds"].(map[string]any)["pgv1"] = -0.1 }},
+		{"above one threshold", func(s map[string]any) { s["thresholds"].(map[string]any)["pgv2"] = 1.1 }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if state, err := parseGuardrailState(editGuardrailState(t, base, tc.edit), "pgv2"); err == nil {
+				t.Fatalf("unsupported current state accepted: %+v", state)
+			}
+		})
+	}
+	for _, tc := range []struct{ name, old, replacement string }{
+		{"duplicate models key", `"models":{"pgv1":`, `"models":{"pgv1":null,"pgv1":`},
+		{"duplicate revision", `"revision":"unknown"`, `"revision":"unknown","revision":"other"`},
+		{"duplicate runtime key", `"runtime":{"packages":`, `"runtime":{"packages":{},"packages":`},
+		{"duplicate package", `"fastapi":`, `"fastapi":"other","fastapi":`},
+		{"nonfinite threshold", `"pgv2":1.0`, `"pgv2":NaN`},
+		{"overflow threshold", `"pgv2":1.0`, `"pgv2":1e999`},
+		{"trailing JSON", "}\n", `} {}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(string(base), tc.old) {
+				t.Fatalf("producer fixture no longer contains %q", tc.old)
+			}
+			raw := []byte(strings.Replace(string(base), tc.old, tc.replacement, 1))
+			if state, err := parseGuardrailState(raw, "pgv2"); err == nil {
+				t.Fatalf("ambiguous current state accepted: %+v", state)
+			}
+		})
+	}
+}
+
+func TestGuardrailCalibrationDeclaredStateDriftStopsResult(t *testing.T) {
+	base := guardrailProducerFixture(t, "enforce")
+	for _, tc := range []struct {
+		name string
+		edit func(map[string]any)
+	}{
+		{"mode", func(s map[string]any) { s["mode"] = "observe" }},
+		{"model revision", func(s map[string]any) { s["models"].(map[string]any)["pgv2"].(map[string]any)["revision"] = "changed" }},
+		{"runtime version", func(s map[string]any) {
+			s["runtime"].(map[string]any)["packages"].(map[string]any)["fastapi"] = "changed"
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := &guardrailFixture{stateRaw: base, stateAfterRaw: editGuardrailState(t, base, tc.edit)}
+			runtime, recorder, closeServer := fixture.setup(t)
+			defer closeServer()
+			result := NewGuardrailCalibrationHandler().Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
+			if result.Outcome != OutcomeInconclusive || result.Cleanup.Verified || result.Summary != "guardrail runtime state changed during calibration" ||
+				fixture.proxyState != 2 || len(fixture.classifyTexts) != 2 || len(recorder.events) != 2 || fixture.mutatingCalls != 0 {
+				t.Fatalf("metadata drift completed calibration: %+v", result)
+			}
+		})
 	}
 }

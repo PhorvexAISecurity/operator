@@ -128,6 +128,95 @@ func TestGuardrailStaticIndependentPrivateReplyValidation(t *testing.T) {
 	}
 }
 
+func staticStateWithMode(t *testing.T, original json.RawMessage, mode any, present bool) json.RawMessage {
+	t.Helper()
+	var state map[string]any
+	if err := json.Unmarshal(original, &state); err != nil {
+		t.Fatal(err)
+	}
+	if present {
+		state["mode"] = mode
+	} else {
+		delete(state, "mode")
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func TestGuardrailStaticResultRefusesObserveModeTypedUpstream403(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mode    any
+		present bool
+		valid   bool
+	}{
+		{"legacy unreported", nil, false, true},
+		{"declared enforce", "enforce", true, true},
+		{"declared observe", "observe", true, false},
+		{"unknown mode", "unknown", true, false},
+		{"null mode", nil, true, false},
+		{"numeric mode", 1, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, cfg, artifact := staticFixture(t)
+			for i := range artifact.Responses {
+				state := staticStateWithMode(t, artifact.Responses[i].StateBefore, tc.mode, tc.present)
+				artifact.Responses[i].StateBefore = state
+				artifact.Responses[i].StateAfter = state
+			}
+			writeStaticArtifact(t, out, artifact)
+			got, err := readGuardrailStaticResult(out, "run-1", cfg)
+			if !tc.valid {
+				if err == nil || got.Accepted {
+					t.Fatalf("typed upstream 403 received static attribution in %s mode: %+v %v", tc.name, got, err)
+				}
+				return
+			}
+			want := "UNREPORTED"
+			if tc.present {
+				want = "enforce"
+			}
+			if err != nil || !got.Accepted || got.ProxyMode != want || got.Status != artifact.Status {
+				t.Fatalf("valid mode lost: result=%+v err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestGuardrailStaticResultRejectsModeDriftAndIncompleteCurrentShape(t *testing.T) {
+	out, cfg, artifact := staticFixture(t)
+	for i := range artifact.Responses {
+		state := staticStateWithMode(t, artifact.Responses[i].StateBefore, "enforce", true)
+		artifact.Responses[i].StateBefore = state
+		artifact.Responses[i].StateAfter = state
+	}
+	artifact.Responses[1].StateAfter = staticStateWithMode(t, artifact.Responses[1].StateAfter, "observe", true)
+	writeStaticArtifact(t, out, artifact)
+	if _, err := readGuardrailStaticResult(out, "run-1", cfg); err == nil {
+		t.Fatal("mode drift around one chat accepted")
+	}
+	artifact.Responses[1].StateAfter = artifact.Responses[1].StateBefore
+	artifact.Responses[2].StateBefore = staticStateWithMode(t, artifact.Responses[2].StateBefore, "enforce", false)
+	artifact.Responses[2].StateAfter = artifact.Responses[2].StateBefore
+	writeStaticArtifact(t, out, artifact)
+	if _, err := readGuardrailStaticResult(out, "run-1", cfg); err == nil {
+		t.Fatal("mode drift between calls accepted")
+	}
+	state := map[string]any{"active": "pgv1", "ready": true, "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]float64{"pgv1": 0.5, "pgv2": 0.5}, "bodySHA256": strings.Repeat("e", 64), "models": map[string]any{}}
+	missing, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact.Responses[2].StateBefore, artifact.Responses[2].StateAfter = missing, missing
+	writeStaticArtifact(t, out, artifact)
+	if _, err := readGuardrailStaticResult(out, "run-1", cfg); err == nil {
+		t.Fatal("current state without mode accepted as legacy")
+	}
+}
+
 func TestGuardrailStaticRejectsDriftAndDuplicateJSON(t *testing.T) {
 	out, cfg, a := staticFixture(t)
 	a.Snapshots[1].Variant = "pgv2"
