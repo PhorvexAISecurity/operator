@@ -6,6 +6,7 @@ package recon
 
 import (
 	"sort"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -146,6 +147,12 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			boostFactWeight(af.Facts, FactInflightRequests, model.AttackVectorInflight, vectorDominance, refs) // -> request-drain
 		}
 	}
+	// A typed, trusted observation may weight only the current Pod-bound API
+	// authentication capability that ingestion independently projected. It does
+	// not steer from an expected actuator or give cover to copied bytes.
+	if refs := podBoundAPIAuthVectorEvents(view.Events, view.Pod, fctx.EventAgeHorizon); len(refs) > 0 {
+		boostFactWeight(af.Facts, FactPodBoundKubeAPIAuthPotential, model.AttackVectorPodBoundAPIAuth, vectorDominance, refs)
+	}
 	// Adapter integrity has its own authenticated authority. It must neither require nor
 	// fabricate a generic model/GPU/serving context. The multiplicative 3x keeps the
 	// fact dominant while preserving zero weight at zero PHold and finite policy scaling.
@@ -268,6 +275,28 @@ func boundMultAt(m, cap float64) (float64, bool) {
 // vectorDominance is the multiplier a named attack vector applies to its matching fact — the same
 // structural ×3 dominance adapter-integrity uses, so the surgical actuator outranks the cheap cover.
 const vectorDominance = 3.0
+
+func podBoundAPIAuthVectorEvents(events []model.SecurityEventInfo, pod model.Pod, horizon time.Duration) []model.VectorSteeringEvent {
+	refs := make([]model.VectorSteeringEvent, 0)
+	for _, event := range events {
+		if !model.PodBoundAPIAuthEventEligible(event, pod, horizon) {
+			continue
+		}
+		refs = append(refs, model.VectorSteeringEvent{
+			EventName: event.Name, EventUID: event.UID, RuleType: event.Type,
+			DeclaredSource: event.Source, TrustVerdict: event.Trust,
+			CreatorIdentity: event.CreatorIdentity, TargetPodUID: pod.UID,
+		})
+	}
+	sort.Slice(refs, func(i, j int) bool { return steeringEventKey(refs[i]) < steeringEventKey(refs[j]) })
+	unique := refs[:0]
+	for _, ref := range refs {
+		if len(unique) == 0 || steeringEventKey(unique[len(unique)-1]) != steeringEventKey(ref) {
+			unique = append(unique, ref)
+		}
+	}
+	return unique
+}
 
 // vectorEvents returns every pod-targeting observation that jointly causes the one
 // multiplier for vectorType. Trust remains an ingestion responsibility (M-94).

@@ -515,11 +515,16 @@ func (e *CoverageEngine) RetainStageClock(owner string, keep map[string]struct{}
 	}
 }
 
-// hasDirectFoothold reports whether an event places the attacker ON this pod (TargetsPod=true), as
-// opposed to a neighbor-propagated event (TargetsPod=false). Under reactiveOnly this is what makes a
-// pod actionable — so containment isolates the COMPROMISED node, not a clean neighbor of it.
-func hasDirectFoothold(evs []model.SecurityEventInfo) bool {
+// hasDirectFoothold reports whether an admitted event directly binds this asset
+// (TargetsPod=true), as opposed to a neighbor-propagated event. The Pod-bound
+// credential vector binds the source Pod whose retirement can invalidate the
+// bearer; it does not assert an on-Pod exploit or infect neighboring assets.
+func hasDirectFoothold(evs []model.SecurityEventInfo, pod model.Pod, eventHorizon time.Duration) bool {
 	for i := range evs {
+		if evs[i].Type == model.AttackVectorPodBoundAPIAuth &&
+			!model.PodBoundAPIAuthEventEligible(evs[i], pod, eventHorizon) {
+			continue
+		}
 		if evs[i].TargetsPod {
 			return true
 		}
@@ -667,14 +672,15 @@ func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Poli
 			nbs = append(nbs, recon.NeighborRef{Key: nb.Key, Value: nb.Value})
 		}
 		return recon.FactContext{
-			AssetValue:     ac.sig.AssetValue,
-			PHold:          ac.assess.PHold,
-			StageUrgency:   ac.assess.StageUrgency,
-			LateralUrgency: ac.assess.LateralUrgency,
-			BlastRadius:    v.BlastRadius,
-			Neighbors:      nbs,
-			HasGPU:         v.Pod.HasGPU,
-			Stateful:       v.Pod.Stateful,
+			AssetValue:      ac.sig.AssetValue,
+			PHold:           ac.assess.PHold,
+			EventAgeHorizon: pol.EffectiveEventAgeHorizon(),
+			StageUrgency:    ac.assess.StageUrgency,
+			LateralUrgency:  ac.assess.LateralUrgency,
+			BlastRadius:     v.BlastRadius,
+			Neighbors:       nbs,
+			HasGPU:          v.Pod.HasGPU,
+			Stateful:        v.Pod.Stateful,
 		}
 	}
 
@@ -849,7 +855,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	}
 
 	// [reactiveOnly] When the policy is reactive-only, an asset is actionable ONLY while a REAL
-	// attack signal places the attacker ON it — a DIRECT foothold (a non-Phorvex SecurityEvent with
+	// attack signal directly binds it — a DIRECT observation (a non-Phorvex SecurityEvent with
 	// TargetsPod=true; Phorvex's own events are already filtered at ingest) OR an AI poison marker
 	// (SuspectAdapter). A pod that merely NEIGHBORS a compromised node (only propagated
 	// TargetsPod=false events) is NOT contained: isolating a clean neighbor degrades availability
@@ -861,7 +867,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	for _, v := range views {
 		backed := true
 		if pol.ReactiveOnly {
-			backed = v.Pod.SuspectAdapter != "" || hasDirectFoothold(v.Events)
+			backed = v.Pod.SuspectAdapter != "" || hasDirectFoothold(v.Events, v.Pod, pol.EffectiveEventAgeHorizon())
 		}
 		attackBackedKey[v.Pod.Namespace+"/"+v.Pod.Name] = backed
 	}
@@ -1992,6 +1998,12 @@ func blindCostSource(v *model.WorkloadView) string {
 func sinceEvidenceOf(a killchain.Assessment) model.OptionalFloat {
 	best := math.Inf(1)
 	for _, e := range a.Events {
+		// A rejected credential-specific observation stays in the diagnostic
+		// event inventory, but must not present as a fresh admitted evidence
+		// clock in the decision trace.
+		if e.Type == model.AttackVectorPodBoundAPIAuth && e.Weight <= 0 {
+			continue
+		}
 		if e.TargetsPod && e.TimestampPresent && e.AgeSec < best {
 			best = e.AgeSec
 		}

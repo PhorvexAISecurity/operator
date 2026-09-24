@@ -304,7 +304,8 @@ func selectionEligibleSet(set actionset.ActionSet, pol model.Policy) actionset.A
 		if candidate.View == nil {
 			continue // no evidence carrier: fail closed in reactive-only mode
 		}
-		if candidate.View.Pod.SuspectAdapter != "" || hasDirectFoothold(candidate.View.Events) {
+		if candidate.View.Pod.SuspectAdapter != "" ||
+			hasDirectFoothold(candidate.View.Events, candidate.View.Pod, pol.EffectiveEventAgeHorizon()) {
 			filtered.Candidates = append(filtered.Candidates, candidate)
 		}
 	}

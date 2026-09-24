@@ -525,6 +525,10 @@ const (
 	AttackVectorGuardrail = "phorvex.attack.guardrail"
 	AttackVectorInflight  = "phorvex.attack.inflight"
 	AttackVectorAdapter   = "phorvex.attack.adapter"
+	// AttackVectorPodBoundAPIAuth reports exposure of a copied projected
+	// default-audience bearer for this exact Pod. It does not establish that a
+	// generic copied credential was erased, or request a particular action.
+	AttackVectorPodBoundAPIAuth = "phorvex.attack.pod-bound-api-auth"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
