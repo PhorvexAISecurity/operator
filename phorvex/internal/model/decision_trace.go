@@ -123,8 +123,11 @@ func SafeDispatchReason(reason string) string {
 	}
 	switch parts[0] {
 	case "pending-dispatch", "unselected", "kill-switch", "namespace-dry-run", "policy-dry-run", "actuation-brake",
+		"standing-policy-guard-unavailable", "context-cancelled",
 		"ensure-policy-failed", "inviolability-guard", "route-preparation-failed",
 		"no-tick-view", "emit-boundary-infeasible", "code-exec-unverified",
+		"shared-capacity-refused", "shared-capacity-operation-already-recorded", "shared-capacity-claim-unconfirmed",
+		"quarantine-capacity-refused",
 		"emitted-unconfirmed", "outcome-unknown", "deadline-expired",
 		"definite-no-effect-refusal", "already-satisfied", "reconciled-prior-operation",
 		"declared-without-implementation":
@@ -135,7 +138,8 @@ func SafeDispatchReason(reason string) string {
 	for _, suffix := range parts[1:] {
 		switch suffix {
 		case "fallback-blocked-kill-switch", "fallback-blocked-actuation-brake",
-			"alternative-deferred-reservation-changed", "alternative-deferred-no-admissible-candidate":
+			"alternative-deferred-reservation-changed", "alternative-deferred-no-admissible-candidate",
+			"shared-capacity-release-pending", "shared-capacity-unknown-retention-unconfirmed":
 			if seen[suffix] {
 				return ""
 			}
