@@ -141,6 +141,9 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 		outcome := r.outcome()
 		if st.ExecutionKind == "fixed-suite" && st.Outcome != "" {
 			outcome.ClaimClass = "functional"
+			if st.ClaimClass == "calibration" {
+				outcome.ClaimClass = "calibration"
+			}
 			outcome.Outcome = st.Outcome
 			outcome.OutcomeReason = "fixed-suite terminal result: " + st.Outcome
 		}

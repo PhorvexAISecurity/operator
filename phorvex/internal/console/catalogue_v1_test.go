@@ -16,8 +16,8 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	if len(items) != 6 {
-		t.Fatalf("items=%d, want six fixed limited-v1 entries", len(items))
+	if len(items) != 7 {
+		t.Fatalf("items=%d, want seven limited-v1 entries", len(items))
 	}
 	for _, item := range items {
 		if !strings.HasPrefix(item.Name, "limited-v1-") {
@@ -26,6 +26,44 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 		if item.LaunchKind == "" || item.ClaimClass == "" {
 			t.Fatalf("entry lacks typed launch metadata: %+v", item)
 		}
+	}
+}
+
+func TestGuardrailCalibrationCatalogueAPIIsSeparateAndDisabledByDefault(t *testing.T) {
+	cfg := Config{}
+	items := cfg.Catalog()
+	var calibration, effect *CatalogItem
+	for i := range items {
+		if items[i].EntryID == limitedV1GuardrailCalibrationID {
+			calibration = &items[i]
+		}
+		if items[i].EntryID == limitedV1GuardrailID {
+			effect = &items[i]
+		}
+	}
+	if calibration == nil || effect == nil {
+		t.Fatal("separate calibration and effect entries are missing")
+	}
+	raw, err := json.Marshal(calibration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var api struct {
+		LaunchKind            string   `json:"launchKind"`
+		ClaimClass            string   `json:"claimClass"`
+		ResponseGuidanceBasis string   `json:"responseGuidanceBasis"`
+		ExpectedActuators     []string `json:"expectedActuators"`
+		Available             bool     `json:"available"`
+		BenignControl         *bool    `json:"benignControl"`
+	}
+	if err = json.Unmarshal(raw, &api); err != nil {
+		t.Fatal(err)
+	}
+	if api.LaunchKind != "fixed-suite" || api.ClaimClass != "calibration" || api.ResponseGuidanceBasis != "none" || len(api.ExpectedActuators) != 0 || api.Available || api.BenignControl == nil || !*api.BenignControl {
+		t.Fatalf("calibration API claim is unsupported: %s", raw)
+	}
+	if effect.LaunchKind != "live-vllm-effect" || effect.ClaimClass != "effect" || len(effect.ExpectedActuators) != 1 {
+		t.Fatalf("effect entry changed: %+v", effect)
 	}
 }
 

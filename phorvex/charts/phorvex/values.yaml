@@ -392,6 +392,17 @@ phorvex:
         pdb: ""
         transcriptSelector: ""
         transcriptContainer: ""
+      # Disabled unless the installed guardrail source digest and fixed route
+      # are explicitly supplied. This only measures two benign classifiers.
+      guardrailCalibration:
+        enabled: false
+        namespace: vllm
+        service: vllm
+        port: 8000
+        container: guardrail
+        sourceConfigMap: guardrail-proxy
+        sourceKey: guardrail_proxy.py
+        sourceSHA256: ""
       gpu:
         enabled: false
         namespace: ""

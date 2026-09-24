@@ -131,6 +131,26 @@ spec:
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_CONTAINER
           value: {{ .transcriptContainer | default "" | quote }}
         {{- end }}
+        {{- with .guardrailCalibration }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_CALIBRATION_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_NAMESPACE
+          value: {{ required "console.catalogueV1.guardrailCalibration.namespace is required" .namespace | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SERVICE
+          value: {{ required "console.catalogueV1.guardrailCalibration.service is required" .service | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_PORT
+          value: {{ .port | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_CONTAINER
+          value: {{ required "console.catalogueV1.guardrailCalibration.container is required" .container | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_CONFIGMAP
+          value: {{ required "console.catalogueV1.guardrailCalibration.sourceConfigMap is required" .sourceConfigMap | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_KEY
+          value: {{ required "console.catalogueV1.guardrailCalibration.sourceKey is required" .sourceKey | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_SHA256
+          value: {{ required "console.catalogueV1.guardrailCalibration.sourceSHA256 is required" .sourceSHA256 | quote }}
+        {{- end }}
+        {{- end }}
         {{- with .gpu }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_GPU_ENABLED
           value: {{ .enabled | default false | quote }}

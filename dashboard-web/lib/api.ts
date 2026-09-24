@@ -151,7 +151,7 @@ export interface CatalogItem {
   expectedActuators?: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
   responseGuidance?: string; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
   launchKind?: "harness-scenario" | "fixed-suite" | "live-vllm-effect";
-  claimClass?: "security" | "functional" | "effect";
+  claimClass?: "security" | "functional" | "effect" | "calibration";
   profile?: string; available?: boolean; unavailableReason?: string;
   runtimeContext?: string;
 }
@@ -404,7 +404,7 @@ export interface TimelineEvent {
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
   scenarioRealism?: string; scenarioBenignControl?: boolean; scenarioClaimLimits?: string;
   functionalOracleStatus?: string;
-  outcome?: TrialOutcome; outcomeReason?: string; claimClass?: "functional" | "security" | "control";
+  outcome?: TrialOutcome; outcomeReason?: string; claimClass?: "functional" | "security" | "control" | "calibration";
   measurementStatus?: string; measurementPhase?: string; validityReasons?: string[];
   reason?: string;
 }
@@ -554,7 +554,7 @@ export interface RunEvidenceTrial {
   defensiveActions: number; mtdEffect: string; observed: string; commands: string[];
   scenarioRealism?: string; scenarioBenignControl: boolean; scenarioClaimLimits?: string;
   functionalOracleStatus?: string;
-  outcome: TrialOutcome; outcomeReason: string; claimClass: "functional" | "security" | "control";
+  outcome: TrialOutcome; outcomeReason: string; claimClass: "functional" | "security" | "control" | "calibration";
   measurementStatus: string; measurementPhase: string; validityReasons: string[];
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }

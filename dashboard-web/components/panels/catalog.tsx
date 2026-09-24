@@ -12,6 +12,7 @@ import { PaginationBar } from "@/components/ui/pagination";
 import { useCatalog, useTargets } from "@/lib/query";
 import { setSelectedTarget } from "@/lib/provider-store";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
+import { GuardrailCalibrationResult } from "@/components/panels/guardrail-calibration-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 
@@ -81,7 +82,7 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
             <span className="font-mono text-[13px] text-foreground">{it.name}</span>
             <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>
             {it.hasRun && <Badge variant="accent">ran</Badge>}
-            {it.benignControl ? <Badge variant="neutral">benign functional</Badge> : it.product === "ai" && <Badge variant="pending">SP-0</Badge>}
+            {it.benignControl ? <Badge variant="neutral">{it.claimClass === "calibration" ? "benign calibration" : "benign functional"}</Badge> : it.product === "ai" && <Badge variant="pending">SP-0</Badge>}
             {it.available === false && <Badge variant="pending">unavailable</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
@@ -181,7 +182,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
         setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "run", id, lens: selectedLens, context });
-        setMsg(`Started ${id}. Its result reports the functional oracle, evidence, cleanup, and claim limits.`);
+        setMsg(item!.claimClass === "calibration" ? `Started ${id}. Its result reports only fixed benign classifier calibration, source pins, and cleanup.` : `Started ${id}. Its result reports the functional oracle, evidence, cleanup, and claim limits.`);
         return;
       }
       if (item!.launchKind === "live-vllm-effect") {
@@ -212,18 +213,18 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           <Badge variant="neutral">{item.category}</Badge>
           <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>
           <Badge variant={item.product === "ai" ? "modeled" : "accent"}>{item.product.toUpperCase()}</Badge>
-          {item.benignControl && <Badge variant="neutral">security outcome not applicable</Badge>}
+          {item.benignControl && <Badge variant="neutral">{item.claimClass === "calibration" ? "classifier-only · security not evaluated" : "security outcome not applicable"}</Badge>}
         </div>
         <div>
           <SectionLabel>ATT&amp;CK techniques</SectionLabel>
           <div className="flex flex-wrap gap-1.5">{(item.techniques ?? []).length === 0 ? <span className="text-[12px] text-muted-foreground">none tagged</span> : (item.techniques ?? []).map((t) => <span key={t} className="rounded bg-muted/40 px-2 py-0.5 text-[12px] font-mono text-foreground/80">{t}</span>)}</div>
         </div>
         {item.benignControl
-          ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
+          ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
           : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {item.launchKind === "fixed-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
+          {item.launchKind === "fixed-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
           <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           </>}
@@ -238,6 +239,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           {fixedEvidence?.functionalResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
             <div>typed outcome: <span className="font-medium text-foreground">{fixedEvidence.functionalResult.outcome}</span> · cleanup: <span className="text-foreground">{fixedEvidence.functionalResult.cleanup.status}</span></div>
             <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
+            {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}

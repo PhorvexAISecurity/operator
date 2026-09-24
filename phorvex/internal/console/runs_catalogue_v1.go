@@ -40,6 +40,8 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GPUFixtureNamespace)
 	case cataloguev1.AuthUnauth, cataloguev1.AuthScope:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.AllowedTenant)
+	case cataloguev1.GuardrailCalibration:
+		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GuardrailNamespace)
 	}
 	if tenant == "" {
 		return runDestination{}, errors.New("fixed suite resolved tenant is unavailable")
@@ -48,7 +50,7 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 }
 
 func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
-	return cataloguev1.RuntimeConfig{Version: cataloguev1.RuntimeConfigVersion, StateDir: c.StateDir,
+	runtime := cataloguev1.RuntimeConfig{Version: cataloguev1.RuntimeConfigVersion, StateDir: c.StateDir,
 		KubeconfigPath: c.CatalogueV1.KubeconfigPath, KubeContext: c.CatalogueV1.KubeContext,
 		FixedLoopback: c.CatalogueV1.LoopbackURL, ScopedTokenFile: c.CatalogueV1.ScopedTokenFile,
 		AllowedTenant: c.CatalogueV1.AllowedTenant, DeniedTenant: c.CatalogueV1.DeniedTenant,
@@ -63,6 +65,14 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Namespace: c.CatalogueV1.GPUFixtureNamespace, FixtureConfigFile: c.CatalogueV1.GPUFixtureConfig,
 			HarnessBinary: c.HarnessBin, HarnessDir: c.HarnessDir,
 			KubeconfigPath: c.CatalogueV1.GPUKubeconfigPath, KubeContext: c.CatalogueV1.GPUKubeContext}}
+	if c.CatalogueV1.GuardrailCalibrationEnabled {
+		runtime.Guardrail = &cataloguev1.GuardrailCalibrationRuntime{Enabled: true,
+			Namespace: c.CatalogueV1.GuardrailNamespace, Service: c.CatalogueV1.GuardrailService,
+			Port: c.CatalogueV1.GuardrailPort, Container: c.CatalogueV1.GuardrailContainer,
+			SourceConfigMap: c.CatalogueV1.GuardrailSourceConfigMap, SourceKey: c.CatalogueV1.GuardrailSourceKey,
+			ExpectedSourceSHA256: c.CatalogueV1.GuardrailSourceSHA256}
+	}
+	return runtime
 }
 
 func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, owner string) (string, error) {
@@ -120,10 +130,14 @@ func (rm *RunManager) StartFunctional(profile cataloguev1.ProfileID, startedAt, 
 		rm.mu.Unlock()
 		return "", fmt.Errorf("persist fixed-suite job: %w", err)
 	}
+	claimClass := "functional"
+	if profile == cataloguev1.GuardrailCalibration {
+		claimClass = "calibration"
+	}
 	st := &RunStatus{ID: id, Config: string(profile), State: "running", Started: startedAt, Date: tsNow(),
 		ExpectedTrials: 1, Owner: owner, ScopeTarget: destination.ScopeTarget, ScopeTenant: destination.ScopeTenant,
 		Target: rm.cfg.catalogueV1RuntimeContext(profile), TargetLabel: rm.cfg.catalogueV1RuntimeContext(profile), Provider: "Kubernetes",
-		ExecutionKind: "fixed-suite", ClaimClass: "functional"}
+		ExecutionKind: "fixed-suite", ClaimClass: claimClass}
 	rm.runs[id], rm.runOut[id], rm.functional[id] = st, id, job
 	rm.active++
 	rm.lastStart = time.Now()

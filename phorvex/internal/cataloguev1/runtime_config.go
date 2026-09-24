@@ -20,19 +20,20 @@ const RuntimeConfigVersion = 1
 // RuntimeConfig is the private, server-generated child configuration. It may
 // contain credential paths, but never credential bytes.
 type RuntimeConfig struct {
-	Version         int               `json:"version"`
-	StateDir        string            `json:"stateDir"`
-	KubeconfigPath  string            `json:"kubeconfigPath,omitempty"`
-	KubeContext     string            `json:"kubeContext,omitempty"`
-	FixedLoopback   string            `json:"fixedLoopback"`
-	ScopedTokenFile string            `json:"scopedTokenFile"`
-	AllowedTenant   string            `json:"allowedTenant"`
-	DeniedTenant    string            `json:"deniedTenant"`
-	DeniedTarget    string            `json:"deniedTarget"`
-	ExpectedSubject string            `json:"expectedSubject"`
-	GrantFile       string            `json:"grantFile"`
-	Voice           VoiceRuntime      `json:"voice"`
-	GPU             GPUFixtureRuntime `json:"gpu"`
+	Version         int                          `json:"version"`
+	StateDir        string                       `json:"stateDir"`
+	KubeconfigPath  string                       `json:"kubeconfigPath,omitempty"`
+	KubeContext     string                       `json:"kubeContext,omitempty"`
+	FixedLoopback   string                       `json:"fixedLoopback"`
+	ScopedTokenFile string                       `json:"scopedTokenFile"`
+	AllowedTenant   string                       `json:"allowedTenant"`
+	DeniedTenant    string                       `json:"deniedTenant"`
+	DeniedTarget    string                       `json:"deniedTarget"`
+	ExpectedSubject string                       `json:"expectedSubject"`
+	GrantFile       string                       `json:"grantFile"`
+	Voice           VoiceRuntime                 `json:"voice"`
+	GPU             GPUFixtureRuntime            `json:"gpu"`
+	Guardrail       *GuardrailCalibrationRuntime `json:"guardrail,omitempty"`
 }
 
 func (c RuntimeConfig) SHA256() (string, error) {
@@ -61,6 +62,11 @@ func (c RuntimeConfig) Validate() error {
 		u, err := url.Parse(c.FixedLoopback)
 		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return errors.New("catalogue v1 loopback origin is invalid")
+		}
+	}
+	if c.Guardrail != nil {
+		if err := ValidateGuardrailCalibrationRuntime(*c.Guardrail); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -108,8 +114,12 @@ func (c RuntimeConfig) Runtime(restConfig *rest.Config, kube kubernetes.Interfac
 			return Runtime{}, err
 		}
 	}
-	return Runtime{StateDir: c.StateDir, ConfigSHA256: hash, KubeconfigPath: c.KubeconfigPath, KubeContext: c.KubeContext, RESTConfig: restConfig, Kube: kube, HTTPClient: client,
+	runtime := Runtime{StateDir: c.StateDir, ConfigSHA256: hash, KubeconfigPath: c.KubeconfigPath, KubeContext: c.KubeContext, RESTConfig: restConfig, Kube: kube, HTTPClient: client,
 		FixedLoopback: loopback, ScopedTokenFile: c.ScopedTokenFile, AllowedTenant: c.AllowedTenant,
 		DeniedTenant: c.DeniedTenant, DeniedTarget: c.DeniedTarget, ExpectedSubject: c.ExpectedSubject,
-		GrantFile: c.GrantFile, Voice: c.Voice, GPU: c.GPU}, nil
+		GrantFile: c.GrantFile, Voice: c.Voice, GPU: c.GPU}
+	if c.Guardrail != nil {
+		runtime.Guardrail = *c.Guardrail
+	}
+	return runtime, nil
 }

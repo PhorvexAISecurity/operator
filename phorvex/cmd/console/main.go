@@ -316,11 +316,22 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	guardrailCalibrationEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_CALIBRATION_ENABLED")
+	if err != nil {
+		return err
+	}
 	port := int64(0)
 	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT"); raw != "" {
 		port, err = strconv.ParseInt(raw, 10, 32)
 		if err != nil || port < 1 || port > 65535 || raw != strconv.FormatInt(port, 10) {
 			return errors.New("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PORT must be a canonical port")
+		}
+	}
+	guardrailPort := int64(0)
+	if raw := read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_PORT"); raw != "" {
+		guardrailPort, err = strconv.ParseInt(raw, 10, 32)
+		if err != nil || guardrailPort < 1 || guardrailPort > 65535 || raw != strconv.FormatInt(guardrailPort, 10) {
+			return errors.New("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_PORT must be a canonical port")
 		}
 	}
 	executable, _ := os.Executable()
@@ -341,7 +352,15 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		VoiceServicePort: int32(port), VoicePDB: read("PHORVEX_CONSOLE_CATALOGUE_V1_VOICE_PDB"),
 		TranscriptSelector: read("PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_SELECTOR"), TranscriptContainer: read("PHORVEX_CONSOLE_CATALOGUE_V1_TRANSCRIPT_CONTAINER"),
 		GPUEnabled: gpuEnabled, GPUFixtureNamespace: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_NAMESPACE"),
-		GPUFixtureConfig: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_CONFIG"), GPUKubeconfigPath: gpuKubeconfigPath, GPUKubeContext: gpuKubeContext}
+		GPUFixtureConfig: read("PHORVEX_CONSOLE_CATALOGUE_V1_GPU_CONFIG"), GPUKubeconfigPath: gpuKubeconfigPath, GPUKubeContext: gpuKubeContext,
+		GuardrailCalibrationEnabled: guardrailCalibrationEnabled,
+		GuardrailNamespace:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_NAMESPACE"),
+		GuardrailService:            read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SERVICE"),
+		GuardrailPort:               int32(guardrailPort),
+		GuardrailContainer:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_CONTAINER"),
+		GuardrailSourceConfigMap:    read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_CONFIGMAP"),
+		GuardrailSourceKey:          read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_KEY"),
+		GuardrailSourceSHA256:       read("PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_SHA256")}
 	if cfg.CatalogueV1.KubeconfigPath != "" && cfg.CatalogueV1.KubeContext == "" {
 		loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: cfg.CatalogueV1.KubeconfigPath}
 		raw, loadErr := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).RawConfig()
@@ -382,7 +401,7 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 	}
 	var restConfig *rest.Config
 	var kube kubernetes.Interface
-	if job.Profile == cataloguev1.VoiceMedia || job.Profile == cataloguev1.VoiceRecovery {
+	if job.Profile == cataloguev1.VoiceMedia || job.Profile == cataloguev1.VoiceRecovery || job.Profile == cataloguev1.GuardrailCalibration {
 		if runtimeConfig.KubeconfigPath != "" {
 			loading := &clientcmd.ClientConfigLoadingRules{ExplicitPath: runtimeConfig.KubeconfigPath}
 			overrides := &clientcmd.ConfigOverrides{CurrentContext: runtimeConfig.KubeContext}
@@ -406,7 +425,8 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 	runner, err := cataloguev1.New(runtime,
 		cataloguev1.NewVoiceMediaHandler(), cataloguev1.NewVoiceRecoveryHandler(),
 		cataloguev1.NewGPUDrainHandler(),
-		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler())
+		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler(),
+		cataloguev1.NewGuardrailCalibrationHandler())
 	if err != nil {
 		log.Printf("catalogue v1 registry: %v", err)
 		return 2

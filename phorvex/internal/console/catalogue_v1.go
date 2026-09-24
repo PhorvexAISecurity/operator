@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	limitedV1GuardrailID = "limited-v1-vllm-guardrail-effect"
-	limitedV1GPUName     = "limited-v1-vllm-request-drain"
+	limitedV1GuardrailID            = "limited-v1-vllm-guardrail-effect"
+	limitedV1GPUName                = "limited-v1-vllm-request-drain"
+	limitedV1GuardrailCalibrationID = "limited-v1-vllm-guardrail-calibration"
 )
 
 func boolPtr(value bool) *bool { return &value }
@@ -56,12 +57,30 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 	if gpuReady {
 		gpuReason = "dedicated GPU fixture authority is configured; launch revalidates every identity"
 	}
+	guardrailRuntime := cataloguev1.GuardrailCalibrationRuntime{Enabled: c.CatalogueV1.GuardrailCalibrationEnabled,
+		Namespace: c.CatalogueV1.GuardrailNamespace, Service: c.CatalogueV1.GuardrailService,
+		Port: c.CatalogueV1.GuardrailPort, Container: c.CatalogueV1.GuardrailContainer,
+		SourceConfigMap: c.CatalogueV1.GuardrailSourceConfigMap, SourceKey: c.CatalogueV1.GuardrailSourceKey,
+		ExpectedSourceSHA256: c.CatalogueV1.GuardrailSourceSHA256}
+	guardrailReady := c.CatalogueV1.Enabled && cataloguev1.ValidateGuardrailCalibrationRuntime(guardrailRuntime) == nil
+	guardrailReason := "installed guardrail calibration route and source are not configured"
+	if guardrailReady {
+		guardrailReason = "configured only; launch rechecks route, permissions, source and runtime before two fixed classifier reads"
+	}
 	return []CatalogItem{
 		functional(cataloguev1.VoiceMedia, "limited-v1-voice-media", "application", "Functional", "Ordinary installed Pipecat media only; no phone-call, semantic, brain or security claim.", []string{"installed Voice service", "three Ready endpoints", "exact transcript cleanup"}, voiceReady, voiceReason),
 		functional(cataloguev1.VoiceRecovery, "limited-v1-voice-recovery", "application", "Functional", "One PDB-honoring exact-UID eviction and fresh-session recovery; no seamless-session or security claim.", []string{"installed Voice service", "PDB minAvailable=2", "one eviction permission"}, voiceReady, voiceReason),
 		functional(cataloguev1.GPUDrain, limitedV1GPUName, "ai", "Functional", "Owned ordinary-GPU drain/reopen/recovery fixture only; no installed-brain or security claim.", []string{"dedicated reviewed GPU fixture", "private operation bearer", "ordinary GPU"}, gpuReady, gpuReason),
 		functional(cataloguev1.AuthUnauth, "limited-v1-console-unauthenticated", "platform", "Boundary", "Installed API authentication boundary only; no application attack, brain or actuator claim.", []string{"fixed loopback origin", "projected scoped test identity"}, authReady, authReason),
 		functional(cataloguev1.AuthScope, "limited-v1-console-scoped-authorization", "platform", "Boundary", "Installed API tenant/target authorization boundary only; no application attack, brain or actuator claim.", []string{"fixed loopback origin", "projected scoped test identity", "fixed allowed and denied scopes"}, authReady, authReason),
+		{EntryID: limitedV1GuardrailCalibrationID, Name: limitedV1GuardrailCalibrationID, Product: "ai", Category: "Benign calibration", R6Tag: "not-applicable",
+			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(true),
+			ExpectedActuators: []string{}, ResponseGuidanceBasis: "none",
+			ResponseGuidance: "Two fixed benign texts are sent to the reviewed non-forwarding classifier endpoint/source contract. The loaded process, forwarding behavior, guarded serving, injected response and security efficacy are not attested.",
+			MeaningfulWhen:   "Shows per-variant benign false positives at the installed threshold, with source and runtime pins; no guarded serving or mitigation claim.",
+			RunnableNote:     guardrailReason, Prereqs: []string{"explicit installed guardrail route and source configuration", "read-only Pod, Service, EndpointSlice and ConfigMap access", "fixed Pod proxy state and classify access"},
+			LaunchKind: "fixed-suite", ClaimClass: "calibration", Profile: string(cataloguev1.GuardrailCalibration),
+			Available: guardrailReady, UnavailableReason: guardrailReason, RuntimeContext: c.catalogueV1RuntimeContext(cataloguev1.GuardrailCalibration)},
 		{EntryID: limitedV1GuardrailID, Name: limitedV1GuardrailID, Product: "ai", Category: "Effect observation", R6Tag: "not-applicable",
 			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(true),
 			ExpectedActuators: []string{"guardrail-rotate"}, ResponseGuidanceBasis: "explicit-effect",
@@ -78,7 +97,7 @@ func (c Config) catalogueV1RuntimeContext(profile cataloguev1.ProfileID) string 
 			return value
 		}
 	}
-	if profile == cataloguev1.VoiceMedia || profile == cataloguev1.VoiceRecovery {
+	if profile == cataloguev1.VoiceMedia || profile == cataloguev1.VoiceRecovery || profile == cataloguev1.GuardrailCalibration {
 		if value := strings.TrimSpace(c.CatalogueV1.KubeContext); value != "" {
 			return value
 		}
