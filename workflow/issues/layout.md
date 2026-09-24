@@ -460,4 +460,6 @@ Their canonical bodies remain in `issues/entries/`.
 
 {{ISSUE:M-186}}
 
+{{ISSUE:M-187}}
+
 <!-- WORKFLOW_NEW_ISSUES -->

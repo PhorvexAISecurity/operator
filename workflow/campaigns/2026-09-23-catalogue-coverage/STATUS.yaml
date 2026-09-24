@@ -8,7 +8,7 @@ state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 created_at: '2026-09-23T22:19:16+00:00'
-updated_at: '2026-09-24T02:05:55+00:00'
+updated_at: '2026-09-24T03:24:13+00:00'
 scope:
   environment: dev-existing-cluster
   source_release: pending-fresh-baseline
@@ -55,8 +55,13 @@ rounds:
   state: COMPLETE
 - id: round-12
   state: COMPLETE
+- id: round-13
+  state: COMPLETE
+- id: round-14
+  state: COMPLETE
 findings:
 - RPT-20260923-224833-pod-bound-credential-invalidation-may-be-exclude
+- RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
 verdict:
   result: pending
   artifact: verdict.md
@@ -67,8 +72,8 @@ roles:
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Review StatefulSet target repair and NATS protocol oracle; finish bounded
-    guardrail observation
+  action: Deliver reviewed source increment; integrate detector and repeatable console
+    baseline repairs
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -301,4 +306,42 @@ transitions:
   phase_approval_ref: null
   note: Installed synthetic Chroma get/query passed; exact UUID/nonce cleanup and
     source-specific absence confirmed; no security/Phorvex credit
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T02:59:54+00:00'
+  by: codex-lead
+  artifact: rounds/round-13/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T03:10:40+00:00'
+  by: codex-lead
+  artifact: rounds/round-13/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Observer stopped before publication; inconclusive preserved; exact namespace
+    independently absent, no installed defense result
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-09-24T03:17:32+00:00'
+  by: codex-lead
+  artifact: rounds/round-14/evidence/ADMISSION.json
+  approval_ref: null
+  phase_approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-24T03:24:13+00:00'
+  by: codex-lead
+  artifact: rounds/round-14/evidence/RESULT.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Separate Pod received exact owned NATS message; legitimate service and cleanup
+    confirmed; no signal or installed defense result
   forced: false

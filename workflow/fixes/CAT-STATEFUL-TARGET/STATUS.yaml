@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 16
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -22,16 +22,16 @@ checks:
     result: PASS
     by: campaign-coverage-plan
     artifact: 04-diff.patch
-    sha256: 113b1400a6f846a40cc484a043002ef2f64e4712c70e2c18671e31fb9279cc1b
-    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
-    at: '2026-09-24T02:15:32+00:00'
+    sha256: 6a22f7c30d63696af6020ccd0da86b9f490515d7811cd32398b9666146879cb6
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:09:56+00:00'
   incident:
     result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 88a8b50dc95ae8fb861bdd0d78e1898e5e4fe5e39145f997e4ed242c48a977bd
-    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
-    at: '2026-09-24T02:20:25+00:00'
+    sha256: 77b64901225ccfb9b2669639a8e436db5faec1419c7993c3eafa68f345ff884d
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:13:34+00:00'
     baseline_sha: 7e52748437523ad071fddbbd710713c7791f823a
   red:
     result: PASS
@@ -43,23 +43,51 @@ checks:
   positive_control:
     result: PASS
     by: campaign-coverage-plan
-    artifact: evidence/head-focused.log
-    sha256: 754b348177e0dfbd32bb531f19814e1bd8b2b5a3901f34caa3d6ecf8f19d0c02
-    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
-    at: '2026-09-24T02:21:23+00:00'
+    artifact: evidence/l0-head-bea.log
+    sha256: 06a1645e4bf4f926192a400ad391102f741b30a0d85ae78632c50c04a4b5c6cb
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:09:56+00:00'
   p3:
     result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 0207aae0e90b9059efa3b40a18a4d9cf0cdb1dc7d67dd5bd6d0665e6363f6242
-    source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
-    at: '2026-09-24T02:21:49+00:00'
-    incident_sha256: 88a8b50dc95ae8fb861bdd0d78e1898e5e4fe5e39145f997e4ed242c48a977bd
+    sha256: 2009cce1c4b1aafe7cd25d6ff3f98a153ef1bb4ce7b2b33b736e0fcdfee5af29
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:13:34+00:00'
+    incident_sha256: 77b64901225ccfb9b2669639a8e436db5faec1419c7993c3eafa68f345ff884d
+  preflight:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/preflight/receipt.json
+    sha256: 9658fd16ac46261c03fb27fb3deebbcda6be8a95f6e8d540a4ca724d009ae4e3
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:09:56+00:00'
+  l0:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l0-head-bea.log
+    sha256: 06a1645e4bf4f926192a400ad391102f741b30a0d85ae78632c50c04a4b5c6cb
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:09:56+00:00'
+  l1:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l1-head-bea.log
+    sha256: 174a1b40e21a9077b8774b1c6e81f8b8ac8922fc18249faadf2ee1bc0d814c4d
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:09:56+00:00'
+  l2:
+    result: PASS
+    by: campaign-coverage-plan
+    artifact: evidence/l2-head-bea.log
+    sha256: ce90d95e4fa8b390a9666c7f92dba76caf603be8271cd5a37352de82fad10a2b
+    source_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
+    at: '2026-09-24T03:09:56+00:00'
 fix_id: CAT-STATEFUL-TARGET
 issues: []
 title: Support authoritative StatefulSet Pods in exact-target catalogue runs
 profile: standard
-state: IMPLEMENTED
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -83,12 +111,12 @@ blind_derivation:
 implementation:
   branch: campaign/catalogue-coverage-20260923
   base_sha: 7e52748437523ad071fddbbd710713c7791f823a
-  head_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+  head_sha: bea68b8d0056de09f051ee3a763f92f58dfa3315
   stacked_on:
   - CAT-EXACT-TARGET
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/323
+  reviewed_head: bea68b8d0056de09f051ee3a763f92f58dfa3315
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -106,9 +134,9 @@ verification:
   live_required: true
   soak_required: false
   p3: PASS
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
   positive_control: PASS
@@ -122,9 +150,9 @@ blockers: []
 residuals: []
 next_action:
   owner: codex-lead
-  action: Review committed StatefulSet source and focused evidence; run final shared
-    preflight after NATS exposure and guardrail source freeze
-updated_at: '2026-09-24T02:21:49+00:00'
+  action: Publish reviewed integrated increment in existing PR323; retain CI infrastructure
+    and deployed L3 debt
+updated_at: '2026-09-24T03:22:30+00:00'
 configuration_history:
 - at: '2026-09-24T01:56:35+00:00'
   by: codex-lead
@@ -139,6 +167,16 @@ configuration_history:
   by: campaign-coverage-plan
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-24T03:09:55+00:00'
+  by: campaign-coverage-plan
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T03:22:21+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -165,6 +203,38 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T03:09:56+00:00'
+  by: campaign-coverage-plan
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T03:13:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T03:13:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T03:22:30+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -175,3 +245,40 @@ check_history:
   at: '2026-09-24T01:57:27+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: implementation
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: 04-diff.patch
+  sha256: 113b1400a6f846a40cc484a043002ef2f64e4712c70e2c18671e31fb9279cc1b
+  source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+  at: '2026-09-24T02:15:32+00:00'
+- check: positive_control
+  result: PASS
+  by: campaign-coverage-plan
+  artifact: evidence/head-focused.log
+  sha256: 754b348177e0dfbd32bb531f19814e1bd8b2b5a3901f34caa3d6ecf8f19d0c02
+  source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+  at: '2026-09-24T02:21:23+00:00'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 88a8b50dc95ae8fb861bdd0d78e1898e5e4fe5e39145f997e4ed242c48a977bd
+  source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+  at: '2026-09-24T02:20:25+00:00'
+  baseline_sha: 7e52748437523ad071fddbbd710713c7791f823a
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 0207aae0e90b9059efa3b40a18a4d9cf0cdb1dc7d67dd5bd6d0665e6363f6242
+  source_sha: 51d38e4664c71c67a5242b2ae29edca0b22eb95b
+  at: '2026-09-24T02:21:49+00:00'
+  incident_sha256: 88a8b50dc95ae8fb861bdd0d78e1898e5e4fe5e39145f997e4ed242c48a977bd
+handoff:
+  id: CAT-STATEFUL-TARGET:14:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 14

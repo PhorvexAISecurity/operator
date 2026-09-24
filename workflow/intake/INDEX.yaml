@@ -260,3 +260,10 @@ intakes:
     state: FILED
     issue_id: M-186
     aliases: []
+  RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible:
+    directory: intake/RPT-20260924-025810-installed-adapter-detector-emits-an-incompatible
+    kind: BUG
+    title: Installed adapter detector emits an incompatible manager observation contract
+    state: FILED
+    issue_id: M-187
+    aliases: []
