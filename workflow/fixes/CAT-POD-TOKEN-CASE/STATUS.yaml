@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: cf2e61dfe6a47423ed3887600d5e4d2d2270e8952a0664bbcd588458f91be8dc
+    sha256: c510e30ae98e8779bafb923a5b2601953c462bf81cb294ab0b94b44b7485a9dc
     source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
-    at: '2026-09-24T15:53:18+00:00'
+    at: '2026-09-24T16:13:41+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 fix_id: CAT-POD-TOKEN-CASE
@@ -83,7 +83,7 @@ residuals: []
 next_action:
   owner: implementer
   action: Implement signed causal catalogue case in parallel owned files
-updated_at: '2026-09-24T15:53:19+00:00'
+updated_at: '2026-09-24T16:13:41+00:00'
 follow_up_to: CAT-POD-TOKEN-VECTOR
 configuration_history:
 - at: '2026-09-24T15:52:24+00:00'
@@ -125,4 +125,13 @@ check_history:
   source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
   at: '2026-09-24T15:52:27+00:00'
   contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: cf2e61dfe6a47423ed3887600d5e4d2d2270e8952a0664bbcd588458f91be8dc
+  source_sha: 57b7df2aeb98c6c0621c25d8ddb855e94b79a2eb
+  at: '2026-09-24T15:53:18+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
