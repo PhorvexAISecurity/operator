@@ -1,0 +1,3 @@
+# Reproduction plan
+
+Observe only journal-owned two syntheticSIDs from round18; keep transcript content private. Independently reproduced firstSID absence/secondSID residual via fixed exact query. Source regression executes actual kubeVoiceRuntime.CleanupTranscripts using a Kubernetes fake Pod and stateful query/deletion producer: first transcript appears, second appears later. Baseline must retain second; repair must delete each exact object once and require bounded absence. Positive controls: single/no document, no late arrival, content drift refusal, ambiguous delete refusal and deadline exhaustion. Preserve worker/root logs separately. Live rerun after source deployment remains pending.

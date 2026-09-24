@@ -1,0 +1,3 @@
+# Root-cause deduplication
+
+NEW. Ranked M144/M146/M140/M142 concern economics,serialization,tenantidentity andtelemetry, not cleanup discovery. M168 concerns a different availability experiment stimulus/restore implementation; its original correction does not fix this new fixed-suite two-session transcript loop. Adjacent M189 concerns hidden consoleterminal evidence, while this incident persists even with direct transcriptread and immutablejournal. This new rootcause is earlybreak on first asynchronous transcript plus no boundedrediscovery before absenceverdict. Retain exactscope in CAT-VOICE-CLEANUP.

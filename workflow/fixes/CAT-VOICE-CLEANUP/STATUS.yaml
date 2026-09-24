@@ -1,0 +1,259 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 7cedfa19fb5135fd833b98a195da70bacc2751a3ea8e8ea39fa7b626a834cb1a
+    source_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+    at: '2026-09-24T06:04:17+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/lead-voice-cleanup-baseline.log
+    sha256: e75b6463a0c77d978f07512a498b0399d7d0e1c7ad3057770871fbc163db782b
+    source_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+    at: '2026-09-24T06:41:05+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 7a7cc2d99380134f7a7fa714437b2229521c493b31f0f57e906b4b30c378f2d1
+    source_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+    at: '2026-09-24T06:56:59+00:00'
+    baseline_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+  preflight:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/preflight/receipt.json
+    sha256: 8aa4b77727db2a4dd649aada215b998b10f6f73fbada66f34831accaddb103f7
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:15+00:00'
+  implementation:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: 04-diff.patch
+    sha256: 93314f59d307c1209fd8f86f38c7fa92d38bc613ee1bcb359b404557b845cfe8
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:15+00:00'
+  l0:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/local-checks.md
+    sha256: e3915b2b925743b0b7e71a353138b439ef9ababa7aae3aca5b7f98e970940303
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:15+00:00'
+    inputs:
+    - phorvex/internal/cataloguev1
+    inputs_sha256: 00c7828ee34cb496caf7f193b18628cf24593514eaf090ea5ac2295a09972ec9
+  l1:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/voice-atomic-head.log
+    sha256: da835b83cb569985fac4687c649e460dda7ae54589b7cbadd64195921a58c511
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:15+00:00'
+    inputs:
+    - phorvex/internal/cataloguev1
+    inputs_sha256: 00c7828ee34cb496caf7f193b18628cf24593514eaf090ea5ac2295a09972ec9
+  l2:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/voice-atomic-head.log
+    sha256: da835b83cb569985fac4687c649e460dda7ae54589b7cbadd64195921a58c511
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:15+00:00'
+    inputs:
+    - phorvex/internal/cataloguev1
+    inputs_sha256: 00c7828ee34cb496caf7f193b18628cf24593514eaf090ea5ac2295a09972ec9
+  positive_control:
+    result: PASS
+    by: catalogue-reference-review
+    artifact: evidence/worker/voice-atomic-head.log
+    sha256: da835b83cb569985fac4687c649e460dda7ae54589b7cbadd64195921a58c511
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:57:15+00:00'
+    inputs:
+    - phorvex/internal/cataloguev1
+    inputs_sha256: 00c7828ee34cb496caf7f193b18628cf24593514eaf090ea5ac2295a09972ec9
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 3179cab868dd522f4f3fc6d9baf529f40c4dd0e636c453ee387d8dbe01155433
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:59:42+00:00'
+    baseline_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 31321e5486475b6d537f8a763f06ab3cd1e46a76eb5dd5387bf5eb55c27af378
+    source_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+    at: '2026-09-24T06:59:42+00:00'
+    incident_sha256: 3179cab868dd522f4f3fc6d9baf529f40c4dd0e636c453ee387d8dbe01155433
+fix_id: CAT-VOICE-CLEANUP
+issues:
+- M-190
+title: Bound asynchronous two-session Voice transcript cleanup
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: catalogue-reference-review
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-coverage-20260923
+  code_sha: 7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44
+  deployed_image: 0.4.154
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-coverage-20260923
+  base_sha: 2aedfd546420fa73fb23f080e76e1f840934e8d3
+  head_sha: 5e4a5a11fd15a0c894649ec8608a328b0b376ca3
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-24T06:59:46+00:00'
+configuration_history:
+- at: '2026-09-24T06:04:13+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-24T06:21:47+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:38:22+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:53:37+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T06:57:15+00:00'
+  by: catalogue-reference-review
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T06:04:15+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T06:04:17+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T06:57:15+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T06:57:17+00:00'
+  by: catalogue-reference-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T06:59:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T06:59:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-VOICE-CLEANUP:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

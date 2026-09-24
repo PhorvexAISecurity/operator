@@ -1,0 +1,5 @@
+# Preregistered actual artifact reproduction
+
+At baseline7d6c056f, create a real catalogue RunManager job/result/metric fixture with test-failed, cleanupFAIL and unsafeToRetry. Drive finishFunctional with the nonzero worker outcome so persisted status becomes partial. Observe actual FunctionalResult and authenticated HTTP evidence endpoint hide the valid failed result. The independently observed installed v1run-5 has this same visible tuple but its precise terminal cause is still being read separately.
+
+At repair, the same fixture must expose the validated non-pass result and reason while retaining partial, unsafe, cleanupFAIL, and no security trial/aggregate credit. Positive controls: valid done result; existing terminal validation. Negative controls: partial with a claimedpass, missing/mismatched/stale job/result/metric/status. An unvalidated raw result or changed run state is a failed repair. Record raw baseline/head commands/exits and exact source hashes. No new live mutation is needed for this regression.

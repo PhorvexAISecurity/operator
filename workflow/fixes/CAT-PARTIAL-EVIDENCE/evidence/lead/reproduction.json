@@ -1,0 +1,14 @@
+{
+  "reviewer": "codex-lead",
+  "at": "2026-09-24T06:01:23.664328+00:00",
+  "baseline": "7cb7d05291e4fdb4e401c0a85c97cf66b2c86c44",
+  "head": "22377035",
+  "real_producer": "persisted job/result/metric -> RunManager.finishFunctional -> FunctionalResult -> Server.runEvidence",
+  "baseline_result": "FAIL valid failed partial evidence hidden",
+  "head_result": "PASS failure projection and completed pass controls; partial metrics excluded; identity/missing/stale/partial-pass refused",
+  "authentication_note": "handler test is not an authentication middleware test",
+  "logs": {
+    "lead-baseline.log": "dec4ea17cb25c838f9927d4702bf196d79789d9ae8e9be9911c43f5b5cb14654",
+    "lead-head.log": "0314dfb57eabf238b0d53ffa8cae7b068c09963ca3617e3af495238da7e5507e"
+  }
+}

@@ -271,6 +271,28 @@ intakes:
     directory: intake/RPT-20260924-051842-resource-capacity-refusals-are-mislabeled-as-mis
     kind: BUG
     title: Resource-capacity refusals are mislabeled as missing recon coverage
-    state: VERIFYING
-    issue_id: null
+    state: FILED
+    issue_id: M-188
+    aliases: []
+  RPT-20260924-054522-partial-console-runs-hide-validated-terminal-fai:
+    directory: intake/RPT-20260924-054522-partial-console-runs-hide-validated-terminal-fai
+    kind: BUG
+    title: Partial console runs hide validated terminal failure evidence
+    state: FILED
+    issue_id: M-189
+    aliases: []
+  RPT-20260924-060237-voice-cleanup-stops-discovery-after-the-first-tr:
+    directory: intake/RPT-20260924-060237-voice-cleanup-stops-discovery-after-the-first-tr
+    kind: BUG
+    title: Voice cleanup stops discovery after the first transcript and leaves the
+      recovery transcript
+    state: FILED
+    issue_id: M-190
+    aliases: []
+  RPT-20260924-062645-audit-sanitizer-removes-closed-manager-dispatch:
+    directory: intake/RPT-20260924-062645-audit-sanitizer-removes-closed-manager-dispatch
+    kind: BUG
+    title: Audit sanitizer removes closed manager dispatch refusal reasons
+    state: FILED
+    issue_id: M-191
     aliases: []

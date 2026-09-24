@@ -1,0 +1,35 @@
+{
+  "baseline": "0c4a11f701b2f10389de031c40b87ab4f642f916",
+  "head": "8bd77c017fa203fe3f267cb3687999d9b92f6a6f",
+  "reviewer": "codex-lead",
+  "results": [
+    {
+      "label": "baseline",
+      "exitCode": 1,
+      "command": [
+        "/home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go",
+        "test",
+        "./internal/runner",
+        "-run",
+        "^TestLeadActualCapacityGateAudit$",
+        "-count=1",
+        "-v"
+      ],
+      "logSHA256": "f59ac31193f6e0c1b67f8b2f0b416e4b8588d06f11667a63b6896801c12d09aa"
+    },
+    {
+      "label": "head",
+      "exitCode": 0,
+      "command": [
+        "/home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go",
+        "test",
+        "./internal/runner",
+        "-run",
+        "^TestLeadActualCapacityGateAudit$",
+        "-count=1",
+        "-v"
+      ],
+      "logSHA256": "7bc60e4e6f708449abbeb8bbc87a4212a4256da9d4b291d7800f6474511fefc5"
+    }
+  ]
+}

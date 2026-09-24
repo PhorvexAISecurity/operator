@@ -1,0 +1,36 @@
+[
+  {
+    "name": "baseline",
+    "cmd": [
+      "/home/mehrdad/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+      "test",
+      "./internal/decision",
+      "-run",
+      "TestResourceCapacityExclusionIsNotNoCover|TestQuarantineCapacityEarlyRefusalsHaveTypedCause|TestGenuineEmptyReconCoverRemainsNoCover|TestOrdinaryFeasibilityRefusalRemainsDistinctFromResourceCapacity",
+      "-count=1",
+      "-v"
+    ],
+    "cwd": "/home/mehrdad/operator-catalogue-resource-trace-baseline/phorvex",
+    "exit": 1,
+    "logSHA256": "066c2c3ef9d5f1ae8d4f89cc01283ea8f54dab08f88fd541c287feeddf3834a8"
+  },
+  {
+    "name": "integrated-head",
+    "cmd": [
+      "/home/mehrdad/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+      "test",
+      "./internal/decision",
+      "./internal/installedauditobserver",
+      "./internal/cataloguev1",
+      "./internal/console",
+      "./cmd/console",
+      "-run",
+      "TestResourceCapacity|TestQuarantineCapacity|TestGenuineEmpty|TestOrdinaryFeasibility|TestMCP",
+      "-count=1",
+      "-v"
+    ],
+    "cwd": "/home/mehrdad/operator-catalogue-campaign/phorvex",
+    "exit": 0,
+    "logSHA256": "271281a099d84694f404dece0a2c1f763bc2cb31683ab4546041014c09b251f4"
+  }
+]

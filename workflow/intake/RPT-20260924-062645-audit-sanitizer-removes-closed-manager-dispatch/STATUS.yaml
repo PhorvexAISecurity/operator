@@ -1,0 +1,144 @@
+schema_version: 1
+intake_id: RPT-20260924-062645-audit-sanitizer-removes-closed-manager-dispatch
+kind: BUG
+title: Audit sanitizer removes closed manager dispatch refusal reasons
+state: FILED
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-24T06:26:45+00:00'
+updated_at: '2026-09-24T06:40:09+00:00'
+pins:
+  source_main_sha: ebcb7a9ade1b933401617e61aa08bd86a8f4480d
+  source_release: null
+  deployed_image: 0.4.154
+  deployed_digest: null
+  deployed_git_sha: a50d796af128cd4109875e03eaf429d460126740
+  environment: dev
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-146
+    score: 17
+    overlap:
+    - any
+    - audit
+    - claim
+    - evidence
+    - field
+    - here
+    - inputs
+    - manager
+    - not
+    - raw
+    - record
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-144
+    score: 13
+    overlap:
+    - any
+    - audit
+    - before
+    - claim
+    - closed
+    - evidence
+    - field
+    - first
+    - not
+    - observation
+    - observed
+    - retained
+    - separate
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-2
+    score: 12
+    overlap:
+    - any
+    - audit
+    - closed
+    - contract
+    - evidence
+    - first
+    - invariant
+    - not
+    - observed
+    - rejects
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-142
+    score: 12
+    overlap:
+    - any
+    - audit
+    - before
+    - claim
+    - evidence
+    - first
+    - here
+    - not
+    - observed
+    - record
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-191
+  fix_id: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-191.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-24T06:39:37+00:00'
+  by: codex-lead
+  artifact: REPORT.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-24T06:39:37+00:00'
+  by: codex-lead
+  artifact: REPRO.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-24T06:39:38+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-24T06:39:38+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-24T06:40:09+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-191.md
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4
