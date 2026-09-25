@@ -324,3 +324,10 @@ intakes:
     state: FILED
     issue_id: M-194
     aliases: []
+  RPT-20260925-155100-pod-node:
+    directory: intake/RPT-20260925-155100-pod-node
+    kind: BUG
+    title: Existing Pod-bound catalogue profile rejects valid EKS node names
+    state: DEDUP_REVIEW
+    issue_id: null
+    aliases: []

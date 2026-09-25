@@ -1,0 +1,239 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0232a4bada6db9c8119f6e265b5de6084fc49569457de83b65f39520aa8b7ea1
+    source_sha: f63f2f639d49a7a48c9580e62262463cb64f12ae
+    at: '2026-09-25T16:11:08+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline.log
+    sha256: 3b546e89797d11b42321e31c615304464127ff18d9f8404fc26bb83f25b90217
+    source_sha: f63f2f639d49a7a48c9580e62262463cb64f12ae
+    at: '2026-09-25T15:57:49+00:00'
+  preflight:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/receipt.json
+    sha256: 98d1a9898d6b47097e1d3d02deccb3daee9f2e317f0e5724aaf3f1e16a23339a
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:11+00:00'
+  implementation:
+    result: PASS
+    by: audit-window-repair
+    artifact: 04-diff.patch
+    sha256: 3a2ee8cf7bd546206456191cef73b36a840e1d045a20cba1473ec5eb30a544d3
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:11+00:00'
+  l0:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/receipt.json
+    sha256: 98d1a9898d6b47097e1d3d02deccb3daee9f2e317f0e5724aaf3f1e16a23339a
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:11+00:00'
+  l1:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/verify-offline.log
+    sha256: 3f803cc755cbcc940b8c56387e531dcbd9fb0de506f3e03b09d9d552a11b692c
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:11+00:00'
+  l2:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/preflight/run-1790352668589178561/go-phorvex.log
+    sha256: 1505c9cedd7f6b40f2b76da079eda8e32c9eb1e1b0101465d7646554037927a5
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:12+00:00'
+  positive_control:
+    result: PASS
+    by: audit-window-repair
+    artifact: evidence/worker/console-podbound-green.log
+    sha256: ee373086235c5dcf1a641476fac3c107bdc9835bfda0698862e7fcf0f9256041
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:12+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: b3ddaa7a5705b8a08846f75ad6ce262d43fc6668a0180833826e3d26b7dbf7f9
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:59+00:00'
+    baseline_sha: f63f2f639d49a7a48c9580e62262463cb64f12ae
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 2137bcd65f1ac6da80bb8b23b10daee295ef1e93cb840ad2302701217dcc67c6
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:14:59+00:00'
+    incident_sha256: b3ddaa7a5705b8a08846f75ad6ce262d43fc6668a0180833826e3d26b7dbf7f9
+fix_id: CAT-POD-NODE
+issues: []
+title: Accept Kubernetes node names in existing Pod-bound catalogue profiles
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: audit-window-repair
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: fix/catalogue-existing22-profile-closures-20260925
+  code_sha: f63f2f639d49a7a48c9580e62262463cb64f12ae
+  deployed_image: null
+  deployed_git_sha: 0316a578624a1d19662c87bfa8d0fea08d1b3729
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/catalogue-node-admission-delivery-20260925
+  base_sha: f63f2f639d49a7a48c9580e62262463cb64f12ae
+  head_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T16:15:03+00:00'
+follow_up_to: CAT-CPU-TOKEN-RESPONSE
+configuration_history:
+- at: '2026-09-25T15:54:20+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-25T16:11:06+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-25T16:14:11+00:00'
+  by: audit-window-repair
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-25T15:57:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T15:57:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T16:14:12+00:00'
+  by: audit-window-repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T16:14:14+00:00'
+  by: audit-window-repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T16:14:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T16:15:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 473946527a0cdea5cf1fcc5ee40ee5638fe47adbc01825adb0f92d611bb17f71
+  source_sha: f63f2f639d49a7a48c9580e62262463cb64f12ae
+  at: '2026-09-25T15:57:49+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+handoff:
+  id: CAT-POD-NODE:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
