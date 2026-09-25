@@ -88,6 +88,12 @@ catalogueV1TokenRefresher:
 # Optional source bytes for the existing CPU Pod-bound token response profile.
 # Supplying this ConfigMap does not enable the console case or its authority.
 catalogueProfiles:
+  # Optional immutable source for the existing Mongo synthetic exposure case.
+  # Source bytes alone do not enable the console or any fixture authority.
+  mongoExposure:
+    enabled: false
+    configMapName: ""
+    profileBase64: ""
   # One reviewed immutable source object for the existing static vLLM
   # confidentiality comparison. Supplying bytes does not enable the case.
   guardrailStatic:
