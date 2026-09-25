@@ -50,6 +50,8 @@ func mongoAdmissionConfig(t *testing.T) Config {
 	cfg.AuditSourceIdentity = "authenticated-test-source"
 	raw := mongoAdmissionProfile("reviewed-cluster", `"`+mongoNodeFQDN+`"`)
 	mongoTestWrite(t, filepath.Join(cfg.HarnessDir, allowedConfigs[mongoExposureConfig].File), raw)
+	h := sha256.Sum256(raw)
+	cfg.MongoExposureProfileSHA256 = hex.EncodeToString(h[:])
 	return cfg
 }
 
@@ -72,6 +74,7 @@ func TestMongoNamedProfileAcceptsKubernetesNodeSubdomainOnly(t *testing.T) {
 			raw := mongoAdmissionProfile("reviewed-cluster", tc.nodes)
 			mongoTestWrite(t, filepath.Join(cfg.HarnessDir, allowedConfigs[mongoExposureConfig].File), raw)
 			h := sha256.Sum256(raw)
+			cfg.MongoExposureProfileSHA256 = hex.EncodeToString(h[:])
 			dest, err := (&RunManager{cfg: cfg}).SuiteDestination(mongoExposureConfig)
 			if (err == nil) != tc.valid {
 				t.Fatalf("node %q: destination=%+v error=%v", tc.nodes, dest, err)
