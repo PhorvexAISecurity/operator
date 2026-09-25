@@ -244,6 +244,9 @@ func (rm *RunManager) fixedSuiteAdmissionLocked(profile cataloguev1.ProfileID, d
 			return functionalPriorUnsafe, errors.New("a prior fixed suite requires reconciliation before another fixed suite can start")
 		}
 		if existing.UnsafeToRetry {
+			if rm.voiceCleanupResolvedLocked(existing) {
+				continue
+			}
 			unsafe = append(unsafe, existing)
 		}
 	}

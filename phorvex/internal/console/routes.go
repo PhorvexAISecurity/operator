@@ -138,6 +138,7 @@ func (s *Server) apiRoutes() []route {
 		control("/api/runs/functional/admission", s.functionalAdmission, routeSpec{methods: getOnly, destination: functionalAdmissionDestination}),
 		control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true}),
 		control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true}),
+		control("/api/runs/voice-cleanup-reconcile", s.runVoiceCleanupReconcile, routeSpec{runQ: "id", runBody: true}),
 		read("/api/runs/list", s.runsList, routeSpec{}),
 		read("/api/runs/status", s.runStatus, routeSpec{runQ: "id"}),
 		read("/api/runs/stream", s.runStream, routeSpec{runQ: "id"}),
