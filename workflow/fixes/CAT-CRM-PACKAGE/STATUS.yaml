@@ -1,0 +1,243 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0ddf2b767a80bd9110b0538e0bf795127ca553957d4adc52c053eb36ffe1fcd2
+    source_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+    at: '2026-09-24T19:49:52+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/BASELINE.json
+    sha256: 395369df7fbe457df200b790a7fdcec95bfb5ad37c1f3985315ff56375fe5091
+    source_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+    at: '2026-09-24T19:50:40+00:00'
+  preflight:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: cd544f61b0f9f5fa043ccb79213c11eec4fbd51acf5dc15bdffde9f01b19867b
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:08:44+00:00'
+  implementation:
+    result: PASS
+    by: litellm-cases
+    artifact: 04-diff.patch
+    sha256: 1770c7308967cd91b7e02d62e2deca4c389dc611bc96aff639065cc4bae9e6a5
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:08:44+00:00'
+  l0:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/l0.log
+    sha256: 36c2bc0b5b6cc2373d7fa49c7860fd13044a395c2722ea39720bbaf621b057ad
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:08:44+00:00'
+  l1:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/REAL-CONTEXT-RECEIPT.json
+    sha256: 3cdf16ed3741d59e836ecd254e734c55793bd6cc881b41130ee232992714ce53
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:08:44+00:00'
+  l2:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/CONTEXT-COMPARISON.json
+    sha256: ff8aeb6963d77676154ba31169faa3ce655b76bef35c8d8d8b798f3c37bac37b
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:08:44+00:00'
+  positive_control:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/positive-control.log
+    sha256: 5cc557f80cc7faef32a9b4f00f2f800c2d90d7d5e0cc2ba555b73903b4c6ffe6
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:08:44+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 47e27265831f3c2cbe1e867e7359c2c7d7bac7855301391ed62482381d4d6cbf
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:09:58+00:00'
+    baseline_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 29acefada6d33de6a03c947bc562d3c8347f501d6de76779a5bae2b83294af0a
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:09:58+00:00'
+    incident_sha256: 47e27265831f3c2cbe1e867e7359c2c7d7bac7855301391ed62482381d4d6cbf
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 74291824a8f1808c8e507790ee9689179d84032dcae0cd0aa86f5b6354893421
+    source_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+    at: '2026-09-24T20:11:48+00:00'
+fix_id: CAT-CRM-PACKAGE
+issues: []
+title: Make the disposable CRM catalogue fixture reproducible from checkout
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: litellm-cases
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-crm-package-20260924
+  code_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-crm-package-20260924
+  base_sha: 6fb1125e67b04bfd42fd6f8ec6018a16354acca1
+  head_sha: c5e47773baacaefa642db0a7eb6308361798ed64
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/333
+  reviewed_head: 5ac770259828239bb6132dd733a21af143d6cdea
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: PR333 open; await normal merge/deployment, publish fixture image and execute
+    named CRM controls under reviewed campaign
+updated_at: '2026-09-24T20:12:16+00:00'
+follow_up_to: CAT-CATALOGUE-BATCH
+configuration_history:
+- at: '2026-09-24T19:49:36+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T20:08:44+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T20:12:04+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: operations/AUTONOMY.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T19:49:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T19:49:52+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T20:08:44+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T20:08:46+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T20:09:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T20:10:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T20:12:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-CRM-PACKAGE:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
