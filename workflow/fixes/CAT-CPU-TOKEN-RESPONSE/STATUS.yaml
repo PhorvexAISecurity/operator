@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,11 +15,80 @@ checks:
     source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
     at: '2026-09-25T03:09:34+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/red.md
+    sha256: 0c91bd618de960904ca25c366124fd14cd809608c73d0e22ff50cc7594e0e6d4
+    source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+    at: '2026-09-25T04:11:16+00:00'
+  preflight:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:19:29+00:00'
+  implementation:
+    result: PASS
+    by: litellm-cases
+    artifact: 04-diff.patch
+    sha256: 2f0ee997c9d1a6181a7b79874ea6b32ed0e94601e43ec91a727b735fcc1deb9c
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:19:29+00:00'
+  l0:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:19:29+00:00'
+    inputs:
+    - deploy/helm
+    - phorvex
+    - workflow
+    inputs_sha256: 60fa136529c891e3101f8655092e01d7ae39123647b4f9abbe390f28288cea5d
+  l1:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-checks.md
+    sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:19:29+00:00'
+    inputs:
+    - build/test-harness
+    - dashboard-web
+    - phorvex/charts/phorvex
+    - phorvex/internal/console
+    inputs_sha256: 82aec4fab6228c150bafba1efeaac519db9f0e2fd0dd7a6d2901e0f657c2b05f
+  l2:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-checks.md
+    sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:19:29+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    - build/test-harness/testdata/pod_bound_token_cpu_positive
+    - phorvex/internal/console
+    inputs_sha256: 7587f6e5a6120a59d854e45bfd5047d63e73729edb8b4de038b86c18e678c275
+  positive_control:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-checks.md
+    sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:19:29+00:00'
+    inputs:
+    - build/test-harness/testdata/pod_bound_token_cpu_positive
+    - phorvex/internal/console
+    inputs_sha256: 9cf034136c415f13b3184a2c4f3e1a251729c4fd857f4c42fbc002bf13a3063b
 fix_id: CAT-CPU-TOKEN-RESPONSE
 issues: []
 title: Add isolated CPU Pod-bound credential response catalogue case
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -41,9 +110,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-cpu-token-response-20260925
+  base_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  head_sha: 56226445bacfb80ad3883add2df4c986edcd7683
   stacked_on: []
 pull_request:
   url: null
@@ -65,12 +134,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -80,10 +149,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed CPU case and timing fixes; retain original negative outcomes;
-    submit frozen source and selected preflight
-updated_at: '2026-09-25T03:09:46+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-25T04:19:34+00:00'
 configuration_history:
 - at: '2026-09-25T03:09:19+00:00'
   by: codex-lead
@@ -92,6 +161,11 @@ configuration_history:
   - change_class
   - roles
   - verification
+  approval_ref: null
+- at: '2026-09-25T04:19:28+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -110,3 +184,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T04:19:29+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T04:19:31+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-CPU-TOKEN-RESPONSE:6:submit
+  from: litellm-cases
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 6
