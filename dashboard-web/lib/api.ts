@@ -397,6 +397,7 @@ export interface AppStack {
 }
 export interface CatalogCompat {
   name: string; product: string; category: string; techniques: string[]; benignControl?: boolean;
+  signalEligible?: boolean; signalEligibilityReason?: string;
   expectedActuators: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
   responseGuidance?: string; prereqs: string[]; compatible: boolean; reason: string;
 }
@@ -585,7 +586,7 @@ export interface LiteLLMRoutingEvidence {
   authorityBeforeSHA256: string; authorityAfterSHA256: string; configSHA256: string;
   eventMode: string; securityEvent: string; brain: string; actuator: string; securityOutcome: string;
 }
-export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; brainMode: "NO_SIGNAL"; securityEfficacy: "NOT_EVALUATED"; sourceAttestation: string; issues?: string[] }
+export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; /** Legacy wire field: NO_SIGNAL means this direct configuration control injected no SecurityEvent; it does not report a brain decision. */ brainMode: "NO_SIGNAL" | string; securityEfficacy: "NOT_EVALUATED" | string; sourceAttestation: string; issues?: string[] }
 export interface NATSResponseDecisionTrace {
   schema: string;
   runId: string;

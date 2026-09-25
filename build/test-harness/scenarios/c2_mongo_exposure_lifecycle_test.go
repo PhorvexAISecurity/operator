@@ -71,7 +71,7 @@ func (s *mongoLifecycleStore) Drop(_ context.Context, _, _, uuid string) error {
 }
 func (*mongoLifecycleStore) Close(context.Context) error { return nil }
 
-func mongoLifecycleEnv(t *testing.T, nonce string, store *mongoLifecycleStore, guard *mongoLifecycleGuard, podCreateErr error) (*core.Env, mongoExposureDependencies, *fake.Clientset) {
+func mongoLifecycleEnv(t *testing.T, nonce string, store mongoExposureStore, guard *mongoLifecycleGuard, podCreateErr error) (*core.Env, mongoExposureDependencies, *fake.Clientset) {
 	t.Helper()
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "document-store", UID: "ns-uid"}}
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "cpu-node", UID: "node-uid"}, Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}, Allocatable: corev1.ResourceList{corev1.ResourceCPU: mustQuantity("2"), corev1.ResourceMemory: mustQuantity("2Gi"), corev1.ResourcePods: mustQuantity("100")}}}
@@ -112,6 +112,93 @@ func mongoLifecycleEnv(t *testing.T, nonce string, store *mongoLifecycleStore, g
 		},
 	}
 	return env, deps, kc
+}
+
+// Both paths use one simulated server. Every Mongo producer operation must
+// address only its fresh database and collection, leaving the prior Voice
+// transcript in a preexisting database untouched even on a shared backend.
+type mongoSharedVoiceStore struct {
+	nonce, voiceTranscript string
+	ownedUUID              string
+	ownedDoc               mongoExposureDocument
+	created, inserted      bool
+	drops                  int
+}
+
+func (*mongoSharedVoiceStore) ServerVersion(context.Context) (string, error) { return "7.0.40", nil }
+func (*mongoSharedVoiceStore) SourceConfiguration(context.Context) error     { return nil }
+func (s *mongoSharedVoiceStore) requireOwned(db, coll string) error {
+	wantDB, wantColl, _ := mongoExposureNames(s.nonce)
+	if db != wantDB || coll != wantColl {
+		return errors.New("producer reached shared Voice database or another collection")
+	}
+	return nil
+}
+func (s *mongoSharedVoiceStore) CollectionUUID(_ context.Context, db, coll string) (string, error) {
+	if err := s.requireOwned(db, coll); err != nil {
+		return "", err
+	}
+	return s.ownedUUID, nil
+}
+func (s *mongoSharedVoiceStore) CreateCollection(_ context.Context, db, coll string) error {
+	if err := s.requireOwned(db, coll); err != nil {
+		return err
+	}
+	if s.created {
+		return errors.New("collection already created")
+	}
+	s.created, s.ownedUUID = true, strings.Repeat("a", 32)
+	return nil
+}
+func (s *mongoSharedVoiceStore) Insert(_ context.Context, db, coll string, doc mongoExposureDocument) (any, error) {
+	if err := s.requireOwned(db, coll); err != nil {
+		return nil, err
+	}
+	s.ownedDoc, s.inserted = doc, true
+	return doc.ID, nil
+}
+func (s *mongoSharedVoiceStore) Read(_ context.Context, db, coll, id string) (mongoExposureDocument, error) {
+	if err := s.requireOwned(db, coll); err != nil {
+		return mongoExposureDocument{}, err
+	}
+	if !s.inserted || id != s.ownedDoc.ID {
+		return mongoExposureDocument{}, errors.New("owned document unavailable")
+	}
+	return s.ownedDoc, nil
+}
+func (s *mongoSharedVoiceStore) Count(_ context.Context, db, coll string) (int64, error) {
+	if err := s.requireOwned(db, coll); err != nil {
+		return 0, err
+	}
+	if s.inserted {
+		return 1, nil
+	}
+	return 0, nil
+}
+func (s *mongoSharedVoiceStore) Drop(_ context.Context, db, coll, uuid string) error {
+	if err := s.requireOwned(db, coll); err != nil {
+		return err
+	}
+	if uuid != s.ownedUUID || !s.inserted || s.ownedDoc != mongoExposureDoc(s.nonce) {
+		return errors.New("owned UUID or singleton record differs")
+	}
+	s.ownedUUID, s.inserted, s.created = "", false, false
+	s.drops++
+	return nil
+}
+func (*mongoSharedVoiceStore) Close(context.Context) error { return nil }
+
+func TestMongoExposureSharedServerLeavesPriorVoiceTranscriptUntouched(t *testing.T) {
+	nonce := strings.Repeat("e", 32)
+	const priorVoiceTranscript = `{"_id":{"$oid":"1234567890abcdef12345678"},"call_sid":"CA11111111111111111111111111111111"}`
+	store := &mongoSharedVoiceStore{nonce: nonce, voiceTranscript: priorVoiceTranscript}
+	env, deps, _ := mongoLifecycleEnv(t, nonce, store, &mongoLifecycleGuard{}, nil)
+	if err := runMongoExposureWith(context.Background(), env, deps); err != nil {
+		t.Fatalf("shared-server owned producer: %v", err)
+	}
+	if store.voiceTranscript != priorVoiceTranscript || store.ownedUUID != "" || store.drops != 1 {
+		t.Fatalf("Voice transcript or exact owned collection changed: voice=%q uuid=%q drops=%d", store.voiceTranscript, store.ownedUUID, store.drops)
+	}
 }
 
 func TestMongoExposureActualRunAndAmbiguousCreateNeverClaimAbsence(t *testing.T) {

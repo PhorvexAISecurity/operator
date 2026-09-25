@@ -164,21 +164,33 @@ func (s *Server) fireSecurityEventAt(ns, pod, targetUID, evName, desc, ruleType 
 
 func (s *Server) catalogueSignalDefinition(name string) (CatalogItem, error) {
 	for _, item := range s.cfg.Catalog() {
-		if item.Name != name || item.LaunchKind != "harness-scenario" {
+		if item.Name != name {
 			continue
 		}
-		if item.BenignControl == nil {
-			return CatalogItem{}, fmt.Errorf("scenario %q has legacy metadata without an authoritative attack/benign declaration", name)
-		}
-		if *item.BenignControl {
-			return CatalogItem{}, fmt.Errorf("scenario %q is a benign functional control and cannot be emitted as a security signal", name)
-		}
-		if len(item.ExpectedActuators) == 0 || strings.TrimSpace(item.ExpectedActuators[0]) == "" {
-			return CatalogItem{}, fmt.Errorf("scenario %q has no server-authoritative expected response", name)
+		if eligible, reason := catalogueSignalEligibility(item); !eligible {
+			return CatalogItem{}, fmt.Errorf("scenario %q %s", name, reason)
 		}
 		return item, nil
 	}
 	return CatalogItem{}, fmt.Errorf("scenario %q is not present in the authoritative harness catalogue", name)
+}
+
+// catalogueSignalEligibility is the single authority for both admission and the
+// compatibility projection. A listed response is guidance, not an observed action.
+func catalogueSignalEligibility(item CatalogItem) (bool, string) {
+	if item.LaunchKind != "harness-scenario" {
+		return false, "is not a harness scenario and cannot be emitted as a security signal"
+	}
+	if item.BenignControl == nil {
+		return false, "has legacy metadata without an authoritative attack/benign declaration"
+	}
+	if *item.BenignControl {
+		return false, "is a benign functional control and cannot be emitted as a security signal"
+	}
+	if len(item.ExpectedActuators) == 0 || strings.TrimSpace(item.ExpectedActuators[0]) == "" {
+		return false, "has no server-authoritative expected response"
+	}
+	return true, "eligible for a bounded injected signal; the listed response is guidance only"
 }
 
 func (s *Server) writeCatalogueSignalFailure(w http.ResponseWriter, endpoint, actor, namespace, scenario, phase, targetUID string, candidate *attackStimulusEvidence, dispatched bool, cause error) {
@@ -384,6 +396,6 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 		"ok": true, "action": "fire", "scenario": scenario, "namespace": ns, "pod": pod,
 		"expect": expected, "attackId": attackID,
 		"message": scenario + " accepted as a synthetic catalogue SecurityEvent at " + ns + "/" + pod +
-			"; the exact-ID observation reports temporal manager evidence and target response without a behavioral security verdict.",
+			"; follow this record for bounded decision evidence and any target Pod UID change. Cause and behavioral outcome are not established.",
 	})
 }
