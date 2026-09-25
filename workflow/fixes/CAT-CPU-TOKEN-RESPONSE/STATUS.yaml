@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 23
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,10 +11,13 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 833b7dc4b10089add3cc4e77a8f98a57e0e93d3adadf1b856c775024f0c15e37
+    sha256: e596a9f18a05957273d14adaaf6a29516dcfd51ab829d8982178a80dd3d42cc4
     source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
-    at: '2026-09-25T03:09:34+00:00'
+    at: '2026-09-25T11:14:46+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Existing campaign and owner conflict repair scope; publication packaging
+      only; no behavior or evidence waiver
   red:
     result: PASS
     by: codex-lead
@@ -23,95 +26,92 @@ checks:
     source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
     at: '2026-09-25T04:11:16+00:00'
   preflight:
-    result: PASS
+    result: UNAVAILABLE
     by: litellm-cases
-    artifact: evidence/preflight/receipt.json
-    sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:19:29+00:00'
+    artifact: evidence/consolidation/worker-checks-superseded.md
+    sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:40+00:00'
+    rationale: Prior source-pinned result preserved in check_history; no combined-source
+      rerun claimed
   implementation:
     result: PASS
     by: litellm-cases
     artifact: 04-diff.patch
-    sha256: 2f0ee997c9d1a6181a7b79874ea6b32ed0e94601e43ec91a727b735fcc1deb9c
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:19:29+00:00'
+    sha256: 48d92033835af3290b6d702387d6cb434aa1436c79ead6a66d6887b62299ee15
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:04+00:00'
   l0:
-    result: PASS
+    result: UNAVAILABLE
     by: litellm-cases
-    artifact: evidence/preflight/receipt.json
-    sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:19:29+00:00'
-    inputs:
-    - deploy/helm
-    - phorvex
-    - workflow
-    inputs_sha256: 60fa136529c891e3101f8655092e01d7ae39123647b4f9abbe390f28288cea5d
+    artifact: evidence/consolidation/worker-checks-superseded.md
+    sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:41+00:00'
+    rationale: Prior source-pinned result preserved in check_history; no combined-source
+      rerun claimed
   l1:
-    result: PASS
+    result: UNAVAILABLE
     by: litellm-cases
-    artifact: evidence/worker-checks.md
-    sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:19:29+00:00'
-    inputs:
-    - build/test-harness
-    - dashboard-web
-    - phorvex/charts/phorvex
-    - phorvex/internal/console
-    inputs_sha256: 82aec4fab6228c150bafba1efeaac519db9f0e2fd0dd7a6d2901e0f657c2b05f
+    artifact: evidence/consolidation/worker-checks-superseded.md
+    sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:41+00:00'
+    rationale: Prior source-pinned result preserved in check_history; no combined-source
+      rerun claimed
   l2:
-    result: PASS
+    result: UNAVAILABLE
     by: litellm-cases
-    artifact: evidence/worker-checks.md
-    sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:19:29+00:00'
-    inputs:
-    - build/test-harness/scenarios
-    - build/test-harness/testdata/pod_bound_token_cpu_positive
-    - phorvex/internal/console
-    inputs_sha256: 7587f6e5a6120a59d854e45bfd5047d63e73729edb8b4de038b86c18e678c275
+    artifact: evidence/consolidation/worker-checks-superseded.md
+    sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:41+00:00'
+    rationale: Prior source-pinned result preserved in check_history; no combined-source
+      rerun claimed
   positive_control:
-    result: PASS
+    result: UNAVAILABLE
     by: litellm-cases
-    artifact: evidence/worker-checks.md
-    sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:19:29+00:00'
-    inputs:
-    - build/test-harness/testdata/pod_bound_token_cpu_positive
-    - phorvex/internal/console
-    inputs_sha256: 9cf034136c415f13b3184a2c4f3e1a251729c4fd857f4c42fbc002bf13a3063b
+    artifact: evidence/consolidation/worker-checks-superseded.md
+    sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:41+00:00'
+    rationale: Prior source-pinned result preserved in check_history; no combined-source
+      rerun claimed
   incident:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/incident.md
     sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:20:23+00:00'
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:14:47+00:00'
     baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
   p3:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/p3/verdict.md
     sha256: e79469b529ec11616088c9de7b0e2fe7f0e85fc9eddf88b649a17ed191aaaccf
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:20:23+00:00'
-    incident_sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:14:47+00:00'
   patch_equivalence:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/publication-equivalence.json
     sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
-    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
-    at: '2026-09-25T04:21:06+00:00'
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:14:47+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/consolidation/base-review.md
+    sha256: 1f6d21887e5f7c45ce8462a50026eb8a53e333b42010c210844768d8cced174d
+    source_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+    at: '2026-09-25T11:14:47+00:00'
+    baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
 fix_id: CAT-CPU-TOKEN-RESPONSE
 issues: []
 title: Add isolated CPU Pod-bound credential response catalogue case
 profile: standard
-state: IN_PR
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -133,16 +133,16 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: campaign/catalogue-cpu-token-response-20260925
-  base_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
-  head_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  branch: campaign/catalogue-litellm-routing-20260925
+  base_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+  head_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
   stacked_on: []
 pull_request:
-  url: https://github.com/PhorvexSecurity/operator/pull/341
-  reviewed_head: 0abe040defee8962f169831bb574598cbdd0eea6
+  url: https://github.com/PhorvexSecurity/operator/pull/338
+  reviewed_head: null
   merge_sha: null
   checks: pending
-  patch_equivalence: PASS
+  patch_equivalence: UNAVAILABLE
 deployment:
   image: null
   digest: null
@@ -156,13 +156,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: PASS
-  l0: PASS
-  l1: PASS
-  l2: PASS
+  p3: UNAVAILABLE
+  l0: UNAVAILABLE
+  l1: UNAVAILABLE
+  l2: UNAVAILABLE
   l3: pending
   l4: pending
-  positive_control: PASS
+  positive_control: UNAVAILABLE
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -172,10 +172,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: PR341 targets main; review merge/deployment, then run exact owned CPU controls
-    with source and grant pins. Preserve all existing live debt.
-updated_at: '2026-09-25T04:22:33+00:00'
+  owner: implementer
+  action: Await shared combined preflight receipt and case controls, then submit truthful
+    source-pinned evidence
+updated_at: '2026-09-25T11:17:52+00:00'
 configuration_history:
 - at: '2026-09-25T03:09:19+00:00'
   by: codex-lead
@@ -193,6 +193,13 @@ configuration_history:
 - at: '2026-09-25T04:22:31+00:00'
   by: codex-lead
   fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:14:44+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  - next_action
   - pull_request
   approval_ref: null
 transitions:
@@ -252,6 +259,15 @@ transitions:
   note: null
   approval_ref: operations/AUTONOMY.md
   forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-25T11:17:52+00:00'
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  note: Combined source is implemented; prior CPU worker checks are retained as superseded
+    and unavailable
+  approval_ref: null
+  forced: false
 handoff:
   id: CAT-CPU-TOKEN-RESPONSE:7:review
   from: codex-lead
@@ -259,3 +275,97 @@ handoff:
   role: coordinator
   kind: review
   revision: 7
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 833b7dc4b10089add3cc4e77a8f98a57e0e93d3adadf1b856c775024f0c15e37
+  source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  at: '2026-09-25T03:09:34+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:20:23+00:00'
+  baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: e79469b529ec11616088c9de7b0e2fe7f0e85fc9eddf88b649a17ed191aaaccf
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:20:23+00:00'
+  incident_sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.json
+  sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:21:06+00:00'
+- check: implementation
+  result: PASS
+  by: litellm-cases
+  artifact: 04-diff.patch
+  sha256: 2f0ee997c9d1a6181a7b79874ea6b32ed0e94601e43ec91a727b735fcc1deb9c
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+- check: preflight
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/preflight/receipt.json
+  sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+- check: l0
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/preflight/receipt.json
+  sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - deploy/helm
+  - phorvex
+  - workflow
+  inputs_sha256: 60fa136529c891e3101f8655092e01d7ae39123647b4f9abbe390f28288cea5d
+- check: l1
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - build/test-harness
+  - dashboard-web
+  - phorvex/charts/phorvex
+  - phorvex/internal/console
+  inputs_sha256: 82aec4fab6228c150bafba1efeaac519db9f0e2fd0dd7a6d2901e0f657c2b05f
+- check: l2
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - build/test-harness/scenarios
+  - build/test-harness/testdata/pod_bound_token_cpu_positive
+  - phorvex/internal/console
+  inputs_sha256: 7587f6e5a6120a59d854e45bfd5047d63e73729edb8b4de038b86c18e678c275
+- check: positive_control
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - build/test-harness/testdata/pod_bound_token_cpu_positive
+  - phorvex/internal/console
+  inputs_sha256: 9cf034136c415f13b3184a2c4f3e1a251729c4fd857f4c42fbc002bf13a3063b
