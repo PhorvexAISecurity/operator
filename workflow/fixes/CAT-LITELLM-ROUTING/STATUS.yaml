@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -98,6 +98,13 @@ checks:
     source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
     at: '2026-09-25T02:22:24+00:00'
     incident_sha256: 87ae9239dfea37e80806886fd550962e38b2e821326645730f04a101ac5eae10
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 0a3f13ce918d8b60825e199f03f0ef369a3da4ef997645347f35c1b4bb3b9fb4
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T02:29:14+00:00'
 fix_id: CAT-LITELLM-ROUTING
 issues: []
 title: Add installed LiteLLM inference routing catalogue control
@@ -166,7 +173,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T02:22:29+00:00'
+updated_at: '2026-09-25T02:29:14+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
