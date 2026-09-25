@@ -1,0 +1,37 @@
+{{- $source := .Values.catalogueProfiles.guardrailStatic -}}
+{{- $child := get .Values.phorvex "phorvex" | default dict -}}
+{{- $console := get $child "console" | default dict -}}
+{{- $static := get $console "guardrailStatic" | default dict -}}
+{{- if and (get $static "enabled") (not $source.enabled) -}}
+{{- fail "console.guardrailStatic.enabled requires catalogueProfiles.guardrailStatic.enabled" -}}
+{{- end -}}
+{{- if $source.enabled -}}
+{{- $name := required "catalogueProfiles.guardrailStatic.configMapName is required" $source.configMapName -}}
+{{- if not (kindIs "string" $name) -}}{{- fail "catalogueProfiles.guardrailStatic.configMapName must be a string" -}}{{- end -}}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) -}}
+{{- fail "catalogueProfiles.guardrailStatic.configMapName must be a DNS subdomain name" -}}
+{{- end -}}
+{{- range (splitList "." $name) -}}{{- if gt (len .) 63 -}}{{- fail "catalogueProfiles.guardrailStatic.configMapName DNS label exceeds 63 characters" -}}{{- end -}}{{- end -}}
+{{- $profile := required "catalogueProfiles.guardrailStatic.profileBase64 is required" $source.profileBase64 -}}
+{{- if not (kindIs "string" $profile) -}}{{- fail "catalogueProfiles.guardrailStatic.profileBase64 must be a string" -}}{{- end -}}
+{{- $profileBytes := b64dec $profile -}}
+{{- if or (eq $profileBytes "") (gt (len $profileBytes) 262144) (ne (b64enc $profileBytes) $profile) -}}
+{{- fail "catalogueProfiles.guardrailStatic.profileBase64 must be canonical bounded nonempty base64" -}}
+{{- end -}}
+{{- $digest := sha256sum $profileBytes -}}
+{{- if ne $name (printf "phorvex-catalogue-guardrail-static-%s" (trunc 12 $digest)) -}}
+{{- fail "catalogueProfiles.guardrailStatic.configMapName must match decoded profile SHA prefix" -}}
+{{- end -}}
+{{- if (get $static "enabled") -}}
+{{- if ne (get $static "configMapName") $name -}}{{- fail "console.guardrailStatic.configMapName must match catalogueProfiles.guardrailStatic.configMapName" -}}{{- end -}}
+{{- if ne (get $static "profileSHA256") $digest -}}{{- fail "console.guardrailStatic.profileSHA256 must match decoded catalogue profile" -}}{{- end -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace }}
+immutable: true
+binaryData:
+  config.guardrail-confidentiality-static.yaml: {{ $profile | quote }}
+{{- end -}}

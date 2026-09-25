@@ -88,6 +88,12 @@ catalogueV1TokenRefresher:
 # Optional source bytes for the existing CPU Pod-bound token response profile.
 # Supplying this ConfigMap does not enable the console case or its authority.
 catalogueProfiles:
+  # One reviewed immutable source object for the existing static vLLM
+  # confidentiality comparison. Supplying bytes does not enable the case.
+  guardrailStatic:
+    enabled: false
+    configMapName: ""
+    profileBase64: ""
   podBoundTokenCPU:
     enabled: false
     configMapName: ""
