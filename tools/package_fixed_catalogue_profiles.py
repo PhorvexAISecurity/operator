@@ -369,6 +369,17 @@ def verified_mongo_166_evidence(root, profile, expected):
              projection.get(component + "ImageID") == images[component] and
              projection.get(component + "Deployment", {}).get("uid") == dep["metadata"].get("uid"),
              "Mongo .166 Pod/ReplicaSet/image original differs: " + component)
+    target_hash, pod = verify_mongo_target(original, profile, expected, cluster_uid, images)
+    return ({"releaseSHA":build["releaseCommit"], "sourceSHA256":digest(build_raw),
+             "clusterUID":cluster_uid, "tag":"0.4.166", **images}, copied,
+            {"sourceCommit":source, "targetReadSHA256":target_hash,
+             "rolloutTerminalSHA256":digest(terminal_raw), "mongoPodUID":pod["metadata"].get("uid"),
+             "managerPodUID":after["after-manager-pods.json"]["items"][0]["metadata"].get("uid"),
+             "consolePodUID":after["after-console-pods.json"]["items"][0]["metadata"].get("uid")})
+
+
+def verify_mongo_target(original, profile, expected, cluster_uid, images):
+    """Reparse original Mongo GET bodies and the separately reviewed CPU node."""
     read_raw = original("mongo/RECEIPT.json")
     need(digest(read_raw) == expected["target"], "Mongo target read original SHA differs")
     read = strict_json(read_raw)
@@ -448,12 +459,193 @@ def verified_mongo_166_evidence(root, profile, expected):
          any(c.get("type") == "Ready" and c.get("status") == "True" for c in node.get("status", {}).get("conditions", [])) and
          f.get("managerImageID") == images["manager"],
          "Mongo original CPU node or manager image differs")
-    return ({"releaseSHA":build["releaseCommit"], "sourceSHA256":digest(build_raw),
-             "clusterUID":cluster_uid, "tag":"0.4.166", **images}, copied,
-            {"sourceCommit":source, "targetReadSHA256":digest(read_raw),
-             "rolloutTerminalSHA256":digest(terminal_raw), "mongoPodUID":pod["metadata"].get("uid"),
-             "managerPodUID":after["after-manager-pods.json"]["items"][0]["metadata"].get("uid"),
-             "consolePodUID":after["after-console-pods.json"]["items"][0]["metadata"].get("uid")})
+    return digest(read_raw), pod
+
+
+def verified_mongo_current_evidence(root, profile, expected):
+    """Bind a reviewed current release to CI bytes, projected rollout and Mongo GETs.
+
+    The rollout responses are the retained bounded projections of Kubernetes GETs,
+    not raw Kubernetes objects. The Mongo target and node records are raw GETs.
+    """
+    need(all(isinstance(x, str) and SHA.fullmatch(x) for x in expected.values()),
+         "Mongo current original evidence SHA pins are required")
+    copied = {}
+    def original(name, limit=MAX_EVIDENCE):
+        relative = "evidence/" + name
+        raw = read_relative(root, relative, limit)
+        copied[relative] = raw
+        return raw
+
+    build_raw = original("source-current/SOURCE-BUILD.json")
+    review_raw = original("source-current/SOURCE-REVIEW.json")
+    need(digest(build_raw) == expected["source"] and digest(review_raw) == expected["review"],
+         "Mongo current independently reviewed source originals differ")
+    build, review = strict_json(build_raw), strict_json(review_raw)
+    source, release = build.get("releaseParentBuildSource"), build.get("releaseCommit")
+    match = re.fullmatch(r"v(\d+\.\d+\.\d+)", str(build.get("releaseTag", "")))
+    need(match is not None, "Mongo current release tag differs")
+    version = match[1]
+    need(build.get("schema") == "catalogue-release-" + version + "-source-build-installed-join-v1" and
+         build.get("releaseTag") == "v" + version and COMMIT.fullmatch(str(source)) and
+         COMMIT.fullmatch(str(release)) and
+         build.get("buildRun", {}).get("headSHA") == source and
+         build["buildRun"].get("conclusion") == "success" and
+         review.get("schema") == "mongo-" + version.split(".")[-1] + "-source-review-v1" and
+         review.get("approved") is True and review.get("sourceCommit") == source and
+         review.get("sourceBuildSHA256") == digest(build_raw),
+         "Mongo current source/build/reviewer fields differ")
+    repo = Path(__file__).resolve().parents[1]
+    git = subprocess.run(["git", "-C", str(repo), "show", "-s", "--format=%H%n%P%n%s", release],
+                         capture_output=True, text=True, timeout=15)
+    parser = subprocess.run(["git", "-C", str(repo), "show", source + ":phorvex/internal/console/runs.go"],
+                            capture_output=True, timeout=15)
+    ancestor = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor",
+                               MONGO_REVIEWED_PARSER_REPAIR, source], capture_output=True, timeout=15)
+    need(git.returncode == 0 and git.stdout.splitlines() ==
+         [release, source, "release: v" + version + " [skip ci]"] and parser.returncode == 0 and
+         digest(parser.stdout) == MONGO_166_RUNS_SHA256 and ancestor.returncode == 0,
+         "Mongo current Git release/source/parser bytes differ")
+
+    metadata = build.get("originalGitHubMetadata", {})
+    for field in ("buildRun", "buildJobs", "releaseCommit", "tagObject", "tagRef"):
+        item = metadata.get(field, {})
+        name = item.get("file", "")
+        need(re.fullmatch(r"[a-z-]+[.]json", name) is not None,
+             "Mongo current GitHub metadata name differs: " + field)
+        raw = original("source-current/" + name, 300_000)
+        need(digest(raw) == item.get("SHA256") and len(raw) == item.get("bytes"),
+             "Mongo current GitHub original bytes differ: " + field)
+        value = strict_json(raw)
+        if field == "buildRun":
+            need(value.get("id") == build["buildRun"].get("id") and
+                 value.get("head_sha") == source and value.get("conclusion") == "success",
+                 "Mongo current CI run original differs")
+        elif field == "buildJobs":
+            jobs = {j.get("name"): j for j in value.get("jobs", []) if isinstance(j, dict)}
+            for component, name in (("manager", "build-operator"), ("console", "build-console")):
+                need(jobs.get(name, {}).get("id") == build["builds"][component].get("jobID") and
+                     jobs[name].get("conclusion") == "success",
+                     "Mongo current CI job original differs: " + component)
+        elif field == "releaseCommit":
+            need(value.get("sha") == release and
+                 [p.get("sha") for p in value.get("parents", [])] == [source],
+                 "Mongo current release original parent differs")
+        elif field == "tagObject":
+            need(value.get("sha") == build.get("annotatedTagObjectSHA") and
+                 value.get("object", {}).get("sha") == release,
+                 "Mongo current annotated tag original differs")
+        else:
+            need(value.get("object", {}).get("sha") == build.get("annotatedTagObjectSHA"),
+                 "Mongo current tag ref original differs")
+
+    images = {}
+    for component, image in (("manager", "phorvex"), ("console", "phorvex-console")):
+        row = build.get("builds", {}).get(component, {})
+        filename = row.get("buildLogFile", "")
+        need(filename == ("build-operator.log" if component == "manager" else "build-console.log"),
+             "Mongo current build log name differs: " + component)
+        log = original("source-current/" + filename, 250_000)
+        manifest = row.get("buildManifestDigest", "")
+        need(isinstance(manifest, str) and manifest.startswith("sha256:") and SHA.fullmatch(manifest[7:]),
+             "Mongo current manifest digest differs: " + component)
+        image_id = "753556437180.dkr.ecr.us-east-2.amazonaws.com/" + image + "@" + manifest
+        pushed = ("pushing manifest for 753556437180.dkr.ecr.us-east-2.amazonaws.com/" + image +
+                  ":sha-" + source + "@" + manifest).encode()
+        need(row.get("jobConclusion") == "success" and row.get("sourceTag") == "sha-" + source and
+             row.get("installedDigestEqualsBuild") is True and row.get("installedImageID") == image_id and
+             digest(log) == row.get("buildLogSHA256") and len(log) == row.get("buildLogBytes") and
+             any(pushed in line and line.rstrip().endswith(b"done") for line in log.splitlines()) and
+             review.get(component + "ImageID") == image_id,
+             "Mongo current CI push/installed image differs: " + component)
+        images[component] = image_id
+
+    rollout_raw = original("rollout-current/RECEIPT.json")
+    need(digest(rollout_raw) == expected["rollout"] and
+         build.get("installedRead", {}).get("receiptSHA256") == digest(rollout_raw) and
+         review.get("rolloutReceiptSHA256") == digest(rollout_raw),
+         "Mongo current installed rollout receipt differs")
+    rollout = strict_json(rollout_raw)
+    need(rollout.get("schema") == "cpu-activation-current-rollout-read-v1" and
+         rollout.get("status") == "READ_COMPLETE_DEPLOYMENT_METADATA" and
+         rollout.get("kubernetesGETs") == 10 and
+         all(rollout.get(k) == 0 for k in ("applicationRequests", "tokenRequests", "execs", "writes")),
+         "Mongo current installed rollout scope/status differs")
+    projection = rollout.get("projection", {})
+    responses = rollout.get("originalProjectedResponses", {})
+    need(set(responses) == set(projection) and len(responses) == 11,
+         "Mongo current projected response set differs")
+    commands = {c.get("label"): c for c in rollout.get("commands", []) if isinstance(c, dict)}
+    need(set(commands) == set(responses) and len(rollout.get("commands", [])) == len(responses),
+         "Mongo current projected GET command set differs")
+    for label, record in responses.items():
+        need(re.fullmatch(r"[A-Za-z]+", label) and record.get("file") == "responses/" + label + ".json",
+             "Mongo current projected response path differs")
+        raw = original("rollout-current/" + label + ".json", 300_000)
+        command = commands[label]
+        need(digest(raw) == record.get("SHA256") and strict_json(raw) == projection[label] and
+             command.get("stdoutSHA256") == digest(raw) and command.get("rc") == 0 and
+             command.get("dispatches") == 1 and command.get("retry") is False,
+             "Mongo current projected original bytes differ: " + label)
+    app = projection.get("stackApplication", {})
+    app_revision = app.get("syncRevision", "")
+    app_ancestor = (subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor",
+                                   release, app_revision], capture_output=True, timeout=15)
+                    if isinstance(app_revision, str) and COMMIT.fullmatch(app_revision) else None)
+    need(app_ancestor is not None and app_ancestor.returncode == 0 and
+         app.get("syncStatus") == "Synced" and
+         build["installedRead"].get("argoSyncRevision") == app_revision and
+         build["installedRead"].get("argoSyncStatus") == "Synced",
+         "Mongo current Argo source join differs")
+    cluster_uid = projection.get("cluster", {}).get("identity", {}).get("uid")
+    need(UID.fullmatch(str(cluster_uid)) and
+         profile["mongoExposureFixture"].get("clusterUID") == cluster_uid,
+         "Mongo current cluster UID differs")
+    for component in ("manager", "console"):
+        name = "phorvex-phorvex" + ("-console" if component == "console" else "")
+        dep = projection.get(component + "Deployment", {})
+        pods = projection.get(component + "Pods", [])
+        rs = projection.get(component + "ReplicaSet", {})
+        assessed = rollout.get("podAssessments", {}).get(component, {})
+        row = build["builds"][component]
+        need(len(pods) == 1 and assessed.get("status") == "EXACT_ACTIVE_READY_SELECTED" and
+             not assessed.get("validationErrors") and
+             assessed.get("selectedActiveReady", {}).get("identity", {}).get("uid") == row.get("podUID") and
+             dep.get("identity", {}).get("name") == name and
+             dep.get("identity", {}).get("namespace") == "phorvex-system" and
+             dep.get("status", {}).get("readyReplicas") == dep.get("status", {}).get("replicas") == 1 and
+             dep.get("status", {}).get("observedGeneration") == dep.get("identity", {}).get("generation") and
+             dep.get("containers", [{}])[0].get("image") ==
+                 "753556437180.dkr.ecr.us-east-2.amazonaws.com/" +
+                 ("phorvex" if component == "manager" else "phorvex-console") + ":" + version and
+             pods[0].get("identity", {}).get("uid") == row.get("podUID") and
+             pods[0].get("ready") is True and pods[0].get("phase") == "Running" and
+             pods[0].get("deleting") is False and
+             pods[0].get("containers", [{}])[0].get("imageID") == images[component] and
+             pods[0]["containers"][0].get("ready") is True and
+             rs.get("identity", {}).get("uid") and rs.get("readyReplicas") == 1 and
+             len(rs.get("owners", [])) == 1 and rs["owners"][0].get("uid") == dep["identity"].get("uid") and
+             any(o.get("uid") == rs["identity"].get("uid") and o.get("controller") is True
+                 for o in pods[0].get("owners", [])),
+             "Mongo current installed Pod/owner/image differs: " + component)
+    need(profile["mongoExposureFixture"].get("managerImageID") == images["manager"],
+         "Mongo current profile manager digest differs")
+    target_hash, pod = verify_mongo_target(original, profile, expected, cluster_uid, images)
+    target_receipt = strict_json(original("mongo/RECEIPT.json"))
+    target_names = {r.get("label"): r.get("originalFile") for r in target_receipt.get("receipts", [])}
+    for component in ("manager", "console"):
+        raw = original("mongo/" + target_names[component + "-pods"])
+        pods = strict_json(raw).get("items", [])
+        need(len(pods) == 1 and
+             pods[0].get("metadata", {}).get("uid") == build["builds"][component]["podUID"] and
+             pods[0].get("status", {}).get("containerStatuses", [{}])[0].get("imageID") == images[component],
+             "Mongo current later original manager/console Pod source differs: " + component)
+    return ({"releaseSHA": release, "sourceSHA256": digest(build_raw),
+             "clusterUID": cluster_uid, "tag": version, **images}, copied,
+            {"sourceCommit": source, "targetReadSHA256": target_hash,
+             "rolloutReceiptSHA256": digest(rollout_raw), "mongoPodUID": pod["metadata"].get("uid"),
+             "managerPodUID": build["builds"]["manager"]["podUID"],
+             "consolePodUID": build["builds"]["console"]["podUID"]})
 
 def package(args):
     root = args.input.resolve()
@@ -469,20 +661,29 @@ def package(args):
     phorvex = overlay["phorvex"]["phorvex"]
     console = phorvex.get("console")
     need(isinstance(console, dict), "console values missing")
-    mono_pins = {"source": getattr(args, "expect_mongo166_source_sha256", None),
+    mono166_pins = {"source": getattr(args, "expect_mongo166_source_sha256", None),
                  "review": getattr(args, "expect_mongo166_review_sha256", None),
                  "rollout": getattr(args, "expect_mongo166_rollout_sha256", None),
                  "target": getattr(args, "expect_mongo166_target_sha256", None),
                  "node": getattr(args, "expect_mongo166_node_sha256", None)}
-    mongo166 = any(mono_pins.values())
-    if mongo166:
+    mono_current_pins = {"source": getattr(args, "expect_mongo_current_source_sha256", None),
+                    "review": getattr(args, "expect_mongo_current_review_sha256", None),
+                    "rollout": getattr(args, "expect_mongo_current_rollout_sha256", None),
+                    "target": getattr(args, "expect_mongo_current_target_sha256", None),
+                    "node": getattr(args, "expect_mongo_current_node_sha256", None)}
+    mongo_release = "166" if any(mono166_pins.values()) else "current" if any(mono_current_pins.values()) else None
+    mono_pins = mono166_pins if mongo_release == "166" else mono_current_pins
+    need(not (any(mono166_pins.values()) and any(mono_current_pins.values())),
+         "Mongo release original proof pin sets cannot be mixed")
+    if mongo_release:
         need(kinds == ["mongo"] and all(mono_pins.values()),
-             "Mongo .166 original proof requires one Mongo profile and five exact SHA pins")
+             "Mongo release original proof requires one Mongo profile and five exact SHA pins")
         mongo_profile = strict_yaml(read_relative(root, SPECS["mongo"][0], MAX_PROFILE))
-        rollout, mongo_originals, mongo_summary = verified_mongo_166_evidence(root, mongo_profile, mono_pins)
+        verifier = verified_mongo_166_evidence if mongo_release == "166" else verified_mongo_current_evidence
+        rollout, mongo_originals, mongo_summary = verifier(root, mongo_profile, mono_pins)
         need(phorvex["image"].get("tag") == rollout["tag"] and
              console["image"].get("tag") == rollout["tag"],
-             "Mongo .166 manager/console desired tags differ from original release")
+             "Mongo manager/console desired tags differ from original release")
         join_raw = build_raw = review_raw = pods_raw = None
     else:
         join_raw = read_relative(root, "evidence/JOIN.json", MAX_EVIDENCE)
@@ -642,7 +843,7 @@ def package(args):
     args.output.mkdir(parents=True, mode=0o700)
     evidence = args.output / "evidence"
     evidence.mkdir(mode=0o700)
-    if mongo166:
+    if mongo_release:
         for relative, raw in mongo_originals.items():
             destination = args.output / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -660,8 +861,8 @@ def package(args):
                "rolloutImageIDs": {k: rollout[k] for k in ("manager", "console")},
                "configMapsSHA256": digest((args.output / "configmaps.yaml").read_bytes()),
                "valuesOverlaySHA256": digest((args.output / "values-overlay.yaml").read_bytes())}
-    if mongo166:
-        receipt.update({"evidenceSchema": "mongo-166-originals-v1", "originalPins": mono_pins,
+    if mongo_release:
+        receipt.update({"evidenceSchema": "mongo-" + mongo_release + "-originals-v1", "originalPins": mono_pins,
                         "originalJoin": mongo_summary,
                         "copiedEvidenceSHA256": {name:digest(raw) for name,raw in mongo_originals.items()}})
     else:
@@ -686,6 +887,11 @@ def main():
     parser.add_argument("--expect-mongo166-rollout-sha256", help="independently reviewed original rollout terminal SHA")
     parser.add_argument("--expect-mongo166-target-sha256", help="independently reviewed original Mongo GET receipt SHA")
     parser.add_argument("--expect-mongo166-node-sha256", help="independently reviewed eligible CPU node read SHA")
+    parser.add_argument("--expect-mongo-current-source-sha256", help="independently reviewed current CI/build installed join SHA")
+    parser.add_argument("--expect-mongo-current-review-sha256", help="independently reviewed current source/image approval SHA")
+    parser.add_argument("--expect-mongo-current-rollout-sha256", help="independently reviewed current projected rollout SHA")
+    parser.add_argument("--expect-mongo-current-target-sha256", help="independently reviewed current Mongo raw GET receipt SHA")
+    parser.add_argument("--expect-mongo-current-node-sha256", help="independently reviewed eligible CPU node raw GET SHA")
     parser.add_argument("--output", type=Path, required=True, help="new output directory; never overwritten")
     receipt = package(parser.parse_args())
     print(json.dumps({"status": receipt["status"], "profiles": receipt["profiles"]}, sort_keys=True))
