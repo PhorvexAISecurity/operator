@@ -18,6 +18,7 @@ import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
 import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
 import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
+import { GuardrailAvailabilityResultPanel } from "@/components/panels/guardrail-availability-result";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -99,6 +100,8 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
       {runConfig === "pod-bound-api-auth-response" && !ev.podBoundTokenResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Pod-bound bearer stage evidence is unavailable. No injected-signal, operation or credential mechanism result is accepted.</div>}
       {ev.guardrailStaticResult && <GuardrailStaticResultPanel result={ev.guardrailStaticResult} />}
       {runConfig === "guardrail-confidentiality-static" && !ev.guardrailStaticResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact private guardrail comparison evidence is unavailable or incomplete. No static-filter finding is accepted.</div>}
+      {runConfig === "guardrail-availability-recovery" && ev.guardrailAvailabilityResult && <GuardrailAvailabilityResultPanel result={ev.guardrailAvailabilityResult} unsafeToRetry={unsafeToRetry} />}
+      {runConfig === "guardrail-availability-recovery" && !ev.guardrailAvailabilityResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact guardrail availability evidence is unavailable. No injected operation or before/after recovery is accepted.</div>}
       {runConfig === "nats-client-response" && !ev.natsResponseResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact NATS response evidence is unavailable or incomplete. No injected-signal outcome, packet isolation, or defense result is accepted.</div>}
       {ev.mongoExposureResult && <MongoExposureResult result={ev.mongoExposureResult} unsafeToRetry={unsafeToRetry} />}
       {runConfig === "mongo-exposure-baseline" && !ev.mongoExposureResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Mongo synthetic-document evidence is unavailable or incomplete. No configuration exposure finding, manager causal claim, or defense result is accepted.</div>}

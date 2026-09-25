@@ -136,6 +136,7 @@ func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 		items = append(items, c.mongoExposureCatalogueItem())
 	}
 	items = append(items, c.guardrailStaticCatalogueItem())
+	items = append(items, c.guardrailAvailabilityCatalogueItem())
 	items = append(items, c.limitedV1Catalogue()...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Product != items[j].Product {
@@ -179,6 +180,23 @@ func (c *Config) guardrailStaticCatalogueItem() CatalogItem {
 		item.RuntimeContext = dest.ScopeTarget
 	} else {
 		item.UnavailableReason = "Guardrail comparison is disabled or lacks reviewed profile bytes, installed source and target pins"
+	}
+	return item
+}
+
+func (c *Config) guardrailAvailabilityCatalogueItem() CatalogItem {
+	dest, err := (&RunManager{cfg: *c}).SuiteDestination(guardrailAvailabilityConfig)
+	item := CatalogItem{EntryID: "ai-vllm-guardrail-availability-recovery", Name: "ai-vllm-guardrail-availability-recovery", Product: "ai", Category: "Injected availability recovery comparison", R6Tag: "not-applicable",
+		Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false), ExpectedActuators: []string{"guardrail-rotate"},
+		ResponseGuidanceBasis: "explicit-effect", ResponseGuidance: "One explicitly injected trusted signal may select a guardrail rotation. Exact event, decision, operation and same-request guarded replies are checked independently; natural detection and security efficacy are not evaluated.",
+		MeaningfulWhen: "Naturally active pgv1 must block fixed benign Say OK while arithmetic serves 4 and a fixed synthetic canary is already blocked; one exact pgv1-to-pgv2 operation may restore Say OK while preserving both controls.",
+		RunnableNote:   "Server-owned, default-off named suite; current installed source, Pod, route, authenticated audit, scoped console identity and profile bytes are rechecked at launch. A failed baseline stops before event.",
+		Prereqs:        []string{"reviewed installed vLLM and manager identities", "scoped console bearer and authenticated audit", "vllm and phorvex-system tenant grants"},
+		LaunchKind:     "named-suite", ClaimClass: "effect", EventMode: "explicitly-injected", Profile: guardrailAvailabilityConfig, Available: err == nil}
+	if err == nil {
+		item.RuntimeContext = dest.ScopeTarget
+	} else {
+		item.UnavailableReason = "Guardrail availability recovery is disabled or lacks reviewed profile, scoped credential, installed route or authenticated audit"
 	}
 	return item
 }

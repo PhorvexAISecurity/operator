@@ -11,12 +11,14 @@ import json
 import re
 import stat
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
 SPECS = {
     "mongo": ("config.mongo-exposure-baseline.yaml", "mongoExposure", "mongoExposureFixture", "document-store"),
     "guardrail-static": ("config.guardrail-confidentiality-static.yaml", "guardrailStatic", "guardrailStaticFixture", "vllm"),
+    "guardrail-availability": ("config.guardrail-availability-recovery.yaml", "guardrailAvailability", "guardrailAvailabilityFixture", "vllm"),
     "nats-baseline": ("config.nats-exposure-baseline.yaml", "natsExposure", "natsExposureFixture", "phorvex-nats-exposure-fixture"),
     "nats-response": ("config.nats-client-response.yaml", "natsExposure.clientResponse", "natsExposureFixture", "phorvex-nats-exposure-fixture"),
     "pod-token": ("config.pod-bound-api-auth-response.yaml", "podBoundToken", "podBoundTokenFixture", "voice"),
@@ -205,7 +207,7 @@ def selected_values(source, kinds):
     exact_keys(inner, allowed_inner, "unrelated stack values")
     exact_keys(inner.get("image"), {"tag"}, "unrelated manager image settings")
     console = inner.get("console")
-    exact_keys(console, {"image", "mongoExposure", "guardrailStatic", "natsExposure", "podBoundToken"},
+    exact_keys(console, {"image", "mongoExposure", "guardrailStatic", "guardrailAvailability", "natsExposure", "podBoundToken"},
                "unrelated console values")
     exact_keys(console.get("image"), {"tag"}, "unrelated console image settings")
     if "pod-token" in kinds:
@@ -219,6 +221,7 @@ def selected_values(source, kinds):
     expected_blocks = {
         "mongoExposure": {"enabled", "configMapName", "profileSHA256"},
         "guardrailStatic": {"enabled", "configMapName", "profileSHA256", "sourceConfigMap", "guardrailJournalName", "kvJournalName"},
+        "guardrailAvailability": {"enabled", "configMapName", "profileSHA256", "sourceConfigMap", "guardrailJournalName"},
         "natsExposure": {"enabled", "configMapName", "profileSHA256", "clientResponse"},
         "podBoundToken": {"enabled", "configMapName", "profileSHA256", "scrapeApproved", "scrapeNamespace", "podSelectorLabel", "quarantineCapacityLedgerName"},
     }
@@ -350,6 +353,59 @@ def package(args):
                  profile[fixture].get("clusterUID") == rollout["clusterUID"], "NATS observer/cluster differs from rollout")
         if kind == "guardrail-static" and block["enabled"]:
             need(profile[fixture].get("variant") == "pgv1", "enabled static suite requires reviewed pgv1 source")
+        if kind == "guardrail-availability":
+            f = profile[fixture]
+            creator = str(f.get("eventCreator", ""))
+            creator_prefix = "system:serviceaccount:phorvex-system:"
+            account = creator.removeprefix(creator_prefix)
+            creator_ok = (creator.startswith(creator_prefix) and 0 < len(account) <= 253 and
+                          all(0 < len(label) <= 63 and
+                              re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", label)
+                              for label in account.split(".")))
+            deployment_name = str(f.get("consoleDeploymentName", ""))
+            deployment_ok = (0 < len(deployment_name) <= 253 and
+                             all(0 < len(label) <= 63 and
+                                 re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", label)
+                                 for label in deployment_name.split(".")))
+            try:
+                audit = urlsplit(str(f.get("auditURL", "")))
+                audit_port = audit.port
+            except ValueError as exc:
+                raise ValueError("availability audit URL is malformed") from exc
+            need(f.get("clusterUID") == rollout["clusterUID"] and
+                 f.get("managerImageID") == rollout["manager"] and
+                 f.get("consoleImageID") == rollout["console"],
+                 "availability cluster/manager/console rollout differs")
+            need(f.get("sourceConfigMapName") == block.get("sourceConfigMap") == "guardrail-proxy" and
+                 f.get("guardrailJournalName") == block.get("guardrailJournalName") and
+                 f.get("policyName") == "vllm-defense" and
+                 f.get("modelID") == "Qwen/Qwen2.5-7B-Instruct-AWQ" and
+                 creator_ok and
+                 f.get("consoleURL") == "http://127.0.0.1:8090" and
+                 f.get("scopedTokenFile") == "/etc/phorvex-catalogue-v1/token" and
+                 f.get("auditCAFile") == "/etc/audit-client/ca.crt" and
+                 f.get("auditClientCertFile") == "/etc/audit-client/tls.crt" and
+                 f.get("auditClientKeyFile") == "/etc/audit-client/tls.key" and
+                 f.get("maxRunSeconds") == 600 and f.get("cleanupSeconds") == 90,
+                 "availability fixed route, journal or bounds differ")
+            need(UID.fullmatch(str(f.get("podUID", ""))) and
+                 UID.fullmatch(str(f.get("serviceUID", ""))) and
+                 UID.fullmatch(str(f.get("sourceUID", ""))) and
+                 UID.fullmatch(str(f.get("guardrailJournalUID", ""))) and
+                 UID.fullmatch(str(f.get("managerPodUID", ""))) and
+                 UID.fullmatch(str(f.get("consoleDeploymentUID", ""))) and
+                 deployment_ok and
+                 "consolePodName" not in f and "consolePodUID" not in f and
+                 UID.fullmatch(str(f.get("policyUID", ""))) and
+                 IMAGE.fullmatch(str(f.get("podImageID", ""))) and
+                 SHA.fullmatch(str(f.get("sourceSHA256", ""))) and
+                 type(f.get("policyGeneration")) is int and f["policyGeneration"] > 0 and
+                 re.fullmatch(r"run-[1-9][0-9]*", str(f.get("runID", ""))) and
+                 audit.scheme == "https" and audit.hostname is not None and
+                 audit.hostname.endswith(".phorvex-system.svc") and audit_port == 8445 and
+                 not audit.username and not audit.password and not audit.path and
+                 not audit.query and not audit.fragment and f.get("auditServerName") == audit.hostname,
+                 "availability installed source/identity pin is incomplete")
         profile_sha = digest(raw)
         name = "phorvex-catalogue-" + kind + "-" + profile_sha[:12]
         for key, actual in (("profileSHA256", profile_sha), ("configMapName", name)):

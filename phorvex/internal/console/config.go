@@ -47,6 +47,10 @@ type Config struct {
 	// GuardrailStaticEnabled and its digest admit only the reviewed named YAML.
 	GuardrailStaticEnabled       bool
 	GuardrailStaticProfileSHA256 string
+	// GuardrailAvailabilityEnabled admits only the separately reviewed, injected
+	// availability comparison profile. It is disabled unless explicitly mounted.
+	GuardrailAvailabilityEnabled       bool
+	GuardrailAvailabilityProfileSHA256 string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool

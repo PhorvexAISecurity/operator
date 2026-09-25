@@ -149,6 +149,8 @@ type TargetConfig struct {
 	ProfileSHA256 string `json:"-"`
 	// GuardrailStaticFixture selects the fixed, read-only installed vLLM comparison.
 	GuardrailStaticFixture *GuardrailStaticFixtureConfig `json:"guardrailStaticFixture,omitempty"`
+	// GuardrailAvailabilityFixture is a separate, injected, fixed availability case.
+	GuardrailAvailabilityFixture *GuardrailAvailabilityFixtureConfig `json:"guardrailAvailabilityFixture,omitempty"`
 
 	// InstalledManagerFixture attaches one catalogue arm to an already installed
 	// manager and its existing authenticated audit API. It is a complete runtime
@@ -294,6 +296,41 @@ type GuardrailStaticFixtureConfig struct {
 	KVJournalName        string `json:"kvJournalName"`
 	KVJournalUID         string `json:"kvJournalUID"`
 	MaxRunSeconds        int    `json:"maxRunSeconds"`
+}
+
+type GuardrailAvailabilityFixtureConfig struct {
+	RunID                 string `json:"runID"`
+	Transport             string `json:"transport"`
+	ClusterUID            string `json:"clusterUID"`
+	PodName               string `json:"podName"`
+	PodUID                string `json:"podUID"`
+	PodImageID            string `json:"podImageID"`
+	ServiceUID            string `json:"serviceUID"`
+	SourceConfigMapName   string `json:"sourceConfigMapName"`
+	SourceUID             string `json:"sourceUID"`
+	SourceSHA256          string `json:"sourceSHA256"`
+	GuardrailJournalName  string `json:"guardrailJournalName"`
+	GuardrailJournalUID   string `json:"guardrailJournalUID"`
+	ManagerPodName        string `json:"managerPodName"`
+	ManagerPodUID         string `json:"managerPodUID"`
+	ManagerImageID        string `json:"managerImageID"`
+	ConsoleDeploymentName string `json:"consoleDeploymentName"`
+	ConsoleDeploymentUID  string `json:"consoleDeploymentUID"`
+	ConsoleImageID        string `json:"consoleImageID"`
+	PolicyName            string `json:"policyName"`
+	PolicyUID             string `json:"policyUID"`
+	PolicyGeneration      int64  `json:"policyGeneration"`
+	ModelID               string `json:"modelID"`
+	EventCreator          string `json:"eventCreator"`
+	ConsoleURL            string `json:"consoleURL"`
+	ScopedTokenFile       string `json:"scopedTokenFile"`
+	AuditURL              string `json:"auditURL"`
+	AuditServerName       string `json:"auditServerName"`
+	AuditCAFile           string `json:"auditCAFile"`
+	AuditClientCertFile   string `json:"auditClientCertFile"`
+	AuditClientKeyFile    string `json:"auditClientKeyFile"`
+	MaxRunSeconds         int    `json:"maxRunSeconds"`
+	CleanupSeconds        int    `json:"cleanupSeconds"`
 }
 
 type InstalledManagerFixtureConfig struct {
@@ -495,6 +532,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateGuardrailStaticFixture(c); err != nil {
 			return err
 		}
+		if err := validateGuardrailAvailabilityFixture(c); err != nil {
+			return err
+		}
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
@@ -534,6 +574,9 @@ func (c TargetConfig) Validate() error {
 		return err
 	}
 	if err := validateGuardrailStaticFixture(c); err != nil {
+		return err
+	}
+	if err := validateGuardrailAvailabilityFixture(c); err != nil {
 		return err
 	}
 	if err := validateGPUFunctionalFixture(c); err != nil {

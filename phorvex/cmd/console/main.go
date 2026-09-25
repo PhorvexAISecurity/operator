@@ -368,6 +368,16 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return errors.New("PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
 	}
 	cfg.GuardrailStaticProfileSHA256 = guardrailStaticProfileSHA256
+	guardrailAvailabilityEnabled, err := readBool("PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.GuardrailAvailabilityEnabled = guardrailAvailabilityEnabled
+	guardrailAvailabilityProfileSHA256, _ := lookup("PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_PROFILE_SHA256")
+	if guardrailAvailabilityEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(guardrailAvailabilityProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.GuardrailAvailabilityProfileSHA256 = guardrailAvailabilityProfileSHA256
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err

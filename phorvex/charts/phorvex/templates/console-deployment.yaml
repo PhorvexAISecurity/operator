@@ -67,6 +67,24 @@
 {{- $sha := required "console.guardrailStatic.profileSHA256 is required" .Values.phorvex.console.guardrailStatic.profileSHA256 }}
 {{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailStatic.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.guardrailAvailability.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.guardrailAvailability.enabled requires catalogueV1.scopedToken.existingSecret" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.scopedToken.key "token" }}{{- fail "console.guardrailAvailability requires scopedToken key token" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.scopedToken.mountPath "/etc/phorvex-catalogue-v1" }}{{- fail "console.guardrailAvailability requires fixed scopedToken mountPath" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.loopbackURL "http://127.0.0.1:8090" }}{{- fail "console.guardrailAvailability requires fixed catalogue loopbackURL" }}{{- end }}
+{{- if ne (int .Values.phorvex.console.auditTransport.port) 8445 }}{{- fail "console.guardrailAvailability requires auditTransport port 8445" }}{{- end }}
+{{- $auditHost := printf "%s-audit-source.%s.svc" (include "phorvex.fullname" .) .Release.Namespace }}
+{{- if ne .Values.phorvex.console.auditTransport.serverDNSName $auditHost }}{{- fail "console.guardrailAvailability requires the release audit source DNS" }}{{- end }}
+{{- $name := required "console.guardrailAvailability.configMapName is required" .Values.phorvex.console.guardrailAvailability.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}{{- fail "console.guardrailAvailability.configMapName must be a DNS subdomain name" }}{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.guardrailAvailability.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.guardrailAvailability.profileSHA256 is required" .Values.phorvex.console.guardrailAvailability.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailAvailability.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- if ne .Values.phorvex.console.guardrailAvailability.sourceConfigMap "guardrail-proxy" }}{{- fail "console.guardrailAvailability.sourceConfigMap must be guardrail-proxy" }}{{- end }}
+{{- $journal := required "console.guardrailAvailability.guardrailJournalName is required" .Values.phorvex.console.guardrailAvailability.guardrailJournalName }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $journal) }}{{- fail "console.guardrailAvailability.guardrailJournalName must be a DNS label" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -175,6 +193,20 @@ spec:
         {{- if .Values.phorvex.console.guardrailStatic.enabled }}
         - name: PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailStatic.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED
+          value: {{ .Values.phorvex.console.guardrailAvailability.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.guardrailAvailability.profileSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PHORVEX_CONSOLE_POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
         {{- end }}
         - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED
           value: {{ .Values.phorvex.console.podBoundToken.enabled | default false | quote }}
@@ -490,6 +522,12 @@ spec:
           subPath: config.guardrail-confidentiality-static.yaml
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+        - name: guardrail-availability-reviewed-profile
+          mountPath: {{ printf "%s/build/test-harness/config.guardrail-availability-recovery.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.guardrail-availability-recovery.yaml
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -591,6 +629,15 @@ spec:
           items:
           - key: config.guardrail-confidentiality-static.yaml
             path: config.guardrail-confidentiality-static.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+      - name: guardrail-availability-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.guardrailAvailability.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.guardrail-availability-recovery.yaml
+            path: config.guardrail-availability-recovery.yaml
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}
