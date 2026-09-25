@@ -1,0 +1,1 @@
+{"clusterUID":"cluster-uid","configuredSelector":"observe-current","eventMode":"DIRECT_STATIC","maxCalls":4,"podUID":"pod-uid","resolvedVariant":"pgv2","runId":"run-1","schema":"guardrail-static-intent-v1","sourceSHA256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","variant":"pgv2"}

@@ -274,6 +274,84 @@ func TestGuardrailStaticReadsRealPgv2ProducerProtocolFixture(t *testing.T) {
 	}
 }
 
+func TestGuardrailStaticObserveCurrentRealProducerAndTampering(t *testing.T) {
+	profile := func(t *testing.T, variant string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "run-1.yaml")
+		raw := "guardrailStaticFixture:\n  runID: run-1\n  clusterUID: cluster-uid\n  podUID: pod-uid\n  variant: " + variant + "\n  serviceUID: service-uid\n  sourceSHA256: " + strings.Repeat("b", 64) + "\n  guardrailJournalUID: gj-uid\n  kvJournalUID: kj-uid\n"
+		if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	copyFixture := func(t *testing.T, source string) string {
+		t.Helper()
+		out := t.TempDir()
+		entries, err := os.ReadDir(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				t.Fatal("nested static producer fixture")
+			}
+			body, err := os.ReadFile(filepath.Join(source, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(out, entry.Name()), body, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return out
+	}
+	for _, variant := range []string{"pgv1", "pgv2"} {
+		t.Run(variant, func(t *testing.T) {
+			source, err := filepath.Abs("testdata/guardrail-static-current-" + variant)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := profile(t, "observe-current")
+			got, err := readGuardrailStaticResult(source, "run-1", cfg)
+			if err != nil || !got.Accepted || got.ConfiguredSelector != "observe-current" || got.Variant != variant || got.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" || got.BrainDecision != "NOT_EVALUATED" {
+				t.Fatalf("actual producer current variant refused: %+v %v", got, err)
+			}
+			if variant == "pgv2" && (got.Calls[2].Status != 200 || got.SayOK == "SAY_OK_FALSE_POSITIVE_OBSERVED") {
+				t.Fatalf("pgv2 benign control mislabeled: %+v", got)
+			}
+			for _, tc := range []struct{ name, file, old, new string }{
+				{"intent selector", "intent.json", `"configuredSelector":"observe-current"`, `"configuredSelector":"pgv1"`},
+				{"intent resolved", "intent.json", `"resolvedVariant":"` + variant + `"`, `"resolvedVariant":"pgv3"`},
+				{"terminal selector", "guardrail-static-result-v1.json", `"configuredSelector": "observe-current"`, `"configuredSelector": "pgv1"`},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					out := copyFixture(t, source)
+					path := filepath.Join(out, tc.file)
+					body, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !strings.Contains(string(body), tc.old) {
+						t.Fatalf("fixture missing %s", tc.old)
+					}
+					if err := os.WriteFile(path, []byte(strings.Replace(string(body), tc.old, tc.new, 1)), 0600); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := readGuardrailStaticResult(out, "run-1", cfg); err == nil {
+						t.Fatal("tampered current selector accepted")
+					}
+				})
+			}
+			if _, err := readGuardrailStaticResult(source, "run-1", profile(t, variant)); err == nil {
+				t.Fatal("observe-current producer accepted under explicit profile")
+			}
+		})
+	}
+	if _, err := readGuardrailStaticResult("testdata/guardrail-static-producer", "run-1", profile(t, "observe-current")); err == nil {
+		t.Fatal("legacy explicit intent accepted under observe-current profile")
+	}
+}
+
 func TestGuardrailStaticRejectsRelabeledHTTPAndProgress(t *testing.T) {
 	out, cfg, a := staticFixture(t)
 	// A terminal claim cannot turn a distinct private HTTP status receipt into a typed refusal.

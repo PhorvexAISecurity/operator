@@ -768,8 +768,8 @@ def package(args):
             need(profile[fixture].get("observerImage") == rollout["console"] and
                  profile[fixture].get("clusterUID") == rollout["clusterUID"], "NATS observer/cluster differs from rollout")
         if kind == "guardrail-static" and block["enabled"]:
-            need(profile[fixture].get("variant") in ("pgv1", "pgv2"),
-                 "enabled static suite requires one exact reviewed pgv1 or pgv2 source")
+            need(profile[fixture].get("variant") in ("pgv1", "pgv2", "observe-current"),
+                 "enabled static suite requires an exact pgv1/pgv2 pin or observe-current selector")
         if kind == "guardrail-availability":
             f = profile[fixture]
             creator = str(f.get("eventCreator", ""))

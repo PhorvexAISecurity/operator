@@ -56,6 +56,14 @@ func TestGuardrailStaticSuiteDestinationRejectsIncompleteProfile(t *testing.T) {
 	if _, err := rm.SuiteDestination(guardrailStaticConfig); err != nil {
 		t.Fatalf("exact pgv2 profile refused: %v", err)
 	}
+	currentRaw := []byte(strings.Replace(string(raw), "  variant: pgv1", "  variant: observe-current", 1))
+	rm.cfg.GuardrailStaticProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256(currentRaw))
+	if err := os.WriteFile(path, currentRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rm.SuiteDestination(guardrailStaticConfig); err != nil {
+		t.Fatalf("observe-current selector refused: %v", err)
+	}
 	for _, tc := range []struct{ name, old, new string }{
 		{"missing pod", "  podName: \"reviewed-vllm-pod\"\n", ""},
 		{"unknown variant", "  variant: pgv1", "  variant: pgv3"},

@@ -76,29 +76,30 @@ type Response struct {
 	StateAfter        json.RawMessage `json:"stateAfter"`
 }
 type Result struct {
-	Schema          string     `json:"schema"`
-	RunID           string     `json:"runId"`
-	Status          string     `json:"status"`
-	Complete        bool       `json:"complete"`
-	Issues          []string   `json:"issues"`
-	ClusterUID      string     `json:"clusterUID"`
-	Target          Snapshot   `json:"target"`
-	Snapshots       []Snapshot `json:"snapshots"`
-	SnapshotsSHA256 string     `json:"snapshotsSHA256"`
-	Responses       []Response `json:"responses"`
-	MarkerFile      string     `json:"markerFile"`
-	MarkerSHA256    string     `json:"markerSHA256"`
-	ProgressSHA256  string     `json:"progressSHA256"`
-	SourceEvidence  string     `json:"sourceEvidence"`
-	LoadedSource    string     `json:"loadedSource"`
-	RouteEvidence   string     `json:"routeEvidence"`
-	EventMode       string     `json:"eventMode"`
-	NaturalDetector string     `json:"naturalDetector"`
-	BrainDecision   string     `json:"brainDecision"`
-	Actuator        string     `json:"actuator"`
-	ExternalRoute   string     `json:"externalRoute"`
-	SayOK           string     `json:"sayOK"`
-	Arithmetic      string     `json:"arithmetic"`
+	Schema             string     `json:"schema"`
+	RunID              string     `json:"runId"`
+	ConfiguredSelector string     `json:"configuredSelector"`
+	Status             string     `json:"status"`
+	Complete           bool       `json:"complete"`
+	Issues             []string   `json:"issues"`
+	ClusterUID         string     `json:"clusterUID"`
+	Target             Snapshot   `json:"target"`
+	Snapshots          []Snapshot `json:"snapshots"`
+	SnapshotsSHA256    string     `json:"snapshotsSHA256"`
+	Responses          []Response `json:"responses"`
+	MarkerFile         string     `json:"markerFile"`
+	MarkerSHA256       string     `json:"markerSHA256"`
+	ProgressSHA256     string     `json:"progressSHA256"`
+	SourceEvidence     string     `json:"sourceEvidence"`
+	LoadedSource       string     `json:"loadedSource"`
+	RouteEvidence      string     `json:"routeEvidence"`
+	EventMode          string     `json:"eventMode"`
+	NaturalDetector    string     `json:"naturalDetector"`
+	BrainDecision      string     `json:"brainDecision"`
+	Actuator           string     `json:"actuator"`
+	ExternalRoute      string     `json:"externalRoute"`
+	SayOK              string     `json:"sayOK"`
+	Arithmetic         string     `json:"arithmetic"`
 }
 
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
@@ -203,7 +204,7 @@ func snapshot(ctx context.Context, c config.TargetConfig, k kubernetes.Interface
 		return Snapshot{}, errors.New("target Pod readiness differs")
 	}
 	s := Snapshot{PodName: p.Name, PodUID: string(p.UID), PodRV: p.ResourceVersion, Variant: p.Annotations["phorvex.ai/guardrail-variant"], TargetEventUIDs: []string{}}
-	if s.Variant != f.Variant {
+	if (f.Variant == "observe-current" && s.Variant != "pgv1" && s.Variant != "pgv2") || (f.Variant != "observe-current" && s.Variant != f.Variant) {
 		return Snapshot{}, errors.New("active variant differs from reviewed pin")
 	}
 	for _, name := range []string{"guardrail", "vllm"} {
@@ -527,17 +528,10 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 	if err := os.Chmod(c.OutDir, 0700); err != nil {
 		return err
 	}
-	intent, err := json.Marshal(map[string]any{"schema": "guardrail-static-intent-v1", "runId": f.RunID, "clusterUID": f.ClusterUID, "podUID": f.PodUID, "variant": f.Variant, "sourceSHA256": f.SourceSHA256, "maxCalls": 4, "eventMode": "DIRECT_STATIC"})
-	if err != nil {
+	if err := privateWrite(c.OutDir, "progress.jsonl", []byte{}); err != nil {
 		return err
 	}
-	if err = privateWrite(c.OutDir, "intent.json", append(intent, '\n')); err != nil {
-		return err
-	}
-	if err = privateWrite(c.OutDir, "progress.jsonl", []byte{}); err != nil {
-		return err
-	}
-	r := Result{Schema: Schema, RunID: f.RunID, Status: "INCONCLUSIVE", Issues: []string{}, Snapshots: []Snapshot{}, Responses: []Response{}, ClusterUID: f.ClusterUID, SourceEvidence: "configmap-mount-declaration", LoadedSource: "NOT_ATTESTED", RouteEvidence: "exact-Pod-loopback", EventMode: "DIRECT_STATIC", NaturalDetector: "NOT_EVALUATED", BrainDecision: "NOT_EVALUATED", Actuator: "NOT_EVALUATED", ExternalRoute: "NOT_TESTED", SayOK: "NOT_EVALUATED", Arithmetic: "NOT_EVALUATED"}
+	r := Result{Schema: Schema, RunID: f.RunID, ConfiguredSelector: f.Variant, Status: "INCONCLUSIVE", Issues: []string{}, Snapshots: []Snapshot{}, Responses: []Response{}, ClusterUID: f.ClusterUID, SourceEvidence: "configmap-mount-declaration", LoadedSource: "NOT_ATTESTED", RouteEvidence: "exact-Pod-loopback", EventMode: "DIRECT_STATIC", NaturalDetector: "NOT_EVALUATED", BrainDecision: "NOT_EVALUATED", Actuator: "NOT_EVALUATED", ExternalRoute: "NOT_TESTED", SayOK: "NOT_EVALUATED", Arithmetic: "NOT_EVALUATED"}
 	defer func() {
 		if runErr != nil {
 			r.Issues = append(r.Issues, runErr.Error())
@@ -569,7 +563,17 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 	if err != nil {
 		return err
 	}
+	if (f.Variant == "observe-current" && first.Variant != "pgv1" && first.Variant != "pgv2") || (f.Variant != "observe-current" && first.Variant != f.Variant) {
+		return errors.New("active variant differs from reviewed selector")
+	}
 	r.Target = first
+	intent, err := json.Marshal(map[string]any{"schema": "guardrail-static-intent-v1", "runId": f.RunID, "clusterUID": f.ClusterUID, "podUID": f.PodUID, "variant": first.Variant, "configuredSelector": f.Variant, "resolvedVariant": first.Variant, "sourceSHA256": f.SourceSHA256, "maxCalls": 4, "eventMode": "DIRECT_STATIC"})
+	if err != nil {
+		return err
+	}
+	if err = privateWrite(c.OutDir, "intent.json", append(intent, '\n')); err != nil {
+		return err
+	}
 	r.Snapshots = append(r.Snapshots, first)
 	if err = appendProgress(c.OutDir, map[string]any{"kind": "SNAPSHOT", "index": 1, "snapshot": first}); err != nil {
 		return err

@@ -13,7 +13,7 @@ export function GuardrailStaticResultPanel({ result }: { result: GuardrailStatic
       {call.name === "arithmetic" && typeof call.answerIsFour === "boolean" && <div>answer is 4: {call.answerIsFour ? "yes" : "no"}</div>}
     </div>)}</div>
     <div>Say OK: <span className="text-foreground">{result.sayOK}</span> · arithmetic: <span className="text-foreground">{result.arithmetic}</span></div>
-    <div className="break-all text-muted-foreground">Pod {result.podUID} · variant {result.variant} · source SHA-256 {result.sourceSHA256} · guardrail journal {result.guardrailJournalUID} generation {result.guardrailJournalGeneration} · KV journal {result.kvJournalUID}</div>
+    <div className="break-all text-muted-foreground">Pod {result.podUID} · observed variant {result.variant}{result.configuredSelector && ` · configured selector ${result.configuredSelector}`} · source SHA-256 {result.sourceSHA256} · guardrail journal {result.guardrailJournalUID} generation {result.guardrailJournalGeneration} · KV journal {result.kvJournalUID}</div>
     <div>Event mode: {result.eventMode} · natural detector: {result.naturalDetector} · brain decision: {result.brainDecision} · actuator: {result.actuator}</div>
     <div className="text-muted-foreground">One fixed synthetic input on exact Pod loopback. Mounted source declaration: {result.sourceEvidence}; loaded Python/model-memory bytes: {result.loadedSource}. External Service route: {result.externalRoute}. No general efficacy or Phorvex defense score is inferred.</div>
     {result.issues.map((issue, i) => <div key={i} className="text-warning">unverified: {issue}</div>)}
