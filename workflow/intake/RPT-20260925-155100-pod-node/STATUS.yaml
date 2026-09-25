@@ -1,0 +1,137 @@
+schema_version: 1
+intake_id: RPT-20260925-155100-pod-node
+kind: BUG
+title: Existing Pod-bound catalogue profile rejects valid EKS node names
+state: DEDUP_REVIEW
+reporter: codex-lead
+approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-25T15:52:36+00:00'
+updated_at: '2026-09-25T16:07:16+00:00'
+pins:
+  source_main_sha: 52dfc166efd06e4d0e635a0590cc225e6c985278
+  source_release: 0.4.166
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: 0316a578624a1d19662c87bfa8d0fea08d1b3729
+  environment: dev-eks
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 20
+    overlap:
+    - actuator
+    - all
+    - already
+    - any
+    - attack
+    - before
+    - both
+    - event
+    - evidence
+    - fixes
+    - internal
+    - its
+    - pins
+    - ran
+    - retained
+    - source
+    - valid
+    - voice
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-2
+    score: 19
+    overlap:
+    - actuator
+    - all
+    - already
+    - any
+    - both
+    - contract
+    - evidence
+    - existing
+    - fixed
+    - installed
+    - internal
+    - its
+    - other
+    - ran
+    - rejects
+    - source
+    - validation
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-155
+    score: 18
+    overlap:
+    - any
+    - attack
+    - before
+    - console
+    - event
+    - evidence
+    - harness
+    - internal
+    - its
+    - label
+    - post
+    - run
+    - source
+    - voice
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Deliver reviewed follow-up CAT-POD-NODE; independent prior Mongo consumer
+    bug is retained
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-25T16:04:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-25T16:04:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-25T16:04:36+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-25T16:04:37+00:00'
+  by: codex-lead
+  artifact: DEDUP.md
+  note: null
+  approval_ref: null
+  forced: false
+revision: 4

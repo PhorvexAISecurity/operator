@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 )
 
@@ -106,6 +107,9 @@ func parsePodBoundTokenProfileFor(raw []byte, profile string) (podBoundTokenProf
 		return p, errors.New("Pod-bound token profile lacks reviewed source, creator or scrape pins")
 	}
 	f := p.Fixture
+	if len(validation.IsDNS1123Subdomain(f.AllowedNodeName)) != 0 {
+		return p, errors.New("Pod-bound token profile allowedNodeName must be a Kubernetes DNS subdomain")
+	}
 	if p.Context == "" || p.Context == "in-cluster" || p.Kubeconfig != "" ||
 		p.Namespace != podBoundNamespace(profile) || p.ExpectedNamespaceUID != "" ||
 		!p.OwnedAck || p.TrialsPerArm != 1 || len(p.DefenderFilter) != 0 ||
@@ -119,7 +123,7 @@ func parsePodBoundTokenProfileFor(raw []byte, profile string) (podBoundTokenProf
 		!regexp.MustCompile(`^phorvex-quarantine-capacity-[0-9a-f]{40}$`).MatchString(f.ProtectedLedgerName) ||
 		f.EventCreator != podBoundCreator(profile) ||
 		f.PrometheusURL == "" || f.ScrapeKind != "podmonitor" ||
-		f.ScrapeNamespace != p.Namespace || !nsRe.MatchString(f.AllowedNodeName) ||
+		f.ScrapeNamespace != p.Namespace ||
 		f.MaxRunSeconds < 300 || f.MaxRunSeconds > 900 {
 		return p, errors.New("Pod-bound token profile has incomplete fixed destination or authority")
 	}

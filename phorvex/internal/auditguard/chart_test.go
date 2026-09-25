@@ -416,7 +416,8 @@ func TestAuditVolumeGuardCustomReleaseNamespaceAndOperatorOnly(t *testing.T) {
 func TestAuditVolumeGuardEKSUsesVendoredChartAndSystemPool(t *testing.T) {
 	root := repository(t)
 	docs, err := render(t, "phorvex", "phorvex-system", "1.30.0", filepath.Join(root, "deploy/helm/phorvex-stack"),
-		"-f", filepath.Join(root, "deploy/helm/phorvex-stack/values.yaml"), "-f", filepath.Join(root, "deploy/helm/phorvex-stack/values-eks.yaml"))
+		"-f", filepath.Join(root, "deploy/helm/phorvex-stack/values.yaml"), "-f", filepath.Join(root, "deploy/helm/phorvex-stack/values-eks.yaml"),
+		"--api-versions", "monitoring.coreos.com/v1/PodMonitor")
 	if err != nil {
 		t.Fatal(err)
 	}

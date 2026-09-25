@@ -27,6 +27,8 @@ class GuardrailStaticChart(unittest.TestCase):
 
     def test_enabled_adds_only_exact_configmap_reads(self):
         docs = render("--set", "phorvex.console.guardrailStatic.enabled=true",
+                      "--set", "phorvex.console.guardrailStatic.configMapName=reviewed-static",
+                      "--set-string", "phorvex.console.guardrailStatic.profileSHA256=" + "a" * 64,
                       "--set", "phorvex.console.guardrailStatic.guardrailJournalName=reviewed-gj",
                       "--set", "phorvex.console.guardrailStatic.kvJournalName=reviewed-kj")
         roles = [d for d in docs if d.get("kind") == "Role" and "console-guardrail-static" in d.get("metadata", {}).get("name", "")]

@@ -1,0 +1,27 @@
+kubeconfig: ""
+context: "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"
+namespace: phorvex-catalogue-cpu
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+outDir: out-pod-bound-api-auth-response-cpu
+defenderFilter: []
+scenarioFilter: [c2-pod-bound-api-auth-response-cpu]
+podBoundTokenFixture:
+  runID: run-1
+  nonce: "000000000000000000000000"
+  transport: in-cluster
+  clusterUID: "f113d464-d8cb-4145-b83d-45638c2a196e"
+  managerNamespace: phorvex-system
+  managerDeployment: "phorvex-phorvex"
+  managerImageID: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:0e48090212d209d52775550a749affb0b7252aad22fb3405aee00c2dd6c43c56"
+  fixtureImageID: "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
+  sourceManifestPath: /etc/phorvex-catalogue-pod-bound-token-cpu/manifest.json
+  sourceManifestSHA256: "d081ebb40ee1939b9cc69e6bfada3dbe772835c84f4511a55e91a6ba285032b0"
+  protectedLedgerName: "phorvex-quarantine-capacity-d9372a8fb610e8aac611abf95dbad3f8874f09e4"
+  eventCreator: "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector-cpu"
+  prometheusURL: "http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090"
+  scrapeKind: podmonitor
+  scrapeNamespace: phorvex-catalogue-cpu
+  allowedNodeName: "ip-172-27-11-9.us-east-2.compute.internal"
+  maxRunSeconds: 900
