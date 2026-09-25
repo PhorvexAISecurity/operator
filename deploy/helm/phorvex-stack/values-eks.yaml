@@ -202,9 +202,9 @@ phorvex:
           enabled: false
       auditTransport:
         port: 8445
-        serverSecretName: phorvex-audit-server
-        clientSecretName: phorvex-audit-client
-        serverDNSName: phorvex-stack-phorvex-audit-source.phorvex-system.svc
+        serverSecretName: phorvex-audit-server-release-dns-20260925
+        clientSecretName: phorvex-audit-client-release-dns-20260925
+        serverDNSName: phorvex-phorvex-audit-source.phorvex-system.svc
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
@@ -274,7 +274,7 @@ phorvex:
                   "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
                   "subject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
                   "roles": ["operator"],
-                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu"],
+                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu", "phorvex-system"],
                   "targets": ["default", "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"],
                   "note": "End-to-End pipeline (CI) and reviewed fixed catalogue profiles in the listed namespaces; token minted per run, never stored."
                 }
