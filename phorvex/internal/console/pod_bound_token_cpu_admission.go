@@ -81,7 +81,9 @@ func mongoEarlyCleanupProofAt(prior *RunStatus, out, expectedTarget string) (mon
 	if json.Unmarshal(claimRaw, &claimIdentity) != nil || claimIdentity.Schema != "mongo-exposure-claim-v1" ||
 		claimIdentity.RunID != prior.ID || !mongoNonce.MatchString(claimIdentity.Nonce) ||
 		start.Schema != "mongo-exposure-audit-start-v1" || start.RunID != prior.ID || !mongoSHA.MatchString(start.ConfigSHA256) ||
-		start.Segment.ID != "live" || start.Offset != start.Segment.Size ||
+		start.Segment.ID != "live" || strings.TrimSpace(start.SourceIdentity) == "" ||
+		strings.TrimSpace(start.Segment.Generation) == "" || strings.TrimSpace(start.Segment.Anchor) == "" ||
+		start.Offset != start.Segment.Size ||
 		artifact.Schema != "mongo-exposure-artifact-v1" || artifact.RunID != prior.ID || artifact.Nonce != claimIdentity.Nonce ||
 		artifact.Namespace != mongoExposureNamespace || artifact.Database != "cc_"+artifact.Nonce || artifact.Collection != "owned_"+artifact.Nonce ||
 		artifact.ClientPodName != "cat-mongo-read-"+artifact.Nonce[:12] || !mongoKubeUID.MatchString(string(artifact.ClientPodUID)) ||
@@ -100,10 +102,12 @@ func mongoEarlyCleanupProofAt(prior *RunStatus, out, expectedTarget string) (mon
 		auditEnd.BrainTrace != "GAP" || auditEnd.IssueCode != "AUDIT_GAP" || len(auditEnd.BrainDecisions) != 0 {
 		return proof, errors.New("CPU token Mongo original identities or exact cleanup differ")
 	}
-	started, e1 := time.Parse(time.RFC3339Nano, artifact.StartedAt)
-	finished, e2 := time.Parse(time.RFC3339Nano, artifact.FinishedAt)
-	terminalAt, e3 := time.Parse(time.RFC3339Nano, terminal.ObservedAt)
-	if e1 != nil || e2 != nil || e3 != nil || finished.Before(started) || terminalAt.Before(finished) {
+	startAt, e1 := time.Parse(time.RFC3339Nano, start.ObservedAt)
+	started, e2 := time.Parse(time.RFC3339Nano, artifact.StartedAt)
+	finished, e3 := time.Parse(time.RFC3339Nano, artifact.FinishedAt)
+	terminalAt, e4 := time.Parse(time.RFC3339Nano, terminal.ObservedAt)
+	if e1 != nil || e2 != nil || e3 != nil || e4 != nil || startAt.IsZero() || startAt.After(started) ||
+		finished.Before(started) || terminalAt.Before(finished) {
 		return proof, errors.New("CPU token Mongo original chronology differs")
 	}
 	lines := bytes.Split(phaseRaw[:len(phaseRaw)-1], []byte{'\n'})

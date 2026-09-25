@@ -124,6 +124,20 @@ func TestPodBoundCPUPriorAdmitsOnlyOriginalShapedMongoCleanup(t *testing.T) {
 	if wrongUUID == original.CollectionUUID {
 		wrongUUID = strings.Repeat("a", 32)
 	}
+	rewriteAuditStart := func(change func(*mongoAuditStart)) {
+		var start mongoAuditStart
+		if err := json.Unmarshal(baseline["mongo-exposure-audit-start.json"], &start); err != nil {
+			t.Fatal(err)
+		}
+		change(&start)
+		startRaw := mongoTestJSON(t, filepath.Join(out, "mongo-exposure-audit-start.json"), start)
+		var auditEnd mongoAuditTerminal
+		if err := json.Unmarshal(baseline["mongo-exposure-audit-terminal.json"], &auditEnd); err != nil {
+			t.Fatal(err)
+		}
+		auditEnd.StartSHA256 = mongoHash(startRaw)
+		mongoTestJSON(t, filepath.Join(out, "mongo-exposure-audit-terminal.json"), auditEnd)
+	}
 	for name, mutate := range map[string]func(){
 		"missing original": func() { os.Remove(filepath.Join(out, "mongo-exposure-terminal.json")) },
 		"drop ack": func() {
@@ -141,6 +155,24 @@ func TestPodBoundCPUPriorAdmitsOnlyOriginalShapedMongoCleanup(t *testing.T) {
 		"tampered artifact hash": func() {
 			p := filepath.Join(out, "mongo-exposure.json")
 			os.WriteFile(p, append(baseline["mongo-exposure.json"], ' '), 0600)
+		},
+		"missing audit source identity with rehashed start": func() {
+			rewriteAuditStart(func(start *mongoAuditStart) { start.SourceIdentity = "" })
+		},
+		"missing audit generation with rehashed start": func() {
+			rewriteAuditStart(func(start *mongoAuditStart) { start.Segment.Generation = "" })
+		},
+		"missing audit anchor with rehashed start": func() {
+			rewriteAuditStart(func(start *mongoAuditStart) { start.Segment.Anchor = "" })
+		},
+		"late audit start with rehashed start": func() {
+			rewriteAuditStart(func(start *mongoAuditStart) {
+				started, err := time.Parse(time.RFC3339Nano, original.StartedAt)
+				if err != nil {
+					t.Fatal(err)
+				}
+				start.ObservedAt = started.Add(time.Second).Format(time.RFC3339Nano)
+			})
 		},
 		"scope tenant":   func() { prior.ScopeTenant = "voice" },
 		"scope target":   func() { prior.ScopeTarget = "another-reviewed-cluster" },
