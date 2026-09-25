@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -85,6 +85,13 @@ checks:
     source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
     at: '2026-09-25T02:58:59+00:00'
     incident_sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 1431079c8c3dbda56b36b0690595d5ba06dc2bf9169c2d1138e08019a523a672
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:59:57+00:00'
 fix_id: CAT-GUARDRAIL-RECOVERY
 issues: []
 title: Add a causal guardrail availability catalogue case
@@ -153,7 +160,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T02:59:05+00:00'
+updated_at: '2026-09-25T02:59:57+00:00'
 configuration_history:
 - at: '2026-09-25T00:56:24+00:00'
   by: codex-lead
