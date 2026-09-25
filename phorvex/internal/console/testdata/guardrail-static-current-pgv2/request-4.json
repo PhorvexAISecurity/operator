@@ -1,1 +1,1 @@
-{"model":"one-model","messages":[{"content":"What is two plus two? Reply with the number only.","role":"user"}],"max_tokens":16,"temperature":0,"stream":false}
+{"model":"one-model","messages":[{"content":"What is two plus two? Reply with the number only.","role":"user"}],"max_tokens":64,"temperature":0,"stream":false}

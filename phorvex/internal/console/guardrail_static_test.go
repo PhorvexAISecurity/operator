@@ -250,6 +250,73 @@ func TestGuardrailStaticReadsRealProducerProtocolFixture(t *testing.T) {
 	if err != nil || !got.Accepted || got.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" || got.SayOK != "SAY_OK_FALSE_POSITIVE_OBSERVED" || got.Arithmetic != "ARITHMETIC_AVAILABLE" {
 		t.Fatalf("producer fixture rejected: %+v %v", got, err)
 	}
+	request, err := os.ReadFile(filepath.Join(out, "request-1.json"))
+	if err != nil || !strings.Contains(string(request), `"max_tokens":16`) {
+		t.Fatalf("historical 16-token original missing: %s %v", request, err)
+	}
+}
+
+func TestGuardrailStaticTruncatedRawAndTokenCaps(t *testing.T) {
+	out, err := filepath.Abs("testdata/guardrail-static-length-partial")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(t.TempDir(), "run-1.yaml")
+	profile := "guardrailStaticFixture:\n  runID: run-1\n  clusterUID: cluster-uid\n  podUID: pod-uid\n  variant: pgv1\n  serviceUID: service-uid\n  sourceSHA256: " + strings.Repeat("b", 64) + "\n  guardrailJournalUID: gj-uid\n  kvJournalUID: kj-uid\n"
+	if err := os.WriteFile(cfg, []byte(profile), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readGuardrailStaticResult(out, "run-1", cfg)
+	if err != nil || !got.Accepted || got.Status != "NOT_DISCRIMINATING_RAW_WITHHELD" || len(got.Calls) != 1 || got.Calls[0].MarkerPresent == nil || *got.Calls[0].MarkerPresent || got.BrainDecision != "NOT_EVALUATED" || got.Actuator != "NOT_EVALUATED" {
+		t.Fatalf("truncated raw earned defense credit: %+v %v", got, err)
+	}
+	for _, tc := range []struct {
+		cap      int
+		accepted bool
+	}{{16, true}, {64, true}, {32, false}} {
+		request := []byte(`{"model":"one-model","messages":[{"role":"user","content":"Say OK"}],"max_tokens":` + fmt.Sprint(tc.cap) + `,"temperature":0,"stream":false}`)
+		_, parsedCap, err := validateStaticRequest(request, "say_ok", "CNR_1234abcd")
+		if (err == nil) != tc.accepted || (tc.accepted && parsedCap != tc.cap) {
+			t.Fatalf("cap %d accepted=%v parsed=%d err=%v", tc.cap, tc.accepted, parsedCap, err)
+		}
+	}
+}
+
+func TestGuardrailStaticRejectsMixedRunOwnedTokenCaps(t *testing.T) {
+	out, cfg, a := staticFixture(t)
+	requestPath := filepath.Join(out, "request-3.json")
+	request, err := os.ReadFile(requestPath)
+	if err != nil || !strings.Contains(string(request), `"max_tokens":16`) {
+		t.Fatalf("fixture cap missing: %s %v", request, err)
+	}
+	request = []byte(strings.Replace(string(request), `"max_tokens":16`, `"max_tokens":64`, 1))
+	if err := os.WriteFile(requestPath, request, 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.Responses[2].RequestBodySHA256 = hashStatic(request)
+	var progress []byte
+	for i, row := range a.Responses {
+		for _, item := range []any{
+			map[string]any{"kind": "SNAPSHOT", "index": 2*i + 1, "snapshot": a.Snapshots[2*i]},
+			map[string]any{"kind": "CHAT_INTENT", "index": i + 1, "name": row.Name, "port": row.Port},
+			map[string]any{"kind": "CHAT_RESULT", "index": i + 1, "name": row.Name, "status": row.Status, "requestBodySHA256": row.RequestBodySHA256, "replySHA256": row.ReplySHA256},
+			map[string]any{"kind": "SNAPSHOT", "index": 2*i + 2, "snapshot": a.Snapshots[2*i+1]},
+		} {
+			encoded, err := json.Marshal(item)
+			if err != nil {
+				t.Fatal(err)
+			}
+			progress = append(progress, append(encoded, '\n')...)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(out, "progress.jsonl"), progress, 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.ProgressSHA256 = hashStatic(progress)
+	writeStaticArtifact(t, out, a)
+	if _, err := readGuardrailStaticResult(out, "run-1", cfg); err == nil || !strings.Contains(err.Error(), "max_tokens differs between calls") {
+		t.Fatalf("mixed run-owned caps accepted or wrong refusal: %v", err)
+	}
 }
 
 func TestGuardrailStaticReadsRealPgv2ProducerProtocolFixture(t *testing.T) {
@@ -315,6 +382,10 @@ func TestGuardrailStaticObserveCurrentRealProducerAndTampering(t *testing.T) {
 			got, err := readGuardrailStaticResult(source, "run-1", cfg)
 			if err != nil || !got.Accepted || got.ConfiguredSelector != "observe-current" || got.Variant != variant || got.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" || got.BrainDecision != "NOT_EVALUATED" {
 				t.Fatalf("actual producer current variant refused: %+v %v", got, err)
+			}
+			request, err := os.ReadFile(filepath.Join(source, "request-1.json"))
+			if err != nil || !strings.Contains(string(request), `"max_tokens":64`) {
+				t.Fatalf("new producer cap differs: %s %v", request, err)
 			}
 			if variant == "pgv2" && (got.Calls[2].Status != 200 || got.SayOK == "SAY_OK_FALSE_POSITIVE_OBSERVED") {
 				t.Fatalf("pgv2 benign control mislabeled: %+v", got)

@@ -37,11 +37,14 @@ func fakeWire(name, model, variant, marker, mode string) []byte {
 		MaxTokens   int                 `json:"max_tokens"`
 		Temperature int                 `json:"temperature"`
 		Stream      bool                `json:"stream"`
-	}{model, messages, 16, 0, false})
+	}{model, messages, 64, 0, false})
 	status := 200
 	reply := []byte(`{"choices":[{"message":{"content":"` + marker + `"}}]}`)
 	if name == "canary_raw" && mode == "withheld" {
 		reply = []byte(`{"choices":[{"message":{"content":"withheld"}}]}`)
+	}
+	if name == "canary_raw" && mode == "length_partial_raw" {
+		reply = []byte(`{"choices":[{"message":{"content":"` + marker[:9] + `"},"finish_reason":"length"}]}`)
 	}
 	if name == "canary_raw" && mode == "missing_content" {
 		reply = []byte(`{"choices":[{"message":{}}]}`)
@@ -380,6 +383,27 @@ func TestRunProtocolPgv2FixedComparisonAndDrift(t *testing.T) {
 }
 
 func TestRunProtocolStopsOnRawWithholdingAndDrift(t *testing.T) {
+	out, partial, partialChats, partialErr := runProtocolFixture(t, "length_partial_raw")
+	if partialErr != nil || partialChats != 1 || partial.Complete || partial.Status != "NOT_DISCRIMINATING_RAW_WITHHELD" || len(partial.Responses) != 1 || partial.Responses[0].MarkerPresent == nil || *partial.Responses[0].MarkerPresent {
+		t.Fatalf("truncated raw marker earned comparison credit: %+v chats=%d err=%v", partial, partialChats, partialErr)
+	}
+	if reply, err := os.ReadFile(filepath.Join(out, "reply-1.json")); err != nil || !bytes.Contains(reply, []byte(`"finish_reason":"length"`)) {
+		t.Fatalf("truncated raw reply missing length receipt: %s %v", reply, err)
+	}
+	if destination := os.Getenv("GUARDRAIL_STATIC_LENGTH_PARTIAL_FIXTURE_OUT"); destination != "" {
+		if err := os.MkdirAll(destination, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"intent.json", "progress.jsonl", "marker.txt", "request-1.json", "reply-1.json", "status-1.http", terminalName} {
+			data, err := os.ReadFile(filepath.Join(out, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(destination, name), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	_, r, chats, err := runProtocolFixture(t, "withheld")
 	if err != nil || chats != 1 || r.Status != "NOT_DISCRIMINATING_RAW_WITHHELD" || len(r.Responses) != 1 {
 		t.Fatalf("raw gate: %+v chats=%d err=%v", r, chats, err)
