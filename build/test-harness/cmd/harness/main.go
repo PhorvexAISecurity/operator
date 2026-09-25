@@ -104,6 +104,10 @@ func main() {
 		digest := sha256.Sum256(raw)
 		cfg.ProfileSHA256 = hex.EncodeToString(digest[:])
 	}
+	if cfg.GuardrailAvailabilityFixture != nil {
+		fmt.Fprintln(os.Stderr, "ERROR: guardrail availability is a console-owned named run; direct harness execution is refused")
+		os.Exit(2)
+	}
 	if cfg.NATSExposureFixture != nil && (*natsSafetyID != cfg.NATSExposureFixture.RunID || filepath.Clean(*natsSafetyOut) != filepath.Clean(cfg.OutDir)) {
 		fmt.Fprintln(os.Stderr, "ERROR: NATS safety receipt destination differs from generated run config")
 		os.Exit(2)

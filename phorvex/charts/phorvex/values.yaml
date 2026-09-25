@@ -378,6 +378,14 @@ phorvex:
       sourceConfigMap: guardrail-proxy
       guardrailJournalName: ""
       kvJournalName: ""
+    # Separate injected availability recovery suite. An operator must supply
+    # a reviewed immutable profile ConfigMap and exact raw-byte digest.
+    guardrailAvailability:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

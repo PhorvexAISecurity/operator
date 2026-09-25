@@ -497,7 +497,7 @@ func runVisibleTo(p *Principal, own runOwnership) bool {
 	if p == nil {
 		return false
 	}
-	if own.Config == guardrailStaticConfig && (own.Tenant != "vllm" || own.FixtureTenant != "phorvex-system" || !p.AllowsTenant(own.FixtureTenant) || !p.AllowsTarget(hostTargetID)) {
+	if (own.Config == guardrailStaticConfig || own.Config == guardrailAvailabilityConfig) && (own.Tenant != "vllm" || own.FixtureTenant != "phorvex-system" || !p.AllowsTenant(own.FixtureTenant) || !p.AllowsTarget(hostTargetID)) {
 		return false
 	}
 	if (own.Config == natsBaselineConfig || own.Config == natsResponseConfig) && (own.Tenant != "nats" || own.FixtureTenant != natsFixtureNamespace || !p.AllowsTenant(own.FixtureTenant)) {

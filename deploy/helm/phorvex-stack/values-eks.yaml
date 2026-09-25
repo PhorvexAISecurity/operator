@@ -94,6 +94,14 @@ phorvex:
     console:
       enabled: true
       allowWorkloadMutations: true
+      # No availability recovery dispatch until a reviewed installed profile,
+      # exact digest, scoped token and audit transport are configured.
+      guardrailAvailability:
+        enabled: false
+        configMapName: ""
+        profileSHA256: ""
+        sourceConfigMap: guardrail-proxy
+        guardrailJournalName: ""
       # Fixed functional profiles remain unavailable until DevOps supplies the
       # short-lived scoped identity and exact Voice/GPU fixture authorities.
       #

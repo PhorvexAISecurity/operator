@@ -62,6 +62,69 @@ class PackageProfiles(unittest.TestCase):
                                rollout_join="evidence/JOIN.json", output=self.root / "output",
                                namespace="phorvex-system", profile=list(kinds), allow_enabled=enabled)
 
+    def test_guardrail_availability_exact_reviewed_profile(self):
+        fixture = {
+            "runID": "run-1", "transport": "in-cluster", "clusterUID": CLUSTER,
+            "podName": "reviewed-vllm", "podUID": "44444444-4444-4444-8444-444444444444",
+            "podImageID": "registry.example/vllm@sha256:" + "e" * 64,
+            "serviceUID": "55555555-5555-4555-8555-555555555555",
+            "sourceConfigMapName": "guardrail-proxy", "sourceUID": "66666666-6666-4666-8666-666666666666",
+            "sourceSHA256": "f" * 64, "guardrailJournalName": "reviewed-journal",
+            "guardrailJournalUID": "77777777-7777-4777-8777-777777777777",
+            "managerPodName": "reviewed-manager", "managerPodUID": "88888888-8888-4888-8888-888888888888",
+            "managerImageID": MANAGER, "consoleDeploymentName": "reviewed-console",
+            "consoleDeploymentUID": "99999999-9999-4999-8999-999999999999", "consoleImageID": CONSOLE,
+            "policyName": "vllm-defense", "policyUID": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "policyGeneration": 1, "modelID": "Qwen/Qwen2.5-7B-Instruct-AWQ",
+            "eventCreator": "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+            "consoleURL": "http://127.0.0.1:8090", "scopedTokenFile": "/etc/phorvex-catalogue-v1/token",
+            "auditURL": "https://phorvex-stack-phorvex-audit-source.phorvex-system.svc:8445",
+            "auditServerName": "phorvex-stack-phorvex-audit-source.phorvex-system.svc",
+            "auditCAFile": "/etc/audit-client/ca.crt",
+            "auditClientCertFile": "/etc/audit-client/tls.crt",
+            "auditClientKeyFile": "/etc/audit-client/tls.key",
+            "maxRunSeconds": 600, "cleanupSeconds": 90,
+        }
+        profile = {"kubeconfig": "", "context": "reviewed-cluster", "namespace": "vllm",
+                   "ownedAck": True, "trialsPerArm": 1, "guardrailAvailabilityFixture": fixture}
+        path = self.input / "config.guardrail-availability-recovery.yaml"
+        path.write_text(yaml.safe_dump(profile, sort_keys=False))
+        self.write_overlay({"guardrailAvailability": {"enabled": True,
+                           "sourceConfigMap": "guardrail-proxy",
+                           "guardrailJournalName": "reviewed-journal"}})
+        with self.assertRaisesRegex(ValueError, "enabled delivery requires explicit"):
+            pack.package(self.args("guardrail-availability"))
+        receipt = pack.package(self.args("guardrail-availability", enabled=True))
+        item = receipt["profiles"]["guardrail-availability"]
+        self.assertEqual(item["sha256"], sha(path.read_bytes()))
+        cm = next(yaml.safe_load_all((self.root / "output/configmaps.yaml").read_text()))
+        self.assertEqual(cm["immutable"], True)
+        self.assertEqual(cm["data"][path.name].encode(), path.read_bytes())
+        (self.root / "output").rename(self.root / "accepted")
+        fixture["consoleImageID"] = "registry.example/console@sha256:" + "0" * 64
+        path.write_text(yaml.safe_dump(profile, sort_keys=False))
+        with self.assertRaisesRegex(ValueError, "rollout differs"):
+            pack.package(self.args("guardrail-availability", enabled=True))
+        self.assertFalse((self.root / "output").exists())
+        fixture["consoleImageID"] = CONSOLE
+        fixture["consolePodName"] = "stale-console-pod"
+        path.write_text(yaml.safe_dump(profile, sort_keys=False))
+        with self.assertRaisesRegex(ValueError, "installed source/identity pin is incomplete"):
+            pack.package(self.args("guardrail-availability", enabled=True))
+        self.assertFalse((self.root / "output").exists())
+        del fixture["consolePodName"]
+        fixture["auditURL"] = "https://source.phorvex-system.svc:invalid"
+        path.write_text(yaml.safe_dump(profile, sort_keys=False))
+        with self.assertRaisesRegex(ValueError, "audit URL is malformed"):
+            pack.package(self.args("guardrail-availability", enabled=True))
+        self.assertFalse((self.root / "output").exists())
+        fixture["auditURL"] = "https://phorvex-stack-phorvex-audit-source.phorvex-system.svc:8445"
+        fixture["eventCreator"] = "system:serviceaccount:other:admin"
+        path.write_text(yaml.safe_dump(profile, sort_keys=False))
+        with self.assertRaisesRegex(ValueError, "fixed route, journal or bounds differ"):
+            pack.package(self.args("guardrail-availability", enabled=True))
+        self.assertFalse((self.root / "output").exists())
+
     def test_nats_exact_bytes_and_disabled_default(self):
         raw = ("context: reviewed-cluster\nnamespace: phorvex-nats-exposure-fixture\n"
                "kubeconfig: ''\nownedAck: true\ntrialsPerArm: 1\nnatsExposureFixture:\n"
