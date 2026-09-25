@@ -189,7 +189,7 @@ func (s *Server) podBoundTokenDisjointAfterReceipt(ctx context.Context, kc kuber
 }
 
 func (s *Server) podBoundTokenDisjointLiveMode(ctx context.Context, kc kubernetes.Interface, r podBoundTokenRequest, p podBoundTokenProfile, allowSourceLifecycle bool) error {
-	if s == nil || s.runs == nil || kc == nil || r.Namespace != podBoundTokenNamespace ||
+	if s == nil || s.runs == nil || kc == nil || r.Namespace != p.Namespace ||
 		r.RunID == "" || !podBoundTokenNonce.MatchString(r.Nonce) ||
 		p.Fixture.RunID != r.RunID || p.Fixture.Nonce != r.Nonce ||
 		p.Context == "" || p.Namespace != r.Namespace ||
@@ -199,6 +199,21 @@ func (s *Server) podBoundTokenDisjointLiveMode(ctx context.Context, kc kubernete
 		return errors.New("Pod-bound token exact fixture identity unavailable")
 	}
 	dest := runDestination{Targets: []string{hostTargetID, p.Context}, Tenants: []string{r.Namespace}, ScopeTarget: p.Context, ScopeTenant: r.Namespace, SuiteSHA256: r.ProfileSHA256}
+	if r.Namespace == podBoundTokenCPUNamespace {
+		if r.CaseID != podBoundTokenCPUCaseID || r.PDBUID == "" {
+			return errors.New("CPU token case or PDB UID absent")
+		}
+		s.runs.mu.Lock()
+		err := s.runs.podBoundTokenCPUPriorAdmissionLocked(dest)
+		s.runs.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		return s.podBoundCPUGraph(ctx, kc, r, allowSourceLifecycle)
+	}
+	if r.Namespace != podBoundTokenNamespace || r.CaseID != "" && r.CaseID != podBoundTokenVoiceCaseID {
+		return errors.New("Voice token case identity differs")
+	}
 	s.runs.mu.Lock()
 	proof, err := s.runs.podBoundTokenPriorProofLocked(dest)
 	s.runs.mu.Unlock()

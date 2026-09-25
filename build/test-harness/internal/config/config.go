@@ -672,10 +672,10 @@ func validatePodBoundTokenFixture(c TargetConfig) error {
 	if f == nil {
 		return nil
 	}
-	if !c.OwnedAck || c.Namespace != "voice" || c.ExpectedNamespaceUID != "" ||
+	if !c.OwnedAck || PodBoundTokenCaseID(c.Namespace) == "" || c.ExpectedNamespaceUID != "" ||
 		c.Context == "" || c.Context == "in-cluster" || c.Kubeconfig != "" ||
 		c.TrialsPerArm != 1 || len(c.DefenderFilter) != 0 ||
-		len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-pod-bound-api-auth-response" ||
+		len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != PodBoundTokenCaseID(c.Namespace) ||
 		c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
 		c.GuardrailStaticFixture != nil || c.InstalledManagerFixture != nil ||
 		c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil ||
@@ -688,7 +688,7 @@ func validatePodBoundTokenFixture(c TargetConfig) error {
 		!filepath.IsAbs(f.SourceManifestPath) || filepath.Clean(f.SourceManifestPath) != f.SourceManifestPath ||
 		!natsExposureDigest.MatchString(f.SourceManifestSHA256) ||
 		!regexp.MustCompile(`^phorvex-quarantine-capacity-[0-9a-f]{40}$`).MatchString(f.ProtectedLedgerName) ||
-		f.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" ||
+		f.EventCreator != PodBoundTokenCreator(c.Namespace) ||
 		f.ScrapeNamespace != c.Namespace ||
 		f.ScrapeKind != "podmonitor" ||
 		f.PrometheusURL == "" || f.AllowedNodeName == "" ||
@@ -697,6 +697,30 @@ func validatePodBoundTokenFixture(c TargetConfig) error {
 		return errors.New("config: Pod-bound token case requires one fixed, pinned, measured, trusted-creator in-cluster response profile")
 	}
 	return nil
+}
+
+// PodBoundTokenCaseID is the complete namespace authority for the two fixed,
+// separately reviewed Pod-token profiles. An arbitrary namespace has no case.
+func PodBoundTokenCaseID(namespace string) string {
+	switch namespace {
+	case "voice":
+		return "c2-pod-bound-api-auth-response"
+	case "phorvex-catalogue-cpu":
+		return "c2-pod-bound-api-auth-response-cpu"
+	default:
+		return ""
+	}
+}
+
+func PodBoundTokenCreator(namespace string) string {
+	switch namespace {
+	case "voice":
+		return "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector"
+	case "phorvex-catalogue-cpu":
+		return "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector-cpu"
+	default:
+		return ""
+	}
 }
 
 func validateGuardrailStaticFixture(c TargetConfig) error {

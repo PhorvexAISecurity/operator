@@ -35,6 +35,7 @@ type podBoundReplayRow struct {
 	Nonce     string `json:"nonce"`
 	Phase     string `json:"phase"`
 	HTTP      int    `json:"http"`
+	RequestAt string `json:"requestAt,omitempty"`
 	At        string `json:"at"`
 	CaptureID string `json:"captureID"`
 }
@@ -59,6 +60,14 @@ func verifyPodBoundReplayJournal(out string, req podBoundTokenRequest, result Po
 	if endErr != nil || expiryErr != nil {
 		return errors.New("Pod-bound token replay window unavailable")
 	}
+	cpu := req.CaseID == podBoundTokenCPUCaseID
+	var peerExpiry time.Time
+	if cpu {
+		peerExpiry, err = time.Parse(time.RFC3339Nano, req.PeerExpiry)
+		if err != nil {
+			return errors.New("CPU token peer expiry unavailable")
+		}
+	}
 	for _, line := range bytes.Split(bytes.TrimSuffix(raw, []byte{'\n'}), []byte{'\n'}) {
 		if len(line) == 0 || len(line) > 2048 {
 			return errors.New("Pod-bound token replay row invalid")
@@ -77,6 +86,16 @@ func verifyPodBoundReplayJournal(out string, req podBoundTokenRequest, result Po
 		if e != nil || at.IsZero() || at.After(end) || (!lastAt.IsZero() && !at.After(lastAt)) {
 			return errors.New("Pod-bound token replay time invalid")
 		}
+		if cpu {
+			bound := expiry
+			if strings.HasPrefix(row.Phase, "peer-") {
+				bound = peerExpiry
+			}
+			started, parseErr := time.Parse(time.RFC3339Nano, row.RequestAt)
+			if parseErr != nil || (!lastAt.IsZero() && started.Before(lastAt)) || !podBoundCPUReplayTimes(row.RequestAt, row.At, bound) {
+				return errors.New("CPU token original replay crossed expiry margin")
+			}
+		}
 		lastAt = at
 		seen[row.Phase]++
 		switch row.Phase {
@@ -84,9 +103,15 @@ func verifyPodBoundReplayJournal(out string, req podBoundTokenRequest, result Po
 			if seen[row.Phase] != 1 || row.HTTP != req.SourceBeforeHTTP || row.CaptureID != req.SourceCaptureID || at.After(requested) {
 				return errors.New("Pod-bound token source baseline differs")
 			}
+			if cpu && (row.RequestAt != req.SourceBeforeRequestAt || row.At != req.SourceBeforeAt || row.At != result.Replay.SourceBeforeAt || row.RequestAt != result.Replay.SourceBeforeRequestAt) {
+				return errors.New("CPU token source baseline time differs")
+			}
 		case "peer-before":
 			if seen[row.Phase] != 1 || seen["source-before"] != 1 || row.HTTP != req.PeerBeforeHTTP || row.CaptureID != req.PeerCaptureID || at.After(requested) {
 				return errors.New("Pod-bound token peer baseline differs")
+			}
+			if cpu && (row.RequestAt != req.PeerBeforeRequestAt || row.At != req.PeerBeforeAt || row.At != result.Replay.PeerBeforeAt || row.RequestAt != result.Replay.PeerBeforeRequestAt) {
+				return errors.New("CPU token peer baseline time differs")
 			}
 		case "source-after":
 			if seen["peer-before"] != 1 || seen["peer-after"] != 0 || at.Before(requested) || !at.Before(expiry) || row.CaptureID != req.SourceCaptureID {
@@ -97,6 +122,9 @@ func verifyPodBoundReplayJournal(out string, req podBoundTokenRequest, result Po
 			if seen[row.Phase] != 1 || seen["source-after"] == 0 || row.HTTP != result.Replay.PeerAfterHTTP || row.CaptureID != req.PeerCaptureID {
 				return errors.New("Pod-bound token peer replay differs")
 			}
+			if cpu && (row.RequestAt != result.Replay.PeerAfterRequestAt || row.At != result.Replay.PeerAfterAt) {
+				return errors.New("CPU token peer outcome time differs")
+			}
 		default:
 			return errors.New("Pod-bound token unknown replay phase")
 		}
@@ -105,47 +133,57 @@ func verifyPodBoundReplayJournal(out string, req podBoundTokenRequest, result Po
 		sourceAfter.HTTP != result.Replay.SourceAfterHTTP || sourceAfter.At != result.Replay.SourceAfterAt {
 		return errors.New("Pod-bound token original replay status differs")
 	}
+	if cpu && (sourceAfter.RequestAt != result.Replay.SourceAfterRequestAt || !podBoundCPUResultTimesValid(result)) {
+		return errors.New("CPU token original outcome window differs")
+	}
 	return nil
 }
 
 type podBoundTokenRequest struct {
-	Schema              string  `json:"schema"`
-	RunID               string  `json:"runID"`
-	Nonce               string  `json:"nonce"`
-	ClusterUID          string  `json:"clusterUID"`
-	Namespace           string  `json:"namespace"`
-	NamespaceUID        string  `json:"namespaceUID"`
-	SourcePodName       string  `json:"sourcePodName"`
-	SourcePodUID        string  `json:"sourcePodUID"`
-	PeerPodName         string  `json:"peerPodName"`
-	PeerPodUID          string  `json:"peerPodUID"`
-	ServiceName         string  `json:"serviceName"`
-	ServiceUID          string  `json:"serviceUID"`
-	DeploymentUID       string  `json:"deploymentUID"`
-	ReplicaSetUID       string  `json:"replicaSetUID"`
-	PolicyName          string  `json:"policyName"`
-	PolicyUID           string  `json:"policyUID"`
-	PolicyGeneration    int64   `json:"policyGeneration"`
-	PolicySpecSHA256    string  `json:"policySpecSHA256"`
-	ManagerPodUID       string  `json:"managerPodUID"`
-	ManagerContainerID  string  `json:"managerContainerID"`
-	ManagerImageID      string  `json:"managerImageID"`
-	ProfileSHA256       string  `json:"profileSHA256"`
-	SourceBeforeHTTP    int     `json:"sourceBeforeHTTP"`
-	PeerBeforeHTTP      int     `json:"peerBeforeHTTP"`
-	ServiceBeforeHTTP   int     `json:"serviceBeforeHTTP"`
-	SourceExpiry        string  `json:"sourceExpiry"`
-	RequestedAt         string  `json:"requestedAt"`
-	SourceCaptureID     string  `json:"sourceCaptureID"`
-	PeerCaptureID       string  `json:"peerCaptureID"`
-	MetricStatus        string  `json:"metricStatus"`
-	MetricFirstAt       string  `json:"metricFirstAt"`
-	MetricSecondAt      string  `json:"metricSecondAt"`
-	MetricFirstValue    float64 `json:"metricFirstValue"`
-	MetricSecondValue   float64 `json:"metricSecondValue"`
-	MetricSourcePodName string  `json:"metricSourcePodName"`
-	PodMonitorUID       string  `json:"podMonitorUID"`
-	MetricQuerySHA256   string  `json:"metricQuerySHA256"`
+	Schema                string  `json:"schema"`
+	CaseID                string  `json:"caseID,omitempty"`
+	RunID                 string  `json:"runID"`
+	Nonce                 string  `json:"nonce"`
+	ClusterUID            string  `json:"clusterUID"`
+	Namespace             string  `json:"namespace"`
+	NamespaceUID          string  `json:"namespaceUID"`
+	SourcePodName         string  `json:"sourcePodName"`
+	SourcePodUID          string  `json:"sourcePodUID"`
+	PeerPodName           string  `json:"peerPodName"`
+	PeerPodUID            string  `json:"peerPodUID"`
+	ServiceName           string  `json:"serviceName"`
+	ServiceUID            string  `json:"serviceUID"`
+	PDBUID                string  `json:"pdbUID,omitempty"`
+	DeploymentUID         string  `json:"deploymentUID"`
+	ReplicaSetUID         string  `json:"replicaSetUID"`
+	PolicyName            string  `json:"policyName"`
+	PolicyUID             string  `json:"policyUID"`
+	PolicyGeneration      int64   `json:"policyGeneration"`
+	PolicySpecSHA256      string  `json:"policySpecSHA256"`
+	ManagerPodUID         string  `json:"managerPodUID"`
+	ManagerContainerID    string  `json:"managerContainerID"`
+	ManagerImageID        string  `json:"managerImageID"`
+	ProfileSHA256         string  `json:"profileSHA256"`
+	SourceBeforeHTTP      int     `json:"sourceBeforeHTTP"`
+	PeerBeforeHTTP        int     `json:"peerBeforeHTTP"`
+	ServiceBeforeHTTP     int     `json:"serviceBeforeHTTP"`
+	SourceExpiry          string  `json:"sourceExpiry"`
+	PeerExpiry            string  `json:"peerExpiry,omitempty"`
+	SourceBeforeRequestAt string  `json:"sourceBeforeRequestAt,omitempty"`
+	SourceBeforeAt        string  `json:"sourceBeforeAt,omitempty"`
+	PeerBeforeRequestAt   string  `json:"peerBeforeRequestAt,omitempty"`
+	PeerBeforeAt          string  `json:"peerBeforeAt,omitempty"`
+	RequestedAt           string  `json:"requestedAt"`
+	SourceCaptureID       string  `json:"sourceCaptureID"`
+	PeerCaptureID         string  `json:"peerCaptureID"`
+	MetricStatus          string  `json:"metricStatus"`
+	MetricFirstAt         string  `json:"metricFirstAt"`
+	MetricSecondAt        string  `json:"metricSecondAt"`
+	MetricFirstValue      float64 `json:"metricFirstValue"`
+	MetricSecondValue     float64 `json:"metricSecondValue"`
+	MetricSourcePodName   string  `json:"metricSourcePodName"`
+	PodMonitorUID         string  `json:"podMonitorUID"`
+	MetricQuerySHA256     string  `json:"metricQuerySHA256"`
 }
 
 type podBoundTokenBarrier struct {
@@ -316,12 +354,16 @@ func readPodBoundTokenResult(out, id string) (PodBoundTokenResult, error) {
 	var req podBoundTokenRequest
 	rawReq, err := readPodBoundJSON(out, podBoundRequestFile, &req)
 	if err != nil || podBoundHash(rawReq) != a.RequestSHA256 || req.RunID != id ||
-		req.Schema != "pod-bound-token-request-v1" || req.Namespace != podBoundTokenNamespace ||
+		req.Schema != "pod-bound-token-request-v1" || podBoundProfileForNamespace(req.Namespace) == "" ||
+		(req.Namespace == podBoundTokenCPUNamespace && req.CaseID != podBoundTokenCPUCaseID) ||
+		(req.Namespace == podBoundTokenNamespace && req.CaseID != "" && req.CaseID != podBoundTokenVoiceCaseID) ||
+		req.CaseID != a.Result.CaseID ||
 		req.PolicyName != "pod-token-"+req.Nonce || req.ServiceName != req.PolicyName ||
 		req.SourcePodName == "" || req.PeerPodName == "" || req.SourcePodName == req.PeerPodName ||
 		req.Nonce != a.Result.Nonce || req.SourcePodUID != a.Result.Admission.SourcePodUID ||
 		req.PeerPodUID != a.Result.Admission.PeerPodUID ||
 		req.ServiceUID != a.Result.Admission.ServiceUID ||
+		(req.Namespace == podBoundTokenCPUNamespace && req.PDBUID != a.Result.Admission.PDBUID) ||
 		req.DeploymentUID != a.Result.Admission.DeploymentUID ||
 		req.ReplicaSetUID != a.Result.Admission.ReplicaSetUID ||
 		req.PolicyUID != a.Result.Admission.PolicyUID ||
@@ -338,6 +380,11 @@ func readPodBoundTokenResult(out, id string) (PodBoundTokenResult, error) {
 		req.PeerBeforeHTTP != a.Result.Replay.PeerBeforeHTTP ||
 		req.ServiceBeforeHTTP != a.Result.Replay.ServiceBeforeHTTP ||
 		req.SourceExpiry != a.Result.Replay.SourceExpiry ||
+		(req.Namespace == podBoundTokenCPUNamespace && (req.PeerExpiry != a.Result.Replay.PeerExpiry ||
+			req.SourceBeforeRequestAt != a.Result.Replay.SourceBeforeRequestAt ||
+			req.SourceBeforeAt != a.Result.Replay.SourceBeforeAt ||
+			req.PeerBeforeRequestAt != a.Result.Replay.PeerBeforeRequestAt ||
+			req.PeerBeforeAt != a.Result.Replay.PeerBeforeAt)) ||
 		!mongoNonce.MatchString(req.SourceCaptureID) ||
 		!mongoNonce.MatchString(req.PeerCaptureID) ||
 		req.SourceCaptureID == req.PeerCaptureID ||
@@ -355,6 +402,12 @@ func readPodBoundTokenResult(out, id string) (PodBoundTokenResult, error) {
 		req.PodMonitorUID != a.Result.Telemetry.PodMonitorUID ||
 		req.MetricQuerySHA256 != a.Result.Telemetry.QuerySHA256 {
 		return PodBoundTokenResult{}, errors.New("Pod-bound token original request differs")
+	}
+	if req.Namespace == podBoundTokenCPUNamespace {
+		requestedAt, parseErr := time.Parse(time.RFC3339Nano, req.RequestedAt)
+		if req.PDBUID == "" || req.MetricStatus != "MEASURED_FRESH" || parseErr != nil || !podBoundCPURequestTimeValid(req, requestedAt) {
+			return PodBoundTokenResult{}, errors.New("CPU token original request authority or timing differs")
+		}
 	}
 	if req.MetricStatus == "MEASURED_FRESH" {
 		first, e1 := time.Parse(time.RFC3339Nano, req.MetricFirstAt)
@@ -502,7 +555,7 @@ func (rm *RunManager) PodBoundTokenResult(id string) (*PodBoundTokenResult, erro
 	st := rm.runs[id]
 	out := rm.runOut[id]
 	rm.mu.Unlock()
-	if st == nil || st.Config != podBoundTokenConfig || out == "" {
+	if st == nil || !podBoundNamedCase(st.Config) || out == "" {
 		return nil, nil
 	}
 	r, err := readPodBoundTokenResult(rm.cfg.runOutputPath(out), id)

@@ -506,7 +506,7 @@ func runVisibleTo(p *Principal, own runOwnership) bool {
 	if own.Config == mongoExposureConfig && (own.Tenant != mongoExposureNamespace || !p.AllowsTarget(hostTargetID)) {
 		return false
 	}
-	if own.Config == podBoundTokenConfig && (own.Tenant != podBoundTokenNamespace || !p.AllowsTarget(hostTargetID)) {
+	if podBoundNamedCase(own.Config) && (own.Tenant != podBoundNamespace(own.Config) || !p.AllowsTarget(hostTargetID)) {
 		return false
 	}
 	if !p.AllowsTarget(own.Target) {

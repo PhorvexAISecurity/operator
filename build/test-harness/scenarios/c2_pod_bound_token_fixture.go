@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +49,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
    self.send_response(200);self.send_header("Content-Type","application/json");self.send_header("Content-Length",str(len(body)));self.end_headers();self.wfile.write(body)
   elif self.path=="/metrics":
    with lock: current=count
-   body=("# TYPE http_requests_total counter\nhttp_requests_total{namespace=\"voice\",pod=\""+os.environ["POD_NAME"]+"\",nonce=\""+nonce+"\"} "+str(current)+"\n").encode()
+   body=("# TYPE http_requests_total counter\nhttp_requests_total{namespace=\""+os.environ["POD_NAMESPACE"]+"\",pod=\""+os.environ["POD_NAME"]+"\",pod_uid=\""+uid+"\",nonce=\""+nonce+"\"} "+str(current)+"\n").encode()
    self.send_response(200);self.send_header("Content-Type","text/plain; version=0.0.4");self.send_header("Content-Length",str(len(body)));self.end_headers();self.wfile.write(body)
   else: self.send_error(404)
 http.server.ThreadingHTTPServer(("0.0.0.0",8080),Handler).serve_forever()
@@ -56,6 +57,7 @@ http.server.ThreadingHTTPServer(("0.0.0.0",8080),Handler).serve_forever()
 
 type podTokenFixture struct {
 	name             string
+	namespace        string
 	namespaceUID     types.UID
 	created          map[string]types.UID
 	deploymentUID    types.UID
@@ -74,11 +76,23 @@ func podTokenName(nonce string) string { return "pod-token-" + nonce }
 func podTokenLabels(nonce string) map[string]string {
 	return map[string]string{podTokenOwnerLabel: nonce, core.OwnedLabelKey: core.OwnedLabelValue, core.ScenarioLabelKey: "c2-pod-bound-api-auth-response", core.TrialLabelKey: "0"}
 }
-func podTokenCreatePhase(env *core.Env, operation, resource, name string, uid types.UID) error {
+func podTokenCaseLabels(env *core.Env) map[string]string {
+	out := podTokenLabels(env.Config.PodBoundTokenFixture.Nonce)
+	out[core.ScenarioLabelKey] = env.ScenarioName
+	return out
+}
+func podTokenCreatePhase(env *core.Env, operation, resource, name string, uid types.UID, observedAt ...time.Time) error {
 	if env == nil || env.Config.PodBoundTokenFixture == nil || len(operation) > 32 || len(resource) > 64 || len(name) > 128 {
 		return errors.New("Pod token phase identity invalid")
 	}
-	row := map[string]string{"schema": "pod-bound-token-phase-v1", "runID": env.Config.PodBoundTokenFixture.RunID, "nonce": env.Config.PodBoundTokenFixture.Nonce, "operation": operation, "resource": resource, "name": name, "uid": string(uid), "at": podTokenUTC()}
+	at := podTokenUTC()
+	if len(observedAt) > 1 {
+		return errors.New("Pod token phase time ambiguous")
+	}
+	if len(observedAt) == 1 {
+		at = observedAt[0].UTC().Format(time.RFC3339Nano)
+	}
+	row := map[string]string{"schema": "pod-bound-token-phase-v1", "runID": env.Config.PodBoundTokenFixture.RunID, "nonce": env.Config.PodBoundTokenFixture.Nonce, "operation": operation, "resource": resource, "name": name, "uid": string(uid), "at": at}
 	raw, err := json.Marshal(row)
 	if err != nil {
 		return err
@@ -148,7 +162,7 @@ func podTokenMonitor(env *core.Env, name string) *unstructured.Unstructured {
 }
 func podTokenDeployment(env *core.Env, name string) *appsv1.Deployment {
 	nonce := env.Config.PodBoundTokenFixture.Nonce
-	labels := podTokenLabels(nonce)
+	labels := podTokenCaseLabels(env)
 	no, yes := false, true
 	replicas := int32(2)
 	user := int64(65532)
@@ -158,7 +172,7 @@ func podTokenDeployment(env *core.Env, name string) *appsv1.Deployment {
 		SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &yes, RunAsUser: &user, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 		Containers: []corev1.Container{{Name: "responder", Image: env.Config.PodBoundTokenFixture.FixtureImageID, ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{"python3", "-B", "-c", podTokenServerSource},
-			Env:             []corev1.EnvVar{{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"}}}, {Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}}, {Name: "NONCE", Value: nonce}},
+			Env:             []corev1.EnvVar{{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"}}}, {Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}}, {Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}, {Name: "NONCE", Value: nonce}},
 			Ports:           []corev1.ContainerPort{{Name: "metrics", ContainerPort: podTokenPort}},
 			ReadinessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/ready", Port: intstr.FromString("metrics")}}, PeriodSeconds: 3, TimeoutSeconds: 1},
 			Resources:       corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("20m"), corev1.ResourceMemory: resource.MustParse("32Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("64Mi")}},
@@ -235,13 +249,14 @@ func podTokenPolicyDigest(p *unstructured.Unstructured) string {
 func podTokenFixtureCreate(ctx context.Context, env *core.Env) (podTokenFixture, error) {
 	var f podTokenFixture
 	cfg := env.Config.PodBoundTokenFixture
-	if cfg == nil || env.Config.Namespace != "voice" || env.NamespaceUID() == "" || env.Ctrl == nil || env.Kube == nil || env.Rest == nil {
+	if cfg == nil || config.PodBoundTokenCaseID(env.Config.Namespace) == "" || env.ScenarioName != config.PodBoundTokenCaseID(env.Config.Namespace) || env.NamespaceUID() == "" || env.Ctrl == nil || env.Kube == nil || env.Rest == nil {
 		return f, errors.New("Pod token fixture authority unavailable")
 	}
 	f.name = podTokenName(cfg.Nonce)
 	f.namespaceUID = env.NamespaceUID()
 	ns := env.Config.Namespace
-	labels := podTokenLabels(cfg.Nonce)
+	f.namespace = ns
+	labels := podTokenCaseLabels(env)
 	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: f.name, Namespace: ns, Labels: labels}, AutomountServiceAccountToken: func() *bool { v := false; return &v }()}
 	if err := podTokenIntent(env, "serviceaccounts", f.name); err != nil {
 		return f, err
@@ -377,19 +392,33 @@ func podTokenCurrentPolicy(ctx context.Context, env *core.Env, f podTokenFixture
 	}
 	return nil
 }
-func podTokenNoCollision(ctx context.Context, env *core.Env) error {
+func podTokenNoCollision(ctx context.Context, env *core.Env, owned ...podTokenFixture) error {
 	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(schema.GroupVersionKind{Group: "phorvex.ai", Version: "v1alpha1", Kind: "PhorvexPolicyList"})
 	if err := env.Ctrl.List(ctx, list, ctrlclient.InNamespace(env.Config.Namespace)); err != nil || list.GetContinue() != "" {
 		return errors.New("Pod token policy inventory incomplete")
 	}
 	nonce := env.Config.PodBoundTokenFixture.Nonce
-	baseLabels := labels.Set(podTokenLabels(nonce))
-	sourceLabels := labels.Set(podTokenLabels(nonce))
+	baseLabels := labels.Set(podTokenCaseLabels(env))
+	sourceLabels := labels.Set(podTokenCaseLabels(env))
 	sourceLabels[podTokenRoleLabel] = "source"
+	sets := []labels.Set{baseLabels, sourceLabels}
+	if len(owned) == 1 {
+		for _, pod := range []corev1.Pod{owned[0].source, owned[0].peer} {
+			current, getErr := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+			if getErr != nil || current.UID != pod.UID {
+				return errors.New("Pod token current selector labels unavailable")
+			}
+			sets = append(sets, labels.Set(pod.Labels), labels.Set(current.Labels))
+			if pod.UID == owned[0].source.UID {
+				sourceLabels = labels.Set(current.Labels)
+			}
+		}
+	}
 	for i := range list.Items {
+		own := len(owned) == 1 && list.Items[i].GetName() == owned[0].name && list.Items[i].GetUID() == owned[0].policyUID
 		tenant, found, err := unstructured.NestedString(list.Items[i].Object, "spec", "tenant")
-		if err != nil || !found || tenant == nonce {
+		if err != nil || !found || (tenant == nonce && !own) {
 			return errors.New("Pod token policy tenant collision or ambiguity")
 		}
 		selectorMap, found, err := unstructured.NestedMap(list.Items[i].Object, "spec", "selector")
@@ -405,8 +434,19 @@ func podTokenNoCollision(ctx context.Context, env *core.Env) error {
 			return errors.New("existing Voice policy selector malformed")
 		}
 		compiled, err := metav1.LabelSelectorAsSelector(&selector)
-		if err != nil || compiled.Empty() || compiled.Matches(baseLabels) || compiled.Matches(sourceLabels) {
-			return errors.New("existing Voice policy selector overlaps nonce fixture")
+		if err != nil || compiled.Empty() {
+			return errors.New("existing policy selector invalid")
+		}
+		if own {
+			if tenant != nonce || !compiled.Matches(sourceLabels) || compiled.Matches(baseLabels) || compiled.Matches(sets[len(sets)-1]) {
+				return errors.New("owned policy selector differs")
+			}
+			continue
+		}
+		for _, set := range sets {
+			if compiled.Matches(set) {
+				return errors.New("existing Voice policy selector overlaps nonce fixture")
+			}
 		}
 	}
 	return nil
@@ -414,13 +454,87 @@ func podTokenNoCollision(ctx context.Context, env *core.Env) error {
 
 // The old Voice bot owns app=voice-bot. Refuse any selector overlap before
 // creating a nonce fixture and recheck before emitting the one event request.
-func podTokenDisjointPrecreate(ctx context.Context, env *core.Env) error {
+func podTokenDisjointPrecreate(ctx context.Context, env *core.Env, owned ...podTokenFixture) error {
 	ns := env.Config.Namespace
-	baseLabels := labels.Set(podTokenLabels(env.Config.PodBoundTokenFixture.Nonce))
-	sourceLabels := labels.Set(podTokenLabels(env.Config.PodBoundTokenFixture.Nonce))
+	baseLabels := labels.Set(podTokenCaseLabels(env))
+	sourceLabels := labels.Set(podTokenCaseLabels(env))
 	sourceLabels[podTokenRoleLabel] = "source"
+	sets := []labels.Set{baseLabels, sourceLabels}
+	if len(owned) == 1 {
+		for _, pod := range []corev1.Pod{owned[0].source, owned[0].peer} {
+			current, getErr := env.Kube.CoreV1().Pods(ns).Get(ctx, pod.Name, metav1.GetOptions{})
+			if getErr != nil || current.UID != pod.UID {
+				return errors.New("CPU token current Pod labels unavailable")
+			}
+			sets = append(sets, labels.Set(pod.Labels), labels.Set(current.Labels))
+		}
+	}
 	overlaps := func(selector labels.Selector) bool {
-		return selector.Matches(baseLabels) || selector.Matches(sourceLabels)
+		for _, set := range sets {
+			if selector.Matches(set) {
+				return true
+			}
+		}
+		return false
+	}
+	if ns == "phorvex-catalogue-cpu" {
+		// A fresh CPU namespace has no Voice bot graph. Inspect every existing
+		// selector before the first CREATE so another owner cannot select either
+		// the base Pod labels or the source-role label added after readiness.
+		pods, err := env.Kube.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: podTokenOwnerLabel + "=" + env.Config.PodBoundTokenFixture.Nonce, Limit: 200})
+		if err != nil || pods.Continue != "" {
+			return errors.New("CPU token nonce Pod inventory unavailable or occupied")
+		}
+		for _, pod := range pods.Items {
+			if len(owned) != 1 || pod.UID == "" || pod.UID != owned[0].source.UID && pod.UID != owned[0].peer.UID {
+				return errors.New("CPU token nonce Pod inventory unavailable or occupied")
+			}
+		}
+		deps, err := env.Kube.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{Limit: 200})
+		if err != nil || deps.Continue != "" {
+			return errors.New("CPU token Deployment selector inventory incomplete")
+		}
+		for _, obj := range deps.Items {
+			if len(owned) == 1 && obj.Name == owned[0].name && obj.UID == owned[0].deploymentUID {
+				continue
+			}
+			if obj.UID == "" || obj.Spec.Selector == nil {
+				return errors.New("CPU token Deployment selector ambiguous")
+			}
+			selector, e := metav1.LabelSelectorAsSelector(obj.Spec.Selector)
+			if e != nil || selector.Empty() || overlaps(selector) {
+				return errors.New("CPU token Deployment selector overlaps fixture")
+			}
+		}
+		services, err := env.Kube.CoreV1().Services(ns).List(ctx, metav1.ListOptions{Limit: 200})
+		if err != nil || services.Continue != "" {
+			return errors.New("CPU token Service selector inventory incomplete")
+		}
+		for _, obj := range services.Items {
+			if len(owned) == 1 && obj.Name == owned[0].name && obj.UID == owned[0].serviceUID {
+				continue
+			}
+			if obj.UID == "" || (len(obj.Spec.Selector) > 0 && overlaps(labels.SelectorFromSet(obj.Spec.Selector))) {
+				return errors.New("CPU token Service selector overlaps fixture")
+			}
+		}
+		budgets, err := env.Kube.PolicyV1().PodDisruptionBudgets(ns).List(ctx, metav1.ListOptions{Limit: 200})
+		if err != nil || budgets.Continue != "" {
+			return errors.New("CPU token PDB selector inventory incomplete")
+		}
+		for _, obj := range budgets.Items {
+			if len(owned) == 1 && obj.Name == owned[0].name && obj.UID == owned[0].created["poddisruptionbudgets/"+owned[0].name] {
+				continue
+			}
+			if obj.UID == "" || obj.Spec.Selector == nil {
+				return errors.New("CPU token PDB selector ambiguous")
+			}
+			selector, e := metav1.LabelSelectorAsSelector(obj.Spec.Selector)
+			if e != nil || selector.Empty() || overlaps(selector) {
+				return errors.New("CPU token PDB selector overlaps fixture")
+			}
+		}
+		return nil
 	}
 	dep, err := env.Kube.AppsV1().Deployments(ns).Get(ctx, "voice-bot", metav1.GetOptions{})
 	if err != nil || dep.UID == "" || dep.DeletionTimestamp != nil || dep.Spec.Selector == nil {
