@@ -113,13 +113,14 @@ func (a liteAuthority) fingerprint() string {
 }
 
 type liteResponse struct {
-	Status        int    `json:"status"`
-	ContentType   string `json:"contentType"`
-	BodySHA256    string `json:"bodySHA256"`
-	BodyBytes     int    `json:"bodyBytes"`
-	Reason        string `json:"reason"`
-	ErrorClass    string `json:"errorClass"`
-	BoundExceeded bool   `json:"boundExceeded"`
+	Status         int    `json:"status"`
+	ContentType    string `json:"contentType"`
+	BodySHA256     string `json:"bodySHA256"`
+	BodyBytes      int    `json:"bodyBytes"`
+	Reason         string `json:"reason"`
+	ErrorClass     string `json:"errorClass"`
+	ModelListShape bool   `json:"modelListShape"`
+	BoundExceeded  bool   `json:"boundExceeded"`
 }
 type liteLimitedBuffer struct {
 	bytes.Buffer
@@ -327,22 +328,41 @@ func (t liteKubeTransport) sourcePin(ctx context.Context, c LiteLLMRuntime, p li
 }
 
 // liteProbeScript opens one loopback application connection inside the exact
-// selected Pod. Kubernetes credentials authenticate only the exec transport;
-// they cannot become application Authorization headers. The invalid bearer is
-// generated in process memory and neither it nor a response body is emitted.
-const liteProbeScript = `import hashlib,http.client,json,secrets,sys
+// selected Pod. Kubernetes credentials authenticate only the exec transport.
+// The installed master key is read only inside that Pod for the positive arm;
+// neither it, the generated invalid bearer, nor a response body is emitted.
+const liteProbeScript = `import hashlib,http.client,json,os,secrets,signal,sys
 path,mode,port=sys.argv[1:]
-if path not in ('/health/liveliness','/v1/models') or mode not in ('health','missing','invalid') or (mode=='health')!=(path=='/health/liveliness'):
+if path not in ('/health/liveliness','/v1/models') or mode not in ('health','master','missing','invalid') or (mode=='health')!=(path=='/health/liveliness'):
  raise ValueError('unsupported fixed GET')
 headers={'Accept':'application/json'}
 if mode=='invalid':headers['Authorization']='Bearer sk-catalogue-'+secrets.token_hex(16)
+if mode=='master':
+ key=os.environ.get('LITELLM_MASTER_KEY','')
+ if not key:raise RuntimeError('declared master credential unavailable')
+ headers['Authorization']='Bearer '+key
 conn=http.client.HTTPConnection('127.0.0.1',int(port),timeout=4)
+def timeout_handler(_signum,_frame):raise TimeoutError('bounded GET elapsed')
+old_handler=signal.signal(signal.SIGALRM,timeout_handler)
+signal.setitimer(signal.ITIMER_REAL,4)
 try:
  conn.request('GET',path,headers=headers)
  response=conn.getresponse()
  body=response.read(4097)
  ct=response.getheader('Content-Type','').split(';',1)[0].strip().lower()
  reason='NOT_CLASSIFIED'
+ model_shape=False
+ if mode=='master' and response.status==200 and ct=='application/json' and len(body)<=4096:
+  try:
+   def unique_pairs(pairs):
+    value={}
+    for name,item in pairs:
+     if name in value:raise ValueError('duplicate JSON field')
+     value[name]=item
+    return value
+   value=json.loads(body,object_pairs_hook=unique_pairs)
+   model_shape=isinstance(value,dict) and value.get('object')=='list' and isinstance(value.get('data'),list)
+  except (ValueError,UnicodeDecodeError):pass
  if response.status==400 and ct=='application/json' and len(body)<=4096:
   try:
    value=json.loads(body)
@@ -350,11 +370,14 @@ try:
    if isinstance(message,dict):message=message.get('message')
    reason='NO_CONNECTED_DB' if isinstance(message,str) and 'no connected db' in message.lower() else 'OTHER_REDACTED'
   except (ValueError,UnicodeDecodeError):reason='UNPARSEABLE'
- print(json.dumps({'status':response.status,'contentType':ct,'bodySHA256':hashlib.sha256(body).hexdigest(),'bodyBytes':len(body),'reason':reason,'boundExceeded':len(body)>4096},sort_keys=True))
-finally:conn.close()`
+ print(json.dumps({'status':response.status,'contentType':ct,'bodySHA256':hashlib.sha256(body).hexdigest(),'bodyBytes':len(body),'reason':reason,'modelListShape':model_shape,'boundExceeded':len(body)>4096},sort_keys=True))
+finally:
+ signal.setitimer(signal.ITIMER_REAL,0)
+ signal.signal(signal.SIGALRM,old_handler)
+ conn.close()`
 
 func (t liteKubeTransport) get(ctx context.Context, c LiteLLMRuntime, p litePod, path, mode string) (liteResponse, error) {
-	if (path != liteHealthPath && path != liteAuthPath) || (mode != "health" && mode != "missing" && mode != "invalid") || (mode == "health") != (path == liteHealthPath) {
+	if (path != liteHealthPath && path != liteAuthPath) || (mode != "health" && mode != "master" && mode != "missing" && mode != "invalid") || (mode == "health") != (path == liteHealthPath) {
 		return liteResponse{}, errors.New("LiteLLM route or mode not allowed")
 	}
 	bounded, cancel := context.WithTimeout(ctx, liteCallTimeout)
@@ -401,6 +424,7 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 	out.Evidence["targetPodCount"] = strconv.Itoa(len(initial.Pods))
 	requests := 0
 	healthPass := true
+	masterPass := true
 	authPass := true
 	configLimited := false
 	denialFailure := false
@@ -413,7 +437,11 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 		out.Evidence[prefix+"version"] = s.version
 		steps := []struct{ name, path, mode string }{{"health", liteHealthPath, "health"}}
 		if h.profile == LiteLLMCredential {
-			steps = append(steps, struct{ name, path, mode string }{"missingBearer", liteAuthPath, "missing"}, struct{ name, path, mode string }{"invalidBearer", liteAuthPath, "invalid"})
+			if !p.MasterKeyDeclared {
+				out.Summary = "LiteLLM master credential declaration unavailable"
+				return
+			}
+			steps = append(steps, struct{ name, path, mode string }{"masterBearer", liteAuthPath, "master"}, struct{ name, path, mode string }{"missingBearer", liteAuthPath, "missing"}, struct{ name, path, mode string }{"invalidBearer", liteAuthPath, "invalid"})
 		}
 		for _, step := range steps {
 			current, readErr := t.snapshot(ctx, c)
@@ -441,6 +469,9 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 			out.Evidence[prefix+step.name+".bodySHA256"] = response.BodySHA256
 			out.Evidence[prefix+step.name+".bodyBytes"] = strconv.Itoa(response.BodyBytes)
 			reason := response.Reason
+			if step.name == "masterBearer" {
+				out.Evidence[prefix+step.name+".listShape"] = strconv.FormatBool(response.ModelListShape)
+			}
 			if step.name == "invalidBearer" {
 				out.Evidence[prefix+step.name+".reason"] = reason
 			}
@@ -456,6 +487,11 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 			if step.name == "health" {
 				if response.Status != 200 || response.ContentType != "application/json" || response.BodyBytes != 12 || response.BodySHA256 != liteHealthySHA {
 					healthPass = false
+				}
+			}
+			if step.name == "masterBearer" {
+				if response.Status != 200 || response.ContentType != "application/json" || !response.ModelListShape {
+					masterPass = false
 				}
 			}
 			if step.name == "missingBearer" || step.name == "invalidBearer" {
@@ -485,14 +521,21 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 		out.Summary = "each exact serving LiteLLM Pod returned bounded liveness 200"
 		return
 	}
+	if !masterPass {
+		out.Evidence["masterPathState"] = "UNVERIFIED"
+		out.Summary = "LiteLLM master-key model-list path did not return reviewed shape on every Pod"
+		return
+	}
+	out.Evidence["masterPathState"] = "AVAILABLE"
 	if denialFailure {
 		out.Outcome = OutcomeFunctionalFail
 		out.Summary = "one or more negative auth GETs returned success"
 		return
 	}
 	if configLimited {
-		out.Summary = "LiteLLM invalid bearer reached NO_CONNECTED_DB; authorization remains unverified"
+		out.Summary = "LiteLLM master-key model listing available; nonmaster bearer reached NO_CONNECTED_DB and virtual-key denial remains unverified"
 		out.Evidence["authBoundaryState"] = "UNKNOWN_CONFIGURATION_LIMITED"
+		out.Evidence["nonmasterPathState"] = "DB_FEATURE_UNAVAILABLE"
 		return
 	}
 	if !authPass {
@@ -502,5 +545,6 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 	out.Outcome = OutcomeFunctionalPass
 	out.Summary = "each exact LiteLLM Pod refused missing and generated invalid bearers"
 	out.Evidence["authBoundaryState"] = "NEGATIVE_GET_REFUSAL_ONLY"
+	out.Evidence["nonmasterPathState"] = "REFUSED"
 	return
 }
