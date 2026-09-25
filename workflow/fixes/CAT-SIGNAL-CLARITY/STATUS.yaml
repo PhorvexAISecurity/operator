@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,11 +15,93 @@ checks:
     source_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
     at: '2026-09-25T00:13:28+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root-baseline.md
+    sha256: 475302748480ded1f9ddbd94347ab50c5b93e97a20947b64680fc21a68289b7d
+    source_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
+    at: '2026-09-25T00:39:49+00:00'
+  preflight:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 0a4fdca31572012cbabb8126e6843243eb2d350937678612f26dd6f29fb74abb
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:42:01+00:00'
+  implementation:
+    result: PASS
+    by: litellm-cases
+    artifact: 04-diff.patch
+    sha256: 4733ce26e6430b54fed9f32884ce04f62f5c46e7b22084a887df07ccfc40e762
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:42:01+00:00'
+  l0:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 0a4fdca31572012cbabb8126e6843243eb2d350937678612f26dd6f29fb74abb
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:42:01+00:00'
+    inputs:
+    - dashboard-web
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 85f626565ab60fa61735c94b0b2300f146f9de97239e0b53ff8e8763067d67f6
+  l1:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker/focused-go.log
+    sha256: 013d3f40d813e29b7116bf0903f43c51352a5e4fcfb6725cc331058ee938ecd6
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:42:01+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: c6b7f0c5a6cb961d743db2fb9164285c1f5ffa622af893b40de06d2a07b1c663
+  l2:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker/ui-checks.log
+    sha256: 3c42f2622af3ce0879544f13603c9fc904a3e5f46d249e54dafd90226ee3e283
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:42:01+00:00'
+    inputs:
+    - dashboard-web
+    inputs_sha256: 70b659fdc403522bfaa6ccc1cfb40007d9e8930add116eb5e09aa35684022fea
+  positive_control:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker/focused-go.log
+    sha256: 013d3f40d813e29b7116bf0903f43c51352a5e4fcfb6725cc331058ee938ecd6
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:42:01+00:00'
+    inputs:
+    - dashboard-web
+    - phorvex/internal/console
+    inputs_sha256: 2646bd66bd922492f6584857c08fe4fc9e21923a7b0345111f9cc42b98271eae
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 60bc0740f027953518275fac6f945875ec02efb518fa8e59d4e171ab276159ed
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:43:35+00:00'
+    baseline_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: ce5fa4b55d0bf9bcb06d7f0d38c3c6ffd9427c37d3073ad861ae8a62e8ad69d9
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:43:35+00:00'
+    incident_sha256: 60bc0740f027953518275fac6f945875ec02efb518fa8e59d4e171ab276159ed
 fix_id: CAT-SIGNAL-CLARITY
 issues: []
 title: Distinguish catalogue signal eligibility, manager decisions and target observations
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -41,9 +123,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-signal-clarity-20260925
+  base_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
+  head_sha: 4621b611830ed89800d01d900f57538472993a7a
   stacked_on: []
 pull_request:
   url: null
@@ -64,13 +146,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -80,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: litellm-cases
-  action: Implement signed signal clarity plan with focused producer and rendered
-    UI regressions
-updated_at: '2026-09-25T00:13:28+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T00:43:40+00:00'
 configuration_history:
 - at: '2026-09-25T00:13:11+00:00'
   by: codex-lead
@@ -98,6 +180,11 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-25T00:42:01+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +202,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T00:42:01+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T00:42:03+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T00:43:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T00:43:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-SIGNAL-CLARITY:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
