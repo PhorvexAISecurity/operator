@@ -48,7 +48,36 @@ def checksum(docs):
     return resource(docs, "Deployment", "phorvex-phorvex-console")["spec"]["template"]["metadata"].get("annotations", {}).get(GRANT_KEY)
 
 
+def auth_control_env(docs):
+    deployment = resource(docs, "Deployment", "phorvex-phorvex-console")
+    containers = deployment["spec"]["template"]["spec"]["containers"]
+    console = next(c for c in containers if c["name"] == "console")
+    env = {item["name"]: item.get("value") for item in console["env"]}
+    prefix = "PHORVEX_CONSOLE_CATALOGUE_V1_"
+    return {name: env[prefix + name] for name in
+            ("EXPECTED_SUBJECT", "ALLOWED_TENANT", "DENIED_TENANT", "DENIED_TARGET")}
+
+
 class ProfileGrantChart(unittest.TestCase):
+    def test_auth_control_scope_matches_its_rendered_subject_grant(self):
+        docs = stack()
+        env = auth_control_env(docs)
+        subjects = json.loads(grant_data(docs))["subjects"]
+        self.assertEqual(env["EXPECTED_SUBJECT"], SA)
+        matches = [item for item in subjects if item.get("subject") == env["EXPECTED_SUBJECT"]]
+        self.assertEqual(len(matches), 1)
+        grant = matches[0]
+        self.assertEqual(grant["issuer"], EKS_ISSUER)
+        self.assertNotIn("*", grant["tenants"])
+        self.assertNotIn("*", grant["targets"])
+        self.assertTrue(env["ALLOWED_TENANT"])
+        self.assertTrue(env["DENIED_TENANT"])
+        self.assertTrue(env["DENIED_TARGET"])
+        self.assertNotEqual(env["ALLOWED_TENANT"], env["DENIED_TENANT"])
+        self.assertIn(env["ALLOWED_TENANT"], grant["tenants"])
+        self.assertNotIn(env["DENIED_TENANT"], grant["tenants"])
+        self.assertNotIn(env["DENIED_TARGET"], grant["targets"])
+
     def test_eks_scope_is_exact_same_subject_and_startup_checksum(self):
         docs = stack()
         raw = grant_data(docs)
