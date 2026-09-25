@@ -470,6 +470,10 @@ phorvex:
         sourceKey: server.py
         imageID: ""
         sourceSHA256: ""
+      # Source-pinned two-call model-decision observation. Always opt in separately.
+      mcpVoiceModel:
+        enabled: false
+        voiceSourceSHA256: ""
       # Fixed direct controls; enabled only against the reviewed installed routes.
       chroma:
         enabled: false

@@ -149,6 +149,8 @@ type CatalogueV1Config struct {
 	LiteLLMConfigSHA256         string
 	LiteLLMInferenceEnabled     bool
 	LiteLLMModelAlias           string
+	MCPVoiceModelEnabled        bool
+	MCPVoiceSourceSHA256        string
 	CRMEnabled                  bool
 	CRMNamespace                string
 	CRMServiceAccountName       string

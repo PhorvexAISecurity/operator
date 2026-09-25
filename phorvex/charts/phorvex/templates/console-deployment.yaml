@@ -1,6 +1,17 @@
 {{- if and .Values.phorvex.console.catalogueV1.litellm.inferenceEnabled (not .Values.phorvex.console.enabled) }}
 {{- fail "console.catalogueV1.litellm.inferenceEnabled requires console.enabled" }}
 {{- end }}
+{{- if .Values.phorvex.console.catalogueV1.mcpVoiceModel.enabled }}
+{{- if not (and .Values.phorvex.console.enabled .Values.phorvex.console.catalogueV1.enabled .Values.phorvex.console.catalogueV1.voice.enabled .Values.phorvex.console.catalogueV1.mcpSession.enabled .Values.phorvex.console.catalogueV1.litellm.enabled .Values.phorvex.console.catalogueV1.litellm.inferenceEnabled) }}
+{{- fail "console.catalogueV1.mcpVoiceModel requires catalogueV1, Voice, MCP and LiteLLM inference enabled" }}
+{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.litellm.modelAlias "gpt-4o-mini" }}
+{{- fail "console.catalogueV1.mcpVoiceModel requires reviewed gpt-4o-mini alias" }}
+{{- end }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" .Values.phorvex.console.catalogueV1.mcpVoiceModel.voiceSourceSHA256) }}
+{{- fail "console.catalogueV1.mcpVoiceModel.voiceSourceSHA256 requires lowercase SHA-256" }}
+{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 {{- if not .Values.phorvex.audit.enabled }}
 {{- fail "console.enabled requires audit.enabled: separate console Pod cannot serve live history without authenticated manager audit source" }}
@@ -276,6 +287,14 @@ spec:
           value: {{ required "console.catalogueV1.guardrailCalibration.sourceKey is required" .sourceKey | quote }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_GUARDRAIL_SOURCE_SHA256
           value: {{ required "console.catalogueV1.guardrailCalibration.sourceSHA256 is required" .sourceSHA256 | quote }}
+        {{- end }}
+        {{- end }}
+        {{- with .mcpVoiceModel }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_VOICE_MODEL_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_VOICE_MODEL_VOICE_SOURCE_SHA256
+          value: {{ .voiceSourceSHA256 | quote }}
         {{- end }}
         {{- end }}
         {{- with .mcpSession }}

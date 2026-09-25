@@ -136,6 +136,10 @@ phorvex:
           pdb: voice-bot
           transcriptSelector: app=voice-bot
           transcriptContainer: bot
+        # Separate model-continuation observation remains off until admission.
+        mcpVoiceModel:
+          enabled: false
+          voiceSourceSHA256: ""
         # Proposed dev desired state; no live apply from this source change.
         # Pinned read-only 2026-09-24: vllm Service :8000 selects one Ready
         # guardrail Pod; guardrail-proxy CM key hashes as below. Source digest

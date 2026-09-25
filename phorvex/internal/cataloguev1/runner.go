@@ -150,6 +150,14 @@ func (r *Runner) Execute(ctx context.Context, job Job) Result {
 		result.Evidence = map[string]string{}
 		result.UnsafeToRetry = true
 	}
+	if job.Profile == MCPVoiceModel && result.Outcome != OutcomeTestFailed {
+		if err := ValidateMCPVoiceModelArtifacts(job, result); err != nil {
+			result.Outcome = OutcomeTestFailed
+			result.Summary = "MCP Voice model original response validation failed: " + err.Error()
+			result.Evidence = map[string]string{}
+			result.UnsafeToRetry = true
+		}
+	}
 	if job.Profile == LiteLLMRouting && result.Outcome != OutcomeTestFailed {
 		if err := ValidateLiteLLMRoutingArtifacts(job, result); err != nil {
 			result.Outcome = OutcomeTestFailed
@@ -240,7 +248,7 @@ func validateResolvedAuthority(job Job, definition Definition, runtime Runtime) 
 	}
 	wantTenant := definition.FixedTenant
 	switch job.Profile {
-	case VoiceMedia, VoiceRecovery:
+	case VoiceMedia, VoiceRecovery, MCPVoiceModel:
 		wantTenant = runtime.Voice.Namespace
 	case GPUDrain:
 		wantTenant = runtime.GPU.Namespace
@@ -264,7 +272,7 @@ func validateResolvedAuthority(job Job, definition Definition, runtime Runtime) 
 }
 
 func validateDefinition(definition Definition) error {
-	known := map[ProfileID]bool{VoiceMedia: true, VoiceRecovery: true, GPUDrain: true, AuthUnauth: true, AuthScope: true, GuardrailCalibration: true, MCPSessionBaseline: true, ChromaOwnedVector: true, LiteLLMHealth: true, LiteLLMCredential: true, LiteLLMRouting: true, CRMRefund: true, CRMReset: true}
+	known := map[ProfileID]bool{VoiceMedia: true, VoiceRecovery: true, GPUDrain: true, AuthUnauth: true, AuthScope: true, GuardrailCalibration: true, MCPSessionBaseline: true, ChromaOwnedVector: true, LiteLLMHealth: true, LiteLLMCredential: true, LiteLLMRouting: true, MCPVoiceModel: true, CRMRefund: true, CRMReset: true}
 	if !known[definition.ID] {
 		return fmt.Errorf("unknown catalogue v1 profile %q", definition.ID)
 	}
@@ -394,6 +402,11 @@ func ValidateResult(job Job, result Result) error {
 	for key, value := range result.Cleanup.Details {
 		if err := validatePublicField(key, value); err != nil {
 			return fmt.Errorf("catalogue v1 cleanup details: %w", err)
+		}
+	}
+	if job.Profile == MCPVoiceModel && result.Outcome != OutcomeTestFailed {
+		if err := ValidateMCPVoiceModelResult(result); err != nil {
+			return err
 		}
 	}
 	if job.Profile == LiteLLMRouting && result.Outcome != OutcomeTestFailed {

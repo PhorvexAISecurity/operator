@@ -29,6 +29,7 @@ const (
 	LiteLLMHealth        ProfileID = "catalogue-litellm-route-health"
 	LiteLLMCredential    ProfileID = "catalogue-litellm-credential-boundary"
 	LiteLLMRouting       ProfileID = "catalogue-litellm-inference-routing"
+	MCPVoiceModel        ProfileID = "catalogue-mcp-voice-model-continuation"
 	CRMRefund            ProfileID = "c2-crm-refund-capability"
 	CRMReset             ProfileID = "c2-crm-reset-capability"
 )
@@ -59,6 +60,7 @@ func DefinitionFor(id ProfileID) (Definition, error) {
 		LiteLLMHealth:        {ID: LiteLLMHealth, Title: "LiteLLM route availability", Product: "ai", Category: "Functional", ClaimLimits: "fixed listener liveliness on each exact serving Pod; no authenticated model serving, SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 		LiteLLMCredential:    {ID: LiteLLMCredential, Title: "LiteLLM credential configuration boundary", Product: "ai", Category: "Boundary", ClaimLimits: "missing and generated invalid bearer on reviewed GET /v1/models authentication route for each exact serving Pod; NO_CONNECTED_DB is configuration-limited, not a verified denial or bypass; no SecurityEvent, brain, actuator or security efficacy claim", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 		LiteLLMRouting:       {ID: LiteLLMRouting, Title: "LiteLLM authenticated inference routing", Product: "ai", Category: "Functional", ClaimLimits: "at most one harmless nonstreaming completion and one unknown-model request per exact serving Pod; completion and explicit typed model rejection are separate observations; returned model metadata does not prove loaded provider model or weights; provider internals, absence of upstream work, SecurityEvent, brain, actuator and security efficacy are not attested", FixedTarget: "default", FixedTenant: "litellm", MaxDuration: 3 * time.Minute, MaxMutations: 0},
+		MCPVoiceModel:        {ID: MCPVoiceModel, Title: "MCP to Voice model continuation", Product: "application", Category: "Observation", ClaimLimits: "two source-pinned stateless model continuations with normal and one substituted MCP result; synthetic tool selection only, no tool execution, SecurityEvent, brain, actuator, enforcement or defense efficacy claim", FixedTarget: "default", FixedTenant: "voice", MaxDuration: 2 * time.Minute, MaxMutations: 0},
 		CRMRefund:            {ID: CRMRefund, Title: "Disposable CRM refund capability", Product: "application", Category: "Functional", ClaimLimits: "synthetic A/B record capability in isolated Mongo only; A/B are not authenticated principals; no installed customer write, phone/provider, authentication bypass, brain or security efficacy claim", FixedTarget: "default", FixedTenant: "crm-functional", MaxDuration: 14 * time.Minute, MaxMutations: 2},
 		CRMReset:             {ID: CRMReset, Title: "Disposable CRM reset capability", Product: "application", Category: "Functional", ClaimLimits: "synthetic A/B record capability in isolated Mongo only; A/B are not authenticated principals; no installed customer write, phone/provider, authentication bypass, brain or security efficacy claim", FixedTarget: "default", FixedTenant: "crm-functional", MaxDuration: 14 * time.Minute, MaxMutations: 2},
 	}
@@ -95,6 +97,11 @@ type VoiceRuntime struct {
 	PDB                   string `json:"pdb"`
 	TranscriptPodSelector string `json:"transcriptPodSelector"`
 	TranscriptContainer   string `json:"transcriptContainer"`
+}
+
+type MCPVoiceModelRuntime struct {
+	Enabled                   bool   `json:"enabled"`
+	ExpectedVoiceSourceSHA256 string `json:"expectedVoiceSourceSHA256"`
 }
 
 type GPUFixtureRuntime struct {
@@ -168,6 +175,7 @@ type Runtime struct {
 	ExpectedSubject string
 	GrantFile       string
 	Voice           VoiceRuntime
+	MCPVoiceModel   MCPVoiceModelRuntime
 	GPU             GPUFixtureRuntime
 	Guardrail       GuardrailCalibrationRuntime
 	MCP             MCPSessionRuntime

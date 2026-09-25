@@ -27,6 +27,7 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 		string(cataloguev1.LiteLLMHealth):          {"fixed-suite", "functional"},
 		string(cataloguev1.LiteLLMCredential):      {"fixed-suite", "functional"},
 		string(cataloguev1.LiteLLMRouting):         {"fixed-suite", "functional"},
+		string(cataloguev1.MCPVoiceModel):          {"fixed-suite", "functional"},
 		string(cataloguev1.CRMRefund):              {"fixed-suite", "functional"},
 		string(cataloguev1.CRMReset):               {"fixed-suite", "functional"},
 		string(cataloguev1.MCPSessionBaseline):     {"fixed-suite", "functional"},

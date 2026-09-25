@@ -20,6 +20,7 @@ import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
 import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
 import { GuardrailAvailabilityResultPanel } from "@/components/panels/guardrail-availability-result";
+import { MCPVoiceModelResult, parseMCPVoiceModelEvidence } from "@/components/panels/mcp-voice-model-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 const catalogDisplayName = (item: CatalogItem) => item.profile === "pod-bound-api-auth-response" ? "Injected Pod-bound API bearer response" : item.name;
@@ -163,6 +164,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   const [fixedAdmission, setFixedAdmission] = React.useState<FixedAdmissionState | null>(null);
   const admissionGeneration = React.useRef(0);
   const fixedProfile = item?.profile || item?.entryID || item?.name || "";
+  const mcpVoiceAccepted = fixedProfile === "catalogue-mcp-voice-model-continuation"
+    ? parseMCPVoiceModelEvidence(fixedEvidence?.functionalResult?.evidence, fixedEvidence?.functionalResult?.outcome) : null;
   const admissionKey = `${scope.identity}\u0000${scope.providerToken}\u0000${scope.ready}\u0000${lens}\u0000${fixedProfile}\u0000${admissionRefreshes}`;
   const requestGeneration = React.useRef(0);
   const requestContext = `${item?.name || ""}\u0000${fixedProfile}\u0000${target?.id || ""}\u0000${target?.context || ""}\u0000${lens}\u0000${scope.identity}\u0000${scope.providerToken}`;
@@ -320,7 +323,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="neutral">{item.category}</Badge>
-          {item.profile === "pod-bound-api-auth-response" || item.profile === guardrailAvailabilityProfile ? <Badge variant="neutral">injected named case · outcome conditional</Badge> : <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>}
+          {item.profile === "catalogue-mcp-voice-model-continuation" ? <Badge variant="neutral">model decision observation · no defense score</Badge> : item.profile === "pod-bound-api-auth-response" ? <Badge variant="neutral">injected named case · mechanism conditional</Badge> : item.profile === guardrailAvailabilityProfile ? <Badge variant="neutral">injected named case · outcome conditional</Badge> : <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>}
           <Badge variant={item.product === "ai" ? "modeled" : "accent"}>{item.product.toUpperCase()}</Badge>
           {item.benignControl && <Badge variant="neutral">{item.claimClass === "calibration" ? "classifier-only · security not evaluated" : "security outcome not applicable"}</Badge>}
         </div>
@@ -330,12 +333,13 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         </div>
         {item.benignControl
           ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
+          : item.profile === "catalogue-mcp-voice-model-continuation" ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">Two fixed model continuations compare an ordinary store-hours result with one synthetic substituted result. A model-selected tool is never executed; no SecurityEvent or Phorvex defense is tested. {item.meaningfulWhen}</div>
           : item.profile === "guardrail-confidentiality-static" || item.profile === guardrailAvailabilityProfile ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.meaningfulWhen}</div>
           : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
         {item.profile === "pod-bound-api-auth-response" && <div className="text-[12px] text-muted-foreground">Signal mode: explicitly injected typed SecurityEvent. Brain selection, native actuation, source-bearer invalidation, peer and Service continuity, and cleanup require separate exact receipts. Natural detector coverage and calibrated security efficacy are not evaluated.</div>}
         {item.profile === guardrailAvailabilityProfile && <div className="text-[12px] text-muted-foreground">Signal mode: explicitly injected. This measures whether guarded Say OK availability recovers after an exact selected rotation while the synthetic canary remains blocked and arithmetic stays available. Natural detection, loaded model weights and security efficacy are not evaluated.</div>}
-        {item.eventMode && <div className="text-[12px] text-muted-foreground">Event mode: <span className="text-foreground">{item.eventMode}</span>{item.profile === "pod-bound-api-auth-response" || item.profile === guardrailAvailabilityProfile ? " · signal is explicitly injected; decision and operation require their own exact receipts" : " · brain: NOT_EVALUATED · actuator: NOT_EVALUATED"}</div>}
+        {item.eventMode && <div className="text-[12px] text-muted-foreground">Event mode: <span className="text-foreground">{item.eventMode}</span>{item.profile === "catalogue-mcp-voice-model-continuation" ? " · no SecurityEvent requested · brain, actuator and enforcement NOT_EVALUATED" : item.profile === "pod-bound-api-auth-response" || item.profile === guardrailAvailabilityProfile ? " · signal is explicitly injected; decision and operation require their own exact receipts" : " · brain: NOT_EVALUATED · actuator: NOT_EVALUATED"}</div>}
         {item.launchKind === "fixed-suite" && <FixedSuiteAdmissionNotice configured={item.available !== false} state={fixedAdmission?.key === admissionKey ? fixedAdmission : null} refreshes={admissionRefreshes} onRefresh={() => setAdmissionRefreshes((count) => Math.min(3, count + 1))} />}
         {item.launchKind === "named-suite" && namedLaunchUncertain && <div className="text-[11px] text-warning">{item.profile === "guardrail-confidentiality-static" ? "The last comparison launch response was indeterminate. Inspect Run History for the exact run before starting a new one." : "The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one."} This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
@@ -352,12 +356,13 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           <div className="mt-1 text-muted-foreground">server profile context: <span className="font-mono text-foreground/85">{fixedRun.context}</span> · state: <span className="text-foreground">{fixedStatus?.state || "starting"}</span></div>
           {fixedStatus?.error && <div className="mt-1 text-warning">{fixedStatus.error}</div>}
           {fixedEvidence?.functionalResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
-            <div>typed outcome: <span className="font-medium text-foreground">{fixedEvidence.functionalResult.outcome}</span> · cleanup: <span className="text-foreground">{fixedEvidence.functionalResult.cleanup.status}</span></div>
-            <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
+            <div>{fixedProfile === "catalogue-mcp-voice-model-continuation" ? "model measurement" : "typed outcome"}: <span className="font-medium text-foreground">{fixedProfile === "catalogue-mcp-voice-model-continuation" ? mcpVoiceAccepted ? "completed, decision below" : "unverified" : fixedEvidence.functionalResult.outcome}</span> · cleanup: <span className="text-foreground">{fixedEvidence.functionalResult.cleanup.status}</span></div>
+            <div className="text-foreground">{fixedProfile === "catalogue-mcp-voice-model-continuation" ? mcpVoiceAccepted ? "Two source-pinned model continuations were measured; see the decision below." : "Model-decision measurement is incomplete or incompatible; see retained bounded evidence below." : fixedEvidence.functionalResult.summary}</div>
             {fixedEvidence.functionalResult.unsafeToRetry && <div className="text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
             {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             {fixedProfile === "catalogue-litellm-inference-routing" && <LiteLLMRoutingResult evidence={fixedEvidence.functionalResult.evidence} outcome={fixedEvidence.functionalResult.outcome} />}
-            {item.eventMode && fixedProfile !== "catalogue-litellm-inference-routing" && <div className="space-y-1 border-t border-border pt-2">{Object.entries(fixedEvidence.functionalResult.evidence || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => <div key={key}><span className="font-mono text-foreground/80">{key}:</span> {value}</div>)}</div>}
+            {fixedProfile === "catalogue-mcp-voice-model-continuation" && <MCPVoiceModelResult evidence={fixedEvidence.functionalResult.evidence} outcome={fixedEvidence.functionalResult.outcome} />}
+            {item.eventMode && fixedProfile !== "catalogue-litellm-inference-routing" && fixedProfile !== "catalogue-mcp-voice-model-continuation" && <div className="space-y-1 border-t border-border pt-2">{Object.entries(fixedEvidence.functionalResult.evidence || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => <div key={key}><span className="font-mono text-foreground/80">{key}:</span> {value}</div>)}</div>}
             {(fixedProfile === "c2-crm-refund-capability" || fixedProfile === "c2-crm-reset-capability") && <CRMCapabilityResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}
@@ -377,6 +382,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           {fixedEvidence?.mongoExposureResult && <div className="mt-2 border-t border-border pt-2"><MongoExposureResult result={fixedEvidence.mongoExposureResult} unsafeToRetry={fixedStatus?.unsafeToRetry} /></div>}
           {item.profile === "mongo-exposure-baseline" && fixedEvidence && !fixedEvidence.mongoExposureResult && <div className="mt-1 text-warning">Exact Mongo synthetic-document evidence is unavailable or incomplete. No configuration exposure finding or defense result is accepted.</div>}
           {fixedEvidence?.guardrailStaticResult && <div className="mt-2 border-t border-border pt-2"><GuardrailStaticResultPanel result={fixedEvidence.guardrailStaticResult} /></div>}
+          {fixedProfile === "catalogue-mcp-voice-model-continuation" && !fixedEvidence?.functionalResult && <div className="mt-2 border-t border-border pt-2"><MCPVoiceModelResult evidence={undefined} /></div>}
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
           {fixedEvidence && item.profile !== "mongo-exposure-baseline" && item.profile !== "pod-bound-api-auth-response" && item.profile !== guardrailAvailabilityProfile && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && !fixedEvidence.natsResponseResult && !fixedEvidence.mongoExposureResult && !fixedEvidence.guardrailStaticResult && !fixedEvidence.guardrailAvailabilityResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
           {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
