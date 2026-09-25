@@ -107,16 +107,17 @@ phorvex:
       #
       # Enabled 2026-09-23 for Voice media, Voice recovery and the two console auth profiles;
       # GPU drain stays off until Codex supplies its owned fixture. The auth profiles use the
-      # existing E2E identity: its grant (operator on voice/nats/vllm, target "default") was
-      # verified live to return 200 for vllm and 403 for document-store and for
-      # unavailable-control-target. Its 24h bearer lives ONLY in the Secret named below,
+      # existing E2E identity: its current grant includes voice, nats, vllm,
+      # document-store, litellm and mcp at target "default". The denied tenant
+      # below is reserved for this negative control and is not granted to that
+      # identity. Its 24h bearer lives ONLY in the Secret named below,
       # created out of band and re-minted by catalogueV1TokenRefresher (bottom of this file).
       # That Secret must exist before this block is enabled, or the console pod cannot mount it.
       catalogueV1:
         enabled: true
         loopbackURL: http://127.0.0.1:8090
         allowedTenant: vllm
-        deniedTenant: document-store
+        deniedTenant: catalogue-denied-control-tenant
         deniedTarget: unavailable-control-target
         expectedSubject: "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e"
         scopedToken:
