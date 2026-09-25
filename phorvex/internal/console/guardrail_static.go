@@ -78,6 +78,7 @@ type GuardrailStaticCall struct {
 type GuardrailStaticResult struct {
 	Accepted                   bool                  `json:"accepted"`
 	Status                     string                `json:"status"`
+	ProxyMode                  string                `json:"proxyMode"`
 	SayOK                      string                `json:"sayOK"`
 	Arithmetic                 string                `json:"arithmetic"`
 	Calls                      []GuardrailStaticCall `json:"calls"`
@@ -239,8 +240,33 @@ func classifyStatic(calls []GuardrailStaticCall, hashes []string) (status, say, 
 	return
 }
 
+func staticReportedMode(raw json.RawMessage) (string, error) {
+	if err := rejectNATSNestedDuplicates(raw); err != nil {
+		return "", err
+	}
+	var state map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &state); err != nil || state == nil {
+		return "", errors.New("guardrail state mode malformed")
+	}
+	value, reported := state["mode"]
+	if !reported {
+		if _, hasModels := state["models"]; hasModels {
+			return "", errors.New("current guardrail state mode absent")
+		}
+		if _, hasRuntime := state["runtime"]; hasRuntime {
+			return "", errors.New("current guardrail state mode absent")
+		}
+		return "UNREPORTED", nil
+	}
+	var mode string
+	if err := json.Unmarshal(value, &mode); err != nil || mode != "enforce" {
+		return "", errors.New("guardrail state does not declare enforce mode")
+	}
+	return mode, nil
+}
+
 func readGuardrailStaticResult(out, id, configPath string) (GuardrailStaticResult, error) {
-	result := GuardrailStaticResult{Status: "INCONCLUSIVE", SayOK: "NOT_EVALUATED", Arithmetic: "NOT_EVALUATED", Calls: []GuardrailStaticCall{}, Issues: []string{}, EventMode: "DIRECT_STATIC", NaturalDetector: "NOT_EVALUATED", BrainDecision: "NOT_EVALUATED", Actuator: "NOT_EVALUATED", ExternalRoute: "NOT_TESTED"}
+	result := GuardrailStaticResult{Status: "INCONCLUSIVE", ProxyMode: "UNREPORTED", SayOK: "NOT_EVALUATED", Arithmetic: "NOT_EVALUATED", Calls: []GuardrailStaticCall{}, Issues: []string{}, EventMode: "DIRECT_STATIC", NaturalDetector: "NOT_EVALUATED", BrainDecision: "NOT_EVALUATED", Actuator: "NOT_EVALUATED", ExternalRoute: "NOT_TESTED"}
 	raw, err := readNATSResponseSizedFile(out, "guardrail-static-result-v1.json", 1<<20)
 	if err != nil {
 		return result, err
@@ -384,6 +410,7 @@ func readGuardrailStaticResult(out, id, configPath string) (GuardrailStaticResul
 	}
 	hashes := []string{}
 	selectedModel := ""
+	selectedMode := ""
 	for i, row := range a.Responses {
 		expected := []struct {
 			Name string
@@ -417,6 +444,19 @@ func readGuardrailStaticResult(out, id, configPath string) (GuardrailStaticResul
 		}
 		if row.ModelBefore != model || row.ModelAfter != model {
 			return result, errors.New("model ID changed around call")
+		}
+		beforeMode, err := staticReportedMode(row.StateBefore)
+		if err != nil {
+			return result, err
+		}
+		afterMode, err := staticReportedMode(row.StateAfter)
+		if err != nil || beforeMode != afterMode {
+			return result, errors.New("guardrail mode changed around call")
+		}
+		if selectedMode == "" {
+			selectedMode = beforeMode
+		} else if selectedMode != beforeMode {
+			return result, errors.New("guardrail mode changed between calls")
 		}
 		var state struct {
 			Active     string             `json:"active"`
@@ -496,7 +536,7 @@ func readGuardrailStaticResult(out, id, configPath string) (GuardrailStaticResul
 	if len(result.Calls) != 4 && !(len(result.Calls) == 1 && derived == "NOT_DISCRIMINATING_RAW_WITHHELD") {
 		return result, errors.New("incomplete static comparison")
 	}
-	result.Status, result.SayOK, result.Arithmetic = derived, say, arithmetic
+	result.Status, result.SayOK, result.Arithmetic, result.ProxyMode = derived, say, arithmetic, selectedMode
 	result.Accepted = true
 	return result, nil
 }
