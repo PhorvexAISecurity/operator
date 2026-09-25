@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,11 +15,76 @@ checks:
     source_sha: 96a27625d94b97701f856d8ec789f40f89c08491
     at: '2026-09-25T12:08:34+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/red.md
+    sha256: f1443f5262ee13225ab36e34430f387bb3d3d3c1d97030deb3c660ed1b7ea928
+    source_sha: 96a27625d94b97701f856d8ec789f40f89c08491
+    at: '2026-09-25T12:18:27+00:00'
+  preflight:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/preflight/receipt.json
+    sha256: 73fb58cfd978a576143ca57883ad0cc0be1b44684019745a21a8db278b030ffe
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:18:43+00:00'
+  implementation:
+    result: PASS
+    by: live-readiness
+    artifact: 04-diff.patch
+    sha256: a537246bb2da58037088c3a3c725808b6745fa3295da8fe9568446cf3ed5303e
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:18:43+00:00'
+  l0:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/l0.log
+    sha256: ad0de1d38893807cabbc4334b410478562aa8f3a875f58a2523fea02a7f2d9d3
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:18:43+00:00'
+  l1:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/l1.log
+    sha256: e7a5c935876177a20a25b8b0928e66973a758612f1f3e0264dcfc4ec3d000324
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:18:43+00:00'
+  l2:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/l2.log
+    sha256: b655872cff889aa2e0360c499fbbfb56df4f223caebc8d53e04dae9ca8e55dfd
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:18:43+00:00'
+  positive_control:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/positive-control.log
+    sha256: cc0630b8510e1cf92ce2c3a84d22c2f023aa8a67dc0b4c57c3ea2949eb43732b
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:18:43+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 509dc764619724e8c5b9c268fefa125f66ee257c88c5637ff61ffe093671257b
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:20:23+00:00'
+    baseline_sha: 96a27625d94b97701f856d8ec789f40f89c08491
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b1e82212ac86190416c41ee0b94e6bd65908fb32cf88c6153356f88b72d2e404
+    source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
+    at: '2026-09-25T12:20:23+00:00'
+    incident_sha256: 509dc764619724e8c5b9c268fefa125f66ee257c88c5637ff61ffe093671257b
 fix_id: CAT-AUTH-CONTROL-SCOPE
 issues: []
 title: Keep the console negative authorization control outside the test identity grants
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -43,7 +108,7 @@ blind_derivation:
 implementation:
   branch: fix/catalogue-auth-control-scope-20260925
   base_sha: 96a27625d94b97701f856d8ec789f40f89c08491
-  head_sha: null
+  head_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
   stacked_on: []
 pull_request:
   url: null
@@ -64,13 +129,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -80,10 +145,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: live-readiness
-  action: Implement exact EKS negative-control tenant and rendered-grant regression;
-    submit independently reviewable source
-updated_at: '2026-09-25T12:08:41+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T12:20:28+00:00'
 follow_up_to: CAT-PROFILE-GRANTS
 configuration_history:
 - at: '2026-09-25T12:08:06+00:00'
@@ -96,6 +161,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-25T12:18:43+00:00'
+  by: live-readiness
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -113,3 +183,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T12:18:43+00:00'
+  by: live-readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T12:18:46+00:00'
+  by: live-readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T12:20:23+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T12:20:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-AUTH-CONTROL-SCOPE:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
