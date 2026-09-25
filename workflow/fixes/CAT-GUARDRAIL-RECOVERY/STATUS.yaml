@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -20,11 +20,76 @@ checks:
     rationale: Lead-authored deployability correction under standing user authorization;
       no new human approval claimed, no evidence waiver, no shared deployment change.
       Prior decision preserved in check_history and evidence/decision-before-self-identity-amendment.md.
+  red:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/red-catalogue.md
+    sha256: 2f81fd9713f04e0577b2fe3a47707731c155efc79e9456dd400121e9b2a6a366
+    source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+    at: '2026-09-25T02:21:11+00:00'
+  preflight:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/preflight/receipt.json
+    sha256: ad732a8262b9d7b0fabd7c5c6f10d4b4cd59122f64960addf0e45e3c8516c59b
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:52:36+00:00'
+  implementation:
+    result: PASS
+    by: guardrail-comparison
+    artifact: 04-diff.patch
+    sha256: 1bc40032c13891043cf2f86d3f3fc7a698ff30eb3eb2e6c03b377115225fccf9
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:52:36+00:00'
+  l0:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/preflight/run-1790304293656246715/go-phorvex.log
+    sha256: 7a0183ed603fff855197f35e13cec2f3e5c8dd5b197dfc97f62049d8c48daa8d
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:52:36+00:00'
+  l1:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/offline-focused.log
+    sha256: bf761a7018a49d5f07a21a3064a840fda8283e0907c3f5607b45f977e6e8e438
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:52:36+00:00'
+  l2:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/offline-focused.log
+    sha256: bf761a7018a49d5f07a21a3064a840fda8283e0907c3f5607b45f977e6e8e438
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:52:36+00:00'
+  positive_control:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/offline-focused.log
+    sha256: bf761a7018a49d5f07a21a3064a840fda8283e0907c3f5607b45f977e6e8e438
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:52:36+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:58:59+00:00'
+    baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b0f123399528216c2e5d4ce7bfcdd40849618f45d5a6d5bd7ebfa556c4e57384
+    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+    at: '2026-09-25T02:58:59+00:00'
+    incident_sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
 fix_id: CAT-GUARDRAIL-RECOVERY
 issues: []
 title: Add a causal guardrail availability catalogue case
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -46,9 +111,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-guardrail-recovery-20260925
+  base_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  head_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
   stacked_on: []
 pull_request:
   url: null
@@ -69,13 +134,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -85,10 +150,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: guardrail-comparison
-  action: Implement signed new catalogue case with assigned disjoint helpers and focused
-    actual producer tests
-updated_at: '2026-09-25T01:26:51+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T02:59:05+00:00'
 configuration_history:
 - at: '2026-09-25T00:56:24+00:00'
   by: codex-lead
@@ -103,6 +168,11 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-25T02:52:36+00:00'
+  by: guardrail-comparison
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -120,6 +190,38 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T02:52:36+00:00'
+  by: guardrail-comparison
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T02:52:38+00:00'
+  by: guardrail-comparison
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T02:59:00+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T02:59:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -129,3 +231,10 @@ check_history:
   source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
   at: '2026-09-25T00:56:59+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+handoff:
+  id: CAT-GUARDRAIL-RECOVERY:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
