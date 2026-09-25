@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,11 +15,94 @@ checks:
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
     at: '2026-09-25T00:57:08+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-red.md
+    sha256: 08d6b15837e133dab71d3c2f0b564116e9a3bd6c895363b7d896bddba1f931ff
+    source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+    at: '2026-09-25T01:47:43+00:00'
+  preflight:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 40cbc36c12471930eaa4bd7abff1e75ed3435d8df2a69b0930061b87b77be7d5
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T01:47:54+00:00'
+  implementation:
+    result: PASS
+    by: litellm-cases
+    artifact: 04-diff.patch
+    sha256: e4dfbdcf61c5388717d71b4f0def4a034aa894a486ff359f90e3255e7b67234f
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T01:47:54+00:00'
+  l0:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/receipt.json
+    sha256: 40cbc36c12471930eaa4bd7abff1e75ed3435d8df2a69b0930061b87b77be7d5
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T01:47:54+00:00'
+    inputs:
+    - dashboard-web
+    - deploy/helm
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 117c50fb3e39e511243446d58901a4d78a1cc5a69dd682067b577b748f4febca
+  l1:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-checks.md
+    sha256: aab175a818802ce9becee5505d6b1285e31cede6721d8e2edc5b66d1335e8891
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T01:47:55+00:00'
+    inputs:
+    - phorvex/internal/cataloguev1
+    inputs_sha256: c44939877730e43582ec940b1a2545764741418d4c202dbba2e17dd317d23dcc
+  l2:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-checks.md
+    sha256: aab175a818802ce9becee5505d6b1285e31cede6721d8e2edc5b66d1335e8891
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T01:47:55+00:00'
+    inputs:
+    - dashboard-web
+    - phorvex/internal/cataloguev1
+    - phorvex/internal/console
+    inputs_sha256: a85844937976c8d546ec9184109db93a78af70c0e2fd1ccb0e613f6402cb02cd
+  positive_control:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/worker-checks.md
+    sha256: aab175a818802ce9becee5505d6b1285e31cede6721d8e2edc5b66d1335e8891
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T01:47:55+00:00'
+    inputs:
+    - phorvex/internal/cataloguev1
+    inputs_sha256: c44939877730e43582ec940b1a2545764741418d4c202dbba2e17dd317d23dcc
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 87ae9239dfea37e80806886fd550962e38b2e821326645730f04a101ac5eae10
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T02:22:24+00:00'
+    baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f5e9a36bc2e872ed3001a8e00c2042f2665a047d62dadb4215b54577c38696f7
+    source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+    at: '2026-09-25T02:22:24+00:00'
+    incident_sha256: 87ae9239dfea37e80806886fd550962e38b2e821326645730f04a101ac5eae10
 fix_id: CAT-LITELLM-ROUTING
 issues: []
 title: Add installed LiteLLM inference routing catalogue control
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -41,9 +124,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-litellm-routing-20260925
+  base_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  head_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
   stacked_on: []
 pull_request:
   url: null
@@ -64,13 +147,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -80,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: litellm-cases
-  action: Implement signed new catalogue case with assigned disjoint helpers and focused
-    actual producer tests
-updated_at: '2026-09-25T00:57:09+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T02:22:29+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -98,6 +181,11 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-25T01:47:54+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +203,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T01:47:55+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T01:47:57+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T02:22:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T02:22:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-LITELLM-ROUTING:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
