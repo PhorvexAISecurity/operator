@@ -34,7 +34,7 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 	}
 	tenant := definition.FixedTenant
 	switch profile {
-	case cataloguev1.VoiceMedia, cataloguev1.VoiceRecovery:
+	case cataloguev1.VoiceMedia, cataloguev1.VoiceRecovery, cataloguev1.MCPVoiceModel:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.VoiceNamespace)
 	case cataloguev1.GPUDrain:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.GPUFixtureNamespace)
@@ -53,6 +53,13 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 	}
 	if tenant == "" {
 		return runDestination{}, errors.New("fixed suite resolved tenant is unavailable")
+	}
+	if profile == cataloguev1.MCPVoiceModel {
+		mcp, lite := strings.TrimSpace(rm.cfg.CatalogueV1.MCPNamespace), strings.TrimSpace(rm.cfg.CatalogueV1.LiteLLMNamespace)
+		if mcp == "" || lite == "" || mcp == tenant || lite == tenant || mcp == lite {
+			return runDestination{}, errors.New("MCP Voice model destination tenants differ or are unavailable")
+		}
+		return runDestination{Targets: []string{hostTargetID, definition.FixedTarget}, Tenants: []string{tenant, mcp, lite}, ScopeTarget: definition.FixedTarget, ScopeTenant: tenant}, nil
 	}
 	return runDestination{Targets: []string{hostTargetID, definition.FixedTarget}, Tenants: []string{tenant}, ScopeTarget: definition.FixedTarget, ScopeTenant: tenant}, nil
 }
@@ -73,6 +80,9 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Namespace: c.CatalogueV1.GPUFixtureNamespace, FixtureConfigFile: c.CatalogueV1.GPUFixtureConfig,
 			HarnessBinary: c.HarnessBin, HarnessDir: c.HarnessDir,
 			KubeconfigPath: c.CatalogueV1.GPUKubeconfigPath, KubeContext: c.CatalogueV1.GPUKubeContext}}
+	if c.CatalogueV1.MCPVoiceModelEnabled {
+		runtime.MCPVoiceModel = &cataloguev1.MCPVoiceModelRuntime{Enabled: true, ExpectedVoiceSourceSHA256: c.CatalogueV1.MCPVoiceSourceSHA256}
+	}
 	if c.CatalogueV1.GuardrailCalibrationEnabled {
 		runtime.Guardrail = &cataloguev1.GuardrailCalibrationRuntime{Enabled: true,
 			Namespace: c.CatalogueV1.GuardrailNamespace, Service: c.CatalogueV1.GuardrailService,
@@ -587,6 +597,11 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	}
 	if err = cataloguev1.ValidateTerminalArtifacts(job, result, filepath.Join(dir, "metrics.jsonl")); err != nil {
 		return nil, err
+	}
+	if job.Profile == cataloguev1.MCPVoiceModel && result.Outcome != cataloguev1.OutcomeTestFailed {
+		if err = cataloguev1.ValidateMCPVoiceModelArtifacts(job, result); err != nil {
+			return nil, err
+		}
 	}
 	if job.Profile == cataloguev1.LiteLLMRouting && result.Outcome != cataloguev1.OutcomeTestFailed {
 		if err = cataloguev1.ValidateLiteLLMRoutingArtifacts(job, result); err != nil {
