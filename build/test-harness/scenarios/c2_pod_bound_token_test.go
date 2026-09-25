@@ -397,11 +397,12 @@ func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 	const pod = "source-abc"
 	const nonce = "0123456789abcdef01234567"
 	sample := time.Now().Add(-20 * time.Second).Unix()
+	returnedUID := "uid"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		expression := r.URL.Query().Get("query")
 		// A healthy fixture has a peer series with the same nonce. Every query,
-		// including the rate query, must select the source Pod explicitly.
-		if r.URL.Path != "/api/v1/query" || !strings.Contains(expression, `pod="`+pod+`"`) {
+		// including the rate query, must select this source Pod incarnation.
+		if r.URL.Path != "/api/v1/query" || !strings.Contains(expression, `pod="`+pod+`"`) || !strings.Contains(expression, `pod_uid="uid"`) {
 			http.Error(w, "bad query", 400)
 			return
 		}
@@ -409,10 +410,10 @@ func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 		if strings.HasPrefix(expression, "timestamp(") {
 			value = strconv.FormatInt(sample, 10)
 		}
-		if strings.HasPrefix(expression, "sum by (pod)") {
+		if strings.HasPrefix(expression, "sum by (pod,pod_uid)") {
 			value = "0.2"
 		}
-		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":"voice","pod":"%s","nonce":"%s"},"value":[%s,"%s"]}]}}`, pod, nonce, r.URL.Query().Get("time"), value)
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":"voice","pod":"%s","pod_uid":"%s","nonce":"%s"},"value":[%s,"%s"]}]}}`, pod, returnedUID, nonce, r.URL.Query().Get("time"), value)
 	}))
 	defer server.Close()
 	env := &core.Env{Config: config.TargetConfig{Namespace: "voice", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
@@ -420,6 +421,11 @@ func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 	if err != nil || at.Unix() != sample || count != 7 || len(hash) != 64 {
 		t.Fatalf("actual scrape sample: at=%s count=%f hash=%q err=%v", at, count, hash, err)
 	}
+	returnedUID = "old-incarnation"
+	if _, _, _, err := podTokenMetricSample(context.Background(), env, podTokenFixture{source: testPodTokenReadyPod(pod, "uid", "image")}); err == nil {
+		t.Fatal("old Voice Pod incarnation counter accepted")
+	}
+	returnedUID = "uid"
 	sample = time.Now().Add(-3 * time.Minute).Unix()
 	if _, _, _, err := podTokenMetricSample(context.Background(), env, podTokenFixture{source: testPodTokenReadyPod(pod, "uid", "image")}); err == nil {
 		t.Fatal("old scrape accepted from fresh instant query evaluation")

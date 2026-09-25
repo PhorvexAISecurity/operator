@@ -290,7 +290,7 @@ func podTokenPromQuery(ctx context.Context, base, expression, namespace, pod, no
 		return 0, raw, errors.New("Pod token Prometheus Pod series differs")
 	}
 	if podUID != "" && row.Metric["pod_uid"] != podUID {
-		return 0, raw, errors.New("CPU token Prometheus source UID differs")
+		return 0, raw, errors.New("Pod token Prometheus source UID differs")
 	}
 	if label := row.Metric["nonce"]; label != "" && label != nonce {
 		return 0, raw, errors.New("Pod token Prometheus nonce differs")
@@ -313,18 +313,11 @@ func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture)
 	nonce := env.Config.PodBoundTokenFixture.Nonce
 	pod := f.source.Name
 	ns := env.Config.Namespace
-	uid := ""
-	if ns == "phorvex-catalogue-cpu" {
-		uid = string(f.source.UID)
-		if uid == "" {
-			return time.Time{}, 0, "", errors.New("CPU token metric source Pod UID absent")
-		}
+	uid := string(f.source.UID)
+	if uid == "" {
+		return time.Time{}, 0, "", errors.New("Pod token metric source Pod UID absent")
 	}
-	selector := `http_requests_total{namespace="` + ns + `",pod="` + pod + `",nonce="` + nonce + `"`
-	if uid != "" {
-		selector += `,pod_uid="` + uid + `"`
-	}
-	selector += `}`
+	selector := `http_requests_total{namespace="` + ns + `",pod="` + pod + `",nonce="` + nonce + `",pod_uid="` + uid + `"}`
 	evaluation := time.Now().UTC()
 	timestampRaw, partA, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", ns, pod, nonce, uid, evaluation, true)
 	if err != nil {
@@ -341,11 +334,7 @@ func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture)
 	if err != nil || confirmedTimestamp != timestampRaw {
 		return time.Time{}, 0, "", errors.New("Pod token counter and scrape timestamp differ")
 	}
-	group := "pod"
-	if uid != "" {
-		group = "pod,pod_uid"
-	}
-	rate, partD, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, `sum by (`+group+`) (rate(`+selector+`[1m]))`, ns, pod, nonce, uid, evaluation, false)
+	rate, partD, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, `sum by (pod,pod_uid) (rate(`+selector+`[1m]))`, ns, pod, nonce, uid, evaluation, false)
 	if err != nil || rate <= 0 {
 		return time.Time{}, 0, "", errors.New("Pod token real request rate absent")
 	}
