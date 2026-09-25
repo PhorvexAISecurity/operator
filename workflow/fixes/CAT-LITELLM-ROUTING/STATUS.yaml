@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 33
+revision: 52
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -27,75 +27,92 @@ checks:
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
     at: '2026-09-25T03:52:11+00:00'
   preflight:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/preflight/observed-reply-pass-receipt.json
-    sha256: 0feebece46eb9562acc6599b91049c3f5a87ffcacd9f99ea35d1cc0e6c2ef107
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T04:07:00+00:00'
+    artifact: evidence/mongo-fixture-validation-pending.md
+    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+    at: '2026-09-25T05:11:13+00:00'
+    rationale: Exact Mongo fixture test repair changed head; previous checks remain
+      historical and current-source selected validation is pending
   implementation:
     result: PASS
     by: stack-case-review
     artifact: 04-diff.patch
-    sha256: f683828b06654df52817e28e8c4d546da31377047157303bdded978768b45fd6
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T03:47:11+00:00'
+    sha256: edb33ac1fb917b010a769361025ab00b69675bb10747088810b72586ec784603
+    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+    at: '2026-09-25T05:11:07+00:00'
   l0:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/preflight/run-1790307781245064580/go-phorvex.log
-    sha256: 7f4458a931b1f9fb77184c1f783f0968313e25d14710d266c96f6c3a3d63aa9f
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T03:52:18+00:00'
+    artifact: evidence/mongo-fixture-validation-pending.md
+    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+    at: '2026-09-25T05:11:13+00:00'
+    rationale: Exact Mongo fixture test repair changed head; previous checks remain
+      historical and current-source selected validation is pending
   l1:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/observed-reply-worker-checks.md
-    sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T03:54:28+00:00'
+    artifact: evidence/mongo-fixture-validation-pending.md
+    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+    at: '2026-09-25T05:11:13+00:00'
+    rationale: Exact Mongo fixture test repair changed head; previous checks remain
+      historical and current-source selected validation is pending
   l2:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/observed-reply-worker-checks.md
-    sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T03:54:29+00:00'
+    artifact: evidence/mongo-fixture-validation-pending.md
+    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+    at: '2026-09-25T05:11:13+00:00'
+    rationale: Exact Mongo fixture test repair changed head; previous checks remain
+      historical and current-source selected validation is pending
   positive_control:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/observed-reply-worker-checks.md
-    sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T03:54:29+00:00'
+    artifact: evidence/mongo-fixture-validation-pending.md
+    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+    at: '2026-09-25T05:11:13+00:00'
+    rationale: Exact Mongo fixture test repair changed head; previous checks remain
+      historical and current-source selected validation is pending
   incident:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/incident.md
     sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T04:07:51+00:00'
+    source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+    at: '2026-09-25T04:53:20+00:00'
     baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
   p3:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/p3/verdict.md
     sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T04:07:51+00:00'
-    incident_sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+    source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+    at: '2026-09-25T04:53:21+00:00'
   patch_equivalence:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/amendment-publication-equivalence.json
     sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
-    source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
-    at: '2026-09-25T04:09:07+00:00'
+    source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+    at: '2026-09-25T04:53:21+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/main-base-review.md
+    sha256: af48248e11ffb5d31e6978764e6446d01ba5f05f0ef384b7ec3ae2729fd048ca
+    source_sha: c4d20703e828b638ba4b9c83fd6ed6d596b3674c
+    at: '2026-09-25T04:54:28+00:00'
+    baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
 fix_id: CAT-LITELLM-ROUTING
 issues: []
 title: Add installed LiteLLM inference routing catalogue control
 profile: standard
-state: IN_PR
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -118,8 +135,8 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: campaign/catalogue-litellm-routing-20260925
-  base_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
-  head_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  base_sha: c4d20703e828b638ba4b9c83fd6ed6d596b3674c
+  head_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/338
@@ -140,13 +157,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: PASS
-  l0: PASS
-  l1: PASS
-  l2: PASS
+  p3: UNAVAILABLE
+  l0: UNAVAILABLE
+  l1: UNAVAILABLE
+  l2: UNAVAILABLE
   l3: pending
   l4: pending
-  positive_control: PASS
+  positive_control: UNAVAILABLE
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -156,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Publish reviewed reply-format amendment in PR338; track deployment and named
-    case verification separately
-updated_at: '2026-09-25T04:09:25+00:00'
+  owner: stack-case-review
+  action: Run selected combined-source preflight and submit source 850ce807 for lead
+    review
+updated_at: '2026-09-25T05:11:13+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -198,6 +215,16 @@ configuration_history:
   by: codex-lead
   fields:
   - pull_request
+  approval_ref: null
+- at: '2026-09-25T04:51:56+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T05:10:50+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -295,6 +322,14 @@ transitions:
   artifact: null
   note: null
   approval_ref: operations/AUTONOMY.md
+  forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-25T04:54:28+00:00'
+  by: codex-lead
+  artifact: evidence/main-integration-lead-pending.md
+  note: null
+  approval_ref: null
   forced: false
 handoff:
   id: CAT-LITELLM-ROUTING:30:review
@@ -452,3 +487,120 @@ check_history:
   sha256: 2902e870325d10bc0f6dd422c04a23c004be01109e9ff4b35f3f45a6534409b6
   source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
   at: '2026-09-25T03:50:25+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: f683828b06654df52817e28e8c4d546da31377047157303bdded978768b45fd6
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:47:11+00:00'
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/observed-reply-pass-receipt.json
+  sha256: 0feebece46eb9562acc6599b91049c3f5a87ffcacd9f99ea35d1cc0e6c2ef107
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:07:00+00:00'
+- check: l0
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/run-1790307781245064580/go-phorvex.log
+  sha256: 7f4458a931b1f9fb77184c1f783f0968313e25d14710d266c96f6c3a3d63aa9f
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:52:18+00:00'
+- check: l1
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:54:28+00:00'
+- check: l2
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:54:29+00:00'
+- check: positive_control
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:54:29+00:00'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:07:51+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:07:51+00:00'
+  incident_sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/amendment-publication-equivalence.json
+  sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:09:07+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: 0ea6d3a9ef71ddc77d4b679e9bb9980b3d68ca452a7098c9a43284f75a9c0b48
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:07+00:00'
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
