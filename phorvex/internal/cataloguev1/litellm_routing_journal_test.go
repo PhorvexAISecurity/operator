@@ -149,6 +149,52 @@ func TestLiteLLMRoutingOriginalJournalConsumer(t *testing.T) {
 	})
 }
 
+// The installed LiteLLM route source emits HTTP 400 with string type "None",
+// code "400", and a complete route/alias-bound message. Exercise the real
+// local HTTP producer, Runner journal, and both consumers with that reply.
+func TestLiteLLMRoutingObservedReplyOriginalJournalConsumer(t *testing.T) {
+	respond := routingObservedPair(t)
+	runtime, transport, _, podA, podB := routingRunFixture(t, respond, respond)
+	runtime.StateDir = t.TempDir()
+	config := RuntimeConfig{Version: RuntimeConfigVersion, StateDir: runtime.StateDir, LiteLLM: &runtime.LiteLLM}
+	runtimeHash, err := config.SHA256()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.ConfigSHA256 = runtimeHash
+	runner, err := New(runtime, liteRoutingHandler{transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := liteJobForTest(t, runtime, LiteLLMRouting)
+	job.RuntimeConfigSHA256 = runtimeHash
+	if err := WriteRuntimeConfig(filepath.Join(job.OutputDir, "runtime.json"), config); err != nil {
+		t.Fatal(err)
+	}
+	result := runner.Execute(context.Background(), job)
+	if result.Outcome != OutcomeFunctionalPass || result.Evidence["requestCount"] != "4" || result.Evidence["unknownModelState"] != "MODEL_REJECTED" {
+		t.Fatalf("observed-source reply did not produce a complete functional result: %s: %s", result.Outcome, result.Summary)
+	}
+	if err := ValidateTerminalArtifacts(job, result, filepath.Join(job.OutputDir, "metrics.jsonl")); err != nil {
+		t.Fatalf("shared terminal consumer: %v", err)
+	}
+	if err := ValidateLiteLLMRoutingArtifacts(job, result); err != nil {
+		t.Fatalf("original journal consumer: %v", err)
+	}
+	if len(podA.requestedModels()) != 2 || len(podB.requestedModels()) != 2 {
+		t.Fatal("observed-source reply fixture did not execute exactly four requests")
+	}
+	journal, err := loadJournal(filepath.Join(job.OutputDir, "journal.jsonl"))
+	if err != nil || len(journal.Records) != 8 {
+		t.Fatalf("original journal has %d records: %v", len(journal.Records), err)
+	}
+	for _, index := range []int{3, 7} {
+		if journal.Records[index].Event == nil || journal.Records[index].Event.Identity["reason"] != "MODEL_NOT_FOUND" || journal.Records[index].Event.Identity["errorCode"] != "MODEL_NOT_FOUND" {
+			t.Fatal("installed-source rejection was not preserved in its original Pod event")
+		}
+	}
+}
+
 func TestLiteLLMRoutingRunnerRetainsRedactedModelsAndUnknownFallback(t *testing.T) {
 	for _, tc := range []struct {
 		name, knownReturned, unknownReturned string

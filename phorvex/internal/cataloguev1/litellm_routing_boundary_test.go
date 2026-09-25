@@ -103,6 +103,25 @@ func routingValidPair(t *testing.T) func(string) routingFixtureReply {
 	}
 }
 
+func routingObservedRejectMessage(route, alias string) string {
+	return route + ": Invalid model name passed in model=" + alias + ". Call `/v1/models` to view available models for your key."
+}
+
+func routingObservedReject(t *testing.T, route, alias, errorType, code string, status int) routingFixtureReply {
+	t.Helper()
+	return routingTypedError(t, status, errorType, code, routingObservedRejectMessage(route, alias))
+}
+
+func routingObservedPair(t *testing.T) func(string) routingFixtureReply {
+	t.Helper()
+	return func(alias string) routingFixtureReply {
+		if alias == routingKnownAlias {
+			return routingValidCompletion(t, alias)
+		}
+		return routingObservedReject(t, "/chat/completions", alias, "None", "400", http.StatusBadRequest)
+	}
+}
+
 func TestLiteLLMRoutingRealHTTPProbeClassifiesBoundaries(t *testing.T) {
 	cases := []struct {
 		name, alias, reason string
@@ -111,6 +130,16 @@ func TestLiteLLMRoutingRealHTTPProbeClassifiesBoundaries(t *testing.T) {
 	}{
 		{"known-completion", routingKnownAlias, "VALID_ASSISTANT_COMPLETION", routingValidCompletion(t, routingKnownAlias), true},
 		{"typed-unknown", liteUnknownAlias, "MODEL_NOT_FOUND", routingTypedError(t, 404, "ModelNotFoundError", "model_not_found", "unknown model"), false},
+		{"installed-exact-unknown", liteUnknownAlias, "MODEL_NOT_FOUND", routingObservedReject(t, "/chat/completions", liteUnknownAlias, "None", "400", 400), false},
+		{"installed-wrong-alias", liteUnknownAlias, "CONFIGURATION_ERROR", routingObservedReject(t, "/chat/completions", "other-model", "None", "400", 400), false},
+		{"installed-wrong-route", liteUnknownAlias, "CONFIGURATION_ERROR", routingObservedReject(t, "/v1/chat/completions", liteUnknownAlias, "None", "400", 400), false},
+		{"installed-wrong-type", liteUnknownAlias, "CONFIGURATION_ERROR", routingObservedReject(t, "/chat/completions", liteUnknownAlias, "BadRequestError", "400", 400), false},
+		{"installed-wrong-code", liteUnknownAlias, "CONFIGURATION_ERROR", routingObservedReject(t, "/chat/completions", liteUnknownAlias, "None", "bad_request", 400), false},
+		{"installed-wrong-status", liteUnknownAlias, "CONFIGURATION_ERROR", routingObservedReject(t, "/chat/completions", liteUnknownAlias, "None", "400", 404), false},
+		{"installed-suffix-added", liteUnknownAlias, "CONFIGURATION_ERROR", routingTypedError(t, 400, "None", "400", routingObservedRejectMessage("/chat/completions", liteUnknownAlias)+" Extra."), false},
+		{"installed-prefix-added", liteUnknownAlias, "CONFIGURATION_ERROR", routingTypedError(t, 400, "None", "400", "prefix "+routingObservedRejectMessage("/chat/completions", liteUnknownAlias)), false},
+		{"installed-known-alias", routingKnownAlias, "CONFIGURATION_ERROR", routingObservedReject(t, "/chat/completions", routingKnownAlias, "None", "400", 400), false},
+		{"installed-duplicate-json-field", liteUnknownAlias, "MALFORMED_RESPONSE", routingFixtureReply{status: 400, contentType: "application/json", body: `{"error":{"type":"None","type":"None","code":"400","message":"` + routingObservedRejectMessage("/chat/completions", liteUnknownAlias) + `"}}`}, false},
 		{"generic-400", liteUnknownAlias, "CONFIGURATION_ERROR", routingTypedError(t, 400, "BadRequestError", "bad_request", "generic error"), false},
 		{"missing-db", routingKnownAlias, "NO_CONNECTED_DB", routingTypedError(t, 400, "BadRequestError", "bad_request", "No connected db."), false},
 		{"typed-unknown-with-missing-db", liteUnknownAlias, "NO_CONNECTED_DB", routingTypedError(t, 400, "ModelNotFoundError", "model_not_found", "No connected db."), false},

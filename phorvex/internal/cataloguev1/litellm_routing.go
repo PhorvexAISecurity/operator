@@ -148,7 +148,13 @@ try:
  out={'status':response.status,'contentType':ct,'bodySHA256':hashlib.sha256(body).hexdigest(),'bodyBytes':len(body),'boundExceeded':len(body)>16384,'completionValid':False,'returnedModel':'','returnedModelSHA256':'','modelRelation':'','usagePromptTokens':0,'usageCompletionTokens':0,'reason':'OTHER_REDACTED','errorCode':''}
  if not out['boundExceeded'] and ct=='application/json':
   try:
-   value=json.loads(body)
+   def unique_pairs(pairs):
+    value={}
+    for name,item in pairs:
+     if name in value:raise ValueError('duplicate JSON field')
+     value[name]=item
+    return value
+   value=json.loads(body,object_pairs_hook=unique_pairs)
    if response.status==200 and isinstance(value,dict) and 'error' not in value and value.get('object')=='chat.completion':
     choices=value.get('choices'); usage=value.get('usage'); model=value.get('model')
     if isinstance(choices,list) and len(choices)==1 and isinstance(choices[0],dict):
@@ -163,6 +169,8 @@ try:
     err=value['error']; code=err.get('code'); typ=err.get('type'); msg=err.get('message')
     if response.status==400 and isinstance(msg,str) and 'no connected db' in msg.lower():out['reason']='NO_CONNECTED_DB'
     elif response.status in (400,404) and (code in ('model_not_found','model_not_found_error','ModelNotFoundError') or typ in ('model_not_found','model_not_found_error','ModelNotFoundError')):
+     out.update(reason='MODEL_NOT_FOUND',errorCode='MODEL_NOT_FOUND')
+    elif response.status==400 and alias=='phorvex-catalogue-nonexistent-model-v1' and code=='400' and typ=='None' and msg=='/chat/completions: Invalid model name passed in model='+alias+'. Call '+chr(96)+'/v1/models'+chr(96)+' to view available models for your key.':
      out.update(reason='MODEL_NOT_FOUND',errorCode='MODEL_NOT_FOUND')
     elif response.status in (401,403):out['reason']='AUTH_DENIED'
     elif response.status==429:out['reason']='RATE_LIMITED'
