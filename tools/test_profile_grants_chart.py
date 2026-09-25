@@ -33,7 +33,8 @@ def render(chart, *args):
 
 
 def stack(*args):
-    return render(STACK, "-f", STACK / "values.yaml", "-f", STACK / "values-eks.yaml", *args)
+    return render(STACK, "-f", STACK / "values.yaml", "-f", STACK / "values-eks.yaml",
+                  "--api-versions", "monitoring.coreos.com/v1/PodMonitor", *args)
 
 
 def resource(docs, kind, name):
@@ -93,8 +94,8 @@ class ProfileGrantChart(unittest.TestCase):
         self.assertEqual(campaign["issuer"], EKS_ISSUER)
         self.assertEqual(campaign["subject"], SA)
         self.assertEqual(campaign["roles"], ["operator"])
-        self.assertEqual(campaign["targets"], ["default"])
-        self.assertEqual(campaign["tenants"], ["voice", "nats", "vllm", "document-store", "litellm", "mcp"])
+        self.assertEqual(campaign["targets"], ["default", "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"])
+        self.assertEqual(campaign["tenants"], ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu"])
         self.assertEqual(checksum(docs), hashlib.sha256(raw.encode()).hexdigest())
 
     def test_only_grant_data_changes_checksum(self):
