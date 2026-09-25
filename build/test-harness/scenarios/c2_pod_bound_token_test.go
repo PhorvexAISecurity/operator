@@ -394,10 +394,10 @@ func TestPodTokenCPUOriginalSourceAndPeerHandlesThroughRealAPI(t *testing.T) {
 }
 
 func TestPodTokenPromRun21MillisecondEvaluationAndWrongInstant(t *testing.T) {
-	// Run 21's original Prometheus replies evaluated at 1790367000.123 after
-	// the client requested 1790367000.123456. Its exact Pod series, counter,
-	// sample time, and positive rate were healthy; the old microsecond check
-	// rejected the millisecond response before using them.
+	// An independent historical query of run 21's exact source series requested
+	// 1790367000.123456 and Prometheus returned 1790367000.123. The retained
+	// counter, sample time and positive rate reproduce the producer's precision
+	// mismatch; these were not captured outbound producer queries.
 	const pod = "pod-token-60bf41c9878d9056727f1b15-5fffbbfdc7-8z9k5"
 	const nonce = "60bf41c9878d9056727f1b15"
 	const uid = "95c1b8ab-ffd1-4f95-ba9e-c166c0f120c0"

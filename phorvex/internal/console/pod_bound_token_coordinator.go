@@ -465,7 +465,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if err := s.podBoundTokenDisjointLive(ctx, kc, r, p); err != nil {
 		return err
 	}
-	if err := s.persistCatalogueSignalIntent("/api/runs", "pod-bound-token", r.Namespace,
+	if err := s.persistCatalogueSignalIntent("/api/runs/start", "pod-bound-token", r.Namespace,
 		profile, r.SourcePodUID, &attackStimulusEvidence{Kind: "synthetic-catalogue-signal",
 			TargetUID: r.SourcePodUID, EventName: "phorvex-e2e-" + r.Nonce,
 			EventRule: model.AttackVectorPodBoundAPIAuth, Correlation: r.Nonce}); err != nil {

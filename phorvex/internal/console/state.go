@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 const consoleStateFileLimit int64 = 48 << 20
@@ -90,11 +92,21 @@ func (s *Server) persistCatalogueSignalFailure(endpoint, actor, namespace, scena
 	return s.cfg.appendState(s.cfg.statePath("effect-intents.jsonl"), b)
 }
 
+// podBoundNamedRunSignalIntent admits only the server-owned named suite's
+// pre-create event identity associated with the run-start route.
+func podBoundNamedRunSignalIntent(endpoint, actor, namespace, scenario, targetUID string, candidate *attackStimulusEvidence) bool {
+	return endpoint == "/api/runs/start" && actor == "pod-bound-token" && podBoundNamedCase(scenario) &&
+		namespace == podBoundNamespace(scenario) && mongoKubeUID.MatchString(targetUID) && candidate != nil &&
+		candidate.Kind == "synthetic-catalogue-signal" && candidate.EventRule == model.AttackVectorPodBoundAPIAuth &&
+		podBoundTokenNonce.MatchString(candidate.Correlation) && candidate.EventName == "phorvex-e2e-"+candidate.Correlation
+}
+
 // persistCatalogueSignalIntent reserves the exact resource lookup authority before
 // dispatch. It deliberately has no event UID or delete authority until create readback
 // succeeds, but a lost acknowledgement can be reconciled by the unique name/correlation.
 func (s *Server) persistCatalogueSignalIntent(endpoint, actor, namespace, scenario, targetUID string, candidate *attackStimulusEvidence) error {
-	if (endpoint != "/api/workload/fire-scenario" && endpoint != "/api/workload/attack") || targetUID == "" ||
+	if (endpoint != "/api/workload/fire-scenario" && endpoint != "/api/workload/attack" &&
+		!podBoundNamedRunSignalIntent(endpoint, actor, namespace, scenario, targetUID, candidate)) || targetUID == "" ||
 		candidate == nil || candidate.TargetUID != targetUID || candidate.EventName == "" || candidate.Correlation == "" || candidate.EventRule == "" ||
 		candidate.Observed || candidate.EventUID != "" {
 		return fmt.Errorf("catalogue signal intent identity is unavailable")
