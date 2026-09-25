@@ -576,8 +576,8 @@ export interface FunctionalResult { outcome: TrialOutcome; summary: string; evid
 // are never part of this UI contract.
 export interface LiteLLMRoutingPodEvidence {
   name: string; uid: string; imageID: string; version: string;
-  known: { status: string; state: string; reason: string; returnedModel: string; usagePromptCount: string; usageCompletionCount: string };
-  unknown: { status: string; state: string; reason: string };
+  known: { status: string; state: string; reason: string; returnedModel: string; returnedModelSHA256: string; modelRelation: string; usagePromptCount: string; usageCompletionCount: string };
+  unknown: { status: string; state: string; reason: string; returnedModel: string; returnedModelSHA256: string; modelRelation: string };
 }
 export interface LiteLLMRoutingEvidence {
   pod1: LiteLLMRoutingPodEvidence; pod2: LiteLLMRoutingPodEvidence;
