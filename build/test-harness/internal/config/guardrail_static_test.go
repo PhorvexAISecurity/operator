@@ -49,6 +49,13 @@ func TestGuardrailStaticRequiresExactReadOnlyPins(t *testing.T) {
 	if err := pgv2.Validate(); err != nil {
 		t.Fatalf("exact pgv2 static fixture rejected: %v", err)
 	}
+	current := base
+	currentFixture := *base.GuardrailStaticFixture
+	currentFixture.Variant = "observe-current"
+	current.GuardrailStaticFixture = &currentFixture
+	if err := current.Validate(); err != nil {
+		t.Fatalf("observe-current static fixture rejected: %v", err)
+	}
 	for _, tc := range []struct {
 		name   string
 		change func(*TargetConfig)

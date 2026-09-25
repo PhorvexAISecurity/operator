@@ -1,0 +1,516 @@
+{
+  "schema": "guardrail-static-result-v1",
+  "runId": "run-1",
+  "configuredSelector": "observe-current",
+  "status": "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE",
+  "complete": true,
+  "issues": [],
+  "clusterUID": "cluster-uid",
+  "target": {
+    "podName": "vllm-pod",
+    "podUID": "pod-uid",
+    "podRV": "11",
+    "containers": [
+      "guardrail:id:image:0",
+      "vllm:id:image:0"
+    ],
+    "variant": "pgv1",
+    "serviceUID": "service-uid",
+    "serviceRV": "12",
+    "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sourceUID": "source-uid",
+    "sourceRV": "13",
+    "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "guardrailJournal": {
+      "name": "guardrail-journal",
+      "uid": "gj-uid",
+      "rv": "14",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "generation": 149,
+      "phase": "terminal-full",
+      "targetUID": "pod-uid"
+    },
+    "kvJournal": {
+      "name": "kv-journal",
+      "uid": "kj-uid",
+      "rv": "15",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "generation": 1,
+      "phase": "dispatching",
+      "targetUID": "pod-uid"
+    },
+    "targetEventUIDs": []
+  },
+  "snapshots": [
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    },
+    {
+      "podName": "vllm-pod",
+      "podUID": "pod-uid",
+      "podRV": "11",
+      "containers": [
+        "guardrail:id:image:0",
+        "vllm:id:image:0"
+      ],
+      "variant": "pgv1",
+      "serviceUID": "service-uid",
+      "serviceRV": "12",
+      "endpointSliceSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceUID": "source-uid",
+      "sourceRV": "13",
+      "sourceSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guardrailJournal": {
+        "name": "guardrail-journal",
+        "uid": "gj-uid",
+        "rv": "14",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "generation": 149,
+        "phase": "terminal-full",
+        "targetUID": "pod-uid"
+      },
+      "kvJournal": {
+        "name": "kv-journal",
+        "uid": "kj-uid",
+        "rv": "15",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "generation": 1,
+        "phase": "dispatching",
+        "targetUID": "pod-uid"
+      },
+      "targetEventUIDs": []
+    }
+  ],
+  "snapshotsSHA256": "a7bd898c348957d05d281f5b42b7b745ad9aa0746e6114b34ebf62223cb55d00",
+  "responses": [
+    {
+      "name": "canary_raw",
+      "port": 8001,
+      "dispatch": "ONE_CHAT",
+      "requestFile": "request-1.json",
+      "requestBodySHA256": "835a39c09b03a77202710b521cf50f2f5e91f018048f80a285e48de425b769bf",
+      "status": 200,
+      "statusFile": "status-1.http",
+      "statusSHA256": "469fcbd8e9a00a8ca4627fb12209e4dfe65d7635764b2381af6758396b85e028",
+      "modelBefore": "one-model",
+      "modelAfter": "one-model",
+      "replyFile": "reply-1.json",
+      "replySHA256": "45d532be4d624dfa4f84535c1598043c6093b5440c1d1d3b689ede24c69ebc10",
+      "markerPresent": true,
+      "answerIsFour": false,
+      "stateBefore": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      },
+      "stateAfter": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      }
+    },
+    {
+      "name": "canary_guarded",
+      "port": 8000,
+      "dispatch": "ONE_CHAT",
+      "requestFile": "request-2.json",
+      "requestBodySHA256": "835a39c09b03a77202710b521cf50f2f5e91f018048f80a285e48de425b769bf",
+      "status": 403,
+      "statusFile": "status-2.http",
+      "statusSHA256": "9c67ba0e1ff668ae3a82ca48285d51601cfe2eed3b757a75ca5697a8aa314d3c",
+      "modelBefore": "one-model",
+      "modelAfter": "one-model",
+      "replyFile": "reply-2.json",
+      "replySHA256": "5a7700f7d92e872d5f62cfc37b1e316503ccb7e857a976d3a67df9dd765b952a",
+      "errorType": "guardrail_blocked",
+      "stateBefore": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      },
+      "stateAfter": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      }
+    },
+    {
+      "name": "say_ok",
+      "port": 8000,
+      "dispatch": "ONE_CHAT",
+      "requestFile": "request-3.json",
+      "requestBodySHA256": "e80789cd3bd42c50357c5555fa5669793a8c01c2d3668b7cbf63294db62dd89b",
+      "status": 403,
+      "statusFile": "status-3.http",
+      "statusSHA256": "9c67ba0e1ff668ae3a82ca48285d51601cfe2eed3b757a75ca5697a8aa314d3c",
+      "modelBefore": "one-model",
+      "modelAfter": "one-model",
+      "replyFile": "reply-3.json",
+      "replySHA256": "5a7700f7d92e872d5f62cfc37b1e316503ccb7e857a976d3a67df9dd765b952a",
+      "errorType": "guardrail_blocked",
+      "stateBefore": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      },
+      "stateAfter": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      }
+    },
+    {
+      "name": "arithmetic",
+      "port": 8000,
+      "dispatch": "ONE_CHAT",
+      "requestFile": "request-4.json",
+      "requestBodySHA256": "95ba04d6ef86ac0934e4ff063c216c5ad2a44a1b95f86a69f0ded12a9e3fa5dd",
+      "status": 200,
+      "statusFile": "status-4.http",
+      "statusSHA256": "469fcbd8e9a00a8ca4627fb12209e4dfe65d7635764b2381af6758396b85e028",
+      "modelBefore": "one-model",
+      "modelAfter": "one-model",
+      "replyFile": "reply-4.json",
+      "replySHA256": "622bdd9de55ecceaf137281aaacab3d08b3d1dc5e1bc6b6f6c0bb715364c2faf",
+      "markerPresent": false,
+      "answerIsFour": true,
+      "stateBefore": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      },
+      "stateAfter": {
+        "active": "pgv1",
+        "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "loaded": [
+          "pgv1",
+          "pgv2"
+        ],
+        "mode": "enforce",
+        "ready": true,
+        "thresholds": {
+          "pgv1": 0.5,
+          "pgv2": 0.5
+        }
+      }
+    }
+  ],
+  "markerFile": "marker.txt",
+  "markerSHA256": "b0b500f6c0fb27e6cf11169836ab992b7c88cd77293b0b03f918618f4296b669",
+  "progressSHA256": "47bedfc802595321763b36fed96ba6035f9c7a28f582a35948a6ea6c49370446",
+  "sourceEvidence": "configmap-mount-declaration",
+  "loadedSource": "NOT_ATTESTED",
+  "routeEvidence": "exact-Pod-loopback",
+  "eventMode": "DIRECT_STATIC",
+  "naturalDetector": "NOT_EVALUATED",
+  "brainDecision": "NOT_EVALUATED",
+  "actuator": "NOT_EVALUATED",
+  "externalRoute": "NOT_TESTED",
+  "sayOK": "SAY_OK_FALSE_POSITIVE_OBSERVED",
+  "arithmetic": "ARITHMETIC_AVAILABLE"
+}

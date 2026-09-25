@@ -78,7 +78,7 @@ class PackageProfiles(unittest.TestCase):
         path = self.input / "config.guardrail-confidentiality-static.yaml"
         self.write_overlay({"guardrailStatic": {"enabled": True, "sourceConfigMap": "guardrail-proxy",
                                                 "guardrailJournalName": "reviewed-gj", "kvJournalName": "reviewed-kj"}})
-        for variant in ("pgv1", "pgv2"):
+        for variant in ("pgv1", "pgv2", "observe-current"):
             profile["guardrailStaticFixture"]["variant"] = variant
             path.write_text(yaml.safe_dump(profile, sort_keys=False))
             receipt = pack.package(self.args("guardrail-static", enabled=True))
@@ -87,7 +87,7 @@ class PackageProfiles(unittest.TestCase):
         for variant in ("pgv3", ""):
             profile["guardrailStaticFixture"]["variant"] = variant
             path.write_text(yaml.safe_dump(profile, sort_keys=False))
-            with self.assertRaisesRegex(ValueError, "one exact reviewed pgv1 or pgv2"):
+            with self.assertRaisesRegex(ValueError, "exact pgv1/pgv2 pin or observe-current"):
                 pack.package(self.args("guardrail-static", enabled=True))
             self.assertFalse((self.root / "output").exists())
 

@@ -774,7 +774,7 @@ func validateGuardrailStaticFixture(c TargetConfig) error {
 	if !c.OwnedAck || c.Namespace != "vllm" || c.Context == "" || c.Context == "in-cluster" || c.Kubeconfig != "" || c.ExpectedNamespaceUID != "" ||
 		c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 0 || len(c.DefenderFilter) != 0 || f.Transport != "in-cluster" ||
 		!natsExposureRunID.MatchString(f.RunID) || !kubernetesUIDPattern.MatchString(f.ClusterUID) ||
-		f.PodName == "" || len(validation.IsDNS1123Subdomain(f.PodName)) != 0 || !kubernetesUIDPattern.MatchString(f.PodUID) || (f.Variant != "pgv1" && f.Variant != "pgv2") ||
+		f.PodName == "" || len(validation.IsDNS1123Subdomain(f.PodName)) != 0 || !kubernetesUIDPattern.MatchString(f.PodUID) || (f.Variant != "pgv1" && f.Variant != "pgv2" && f.Variant != "observe-current") ||
 		!kubernetesUIDPattern.MatchString(f.ServiceUID) || !natsExposureDigest.MatchString(f.SourceSHA256) ||
 		f.GuardrailJournalName == "" || len(validation.IsDNS1123Subdomain(f.GuardrailJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.GuardrailJournalUID) ||
 		f.KVJournalName == "" || len(validation.IsDNS1123Subdomain(f.KVJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.KVJournalUID) ||

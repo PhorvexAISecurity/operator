@@ -37,11 +37,14 @@ func fakeWire(name, model, variant, marker, mode string) []byte {
 		MaxTokens   int                 `json:"max_tokens"`
 		Temperature int                 `json:"temperature"`
 		Stream      bool                `json:"stream"`
-	}{model, messages, 16, 0, false})
+	}{model, messages, 64, 0, false})
 	status := 200
 	reply := []byte(`{"choices":[{"message":{"content":"` + marker + `"}}]}`)
 	if name == "canary_raw" && mode == "withheld" {
 		reply = []byte(`{"choices":[{"message":{"content":"withheld"}}]}`)
+	}
+	if name == "canary_raw" && mode == "length_partial_raw" {
+		reply = []byte(`{"choices":[{"message":{"content":"` + marker[:9] + `"},"finish_reason":"length"}]}`)
 	}
 	if name == "canary_raw" && mode == "missing_content" {
 		reply = []byte(`{"choices":[{"message":{}}]}`)
@@ -230,9 +233,13 @@ func runProtocolFixture(t *testing.T, mode string) (string, Result, int, error) 
 }
 
 func runProtocolFixtureVariant(t *testing.T, mode, variant string) (string, Result, int, error) {
+	return runProtocolFixtureSelector(t, mode, variant, variant)
+}
+
+func runProtocolFixtureSelector(t *testing.T, mode, selector, active string) (string, Result, int, error) {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "run-1")
-	c := config.TargetConfig{OutDir: out, GuardrailStaticFixture: &config.GuardrailStaticFixtureConfig{RunID: "run-1", ClusterUID: "cluster-uid", PodUID: "pod-uid", Variant: variant, SourceSHA256: strings.Repeat("b", 64)}}
+	c := config.TargetConfig{OutDir: out, GuardrailStaticFixture: &config.GuardrailStaticFixtureConfig{RunID: "run-1", ClusterUID: "cluster-uid", PodUID: "pod-uid", Variant: selector, SourceSHA256: strings.Repeat("b", 64)}}
 	snapshots, chats, clusterChecks := 0, 0, 0
 	ops := runOps{cluster: func(context.Context) error {
 		clusterChecks++
@@ -243,12 +250,12 @@ func runProtocolFixtureVariant(t *testing.T, mode, variant string) (string, Resu
 	}, snapshot: func(context.Context) (Snapshot, error) {
 		snapshots++
 		s := protocolSnapshot()
-		s.Variant = variant
+		s.Variant = active
 		if mode == "source_drift" && snapshots == 2 {
 			s.SourceSHA256 = strings.Repeat("f", 64)
 		}
 		if mode == "variant_drift" && snapshots == 2 {
-			if variant == "pgv1" {
+			if active == "pgv1" {
 				s.Variant = "pgv2"
 			} else {
 				s.Variant = "pgv1"
@@ -278,6 +285,47 @@ func runProtocolFixtureVariant(t *testing.T, mode, variant string) (string, Resu
 		t.Fatal(e)
 	}
 	return out, result, chats, err
+}
+
+func TestRunProtocolObserveCurrentSelector(t *testing.T) {
+	for _, active := range []string{"pgv1", "pgv2"} {
+		t.Run(active, func(t *testing.T) {
+			out, result, calls, err := runProtocolFixtureSelector(t, "declared_enforce", "observe-current", active)
+			if err != nil || calls != 4 || !result.Complete || result.Target.Variant != active || result.ConfiguredSelector != "observe-current" || result.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" {
+				t.Fatalf("current selector result: %+v calls=%d err=%v", result, calls, err)
+			}
+			intent, err := os.ReadFile(filepath.Join(out, "intent.json"))
+			if err != nil || !bytes.Contains(intent, []byte(`"configuredSelector":"observe-current"`)) || !bytes.Contains(intent, []byte(`"resolvedVariant":"`+active+`"`)) {
+				t.Fatalf("durable resolved intent missing: %s %v", intent, err)
+			}
+			if destination := os.Getenv("GUARDRAIL_STATIC_CURRENT_" + strings.ToUpper(active) + "_FIXTURE_OUT"); destination != "" {
+				if err := os.MkdirAll(destination, 0700); err != nil {
+					t.Fatal(err)
+				}
+				for _, name := range []string{"intent.json", "progress.jsonl", "marker.txt", "request-1.json", "request-2.json", "request-3.json", "request-4.json", "reply-1.json", "reply-2.json", "reply-3.json", "reply-4.json", "status-1.http", "status-2.http", "status-3.http", "status-4.http", terminalName} {
+					data, e := os.ReadFile(filepath.Join(out, name))
+					if e != nil {
+						t.Fatal(e)
+					}
+					if e = os.WriteFile(filepath.Join(destination, name), data, 0600); e != nil {
+						t.Fatal(e)
+					}
+				}
+			}
+		})
+	}
+	_, wrong, wrongCalls, wrongErr := runProtocolFixtureSelector(t, "declared_enforce", "pgv1", "pgv2")
+	if wrongErr == nil || wrongCalls != 0 || wrong.Complete {
+		t.Fatalf("explicit mismatch proceeded: %+v calls=%d err=%v", wrong, wrongCalls, wrongErr)
+	}
+	_, unknown, unknownCalls, unknownErr := runProtocolFixtureSelector(t, "declared_enforce", "observe-current", "pgv3")
+	if unknownErr == nil || unknownCalls != 0 || unknown.Complete {
+		t.Fatalf("unknown variant proceeded: %+v calls=%d err=%v", unknown, unknownCalls, unknownErr)
+	}
+	_, drift, driftCalls, driftErr := runProtocolFixtureSelector(t, "variant_drift", "observe-current", "pgv2")
+	if driftErr == nil || driftCalls != 1 || drift.Complete {
+		t.Fatalf("current variant drift proceeded: %+v calls=%d err=%v", drift, driftCalls, driftErr)
+	}
 }
 
 func TestRunProtocolWritesPrivateBoundedEvidence(t *testing.T) {
@@ -335,6 +383,27 @@ func TestRunProtocolPgv2FixedComparisonAndDrift(t *testing.T) {
 }
 
 func TestRunProtocolStopsOnRawWithholdingAndDrift(t *testing.T) {
+	out, partial, partialChats, partialErr := runProtocolFixture(t, "length_partial_raw")
+	if partialErr != nil || partialChats != 1 || partial.Complete || partial.Status != "NOT_DISCRIMINATING_RAW_WITHHELD" || len(partial.Responses) != 1 || partial.Responses[0].MarkerPresent == nil || *partial.Responses[0].MarkerPresent {
+		t.Fatalf("truncated raw marker earned comparison credit: %+v chats=%d err=%v", partial, partialChats, partialErr)
+	}
+	if reply, err := os.ReadFile(filepath.Join(out, "reply-1.json")); err != nil || !bytes.Contains(reply, []byte(`"finish_reason":"length"`)) {
+		t.Fatalf("truncated raw reply missing length receipt: %s %v", reply, err)
+	}
+	if destination := os.Getenv("GUARDRAIL_STATIC_LENGTH_PARTIAL_FIXTURE_OUT"); destination != "" {
+		if err := os.MkdirAll(destination, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"intent.json", "progress.jsonl", "marker.txt", "request-1.json", "reply-1.json", "status-1.http", terminalName} {
+			data, err := os.ReadFile(filepath.Join(out, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(destination, name), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	_, r, chats, err := runProtocolFixture(t, "withheld")
 	if err != nil || chats != 1 || r.Status != "NOT_DISCRIMINATING_RAW_WITHHELD" || len(r.Responses) != 1 {
 		t.Fatalf("raw gate: %+v chats=%d err=%v", r, chats, err)
