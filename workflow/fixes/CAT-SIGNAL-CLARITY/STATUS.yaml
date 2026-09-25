@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -97,6 +97,13 @@ checks:
     source_sha: 4621b611830ed89800d01d900f57538472993a7a
     at: '2026-09-25T00:43:35+00:00'
     incident_sha256: 60bc0740f027953518275fac6f945875ec02efb518fa8e59d4e171ab276159ed
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 8dbeab3a72384840c6c31f9c163bcb0de128560f8e45c389de446327aa794982
+    source_sha: 4621b611830ed89800d01d900f57538472993a7a
+    at: '2026-09-25T00:44:32+00:00'
 fix_id: CAT-SIGNAL-CLARITY
 issues: []
 title: Distinguish catalogue signal eligibility, manager decisions and target observations
@@ -165,7 +172,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T00:43:40+00:00'
+updated_at: '2026-09-25T00:44:32+00:00'
 configuration_history:
 - at: '2026-09-25T00:13:11+00:00'
   by: codex-lead
