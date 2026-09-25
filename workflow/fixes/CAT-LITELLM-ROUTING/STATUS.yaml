@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 52
+revision: 56
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -43,41 +43,33 @@ checks:
     source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
     at: '2026-09-25T05:11:07+00:00'
   l0:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/mongo-fixture-validation-pending.md
-    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    artifact: evidence/preflight/ec51-go-phorvex-fixed-toolchain.log
+    sha256: e8f00de8f02b72c82ef7dfa4da3cfa15bca738d78652e262fba386b07dc476f8
     source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:11:13+00:00'
-    rationale: Exact Mongo fixture test repair changed head; previous checks remain
-      historical and current-source selected validation is pending
+    at: '2026-09-25T05:19:15+00:00'
   l1:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/mongo-fixture-validation-pending.md
-    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    artifact: evidence/ec51-worker-checks.md
+    sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
     source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:11:13+00:00'
-    rationale: Exact Mongo fixture test repair changed head; previous checks remain
-      historical and current-source selected validation is pending
+    at: '2026-09-25T05:20:48+00:00'
   l2:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/mongo-fixture-validation-pending.md
-    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    artifact: evidence/ec51-worker-checks.md
+    sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
     source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:11:13+00:00'
-    rationale: Exact Mongo fixture test repair changed head; previous checks remain
-      historical and current-source selected validation is pending
+    at: '2026-09-25T05:20:48+00:00'
   positive_control:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/mongo-fixture-validation-pending.md
-    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    artifact: evidence/ec51-worker-checks.md
+    sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
     source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:11:13+00:00'
-    rationale: Exact Mongo fixture test repair changed head; previous checks remain
-      historical and current-source selected validation is pending
+    at: '2026-09-25T05:20:48+00:00'
   incident:
     result: UNAVAILABLE
     by: codex-lead
@@ -158,12 +150,12 @@ verification:
   live_required: true
   soak_required: false
   p3: UNAVAILABLE
-  l0: UNAVAILABLE
-  l1: UNAVAILABLE
-  l2: UNAVAILABLE
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: UNAVAILABLE
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -176,7 +168,7 @@ next_action:
   owner: stack-case-review
   action: Run selected combined-source preflight and submit source 850ce807 for lead
     review
-updated_at: '2026-09-25T05:11:13+00:00'
+updated_at: '2026-09-25T05:20:48+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -604,3 +596,39 @@ check_history:
   at: '2026-09-25T04:52:24+00:00'
   rationale: Merge integration changed source to 850ce807; fresh selected validation
     is pending
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
