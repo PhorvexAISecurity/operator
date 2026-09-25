@@ -46,6 +46,41 @@ func TestGuardrailAvailabilityCappedWriter(t *testing.T) {
 	}
 }
 
+func TestGuardrailAvailabilityConsoleRolloutIdentity(t *testing.T) {
+	p, err := parseGuardrailAvailabilityProfile(guardrailAvailabilityPinnedProfile(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := func(kind, name, uid string) []any {
+		return []any{map[string]any{"kind": kind, "name": name, "uid": uid, "controller": true}}
+	}
+	mk := func(name, uid, image string) (map[string]any, map[string]any, map[string]any) {
+		console := map[string]any{"metadata": map[string]any{"name": name, "uid": uid, "ownerReferences": owner("ReplicaSet", "console-rs", "rs-uid")}, "spec": map[string]any{"serviceAccountName": "console-sa"}, "status": map[string]any{"containerStatuses": []any{map[string]any{"name": "console", "containerID": "containerd://" + uid, "imageID": image, "ready": true, "restartCount": float64(0)}}}}
+		rs := map[string]any{"metadata": map[string]any{"name": "console-rs", "uid": "rs-uid", "ownerReferences": owner("Deployment", p.Fixture.ConsoleDeploymentName, p.Fixture.ConsoleDeploymentUID)}}
+		dep := map[string]any{"metadata": map[string]any{"name": p.Fixture.ConsoleDeploymentName, "uid": p.Fixture.ConsoleDeploymentUID}}
+		return console, rs, dep
+	}
+	oldPod, oldRS, oldDep := mk("console-old", "old-uid", p.Fixture.ConsoleImageID)
+	newPod, newRS, newDep := mk("console-new", "new-uid", p.Fixture.ConsoleImageID)
+	if err := availabilityCheckConsoleIdentity(p, "console-old", "old-uid", oldPod, oldRS, oldDep); err != nil {
+		t.Fatal(err)
+	}
+	if err := availabilityCheckConsoleIdentity(p, "console-new", "new-uid", newPod, newRS, newDep); err != nil {
+		t.Fatalf("new rollout with unchanged reviewed Deployment profile refused: %v", err)
+	}
+	if err := availabilityCheckConsoleIdentity(p, "console-old", "old-uid", newPod, newRS, newDep); err == nil {
+		t.Fatal("in-run Pod replacement accepted")
+	}
+	wrongImage, rs, dep := mk("console-new", "new-uid", "example.test/wrong@sha256:"+strings.Repeat("b", 64))
+	if err := availabilityCheckConsoleIdentity(p, "console-new", "new-uid", wrongImage, rs, dep); err == nil {
+		t.Fatal("unreviewed image accepted")
+	}
+	newRS["metadata"].(map[string]any)["ownerReferences"] = owner("Deployment", p.Fixture.ConsoleDeploymentName, "other-deployment-uid")
+	if err := availabilityCheckConsoleIdentity(p, "console-new", "new-uid", newPod, newRS, newDep); err == nil {
+		t.Fatal("wrong Deployment owner accepted")
+	}
+}
+
 func TestGuardrailAvailabilityProfileSelfRolloutAndScope(t *testing.T) {
 	raw := guardrailAvailabilityPinnedProfile(t)
 	p, err := parseGuardrailAvailabilityProfile(raw)

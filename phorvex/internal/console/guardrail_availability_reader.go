@@ -3,11 +3,14 @@ package console
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/phorvex/phorvex/internal/audittransport"
 )
 
 type availabilityEvidence struct {
@@ -24,6 +27,21 @@ func (e *availabilityEvidence) original(name string) ([]byte, error) {
 		return nil, fmt.Errorf("original %s missing", name)
 	}
 	return raw, nil
+}
+
+func availabilityValidManifest(m audittransport.Manifest) bool {
+	if m.FetchedAt <= 0 || len(m.Segments) == 0 || len(m.Segments) > 2*(audittransport.MaxSegments+1) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, seg := range m.Segments {
+		anchor, e := hex.DecodeString(seg.Anchor)
+		if seg.ID == "" || seen[seg.ID] || seg.Generation == "" || seg.Size < 0 || e != nil || len(anchor) != 16 || strings.ToLower(seg.Anchor) != seg.Anchor {
+			return false
+		}
+		seen[seg.ID] = true
+	}
+	return true
 }
 func (e *availabilityEvidence) decode(name string, v any) error {
 	raw, err := e.original(name)
@@ -471,17 +489,47 @@ func (e *availabilityEvidence) projectEffect(result *GuardrailAvailabilityResult
 	if ee != nil || te != nil || availabilityHash(endManifest) != audit.EndManifestSHA256 || availabilityHash(terminalManifest) != audit.TerminalManifestSHA256 {
 		return result, nil
 	}
+	startManifest, se := e.original("audit-start-manifest.json")
+	var startM, endM, terminalM audittransport.Manifest
+	if se != nil || availabilityDecode(startManifest, &startM) != nil || availabilityDecode(endManifest, &endM) != nil || availabilityDecode(terminalManifest, &terminalM) != nil ||
+		!availabilityValidManifest(startM) || !availabilityValidManifest(endM) || !availabilityValidManifest(terminalM) ||
+		startM.Segments[0] != auditStart.Segment || auditStart.CheckpointSize != auditStart.Segment.Size || auditStart.AlignedOffset > auditStart.CheckpointSize ||
+		startM.FetchedAt > endM.FetchedAt || endM.FetchedAt > terminalM.FetchedAt {
+		return result, nil
+	}
+	spans, spanErr := availabilitySpans(auditStart, endM)
+	finalSpans, finalErr := availabilitySpans(auditStart, terminalM)
+	if spanErr != nil || finalErr != nil || len(finalSpans) < len(spans) {
+		return result, nil
+	}
+	for i, span := range spans {
+		a, b := span[0].(audittransport.Segment), finalSpans[i][0].(audittransport.Segment)
+		if a.Generation != b.Generation || a.Anchor != b.Anchor || b.Size < span[2].(int64) {
+			return result, nil
+		}
+	}
 	if audit.Schema != "guardrail-availability-audit-terminal-v1" || audit.Status != "COMPLETE" || !audit.CoverageComplete || audit.RawAuditRetained || audit.CloseStartedLate || audit.SourceIdentity != auditStart.SourceIdentity || audit.StartSHA256 != availabilityHash(mustAvailabilityJSON(auditStart)) || !staticSHA256.MatchString(audit.EndManifestSHA256) || !staticSHA256.MatchString(audit.TerminalManifestSHA256) || audit.UnboundTargetRows == nil || *audit.UnboundTargetRows != 0 || audit.FrozenBytes < 0 || audit.PayloadBytes < audit.FrozenBytes || audit.PayloadBytes > 96<<20 || audit.BytesRead != audit.FrozenBytes || audit.DataGETs < 0 || audit.DataGETs > 100 || audit.ControlGETs < 2 || audit.ControlGETs > 3 || audit.AuditReadElapsedSeconds < 0 || audit.AuditReadElapsedSeconds >= 180 || len(audit.ChunkReceipts) != audit.DataGETs {
 		return result, nil
 	}
 	var sum int64
-	for _, c := range audit.ChunkReceipts {
-		if c.Bytes < 1 || c.Bytes > 1<<20 || !staticSHA256.MatchString(c.SHA256) {
-			return result, nil
+	index := 0
+	for _, span := range spans {
+		seg, off, end := span[0].(audittransport.Segment), span[1].(int64), span[2].(int64)
+		for off < end {
+			if index >= len(audit.ChunkReceipts) {
+				return result, nil
+			}
+			c := audit.ChunkReceipts[index]
+			want := int(min(int64(audittransport.ChunkBytes), end-off))
+			if c.SegmentID != seg.ID || c.Generation != seg.Generation || c.Offset != off || c.Bytes != want || !staticSHA256.MatchString(c.SHA256) {
+				return result, nil
+			}
+			off += int64(want)
+			sum += int64(want)
+			index++
 		}
-		sum += int64(c.Bytes)
 	}
-	if sum != audit.FrozenBytes {
+	if index != len(audit.ChunkReceipts) || sum != audit.FrozenBytes {
 		return result, nil
 	}
 	if len(audit.TargetRows) == 0 {

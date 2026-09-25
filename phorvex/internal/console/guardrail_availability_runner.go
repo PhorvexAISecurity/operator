@@ -409,6 +409,24 @@ func availabilityStatus(p map[string]any, container string) (string, string, err
 	}
 	return "", "", errors.New("exact ready container unavailable")
 }
+func availabilityCheckConsoleIdentity(p guardrailAvailabilityProfile, ownName, ownUID string, console, rs, dep map[string]any) error {
+	if availabilityString(availabilityMeta(console), "name") != ownName || availabilityUID(console) != ownUID {
+		return errors.New("downward API console Pod identity changed")
+	}
+	rsName, rsUID, re := availabilityController(console, "ReplicaSet")
+	depName, depUID, de := availabilityController(rs, "Deployment")
+	if re != nil || de != nil || availabilityString(availabilityMeta(rs), "name") != rsName || availabilityUID(rs) != rsUID ||
+		availabilityString(availabilityMeta(dep), "name") != depName || availabilityUID(dep) != depUID ||
+		depName != p.Fixture.ConsoleDeploymentName || depUID != p.Fixture.ConsoleDeploymentUID ||
+		p.Fixture.EventCreator != "system:serviceaccount:phorvex-system:"+availabilityString(availabilityMap(console["spec"]), "serviceAccountName") {
+		return errors.New("reviewed console Deployment owner or service account differs")
+	}
+	_, image, se := availabilityStatus(console, "console")
+	if se != nil || image != p.Fixture.ConsoleImageID {
+		return errors.New("reviewed console ready container image differs")
+	}
+	return nil
+}
 func availabilityCanonicalModel(runtime map[string]any, expected string) (json.RawMessage, error) {
 	var first []byte
 	for _, key := range []string{"8000/v1/models", "8001/v1/models"} {
@@ -490,8 +508,8 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if availabilityUID(dep) != depUID {
 		return out, errors.New("console Deployment UID changed")
 	}
-	if f.EventCreator != "system:serviceaccount:phorvex-system:"+availabilityString(availabilityMap(console["spec"]), "serviceAccountName") {
-		return out, errors.New("reviewed event creator differs from console service account")
+	if e := availabilityCheckConsoleIdentity(w.p, w.selfName, w.selfUID, console, rs, dep); e != nil {
+		return out, e
 	}
 	pod, e := read("target", "-n", "vllm", "get", "pod", f.PodName, "-o", "json")
 	if e != nil {

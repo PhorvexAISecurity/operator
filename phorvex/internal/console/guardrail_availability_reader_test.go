@@ -24,9 +24,12 @@ func availabilityEffectFixture(t *testing.T) (availabilityEvidence, availability
 		}
 		e.files[name] = raw
 	}
-	start := availabilityAuditStart{Schema: "guardrail-availability-audit-start-v1", SourceIdentity: "audit|server", Segment: audittransport.Segment{ID: "live", Generation: "gen-1", Size: 0, Anchor: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, ManifestSHA256: availabilityHash([]byte(`{"segments":[]}`))}
+	anchor := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	segment := audittransport.Segment{ID: "live", Generation: "gen-1", Size: 0, Anchor: anchor}
+	startManifest := mustAvailabilityJSON(audittransport.Manifest{Segments: []audittransport.Segment{segment}, FetchedAt: 1})
+	start := availabilityAuditStart{Schema: "guardrail-availability-audit-start-v1", SourceIdentity: "audit|server", Segment: segment, ManifestSHA256: availabilityHash(startManifest)}
 	put("audit-start.json", start)
-	e.files["audit-start-manifest.json"] = []byte(`{"segments":[]}`)
+	e.files["audit-start-manifest.json"] = startManifest
 	put("post-intent.json", map[string]any{"runID": "run-1", "requestSHA256": availabilityHash([]byte(availabilityConsoleBody)), "auditStartSHA256": availabilityHash(mustAvailabilityJSON(start)), "baselineGate": "READY_FOR_ONE_INJECTED_RECOVERY", "maximumPOSTs": 1})
 	postBody := []byte(`{"ok":true,"action":"guardrail-rotate","attackId":"atk-one"}`)
 	put("console-1-0.json", availabilityConsoleHTTP{"POST", "/api/vllm/attack", 200, base64.StdEncoding.EncodeToString(postBody), availabilityHash(postBody), len(postBody)})
@@ -61,10 +64,13 @@ func availabilityEffectFixture(t *testing.T) (availabilityEvidence, availability
 		t.Fatalf("project real-shaped 17 rows: %d %v", unbound, err)
 	}
 	chunk := []byte("audit-interval")
-	audit := availabilityAuditTerminal{Schema: "guardrail-availability-audit-terminal-v1", Status: "COMPLETE", CoverageComplete: true, SourceIdentity: start.SourceIdentity, StartSHA256: availabilityHash(mustAvailabilityJSON(start)), EndManifestSHA256: availabilityHash([]byte(`{"end":1}`)), TerminalManifestSHA256: availabilityHash([]byte(`{"final":1}`)), FrozenBytes: int64(len(chunk)), BytesRead: int64(len(chunk)), PayloadBytes: int64(len(chunk)), DataGETs: 1, ControlGETs: 2, AuditReadElapsedSeconds: 1, UnboundTargetRows: &unbound, TargetRows: rows, ChunkReceipts: []availabilityAuditChunk{{SegmentID: "live", Generation: "gen-1", Offset: 0, Bytes: len(chunk), SHA256: availabilityHash(chunk)}}}
+	segment.Size = int64(len(chunk))
+	endManifest := mustAvailabilityJSON(audittransport.Manifest{Segments: []audittransport.Segment{segment}, FetchedAt: 2})
+	finalManifest := mustAvailabilityJSON(audittransport.Manifest{Segments: []audittransport.Segment{segment}, FetchedAt: 3})
+	audit := availabilityAuditTerminal{Schema: "guardrail-availability-audit-terminal-v1", Status: "COMPLETE", CoverageComplete: true, SourceIdentity: start.SourceIdentity, StartSHA256: availabilityHash(mustAvailabilityJSON(start)), EndManifestSHA256: availabilityHash(endManifest), TerminalManifestSHA256: availabilityHash(finalManifest), FrozenBytes: int64(len(chunk)), BytesRead: int64(len(chunk)), PayloadBytes: int64(len(chunk)), DataGETs: 1, ControlGETs: 2, AuditReadElapsedSeconds: 1, UnboundTargetRows: &unbound, TargetRows: rows, ChunkReceipts: []availabilityAuditChunk{{SegmentID: "live", Generation: "gen-1", Offset: 0, Bytes: len(chunk), SHA256: availabilityHash(chunk)}}}
 	put("audit-terminal.json", audit)
-	e.files["audit-end-manifest.json"] = []byte(`{"end":1}`)
-	e.files["audit-terminal-manifest.json"] = []byte(`{"final":1}`)
+	e.files["audit-end-manifest.json"] = endManifest
+	e.files["audit-terminal-manifest.json"] = finalManifest
 	result := &GuardrailAvailabilityResult{Status: "UNKNOWN", EventMode: "INJECTED", NaturalDetector: "NOT_EVALUATED", SecurityEfficacy: "NOT_EVALUATED", SyntheticThreat: "NOT_EVALUATED", Route: "Pod-loopback-8000", Before: GuardrailAvailabilityControls{"GUARDRAIL_BLOCKED", "GUARDRAIL_BLOCKED", "FOUR"}, After: GuardrailAvailabilityControls{"GUARDRAIL_BLOCKED", "OK", "FOUR"}}
 	return e, before, after, result
 }
@@ -94,6 +100,14 @@ func TestGuardrailAvailabilityProducerProjectionToIndependentEffectReader(t *tes
 			var a availabilityAuditTerminal
 			_ = e.decode("audit-terminal.json", &a)
 			a.UnboundTargetRows = nil
+			e.files["audit-terminal.json"] = mustAvailabilityJSON(a)
+		}},
+		{"unrelated audit chunk generation", func(e *availabilityEvidence, _ *availabilitySnapshot) {
+			var a availabilityAuditTerminal
+			_ = e.decode("audit-terminal.json", &a)
+			a.ChunkReceipts[0].SegmentID = "unrelated"
+			a.ChunkReceipts[0].Generation = "unrelated-generation"
+			a.ChunkReceipts[0].Offset = 999999
 			e.files["audit-terminal.json"] = mustAvailabilityJSON(a)
 		}},
 		{"second selected action", func(e *availabilityEvidence, _ *availabilitySnapshot) {
