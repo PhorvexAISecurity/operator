@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,11 +15,76 @@ checks:
     source_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
     at: '2026-09-25T00:18:35+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  preflight:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/preflight/receipt.json
+    sha256: beae244d2733e86e07dabbc0de1ef0b80f0fff5003091981b6ec7910d2985ec8
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:32:00+00:00'
+  implementation:
+    result: PASS
+    by: live-readiness
+    artifact: 04-diff.patch
+    sha256: 0ff9d39e60f6cb9db9a5e6835c4aae278acce1486cb2ab6fe924c64d2d193af5
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:32:00+00:00'
+  red:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/worker/red-baseline.txt
+    sha256: 5416a6ac3705acab701c7f10889aacb0b9902df9fae6f70232b52499e5be1f7d
+    source_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
+    at: '2026-09-25T00:32:00+00:00'
+  l0:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/worker/l0-offline.txt
+    sha256: b91afeb7be86f6f1d903af61f4101403ed7f3448b92cdbb5fc17d27a21a59788
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:32:00+00:00'
+  l1:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/worker/l1-scope.txt
+    sha256: 463b49edf8530b7a8208ffe67e3361afe13a68ff5402dc708b1d1c80f1a15c5f
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:32:00+00:00'
+  l2:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/worker/l2-checksum.txt
+    sha256: e2b376c682e6609b15e0b06b47ac6f840978507e6531ba57aed0858a422ec1c6
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:32:00+00:00'
+  positive_control:
+    result: PASS
+    by: live-readiness
+    artifact: evidence/worker/control.txt
+    sha256: 5f188a6c847baa41f891d916693cac76786d99f34d854e5e528c2fc78f7a2d7a
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:32:00+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1eff94e876c9c8646ddffae4cccc12b44856a438f5697467845b4adbdf1fcfe0
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:33:19+00:00'
+    baseline_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 183c6cfd215b8f57daf74c7e7744acf45c07e7ee59a9844468d5744e772b962b
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:33:19+00:00'
+    incident_sha256: 1eff94e876c9c8646ddffae4cccc12b44856a438f5697467845b4adbdf1fcfe0
 fix_id: CAT-PROFILE-GRANTS
 issues: []
 title: Authorize enabled catalogue profiles for the existing dev test identity
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -41,9 +106,9 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: campaign/catalogue-profile-grants-20260925
+  base_sha: a625d0f2375b99e55c55dec5b56f46a5fc9e873b
+  head_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
   stacked_on: []
 pull_request:
   url: null
@@ -64,13 +129,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -80,10 +145,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: live-readiness
-  action: Implement exact grant scope and startup reload checksum if required; focused
-    real Helm/auth tests
-updated_at: '2026-09-25T00:18:35+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T00:33:24+00:00'
 configuration_history:
 - at: '2026-09-25T00:18:29+00:00'
   by: codex-lead
@@ -98,6 +163,11 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-25T00:32:00+00:00'
+  by: live-readiness
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +185,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T00:32:00+00:00'
+  by: live-readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T00:32:03+00:00'
+  by: live-readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T00:33:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T00:33:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-PROFILE-GRANTS:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
