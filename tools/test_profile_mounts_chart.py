@@ -1,5 +1,8 @@
-"""Render real chart authority for the four reviewed named YAML projections."""
+"""Render real chart authority for reviewed named YAML projections."""
 
+import base64
+import hashlib
+import json
 import os
 import subprocess
 import unittest
@@ -8,6 +11,8 @@ from pathlib import Path
 import yaml
 
 CHART = Path(__file__).resolve().parents[1] / "phorvex/charts/phorvex"
+STACK = Path(__file__).resolve().parents[1] / "deploy/helm/phorvex-stack"
+CPU_PACKAGE = Path(__file__).resolve().parents[1] / "workflow/campaigns/2026-09-23-catalogue-coverage/deployment/existing22-cpu-166"
 HELM = os.environ.get("HELM_BIN", "helm")
 BASE = [HELM, "template", "phorvex", str(CHART), "-n", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",
@@ -29,10 +34,48 @@ NATS = ["--set", "phorvex.console.natsExposure.enabled=true",
 NATS_RESPONSE = ["--set", "phorvex.console.natsExposure.clientResponse.enabled=true",
                  "--set", "phorvex.console.natsExposure.clientResponse.configMapName=reviewed-nats-response",
                  "--set-string", "phorvex.console.natsExposure.clientResponse.profileSHA256=" + "d" * 64]
+CPU_PROFILE = b"context: owned-cpu-test\nfixture: harmless\n"
+CPU_MANIFEST = b'{"schema":"owned-cpu-test"}\n'
+CPU_NAME = "reviewed-cpu-source"
+CPU_FILENAME = "config.pod-bound-api-auth-response-cpu.yaml"
+CPU_LEDGER = "phorvex-quarantine-capacity-" + "a" * 40
+STACK_BASE = [HELM, "template", "phorvex", str(STACK), "-n", "phorvex-system",
+              # The webhook generates a fresh certificate per offline render; disabling
+              # it in this chart-diff test keeps unrelated resources comparable.
+              "--set", "phorvex.phorvex.admissionWebhook.enabled=false"]
+CPU_SOURCE = ["--set", "catalogueProfiles.podBoundTokenCPU.enabled=true",
+              "--set", "catalogueProfiles.podBoundTokenCPU.configMapName=" + CPU_NAME,
+              "--set-string", "catalogueProfiles.podBoundTokenCPU.profileBase64=" + base64.b64encode(CPU_PROFILE).decode(),
+              "--set-string", "catalogueProfiles.podBoundTokenCPU.manifestBase64=" + base64.b64encode(CPU_MANIFEST).decode()]
+CPU_CONSOLE = ["--set", "phorvex.phorvex.console.enabled=true",
+               "--set", "phorvex.phorvex.audit.enabled=true",
+               "--set", "phorvex.phorvex.console.auditTransport.serverSecretName=audit-server",
+               "--set", "phorvex.phorvex.console.auditTransport.clientSecretName=audit-client",
+               "--set", "phorvex.phorvex.console.auditTransport.clientDNSName=console.example",
+               "--set", "phorvex.phorvex.console.auditTransport.serverDNSName=source.example",
+               "--set", "phorvex.phorvex.console.podBoundTokenCPU.enabled=true",
+               "--set", "phorvex.phorvex.console.podBoundTokenCPU.configMapName=" + CPU_NAME,
+               "--set-string", "phorvex.phorvex.console.podBoundTokenCPU.profileSHA256=" + hashlib.sha256(CPU_PROFILE).hexdigest(),
+               "--set", "phorvex.phorvex.console.podBoundTokenCPU.scrapeApproved=true",
+               "--set", "phorvex.phorvex.prometheusUrl=http://prometheus.monitoring.svc:9090",
+               "--set-string", "phorvex.phorvex.console.podBoundTokenCPU.quarantineCapacityLedgerName=" + CPU_LEDGER,
+               "--api-versions", "monitoring.coreos.com/v1/PodMonitor"]
 
 
 def render(*extra):
     return subprocess.run([*BASE, *extra], capture_output=True, text=True, timeout=30)
+
+
+def render_stack(*extra):
+    return subprocess.run([*STACK_BASE, *extra], capture_output=True, text=True, timeout=30)
+
+
+def rendered_objects(result):
+    if result.returncode:
+        raise AssertionError(result.stderr)
+    docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+    return {(d["apiVersion"], d["kind"], d["metadata"].get("namespace", ""),
+             d["metadata"]["name"]): d for d in docs}
 
 
 def console_doc(docs):
@@ -40,6 +83,104 @@ def console_doc(docs):
 
 
 class ProfileMountChart(unittest.TestCase):
+    def test_eks_cpu_activation_uses_reviewed_source_and_exact_authority(self):
+        reviewed = json.loads((CPU_PACKAGE / "configmap.json").read_text())
+        bundle = json.loads((CPU_PACKAGE / "FILES.json").read_text())
+        result = render_stack("-f", str(STACK / "values-eks.yaml"),
+                              "--api-versions", "monitoring.coreos.com/v1/PodMonitor")
+        docs = list(rendered_objects(result).values())
+        source = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == reviewed["metadata"]["name"])
+        self.assertEqual(source["metadata"]["namespace"], "phorvex-system")
+        self.assertIs(source["immutable"], True)
+        self.assertEqual(source["binaryData"], reviewed["binaryData"])
+        for filename, encoded in source["binaryData"].items():
+            raw = base64.b64decode(encoded, validate=True)
+            self.assertEqual(raw, (CPU_PACKAGE / filename).read_bytes())
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), bundle["filesSHA256"][filename])
+
+        console = console_doc(docs)["spec"]["template"]["spec"]
+        container = console["containers"][0]
+        env = {e["name"]: e["value"] for e in container["env"] if "value" in e}
+        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED"], "true")
+        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256"], bundle["profileSHA256"])
+        volume = next(v for v in console["volumes"] if v["name"] == "pod-bound-token-cpu-reviewed-source")
+        self.assertEqual(volume["configMap"]["name"], source["metadata"]["name"])
+        self.assertEqual({i["key"] for i in volume["configMap"]["items"]}, set(source["binaryData"]))
+        mounts = [m for m in container["volumeMounts"] if m["name"] == volume["name"]]
+        self.assertEqual({m["subPath"] for m in mounts}, set(source["binaryData"]))
+        self.assertTrue(all(m["readOnly"] for m in mounts))
+
+        manager = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "phorvex-phorvex")
+        args = manager["spec"]["template"]["spec"]["containers"][0]["args"]
+        self.assertIn("--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090", args)
+        trusted = next(a for a in args if a.startswith("--trusted-detectors="))
+        self.assertIn("phorvex-system/phorvex-phorvex-e2e-detector-cpu", trusted.split("=", 1)[1].split(","))
+        def object_named(kind, name, namespace=None):
+            return next(d for d in docs if d["kind"] == kind and d["metadata"]["name"] == name
+                        and (namespace is None or d["metadata"].get("namespace") == namespace))
+        object_named("ServiceAccount", "phorvex-phorvex-e2e-detector-cpu", "phorvex-system")
+        object_named("ValidatingAdmissionPolicy", "phorvex-phorvex-e2e-detector-cpu")
+        object_named("ValidatingAdmissionPolicyBinding", "phorvex-phorvex-e2e-detector-cpu")
+        object_named("Role", "phorvex-phorvex-pod-bound-token-cpu-fixture", "phorvex-catalogue-cpu")
+        object_named("RoleBinding", "phorvex-phorvex-pod-bound-token-cpu-fixture", "phorvex-catalogue-cpu")
+        object_named("Role", "phorvex-phorvex-actuator-routine", "phorvex-catalogue-cpu")
+        object_named("RoleBinding", "phorvex-phorvex-actuator-routine", "phorvex-catalogue-cpu")
+        ledger = object_named("Role", "phorvex-phorvex-pod-bound-token-cpu-capacity-ledger", "phorvex-system")
+        self.assertEqual(ledger["rules"], [{"apiGroups": [""], "resources": ["configmaps"],
+                                            "resourceNames": ["phorvex-quarantine-capacity-d9372a8fb610e8aac611abf95dbad3f8874f09e4"], "verbs": ["get"]}])
+        grants = json.loads(object_named("ConfigMap", "phorvex-phorvex-console-grants")["data"]["grants.json"])
+        reviewed_grants = json.loads(yaml.safe_load((CPU_PACKAGE / "grant-overlay-proposed.yaml").read_text())["phorvex"]["phorvex"]["console"]["auth"]["grants"]["data"])
+        self.assertEqual(grants, reviewed_grants)
+
+    def test_umbrella_cpu_profile_is_default_off_and_adds_only_exact_source(self):
+        before = rendered_objects(render_stack())
+        after = rendered_objects(render_stack(*CPU_SOURCE))
+        key = ("v1", "ConfigMap", "phorvex-system", CPU_NAME)
+        self.assertNotIn(key, before)
+        self.assertEqual(set(after) - set(before), {key})
+        self.assertEqual(set(before) - set(after), set())
+        self.assertEqual({k: after[k] for k in before}, before)
+        source = after[key]
+        self.assertEqual(set(source), {"apiVersion", "kind", "metadata", "immutable", "binaryData"})
+        self.assertIs(source["immutable"], True)
+        self.assertEqual(set(source["binaryData"]), {CPU_FILENAME, "manifest.json"})
+        self.assertEqual(base64.b64decode(source["binaryData"][CPU_FILENAME], validate=True), CPU_PROFILE)
+        self.assertEqual(base64.b64decode(source["binaryData"]["manifest.json"], validate=True), CPU_MANIFEST)
+
+    def test_umbrella_cpu_source_matches_existing_console_mount_and_hash(self):
+        before = rendered_objects(render_stack(*CPU_CONSOLE))
+        after = rendered_objects(render_stack(*CPU_CONSOLE, *CPU_SOURCE))
+        key = ("v1", "ConfigMap", "phorvex-system", CPU_NAME)
+        self.assertEqual(set(after) - set(before), {key})
+        self.assertEqual({k: after[k] for k in before}, before)
+        console = console_doc(after.values())["spec"]["template"]["spec"]
+        container = console["containers"][0]
+        env = {e["name"]: e["value"] for e in container["env"] if "value" in e}
+        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED"], "true")
+        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256"], hashlib.sha256(CPU_PROFILE).hexdigest())
+        volume = next(v for v in console["volumes"] if v["name"] == "pod-bound-token-cpu-reviewed-source")
+        self.assertEqual(volume["configMap"], {"name": CPU_NAME, "defaultMode": 0o440,
+            "items": [{"key": CPU_FILENAME, "path": CPU_FILENAME}, {"key": "manifest.json", "path": "manifest.json"}]})
+        mount = next(v for v in container["volumeMounts"] if v["name"] == volume["name"])
+        self.assertTrue(mount["readOnly"])
+
+    def test_umbrella_cpu_source_requires_exact_inputs_and_console_join(self):
+        cases = [
+            (CPU_SOURCE[:2], "configMapName is required"),
+            ([*CPU_SOURCE[:2], "--set", "catalogueProfiles.podBoundTokenCPU.configMapName=Bad_Name"], "must be a DNS subdomain"),
+            (CPU_SOURCE[:4], "profileBase64 is required"),
+            ([*CPU_SOURCE[:4], "--set-string", "catalogueProfiles.podBoundTokenCPU.profileBase64=not-base64", *CPU_SOURCE[6:]], "canonical nonempty base64"),
+            (CPU_SOURCE[:6], "manifestBase64 is required"),
+            ([*CPU_SOURCE[:6], "--set-string", "catalogueProfiles.podBoundTokenCPU.manifestBase64=not-base64"], "canonical nonempty base64"),
+            ([*CPU_SOURCE, *CPU_CONSOLE, "--set", "phorvex.phorvex.console.podBoundTokenCPU.configMapName=other-source"], "configMapName must match"),
+            ([*CPU_SOURCE, *CPU_CONSOLE, "--set-string", "phorvex.phorvex.console.podBoundTokenCPU.profileSHA256=" + "b" * 64], "profileSHA256 must match"),
+        ]
+        for args, expected in cases:
+            with self.subTest(expected=expected):
+                result = render_stack(*args)
+                self.assertNotEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stderr)
+
     def test_default_off_adds_no_projection(self):
         result = render()
         self.assertEqual(result.returncode, 0, result.stderr)

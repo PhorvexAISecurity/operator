@@ -84,3 +84,12 @@ catalogueV1TokenRefresher:
   schedule: "17 */6 * * *"
   # Official python image pinned by digest; the refresher uses only the standard library.
   image: python:3.12-alpine@sha256:4c47124a8391cb7a9f571164147d154777cf012a4ece5f86097130d7a4478111
+
+# Optional source bytes for the existing CPU Pod-bound token response profile.
+# Supplying this ConfigMap does not enable the console case or its authority.
+catalogueProfiles:
+  podBoundTokenCPU:
+    enabled: false
+    configMapName: ""
+    profileBase64: ""
+    manifestBase64: ""

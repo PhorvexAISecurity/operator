@@ -1,0 +1,34 @@
+{{- $source := .Values.catalogueProfiles.podBoundTokenCPU -}}
+{{- if $source.enabled -}}
+{{- $name := required "catalogueProfiles.podBoundTokenCPU.configMapName is required" $source.configMapName -}}
+{{- if not (kindIs "string" $name) -}}{{- fail "catalogueProfiles.podBoundTokenCPU.configMapName must be a string" -}}{{- end -}}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) -}}
+{{- fail "catalogueProfiles.podBoundTokenCPU.configMapName must be a DNS subdomain name" -}}
+{{- end -}}
+{{- range (splitList "." $name) -}}{{- if gt (len .) 63 -}}{{- fail "catalogueProfiles.podBoundTokenCPU.configMapName DNS label exceeds 63 characters" -}}{{- end -}}{{- end -}}
+{{- $profile := required "catalogueProfiles.podBoundTokenCPU.profileBase64 is required" $source.profileBase64 -}}
+{{- $manifest := required "catalogueProfiles.podBoundTokenCPU.manifestBase64 is required" $source.manifestBase64 -}}
+{{- if or (not (kindIs "string" $profile)) (not (kindIs "string" $manifest)) -}}
+{{- fail "catalogueProfiles.podBoundTokenCPU profile and manifest must be base64 strings" -}}
+{{- end -}}
+{{- $profileBytes := b64dec $profile -}}
+{{- $manifestBytes := b64dec $manifest -}}
+{{- if or (eq $profileBytes "") (ne (b64enc $profileBytes) $profile) -}}{{- fail "catalogueProfiles.podBoundTokenCPU.profileBase64 must be canonical nonempty base64" -}}{{- end -}}
+{{- if or (eq $manifestBytes "") (ne (b64enc $manifestBytes) $manifest) -}}{{- fail "catalogueProfiles.podBoundTokenCPU.manifestBase64 must be canonical nonempty base64" -}}{{- end -}}
+{{- $child := get .Values.phorvex "phorvex" | default dict -}}
+{{- $console := get $child "console" | default dict -}}
+{{- $cpu := get $console "podBoundTokenCPU" | default dict -}}
+{{- if (get $cpu "enabled") -}}
+{{- if ne (get $cpu "configMapName") $name -}}{{- fail "console.podBoundTokenCPU.configMapName must match catalogueProfiles.podBoundTokenCPU.configMapName" -}}{{- end -}}
+{{- if ne (get $cpu "profileSHA256") (sha256sum $profileBytes) -}}{{- fail "console.podBoundTokenCPU.profileSHA256 must match decoded catalogue profile" -}}{{- end -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace }}
+immutable: true
+binaryData:
+  config.pod-bound-api-auth-response-cpu.yaml: {{ $profile | quote }}
+  manifest.json: {{ $manifest | quote }}
+{{- end -}}

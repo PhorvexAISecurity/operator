@@ -181,7 +181,8 @@ jobs:
         run: |
           helm template phorvex deploy/helm/phorvex-stack -n phorvex-system \
             -f deploy/helm/phorvex-stack/values.yaml \
-            -f deploy/helm/phorvex-stack/values-eks.yaml --include-crds > /dev/null
+            -f deploy/helm/phorvex-stack/values-eks.yaml \
+            --api-versions monitoring.coreos.com/v1/PodMonitor --include-crds > /dev/null
           python3 tools/test_profile_mounts_chart.py
 
       - name: Vendored subchart matches its source

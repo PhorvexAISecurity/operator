@@ -94,6 +94,16 @@ phorvex:
     console:
       enabled: true
       allowWorkloadMutations: true
+      # Existing owned CPU response profile; its source bytes are the immutable
+      # catalogueProfiles ConfigMap below. These values do not force a decision.
+      podBoundTokenCPU:
+        enabled: true
+        configMapName: phorvex-catalogue-pod-bound-token-cpu-166-20260925
+        profileSHA256: ec2e71b3d91c2e55bc3022679af749bf796e00431e583d245c4d33971b4f7bca
+        scrapeApproved: true
+        scrapeNamespace: phorvex-catalogue-cpu
+        podSelectorLabel: fixture.phorvex.ai/token-response
+        quarantineCapacityLedgerName: phorvex-quarantine-capacity-d9372a8fb610e8aac611abf95dbad3f8874f09e4
       # No availability recovery dispatch until a reviewed installed profile,
       # exact digest, scoped token and audit transport are configured.
       guardrailAvailability:
@@ -108,7 +118,8 @@ phorvex:
       # Enabled 2026-09-23 for Voice media, Voice recovery and the two console auth profiles;
       # GPU drain stays off until Codex supplies its owned fixture. The auth profiles use the
       # existing E2E identity: its current grant includes voice, nats, vllm,
-      # document-store, litellm and mcp at target "default". The denied tenant
+      # document-store, litellm and mcp at target "default"; the CPU fixture is
+      # separately scoped to its namespace and exact dev EKS target. The denied tenant
       # below is reserved for this negative control and is not granted to that
       # identity. Its 24h bearer lives ONLY in the Secret named below,
       # created out of band and re-minted by catalogueV1TokenRefresher (bottom of this file).
@@ -257,8 +268,8 @@ phorvex:
                   "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
                   "subject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
                   "roles": ["operator"],
-                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp"],
-                  "targets": ["default"],
+                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu"],
+                  "targets": ["default", "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"],
                   "note": "End-to-End pipeline (CI) and reviewed fixed catalogue profiles in the listed namespaces; token minted per run, never stored."
                 }
               ]
@@ -298,6 +309,9 @@ phorvex:
       - crm
       - mcp
       - document-store
+      # The owned CPU fixture creates a policy for this exact namespace; a
+      # selected routine action needs its existing namespaced actuator Role.
+      - phorvex-catalogue-cpu
       - ci-reports
       # Codex verification tenants for the two outstanding behavioural tests (M100 loss
       # history, M106 scoped outcomes). Their PhorvexPolicies exist on the cluster; without
@@ -446,3 +460,13 @@ dashboard:
 catalogueV1TokenRefresher:
   enabled: true
   secretName: phorvex-console-catalogue-v1-token
+
+# Reviewed, immutable source bytes for the existing owned CPU response case.
+# This is not a credential or a new scenario; the normal console profile SHA
+# and manager image gates independently verify these bytes before a run.
+catalogueProfiles:
+  podBoundTokenCPU:
+    enabled: true
+    configMapName: phorvex-catalogue-pod-bound-token-cpu-166-20260925
+    profileBase64: "a3ViZWNvbmZpZzogIiIKY29udGV4dDogImFybjphd3M6ZWtzOnVzLWVhc3QtMjo3NTM1NTY0MzcxODA6Y2x1c3Rlci9waG9ydmV4LWRldi1la3MiCm5hbWVzcGFjZTogcGhvcnZleC1jYXRhbG9ndWUtY3B1Cm93bmVkQWNrOiB0cnVlCnRyaWFsc1BlckFybTogMQptYXN0ZXJTZWVkOiAxMzM3Cm91dERpcjogb3V0LXBvZC1ib3VuZC1hcGktYXV0aC1yZXNwb25zZS1jcHUKZGVmZW5kZXJGaWx0ZXI6IFtdCnNjZW5hcmlvRmlsdGVyOiBbYzItcG9kLWJvdW5kLWFwaS1hdXRoLXJlc3BvbnNlLWNwdV0KcG9kQm91bmRUb2tlbkZpeHR1cmU6CiAgcnVuSUQ6IHJ1bi0xCiAgbm9uY2U6ICIwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiCiAgdHJhbnNwb3J0OiBpbi1jbHVzdGVyCiAgY2x1c3RlclVJRDogImYxMTNkNDY0LWQ4Y2ItNDE0NS1iODNkLTQ1NjM4YzJhMTk2ZSIKICBtYW5hZ2VyTmFtZXNwYWNlOiBwaG9ydmV4LXN5c3RlbQogIG1hbmFnZXJEZXBsb3ltZW50OiAicGhvcnZleC1waG9ydmV4IgogIG1hbmFnZXJJbWFnZUlEOiAiNzUzNTU2NDM3MTgwLmRrci5lY3IudXMtZWFzdC0yLmFtYXpvbmF3cy5jb20vcGhvcnZleEBzaGEyNTY6MGU0ODA5MDIxMmQyMDlkNTI3NzU1NTBhNzQ5YWZmYjBiNzI1MmFhZDIyZmIzNDA1YWVlMDBjMmRkNmM0M2M1NiIKICBmaXh0dXJlSW1hZ2VJRDogImRvY2tlci5pby9saWJyYXJ5L3B5dGhvbkBzaGEyNTY6OTA3NDRjZmY4ZjMyODg3ZjA3NWM0N2Q3NDdhMTczZmYzMzNlOWU5ODgwMTY2N2FmOTNjMzU3ZmE5ZjVlMjhmZiIKICBzb3VyY2VNYW5pZmVzdFBhdGg6IC9ldGMvcGhvcnZleC1jYXRhbG9ndWUtcG9kLWJvdW5kLXRva2VuLWNwdS9tYW5pZmVzdC5qc29uCiAgc291cmNlTWFuaWZlc3RTSEEyNTY6ICJkMDgxZWJiNDBlZTE5MzliOWNjNjllNmJmYWRhM2RiZTc3MjgzNWM4NGY0NTExYTU1ZTkxYTZiYTI4NTAzMmIwIgogIHByb3RlY3RlZExlZGdlck5hbWU6ICJwaG9ydmV4LXF1YXJhbnRpbmUtY2FwYWNpdHktZDkzNzJhOGZiNjEwZThhYWM2MTFhYmY5NWRiYWQzZjg4NzRmMDllNCIKICBldmVudENyZWF0b3I6ICJzeXN0ZW06c2VydmljZWFjY291bnQ6cGhvcnZleC1zeXN0ZW06cGhvcnZleC1waG9ydmV4LWUyZS1kZXRlY3Rvci1jcHUiCiAgcHJvbWV0aGV1c1VSTDogImh0dHA6Ly9rdWJlLXByb20tc3RhY2sta3ViZS1wcm9tZS1wcm9tZXRoZXVzLm1vbml0b3Jpbmcuc3ZjLmNsdXN0ZXIubG9jYWw6OTA5MCIKICBzY3JhcGVLaW5kOiBwb2Rtb25pdG9yCiAgc2NyYXBlTmFtZXNwYWNlOiBwaG9ydmV4LWNhdGFsb2d1ZS1jcHUKICBhbGxvd2VkTm9kZU5hbWU6ICJpcC0xNzItMjctMTEtOS51cy1lYXN0LTIuY29tcHV0ZS5pbnRlcm5hbCIKICBtYXhSdW5TZWNvbmRzOiA5MDAK"
+    manifestBase64: "ewogICJzY2hlbWEiOiAicGhvcnZleC5tYW5hZ2VyLXNvdXJjZS1pbWFnZS52MSIsCiAgInNvdXJjZUNvbW1pdCI6ICIwMzE2YTU3ODYyNGExZDE5NjYyYzg3YmZhOGQwZmVhMDhkMWIzNzI5IiwKICAibWFuYWdlckltYWdlSUQiOiAiNzUzNTU2NDM3MTgwLmRrci5lY3IudXMtZWFzdC0yLmFtYXpvbmF3cy5jb20vcGhvcnZleEBzaGEyNTY6MGU0ODA5MDIxMmQyMDlkNTI3NzU1NTBhNzQ5YWZmYjBiNzI1MmFhZDIyZmIzNDA1YWVlMDBjMmRkNmM0M2M1NiIsCiAgImJ1aWxkRXZpZGVuY2VSZWYiOiAiZXZpZGVuY2UvU09VUkNFLUJVSUxELTE2Ni5qc29uIiwKICAiYnVpbGRFdmlkZW5jZVNIQTI1NiI6ICI0NTVhOTNjOTkzMjM1OGFlMDJlYWUyZGZmMjUzOTliZTdkYmRiODZkOTI4MGI0MWM2N2M3NWMxYjgxMDk5MTUyIiwKICAicmV2aWV3UmVjb3JkUmVmIjogImV2aWRlbmNlL3NvdXJjZS1yZXZpZXcuanNvbiIsCiAgInJldmlld1JlY29yZFNIQTI1NiI6ICJhMmNkNTRhNDM5MjkzMGI2ZjE1OGQwYWQ0N2RlMTIxOWU0ZTVlYjUzMDcyZTc2YzVkMzdlNjUzZGFkYjdhZTE3Igp9Cg=="
