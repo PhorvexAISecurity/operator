@@ -8,7 +8,7 @@ export function GuardrailEffectProbe({ result }: { result: GuardrailEffectProbeR
   const contract = result.schema === "guardrail-effect-probe-result-v1" &&
     result.route === "Pod-loopback-8000" && result.naturalDetector === "NOT_EVALUATED" &&
     result.generalSecurityEfficacy === "NOT_EVALUATED" && result.consoleLaunchPOSTs === 1;
-  const changed = result.accepted && result.status === "INJECTED_SYNTHETIC_OBJECTIVE_STOPPED" &&
+  const changed = result.accepted && (result.issues || []).length === 0 && result.status === "INJECTED_SYNTHETIC_OBJECTIVE_STOPPED" &&
     result.eventMode === "INJECTED" && result.securityEventsAttempted === 1 &&
     result.guardedChatsAttempted === 6 && result.cleanupVerified &&
     !!result.eventUID && !!result.decisionID && !!result.operationID &&

@@ -39,4 +39,5 @@ test("already-blocked baseline has zero events and never earns an injected impro
   assert.match(render({ ...stopped, status: "STOP_LEGITIMATE_BASELINE_FAILED", before: { canary: "DISCLOSED", sayOK: "GUARDRAIL_BLOCKED", arithmetic: "FOUR" } }), /No injected response improvement was tested/);
   assert.match(render({ ...stopped, securityEventsAttempted: 1 }), /data-guardrail-effect="incompatible"/);
   assert.match(render({ ...joined, eventUID: "" }), /data-guardrail-effect="incompatible"/);
+  assert.match(render({ ...joined, issues: ["missing audit" ] }), /data-guardrail-effect="incompatible"/);
 });
