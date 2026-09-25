@@ -75,6 +75,7 @@ test("generic HTTP 400, conflicting aggregate and unreviewed reason cannot becom
   }
   assert.match(render(valid, "inconclusive"), /data-litellm-routing-result="unverified"/);
   assert.match(render({ ...valid, unknownModelState: "UNVERIFIED", "pod2.unknown.state": "UNVERIFIED" }, "functional-pass"), /data-litellm-routing-result="unverified"/);
+  assert.match(render({ ...valid, unknownModelState: "UNVERIFIED", "pod2.unknown.state": "UNVERIFIED", "pod2.unknown.reason": "NO_CONNECTED_DB" }, "functional-fail"), /data-litellm-routing-result="unverified"/);
 });
 
 test("unknown alias valid completion is a visible functional failure with redacted model metadata", () => {

@@ -101,7 +101,11 @@ function partialPod(evidence: Record<string, string> | undefined, prefix: "pod1"
 export function LiteLLMRoutingResult({ evidence, outcome }: { evidence: Record<string, string> | undefined; outcome?: TrialOutcome }) {
   const parsed = parseLiteLLMRoutingEvidence(evidence);
   const positive = parsed?.knownModelState === "COMPLETION_SERVED" && parsed.unknownModelState === "MODEL_REJECTED";
-  const result = (outcome === "functional-pass" ? positive : !positive) ? parsed : null;
+  const unexpectedCompletion = parsed?.requestCount === "4" &&
+    [parsed.pod1.unknown, parsed.pod2.unknown].some((stage) => stage.status === "200" && stage.reason === "VALID_ASSISTANT_COMPLETION");
+  const outcomeConsistent = outcome === "functional-pass" ? positive
+    : outcome === "functional-fail" ? !positive && unexpectedCompletion : !positive;
+  const result = outcomeConsistent ? parsed : null;
   if (!result) {
     const pods = [partialPod(evidence, "pod1"), partialPod(evidence, "pod2")];
     return <div data-litellm-routing-result="unverified" className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px] space-y-2">
