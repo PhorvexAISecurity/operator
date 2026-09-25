@@ -1,4 +1,19 @@
-import type { AttackResult } from "@/lib/api";
+import type { AttackResult, AttackDecisionEvidence, CatalogCompat } from "@/lib/api";
+
+export function canSendCatalogueSignal(item: CatalogCompat, armed: boolean): boolean {
+  return armed && item.compatible === true && item.signalEligible === true;
+}
+
+export function exactCatalogueDecision(result: AttackResult): AttackDecisionEvidence | undefined {
+  const stimulus = result.stimulusEvidence;
+  if (!stimulus?.observed || !stimulus.eventUid || !stimulus.eventName || !stimulus.targetUid) return undefined;
+  // The producer's summary is its ranked exact decision; retain that rank when
+  // the bounded trace contains earlier observations of the same event.
+  const candidates = [...(result.decisionEvidence ? [result.decisionEvidence] : []), ...(result.decisionTraceEvidence || [])];
+  return candidates.find((row) => row.correlation === "exact-event-uid" && row.eventUid === stimulus.eventUid &&
+    row.eventName === stimulus.eventName && row.targetUid === stimulus.targetUid &&
+    (!stimulus.eventRule || row.eventRule === stimulus.eventRule));
+}
 
 export function isCatalogueSignalResult(result: AttackResult): boolean {
   return result.evidenceKind === "catalogue-signal"
@@ -8,26 +23,32 @@ export function isCatalogueSignalResult(result: AttackResult): boolean {
     || result.producerRoute === "/api/workload/fire-scenario";
 }
 
+export function attackCSVActuator(result: AttackResult): string {
+  // The CSV column means a completed actuator in behavioral rows. A manager
+  // selection on a signal-only row does not satisfy that meaning.
+  return isCatalogueSignalResult(result) ? "" : result.phorvexAction || "";
+}
+
 export function isUnversionedResult(result: AttackResult): boolean {
   return !result.resultSchemaVersion && !result.evidenceKind;
 }
 
 export function catalogueSignalState(result: AttackResult): {
   label: "SIGNAL ACCEPTED" | "SIGNAL RECORD PARTIAL";
-  response: "RESPONSE OBSERVED" | "RESPONSE UNCONFIRMED" | "OBSERVATION UNAVAILABLE";
+  response: "TARGET UID CHANGED" | "TARGET CHANGE UNCONFIRMED" | "OBSERVATION UNAVAILABLE";
   responseDetail: string;
   limitation: string;
 } {
   const partial = result.status === "partial" || !!result.observationError;
-  let response: "RESPONSE OBSERVED" | "RESPONSE UNCONFIRMED" | "OBSERVATION UNAVAILABLE" = "RESPONSE UNCONFIRMED";
-  if (result.responseObserved) response = "RESPONSE OBSERVED";
+  let response: "TARGET UID CHANGED" | "TARGET CHANGE UNCONFIRMED" | "OBSERVATION UNAVAILABLE" = "TARGET CHANGE UNCONFIRMED";
+  if (result.responseObserved) response = "TARGET UID CHANGED";
   else if (result.outcomeClass === "observation-unavailable") response = "OBSERVATION UNAVAILABLE";
-  else if (result.outcomeClass === "response-unconfirmed") response = "RESPONSE UNCONFIRMED";
+  else if (result.outcomeClass === "response-unconfirmed") response = "TARGET CHANGE UNCONFIRMED";
   else if (result.observationError) response = "OBSERVATION UNAVAILABLE";
 
   const responseDetail = result.responseObserved
-    ? `${result.responseAction || "target response"}${result.responsePod ? ` on ${result.responsePod}` : ""}${(result.responseSeconds ?? 0) > 0 ? ` in ${result.responseSeconds}s` : ""}`
-    : result.observationError || "No exact target response was confirmed during the observation window.";
+    ? `Target Pod UID changed${result.responsePod ? ` for ${result.responsePod}` : ""}${(result.responseSeconds ?? 0) > 0 ? ` in ${result.responseSeconds}s` : ""}; cause not established.`
+    : result.observationError || "No exact target Pod UID change was confirmed during the observation window.";
   const limitation = result.stimulusEvidence?.limitation
     || "This synthetic signal does not execute or measure the named behavioral attack and carries no defense, dwell, containment, or ROI credit.";
   return {

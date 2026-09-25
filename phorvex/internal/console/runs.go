@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/cataloguev1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 )
 
@@ -314,15 +315,9 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	}
 	rm.mu.Lock()
 	if name == mongoExposureConfig {
-		if rm.loadErr != nil {
+		if err := rm.mongoPriorAdmissionLocked(); err != nil {
 			rm.mu.Unlock()
-			return "", fmt.Errorf("prior run state unavailable; Mongo exposure launch refused")
-		}
-		for _, prior := range rm.runs {
-			if prior.UnsafeToRetry {
-				rm.mu.Unlock()
-				return "", fmt.Errorf("prior run has unresolved cleanup; Mongo exposure launch refused")
-			}
+			return "", fmt.Errorf("Mongo exposure prior-run admission refused: %w", err)
 		}
 	}
 	if name == podBoundTokenConfig {
@@ -656,6 +651,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		if s == "c2-mongo-uncredentialed-service-exposure" {
 			return "", fmt.Errorf("Mongo exposure requires the server-owned named suite mongo-exposure-baseline")
 		}
+		if s == string(cataloguev1.GuardrailCalibration) || s == string(cataloguev1.MCPSessionBaseline) {
+			return "", fmt.Errorf("fixed control %s requires the server-owned fixed-suite profile", s)
+		}
 		if s == "c2-pod-bound-api-auth-response" {
 			return "", fmt.Errorf("Pod-bound API bearer response requires the server-owned named suite %s", podBoundTokenConfig)
 		}
@@ -900,7 +898,7 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 		}
 		seenNodes := map[string]bool{}
 		for _, name := range f.AllowedNodeNames {
-			if !nsRe.MatchString(name) || seenNodes[name] {
+			if len(validation.IsDNS1123Subdomain(name)) != 0 || seenNodes[name] {
 				return dest, fmt.Errorf("named Mongo suite CPU node list invalid")
 			}
 			seenNodes[name] = true

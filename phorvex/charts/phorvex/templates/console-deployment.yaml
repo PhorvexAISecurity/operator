@@ -106,6 +106,10 @@ spec:
         app.kubernetes.io/name: phorvex-console
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: console
+      {{- if and .Values.phorvex.console.auth.grants.enabled .Values.phorvex.console.auth.grants.create }}
+      annotations:
+        checksum/console-grants: {{ .Values.phorvex.console.auth.grants.data | default "{\n  \"version\": 1,\n  \"subjects\": []\n}\n" | sha256sum | quote }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "phorvex.consoleServiceAccountName" . }}
       securityContext:

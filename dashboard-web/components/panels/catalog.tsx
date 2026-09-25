@@ -14,6 +14,7 @@ import { setSelectedTarget } from "@/lib/provider-store";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailCalibrationResult } from "@/components/panels/guardrail-calibration-result";
 import { NATSClientResponseResult } from "@/components/panels/nats-client-response-result";
+import { NATSConfigurationClarity } from "@/components/panels/nats-configuration-clarity";
 import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
 import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
@@ -367,7 +368,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             {!fixedEvidence.configurationResult.accepted && <div className="text-muted-foreground">Unaccepted observer indication: {fixedEvidence.configurationResult.observedFinding}</div>}
             <div>remote receipt: {fixedEvidence.configurationResult.remoteStatus} · legitimate ACK: {fixedEvidence.configurationResult.legitimateAcked ? "yes" : "unverified"}</div>
             <div>stream cleanup: {fixedEvidence.configurationResult.streamCleanup} · fixture cleanup: {fixedEvidence.configurationResult.fixtureResourcesCleanup}</div>
-            <div>brain: {fixedEvidence.configurationResult.brainMode} · defense efficacy: {fixedEvidence.configurationResult.securityEfficacy}</div>
+            <NATSConfigurationClarity result={fixedEvidence.configurationResult} />
             {(fixedEvidence.configurationResult.issues || []).map((issue, index) => <div key={`${index}-${issue}`} className="text-warning">{issue}</div>)}
           </div>}
           {fixedEvidence?.natsResponseResult && <div className="mt-2 border-t border-border pt-2"><NATSClientResponseResult result={fixedEvidence.natsResponseResult} unsafeToRetry={fixedStatus?.unsafeToRetry} /></div>}

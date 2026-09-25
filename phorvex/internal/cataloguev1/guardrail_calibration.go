@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -299,27 +300,64 @@ type guardrailRuntimeState struct {
 	Active     string             `json:"active"`
 	Loaded     []string           `json:"loaded"`
 	Thresholds map[string]float64 `json:"thresholds"`
+	Shape      string
+	Mode       string
+	Models     map[string]guardrailModelDeclaration
+	Runtime    guardrailRuntimeDeclaration
 }
+
+type guardrailModelDeclaration struct {
+	Model    string
+	Revision string
+}
+
+type guardrailRuntimeDeclaration struct {
+	Python   string
+	Packages map[string]string
+}
+
+const (
+	guardrailModelPGV1 = "protectai/deberta-v3-base-prompt-injection"
+	guardrailModelPGV2 = "protectai/deberta-v3-base-prompt-injection-v2"
+)
 
 func parseGuardrailState(raw []byte, annotation string) (guardrailRuntimeState, error) {
 	var s guardrailRuntimeState
 	fields, err := uniqueGuardrailObject(raw)
-	if err != nil || len(fields) != 4 {
+	if err != nil || len(fields) != 4 && len(fields) != 7 {
 		return s, errors.New("guardrail state object has missing, duplicate or unsupported fields")
 	}
+	current := len(fields) == 7
 	for key := range fields {
-		if key != "ready" && key != "active" && key != "loaded" && key != "thresholds" {
+		if key != "ready" && key != "active" && key != "loaded" && key != "thresholds" &&
+			!(current && (key == "mode" || key == "models" || key == "runtime")) {
 			return s, errors.New("guardrail state has an unsupported field")
 		}
+	}
+	for _, key := range []string{"ready", "active", "loaded", "thresholds"} {
+		if fields[key] == nil {
+			return s, errors.New("guardrail state omits a required field")
+		}
+	}
+	if current {
+		for _, key := range []string{"mode", "models", "runtime"} {
+			if fields[key] == nil {
+				return s, errors.New("guardrail state omits current producer metadata")
+			}
+		}
+		s.Shape = "current"
+	} else {
+		s.Shape = "legacy"
 	}
 	thresholdFields, err := uniqueGuardrailObject(fields["thresholds"])
 	if err != nil || len(thresholdFields) != 2 || thresholdFields["pgv1"] == nil || thresholdFields["pgv2"] == nil {
 		return s, errors.New("guardrail state thresholds are missing or ambiguous")
 	}
-	if err := json.Unmarshal(fields["ready"], &s.Ready); err != nil {
-		return s, err
+	if string(bytes.TrimSpace(fields["ready"])) != "true" {
+		return s, errors.New("guardrail state is not ready")
 	}
-	if err := json.Unmarshal(fields["active"], &s.Active); err != nil {
+	s.Ready = true
+	if s.Active, err = guardrailDeclaredString(fields["active"]); err != nil {
 		return s, err
 	}
 	if err := json.Unmarshal(fields["loaded"], &s.Loaded); err != nil {
@@ -327,14 +365,20 @@ func parseGuardrailState(raw []byte, annotation string) (guardrailRuntimeState, 
 	}
 	s.Thresholds = make(map[string]float64, 2)
 	for key, value := range thresholdFields {
+		value = bytes.TrimSpace(value)
+		if len(value) == 0 || value[0] != '-' && (value[0] < '0' || value[0] > '9') {
+			return s, errors.New("guardrail threshold is not a JSON number")
+		}
 		var threshold float64
 		if err := json.Unmarshal(value, &threshold); err != nil {
 			return s, err
 		}
 		s.Thresholds[key] = threshold
 	}
-	if !s.Ready || s.Active != annotation || len(s.Loaded) != 2 || len(s.Thresholds) != 2 || s.Thresholds["pgv1"] <= 0 || s.Thresholds["pgv2"] <= 0 ||
-		s.Thresholds["pgv1"] > 1 || s.Thresholds["pgv2"] > 1 || math.IsNaN(s.Thresholds["pgv1"]) || math.IsNaN(s.Thresholds["pgv2"]) {
+	if (s.Active != "pgv1" && s.Active != "pgv2") || s.Active != annotation || len(s.Loaded) != 2 || len(s.Thresholds) != 2 ||
+		s.Thresholds["pgv1"] < 0 || s.Thresholds["pgv2"] < 0 ||
+		s.Thresholds["pgv1"] > 1 || s.Thresholds["pgv2"] > 1 || math.IsNaN(s.Thresholds["pgv1"]) || math.IsNaN(s.Thresholds["pgv2"]) ||
+		math.IsInf(s.Thresholds["pgv1"], 0) || math.IsInf(s.Thresholds["pgv2"], 0) {
 		return s, errors.New("guardrail runtime state is unavailable or incoherent")
 	}
 	loaded := map[string]bool{}
@@ -344,7 +388,67 @@ func parseGuardrailState(raw []byte, annotation string) (guardrailRuntimeState, 
 	if len(loaded) != 2 || !loaded["pgv1"] || !loaded["pgv2"] {
 		return s, errors.New("guardrail loaded variant roster differs")
 	}
+	if current {
+		if s.Mode, err = guardrailDeclaredString(fields["mode"]); err != nil || s.Mode != "enforce" && s.Mode != "observe" {
+			return s, errors.New("guardrail mode declaration is unsupported")
+		}
+		models, err := uniqueGuardrailObject(fields["models"])
+		if err != nil || len(models) != 2 || models["pgv1"] == nil || models["pgv2"] == nil {
+			return s, errors.New("guardrail model declarations are missing or ambiguous")
+		}
+		s.Models = make(map[string]guardrailModelDeclaration, 2)
+		for variant, expected := range map[string]string{"pgv1": guardrailModelPGV1, "pgv2": guardrailModelPGV2} {
+			declared, err := uniqueGuardrailObject(models[variant])
+			if err != nil || len(declared) != 2 || declared["model"] == nil || declared["revision"] == nil {
+				return s, errors.New("guardrail model declaration fields differ")
+			}
+			model, modelErr := guardrailDeclaredString(declared["model"])
+			revision, revisionErr := guardrailDeclaredString(declared["revision"])
+			if modelErr != nil || revisionErr != nil || model != expected {
+				return s, errors.New("guardrail model name or declared revision differs")
+			}
+			s.Models[variant] = guardrailModelDeclaration{Model: model, Revision: revision}
+		}
+		runtime, err := uniqueGuardrailObject(fields["runtime"])
+		if err != nil || len(runtime) != 2 || runtime["python"] == nil || runtime["packages"] == nil {
+			return s, errors.New("guardrail runtime declaration fields differ")
+		}
+		if s.Runtime.Python, err = guardrailDeclaredString(runtime["python"]); err != nil {
+			return s, errors.New("guardrail Python version declaration differs")
+		}
+		packages, err := uniqueGuardrailObject(runtime["packages"])
+		if err != nil || len(packages) != 5 {
+			return s, errors.New("guardrail package declarations are missing or ambiguous")
+		}
+		s.Runtime.Packages = make(map[string]string, 5)
+		for _, name := range []string{"fastapi", "httpx", "torch", "transformers", "uvicorn"} {
+			value, ok := packages[name]
+			if !ok {
+				return s, errors.New("guardrail package declaration is missing")
+			}
+			version, err := guardrailDeclaredString(value)
+			if err != nil {
+				return s, errors.New("guardrail package version declaration differs")
+			}
+			s.Runtime.Packages[name] = version
+		}
+	}
 	return s, nil
+}
+
+// These are strings declared by the proxy response, not loaded-weight or
+// running-process attestations. Keep them bounded and exact for drift checks.
+func guardrailDeclaredString(raw []byte) (string, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) < 2 || raw[0] != '"' {
+		return "", errors.New("guardrail declaration is not a string")
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil || len(value) == 0 || len(value) > 256 ||
+		strings.TrimSpace(value) != value || strings.ContainsAny(value, "\x00\n\r\t") {
+		return "", errors.New("guardrail declaration is empty or malformed")
+	}
+	return value, nil
 }
 
 func uniqueGuardrailObject(raw []byte) (map[string]json.RawMessage, error) {
@@ -512,6 +616,23 @@ func (guardrailCalibrationHandler) Run(ctx context.Context, jc JobContext) (resu
 		result.Summary = "guardrail runtime state changed during calibration"
 		return result
 	}
+	result.Evidence["stateShape"] = stateBefore.Shape
+	result.Evidence["declaredMode"] = "UNREPORTED"
+	result.Evidence["declaredProvenance"] = "UNREPORTED"
+	if stateBefore.Shape == "current" {
+		// Public state is a declaration by the proxy endpoint. Neither the
+		// running source nor loaded model weights are attested by this read.
+		result.Evidence["declaredMode"] = stateBefore.Mode
+		result.Evidence["declaredProvenance"] = "PROXY_RESPONSE_NOT_ATTESTED"
+		result.Evidence["declaredPythonVersion"] = stateBefore.Runtime.Python
+		for _, variant := range []string{"pgv1", "pgv2"} {
+			result.Evidence[variant+"DeclaredModel"] = stateBefore.Models[variant].Model
+			result.Evidence[variant+"DeclaredRevision"] = stateBefore.Models[variant].Revision
+		}
+		for _, name := range []string{"fastapi", "httpx", "torch", "transformers", "uvicorn"} {
+			result.Evidence["declaredPackageVersion."+name] = stateBefore.Runtime.Packages[name]
+		}
+	}
 	after, err := captureGuardrailAuthority(ctx, jc.Runtime)
 	if err != nil || guardrailFingerprint(before) != guardrailFingerprint(after) {
 		result.Summary = "guardrail target, route or source changed during calibration"
@@ -551,7 +672,8 @@ func shaGuardrailText(s string) string  { return shaGuardrailBytes([]byte(s)) }
 func shaGuardrailBytes(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func sameGuardrailState(a, b guardrailRuntimeState) bool {
 	return a.Ready == b.Ready && a.Active == b.Active && a.Thresholds["pgv1"] == b.Thresholds["pgv1"] && a.Thresholds["pgv2"] == b.Thresholds["pgv2"] &&
-		len(a.Loaded) == len(b.Loaded) && strings.Join(a.Loaded, ",") == strings.Join(b.Loaded, ",")
+		len(a.Loaded) == len(b.Loaded) && strings.Join(a.Loaded, ",") == strings.Join(b.Loaded, ",") &&
+		a.Shape == b.Shape && a.Mode == b.Mode && reflect.DeepEqual(a.Models, b.Models) && reflect.DeepEqual(a.Runtime, b.Runtime)
 }
 
 func (guardrailCalibrationHandler) Reconcile(_ context.Context, _ JobContext, j Journal) Cleanup {
