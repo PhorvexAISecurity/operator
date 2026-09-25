@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 58
+revision: 65
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -27,47 +27,57 @@ checks:
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
     at: '2026-09-25T03:52:11+00:00'
   preflight:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/preflight/ec51-selected-receipt.json
-    sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
-    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:30:05+00:00'
+    artifact: evidence/release-tag-validation-pending.md
+    sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+    source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+    at: '2026-09-25T11:04:48+00:00'
+    rationale: ec51 source evidence retained in check history; exact release-tag merge
+      head requires new attestation
   implementation:
     result: PASS
     by: stack-case-review
     artifact: 04-diff.patch
-    sha256: edb33ac1fb917b010a769361025ab00b69675bb10747088810b72586ec784603
-    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:11:07+00:00'
+    sha256: f3afc28dca97a41d772306316016ec6c70041eb422cd92f468e7f1ec3a24db36
+    source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+    at: '2026-09-25T11:04:48+00:00'
   l0:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/preflight/ec51-go-phorvex-fixed-toolchain.log
-    sha256: e8f00de8f02b72c82ef7dfa4da3cfa15bca738d78652e262fba386b07dc476f8
-    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:19:15+00:00'
+    artifact: evidence/release-tag-validation-pending.md
+    sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+    source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+    at: '2026-09-25T11:04:48+00:00'
+    rationale: ec51 source evidence retained in check history; exact release-tag merge
+      head requires new attestation
   l1:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/ec51-worker-checks.md
-    sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
-    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:20:48+00:00'
+    artifact: evidence/release-tag-validation-pending.md
+    sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+    source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+    at: '2026-09-25T11:04:48+00:00'
+    rationale: ec51 source evidence retained in check history; exact release-tag merge
+      head requires new attestation
   l2:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/ec51-worker-checks.md
-    sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
-    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:20:48+00:00'
+    artifact: evidence/release-tag-validation-pending.md
+    sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+    source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+    at: '2026-09-25T11:04:49+00:00'
+    rationale: ec51 source evidence retained in check history; exact release-tag merge
+      head requires new attestation
   positive_control:
-    result: PASS
+    result: UNAVAILABLE
     by: stack-case-review
-    artifact: evidence/ec51-worker-checks.md
-    sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
-    source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:20:48+00:00'
+    artifact: evidence/release-tag-validation-pending.md
+    sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+    source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+    at: '2026-09-25T11:04:49+00:00'
+    rationale: ec51 source evidence retained in check history; exact release-tag merge
+      head requires new attestation
   incident:
     result: UNAVAILABLE
     by: codex-lead
@@ -125,8 +135,8 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: campaign/catalogue-litellm-routing-20260925
-  base_sha: c4d20703e828b638ba4b9c83fd6ed6d596b3674c
-  head_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  base_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+  head_sha: da851b61de7abfd4d15161a886f4995f4c140d35
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/338
@@ -148,12 +158,12 @@ verification:
   live_required: true
   soak_required: false
   p3: UNAVAILABLE
-  l0: PASS
-  l1: PASS
-  l2: PASS
+  l0: UNAVAILABLE
+  l1: UNAVAILABLE
+  l2: UNAVAILABLE
   l3: pending
   l4: pending
-  positive_control: PASS
+  positive_control: UNAVAILABLE
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -166,7 +176,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-25T05:30:09+00:00'
+updated_at: '2026-09-25T11:04:49+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -212,6 +222,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-25T05:10:50+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T11:04:27+00:00'
   by: stack-case-review
   fields:
   - implementation
@@ -654,3 +669,45 @@ check_history:
   sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
   source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
   at: '2026-09-25T05:29:06+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: edb33ac1fb917b010a769361025ab00b69675bb10747088810b72586ec784603
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:07+00:00'
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/ec51-selected-receipt.json
+  sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:30:05+00:00'
+- check: l0
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/ec51-go-phorvex-fixed-toolchain.log
+  sha256: e8f00de8f02b72c82ef7dfa4da3cfa15bca738d78652e262fba386b07dc476f8
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:19:15+00:00'
+- check: l1
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/ec51-worker-checks.md
+  sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:20:48+00:00'
+- check: l2
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/ec51-worker-checks.md
+  sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:20:48+00:00'
+- check: positive_control
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/ec51-worker-checks.md
+  sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:20:48+00:00'
