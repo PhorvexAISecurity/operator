@@ -449,6 +449,11 @@ func TestDisjointAdmissionLegacyVoiceRecoveryProjection(t *testing.T) {
 			if (post.Code == http.StatusOK) != tc.admit {
 				t.Fatalf("legacy POST: %d", post.Code)
 			}
+			if tc.admit {
+				// POST starts a worker goroutine. Drain its terminal status before
+				// t.TempDir removes the fixture's state directory.
+				waitForRunToLeaveRunning(t, f.srv.runs, "v1run-6", 2*time.Second)
+			}
 			if !tc.admit && f.srv.runs.seq != 5 {
 				t.Fatalf("blocked legacy allocated run %d", f.srv.runs.seq)
 			}

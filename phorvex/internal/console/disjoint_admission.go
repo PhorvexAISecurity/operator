@@ -71,7 +71,8 @@ var priorVoiceJournalKeys = map[string][]string{
 func disjointVoiceCandidate(profile cataloguev1.ProfileID) bool {
 	switch profile {
 	case cataloguev1.ChromaOwnedVector, cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential, cataloguev1.LiteLLMRouting,
-		cataloguev1.CRMRefund, cataloguev1.CRMReset:
+		cataloguev1.CRMRefund, cataloguev1.CRMReset, cataloguev1.GuardrailCalibration,
+		cataloguev1.MCPSessionBaseline:
 		return true
 	default:
 		return false
@@ -109,6 +110,18 @@ func (rm *RunManager) disjointVoiceAdmissionLocked(profile cataloguev1.ProfileID
 			destination.ScopeTenant == "phorvex-system" ||
 			destination.ScopeTenant == rm.cfg.CatalogueV1.AllowedTenant ||
 			rm.cfg.CatalogueV1.CRMNamespaceUID == "" || rm.cfg.CatalogueV1.CRMServiceAccountName == "" {
+			return false
+		}
+	case cataloguev1.GuardrailCalibration:
+		runtime := rm.cfg.catalogueV1RuntimeConfig().Guardrail
+		if destination.ScopeTenant != "vllm" || rm.cfg.CatalogueV1.GuardrailNamespace != "vllm" ||
+			runtime == nil || cataloguev1.ValidateGuardrailCalibrationRuntime(*runtime) != nil {
+			return false
+		}
+	case cataloguev1.MCPSessionBaseline:
+		runtime := rm.cfg.catalogueV1RuntimeConfig().MCP
+		if destination.ScopeTenant != "mcp" || rm.cfg.CatalogueV1.MCPNamespace != "mcp" ||
+			runtime == nil || cataloguev1.ValidateMCPSessionRuntime(*runtime) != nil {
 			return false
 		}
 	}

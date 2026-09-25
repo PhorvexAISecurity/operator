@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 const moduleUnderTest = { exports: {} };
 new Function("require", "module", "exports", compiled)(require, moduleUnderTest, moduleUnderTest.exports);
-const { catalogueSignalState, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } = moduleUnderTest.exports;
+const { attackCSVActuator, catalogueSignalState, exactCatalogueDecision, canSendCatalogueSignal, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } = moduleUnderTest.exports;
 
 const base = {
   id: "atk-signal-1",
@@ -36,7 +36,9 @@ test("catalogue signal remains unscored despite a contradictory legacy outcome",
   assert.equal(isCatalogueSignalResult(row), true);
   assert.equal(showSecurityOutcomeSections(row), false);
   assert.equal(catalogueSignalState(row).label, "SIGNAL ACCEPTED");
-  assert.equal(catalogueSignalState(row).response, "RESPONSE OBSERVED");
+  assert.equal(catalogueSignalState(row).response, "TARGET UID CHANGED");
+  assert.match(catalogueSignalState(row).responseDetail, /cause not established/);
+  assert.equal(attackCSVActuator({ ...row, phorvexAction: "rotate", responseAction: "rotate", decisionEvidence: { correlation: "exact-event-uid", selected: true, action: "rotate" } }), "");
 });
 
 test("synthetic detector signal v2 remains unscored despite contradictory outcome labels", () => {
@@ -51,7 +53,7 @@ test("synthetic detector signal v2 remains unscored despite contradictory outcom
   };
   assert.equal(isCatalogueSignalResult(row), true);
   assert.equal(showSecurityOutcomeSections(row), false);
-  assert.equal(catalogueSignalState(row).response, "RESPONSE OBSERVED");
+  assert.equal(catalogueSignalState(row).response, "TARGET UID CHANGED");
 
   const schemaOnly = { ...row, evidenceKind: "", outcome: "DEFENDED" };
   assert.equal(isCatalogueSignalResult(schemaOnly), true);
@@ -69,21 +71,40 @@ test("unconfirmed and unavailable observations remain distinct", () => {
     outcomeClass: "response-unconfirmed",
     observationError: "no exact target response observed within registered window",
   };
-  assert.equal(catalogueSignalState(unconfirmed).response, "RESPONSE UNCONFIRMED");
+  assert.equal(catalogueSignalState(unconfirmed).response, "TARGET CHANGE UNCONFIRMED");
   assert.equal(catalogueSignalState(unconfirmed).responseDetail, "no exact target response observed within registered window");
   const unavailable = { ...unconfirmed, status: "partial", outcomeClass: "observation-unavailable", observationError: "pod watch failed" };
   assert.equal(catalogueSignalState(unavailable).label, "SIGNAL RECORD PARTIAL");
   assert.equal(catalogueSignalState(unavailable).response, "OBSERVATION UNAVAILABLE");
   assert.equal(catalogueSignalState(unavailable).responseDetail, "pod watch failed");
   const responseWithDecisionError = { ...base, status: "partial", observationError: "decision correlation unavailable" };
-  assert.equal(catalogueSignalState(responseWithDecisionError).response, "RESPONSE OBSERVED");
+  assert.equal(catalogueSignalState(responseWithDecisionError).response, "TARGET UID CHANGED");
   assert.equal(catalogueSignalState(responseWithDecisionError).label, "SIGNAL RECORD PARTIAL");
+});
+
+test("compatibility and explicit signal eligibility are independent", () => {
+  assert.equal(canSendCatalogueSignal({ compatible: true, signalEligible: true }, true), true);
+  for (const row of [{ compatible: true }, { compatible: true, signalEligible: false }, { compatible: false, signalEligible: true }]) {
+    assert.equal(canSendCatalogueSignal(row, true), false);
+  }
+  assert.equal(canSendCatalogueSignal({ compatible: true, signalEligible: true }, false), false);
+});
+
+test("selected action requires the injected event UID, name, rule and target join", () => {
+  const stimulusEvidence = { observed: true, eventUid: "event-1", eventName: "signal-1", eventRule: "PromptInjection", targetUid: "pod-1" };
+  const joined = { correlation: "exact-event-uid", eventUid: "event-1", eventName: "signal-1", eventRule: "PromptInjection", targetUid: "pod-1", selected: true, action: "quarantine" };
+  assert.equal(exactCatalogueDecision({ ...base, stimulusEvidence, decisionTraceEvidence: [joined] })?.action, "quarantine");
+  for (const field of ["eventUid", "eventName", "eventRule", "targetUid", "correlation"]) {
+    assert.equal(exactCatalogueDecision({ ...base, stimulusEvidence, decisionTraceEvidence: [{ ...joined, [field]: "foreign" }] }), undefined, field);
+  }
+  assert.equal(exactCatalogueDecision({ ...base, stimulusEvidence, decisionTraceEvidence: [], responseAction: "rotate" }), undefined);
 });
 
 test("a generic behavioral observation failure is not reclassified as a synthetic signal", () => {
   const behavioral = { id: "atk-behavioral", status: "partial", outcome: "", outcomeClass: "observation-unavailable", observationError: "watch failed" };
   assert.equal(isCatalogueSignalResult(behavioral), false);
   assert.equal(showSecurityOutcomeSections(behavioral), true);
+  assert.equal(attackCSVActuator({ ...behavioral, phorvexAction: "quarantine" }), "quarantine");
 });
 
 test("unversioned historical rows retain a separate provenance classification", () => {

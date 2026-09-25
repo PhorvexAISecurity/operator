@@ -1,0 +1,253 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f34432ec966d0fd23bca4fcd57392241a494b7c56bd6bcd73b21a9feadd7156c
+    source_sha: ce7d1973ebe7f8df7f3a1ad72e0d45c12a547246
+    at: '2026-09-24T20:19:39+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 01a710bee8f01a18b6417095926fa3d96101d15213ef9c6ff8c2c1c53394c87a
+    source_sha: ce7d1973ebe7f8df7f3a1ad72e0d45c12a547246
+    at: '2026-09-24T20:25:50+00:00'
+  preflight:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/preflight-final/receipt.json
+    sha256: 73df51367fb3e89b8b0c76068ec3376011e665d711961d54b565c0c2172c9a15
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:37+00:00'
+  implementation:
+    result: PASS
+    by: stack-integration
+    artifact: 04-diff.patch
+    sha256: 2745f382fad101c53bf1547c85eadc50453f50a802befbbc8bcba712ecee7be1
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:37+00:00'
+  l0:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/preflight-final/receipt.json
+    sha256: 73df51367fb3e89b8b0c76068ec3376011e665d711961d54b565c0c2172c9a15
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:37+00:00'
+  l1:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/verify-offline-final.log
+    sha256: 0c70a845488625694f185a3aaf6db50bc49e978bbca19773432fddc1c18ca46b
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:37+00:00'
+  l2:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/preflight-final/run-1790282518806487698/go-phorvex.log
+    sha256: 04f8b61729e7776a4357bafd5f6d955ec53f2d89199608e0f9d92dd0fc814b80
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:37+00:00'
+  positive_control:
+    result: PASS
+    by: stack-integration
+    artifact: evidence/ROOT-REVIEW.json
+    sha256: c05c670209a839f27590cecf5fcd1e2e10d50c78d305c15e222737f8762377a3
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:37+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 01a710bee8f01a18b6417095926fa3d96101d15213ef9c6ff8c2c1c53394c87a
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:58+00:00'
+    baseline_sha: ce7d1973ebe7f8df7f3a1ad72e0d45c12a547246
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: a4a0514aa97c59d6df5acb959b6360f0afa8ec9ab7e2023918e08aee4c8ceea8
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:50:58+00:00'
+    incident_sha256: 01a710bee8f01a18b6417095926fa3d96101d15213ef9c6ff8c2c1c53394c87a
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: a618f54df34eced92f4d12d7c88bbb45cc4a5a1c3c143b7d0733eca0f21c24d5
+    source_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+    at: '2026-09-24T20:52:15+00:00'
+fix_id: CAT-MONGO-ADMISSION
+issues: []
+title: Admit exact Mongo controls on valid EKS nodes beside bounded prior Voice debt
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: stack-integration
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-mongo-admission-20260924
+  code_sha: ce7d1973ebe7f8df7f3a1ad72e0d45c12a547246
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-mongo-admission-20260924
+  base_sha: ce7d1973ebe7f8df7f3a1ad72e0d45c12a547246
+  head_sha: 4a9c35776d15549c0a3cd4f0632cd56fddcf34e5
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/334
+  reviewed_head: 32f3eb3cd0863b9faee96abcbd4042e350650724
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: PR334 open main; normal deployment and current profile config then independently
+    verify console admission and actual behavior without clearing original Voice history
+updated_at: '2026-09-24T20:53:20+00:00'
+follow_up_to: CAT-MONGO-EXPOSURE
+configuration_history:
+- at: '2026-09-24T20:13:30+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-24T20:50:36+00:00'
+  by: stack-integration
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-24T20:53:18+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-24T20:13:48+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-24T20:13:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-24T20:50:37+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-24T20:50:39+00:00'
+  by: stack-integration
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-24T20:50:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-24T20:51:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-24T20:53:20+00:00'
+  by: codex-lead
+  artifact: PR_BODY.draft.md
+  note: null
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 939798d2202dfec4e9745cea6e2a15ace0ff511d679c387e4ffef3de35e431f2
+  source_sha: ce7d1973ebe7f8df7f3a1ad72e0d45c12a547246
+  at: '2026-09-24T20:13:51+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+handoff:
+  id: CAT-MONGO-ADMISSION:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
