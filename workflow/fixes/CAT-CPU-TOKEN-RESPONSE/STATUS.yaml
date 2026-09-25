@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -100,6 +100,13 @@ checks:
     source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
     at: '2026-09-25T04:20:23+00:00'
     incident_sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.json
+    sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:21:06+00:00'
 fix_id: CAT-CPU-TOKEN-RESPONSE
 issues: []
 title: Add isolated CPU Pod-bound credential response catalogue case
@@ -168,7 +175,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T04:20:28+00:00'
+updated_at: '2026-09-25T04:21:06+00:00'
 configuration_history:
 - at: '2026-09-25T03:09:19+00:00'
   by: codex-lead
