@@ -386,6 +386,14 @@ phorvex:
       profileSHA256: ""
       sourceConfigMap: guardrail-proxy
       guardrailJournalName: ""
+    # Separate pinned authority for the existing injected guardrail-effect
+    # action. Its fixed guarded baseline may stop without creating an event.
+    guardrailEffect:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

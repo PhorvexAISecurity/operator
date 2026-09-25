@@ -52,6 +52,7 @@ type availabilityTerminal struct {
 	GuardedChatsAttempted      int                   `json:"guardedChatsAttempted"`
 	KubeReadsAttempted         int                   `json:"kubeReadsAttempted"`
 	ExactEventDeletesAttempted int                   `json:"exactEventDeletesAttempted"`
+	SecurityEventsAttempted    int                   `json:"securityEventsAttempted,omitempty"`
 	CleanupVerified            bool                  `json:"cleanupVerified"`
 	StartedAt                  string                `json:"startedAt"`
 	FinishedAt                 string                `json:"finishedAt"`

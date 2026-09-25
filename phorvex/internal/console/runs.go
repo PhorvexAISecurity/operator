@@ -95,7 +95,10 @@ type RunStatus struct {
 	Outcome       string `json:"outcome,omitempty"`
 	CleanupStatus string `json:"cleanupStatus,omitempty"`
 	UnsafeToRetry bool   `json:"unsafeToRetry,omitempty"`
-	ProfileSHA256 string `json:"profileSHA256,omitempty"`
+	// Computed from a separate immutable Voice cleanup receipt for public history;
+	// the retained terminal status and its failed/unsafe fields are never rewritten.
+	CleanupResolvedSeparately bool   `json:"cleanupResolvedSeparately,omitempty"`
+	ProfileSHA256             string `json:"profileSHA256,omitempty"`
 }
 
 // tsNow is the canonical run timestamp format (UTC) used for the report history.
@@ -1051,6 +1054,9 @@ func (rm *RunManager) Status(id string) (*RunStatus, bool) {
 		st.Arms, st.Trials = summarizeArms(rows)
 	}
 	cp := *st
+	if st.ID == voiceLegacyRunID {
+		cp.CleanupResolvedSeparately = rm.voiceCleanupResolvedLocked(st)
+	}
 	cp.QueuePos = rm.queuePosLocked(id) // 0 unless still queued
 	return &cp, true
 }
@@ -1066,6 +1072,9 @@ func (rm *RunManager) List() []RunStatus {
 			st.Arms, st.Trials = summarizeArms(rows)
 		}
 		cp := *st
+		if st.ID == voiceLegacyRunID {
+			cp.CleanupResolvedSeparately = rm.voiceCleanupResolvedLocked(st)
+		}
 		cp.QueuePos = rm.queuePosLocked(id) // 0 unless still queued
 		out = append(out, cp)
 	}
@@ -1130,6 +1139,9 @@ func (rm *RunManager) HydrateList(selected []RunStatus) []RunStatus {
 			if arms != nil {
 				cp.Arms, cp.Trials = arms, trials
 				st.Arms, st.Trials = arms, trials
+			}
+			if st.ID == voiceLegacyRunID {
+				cp.CleanupResolvedSeparately = rm.voiceCleanupResolvedLocked(st)
 			}
 			cp.QueuePos = rm.queuePosLocked(meta.ID)
 			out = append(out, cp)

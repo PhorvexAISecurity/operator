@@ -1,0 +1,48 @@
+# Separate exact-byte profile for the existing injected guardrail-effect action.
+# The shared guardrailAvailabilityFixture key carries source/authority pins only;
+# it does not apply the availability-recovery pgv1 outcome rule. Fill every
+# __SET_ scalar from fresh installed evidence and package one immutable ConfigMap.
+# The default chart keeps this action unavailable.
+kubeconfig: ""
+context: "__SET_LOGICAL_CLUSTER_TARGET__"
+namespace: vllm
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+outDir: out-guardrail-effect
+defenderFilter: []
+scenarioFilter: []
+guardrailAvailabilityFixture:
+  runID: run-1
+  transport: in-cluster
+  clusterUID: "__SET_REVIEWED_KUBE_SYSTEM_UID__"
+  podName: "__SET_REVIEWED_VLLM_POD_NAME__"
+  podUID: "__SET_REVIEWED_VLLM_POD_UID__"
+  podImageID: "__SET_REVIEWED_VLLM_IMAGE_ID__"
+  serviceUID: "__SET_REVIEWED_VLLM_SERVICE_UID__"
+  sourceConfigMapName: guardrail-proxy
+  sourceUID: "__SET_REVIEWED_GUARDRAIL_SOURCE_CONFIGMAP_UID__"
+  sourceSHA256: "__SET_REVIEWED_GUARDRAIL_SOURCE_SHA256__"
+  guardrailJournalName: "__SET_REVIEWED_GUARDRAIL_JOURNAL_NAME__"
+  guardrailJournalUID: "__SET_REVIEWED_GUARDRAIL_JOURNAL_UID__"
+  managerPodName: "__SET_REVIEWED_MANAGER_POD_NAME__"
+  managerPodUID: "__SET_REVIEWED_MANAGER_POD_UID__"
+  managerImageID: "__SET_REVIEWED_MANAGER_IMAGE_ID__"
+  consoleDeploymentName: "__SET_REVIEWED_CONSOLE_DEPLOYMENT_NAME__"
+  consoleDeploymentUID: "__SET_REVIEWED_CONSOLE_DEPLOYMENT_UID__"
+  consoleImageID: "__SET_REVIEWED_CONSOLE_IMAGE_ID__"
+  policyName: vllm-defense
+  policyUID: "__SET_REVIEWED_POLICY_UID__"
+  policyGeneration: __SET_REVIEWED_POLICY_GENERATION__
+  modelID: "__SET_REVIEWED_MODEL_ID__"
+  activeVariant: "__SET_REVIEWED_CURRENT_PGV1_OR_PGV2__"
+  eventCreator: "__SET_REVIEWED_CONSOLE_EVENT_CREATOR__"
+  consoleURL: http://127.0.0.1:8090
+  scopedTokenFile: /etc/phorvex-catalogue-v1/token
+  auditURL: "__SET_REVIEWED_AUDIT_SOURCE_URL__"
+  auditServerName: "__SET_REVIEWED_AUDIT_SERVER_DNS__"
+  auditCAFile: /etc/audit-client/ca.crt
+  auditClientCertFile: /etc/audit-client/tls.crt
+  auditClientKeyFile: /etc/audit-client/tls.key
+  maxRunSeconds: 600
+  cleanupSeconds: 90

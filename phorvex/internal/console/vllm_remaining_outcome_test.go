@@ -289,7 +289,7 @@ func TestRemainingVLLMHandlersRetainAmbiguousStimulusCreate(t *testing.T) {
 	}
 }
 
-func TestGuardrailHandlerUsesCoherentDynamicBaselineWithoutSetupWrites(t *testing.T) {
+func TestGuardrailHandlerRefusesUnpinnedMeasuredProfileBeforeEvent(t *testing.T) {
 	resetM168AttackMemory()
 	var mu sync.Mutex
 	active, posts := "pgv2", 0
@@ -310,14 +310,8 @@ func TestGuardrailHandlerUsesCoherentDynamicBaselineWithoutSetupWrites(t *testin
 	request := httptest.NewRequest(http.MethodPost, "/api/vllm/attack", strings.NewReader(`{"action":"guardrail-rotate"}`))
 	response := httptest.NewRecorder()
 	s.vllmAttack(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("coherent pgv2 launch failed: code=%d body=%s", response.Code, response.Body.String())
-	}
-	var reply struct {
-		AttackID string `json:"attackId"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil || reply.AttackID == "" {
-		t.Fatalf("missing attack identity: err=%v body=%s", err, response.Body.String())
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "profile-failed") {
+		t.Fatalf("unreviewed effect source was admitted: code=%d body=%s", response.Code, response.Body.String())
 	}
 	fixture.mu.Lock()
 	commands := append([]string(nil), fixture.commands...)
@@ -328,23 +322,9 @@ func TestGuardrailHandlerUsesCoherentDynamicBaselineWithoutSetupWrites(t *testin
 		}
 	}
 	mu.Lock()
-	if posts != 0 {
-		mu.Unlock()
-		t.Fatalf("read-only guardrail setup sent %d runtime writes", posts)
-	}
-	active = "pgv1"
-	mu.Unlock()
-	deadline := time.Now().Add(time.Second)
-	var record *attackRecord
-	for time.Now().Before(deadline) {
-		record = attackSnapshotByID(reply.AttackID)
-		if record != nil && record.Status != "running" {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if record == nil || record.EffectEvidence == nil || !record.EffectEvidence.Observed || record.EffectEvidence.Before != "pgv2" || record.EffectEvidence.After != "pgv1" || record.Outcome != "" || record.StimulusEvidence == nil || record.StimulusEvidence.BehavioralExecuted {
-		t.Fatalf("dynamic coherent guardrail effect record=%+v", record)
+	defer mu.Unlock()
+	if posts != 0 || len(fixture.events) != 0 {
+		t.Fatalf("unreviewed effect setup sent runtime writes=%d or created events=%d", posts, len(fixture.events))
 	}
 }
 

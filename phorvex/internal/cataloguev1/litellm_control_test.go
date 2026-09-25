@@ -47,6 +47,8 @@ type liteFixtureTransport struct {
 	afterGet         func(litePod)
 }
 
+const liteSyntheticMaster = "sk-local-master-never-retain"
+
 func (t *liteFixtureTransport) snapshot(ctx context.Context, c LiteLLMRuntime) (liteAuthority, error) {
 	c.ExpectedConfigSHA256 = t.fixtureConfigSHA
 	return t.liteKubeTransport.snapshot(ctx, c)
@@ -58,10 +60,12 @@ func (t *liteFixtureTransport) sourcePin(_ context.Context, _ LiteLLMRuntime, _ 
 	return nil
 }
 func (t *liteFixtureTransport) get(ctx context.Context, _ LiteLLMRuntime, p litePod, path, mode string) (liteResponse, error) {
-	if (path != liteHealthPath && path != liteAuthPath) || (mode != "health" && mode != "missing" && mode != "invalid") || (mode == "health") != (path == liteHealthPath) {
+	if (path != liteHealthPath && path != liteAuthPath) || (mode != "health" && mode != "master" && mode != "missing" && mode != "invalid") || (mode == "health") != (path == liteHealthPath) {
 		return liteResponse{}, errors.New("unsupported fixed route")
 	}
-	raw, e := exec.CommandContext(ctx, "python3", "-c", liteProbeScript, path, mode, t.port).Output()
+	command := exec.CommandContext(ctx, "python3", "-c", liteProbeScript, path, mode, t.port)
+	command.Env = append(os.Environ(), "LITELLM_MASTER_KEY="+liteSyntheticMaster)
+	raw, e := command.Output()
 	if e != nil {
 		return liteResponse{}, e
 	}
@@ -82,6 +86,14 @@ func (t *liteFixtureTransport) get(ctx context.Context, _ LiteLLMRuntime, p lite
 }
 
 func liteFixture(t *testing.T) (Runtime, *liteFixtureTransport, *liteRecorder, *httptest.Server) {
+	return liteFixtureWithAuth(t, nil)
+}
+
+func liteFixtureWithAuth(t *testing.T, masterReply func(http.ResponseWriter, *http.Request)) (Runtime, *liteFixtureTransport, *liteRecorder, *httptest.Server) {
+	return liteFixtureWithAuthReplies(t, masterReply, nil)
+}
+
+func liteFixtureWithAuthReplies(t *testing.T, masterReply, invalidReply func(http.ResponseWriter, *http.Request)) (Runtime, *liteFixtureTransport, *liteRecorder, *httptest.Server) {
 	t.Helper()
 	yes, no := true, false
 	two := int32(2)
@@ -112,6 +124,15 @@ func liteFixture(t *testing.T) (Runtime, *liteFixtureTransport, *liteRecorder, *
 		}
 		if strings.HasSuffix(r.URL.Path, liteAuthPath) {
 			auth := r.Header.Get("Authorization")
+			if auth == "Bearer "+liteSyntheticMaster {
+				if masterReply != nil {
+					masterReply(w, r)
+					return
+				}
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"reviewed-model"}]}`))
+				return
+			}
 			if auth == "" {
 				w.WriteHeader(401)
 				_, _ = w.Write([]byte(`{"error":"missing bearer"}`))
@@ -119,6 +140,10 @@ func liteFixture(t *testing.T) (Runtime, *liteFixtureTransport, *liteRecorder, *
 			}
 			if !strings.HasPrefix(auth, "Bearer sk-catalogue-") {
 				t.Errorf("unexpected bearer shape")
+			}
+			if invalidReply != nil {
+				invalidReply(w, r)
+				return
 			}
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte(`{"error":{"message":"No connected db."}}`))
@@ -138,7 +163,7 @@ func liteFixture(t *testing.T) (Runtime, *liteFixtureTransport, *liteRecorder, *
 
 func liteFixturePod(name, uid, ip, image string, rsUID types.UID, yes bool) *corev1.Pod {
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "litellm", UID: types.UID(uid), ResourceVersion: "5", Labels: map[string]string{"app": "litellm"}, OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "litellm-rs", UID: rsUID, Controller: &yes}}},
-		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "litellm", Args: []string{"--config", "/etc/litellm/config.yaml", "--port", "4000"}, Ports: []corev1.ContainerPort{{ContainerPort: 4000, Protocol: corev1.ProtocolTCP}}, VolumeMounts: []corev1.VolumeMount{{Name: "cfg", MountPath: "/etc/litellm"}}}}, Volumes: []corev1.Volume{{Name: "cfg", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "litellm-config"}}}}}},
+		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "litellm", Args: []string{"--config", "/etc/litellm/config.yaml", "--port", "4000"}, Env: []corev1.EnvVar{{Name: "LITELLM_MASTER_KEY", Value: liteSyntheticMaster}}, Ports: []corev1.ContainerPort{{ContainerPort: 4000, Protocol: corev1.ProtocolTCP}}, VolumeMounts: []corev1.VolumeMount{{Name: "cfg", MountPath: "/etc/litellm"}}}}, Volumes: []corev1.Volume{{Name: "cfg", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "litellm-config"}}}}}},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning, PodIP: ip, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: "litellm", Ready: true, ImageID: image, ContainerID: "containerd://" + uid}}}}
 }
 
@@ -205,14 +230,126 @@ func TestLiteLLMExactPodHTTPAndConfigurationLimitedAuth(t *testing.T) {
 	}
 	h := liteHandler{profile: LiteLLMCredential, transport: transport}
 	result := h.Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
-	if result.Outcome != OutcomeInconclusive || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" || result.Evidence["requestCount"] != "6" || len(recorder.intents) != 6 || len(recorder.events) != 6 {
+	if result.Outcome != OutcomeInconclusive || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" || result.Evidence["masterPathState"] != "AVAILABLE" || result.Evidence["nonmasterPathState"] != "DB_FEATURE_UNAVAILABLE" || result.Evidence["requestCount"] != "8" || len(recorder.intents) != 8 || len(recorder.events) != 8 {
 		t.Fatalf("configuration-limited outcome was misclassified: %+v, intents=%d, events=%d", result, len(recorder.intents), len(recorder.events))
 	}
 	if result.Evidence["pod1.version"] == result.Evidence["pod2.version"] {
 		t.Fatal("mixed versions collapsed")
 	}
+	if result.Evidence["pod1.masterBearer.status"] != "200" || result.Evidence["pod2.masterBearer.status"] != "200" || result.Evidence["pod1.masterBearer.listShape"] != "true" || result.Evidence["pod2.masterBearer.listShape"] != "true" {
+		t.Fatalf("per-Pod master positive was not independently observed: %+v", result.Evidence)
+	}
 	if e := ValidateResult(liteJobForTest(t, runtime, LiteLLMCredential), normalizeResult(liteJobForTest(t, runtime, LiteLLMCredential), h.Definition(), result, result.StartedAt)); e != nil {
 		t.Fatalf("shared result consumer rejected control: %v", e)
+	}
+}
+
+func TestLiteLLMMasterMalformedAndDeniedStayInconclusive(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		status     int
+	}{
+		{"malformed-list", `{"object":"error","data":[]}`, 200},
+		{"denied-master", `{"error":"rejected"}`, 401},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime, transport, recorder, server := liteFixtureWithAuth(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+			defer server.Close()
+			result := (liteHandler{profile: LiteLLMCredential, transport: transport}).Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
+			if result.Outcome != OutcomeInconclusive || result.Evidence["masterPathState"] != "UNVERIFIED" || result.Evidence["authBoundaryState"] == "NEGATIVE_GET_REFUSAL_ONLY" {
+				t.Fatalf("bad master positive was credited: %+v", result)
+			}
+		})
+	}
+}
+
+func TestLiteLLMNegativeAcceptanceIsNotMaskedByMasterFailure(t *testing.T) {
+	masterRequests, invalidRequests := 0, 0
+	runtime, transport, _, server := liteFixtureWithAuthReplies(t,
+		func(w http.ResponseWriter, _ *http.Request) {
+			masterRequests++
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"master path unavailable"}`))
+		},
+		func(w http.ResponseWriter, _ *http.Request) {
+			invalidRequests++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+		})
+	defer server.Close()
+	runtime.StateDir = t.TempDir()
+	runtime.ConfigSHA256 = strings.Repeat("b", 64)
+	runner, err := New(runtime, liteHandler{profile: LiteLLMCredential, transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := liteJobForTest(t, runtime, LiteLLMCredential)
+	result := runner.Execute(context.Background(), job)
+	if masterRequests != 2 || invalidRequests != 2 || result.Outcome != OutcomeFunctionalFail || result.Evidence["masterPathState"] != "UNVERIFIED" || result.Evidence["authBoundaryState"] != "NEGATIVE_GET_ACCEPTED" || result.Evidence["pod1.invalidBearer.status"] != "200" || result.Evidence["pod2.invalidBearer.status"] != "200" {
+		t.Fatalf("observed negative acceptance was masked: master=%d invalid=%d result=%+v", masterRequests, invalidRequests, result)
+	}
+	if err = ValidateTerminalArtifacts(job, result, filepath.Join(job.OutputDir, "metrics.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLiteLLMMasterSecretEchoIsNeverRetained(t *testing.T) {
+	runtime, transport, _, server := liteFixtureWithAuth(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"` + liteSyntheticMaster + `"}]}`))
+	})
+	defer server.Close()
+	runtime.StateDir = t.TempDir()
+	runtime.ConfigSHA256 = strings.Repeat("b", 64)
+	runner, err := New(runtime, liteHandler{profile: LiteLLMCredential, transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := liteJobForTest(t, runtime, LiteLLMCredential)
+	result := runner.Execute(context.Background(), job)
+	if result.Outcome != OutcomeInconclusive || result.Evidence["masterPathState"] != "AVAILABLE" || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" || result.Evidence["requestCount"] != "8" {
+		t.Fatalf("master positive and DB-limited negative not preserved: %+v", result)
+	}
+	if err = ValidateTerminalArtifacts(job, result, filepath.Join(job.OutputDir, "metrics.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"result.json", "journal.jsonl", "metrics.jsonl"} {
+		body, err := os.ReadFile(filepath.Join(job.OutputDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), liteSyntheticMaster) {
+			t.Fatalf("master secret appeared in persisted %s", name)
+		}
+	}
+}
+
+func TestLiteLLMMasterPostRequestDriftCannotEarnPositive(t *testing.T) {
+	runtime, transport, recorder, server := liteFixture(t)
+	defer server.Close()
+	requests := 0
+	transport.afterGet = func(p litePod) {
+		requests++
+		if requests != 2 { // health, then master bearer on the first exact Pod
+			return
+		}
+		pod, err := runtime.Kube.CoreV1().Pods("litellm").Get(context.Background(), p.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pod.ResourceVersion = "changed-after-master"
+		if _, err = runtime.Kube.CoreV1().Pods("litellm").Update(context.Background(), pod, metav1.UpdateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result := (liteHandler{profile: LiteLLMCredential, transport: transport}).Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
+	if result.Outcome != OutcomeInconclusive || result.Evidence["requestCount"] != "2" || result.Evidence["masterPathState"] == "AVAILABLE" || !strings.Contains(result.Summary, "changed after GET") {
+		t.Fatalf("master response crossed changed authority: %+v", result)
 	}
 }
 
@@ -260,7 +397,7 @@ func TestLiteLLMCredentialOnePodNoDBRemainsUnknown(t *testing.T) {
 		return r
 	}
 	result := (liteHandler{profile: LiteLLMCredential, transport: transport}).Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
-	if result.Outcome != OutcomeInconclusive || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" || result.Evidence["pod2.invalidBearer.reason"] != "NO_CONNECTED_DB" {
+	if result.Outcome != OutcomeInconclusive || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" || result.Evidence["masterPathState"] != "AVAILABLE" || result.Evidence["pod2.invalidBearer.reason"] != "NO_CONNECTED_DB" {
 		t.Fatalf("one Pod's no-DB branch incorrectly passed: %+v", result)
 	}
 }
@@ -375,7 +512,7 @@ func TestLiteLLMRunnerPersistsConfigurationLimitedCredential(t *testing.T) {
 	}
 	job := liteJobForTest(t, runtime, LiteLLMCredential)
 	result := runner.Execute(context.Background(), job)
-	if result.Outcome != OutcomeInconclusive || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" {
+	if result.Outcome != OutcomeInconclusive || result.Evidence["authBoundaryState"] != "UNKNOWN_CONFIGURATION_LIMITED" || result.Evidence["masterPathState"] != "AVAILABLE" || result.Evidence["requestCount"] != "8" {
 		t.Fatalf("runner auth outcome: %+v", result)
 	}
 	if e = ValidateTerminalArtifacts(job, result, filepath.Join(job.OutputDir, "metrics.jsonl")); e != nil {

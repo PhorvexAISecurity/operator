@@ -20,6 +20,7 @@ import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
 import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
 import { GuardrailAvailabilityResultPanel } from "@/components/panels/guardrail-availability-result";
+import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
 import { MCPVoiceModelResult, parseMCPVoiceModelEvidence } from "@/components/panels/mcp-voice-model-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
@@ -300,7 +301,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         const context = item!.runtimeContext || "in-cluster";
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "attack", id: result.attackId, lens: selectedLens, context });
         setEffectRecordId(result.attackId); setEffectResult(null); setEffectReadError("");
-        setMsg(`Started ${result.attackId}. The result is effect-only and does not establish behavioral mitigation.`);
+        setMsg(`Started ${result.attackId}. The fixed guarded baseline runs before any injected event; exact before/after replies and the decision and operation receipts determine the outcome.`);
         return;
       }
       if (!selectedTarget?.runnable || !selectedTarget.id || !selectedTarget.context) throw new Error("Select a runnable target for this harness scenario.");
@@ -391,17 +392,19 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         </div>}
         {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="modeled">EFFECT-ONLY OBSERVATION</Badge>
+            <Badge variant="modeled">MEASURED GUARDED OUTCOME</Badge>
             <span className="font-mono text-foreground" title={effectRecordId}>{effectRecordId}</span>
             <span className="text-muted-foreground">{effectResult?.status || "waiting for exact result"}</span>
           </div>
           {effectResult ? <div className="mt-2 space-y-1.5">
+            {effectResult.guardrailEffectProbe && <GuardrailEffectProbe result={effectResult.guardrailEffectProbe} />}
+            {!effectResult.guardrailEffectProbe && effectResult.status !== "running" && <div className="text-warning">The typed original-receipt guardrail result is unavailable; no measured outcome is accepted.</div>}
             {effectResult.effectEvidence?.observed
               ? <div>fresh exact-target effect: <span className="font-mono text-foreground">{effectResult.effectEvidence.before || "—"} → {effectResult.effectEvidence.after || "—"}</span>{effectResult.effectEvidence.seconds > 0 ? ` in ${effectResult.effectEvidence.seconds}s` : ""}</div>
               : <div className="text-warning">No fresh exact-target runtime effect was confirmed by this record.</div>}
             <DecisionEvidencePanel exact={effectResult.decisionTraceEvidence} temporal={effectResult.temporalDecisionEvidence} legacy={effectResult.decisionEvidence} compact observationStartedAt={effectResult.observationStartedAt} observationDeadline={effectResult.observationDeadline} />
             {effectResult.observationError && <div className="text-warning">observation error: {effectResult.observationError}</div>}
-            <div className="text-warning/90">limits: {effectResult.effectEvidence?.limitation || "This record measures a mechanism effect only; behavioral attack execution, mitigation, defense success, containment, dwell, and ROI are not established."}</div>
+            <div className="text-warning/90">limits: {effectResult.effectEvidence?.limitation || "This fixed synthetic request measures only the stated guarded outcome. Natural detection and general security efficacy are not evaluated."}</div>
           </div> : <div className="mt-2 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> polling this exact attack ID with observations enabled…</div>}
           {effectReadError && <div className="mt-2 text-warning">result read incomplete: {effectReadError}</div>}
         </div>}

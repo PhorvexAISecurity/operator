@@ -48,16 +48,19 @@ type guardrailAvailabilityProfile struct {
 		PolicyUID             string `json:"policyUID"`
 		PolicyGeneration      int64  `json:"policyGeneration"`
 		ModelID               string `json:"modelID"`
-		EventCreator          string `json:"eventCreator"`
-		ConsoleURL            string `json:"consoleURL"`
-		ScopedTokenFile       string `json:"scopedTokenFile"`
-		AuditURL              string `json:"auditURL"`
-		AuditServerName       string `json:"auditServerName"`
-		AuditCAFile           string `json:"auditCAFile"`
-		AuditClientCertFile   string `json:"auditClientCertFile"`
-		AuditClientKeyFile    string `json:"auditClientKeyFile"`
-		MaxRunSeconds         int    `json:"maxRunSeconds"`
-		CleanupSeconds        int    `json:"cleanupSeconds"`
+		// The effect action requires this explicit active baseline pin. The
+		// availability recovery suite retains its own pgv1-only gate.
+		ActiveVariant       string `json:"activeVariant,omitempty"`
+		EventCreator        string `json:"eventCreator"`
+		ConsoleURL          string `json:"consoleURL"`
+		ScopedTokenFile     string `json:"scopedTokenFile"`
+		AuditURL            string `json:"auditURL"`
+		AuditServerName     string `json:"auditServerName"`
+		AuditCAFile         string `json:"auditCAFile"`
+		AuditClientCertFile string `json:"auditClientCertFile"`
+		AuditClientKeyFile  string `json:"auditClientKeyFile"`
+		MaxRunSeconds       int    `json:"maxRunSeconds"`
+		CleanupSeconds      int    `json:"cleanupSeconds"`
 	} `json:"guardrailAvailabilityFixture"`
 }
 

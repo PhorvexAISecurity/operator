@@ -255,27 +255,28 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"message":  "Endpoint route setup and a unique detector signal were accepted for " + pod + ". The console will report an exact route-key/Service/EndpointSlice effect if observed; this does not establish SSRF or model-extraction mitigation."})
 
 	case "guardrail-rotate":
-		// The currently calibrated harmless probes do not distinguish pgv1 from pgv2. Observe an exact
-		// coherent runtime/Pod-roster baseline and measure only a later distinct state transition;
-		// do not manufacture a jailbreak or mitigation verdict from that mechanism-level observation.
-		authority, setupErr := s.prepareGuardrailEffect(pod, base.uid, execIn)
+		// One launch POST starts a bounded original-reply observation. A stable
+		// already-blocked canary or failed legitimate baseline completes with zero
+		// SecurityEvents; only a landed guarded baseline can create one injected
+		// event. This launch POST itself is always counted truthfully.
+		profile, raw, profileErr := loadGuardrailEffectProfile(s.cfg)
+		if profileErr != nil {
+			s.writeVLLMSetupFailure(w, r, body.Action, "profile", base.uid, "", nil, false, "not-needed", profileErr)
+			return
+		}
+		if profile.Fixture.PodName != pod || profile.Fixture.PodUID != base.uid || s.runs == nil {
+			s.writeVLLMSetupFailure(w, r, body.Action, "profile", base.uid, "", nil, false, "not-needed", fmt.Errorf("reviewed effect target or run authority differs"))
+			return
+		}
+		_, setupErr := s.prepareGuardrailEffect(pod, base.uid, execIn)
 		if setupErr != nil {
 			s.writeVLLMSetupFailure(w, r, body.Action, "setup", base.uid, "", nil, false, "not-needed", setupErr)
 			return
 		}
-		stimulus, eventErr := s.createCorrelatedVLLMEvent(pod, base.uid, "GuardrailBypass", "synthetic guardrail signal for an in-place runtime-state observation", "0.95")
-		if eventErr != nil {
-			s.writeVLLMSetupFailure(w, r, body.Action, "stimulus", base.uid, "", stimulus, true, "unavailable: exact detector stimulus outcome retained; guardrail setup made no runtime or metadata write", eventErr)
-			return
-		}
-		stimulus.Limitation = "synthetic guardrail signal; no preregistered pgv1-pass to pgv2-block behavioral probe was available"
-		base.stimulus = stimulus
-		base.vllmEffect = &vllmEffectBaseline{kind: "guardrail-runtime-state", before: authority.originalRuntime.Active}
-		base.outcomeClass = "behavioral-oracle-unsupported"
-		attackID := s.startVLLMEffectRecord(vllmAttackNS, pod, "Guardrail runtime-effect observation", "guardrail-rotate", "filter-effect-only", "guardrail-rotate", base)
+		attackID := s.startMeasuredGuardrailEffect(profile, raw, base, pod)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "guardrail-rotate",
 			"attackId": attackID,
-			"message":  "A coherent guardrail runtime/Pod roster baseline and a unique detector signal were confirmed on " + pod + ". The console will report a later distinct runtime variant if observed; no jailbreak bypass or mitigation verdict is claimed."})
+			"message":  "A fixed guarded confidentiality and legitimate-control baseline is measuring on " + pod + ". A blocked or invalid baseline creates no SecurityEvent; an eligible baseline may produce one injected effect and exact before/after result. Natural detection and general mitigation remain untested."})
 
 	case "request-drain":
 		_, producerErr := runBoundedProducer(func() error { _, err := readVLLMModels(execIn); return err })

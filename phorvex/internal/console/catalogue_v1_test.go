@@ -23,7 +23,7 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 		"c2-nats-owned-client-response":            {"named-suite", "effect"},
 		"c2-mongo-uncredentialed-service-exposure": {"named-suite", "configuration"},
 		"ai-vllm-guardrail-confidentiality-static": {"named-suite", "effect"},
-		"ai-vllm-guardrail-availability-recovery": {"named-suite", "effect"},
+		"ai-vllm-guardrail-availability-recovery":  {"named-suite", "effect"},
 		string(cataloguev1.ChromaOwnedVector):      {"fixed-suite", "functional"},
 		string(cataloguev1.LiteLLMHealth):          {"fixed-suite", "functional"},
 		string(cataloguev1.LiteLLMCredential):      {"fixed-suite", "functional"},
@@ -50,7 +50,7 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 			t.Fatalf("missing, duplicate or changed catalogue row: %+v", item)
 		}
 		seen[item.Name] = true
-		if item.Name != limitedV1GuardrailID && item.Available {
+		if item.Available {
 			t.Fatalf("unconfigured row gained launch authority: %+v", item)
 		}
 	}
@@ -92,7 +92,7 @@ func TestGuardrailCalibrationCatalogueAPIIsSeparateAndDisabledByDefault(t *testi
 	if api.LaunchKind != "fixed-suite" || api.ClaimClass != "calibration" || api.ResponseGuidanceBasis != "none" || len(api.ExpectedActuators) != 0 || api.Available || api.BenignControl == nil || !*api.BenignControl {
 		t.Fatalf("calibration API claim is unsupported: %s", raw)
 	}
-	if effect.LaunchKind != "live-vllm-effect" || effect.ClaimClass != "effect" || len(effect.ExpectedActuators) != 1 {
+	if effect.LaunchKind != "live-vllm-effect" || effect.ClaimClass != "effect" || len(effect.ExpectedActuators) != 1 || effect.Available || effect.BenignControl == nil || *effect.BenignControl {
 		t.Fatalf("effect entry changed: %+v", effect)
 	}
 }

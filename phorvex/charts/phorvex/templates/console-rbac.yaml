@@ -4,6 +4,9 @@
 {{- if and .Values.phorvex.console.guardrailAvailability.enabled (not .Values.phorvex.console.enabled) }}
 {{- fail "guardrailAvailability.enabled requires console.enabled" }}
 {{- end }}
+{{- if and .Values.phorvex.console.guardrailEffect.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "guardrailEffect.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -433,6 +436,63 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "phorvex.fullname" $ }}-console-guardrail-availability-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- with .Values.phorvex.console.guardrailEffect }}
+{{- if and $.Values.phorvex.console.enabled .enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-effect-source
+  namespace: vllm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["guardrail-proxy"]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-effect-source
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-effect-source
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-effect-journal
+  namespace: phorvex-system
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .guardrailJournalName | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-effect-journal
+  namespace: phorvex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-effect-journal
 subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.consoleServiceAccountName" $ }}

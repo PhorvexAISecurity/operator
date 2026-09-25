@@ -51,6 +51,11 @@ type Config struct {
 	// availability comparison profile. It is disabled unless explicitly mounted.
 	GuardrailAvailabilityEnabled       bool
 	GuardrailAvailabilityProfileSHA256 string
+	// The existing vLLM guardrail-effect action uses a separate, exact-hash
+	// profile. It never borrows availability's pgv1 recovery authority.
+	GuardrailEffectEnabled       bool
+	GuardrailEffectProfileSHA256 string
+	GuardrailEffectProfilePath   string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool

@@ -72,6 +72,9 @@ spec:
     source: "redteam"
   anomalyScore: %q
 `, name, annotations, correlation, desc, vllmAttackNS, pod, ruleType, anomaly)
+	if evType == "GuardrailBypass" {
+		candidate.createManifest = []byte(manifest)
+	}
 	f, err := os.CreateTemp("", "phorvex-vllm-event-*.yaml")
 	if err != nil {
 		return nil, err
@@ -90,6 +93,12 @@ spec:
 		return nil, fmt.Errorf("write SecurityEvent manifest: %w", err)
 	}
 	out, err := s.cfg.execText(10*time.Second, "kubectl", "create", "-f", f.Name(), "-o", "json")
+	if evType == "GuardrailBypass" && len(out) > 0 && len(out) <= 64<<10 {
+		candidate.createReply = []byte(out)
+	}
+	if len(out) > 64<<10 {
+		return candidate, fmt.Errorf("created SecurityEvent reply exceeded fixed bound; exact resource %q correlation %q requires reconciliation", name, correlation)
+	}
 	if err != nil {
 		return candidate, fmt.Errorf("create SecurityEvent %q correlation %q outcome unknown: %w (%s)", name, correlation, err, strings.TrimSpace(out))
 	}
@@ -105,7 +114,7 @@ spec:
 	if adapter != "" && (event.Metadata.Annotations["phorvex.ai/adapter-name"] != adapter || event.Metadata.Annotations["phorvex.ai/target-pod-uid"] != targetUID) {
 		return candidate, fmt.Errorf("created adapter SecurityEvent reply is incomplete or mismatched; exact resource %q correlation %q requires reconciliation", name, correlation)
 	}
-	return &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: true, TargetUID: targetUID, EventName: name, EventUID: event.Metadata.UID, EventCreatedAt: event.Metadata.CreationTimestamp, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "detector stimulus is not a demonstrated exploit"}, nil
+	return &attackStimulusEvidence{Kind: "synthetic-security-event", Observed: true, TargetUID: targetUID, EventName: name, EventUID: event.Metadata.UID, EventCreatedAt: event.Metadata.CreationTimestamp, EventRule: ruleType, Correlation: correlation, BehavioralExecuted: false, Limitation: "detector stimulus is not a demonstrated exploit", createManifest: candidate.createManifest, createReply: candidate.createReply}, nil
 }
 
 const (

@@ -1,0 +1,34 @@
+{{- $source := .Values.catalogueProfiles.guardrailEffect -}}
+{{- $child := get .Values.phorvex "phorvex" | default dict -}}
+{{- $console := get $child "console" | default dict -}}
+{{- $effect := get $console "guardrailEffect" | default dict -}}
+{{- if $source.enabled -}}
+{{- $name := required "catalogueProfiles.guardrailEffect.configMapName is required" $source.configMapName -}}
+{{- if not (kindIs "string" $name) -}}{{- fail "catalogueProfiles.guardrailEffect.configMapName must be a string" -}}{{- end -}}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) -}}
+{{- fail "catalogueProfiles.guardrailEffect.configMapName must be a DNS subdomain name" -}}
+{{- end -}}
+{{- range (splitList "." $name) -}}{{- if gt (len .) 63 -}}{{- fail "catalogueProfiles.guardrailEffect.configMapName DNS label exceeds 63 characters" -}}{{- end -}}{{- end -}}
+{{- $profile := required "catalogueProfiles.guardrailEffect.profileBase64 is required" $source.profileBase64 -}}
+{{- if not (kindIs "string" $profile) -}}{{- fail "catalogueProfiles.guardrailEffect.profileBase64 must be a string" -}}{{- end -}}
+{{- $profileBytes := b64dec $profile -}}
+{{- if or (eq $profileBytes "") (gt (len $profileBytes) 65536) (ne (b64enc $profileBytes) $profile) -}}
+{{- fail "catalogueProfiles.guardrailEffect.profileBase64 must be canonical bounded nonempty base64" -}}
+{{- end -}}
+{{- $digest := sha256sum $profileBytes -}}
+{{- if ne $name (printf "phorvex-catalogue-guardrail-effect-%s" (trunc 12 $digest)) -}}
+{{- fail "catalogueProfiles.guardrailEffect.configMapName must match decoded profile SHA prefix" -}}
+{{- end -}}
+{{- if (get $effect "enabled") -}}
+{{- if ne (get $effect "configMapName") $name -}}{{- fail "console.guardrailEffect.configMapName must match catalogueProfiles.guardrailEffect.configMapName" -}}{{- end -}}
+{{- if ne (get $effect "profileSHA256") $digest -}}{{- fail "console.guardrailEffect.profileSHA256 must match decoded catalogue profile" -}}{{- end -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace }}
+immutable: true
+binaryData:
+  config.guardrail-effect.yaml: {{ $profile | quote }}
+{{- end -}}

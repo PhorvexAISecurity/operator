@@ -761,6 +761,17 @@ func (s *Server) runNATSReconcile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "verified_read_only", "id": id})
 }
 
+// runVoiceCleanupReconcile verifies only the retained terminal Voice cleanup debt.
+// The historical failed result and unsafe status are never replaced.
+func (s *Server) runVoiceCleanupReconcile(w http.ResponseWriter, r *http.Request) {
+	id := runIDOf(r)
+	if err := s.runs.ReconcileVoiceCleanup(id, principalKey(principalOf(r))); err != nil {
+		writeJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "verified_read_only_separate_history", "id": id})
+}
+
 func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {
 	st, ok := s.runs.Status(runIDOf(r))
 	if !ok {

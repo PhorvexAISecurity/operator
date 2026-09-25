@@ -487,6 +487,7 @@ export interface AttackResult {
   resultSchemaVersion?: string;
   stimulusEvidence?: { kind: string; observed: boolean; targetUid: string; eventName: string; eventUid: string; eventCreatedAt: string; eventRule: string; correlation: string; behavioralExecuted: boolean; limitation: string };
   effectEvidence?: { kind: string; observed: boolean; observedAt?: string; targetUid: string; before?: string; after?: string; serviceUid?: string; correlation: string; limitation: string; seconds: number };
+  guardrailEffectProbe?: GuardrailEffectProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
   decisionTraceEvidence?: AttackDecisionEvidence[];
   temporalDecisionEvidence?: AttackDecisionEvidence;
@@ -500,6 +501,18 @@ export interface AttackResult {
   dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "flushed" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
+}
+export interface GuardrailEffectProbeResult {
+  schema: "guardrail-effect-probe-result-v1";
+  status: string; accepted: boolean; issues: string[];
+  eventMode: "INJECTED" | "NONE";
+  naturalDetector: "NOT_EVALUATED"; generalSecurityEfficacy: "NOT_EVALUATED";
+  route: "Pod-loopback-8000"; profileSHA256: string; markerSHA256: string;
+  before: { canary: string; sayOK: string; arithmetic: string };
+  after: { canary: string; sayOK: string; arithmetic: string };
+  guardedChatsAttempted: number; consoleLaunchPOSTs: number; securityEventsAttempted: number;
+  eventUID?: string; decisionID?: string; operationID?: string;
+  priorVariant?: string; nextVariant?: string; cleanupVerified: boolean;
 }
 // --- Optimizer Bench: config sweep over the real p1-coverage engine (in-process, no live attack) ---
 export interface BenchConfigInput {

@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,11 +81,18 @@ checks:
     source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
     at: '2026-09-25T16:14:59+00:00'
     incident_sha256: b3ddaa7a5705b8a08846f75ad6ce262d43fc6668a0180833826e3d26b7dbf7f9
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/worker/PATCH-EQUIVALENCE.md
+    sha256: e05ae01554feb0d9a4392de2aed26c9e1c615aa381a1c216f5da7fa826ab0881
+    source_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
+    at: '2026-09-25T16:28:45+00:00'
 fix_id: CAT-POD-NODE
 issues: []
 title: Accept Kubernetes node names in existing Pod-bound catalogue profiles
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -112,11 +119,11 @@ implementation:
   head_sha: 4fa2c65977bfcdae48a38483953e0cffd0c03cb1
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
-  merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  url: https://github.com/PhorvexSecurity/operator/pull/345
+  reviewed_head: e146cee46aa55dc6b2a8f0dd42639efa4ce243ec
+  merge_sha: b3b8c924e49a57aa42d0fb9b4b5705f114ee12e8
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -146,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-25T16:15:03+00:00'
+  owner: codex-lead
+  action: PR345 normally merged as b3b8c924; record actual remote check failures without
+    upgrading them. Await fixed console rollout and a fresh named CPU trial.
+updated_at: '2026-09-25T16:29:57+00:00'
 follow_up_to: CAT-CPU-TOKEN-RESPONSE
 configuration_history:
 - at: '2026-09-25T15:54:20+00:00'
@@ -171,6 +178,16 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-25T16:21:14+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-25T16:29:57+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -219,6 +236,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T16:29:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision
