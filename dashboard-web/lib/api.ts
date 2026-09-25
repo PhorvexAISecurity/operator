@@ -676,6 +676,7 @@ export interface GuardrailStaticResult { accepted: boolean; status: string; sayO
 export interface PodBoundTokenStage { name: string; status: "CONFIRMED" | "REFUSED" | "UNKNOWN"; observedAt?: string; evidenceSHA256?: string; reason?: string }
 export interface PodBoundTokenResult {
   schema: "pod-bound-token-result-v1";
+  caseID?: "c2-pod-bound-api-auth-response" | "c2-pod-bound-api-auth-response-cpu";
   runID?: string; nonce?: string; terminalStatus: "COMPLETE" | "INCOMPLETE" | "UNSAFE"; mechanismObserved: boolean;
   securityEfficacy: "NOT_EVALUATED"; signalMode: "explicit-injected-typed-event";
   stages?: PodBoundTokenStage[];
@@ -683,7 +684,7 @@ export interface PodBoundTokenResult {
   event?: { uid?: string; kind?: string; creator?: string; sourcePodUID?: string; trustVerified?: boolean };
   decision?: { id?: string; selectedAction?: string; dispatchOutcome?: string; costCeiling?: number; rotateStatus?: string; rotateReason?: string; rotateExpectedCost?: number; rotateHighCost?: number; requestRateStatus?: "MEASURED_FRESH" | "MISSING_REQUEST_RATE" | "STALE_REQUEST_RATE" | "UNKNOWN"; flowRegime?: string; quarantineStatus?: string; quarantineReason?: string; quarantineUsed?: number; quarantineLimit?: number; auditCoverage?: string };
   operation?: { terminationStatus?: "REQUEST_CONFIRMED" | "NOT_DISPATCHED" | "UNCONFIRMED"; originalPodAbsent?: boolean; receiptSHA256?: string };
-  replay?: { sourceBeforeHTTP?: number; sourceAfterHTTP?: number; sourceExpiry?: string; sourceAfterAt?: string; peerBeforeHTTP?: number; peerAfterHTTP?: number; serviceBeforeHTTP?: number; serviceAfterHTTP?: number; sameSourceHandle?: boolean; samePeerHandle?: boolean; sourceBeforeCaptureID?: string; sourceAfterCaptureID?: string; peerBeforeCaptureID?: string; peerAfterCaptureID?: string; serviceMemberPodUID?: string; serviceAfterAt?: string; serviceAfterServiceUID?: string; serviceAfterEndpointSliceUID?: string; serviceMemberReady?: boolean; serviceMemberOwnerDeploymentUID?: string };
+  replay?: { sourceBeforeHTTP?: number; sourceAfterHTTP?: number; sourceExpiry?: string; sourceBeforeRequestAt?: string; sourceBeforeAt?: string; sourceAfterRequestAt?: string; sourceAfterAt?: string; peerBeforeHTTP?: number; peerAfterHTTP?: number; peerExpiry?: string; peerBeforeRequestAt?: string; peerBeforeAt?: string; peerAfterRequestAt?: string; peerAfterAt?: string; serviceBeforeHTTP?: number; serviceAfterHTTP?: number; sameSourceHandle?: boolean; samePeerHandle?: boolean; sourceBeforeCaptureID?: string; sourceAfterCaptureID?: string; peerBeforeCaptureID?: string; peerAfterCaptureID?: string; serviceMemberPodUID?: string; serviceAfterAt?: string; serviceAfterServiceUID?: string; serviceAfterEndpointSliceUID?: string; serviceMemberReady?: boolean; serviceMemberOwnerDeploymentUID?: string };
   telemetry?: { producerStatus?: string; firstAt?: string; secondAt?: string; firstValue?: number; secondValue?: number; sourcePodName?: string; podMonitorUID?: string; querySHA256?: string };
   cleanup?: { status?: string; inventorySHA256?: string; absent?: boolean };
 }
