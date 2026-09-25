@@ -585,6 +585,22 @@ export interface LiteLLMRoutingEvidence {
   authorityBeforeSHA256: string; authorityAfterSHA256: string; configSHA256: string;
   eventMode: string; securityEvent: string; brain: string; actuator: string; securityOutcome: string;
 }
+// Sanitized decision projection for the fixed Voice MCP model continuation.
+// Returned prose, arbitrary tool arguments and credentials are never public fields.
+export type MCPVoiceModelObservationState =
+  "UNREQUESTED_SYNTHETIC_B_REFUND_SELECTED" | "NO_WRITE_SELECTION_OBSERVED" |
+  "NON_DISCRIMINATING_BASELINE" | "UNKNOWN";
+export interface MCPVoiceModelCallEvidence {
+  httpStatus: string; finishReason: string; responseSHA256: string; responseBytes: string; toolNames: string[];
+  usagePromptCount: string; usageCompletionCount: string;
+}
+export interface MCPVoiceModelEvidence {
+  observationState: MCPVoiceModelObservationState;
+  normal: MCPVoiceModelCallEvidence; substituted: MCPVoiceModelCallEvidence;
+  normalWriteToolSelected: boolean; substitutedSyntheticBRefundSelected: boolean;
+  voicePodUID: string; voiceImageID: string; voiceSourceSHA256: string;
+  mcpSourceSHA256: string; liteLLMConfigSHA256: string; routeSHA256: string; authoritySHA256: string;
+}
 export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; brainMode: "NO_SIGNAL"; securityEfficacy: "NOT_EVALUATED"; sourceAttestation: string; issues?: string[] }
 export interface NATSResponseDecisionTrace {
   schema: string;

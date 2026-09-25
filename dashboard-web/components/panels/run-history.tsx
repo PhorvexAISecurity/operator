@@ -18,6 +18,7 @@ import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
 import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
 import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
+import { MCPVoiceModelResult, parseMCPVoiceModelEvidence } from "@/components/panels/mcp-voice-model-result";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -70,6 +71,8 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
   if (!evidence.data) return <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading evidence…</div>;
   const ev = evidence.data;
   const liteLLMRouting = runConfig === "catalogue-litellm-inference-routing" || ev.scenario === "catalogue-litellm-inference-routing";
+  const mcpVoiceModel = runConfig === "catalogue-mcp-voice-model-continuation" || ev.scenario === "catalogue-mcp-voice-model-continuation";
+  const mcpVoiceAccepted = mcpVoiceModel ? parseMCPVoiceModelEvidence(ev.functionalResult?.evidence, ev.functionalResult?.outcome) : null;
   const ms = (x: number) => (x > 0 ? `${x.toFixed(1)}s` : "—");
   return (
     <div className="space-y-3">
@@ -78,14 +81,16 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
       </div>
 
       {ev.functionalResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
-        <div className="flex flex-wrap items-center gap-2"><Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge><span className="text-foreground">{ev.functionalResult.summary}</span></div>
+        <div className="flex flex-wrap items-center gap-2">{mcpVoiceModel ? <Badge variant="neutral">{mcpVoiceAccepted ? "Measurement completed" : "Measurement unverified"}</Badge> : <Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge>}<span className="text-foreground">{mcpVoiceModel ? mcpVoiceAccepted ? "Two source-pinned model continuations were measured; see the decision below." : "Model-decision measurement is incomplete or incompatible." : ev.functionalResult.summary}</span></div>
         <div className="mt-2 text-muted-foreground">cleanup: <span className="text-foreground">{ev.functionalResult.cleanup.status}</span>{ev.functionalResult.cleanup.verified ? " · verified" : " · unverified"}</div>
         {ev.functionalResult.unsafeToRetry && <div className="mt-1 text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
         {ev.functionalResult.limits?.map((limit) => <div key={limit} className="mt-1 text-muted-foreground">limit: {limit}</div>)}
-        {liteLLMRouting ? <div className="mt-2"><LiteLLMRoutingResult evidence={ev.functionalResult.evidence} outcome={ev.functionalResult.outcome} /></div>
+        {mcpVoiceModel ? <div className="mt-2"><MCPVoiceModelResult evidence={ev.functionalResult.evidence} outcome={ev.functionalResult.outcome} /></div>
+          : liteLLMRouting ? <div className="mt-2"><LiteLLMRoutingResult evidence={ev.functionalResult.evidence} outcome={ev.functionalResult.outcome} /></div>
           : <div className="mt-2 grid gap-1 md:grid-cols-2">{Object.entries(ev.functionalResult.evidence || {}).map(([key, value]) => <div key={key} className="break-all font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span>{value}</div>)}</div>}
       </div>}
       {liteLLMRouting && !ev.functionalResult && <LiteLLMRoutingResult evidence={undefined} />}
+      {mcpVoiceModel && !ev.functionalResult && <MCPVoiceModelResult evidence={undefined} />}
 
       {ev.configurationResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
         <div className="font-medium text-foreground">Accepted synthetic NATS configuration finding: {ev.configurationResult.finding}</div>
