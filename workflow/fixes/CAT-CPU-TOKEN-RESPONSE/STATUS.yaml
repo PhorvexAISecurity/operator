@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 25
+revision: 28
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -109,12 +109,12 @@ checks:
     at: '2026-09-25T11:30:00+00:00'
     incident_sha256: 352be1cee7527027def922d6f82de9c8006682ae234c1ddd79b021043c2a0de1
   patch_equivalence:
-    result: UNAVAILABLE
+    result: PASS
     by: codex-lead
-    artifact: evidence/publication-equivalence.json
-    sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
+    artifact: evidence/consolidation/publication-equivalence.json
+    sha256: b3ac41b80c786505b8aaa71c1a21c2e32a0befe342496ded79e8a2a620618a01
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:14:47+00:00'
+    at: '2026-09-25T11:32:01+00:00'
   base_review:
     result: PASS
     by: codex-lead
@@ -127,7 +127,7 @@ fix_id: CAT-CPU-TOKEN-RESPONSE
 issues: []
 title: Add isolated CPU Pod-bound credential response catalogue case
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -155,10 +155,10 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/338
-  reviewed_head: null
+  reviewed_head: cf010ee147061e33bf81d7bf5d6a4ee4c10e82a0
   merge_sha: null
   checks: pending
-  patch_equivalence: UNAVAILABLE
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -188,10 +188,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-25T11:30:06+00:00'
+  owner: codex-lead
+  action: Publish consolidated PR338; close superseded PR339–341 after verifying all
+    commits are present; deployment/configuration/live checks remain pending
+updated_at: '2026-09-25T11:32:03+00:00'
 configuration_history:
 - at: '2026-09-25T03:09:19+00:00'
   by: codex-lead
@@ -216,6 +216,11 @@ configuration_history:
   fields:
   - implementation
   - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:32:01+00:00'
+  by: codex-lead
+  fields:
   - pull_request
   approval_ref: null
 transitions:
@@ -307,6 +312,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T11:32:03+00:00'
+  by: codex-lead
+  artifact: evidence/consolidation/publication-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-CPU-TOKEN-RESPONSE:25:review
@@ -467,5 +480,12 @@ check_history:
   by: codex-lead
   artifact: evidence/p3/verdict.md
   sha256: e79469b529ec11616088c9de7b0e2fe7f0e85fc9eddf88b649a17ed191aaaccf
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:47+00:00'
+- check: patch_equivalence
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/publication-equivalence.json
+  sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
   source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
   at: '2026-09-25T11:14:47+00:00'

@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 85
+revision: 88
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -84,12 +84,12 @@ checks:
     at: '2026-09-25T11:29:09+00:00'
     incident_sha256: 9f07da457bd06bde139c45a2f904ea03966240bb5e825a08ed1490816a1e510b
   patch_equivalence:
-    result: UNAVAILABLE
+    result: PASS
     by: codex-lead
-    artifact: evidence/amendment-publication-equivalence.json
-    sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
+    artifact: evidence/consolidation/publication-equivalence.json
+    sha256: b3ac41b80c786505b8aaa71c1a21c2e32a0befe342496ded79e8a2a620618a01
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:14:38+00:00'
+    at: '2026-09-25T11:31:46+00:00'
   base_review:
     result: PASS
     by: codex-lead
@@ -102,7 +102,7 @@ fix_id: CAT-LITELLM-ROUTING
 issues: []
 title: Add installed LiteLLM inference routing catalogue control
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -130,10 +130,10 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/338
-  reviewed_head: null
+  reviewed_head: cf010ee147061e33bf81d7bf5d6a4ee4c10e82a0
   merge_sha: null
   checks: pending
-  patch_equivalence: UNAVAILABLE
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -163,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-25T11:29:14+00:00'
+  owner: codex-lead
+  action: Publish consolidated PR338; close superseded PR339–341 after verifying all
+    commits are present; deployment/configuration/live checks remain pending
+updated_at: '2026-09-25T11:31:48+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -226,6 +226,11 @@ configuration_history:
   fields:
   - implementation
   - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:31:46+00:00'
+  by: codex-lead
+  fields:
   - pull_request
   approval_ref: null
 transitions:
@@ -372,6 +377,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T11:31:48+00:00'
+  by: codex-lead
+  artifact: evidence/consolidation/publication-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-LITELLM-ROUTING:85:review
@@ -899,5 +912,12 @@ check_history:
   by: codex-lead
   artifact: evidence/p3/verdict.md
   sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:38+00:00'
+- check: patch_equivalence
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/amendment-publication-equivalence.json
+  sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
   source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
   at: '2026-09-25T11:14:38+00:00'
