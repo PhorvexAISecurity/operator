@@ -2,16 +2,24 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 2
+revision: 4
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 833b7dc4b10089add3cc4e77a8f98a57e0e93d3adadf1b856c775024f0c15e37
+    source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+    at: '2026-09-25T03:09:34+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
 fix_id: CAT-CPU-TOKEN-RESPONSE
 issues: []
 title: Add isolated CPU Pod-bound credential response catalogue case
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -72,10 +80,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: proposer
-  action: Sign concrete CPU case plan based on retained Voice NOOP and independent
-    timing/namespace review
-updated_at: '2026-09-25T03:09:21+00:00'
+  owner: implementer
+  action: Implement signed CPU case and timing fixes; retain original negative outcomes;
+    submit frozen source and selected preflight
+updated_at: '2026-09-25T03:09:46+00:00'
 configuration_history:
 - at: '2026-09-25T03:09:19+00:00'
   by: codex-lead
@@ -89,6 +97,14 @@ transitions:
 - from: TRIAGED
   to: DESIGNING
   at: '2026-09-25T03:09:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T03:09:46+00:00'
   by: codex-lead
   artifact: null
   note: null
