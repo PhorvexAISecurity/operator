@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -84,11 +84,27 @@ checks:
     - build/test-harness/testdata/pod_bound_token_cpu_positive
     - phorvex/internal/console
     inputs_sha256: 9cf034136c415f13b3184a2c4f3e1a251729c4fd857f4c42fbc002bf13a3063b
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:20:23+00:00'
+    baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e79469b529ec11616088c9de7b0e2fe7f0e85fc9eddf88b649a17ed191aaaccf
+    source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+    at: '2026-09-25T04:20:23+00:00'
+    incident_sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
 fix_id: CAT-CPU-TOKEN-RESPONSE
 issues: []
 title: Add isolated CPU Pod-bound credential response catalogue case
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -133,7 +149,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -149,10 +165,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-25T04:19:34+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T04:20:28+00:00'
 configuration_history:
 - at: '2026-09-25T03:09:19+00:00'
   by: codex-lead
@@ -200,10 +216,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T04:20:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T04:20:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: CAT-CPU-TOKEN-RESPONSE:6:submit
-  from: litellm-cases
+  id: CAT-CPU-TOKEN-RESPONSE:7:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 6
+  role: coordinator
+  kind: review
+  revision: 7
