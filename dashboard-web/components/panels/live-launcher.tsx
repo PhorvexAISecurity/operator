@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { clearLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import { useApiRead, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
 import { emitQueryChange } from "@/lib/query-events";
-import { isCatalogueSignalResult } from "@/lib/attack-result-truth";
+import { canSendCatalogueSignal, isCatalogueSignalResult } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { ScenarioResponseGuidance, displayActuatorHints } from "@/components/panels/scenario-response-guidance";
 
@@ -210,7 +210,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
   // returned record ID. The result describes signal acceptance and observed response;
   // it does not claim that the named behavioral attack ran or was mitigated.
   const fireScenario = async (c: CatalogCompat) => {
-    if (!canMutateApp || !compat?.stack.armed || !compat.catalog.some((entry) => entry.name === c.name && entry.compatible)) {
+    if (!canMutateApp || !compat?.stack.armed || !compat.catalog.some((entry) => entry.name === c.name && canSendCatalogueSignal(entry, compat.stack.armed))) {
       setErr("Live scenario refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
       return;
     }
@@ -360,7 +360,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                               <span className="font-mono" title={run.id}>run {run.id}</span> · {run.state === "running" ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> running · {run.trials}/{run.expectedTrials ?? "?"}</span> : run.state}
                             </span>
                           )}
-                          <Button size="sm" variant={compat.stack.armed ? "primary" : "outline"} disabled={!compat.stack.armed || !canMutateApp || firing !== ""} onClick={() => fireScenario(c)}>
+                          <Button size="sm" variant={canSendCatalogueSignal(c, compat.stack.armed) ? "primary" : "outline"} disabled={!canSendCatalogueSignal(c, compat.stack.armed) || !canMutateApp || firing !== ""} title={c.signalEligible === true ? "Send one bounded injected signal" : c.signalEligibilityReason || "Signal eligibility unavailable from the server"} onClick={() => fireScenario(c)}>
                             {firing === "scnlive:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Send signal</>}
                           </Button>
                           <Button size="sm" variant="ghost" disabled={lens !== "operator" || !targetId || selectedTarget?.id !== targetId || selectedTarget.context !== sel.context || compat.namespace !== app || firing !== "" || run?.state === "running"} onClick={() => runScenario(c)}>

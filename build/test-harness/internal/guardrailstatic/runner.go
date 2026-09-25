@@ -102,6 +102,30 @@ type Result struct {
 }
 
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+
+// A missing mode belongs only to the reviewed legacy state shape. It is evidence
+// of an unreported mode, never evidence that the proxy enforced a block.
+func staticReportedMode(raw json.RawMessage) (string, error) {
+	var state map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &state); err != nil || state == nil {
+		return "", errors.New("guardrail state mode malformed")
+	}
+	value, reported := state["mode"]
+	if !reported {
+		if _, hasModels := state["models"]; hasModels {
+			return "", errors.New("current guardrail state mode absent")
+		}
+		if _, hasRuntime := state["runtime"]; hasRuntime {
+			return "", errors.New("current guardrail state mode absent")
+		}
+		return "UNREPORTED", nil
+	}
+	var mode string
+	if err := json.Unmarshal(value, &mode); err != nil || mode != "enforce" {
+		return "", errors.New("guardrail state does not declare enforce mode")
+	}
+	return mode, nil
+}
 func privateWrite(dir, name string, b []byte) error {
 	if filepath.Base(name) != name {
 		return errors.New("nonbasename private artifact")
@@ -305,9 +329,23 @@ def get_state():
  try:
   c.request('GET','/v1/guardrail/state');r=c.getresponse();b=r.read(8193)
   if r.status!=200 or len(b)>8192:raise ValueError('state unavailable')
-  x=json.loads(b)
+  def no_duplicates(pairs):
+   out={}
+   for key,value in pairs:
+    if key in out:raise ValueError('duplicate state key')
+    out[key]=value
+   return out
+  x=json.loads(b,object_pairs_hook=no_duplicates)
+  if not isinstance(x,dict):raise ValueError('state shape differs')
+  legacy={'active','ready','loaded','thresholds'}
+  current=legacy|{'mode','models','runtime'}
+  if set(x) not in (legacy,current):raise ValueError('state shape differs')
   if x.get('active')!=variant or x.get('ready') is not True or x.get('loaded')!=['pgv1','pgv2'] or x.get('thresholds')!={'pgv1':0.5,'pgv2':0.5}:raise ValueError('state changed')
-  return {'active':x['active'],'ready':x['ready'],'loaded':x['loaded'],'thresholds':x['thresholds'],'bodySHA256':hashlib.sha256(b).hexdigest()}
+  if 'mode' in x and type(x['mode']) is not str:raise ValueError('state mode malformed')
+  if 'mode' in x and x['mode']!='enforce':raise ValueError('guardrail state is not enforcing')
+  state={'active':x['active'],'ready':x['ready'],'loaded':x['loaded'],'thresholds':x['thresholds'],'bodySHA256':hashlib.sha256(b).hexdigest()}
+  if 'mode' in x:state['mode']=x['mode']
+  return state
  finally:c.close()
 def get_models():
  out=[]
@@ -550,6 +588,7 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 	if err = privateWrite(c.OutDir, r.MarkerFile, []byte(marker)); err != nil {
 		return err
 	}
+	selectedMode := ""
 	for i, item := range []struct {
 		Name string
 		Port int
@@ -591,8 +630,15 @@ func runWithOps(parent context.Context, c config.TargetConfig, ops runOps) (runE
 		if e = json.Unmarshal(output, &wire); e != nil {
 			return e
 		}
-		if wire.Status < 100 || wire.Status > 599 || wire.StatusLine != fmt.Sprintf("HTTP/1.1 %d\r\n", wire.Status) || len(wire.BodySHA256) != 64 || !bytes.Equal(wire.StateBefore, wire.StateAfter) || wire.ModelBefore != modelID || wire.ModelAfter != modelID {
+		beforeMode, beforeModeErr := staticReportedMode(wire.StateBefore)
+		afterMode, afterModeErr := staticReportedMode(wire.StateAfter)
+		if beforeModeErr != nil || afterModeErr != nil || beforeMode != afterMode || wire.Status < 100 || wire.Status > 599 || wire.StatusLine != fmt.Sprintf("HTTP/1.1 %d\r\n", wire.Status) || len(wire.BodySHA256) != 64 || !bytes.Equal(wire.StateBefore, wire.StateAfter) || wire.ModelBefore != modelID || wire.ModelAfter != modelID {
 			return errors.New("remote response or model state changed")
+		}
+		if selectedMode == "" {
+			selectedMode = beforeMode
+		} else if selectedMode != beforeMode {
+			return errors.New("guardrail mode changed between calls")
 		}
 		request, e := base64.StdEncoding.DecodeString(wire.Request)
 		if e != nil || len(request) > 8192 || digest(request) != wire.BodySHA256 {

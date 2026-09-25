@@ -65,7 +65,7 @@ export function DecisionEvidenceTrace({ decision, compact = false, observationSt
       <div className="mt-2 grid gap-1 text-muted-foreground md:grid-cols-2">
         <div>decision <span className="font-mono text-foreground/85">{short(decision.decisionId)}</span> · tick <span className="font-mono text-foreground/85">{short(decision.tickId)}</span></div>
         <div>policy <span className="font-mono text-foreground/85">{decision.policyNamespace && decision.policyName ? `${decision.policyNamespace}/${decision.policyName}` : "unavailable"}</span></div>
-        <div>selected action <span className="font-mono text-foreground/85">{decision.action || "unavailable"}</span> · selected {yesNo(decision.selected)}</div>
+        <div>decision action <span className="font-mono text-foreground/85">{decision.action || "unavailable"}</span> · selected {yesNo(decision.selected)}</div>
         <div>feasible {yesNo(decision.feasible)}{decision.infeasibleWhy ? ` · ${decision.infeasibleWhy}` : ""}</div>
         <div>dispatch <span className="font-mono text-foreground/85">{dispatch}</span>{decision.dispatchReason ? ` · ${decision.dispatchReason}` : ""}</div>
         <div>handler <span className="font-mono text-foreground/85">{decision.handler || "unavailable"}</span> · manager actuation report {yesNo(decision.actuated)}</div>

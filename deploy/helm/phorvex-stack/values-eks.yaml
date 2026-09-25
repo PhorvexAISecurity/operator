@@ -248,9 +248,9 @@ phorvex:
                   "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
                   "subject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
                   "roles": ["operator"],
-                  "tenants": ["voice", "nats", "vllm"],
+                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp"],
                   "targets": ["default"],
-                  "note": "End-to-End pipeline (CI). Operator only on the namespaces End-to-End/config.json fires at; token minted per run, never stored."
+                  "note": "End-to-End pipeline (CI) and reviewed fixed catalogue profiles in the listed namespaces; token minted per run, never stored."
                 }
               ]
             }
