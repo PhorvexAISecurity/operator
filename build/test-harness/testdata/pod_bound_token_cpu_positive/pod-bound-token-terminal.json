@@ -1,0 +1,1 @@
+{"schema":"pod-bound-token-terminal-v1","runID":"run-cpu-1","nonce":"0123456789abcdef01234567","artifactSHA256":"881218c0a67a4670bd687771ebeef0daa94da2f2a9f193b983f8dfb9cff7d92e","cleanupStatus":"CONFIRMED_ABSENT","protectedReservationAbsent":true,"finishedAt":"2026-09-24T18:02:15Z"}

@@ -74,6 +74,9 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
   const liteLLMRouting = runConfig === "catalogue-litellm-inference-routing" || ev.scenario === "catalogue-litellm-inference-routing";
   const mcpVoiceModel = runConfig === "catalogue-mcp-voice-model-continuation" || ev.scenario === "catalogue-mcp-voice-model-continuation";
   const mcpVoiceAccepted = mcpVoiceModel ? parseMCPVoiceModelEvidence(ev.functionalResult?.evidence, ev.functionalResult?.outcome) : null;
+  const cpuToken = [runConfig, ev.scenario].some((value) => value === "pod-bound-api-auth-response-cpu" || value === "c2-pod-bound-api-auth-response-cpu");
+  const voiceToken = [runConfig, ev.scenario].some((value) => value === "pod-bound-api-auth-response" || value === "c2-pod-bound-api-auth-response");
+  const tokenCase = cpuToken && voiceToken ? null : cpuToken ? "cpu" : voiceToken ? "voice" : null;
   const ms = (x: number) => (x > 0 ? `${x.toFixed(1)}s` : "—");
   return (
     <div className="space-y-3">
@@ -101,8 +104,9 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
         {ev.configurationResult.issues?.map((issue) => <div key={issue} className="mt-1 text-warning">unverified: {issue}</div>)}
       </div>}
       {ev.natsResponseResult && <NATSClientResponseResult result={ev.natsResponseResult} unsafeToRetry={unsafeToRetry} />}
-      {runConfig === "pod-bound-api-auth-response" && ev.podBoundTokenResult && <PodBoundTokenResultPanel result={ev.podBoundTokenResult} unsafeToRetry={unsafeToRetry} />}
-      {runConfig === "pod-bound-api-auth-response" && !ev.podBoundTokenResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Pod-bound bearer stage evidence is unavailable. No injected-signal, operation or credential mechanism result is accepted.</div>}
+      {tokenCase && ev.podBoundTokenResult && <PodBoundTokenResultPanel result={ev.podBoundTokenResult} caseProfile={tokenCase} unsafeToRetry={unsafeToRetry} />}
+      {tokenCase && !ev.podBoundTokenResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Pod-bound bearer stage evidence is unavailable. No injected-signal, operation or credential mechanism result is accepted.</div>}
+      {cpuToken && voiceToken && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Pod-bound case identity conflicts between run and evidence. No CPU or Voice mechanism result is accepted.</div>}
       {ev.guardrailStaticResult && <GuardrailStaticResultPanel result={ev.guardrailStaticResult} />}
       {runConfig === "guardrail-confidentiality-static" && !ev.guardrailStaticResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact private guardrail comparison evidence is unavailable or incomplete. No static-filter finding is accepted.</div>}
       {runConfig === "guardrail-availability-recovery" && ev.guardrailAvailabilityResult && <GuardrailAvailabilityResultPanel result={ev.guardrailAvailabilityResult} unsafeToRetry={unsafeToRetry} />}

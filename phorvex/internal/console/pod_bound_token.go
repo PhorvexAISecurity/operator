@@ -14,10 +14,54 @@ import (
 )
 
 const (
-	podBoundTokenConfig    = "pod-bound-api-auth-response"
-	podBoundTokenSchema    = "pod-bound-token-result-v1"
-	podBoundTokenNamespace = "voice"
+	podBoundTokenConfig       = "pod-bound-api-auth-response"
+	podBoundTokenSchema       = "pod-bound-token-result-v1"
+	podBoundTokenNamespace    = "voice"
+	podBoundTokenCPUConfig    = "pod-bound-api-auth-response-cpu"
+	podBoundTokenCPUNamespace = "phorvex-catalogue-cpu"
+	podBoundTokenVoiceCaseID  = "c2-pod-bound-api-auth-response"
+	podBoundTokenCPUCaseID    = "c2-pod-bound-api-auth-response-cpu"
 )
+
+func podBoundCaseID(profile string) string {
+	if profile == podBoundTokenCPUConfig {
+		return podBoundTokenCPUCaseID
+	}
+	if profile == podBoundTokenConfig {
+		return podBoundTokenVoiceCaseID
+	}
+	return ""
+}
+func podBoundNamespace(profile string) string {
+	if profile == podBoundTokenCPUConfig {
+		return podBoundTokenCPUNamespace
+	}
+	if profile == podBoundTokenConfig {
+		return podBoundTokenNamespace
+	}
+	return ""
+}
+func podBoundCreator(profile string) string {
+	if profile == podBoundTokenCPUConfig {
+		return "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector-cpu"
+	}
+	if profile == podBoundTokenConfig {
+		return "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector"
+	}
+	return ""
+}
+func podBoundNamedCase(profile string) bool {
+	return profile == podBoundTokenConfig || profile == podBoundTokenCPUConfig
+}
+func podBoundProfileForNamespace(namespace string) string {
+	if namespace == podBoundTokenNamespace {
+		return podBoundTokenConfig
+	}
+	if namespace == podBoundTokenCPUNamespace {
+		return podBoundTokenCPUConfig
+	}
+	return ""
+}
 
 var podBoundTokenNonce = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
@@ -52,6 +96,10 @@ type podBoundTokenProfile struct {
 }
 
 func parsePodBoundTokenProfile(raw []byte) (podBoundTokenProfile, error) {
+	return parsePodBoundTokenProfileFor(raw, podBoundTokenConfig)
+}
+
+func parsePodBoundTokenProfileFor(raw []byte, profile string) (podBoundTokenProfile, error) {
 	var p podBoundTokenProfile
 	if len(raw) == 0 || len(raw) > 64<<10 || bytes.Contains(raw, []byte("__SET_")) ||
 		yaml.Unmarshal(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")), &p) != nil {
@@ -59,9 +107,9 @@ func parsePodBoundTokenProfile(raw []byte) (podBoundTokenProfile, error) {
 	}
 	f := p.Fixture
 	if p.Context == "" || p.Context == "in-cluster" || p.Kubeconfig != "" ||
-		p.Namespace != podBoundTokenNamespace || p.ExpectedNamespaceUID != "" ||
+		p.Namespace != podBoundNamespace(profile) || p.ExpectedNamespaceUID != "" ||
 		!p.OwnedAck || p.TrialsPerArm != 1 || len(p.DefenderFilter) != 0 ||
-		len(p.ScenarioFilter) != 1 || p.ScenarioFilter[0] != "c2-pod-bound-api-auth-response" ||
+		len(p.ScenarioFilter) != 1 || p.ScenarioFilter[0] != podBoundCaseID(profile) ||
 		f.Transport != "in-cluster" || !mongoKubeUID.MatchString(f.ClusterUID) ||
 		f.ManagerNamespace != "phorvex-system" || !nsRe.MatchString(f.ManagerDeployment) ||
 		!mongoPinnedImage.MatchString(f.ManagerImageID) ||
@@ -69,7 +117,7 @@ func parsePodBoundTokenProfile(raw []byte) (podBoundTokenProfile, error) {
 		!mongoSHA.MatchString(f.SourceManifestSHA256) ||
 		!filepath.IsAbs(f.SourceManifestPath) ||
 		!regexp.MustCompile(`^phorvex-quarantine-capacity-[0-9a-f]{40}$`).MatchString(f.ProtectedLedgerName) ||
-		f.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" ||
+		f.EventCreator != podBoundCreator(profile) ||
 		f.PrometheusURL == "" || f.ScrapeKind != "podmonitor" ||
 		f.ScrapeNamespace != p.Namespace || !nsRe.MatchString(f.AllowedNodeName) ||
 		f.MaxRunSeconds < 300 || f.MaxRunSeconds > 900 {
@@ -78,16 +126,23 @@ func parsePodBoundTokenProfile(raw []byte) (podBoundTokenProfile, error) {
 	return p, nil
 }
 
-func (rm *RunManager) podBoundTokenDestination(raw []byte, dest runDestination) (runDestination, error) {
-	if !rm.cfg.PodBoundTokenEnabled || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "" {
+func (rm *RunManager) podBoundTokenDestination(raw []byte, dest runDestination, profiles ...string) (runDestination, error) {
+	profile := podBoundTokenConfig
+	if len(profiles) == 1 {
+		profile = profiles[0]
+	}
+	enabled, pinned := rm.cfg.PodBoundTokenEnabled, rm.cfg.PodBoundTokenProfileSHA256
+	if profile == podBoundTokenCPUConfig {
+		enabled, pinned = rm.cfg.PodBoundTokenCPUEnabled, rm.cfg.PodBoundTokenCPUProfileSHA256
+	}
+	if !enabled || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "" {
 		return dest, errors.New("Pod-bound token fixture, trusted creator or authenticated audit is disabled")
 	}
-	p, err := parsePodBoundTokenProfile(raw)
+	p, err := parsePodBoundTokenProfileFor(raw, profile)
 	if err != nil {
 		return dest, err
 	}
-	if !mongoSHA.MatchString(rm.cfg.PodBoundTokenProfileSHA256) ||
-		podBoundHash(raw) != rm.cfg.PodBoundTokenProfileSHA256 {
+	if !mongoSHA.MatchString(pinned) || podBoundHash(raw) != pinned {
 		return dest, errors.New("Pod-bound token profile differs from installed reviewed digest")
 	}
 	if _, err := verifyPodBoundTokenSourceManifest(p); err != nil {
@@ -95,8 +150,28 @@ func (rm *RunManager) podBoundTokenDestination(raw []byte, dest runDestination) 
 	}
 	h := sha256.Sum256(raw)
 	return runDestination{Targets: []string{hostTargetID, p.Context},
-		Tenants: []string{podBoundTokenNamespace}, ScopeTarget: p.Context,
-		ScopeTenant: podBoundTokenNamespace, SuiteSHA256: hex.EncodeToString(h[:])}, nil
+		Tenants: []string{p.Namespace}, ScopeTarget: p.Context,
+		ScopeTenant: p.Namespace, SuiteSHA256: hex.EncodeToString(h[:])}, nil
+}
+
+func (c *Config) podBoundTokenCPUCatalogueItem() CatalogItem {
+	dest, err := (&RunManager{cfg: *c}).SuiteDestination(podBoundTokenCPUConfig)
+	item := CatalogItem{EntryID: podBoundTokenCPUCaseID, Name: podBoundTokenCPUCaseID,
+		Product: "application", Category: "Injected response control", R6Tag: "not-applicable",
+		Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{},
+		Realism: "executable-mechanism", BenignControl: boolPtr(false),
+		ExpectedActuators: []string{}, ResponseGuidanceBasis: "explicit-response-control",
+		ResponseGuidance: "One trusted typed event is injected. The brain may choose no action; only exact rotate, old Pod retirement and same-bearer before-expiry replay can support a narrow response claim.",
+		MeaningfulWhen:   "Shows an exact CPU source Pod-bound bearer, attributed decision and sampled peer/Service response; natural detection and continuous availability are not evaluated.",
+		RunnableNote:     "Default-off owned CPU namespace with reviewed creator, scrape, source and authenticated audit pins.",
+		Prereqs:          []string{"reviewed fixed CPU profile and source pins", "dedicated existing namespace and exact grants", "trusted CPU E2E creator admission", "fresh source-Pod request rate", "authenticated exact-window audit"},
+		LaunchKind:       "named-suite", ClaimClass: "effect", Profile: podBoundTokenCPUConfig, Available: err == nil}
+	if err == nil {
+		item.RuntimeContext = dest.ScopeTarget
+	} else {
+		item.UnavailableReason = err.Error()
+	}
+	return item
 }
 
 func (c *Config) podBoundTokenCatalogueItem() CatalogItem {
@@ -142,6 +217,7 @@ type PodBoundTokenAdmission struct {
 	SourcePodUID       string `json:"sourcePodUID"`
 	PeerPodUID         string `json:"peerPodUID"`
 	ServiceUID         string `json:"serviceUID"`
+	PDBUID             string `json:"pdbUID,omitempty"`
 	DeploymentUID      string `json:"deploymentUID"`
 	ReplicaSetUID      string `json:"replicaSetUID"`
 	ProfileSHA256      string `json:"profileSHA256"`
@@ -183,11 +259,19 @@ type PodBoundTokenOperation struct {
 
 type PodBoundTokenReplay struct {
 	SourceBeforeHTTP                int    `json:"sourceBeforeHTTP"`
+	SourceBeforeRequestAt           string `json:"sourceBeforeRequestAt,omitempty"`
+	SourceBeforeAt                  string `json:"sourceBeforeAt,omitempty"`
 	SourceAfterHTTP                 int    `json:"sourceAfterHTTP"`
+	SourceAfterRequestAt            string `json:"sourceAfterRequestAt,omitempty"`
 	SourceExpiry                    string `json:"sourceExpiry"`
 	SourceAfterAt                   string `json:"sourceAfterAt"`
 	PeerBeforeHTTP                  int    `json:"peerBeforeHTTP"`
+	PeerBeforeRequestAt             string `json:"peerBeforeRequestAt,omitempty"`
+	PeerBeforeAt                    string `json:"peerBeforeAt,omitempty"`
 	PeerAfterHTTP                   int    `json:"peerAfterHTTP"`
+	PeerAfterRequestAt              string `json:"peerAfterRequestAt,omitempty"`
+	PeerAfterAt                     string `json:"peerAfterAt,omitempty"`
+	PeerExpiry                      string `json:"peerExpiry,omitempty"`
 	ServiceBeforeHTTP               int    `json:"serviceBeforeHTTP"`
 	ServiceAfterHTTP                int    `json:"serviceAfterHTTP"`
 	SameSourceHandle                bool   `json:"sameSourceHandle"`
@@ -223,6 +307,7 @@ type PodBoundTokenTelemetry struct {
 
 type PodBoundTokenResult struct {
 	Schema            string                 `json:"schema"`
+	CaseID            string                 `json:"caseID,omitempty"`
 	RunID             string                 `json:"runID"`
 	Nonce             string                 `json:"nonce"`
 	TerminalStatus    string                 `json:"terminalStatus"`
@@ -240,6 +325,11 @@ type PodBoundTokenResult struct {
 }
 
 func validatePodBoundTokenResult(r PodBoundTokenResult) error {
+	profile := podBoundProfileForNamespace(r.Admission.Namespace)
+	if profile == "" || (profile == podBoundTokenCPUConfig && r.CaseID != podBoundTokenCPUCaseID) ||
+		(profile == podBoundTokenConfig && r.CaseID != "" && r.CaseID != podBoundTokenVoiceCaseID) {
+		return errors.New("Pod-bound token case and namespace differ")
+	}
 	if r.Schema != podBoundTokenSchema || r.RunID == "" || !podBoundTokenNonce.MatchString(r.Nonce) ||
 		r.SecurityEfficacy != "NOT_EVALUATED" || r.SignalMode != "explicit-injected-typed-event" ||
 		(r.TerminalStatus != "COMPLETE" && r.TerminalStatus != "INCOMPLETE" && r.TerminalStatus != "UNSAFE") {
@@ -247,6 +337,9 @@ func validatePodBoundTokenResult(r PodBoundTokenResult) error {
 	}
 	if len(r.Stages) != 9 {
 		return errors.New("Pod-bound token stage chain incomplete")
+	}
+	if profile == podBoundTokenCPUConfig && r.TerminalStatus == "COMPLETE" && !podBoundCPUResultTimesValid(r) {
+		return errors.New("CPU token complete replay crossed an original-handle expiry margin")
 	}
 	if r.MechanismObserved {
 		afterAt, aerr := time.Parse(time.RFC3339Nano, r.Replay.SourceAfterAt)
@@ -304,13 +397,14 @@ func validatePodBoundTokenResult(r PodBoundTokenResult) error {
 			}
 		}
 	}
-	if r.TerminalStatus == "COMPLETE" && (r.Admission.Namespace != podBoundTokenNamespace ||
+	if r.TerminalStatus == "COMPLETE" && (r.Admission.Namespace != podBoundNamespace(profile) ||
+		(profile == podBoundTokenCPUConfig && r.Admission.PDBUID == "") ||
 		r.Admission.SourcePodUID == "" || r.Admission.SourcePodUID != r.Event.SourcePodUID ||
 		r.Admission.PeerPodUID == "" || r.Admission.PeerPodUID == r.Admission.SourcePodUID ||
 		r.Admission.ServiceUID == "" || r.Admission.PolicyUID == "" ||
 		r.Admission.PolicyGeneration < 1 || !mongoSHA.MatchString(r.Admission.PolicySpecSHA256) ||
 		r.Admission.ManagerPodUID == "" || !mongoSHA.MatchString(r.Admission.ProfileSHA256) ||
-		r.Event.UID == "" || r.Event.Creator != "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" ||
+		r.Event.UID == "" || r.Event.Creator != podBoundCreator(profile) ||
 		r.Decision.ID == "" || r.Decision.AuditCoverage != "COMPLETE") {
 		return errors.New("Pod-bound token exact source, event or audit identity differs")
 	}

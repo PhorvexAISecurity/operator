@@ -65,7 +65,7 @@ func (rm *RunManager) PodBoundTokenUnsafe(id string) (*PodBoundTokenUnsafeReceip
 	st := rm.runs[id]
 	out := rm.runOut[id]
 	rm.mu.Unlock()
-	if st == nil || st.Config != podBoundTokenConfig || out == "" {
+	if st == nil || !podBoundNamedCase(st.Config) || out == "" {
 		return nil, nil
 	}
 	r, err := readPodBoundTokenUnsafe(rm.cfg.runOutputPath(out), id)

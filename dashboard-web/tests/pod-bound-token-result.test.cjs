@@ -12,7 +12,7 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 const subject = { exports: {} };
 new Function("require", "module", "exports", compiled)(require, subject, subject.exports);
-const render = (result, unsafeToRetry = false) => renderToStaticMarkup(React.createElement(subject.exports.PodBoundTokenResultPanel, { result, unsafeToRetry }));
+const render = (result, unsafeToRetry = false, caseProfile = "voice") => renderToStaticMarkup(React.createElement(subject.exports.PodBoundTokenResultPanel, { result, unsafeToRetry, caseProfile }));
 const stageNames = ["ADMISSION", "OWNED_FIXTURE", "CREDENTIAL_AND_ROUTE_BASELINE", "AUDIT_START", "SOLE_TYPED_SIGNAL", "BRAIN_DECISION", "NATIVE_OPERATION", "INDEPENDENT_OUTCOME", "CLEANUP"];
 const stages = stageNames.map((name, index) => ({ name, status: "CONFIRMED", observedAt: `2026-09-24T15:00:0${index}Z`, evidenceSHA256: "a".repeat(64), reason: "" }));
 const observation = {
@@ -106,4 +106,64 @@ test("wrong schema or asserted defense efficacy is never rendered as accepted", 
   for (const changed of [{ ...observation, schema: "other" }, { ...observation, securityEfficacy: "DEFENDED" }, { ...observation, signalMode: "natural" }]) {
     assert.match(render(changed), /incompatible claim contract/);
   }
+});
+
+const cpu = {
+  ...observation, caseID: "c2-pod-bound-api-auth-response-cpu", mechanismObserved: true,
+  admission: { ...observation.admission, namespace: "phorvex-catalogue-cpu" },
+  event: { ...observation.event, creator: "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector-cpu" },
+  decision: { ...observation.decision, selectedAction: "rotate", dispatchOutcome: "emitted", requestRateStatus: "MEASURED_FRESH" },
+  operation: { terminationStatus: "REQUEST_CONFIRMED", originalPodAbsent: true, receiptSHA256: "e".repeat(64) },
+  replay: { ...observation.replay, sourceAfterHTTP: 401,
+    sourceBeforeRequestAt: "2026-09-24T15:00:01.000Z", sourceBeforeAt: "2026-09-24T15:00:01.100Z",
+    peerBeforeRequestAt: "2026-09-24T15:00:01.200Z", peerBeforeAt: "2026-09-24T15:00:01.300Z",
+    sourceAfterRequestAt: "2026-09-24T15:00:06.200Z", sourceAfterAt: "2026-09-24T15:00:06.500Z",
+    peerAfterRequestAt: "2026-09-24T15:00:06.300Z", peerAfterAt: "2026-09-24T15:00:06.600Z",
+    peerExpiry: "2026-09-24T15:10:00Z" },
+};
+
+test("CPU case reuses the exact mechanism ledger with sampled, before-expiry peer and route checks", () => {
+  const html = render(cpu, false, "cpu");
+  assert.match(html, /data-pod-bound-token-result="mechanism-observed"/);
+  assert.match(html, /CPU fixture · injected Pod-bound API bearer response/);
+  assert.match(html, /Availability is sampled at the recorded peer and routed Service checks, not continuous uptime/);
+  assert.match(html, /all recorded source\/peer requests and responses before expiry−30s: yes/);
+  assert.match(html, /Source baseline request\/response:.*15:00:01\.000Z.*15:00:01\.100Z/);
+  assert.match(html, /Peer post request\/response:.*15:00:06\.300Z.*15:00:06\.600Z/);
+  assert.match(html, /This does not establish zero downtime/);
+  assert.match(html, /CPU case limits: one explicitly injected event arm/);
+  assert.doesNotMatch(html, /defended|continuous availability established/i);
+});
+
+test("CPU source/creator mismatch, replacement handle and expiry-only 401 cannot earn response credit", () => {
+  for (const row of [
+    { ...cpu, caseID: "c2-pod-bound-api-auth-response" },
+    { ...cpu, admission: { ...cpu.admission, namespace: "voice" } },
+    { ...cpu, event: { ...cpu.event, creator: observation.event.creator } },
+    { ...cpu, replay: { ...cpu.replay, sourceAfterCaptureID: "replacement" } },
+    { ...cpu, replay: { ...cpu.replay, sourceExpiry: "2026-09-24T15:00:35Z" } },
+    { ...cpu, replay: { ...cpu.replay, peerExpiry: "2026-09-24T15:00:35Z" } },
+    { ...cpu, replay: { ...cpu.replay, sourceAfterRequestAt: "2026-09-24T15:00:06.700Z" } },
+    { ...cpu, replay: { ...cpu.replay, peerAfterAt: "" } },
+    { ...cpu, replay: { ...cpu.replay, sourceBeforeRequestAt: "" } },
+    { ...cpu, replay: { ...cpu.replay, peerBeforeAt: "" } },
+  ]) {
+    const html = render(row, false, "cpu");
+    assert.match(html, /incompatible claim contract/);
+    assert.doesNotMatch(html, /data-pod-bound-token-result="mechanism-observed"/);
+  }
+  assert.match(render(cpu, false, "voice"), /incompatible claim contract/);
+});
+
+test("CPU NOOP remains a visible negative observation with original bearer and sampled controls", () => {
+  const row = { ...cpu, mechanismObserved: false,
+    stages: stages.map((stage) => stage.name === "BRAIN_DECISION" ? { ...stage, reason: "NOOP_COST_GATE_AND_CAPACITY" } : stage),
+    decision: { ...cpu.decision, selectedAction: "noop", dispatchOutcome: "not-attempted" },
+    operation: { terminationStatus: "NOT_DISPATCHED", originalPodAbsent: false, receiptSHA256: "" },
+    replay: { ...cpu.replay, sourceAfterHTTP: 200 } };
+  const html = render(row, false, "cpu");
+  assert.match(html, /data-pod-bound-token-result="observation-only"/);
+  assert.match(html, /NOOP_COST_GATE_AND_CAPACITY/);
+  assert.match(html, /A complete no-op is a valid negative case result, not a defense success/);
+  assert.doesNotMatch(html, /ROTATE_CREDENTIAL_MECHANISM_OBSERVED/);
 });

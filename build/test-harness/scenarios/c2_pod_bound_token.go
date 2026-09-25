@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -240,16 +241,20 @@ func podTokenOriginalAbsent(ctx context.Context, env *core.Env, f podTokenFixtur
 	p, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, f.source.Name, metav1.GetOptions{})
 	return err != nil && podTokenIsNotFound(err) || err == nil && p.UID != f.source.UID
 }
-func podTokenReplayPhase(env *core.Env, phase string, status int, at time.Time, captureID string) error {
+func podTokenReplayPhase(env *core.Env, phase string, status int, at time.Time, captureID string, requestAt ...time.Time) error {
 	row := struct {
 		Schema    string `json:"schema"`
 		RunID     string `json:"runID"`
 		Nonce     string `json:"nonce"`
 		Phase     string `json:"phase"`
 		HTTP      int    `json:"http"`
+		RequestAt string `json:"requestAt,omitempty"`
 		At        string `json:"at"`
 		CaptureID string `json:"captureID"`
-	}{"pod-bound-token-replay-v1", env.Config.PodBoundTokenFixture.RunID, env.Config.PodBoundTokenFixture.Nonce, phase, status, at.Format(time.RFC3339Nano), captureID}
+	}{Schema: "pod-bound-token-replay-v1", RunID: env.Config.PodBoundTokenFixture.RunID, Nonce: env.Config.PodBoundTokenFixture.Nonce, Phase: phase, HTTP: status, At: at.Format(time.RFC3339Nano), CaptureID: captureID}
+	if len(requestAt) == 1 {
+		row.RequestAt = requestAt[0].Format(time.RFC3339Nano)
+	}
 	raw, e := json.Marshal(row)
 	if e != nil {
 		return e
@@ -270,6 +275,7 @@ func podTokenOutcomeReplay(ctx context.Context, env *core.Env, f podTokenFixture
 	r.PeerBeforeHTTP = 200
 	r.ServiceBeforeHTTP = 200
 	r.SourceExpiry = source.expiry.Format(time.RFC3339Nano)
+	r.PeerExpiry = peer.expiry.Format(time.RFC3339Nano)
 	r.SourceBeforeCaptureID = source.captureID
 	r.SourceAfterCaptureID = source.captureID
 	r.PeerBeforeCaptureID = peer.captureID
@@ -281,7 +287,8 @@ func podTokenOutcomeReplay(ctx context.Context, env *core.Env, f podTokenFixture
 		deadline = margin
 	}
 	for time.Now().Before(deadline) {
-		status, at, err := podTokenReplayAPI(ctx, env, source, f.peer.Name)
+		status, started, at, err := podTokenReplayAPIWindow(ctx, env, source, f.peer.Name)
+		r.SourceAfterRequestAt = started.Format(time.RFC3339Nano)
 		if err != nil {
 			r.SourceAfterHTTP = 0
 			r.SourceAfterAt = at.Format(time.RFC3339Nano)
@@ -289,7 +296,7 @@ func podTokenOutcomeReplay(ctx context.Context, env *core.Env, f podTokenFixture
 		}
 		r.SourceAfterHTTP = status
 		r.SourceAfterAt = at.Format(time.RFC3339Nano)
-		if err := podTokenReplayPhase(env, "source-after", status, at, source.captureID); err != nil {
+		if err := podTokenReplayPhase(env, "source-after", status, at, source.captureID, started); err != nil {
 			return err
 		}
 		if status == 401 || barrier.Decision.SelectedAction != "rotate" {
@@ -301,12 +308,14 @@ func podTokenOutcomeReplay(ctx context.Context, env *core.Env, f podTokenFixture
 		case <-time.After(2 * time.Second):
 		}
 	}
-	status, at, err := podTokenReplayAPI(ctx, env, peer, f.peer.Name)
+	status, started, at, err := podTokenReplayAPIWindow(ctx, env, peer, f.peer.Name)
 	if err != nil {
 		return err
 	}
 	r.PeerAfterHTTP = status
-	if err := podTokenReplayPhase(env, "peer-after", status, at, peer.captureID); err != nil {
+	r.PeerAfterRequestAt = started.Format(time.RFC3339Nano)
+	r.PeerAfterAt = at.Format(time.RFC3339Nano)
+	if err := podTokenReplayPhase(env, "peer-after", status, at, peer.captureID, started); err != nil {
 		return err
 	}
 	serviceStatus, member, sliceUID, err := podTokenServiceReady(ctx, env, f)
@@ -323,14 +332,63 @@ func podTokenOutcomeReplay(ctx context.Context, env *core.Env, f podTokenFixture
 	return nil
 }
 
+const podTokenExpiryMargin = 30 * time.Second
+const podTokenCPUObservationReserve = 360 * time.Second
+const podTokenCPUGlobalReserve = 645 * time.Second
+
+func podTokenBeforeExpiry(start, end, expiry time.Time) bool {
+	return !start.IsZero() && !end.IsZero() && !end.Before(start) && end.Before(expiry.Add(-podTokenExpiryMargin))
+}
+
+func podTokenBeforeExpiryString(startText, endText string, expiry time.Time) bool {
+	start, startErr := time.Parse(time.RFC3339Nano, startText)
+	end, endErr := time.Parse(time.RFC3339Nano, endText)
+	return startErr == nil && endErr == nil && podTokenBeforeExpiry(start, end, expiry)
+}
+
+func podTokenMechanismObserved(result podTokenResult, sourceUID string, committed, eventClean bool, replayErr error) bool {
+	sourceExpiry, sourceErr := time.Parse(time.RFC3339Nano, result.Replay.SourceExpiry)
+	peerExpiry, peerErr := time.Parse(time.RFC3339Nano, result.Replay.PeerExpiry)
+	sourceAfter, afterErr := time.Parse(time.RFC3339Nano, result.Replay.SourceAfterAt)
+	observed := result.Decision.SelectedAction == "rotate" && result.Decision.DispatchOutcome == "emitted" &&
+		result.Decision.RequestRateStatus == "MEASURED_FRESH" && result.Telemetry.ProducerStatus == "MEASURED_FRESH" &&
+		result.Operation.TerminationStatus == "REQUEST_CONFIRMED" && result.Operation.OriginalPodAbsent &&
+		result.Replay.SourceBeforeHTTP == 200 && result.Replay.SourceAfterHTTP == 401 &&
+		result.Replay.PeerBeforeHTTP == 200 && result.Replay.PeerAfterHTTP == 200 &&
+		result.Replay.ServiceBeforeHTTP == 200 && result.Replay.ServiceAfterHTTP == 200 &&
+		result.Replay.ServiceMemberReady && result.Replay.ServiceMemberPodUID != sourceUID &&
+		result.Replay.SameSourceHandle && result.Replay.SamePeerHandle && sourceErr == nil &&
+		afterErr == nil && sourceAfter.Before(sourceExpiry) && result.Cleanup.Absent &&
+		eventClean && committed && replayErr == nil
+	if result.CaseID == "c2-pod-bound-api-auth-response-cpu" {
+		observed = observed && peerErr == nil &&
+			podTokenBeforeExpiryString(result.Replay.SourceBeforeRequestAt, result.Replay.SourceBeforeAt, sourceExpiry) &&
+			podTokenBeforeExpiryString(result.Replay.PeerBeforeRequestAt, result.Replay.PeerBeforeAt, peerExpiry) &&
+			podTokenBeforeExpiryString(result.Replay.SourceAfterRequestAt, result.Replay.SourceAfterAt, sourceExpiry) &&
+			podTokenBeforeExpiryString(result.Replay.PeerAfterRequestAt, result.Replay.PeerAfterAt, peerExpiry)
+	}
+	return observed
+}
+
+func podTokenCPUTimeBudget(ctx context.Context, source, peer podTokenHandle, now time.Time) error {
+	if !source.expiry.After(now.Add(podTokenCPUObservationReserve)) || !peer.expiry.After(now.Add(podTokenCPUObservationReserve)) {
+		return errors.New("CPU token original handle has insufficient pre-event lifetime")
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok || !deadline.After(now.Add(podTokenCPUGlobalReserve)) {
+		return errors.New("CPU token event, audit and cleanup budget unavailable")
+	}
+	return nil
+}
+
 // RunPodBoundTokenCase is the sole unscored producer. It never creates an event
 // or chooses a policy action; the console writes the one trusted barrier.
 func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
-	if env == nil || env.Config.PodBoundTokenFixture == nil || env.Config.Namespace != "voice" || env.Config.ProfileSHA256 == "" || env.Config.OutDir == "" {
+	if env == nil || env.Config.PodBoundTokenFixture == nil || config.PodBoundTokenCaseID(env.Config.Namespace) == "" || env.ScenarioName != config.PodBoundTokenCaseID(env.Config.Namespace) || env.Config.ProfileSHA256 == "" || env.Config.OutDir == "" {
 		return errors.New("Pod token named-suite authority absent")
 	}
 	cfg := env.Config.PodBoundTokenFixture
-	result := podTokenResult{Schema: "pod-bound-token-result-v1", RunID: cfg.RunID, Nonce: cfg.Nonce, TerminalStatus: "INCOMPLETE", SecurityEfficacy: "NOT_EVALUATED", SignalMode: "explicit-injected-typed-event", Stages: make([]podTokenStage, len(podTokenStageNames))}
+	result := podTokenResult{Schema: "pod-bound-token-result-v1", CaseID: env.ScenarioName, RunID: cfg.RunID, Nonce: cfg.Nonce, TerminalStatus: "INCOMPLETE", SecurityEfficacy: "NOT_EVALUATED", SignalMode: "explicit-injected-typed-event", Stages: make([]podTokenStage, len(podTokenStageNames))}
 	for i, name := range podTokenStageNames {
 		result.Stages[i] = podTokenStage{Name: name, Status: "UNKNOWN"}
 	}
@@ -385,6 +443,11 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 		return err
 	}
 	podTokenStageSet(&result, 1, "CONFIRMED", podTokenHash([]byte(podTokenFixtureSummary(fixture))), "two controller-owned Ready Pods")
+	telemetry := podTokenWarmMetric(ctx, env, fixture)
+	result.Telemetry = telemetry
+	if env.Config.Namespace == "phorvex-catalogue-cpu" && telemetry.ProducerStatus != "MEASURED_FRESH" {
+		return errors.New("CPU token source-Pod measured request rate unavailable before event")
+	}
 	sa, err := env.Kube.CoreV1().ServiceAccounts(env.Config.Namespace).Get(ctx, fixture.name, metav1.GetOptions{})
 	if err != nil || sa.UID == "" {
 		return errors.New("Pod token ServiceAccount identity unavailable")
@@ -400,18 +463,18 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 	if source.captureID == peer.captureID || source.token == peer.token {
 		return errors.New("Pod token independent projected handles not distinct")
 	}
-	sourceHTTP, sourceAt, err := podTokenReplayAPI(ctx, env, source, fixture.peer.Name)
+	sourceHTTP, sourceStart, sourceAt, err := podTokenReplayAPIWindow(ctx, env, source, fixture.peer.Name)
 	if err != nil || sourceHTTP != 200 {
 		return errors.New("source projected bearer API baseline not 200")
 	}
-	if err := podTokenReplayPhase(env, "source-before", sourceHTTP, sourceAt, source.captureID); err != nil {
+	if err := podTokenReplayPhase(env, "source-before", sourceHTTP, sourceAt, source.captureID, sourceStart); err != nil {
 		return err
 	}
-	peerHTTP, peerAt, err := podTokenReplayAPI(ctx, env, peer, fixture.peer.Name)
+	peerHTTP, peerStart, peerAt, err := podTokenReplayAPIWindow(ctx, env, peer, fixture.peer.Name)
 	if err != nil || peerHTTP != 200 {
 		return errors.New("peer projected bearer API baseline not 200")
 	}
-	if err := podTokenReplayPhase(env, "peer-before", peerHTTP, peerAt, peer.captureID); err != nil {
+	if err := podTokenReplayPhase(env, "peer-before", peerHTTP, peerAt, peer.captureID, peerStart); err != nil {
 		return err
 	}
 	if status, e := podTokenDirectReady(ctx, fixture.source, cfg.Nonce); e != nil || status != 200 {
@@ -424,8 +487,14 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 	if err != nil || serviceHTTP != 200 {
 		return errors.New("owned Service route baseline unavailable")
 	}
-	telemetry := podTokenWarmMetric(ctx, env, fixture)
-	result.Telemetry = telemetry
+	if env.Config.Namespace == "phorvex-catalogue-cpu" {
+		if !podTokenBeforeExpiry(sourceStart, sourceAt, source.expiry) || !podTokenBeforeExpiry(peerStart, peerAt, peer.expiry) {
+			return errors.New("CPU token baseline replay crossed original-handle expiry margin")
+		}
+		if err := podTokenCPUTimeBudget(ctx, source, peer, time.Now().UTC()); err != nil {
+			return err
+		}
+	}
 	podTokenStageSet(&result, 2, "CONFIRMED", telemetry.QuerySHA256, "capture-once projected handles and real route baselines")
 	if err := podTokenCurrentPod(ctx, env, fixture.source); err != nil {
 		return err
@@ -436,19 +505,26 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 	if err := podTokenCurrentPolicy(ctx, env, fixture); err != nil {
 		return err
 	}
-	if err := podTokenDisjointPrecreate(ctx, env); err != nil {
+	if err := podTokenDisjointPrecreate(ctx, env, fixture); err != nil {
+		return err
+	}
+	if err := podTokenNoCollision(ctx, env, fixture); err != nil {
 		return err
 	}
 	currentUID, currentContainer, currentImage, err := podTokenManager(ctx, env)
 	if err != nil || currentUID != managerUID || currentContainer != managerContainer || currentImage != managerImage {
 		return errors.New("manager incarnation changed before request")
 	}
-	request := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: cfg.RunID, Nonce: cfg.Nonce, ClusterUID: cfg.ClusterUID, Namespace: env.Config.Namespace, NamespaceUID: string(env.NamespaceUID()), SourcePodName: fixture.source.Name, SourcePodUID: string(fixture.source.UID), DeploymentUID: string(fixture.deploymentUID), ReplicaSetUID: string(fixture.replicaSetUID), PeerPodName: fixture.peer.Name, PeerPodUID: string(fixture.peer.UID), ServiceName: fixture.name, ServiceUID: string(fixture.serviceUID), PolicyName: fixture.name, PolicyUID: string(fixture.policyUID), PolicyGeneration: fixture.policyGeneration, PolicySpecSHA256: fixture.policySpecSHA, ManagerPodUID: managerUID, ManagerContainerID: managerContainer, ManagerImageID: managerImage, ProfileSHA256: env.Config.ProfileSHA256, SourceBeforeHTTP: sourceHTTP, PeerBeforeHTTP: peerHTTP, ServiceBeforeHTTP: serviceHTTP, SourceExpiry: source.expiry.Format(time.RFC3339Nano), RequestedAt: podTokenUTC(), SourceCaptureID: source.captureID, PeerCaptureID: peer.captureID, MetricStatus: telemetry.ProducerStatus, MetricFirstAt: telemetry.FirstAt, MetricSecondAt: telemetry.SecondAt, MetricFirstValue: telemetry.FirstValue, MetricSecondValue: telemetry.SecondValue, MetricSourcePodName: telemetry.SourcePodName, PodMonitorUID: telemetry.PodMonitorUID, MetricQuerySHA256: telemetry.QuerySHA256}
+	request := podTokenRequest{Schema: "pod-bound-token-request-v1", CaseID: env.ScenarioName, RunID: cfg.RunID, Nonce: cfg.Nonce, ClusterUID: cfg.ClusterUID, Namespace: env.Config.Namespace, NamespaceUID: string(env.NamespaceUID()), SourcePodName: fixture.source.Name, SourcePodUID: string(fixture.source.UID), DeploymentUID: string(fixture.deploymentUID), ReplicaSetUID: string(fixture.replicaSetUID), PeerPodName: fixture.peer.Name, PeerPodUID: string(fixture.peer.UID), ServiceName: fixture.name, ServiceUID: string(fixture.serviceUID), PDBUID: string(fixture.created["poddisruptionbudgets/"+fixture.name]), PolicyName: fixture.name, PolicyUID: string(fixture.policyUID), PolicyGeneration: fixture.policyGeneration, PolicySpecSHA256: fixture.policySpecSHA, ManagerPodUID: managerUID, ManagerContainerID: managerContainer, ManagerImageID: managerImage, ProfileSHA256: env.Config.ProfileSHA256, SourceBeforeHTTP: sourceHTTP, PeerBeforeHTTP: peerHTTP, ServiceBeforeHTTP: serviceHTTP, SourceExpiry: source.expiry.Format(time.RFC3339Nano), PeerExpiry: peer.expiry.Format(time.RFC3339Nano), SourceBeforeRequestAt: sourceStart.Format(time.RFC3339Nano), SourceBeforeAt: sourceAt.Format(time.RFC3339Nano), PeerBeforeRequestAt: peerStart.Format(time.RFC3339Nano), PeerBeforeAt: peerAt.Format(time.RFC3339Nano), RequestedAt: podTokenUTC(), SourceCaptureID: source.captureID, PeerCaptureID: peer.captureID, MetricStatus: telemetry.ProducerStatus, MetricFirstAt: telemetry.FirstAt, MetricSecondAt: telemetry.SecondAt, MetricFirstValue: telemetry.FirstValue, MetricSecondValue: telemetry.SecondValue, MetricSourcePodName: telemetry.SourcePodName, PodMonitorUID: telemetry.PodMonitorUID, MetricQuerySHA256: telemetry.QuerySHA256}
 	requestSHA, err := writePodTokenFile(env.Config.OutDir, podTokenRequestFile, request)
 	if err != nil {
 		return err
 	}
-	result.Admission = podTokenAdmission{ClusterUID: request.ClusterUID, Namespace: request.Namespace, NamespaceUID: request.NamespaceUID, ManagerPodUID: request.ManagerPodUID, ManagerContainerID: request.ManagerContainerID, ManagerImageID: request.ManagerImageID, DeploymentUID: request.DeploymentUID, ReplicaSetUID: request.ReplicaSetUID, PolicyUID: request.PolicyUID, PolicyGeneration: request.PolicyGeneration, PolicySpecSHA256: request.PolicySpecSHA256, SourcePodUID: request.SourcePodUID, PeerPodUID: request.PeerPodUID, ServiceUID: request.ServiceUID, ProfileSHA256: request.ProfileSHA256, Available: true}
+	result.Admission = podTokenAdmission{ClusterUID: request.ClusterUID, Namespace: request.Namespace, NamespaceUID: request.NamespaceUID, ManagerPodUID: request.ManagerPodUID, ManagerContainerID: request.ManagerContainerID, ManagerImageID: request.ManagerImageID, DeploymentUID: request.DeploymentUID, ReplicaSetUID: request.ReplicaSetUID, PolicyUID: request.PolicyUID, PolicyGeneration: request.PolicyGeneration, PolicySpecSHA256: request.PolicySpecSHA256, SourcePodUID: request.SourcePodUID, PeerPodUID: request.PeerPodUID, ServiceUID: request.ServiceUID, PDBUID: request.PDBUID, ProfileSHA256: request.ProfileSHA256, Available: true}
+	result.Replay.SourceBeforeRequestAt = request.SourceBeforeRequestAt
+	result.Replay.SourceBeforeAt = request.SourceBeforeAt
+	result.Replay.PeerBeforeRequestAt = request.PeerBeforeRequestAt
+	result.Replay.PeerBeforeAt = request.PeerBeforeAt
 	barrierCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	barrier, barrierSHA, err := podTokenWaitBarrier(barrierCtx, env.Config.OutDir, request, requestSHA)
 	cancel()
@@ -529,8 +605,7 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 	}
 	result.Replay.SameSourceHandle = result.Replay.SourceBeforeCaptureID != "" && result.Replay.SourceBeforeCaptureID == result.Replay.SourceAfterCaptureID
 	result.Replay.SamePeerHandle = result.Replay.PeerBeforeCaptureID != "" && result.Replay.PeerBeforeCaptureID == result.Replay.PeerAfterCaptureID
-	replayAt, replayTimeErr := time.Parse(time.RFC3339Nano, result.Replay.SourceAfterAt)
-	result.MechanismObserved = result.Decision.SelectedAction == "rotate" && result.Decision.DispatchOutcome == "emitted" && result.Decision.RequestRateStatus == "MEASURED_FRESH" && result.Telemetry.ProducerStatus == "MEASURED_FRESH" && result.Operation.TerminationStatus == "REQUEST_CONFIRMED" && result.Operation.OriginalPodAbsent && result.Replay.SourceAfterHTTP == 401 && result.Replay.PeerAfterHTTP == 200 && result.Replay.ServiceAfterHTTP == 200 && result.Replay.ServiceMemberReady && result.Replay.ServiceMemberPodUID != string(fixture.source.UID) && result.Replay.SameSourceHandle && result.Replay.SamePeerHandle && replayTimeErr == nil && replayAt.Before(source.expiry) && result.Cleanup.Absent && eventClean && commitOK && replayErr == nil
+	result.MechanismObserved = podTokenMechanismObserved(result, string(fixture.source.UID), commitOK, eventClean, replayErr)
 	if result.Cleanup.Absent && commitOK && replayErr == nil {
 		result.TerminalStatus = "COMPLETE"
 	} else if !result.Cleanup.Absent {

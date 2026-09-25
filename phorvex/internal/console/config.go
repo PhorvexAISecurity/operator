@@ -57,8 +57,12 @@ type Config struct {
 	// PodBoundTokenProfileSHA256 is the installation-reviewed digest of the
 	// read-only named profile, independent of that profile's own manifest pin.
 	PodBoundTokenProfileSHA256 string
-	Addr                       string // http listen address
-	Web                        string // static SPA dir (dashboard-web/out) served at / alongside /api
+	// CPU Pod-bound token control is an independently pinned, default-off
+	// namespace and creator. Its profile cannot authorize the Voice case.
+	PodBoundTokenCPUEnabled       bool
+	PodBoundTokenCPUProfileSHA256 string
+	Addr                          string // http listen address
+	Web                           string // static SPA dir (dashboard-web/out) served at / alongside /api
 	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
 	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
 	MetricsAllow []string

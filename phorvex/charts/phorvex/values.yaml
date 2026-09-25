@@ -425,6 +425,18 @@ phorvex:
       # Voice Namespace UID>. The harness derives the name independently;
       # a mismatch cannot read the ledger and leaves cleanup unsafe.
       quarantineCapacityLedgerName: ""
+    # Separate, fixed CPU response fixture. This grants nothing until enabled
+    # with a reviewed source ConfigMap and namespace-specific scrape/ledger pins.
+    # It does not enable or alter the original Voice token-response case.
+    podBoundTokenCPU:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      scrapeApproved: false
+      scrapeNamespace: phorvex-catalogue-cpu
+      podSelectorLabel: fixture.phorvex.ai/token-response
+      # Exact name derived from the live phorvex-catalogue-cpu Namespace UID.
+      quarantineCapacityLedgerName: ""
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
     catalogueV1:

@@ -392,6 +392,16 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return errors.New("PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
 	}
 	cfg.PodBoundTokenProfileSHA256 = podBoundTokenProfileSHA256
+	podBoundTokenCPUEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.PodBoundTokenCPUEnabled = podBoundTokenCPUEnabled
+	podBoundTokenCPUProfileSHA256, _ := lookup("PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256")
+	if podBoundTokenCPUEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(podBoundTokenCPUProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.PodBoundTokenCPUProfileSHA256 = podBoundTokenCPUProfileSHA256
 	chromaEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_CHROMA_ENABLED")
 	if err != nil {
 		return err

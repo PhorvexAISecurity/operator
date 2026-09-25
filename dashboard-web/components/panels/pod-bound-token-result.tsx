@@ -17,10 +17,19 @@ const beforeExpiry = (after: string, expiry: string) => {
   const expires = utcNanos(expiry);
   return observed !== null && expires !== null && observed < expires;
 };
+const beforeExpiryMargin = (started: string | undefined, ended: string | undefined, expiry: string | undefined) => {
+  const start = utcNanos(started);
+  const end = utcNanos(ended);
+  const expires = utcNanos(expiry);
+  return start !== null && end !== null && expires !== null && start < end && end + BigInt(30_000_000_000) < expires;
+};
 
 // The typed result is a causal observation, not a calibrated security score.
 // Keep each receipt separate; selected rotate alone never establishes bearer invalidation.
-export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { result: PodBoundTokenResult; unsafeToRetry?: boolean }) {
+export function PodBoundTokenResultPanel({ result, unsafeToRetry = false, caseProfile = "voice" }: { result: PodBoundTokenResult; unsafeToRetry?: boolean; caseProfile?: "voice" | "cpu" }) {
+  const cpu = caseProfile === "cpu";
+  const expectedNamespace = cpu ? "phorvex-catalogue-cpu" : "voice";
+  const expectedCreator = cpu ? "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector-cpu" : "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector";
   const stages = Array.isArray(result?.stages) ? result.stages : [];
   const admission = result?.admission ?? {};
   const event = result?.event ?? {};
@@ -49,6 +58,14 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     replayTime <= stageTimes[7]!;
   const serviceAfterOperation = serviceTime !== null && stageTimes.length === stageOrder.length &&
     stageTimes[6] !== null && stageTimes[7] !== null && serviceTime > stageTimes[6]! && serviceTime <= stageTimes[7]!;
+  const cpuReplayTimeline = !cpu || (beforeExpiryMargin(replay.sourceBeforeRequestAt, replay.sourceBeforeAt, replay.sourceExpiry) &&
+    beforeExpiryMargin(replay.sourceAfterRequestAt, replay.sourceAfterAt, replay.sourceExpiry) &&
+    beforeExpiryMargin(replay.peerBeforeRequestAt, replay.peerBeforeAt, replay.peerExpiry) &&
+    beforeExpiryMargin(replay.peerAfterRequestAt, replay.peerAfterAt, replay.peerExpiry) &&
+    stageTimes.length === stageOrder.length && stageTimes[2] !== null && stageTimes[6] !== null && stageTimes[7] !== null &&
+    utcNanos(replay.sourceBeforeAt)! <= stageTimes[2]! && utcNanos(replay.peerBeforeAt)! <= stageTimes[2]! &&
+    utcNanos(replay.sourceAfterRequestAt)! > stageTimes[6]! && utcNanos(replay.peerAfterRequestAt)! > stageTimes[6]! &&
+    utcNanos(replay.peerAfterAt)! <= stageTimes[7]!);
   const sourceCaptureJoined = !!(replay.sourceBeforeCaptureID &&
     replay.sourceBeforeCaptureID === replay.sourceAfterCaptureID);
   const peerCaptureJoined = !!(replay.peerBeforeCaptureID &&
@@ -69,9 +86,9 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     sha256.test(admission.policySpecSHA256 || "") && sha256.test(admission.profileSHA256 || "") &&
     admission.sourcePodUID && admission.peerPodUID && admission.sourcePodUID !== admission.peerPodUID &&
     admission.serviceUID && admission.deploymentUID && admission.replicaSetUID &&
-    event?.uid && event.creator === "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" &&
+    event?.uid && event.creator === expectedCreator &&
     event.trustVerified && event.sourcePodUID &&
-    admission?.namespace === "voice" && admission.sourcePodUID === event.sourcePodUID &&
+    admission?.namespace === expectedNamespace && admission.sourcePodUID === event.sourcePodUID &&
     event.kind === "phorvex.attack.pod-bound-api-auth" && decision?.id &&
     decision.auditCoverage === "COMPLETE" && decision.requestRateStatus === "MEASURED_FRESH" && measuredFixture &&
     !brainBranch?.startsWith("NOOP_") && nativeBranch !== "NOT_DISPATCHED" &&
@@ -79,7 +96,7 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     operation?.terminationStatus === "REQUEST_CONFIRMED" && operation.originalPodAbsent && sha256.test(operation.receiptSHA256 || "") &&
     replay?.sameSourceHandle && replay?.samePeerHandle && sourceCaptureJoined && peerCaptureJoined &&
     replay.sourceBeforeHTTP === 200 &&
-    replay.sourceAfterHTTP === 401 && replayAfterOperation && beforeExpiry(replay.sourceAfterAt || "", replay.sourceExpiry || "") &&
+    replay.sourceAfterHTTP === 401 && replayAfterOperation && beforeExpiry(replay.sourceAfterAt || "", replay.sourceExpiry || "") && cpuReplayTimeline &&
     replay.peerBeforeHTTP === 200 && replay.peerAfterHTTP === 200 &&
     replay.serviceBeforeHTTP === 200 && replay.serviceAfterHTTP === 200 && serviceAfterOperation &&
     replay.serviceAfterServiceUID === admission.serviceUID && replay.serviceAfterEndpointSliceUID &&
@@ -87,6 +104,7 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     replay.serviceMemberReady && replay.serviceMemberOwnerDeploymentUID === admission.deploymentUID &&
     cleanup?.status === "CONFIRMED_ABSENT" && cleanup.absent && sha256.test(cleanup.inventorySHA256 || "") && completeStages && orderedTimes);
   if (result?.schema !== "pod-bound-token-result-v1" || result.securityEfficacy !== "NOT_EVALUATED" ||
+      (cpu ? result.caseID !== "c2-pod-bound-api-auth-response-cpu" : !!result.caseID && result.caseID !== "c2-pod-bound-api-auth-response") ||
       result.signalMode !== "explicit-injected-typed-event" || typeof result.mechanismObserved !== "boolean" ||
       !["COMPLETE", "INCOMPLETE", "UNSAFE"].includes(result.terminalStatus) || stages.length > stageOrder.length ||
       stages.some((stage, index) => !stage || stage.name !== stageOrder[index] || !stageStatuses.has(stage.status) ||
@@ -110,10 +128,17 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     ["Service before", replay.serviceBeforeHTTP], ["Service after", replay.serviceAfterHTTP],
     ["This-run cleanup", cleanup.status],
   ];
+  if (cpu) observationRows.push(
+    ["Source baseline request/response", `${known(replay.sourceBeforeRequestAt)} → ${known(replay.sourceBeforeAt)}`],
+    ["Source post request/response", `${known(replay.sourceAfterRequestAt)} → ${known(replay.sourceAfterAt)}`],
+    ["Peer baseline request/response", `${known(replay.peerBeforeRequestAt)} → ${known(replay.peerBeforeAt)}`],
+    ["Peer post request/response", `${known(replay.peerAfterRequestAt)} → ${known(replay.peerAfterAt)}`],
+    ["Source / peer expiry", `${known(replay.sourceExpiry)} / ${known(replay.peerExpiry)}`],
+  );
   return <div data-pod-bound-token-result={result.mechanismObserved ? "mechanism-observed" : "observation-only"} className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
-    <div className="font-medium text-foreground">Injected Pod-bound API bearer response · {known(result.terminalStatus)}</div>
-    <div className="mt-1 text-muted-foreground">The SecurityEvent is explicitly injected. Selection, request emission, exact Pod retirement, source-bearer replay, peer access, Service routing and cleanup are separate observations. Natural detection and calibrated defense efficacy are NOT EVALUATED.</div>
-    {result.mechanismObserved ? <div className="mt-2 text-foreground">ROTATE_CREDENTIAL_MECHANISM_OBSERVED: the same captured source bearer changed from API 200 to 401 before expiry while the captured peer bearer and owned Service still returned 200, with exact retirement and cleanup receipts.</div>
+    <div className="font-medium text-foreground">{cpu ? "CPU fixture · injected Pod-bound API bearer response" : "Injected Pod-bound API bearer response"} · {known(result.terminalStatus)}</div>
+    <div className="mt-1 text-muted-foreground">The SecurityEvent is explicitly injected. Selection, request emission, exact Pod retirement, source-bearer replay, peer access, Service routing and cleanup are separate observations. Natural detection and calibrated defense efficacy are NOT EVALUATED.{cpu ? " Availability is sampled at the recorded peer and routed Service checks, not continuous uptime." : ""}</div>
+    {result.mechanismObserved ? <div className="mt-2 text-foreground">ROTATE_CREDENTIAL_MECHANISM_OBSERVED: the same captured source bearer changed from API 200 to 401 {cpu ? "with request starts and response ends at least 30 seconds before expiry" : "before expiry"} while the captured peer bearer and owned Service returned 200 at the recorded samples, with exact retirement and cleanup receipts. {cpu ? "This does not establish zero downtime." : ""}</div>
       : <div className="mt-2 text-warning">No credential-rotation mechanism is established by this observation. A complete no-op is a valid negative case result, not a defense success.</div>}
     <dl className="mt-2 grid gap-x-4 gap-y-1 md:grid-cols-2">{observationRows.map(([label, value]) => <div key={label} className="flex min-w-0 gap-2"><dt className="shrink-0 text-muted-foreground">{label}:</dt><dd className="break-all font-mono text-foreground">{known(value)}</dd></div>)}</dl>
     <div className="mt-3 border-t border-border pt-2">
@@ -122,7 +147,7 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     </div>
     <div className="mt-3 border-t border-border pt-2">
       <div className="font-medium text-foreground">Exact identities and authority</div>
-      <div className="mt-1 break-all text-muted-foreground">run {known(result.runID)} · cluster {known(admission.clusterUID)} · namespace {known(admission.namespace)} / UID {known(admission.namespaceUID)} · manager Pod UID {known(admission.managerPodUID)} · container {known(admission.managerContainerID)} · image {known(admission.managerImageID)} · policy UID {known(admission.policyUID)} / generation {known(admission.policyGeneration)} · policy spec SHA-256 {known(admission.policySpecSHA256)} · profile SHA-256 {known(admission.profileSHA256)}</div>
+      <div className="mt-1 break-all text-muted-foreground">{cpu ? `case ${known(result.caseID)} · ` : ""}run {known(result.runID)} · cluster {known(admission.clusterUID)} · namespace {known(admission.namespace)} / UID {known(admission.namespaceUID)} · manager Pod UID {known(admission.managerPodUID)} · container {known(admission.managerContainerID)} · image {known(admission.managerImageID)} · policy UID {known(admission.policyUID)} / generation {known(admission.policyGeneration)} · policy spec SHA-256 {known(admission.policySpecSHA256)} · profile SHA-256 {known(admission.profileSHA256)}</div>
       <div className="mt-1 break-all text-muted-foreground">source Pod UID {known(admission.sourcePodUID)} · peer Pod UID {known(admission.peerPodUID)} · Deployment UID {known(admission.deploymentUID)} · ReplicaSet UID {known(admission.replicaSetUID)} · Service UID {known(admission.serviceUID)} · event UID {known(event.uid)} · kind {known(event.kind)} · stamped creator {known(event.creator)} · event source Pod UID {known(event.sourcePodUID)} · decision {known(decision.id)}</div>
     </div>
     <div className="mt-3 border-t border-border pt-2">
@@ -141,12 +166,13 @@ export function PodBoundTokenResultPanel({ result, unsafeToRetry = false }: { re
     </div>
     <div className="mt-3 border-t border-border pt-2">
       <div className="font-medium text-foreground">Same-handle API and Service controls</div>
-      <div className="mt-1 text-muted-foreground">Source captured handle reused: {sourceCaptureJoined && replay.sameSourceHandle ? "yes" : "unverified"} ({known(replay.sourceBeforeCaptureID)} → {known(replay.sourceAfterCaptureID)}) · peer captured handle reused: {peerCaptureJoined && replay.samePeerHandle ? "yes" : "unverified"} ({known(replay.peerBeforeCaptureID)} → {known(replay.peerAfterCaptureID)}) · source replay {known(replay.sourceAfterAt)} · source expiry {known(replay.sourceExpiry)} · replay before expiry: {beforeExpiry(replay.sourceAfterAt || "", replay.sourceExpiry || "") ? "yes" : "unverified"}</div>
+      <div className="mt-1 text-muted-foreground">Source captured handle reused: {sourceCaptureJoined && replay.sameSourceHandle ? "yes" : "unverified"} ({known(replay.sourceBeforeCaptureID)} → {known(replay.sourceAfterCaptureID)}) · peer captured handle reused: {peerCaptureJoined && replay.samePeerHandle ? "yes" : "unverified"} ({known(replay.peerBeforeCaptureID)} → {known(replay.peerAfterCaptureID)}) · source replay {known(replay.sourceAfterAt)} · source expiry {known(replay.sourceExpiry)} · {cpu ? "all recorded source/peer requests and responses before expiry−30s" : "replay before expiry"}: {cpu ? cpuReplayTimeline ? "yes" : "unverified" : beforeExpiry(replay.sourceAfterAt || "", replay.sourceExpiry || "") ? "yes" : "unverified"}</div>
       <div className="mt-1 break-all text-muted-foreground">Service routed member UID {known(replay.serviceMemberPodUID)} · Ready {replay.serviceMemberReady ? "yes" : "unverified"} · owner Deployment UID {known(replay.serviceMemberOwnerDeploymentUID)} · Service UID {known(replay.serviceAfterServiceUID)} · EndpointSlice UID {known(replay.serviceAfterEndpointSliceUID)} · observed {known(replay.serviceAfterAt)}</div>
       <div className="mt-1 break-all text-muted-foreground">Exact operation receipt SHA-256 {known(operation.receiptSHA256)} · this-run cleanup inventory SHA-256 {known(cleanup.inventorySHA256)} · this-run owned graph and source reservation absent: {cleanup.absent ? "yes" : "unverified"}</div>
     </div>
     {(result.terminalStatus === "UNSAFE" || !cleanup.absent) && <div className="mt-2 text-warning">This run's exact cleanup or source reservation remains unresolved. Do not retry until exact reconciliation confirms safety.</div>}
     {unsafeToRetry && <div className="mt-2 text-warning">Run status forbids retry. Inspect this result and the separate prior-reservation ledger before another attempt.</div>}
-    <div className="mt-2 text-muted-foreground">This-run cleanup does not certify that unrelated earlier Voice or quarantine reservations are absent. Prior debt is checked separately by server admission.</div>
+    {cpu && <div className="mt-2 text-muted-foreground">CPU case limits: one explicitly injected event arm, exact original source and peer bearers, before-expiry replay, and sampled owned Service routing. An ordinary platform restart arm, continuous availability, natural detection and calibrated security efficacy are not measured.</div>}
+    <div className="mt-2 text-muted-foreground">This-run cleanup does not certify that unrelated earlier {cpu ? "CPU, Voice" : "Voice"} or quarantine reservations are absent. Prior debt is checked separately by server admission.</div>
   </div>;
 }

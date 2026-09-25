@@ -590,7 +590,7 @@ func runPodBoundTokenCase(ctx context.Context, cfg config.TargetConfig, clients 
 	}
 	defer func() { runErr = errors.Join(runErr, closeLogger(logger)) }()
 	env := &core.Env{Ctrl: clients.Ctrl, Kube: clients.Kube, Rest: clients.Rest, Config: cfg,
-		Caps: caps, Log: logger, Guard: guard, Trial: 0, ScenarioName: "c2-pod-bound-api-auth-response",
+		Caps: caps, Log: logger, Guard: guard, Trial: 0, ScenarioName: config.PodBoundTokenCaseID(cfg.Namespace),
 		DefenderName: "injected-response", RestConfigHost: clients.LiveHost}
 	if err := env.EnsureNamespace(ctx); err != nil {
 		return err

@@ -44,6 +44,7 @@ func verifyPodBoundPhaseJournal(out string, req podBoundTokenRequest, barrier po
 	deletes := map[string]string{}
 	deleted := map[string]bool{}
 	var last time.Time
+	var monitorAck, sourcePatchAck time.Time
 	absence := 0
 	for _, line := range bytes.Split(bytes.TrimSuffix(raw, []byte{'\n'}), []byte{'\n'}) {
 		if len(line) == 0 || len(line) > 2048 {
@@ -76,9 +77,15 @@ func verifyPodBoundPhaseJournal(out string, req podBoundTokenRequest, barrier po
 				return fmt.Errorf("Pod-bound token create ACK differs for %s", key)
 			}
 			created[key] = row.UID
+			if req.CaseID == podBoundTokenCPUCaseID && row.Resource == "podmonitors" {
+				monitorAck = at
+			}
 		case "PATCH_INTENT", "PATCH_ACK":
 			if row.Resource != "pods" || row.Name != req.SourcePodName || row.UID != req.SourcePodUID || at.After(requested) {
 				return errors.New("Pod-bound token source patch phase differs")
+			}
+			if req.CaseID == podBoundTokenCPUCaseID && row.Operation == "PATCH_ACK" {
+				sourcePatchAck = at
 			}
 		case "ORIGINAL_POD_ABSENT":
 			if row.Resource != "pods" || row.Name != req.SourcePodName || row.UID != req.SourcePodUID ||
@@ -99,6 +106,12 @@ func verifyPodBoundPhaseJournal(out string, req podBoundTokenRequest, barrier po
 			deleted[key] = true
 		default:
 			return errors.New("Pod-bound token unknown phase operation")
+		}
+	}
+	if req.CaseID == podBoundTokenCPUCaseID {
+		first, parseErr := time.Parse(time.RFC3339Nano, req.MetricFirstAt)
+		if parseErr != nil || monitorAck.IsZero() || sourcePatchAck.IsZero() || !first.After(monitorAck) || !first.After(sourcePatchAck) {
+			return errors.New("CPU token metric sample predates owned source and PodMonitor setup")
 		}
 	}
 	for _, resource := range []string{"serviceaccounts", "deployments", "services", "poddisruptionbudgets", "roles", "rolebindings", "phorvexpolicies", "podmonitors"} {
@@ -123,7 +136,7 @@ func verifyPodBoundPhaseJournal(out string, req podBoundTokenRequest, barrier po
 
 func podBoundGeneratedCleanupName(resource, name string, req podBoundTokenRequest) bool {
 	if resource == "adaptivemovingtargetdefenses" {
-		return name == "phorvex-voice-"+req.Nonce
+		return name == "phorvex-"+req.Namespace+"-"+req.Nonce
 	}
 	if resource != "networkpolicies" {
 		return false
@@ -132,11 +145,11 @@ func podBoundGeneratedCleanupName(resource, name string, req podBoundTokenReques
 		if name == "phorvex-quarantine-"+podBoundHash([]byte(pod.uid)) {
 			return true
 		}
-		legacy := "voice-" + pod.name + "-policy"
+		legacy := req.Namespace + "-" + pod.name + "-policy"
 		if len(legacy) <= 63 && name == legacy {
 			return true
 		}
-		sum := podBoundHash([]byte("phoenix-quarantine-policy-v1\x00voice\x00" + pod.name))
+		sum := podBoundHash([]byte("phoenix-quarantine-policy-v1\x00" + req.Namespace + "\x00" + pod.name))
 		if name == "amtd-q-"+sum[:48] {
 			return true
 		}

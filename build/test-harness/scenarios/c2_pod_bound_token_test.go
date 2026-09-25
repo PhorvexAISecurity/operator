@@ -140,8 +140,40 @@ func TestPodTokenRefusesOtherPolicySelectorBeforeCreate(t *testing.T) {
 	}
 }
 
+func TestPodTokenCPUPostCreateRefusesAdmissionAddedSelectorOverlap(t *testing.T) {
+	const ns = "phorvex-catalogue-cpu"
+	nonce := strings.Repeat("a", 24)
+	env := &core.Env{ScenarioName: "c2-pod-bound-api-auth-response-cpu", Config: config.TargetConfig{Namespace: ns, PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce}}}
+	base := podTokenCaseLabels(env)
+	sourceLabels := map[string]string{}
+	peerLabels := map[string]string{}
+	for key, value := range base {
+		sourceLabels[key] = value
+		peerLabels[key] = value
+	}
+	sourceLabels[podTokenRoleLabel] = "source"
+	sourceLabels["admission.example/foreign"] = "yes"
+	source := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "source", Namespace: ns, UID: "source-uid", Labels: sourceLabels}}
+	peer := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "peer", Namespace: ns, UID: "peer-uid", Labels: peerLabels}}
+	foreign := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "foreign", Namespace: ns, UID: "foreign-uid"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"admission.example/foreign": "yes"}}}
+	env.Kube = fake.NewSimpleClientset(foreign)
+	fixture := podTokenFixture{name: "pod-token-" + nonce, source: source, peer: peer}
+	if err := podTokenDisjointPrecreate(context.Background(), env); err != nil {
+		t.Fatalf("planned labels should remain disjoint: %v", err)
+	}
+	if _, err := env.Kube.CoreV1().Pods(ns).Create(context.Background(), &source, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.Kube.CoreV1().Pods(ns).Create(context.Background(), &peer, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := podTokenDisjointPrecreate(context.Background(), env, fixture); err == nil {
+		t.Fatal("post-CREATE actual source label joined foreign Service")
+	}
+}
+
 func TestPodTokenGeneratedNetworkPolicyOwnerIdentity(t *testing.T) {
-	f := podTokenFixture{name: "pod-token-" + strings.Repeat("a", 24), policyUID: "policy-uid", policyGeneration: 1, source: testPodTokenReadyPod("source", "source-uid", "image")}
+	f := podTokenFixture{name: "pod-token-" + strings.Repeat("a", 24), namespace: "voice", policyUID: "policy-uid", policyGeneration: 1, source: testPodTokenReadyPod("source", "source-uid", "image")}
 	uid := types.UID("amtd-uid")
 	phoenix := networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: podTokenPhoenixNPName("voice", f.source.Name), UID: "np-uid", OwnerReferences: []metav1.OwnerReference{{Kind: "AdaptiveMovingTargetDefense", UID: uid}}}}
 	if owned, err := podTokenGeneratedNP(phoenix, f, uid); !owned || err != nil {
@@ -162,7 +194,7 @@ func TestPodTokenGeneratedNetworkPolicyOwnerIdentity(t *testing.T) {
 
 func TestPodTokenGeneratedStandingAMTDPolicyAnnotations(t *testing.T) {
 	nonce := strings.Repeat("a", 24)
-	f := podTokenFixture{name: "pod-token-" + nonce, policyUID: "policy-uid", policyGeneration: 3}
+	f := podTokenFixture{name: "pod-token-" + nonce, namespace: "voice", policyUID: "policy-uid", policyGeneration: 3}
 	a := &unstructured.Unstructured{}
 	a.SetName(podTokenAMTDName(f))
 	a.SetNamespace("voice")
@@ -285,6 +317,82 @@ func TestPodTokenCaptureOnceReplaysSameBearerThroughRealTransport(t *testing.T) 
 	}
 }
 
+func TestPodTokenCPUOriginalSourceAndPeerHandlesThroughRealAPI(t *testing.T) {
+	const ns = "phorvex-catalogue-cpu"
+	const sourceUID = "11111111-1111-4111-8111-111111111111"
+	const peerUID = "22222222-2222-4222-8222-222222222222"
+	const saUID = "33333333-3333-4333-8333-333333333333"
+	expiry := time.Now().Add(10 * time.Minute)
+	sourceBearer := testPodTokenJWT(sourceUID, saUID, expiry)
+	peerBearer := testPodTokenJWT(peerUID, saUID, expiry)
+	sourceAllowed := true
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/namespaces/"+ns+"/pods/peer" {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Header.Get("Authorization") {
+		case "Bearer " + sourceBearer:
+			if !sourceAllowed {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+		case "Bearer " + peerBearer:
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	source := testPodTokenReadyPod("source", sourceUID, "reviewed-image")
+	peer := testPodTokenReadyPod("peer", peerUID, "reviewed-image")
+	source.Namespace, peer.Namespace = ns, ns
+	kube := fake.NewSimpleClientset(&source, &peer)
+	env := &core.Env{Kube: kube, Rest: &rest.Config{Host: server.URL}, Log: podTokenSilentLogger{}, Config: config.TargetConfig{Namespace: ns, PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{FixtureImageID: "reviewed-image"}}}
+	captures := 0
+	core.SetTimedExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, podName, _ string, _ time.Duration, command []string) core.ExecResult {
+		captures++
+		if len(command) != 2 || command[0] != "cat" || command[1] != "/var/run/pod-token/token" {
+			return core.ExecResult{ExitCode: 1}
+		}
+		if podName == source.Name {
+			return core.ExecResult{Stdout: sourceBearer, ExitCode: 0}
+		}
+		if podName == peer.Name {
+			return core.ExecResult{Stdout: peerBearer, ExitCode: 0}
+		}
+		return core.ExecResult{ExitCode: 1}
+	})
+	t.Cleanup(func() { core.SetTimedExecer(nil) })
+	sourceHandle, err := podTokenCapture(context.Background(), env, source, saUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerHandle, err := podTokenCapture(context.Background(), env, peer, saUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourceHandle.captureID == peerHandle.captureID || captures != 2 {
+		t.Fatal("source and peer capture identities are not independent")
+	}
+	for _, handle := range []podTokenHandle{sourceHandle, peerHandle} {
+		status, start, end, e := podTokenReplayAPIWindow(context.Background(), env, handle, peer.Name)
+		if e != nil || status != 200 || !podTokenBeforeExpiry(start, end, handle.expiry) {
+			t.Fatalf("original baseline unavailable status=%d err=%v", status, e)
+		}
+	}
+	sourceAllowed = false
+	status, start, end, err := podTokenReplayAPIWindow(context.Background(), env, sourceHandle, peer.Name)
+	if err != nil || status != 401 || !podTokenBeforeExpiry(start, end, sourceHandle.expiry) {
+		t.Fatalf("source original handle did not become unauthorized: %d %v", status, err)
+	}
+	status, start, end, err = podTokenReplayAPIWindow(context.Background(), env, peerHandle, peer.Name)
+	if err != nil || status != 200 || !podTokenBeforeExpiry(start, end, peerHandle.expiry) || captures != 2 {
+		t.Fatalf("peer original handle or capture-once control failed: %d %v", status, err)
+	}
+}
+
 func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 	const pod = "source-abc"
 	const nonce = "0123456789abcdef01234567"
@@ -304,7 +412,7 @@ func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 		if strings.HasPrefix(expression, "sum by (pod)") {
 			value = "0.2"
 		}
-		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"pod":"%s","nonce":"%s"},"value":[%d,"%s"]}]}}`, pod, nonce, time.Now().Unix(), value)
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":"voice","pod":"%s","nonce":"%s"},"value":[%s,"%s"]}]}}`, pod, nonce, r.URL.Query().Get("time"), value)
 	}))
 	defer server.Close()
 	env := &core.Env{Config: config.TargetConfig{Namespace: "voice", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
@@ -315,6 +423,69 @@ func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 	sample = time.Now().Add(-3 * time.Minute).Unix()
 	if _, _, _, err := podTokenMetricSample(context.Background(), env, podTokenFixture{source: testPodTokenReadyPod(pod, "uid", "image")}); err == nil {
 		t.Fatal("old scrape accepted from fresh instant query evaluation")
+	}
+}
+
+func TestPodTokenPromRejectsSplitEvaluationForTimestampAndCounter(t *testing.T) {
+	const pod, nonce = "source-abc", "0123456789abcdef01234567"
+	queries := 0
+	returnedUID := "uid"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries++
+		if !strings.Contains(r.URL.Query().Get("query"), `pod_uid="uid"`) {
+			t.Error("CPU source UID absent from exact Prometheus selector")
+		}
+		evaluation, err := strconv.ParseFloat(r.URL.Query().Get("time"), 64)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if queries == 2 {
+			evaluation += 0.5
+		} // Counter belongs to a different evaluation.
+		value := "7"
+		if strings.HasPrefix(r.URL.Query().Get("query"), "timestamp(") {
+			value = strconv.FormatInt(time.Now().Add(-20*time.Second).Unix(), 10)
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":"phorvex-catalogue-cpu","pod":"%s","pod_uid":"%s","nonce":"%s"},"value":[%.6f,"%s"]}]}}`, pod, returnedUID, nonce, evaluation, value)
+	}))
+	defer server.Close()
+	env := &core.Env{Config: config.TargetConfig{Namespace: "phorvex-catalogue-cpu", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
+	if _, _, _, err := podTokenMetricSample(context.Background(), env, podTokenFixture{source: testPodTokenReadyPod(pod, "uid", "image")}); err == nil {
+		t.Fatal("timestamp and counter from distinct evaluations accepted")
+	}
+	returnedUID = "foreign-uid"
+	if _, _, _, err := podTokenMetricSample(context.Background(), env, podTokenFixture{source: testPodTokenReadyPod(pod, "uid", "image")}); err == nil {
+		t.Fatal("foreign Pod UID source counter accepted")
+	}
+}
+
+func TestPodTokenPromRejectsScrapeIngestedBetweenTimestampAndCounter(t *testing.T) {
+	const pod, nonce = "source-abc", "0123456789abcdef01234567"
+	oldScrape := time.Now().Add(-40 * time.Second).Unix()
+	newScrape := oldScrape + 20
+	queries := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries++
+		if !strings.Contains(r.URL.Query().Get("query"), `pod_uid="uid"`) {
+			t.Error("CPU source UID absent from Prometheus query")
+		}
+		value := "8" // A newer counter became visible after the first query.
+		if strings.HasPrefix(r.URL.Query().Get("query"), "timestamp(") {
+			value = strconv.FormatInt(newScrape, 10)
+			if queries == 1 {
+				value = strconv.FormatInt(oldScrape, 10)
+			}
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":"phorvex-catalogue-cpu","pod":"%s","pod_uid":"uid","nonce":"%s"},"value":[%s,"%s"]}]}}`, pod, nonce, r.URL.Query().Get("time"), value)
+	}))
+	defer server.Close()
+	env := &core.Env{Config: config.TargetConfig{Namespace: "phorvex-catalogue-cpu", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
+	if _, _, _, err := podTokenMetricSample(context.Background(), env, podTokenFixture{source: testPodTokenReadyPod(pod, "uid", "image")}); err == nil || !strings.Contains(err.Error(), "counter and scrape timestamp differ") {
+		t.Fatalf("mixed-scrape counter accepted or wrong refusal: %v", err)
+	}
+	if queries != 3 {
+		t.Fatalf("mixed-scrape counter should stop before rate query, got %d requests", queries)
 	}
 }
 

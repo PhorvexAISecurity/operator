@@ -125,6 +125,7 @@ func (c *Config) Catalog() []CatalogItem {
 func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 	items = append(items, c.natsResponseCatalogueItem())
 	items = append(items, c.podBoundTokenCatalogueItem())
+	items = append(items, c.podBoundTokenCPUCatalogueItem())
 	hasMongo := false
 	for _, item := range items {
 		if item.Name == "c2-mongo-uncredentialed-service-exposure" {

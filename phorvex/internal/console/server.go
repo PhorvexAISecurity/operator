@@ -149,13 +149,17 @@ npm run build</pre><p>then restart this binary. (Or pass <code>--web &lt;path-to
 func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
 	items := s.cfg.Catalog()
 	for i := range items {
-		if items[i].Profile != podBoundTokenConfig || !items[i].Available {
+		if !podBoundNamedCase(items[i].Profile) || !items[i].Available {
 			continue
 		}
-		dest, err := s.runs.SuiteDestination(podBoundTokenConfig)
+		dest, err := s.runs.SuiteDestination(items[i].Profile)
 		if err == nil {
 			s.runs.mu.Lock()
-			err = s.runs.podBoundTokenPriorAdmissionLocked(dest)
+			if items[i].Profile == podBoundTokenCPUConfig {
+				err = s.runs.podBoundTokenCPUPriorAdmissionLocked(dest)
+			} else {
+				err = s.runs.podBoundTokenPriorAdmissionLocked(dest)
+			}
 			s.runs.mu.Unlock()
 		}
 		if err != nil {
@@ -491,7 +495,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// The named broker baseline reads a server-owned file at authorization and
 	// launch. Recheck the second snapshot against this verified principal; Start
 	// also requires its digest still to match the exact file it copies.
-	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig || body.Config == guardrailStaticConfig || body.Config == guardrailAvailabilityConfig || body.Config == podBoundTokenConfig {
+	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig || body.Config == guardrailStaticConfig || body.Config == guardrailAvailabilityConfig || podBoundNamedCase(body.Config) {
 		p := principalOf(r)
 		for _, target := range dest.Targets {
 			if p == nil || !p.AllowsTarget(target) {

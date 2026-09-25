@@ -232,6 +232,9 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	}
 	ns, err := e.Kube.CoreV1().Namespaces().Get(ctx, e.Config.Namespace, metav1.GetOptions{})
 	if err == nil {
+		if e.Config.PodBoundTokenFixture != nil && e.Config.Namespace == "phorvex-catalogue-cpu" && ns.Labels["phorvex.ai/cpu-token-fixture"] != "true" {
+			return fmt.Errorf("CPU token fixture namespace %q lacks the installed ownership label", e.Config.Namespace)
+		}
 		if e.Config.NATSExposureFixture != nil && ns.Labels["phorvex.ai/nats-exposure-fixture"] != "true" {
 			return fmt.Errorf("NATS fixture namespace %q lacks the installed ownership label", e.Config.Namespace)
 		}

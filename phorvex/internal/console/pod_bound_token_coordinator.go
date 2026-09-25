@@ -34,7 +34,7 @@ func (s *Server) currentPodBoundTokenGrant(id string) error {
 	launched, ok := s.runs.podBoundTokenPrincipals[id]
 	status := s.runs.runs[id]
 	s.runs.mu.Unlock()
-	if !ok || status == nil || status.Config != podBoundTokenConfig || status.State != "running" ||
+	if !ok || status == nil || !podBoundNamedCase(status.Config) || status.State != "running" ||
 		principalKey(&launched) != status.Owner || s.auth == nil {
 		return errors.New("Pod-bound token run owner unavailable")
 	}
@@ -47,9 +47,9 @@ func (s *Server) currentPodBoundTokenGrant(id string) error {
 		}
 	}
 	p, found := grants.Lookup(launched.Issuer, launched.Subject)
-	if !found || !p.HasRole(RoleOperator) || !p.AllowsTenant(podBoundTokenNamespace) ||
+	if !found || !p.HasRole(RoleOperator) || !p.AllowsTenant(podBoundNamespace(status.Config)) ||
 		!p.AllowsTarget(hostTargetID) || !p.AllowsTarget(status.ScopeTarget) ||
-		status.ScopeTenant != podBoundTokenNamespace {
+		status.ScopeTenant != podBoundNamespace(status.Config) {
 		return errors.New("Pod-bound token target or tenant grant changed")
 	}
 	return nil
@@ -66,6 +66,9 @@ func (s *Server) podBoundTokenCurrentSource(ctx context.Context, kc kubernetes.I
 	ns, err := kc.CoreV1().Namespaces().Get(ctx, r.Namespace, metav1.GetOptions{})
 	if err != nil || string(ns.UID) != r.NamespaceUID || ns.DeletionTimestamp != nil {
 		return errors.New("Pod-bound token namespace identity changed")
+	}
+	if r.Namespace == podBoundTokenCPUNamespace && ns.Labels["phorvex.ai/cpu-token-fixture"] != "true" {
+		return errors.New("CPU token namespace ownership label absent")
 	}
 	sys, err := kc.CoreV1().Namespaces().Get(ctx, "kube-system", metav1.GetOptions{})
 	if err != nil || string(sys.UID) != p.Fixture.ClusterUID || r.ClusterUID != p.Fixture.ClusterUID {
@@ -149,7 +152,11 @@ func (s *Server) podBoundTokenCurrentSource(ctx context.Context, kc kubernetes.I
 }
 
 func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Interface, base *rest.Config, r podBoundTokenRequest) (*unstructured.Unstructured, dynamic.Interface, error) {
-	const creatorName = "phorvex-phorvex-e2e-detector"
+	creatorIdentity := podBoundCreator(podBoundProfileForNamespace(r.Namespace))
+	if creatorIdentity == "" {
+		return nil, nil, errors.New("Pod-bound token creator scope absent")
+	}
+	creatorName := strings.TrimPrefix(creatorIdentity, "system:serviceaccount:phorvex-system:")
 	sa, err := kc.CoreV1().ServiceAccounts("phorvex-system").Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || sa.UID == "" || sa.DeletionTimestamp != nil || sa.AutomountServiceAccountToken == nil || *sa.AutomountServiceAccountToken {
 		return nil, nil, errors.New("dedicated trusted creator ServiceAccount unavailable")
@@ -161,9 +168,9 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 		return nil, nil, errors.New("dedicated creator admission policy unavailable")
 	}
 	if vap.Spec.MatchConditions[0].Expression !=
-		"request.userInfo.username == 'system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector'" ||
+		"request.userInfo.username == '"+creatorIdentity+"'" ||
 		vap.Spec.Validations[0].Expression != "variables.event.metadata.name.startsWith('phorvex-e2e-')" ||
-		vap.Spec.Validations[1].Expression != "size(variables.event.spec.targets) == 1 && variables.event.spec.targets[0].startsWith('voice/')" ||
+		vap.Spec.Validations[1].Expression != "size(variables.event.spec.targets) == 1 && variables.event.spec.targets[0].startsWith('"+r.Namespace+"/')" ||
 		vap.Spec.Validations[2].Expression != "variables.event.spec.rule.source == 'PhorvexE2EDetector'" {
 		return nil, nil, errors.New("dedicated creator admission scope changed")
 	}
@@ -210,8 +217,7 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	if readback.GetUID() == "" || readback.GetUID() != created.GetUID() ||
 		readback.GetName() != "phorvex-e2e-"+r.Nonce ||
 		readback.GetAnnotations()[model.ConsoleTargetPodUIDAnnotation] != r.SourcePodUID ||
-		readback.GetAnnotations()["phorvex.ai/creator-identity"] !=
-			"system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" ||
+		readback.GetAnnotations()["phorvex.ai/creator-identity"] != creatorIdentity ||
 		targetErr != nil || !targetOK || len(targets) != 1 || targets[0] != r.Namespace+"/"+r.SourcePodName ||
 		typeErr != nil || !typeOK || ruleType != model.AttackVectorPodBoundAPIAuth ||
 		sourceErr != nil || !sourceOK || ruleSource != "PhorvexE2EDetector" ||
@@ -243,7 +249,7 @@ func podBoundTypedDecision(raw []byte, r podBoundTokenRequest, eventUID string) 
 			continue
 		}
 		if ev.Type != model.AttackVectorPodBoundAPIAuth || ev.Name != "phorvex-e2e-"+r.Nonce ||
-			ev.CreatorIdentity != "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector" ||
+			ev.CreatorIdentity != podBoundCreator(podBoundProfileForNamespace(r.Namespace)) ||
 			ev.TargetPodUID != r.SourcePodUID || ev.TrustVerdict != "trusted" || !ev.TargetsPod || !ev.TimestampPresent {
 			return PodBoundTokenDecision{}, PodBoundTokenOperation{}, errors.New("typed event was not admitted by source")
 		}
@@ -368,18 +374,36 @@ func podBoundCompetingUnattributedOperation(raw []byte) bool {
 func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out string) error {
 	ctx, cancel := context.WithTimeout(parent, 15*time.Minute)
 	defer cancel()
+	s.runs.mu.Lock()
+	status := s.runs.runs[id]
+	profile := ""
+	if status != nil {
+		profile = status.Config
+	}
+	s.runs.mu.Unlock()
+	if !podBoundNamedCase(profile) {
+		return errors.New("Pod-bound token named profile unavailable")
+	}
 	var r podBoundTokenRequest
 	rawReq, err := podBoundTokenWaitFile(ctx, out, podBoundRequestFile, &r)
 	if err != nil {
 		return err
 	}
 	if r.Schema != "pod-bound-token-request-v1" || r.RunID != id ||
-		!podBoundTokenNonce.MatchString(r.Nonce) || r.Namespace != podBoundTokenNamespace ||
+		!podBoundTokenNonce.MatchString(r.Nonce) || r.Namespace != podBoundNamespace(profile) ||
 		r.SourcePodUID == "" || r.PeerPodUID == "" || r.SourcePodUID == r.PeerPodUID ||
 		r.SourceBeforeHTTP != 200 || r.PeerBeforeHTTP != 200 || r.ServiceBeforeHTTP != 200 ||
 		r.PolicyGeneration < 1 || !mongoSHA.MatchString(r.PolicySpecSHA256) ||
 		!mongoSHA.MatchString(r.ProfileSHA256) {
 		return errors.New("Pod-bound token baseline request incomplete")
+	}
+	if profile == podBoundTokenCPUConfig {
+		if r.CaseID != podBoundTokenCPUCaseID || r.PDBUID == "" || r.PeerExpiry == "" ||
+			r.MetricStatus != "MEASURED_FRESH" || !podBoundCPURequestTimeValid(r, time.Now().UTC()) {
+			return errors.New("CPU token case, measured source rate or before-expiry budget unavailable")
+		}
+	} else if r.CaseID != "" && r.CaseID != podBoundTokenVoiceCaseID {
+		return errors.New("Voice token case differs")
 	}
 	if err := s.currentPodBoundTokenGrant(id); err != nil {
 		return err
@@ -388,8 +412,12 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if err != nil || podBoundHash(cfgRaw) != r.ProfileSHA256 {
 		return errors.New("Pod-bound token authorized profile changed")
 	}
-	templateRaw, err := readBoundedFile(filepath.Join(s.cfg.HarnessDir, "config.pod-bound-api-auth-response.yaml"), 64<<10)
-	if err != nil || podBoundHash(templateRaw) != s.cfg.PodBoundTokenProfileSHA256 ||
+	pinned := s.cfg.PodBoundTokenProfileSHA256
+	if profile == podBoundTokenCPUConfig {
+		pinned = s.cfg.PodBoundTokenCPUProfileSHA256
+	}
+	templateRaw, err := readBoundedFile(filepath.Join(s.cfg.HarnessDir, allowedConfigs[profile].File), 64<<10)
+	if err != nil || podBoundHash(templateRaw) != pinned ||
 		!podBoundTokenRuntimeMatchesTemplate(templateRaw, cfgRaw, id, r.Nonce, out) {
 		return errors.New("Pod-bound token reviewed template or prepared runtime profile changed")
 	}
@@ -438,7 +466,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 		return err
 	}
 	if err := s.persistCatalogueSignalIntent("/api/runs", "pod-bound-token", r.Namespace,
-		podBoundTokenConfig, r.SourcePodUID, &attackStimulusEvidence{Kind: "synthetic-catalogue-signal",
+		profile, r.SourcePodUID, &attackStimulusEvidence{Kind: "synthetic-catalogue-signal",
 			TargetUID: r.SourcePodUID, EventName: "phorvex-e2e-" + r.Nonce,
 			EventRule: model.AttackVectorPodBoundAPIAuth, Correlation: r.Nonce}); err != nil {
 		return err
