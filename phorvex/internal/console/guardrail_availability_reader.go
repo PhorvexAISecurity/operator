@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/phorvex/phorvex/internal/audittransport"
@@ -128,6 +129,10 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 	if s.TargetPodUID != availabilityUID(pod) || s.SourceUID != availabilityUID(source) || s.JournalUID != availabilityUID(journal) || s.JournalResourceVersion != availabilityString(availabilityMeta(journal), "resourceVersion") || s.SourceSHA256 != availabilityHash([]byte(availabilityString(availabilityMap(source["data"]), "guardrail_proxy.py"))) || !bytes.Equal(sr, jr) {
 		return s, errors.New("snapshot differs from original Kubernetes source")
 	}
+	targetID, targetImage, targetErr := availabilityStatus(pod, "guardrail")
+	if targetErr != nil || s.TargetContainerID != targetID || s.TargetImageID != targetImage {
+		return s, errors.New("snapshot differs from original ready target container")
+	}
 	var runtime map[string]any
 	if err = e.decode(name+"-runtime.json", &runtime); err != nil {
 		return s, err
@@ -180,12 +185,21 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 func (e *availabilityEvidence) findKube(suffix string, v any) error {
 	var name string
 	for k := range e.files {
-		if strings.HasPrefix(k, "kube-") && strings.HasSuffix(k, "-"+suffix+".json") {
-			if name != "" {
-				return errors.New("duplicate original Kubernetes receipt")
-			}
-			name = k
+		if !strings.HasPrefix(k, "kube-") {
+			continue
 		}
+		rest := strings.TrimPrefix(k, "kube-")
+		index, label, ok := strings.Cut(rest, "-")
+		if !ok || label != suffix+".json" {
+			continue
+		}
+		if _, err := strconv.Atoi(index); err != nil {
+			continue
+		}
+		if name != "" {
+			return errors.New("duplicate original Kubernetes receipt")
+		}
+		name = k
 	}
 	if name == "" {
 		return errors.New("original Kubernetes receipt absent")
@@ -428,6 +442,15 @@ func (e *availabilityEvidence) project() (*GuardrailAvailabilityResult, error) {
 		result.Status = gate
 		result.SyntheticThreat = "BLOCKED_BEFORE_NO_POST_CLAIM"
 		return result, nil
+	}
+	prepost, pe := e.snapshot("prepost")
+	immediate, ie := e.snapshot("immediate-prepost")
+	if pe != nil || ie != nil || availabilityAdmissionMatches(before, prepost, immediate) != nil {
+		return result, errors.New("original pre-POST admission snapshots differ")
+	}
+	var population map[string]any
+	if e.findKube("prepost-target-population", &population) != nil || availabilityOneTargetPopulation(population, before, e.p.Fixture.PodName) != nil {
+		return result, errors.New("original pre-POST target population differs")
 	}
 	if e.terminal.ConsolePOSTsAttempted != 1 || len(e.terminal.Calls) != 6 {
 		return result, nil

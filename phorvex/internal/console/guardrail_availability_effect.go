@@ -320,9 +320,8 @@ func (w *availabilityWorker) execute() (err error) {
 	if e != nil {
 		return e
 	}
-	items, _ := population["items"].([]any)
-	if len(items) != 1 || availabilityUID(availabilityMap(items[0])) != w.before.TargetPodUID {
-		return errors.New("console target population changed before POST")
+	if e = availabilityOneTargetPopulation(population, w.before, w.p.Fixture.PodName); e != nil {
+		return e
 	}
 	inventory, e := w.kube("prepost-event-inventory", "get", "securityevents.amtd.r6security.com", "-l", "phorvex.ai/console-vllm=true", "-o", "json")
 	if e != nil {
@@ -353,7 +352,11 @@ func (w *availabilityWorker) execute() (err error) {
 	if e != nil {
 		return e
 	}
-	if _, e = w.compactSnapshot("immediate-prepost", w.before); e != nil {
+	immediate, e := w.compactSnapshot("immediate-prepost", w.before)
+	if e != nil {
+		return e
+	}
+	if e = availabilityAdmissionMatches(w.before, prepost, immediate); e != nil {
 		return e
 	}
 	if _, e = w.remaining(330 * time.Second); e != nil {

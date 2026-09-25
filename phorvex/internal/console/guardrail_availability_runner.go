@@ -688,6 +688,29 @@ func availabilitySameSource(a, b availabilitySnapshot, allowOperation bool) bool
 	return true
 }
 
+func availabilityAdmissionMatches(before, prepost, immediate availabilitySnapshot) error {
+	if !availabilitySameSource(before, prepost, false) || !availabilitySameSource(before, immediate, false) {
+		return errors.New("pre-POST source, variant or protected journal changed")
+	}
+	return nil
+}
+
+func availabilityOneTargetPopulation(population map[string]any, ref availabilitySnapshot, podName string) error {
+	if availabilityString(availabilityMeta(population), "continue") != "" {
+		return errors.New("console target population list is incomplete")
+	}
+	items, ok := population["items"].([]any)
+	if !ok || len(items) != 1 {
+		return errors.New("console target population is not one reviewed Pod")
+	}
+	pod := availabilityMap(items[0])
+	id, image, err := availabilityStatus(pod, "guardrail")
+	if err != nil || availabilityString(availabilityMeta(pod), "name") != podName || availabilityUID(pod) != ref.TargetPodUID || id != ref.TargetContainerID || image != ref.TargetImageID {
+		return errors.New("console target population differs from reviewed Pod")
+	}
+	return nil
+}
+
 func (w *availabilityWorker) measure(phase string, reference availabilitySnapshot) (GuardrailAvailabilityControls, error) {
 	var result GuardrailAvailabilityControls
 	for _, which := range []string{"canary", "say_ok", "arithmetic"} {

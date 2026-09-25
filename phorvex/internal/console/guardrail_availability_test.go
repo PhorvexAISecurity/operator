@@ -46,6 +46,74 @@ func TestGuardrailAvailabilityCappedWriter(t *testing.T) {
 	}
 }
 
+func TestGuardrailAvailabilityPrePOSTAdmissionJoins(t *testing.T) {
+	before := availabilitySnapshot{TargetPodUID: "target-uid", TargetContainerID: "containerd://target", TargetImageID: "reviewed-image", SourceUID: "source-uid", SourceSHA256: strings.Repeat("a", 64), JournalUID: "journal-uid", JournalResourceVersion: "24", Receipt: json.RawMessage(`{"generation":24}`), ActiveVariant: "pgv1", PodVariant: "pgv1", GuardrailEpoch: "epoch-1", ModelIdentity: json.RawMessage(`{"id":"reviewed-model"}`)}
+	if err := availabilityAdmissionMatches(before, before, before); err != nil {
+		t.Fatalf("unchanged baseline refused: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*availabilitySnapshot)
+	}{
+		{"variant", func(s *availabilitySnapshot) { s.ActiveVariant = "pgv2" }},
+		{"protected journal", func(s *availabilitySnapshot) {
+			s.JournalResourceVersion = "25"
+			s.Receipt = json.RawMessage(`{"generation":25}`)
+		}},
+		{"source", func(s *availabilitySnapshot) { s.SourceSHA256 = strings.Repeat("b", 64) }},
+		{"model", func(s *availabilitySnapshot) { s.ModelIdentity = json.RawMessage(`{"id":"changed-model"}`) }},
+		{"target container", func(s *availabilitySnapshot) { s.TargetContainerID = "containerd://replacement" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := before
+			tc.change(&changed)
+			if availabilityAdmissionMatches(before, changed, before) == nil || availabilityAdmissionMatches(before, before, changed) == nil {
+				t.Fatal("prepost or immediate-prepost drift admitted")
+			}
+		})
+	}
+	population := func(name, uid, id, image string, extra bool, continuation string) map[string]any {
+		pod := map[string]any{"metadata": map[string]any{"name": name, "uid": uid}, "status": map[string]any{"containerStatuses": []any{map[string]any{"name": "guardrail", "containerID": id, "imageID": image, "ready": true, "restartCount": float64(0)}}}}
+		items := []any{pod}
+		if extra {
+			items = append(items, pod)
+		}
+		return map[string]any{"metadata": map[string]any{"continue": continuation}, "items": items}
+	}
+	if err := availabilityOneTargetPopulation(population("target-pod", before.TargetPodUID, before.TargetContainerID, before.TargetImageID, false, ""), before, "target-pod"); err != nil {
+		t.Fatalf("sole exact target refused: %v", err)
+	}
+	for _, p := range []map[string]any{
+		population("target-pod", before.TargetPodUID, before.TargetContainerID, before.TargetImageID, true, ""),
+		population("target-pod", before.TargetPodUID, before.TargetContainerID, before.TargetImageID, false, "next-page"),
+		population("target-pod", "other-uid", before.TargetContainerID, before.TargetImageID, false, ""),
+		population("other-pod", before.TargetPodUID, before.TargetContainerID, before.TargetImageID, false, ""),
+		population("target-pod", before.TargetPodUID, "containerd://replacement", before.TargetImageID, false, ""),
+	} {
+		if err := availabilityOneTargetPopulation(p, before, "target-pod"); err == nil {
+			t.Fatal("non-exact or incomplete target population admitted")
+		}
+	}
+}
+
+func TestGuardrailAvailabilityOriginalKubeLabelBoundary(t *testing.T) {
+	e := availabilityEvidence{files: map[string][]byte{
+		"kube-001-prepost-target.json":           []byte(`{"metadata":{"uid":"before"}}`),
+		"kube-002-immediate-prepost-target.json": []byte(`{"metadata":{"uid":"immediate"}}`),
+	}}
+	var before, immediate map[string]any
+	if err := e.findKube("prepost-target", &before); err != nil || availabilityUID(before) != "before" {
+		t.Fatalf("exact prepost original lost to nested label: %v", err)
+	}
+	if err := e.findKube("immediate-prepost-target", &immediate); err != nil || availabilityUID(immediate) != "immediate" {
+		t.Fatalf("exact immediate original absent: %v", err)
+	}
+	e.files["kube-003-prepost-target.json"] = []byte(`{"metadata":{"uid":"duplicate"}}`)
+	if err := e.findKube("prepost-target", &before); err == nil {
+		t.Fatal("duplicate exact prepost original admitted")
+	}
+}
+
 func TestGuardrailAvailabilityConsoleRolloutIdentity(t *testing.T) {
 	p, err := parseGuardrailAvailabilityProfile(guardrailAvailabilityPinnedProfile(t))
 	if err != nil {
@@ -229,10 +297,10 @@ func TestGuardrailAvailabilityRotatedAuditAlias(t *testing.T) {
 func TestGuardrailAvailabilityObserveModeCannotEarnBlockedCredit(t *testing.T) {
 	put := func(files map[string][]byte, name string, v any) { raw, _ := json.Marshal(v); files[name] = raw }
 	e := availabilityEvidence{files: map[string][]byte{}}
-	s := availabilitySnapshot{TargetPodUID: "target-uid", SourceUID: "source-uid", JournalUID: "journal-uid", JournalResourceVersion: "44", SourceSHA256: availabilityHash([]byte("source")), Receipt: json.RawMessage(`{"generation":1}`), ActiveVariant: "pgv1", PodVariant: "pgv1", GuardrailEpoch: "epoch"}
+	s := availabilitySnapshot{TargetPodUID: "target-uid", TargetContainerID: "containerd://target", TargetImageID: "image@sha256:" + strings.Repeat("a", 64), SourceUID: "source-uid", JournalUID: "journal-uid", JournalResourceVersion: "44", SourceSHA256: availabilityHash([]byte("source")), Receipt: json.RawMessage(`{"generation":1}`), ActiveVariant: "pgv1", PodVariant: "pgv1", GuardrailEpoch: "epoch"}
 	name := "before-canary-pre"
 	put(e.files, name+"-snapshot.json", s)
-	put(e.files, "kube-001-"+name+"-target.json", map[string]any{"metadata": map[string]any{"uid": "target-uid", "annotations": map[string]any{"phorvex.ai/guardrail-variant": "pgv1"}, "labels": map[string]any{"phorvex.ai/guardrail-epoch": "epoch"}}})
+	put(e.files, "kube-001-"+name+"-target.json", map[string]any{"metadata": map[string]any{"uid": "target-uid", "annotations": map[string]any{"phorvex.ai/guardrail-variant": "pgv1"}, "labels": map[string]any{"phorvex.ai/guardrail-epoch": "epoch"}}, "status": map[string]any{"containerStatuses": []any{map[string]any{"name": "guardrail", "containerID": s.TargetContainerID, "imageID": s.TargetImageID, "ready": true, "restartCount": float64(0)}}}})
 	put(e.files, "kube-002-"+name+"-source.json", map[string]any{"metadata": map[string]any{"uid": "source-uid"}, "data": map[string]any{"guardrail_proxy.py": "source"}})
 	put(e.files, "kube-003-"+name+"-journal.json", map[string]any{"metadata": map[string]any{"uid": "journal-uid", "resourceVersion": "44"}, "data": map[string]any{"receipt": `{"generation":1}`}})
 	put(e.files, name+"-runtime.json", map[string]any{"_mountedSourceSHA256": s.SourceSHA256, "8000/v1/guardrail/state": map[string]any{"status": 200, "body": map[string]any{"mode": "observe", "ready": true, "active": "pgv1", "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]float64{"pgv1": 0.5, "pgv2": 0.5}}}})
