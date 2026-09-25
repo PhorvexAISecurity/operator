@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 15
+revision: 17
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,15 +11,11 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 9517231da8b2f3031d5eb65afd49223f22c6008ba243b7eebc2fd5eb80a7ddff
+    sha256: 30d068fc649b90a815da34bb30511b493e436a8cf4b3896c7e90b363e701cad1
     source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
-    at: '2026-09-25T02:47:11+00:00'
+    at: '2026-09-25T04:43:17+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
-    approval_ref: 'workflow/operations/AUTONOMY.md: standing user delegation for in-scope
-      lead design amendments'
-    rationale: Root corrected initial verification configuration to explicitly require
-      L3, already required by the design and live_required=true. No product-scope
-      change, evidence waiver or new human approval is claimed.
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
   red:
     result: PASS
     by: codex-lead
@@ -110,13 +106,12 @@ checks:
     at: '2026-09-25T03:41:45+00:00'
     baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
   p3:
-    result: PASS
+    result: FAIL
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: db596ca1ab50aa5c51950ddf76c1670542bd70cfe01571a5be9b6034471f81f9
+    sha256: b2be6251f0cf61cb10053ca751cbe50f39c1c9ba32c24b9442d37bfc167103ce
     source_sha: 2368a409b7fc9754353bae2bfa1a8f94a53f2575
-    at: '2026-09-25T03:41:45+00:00'
-    incident_sha256: 79fc2962f57e66a8335c3e060f06e4be962385e8050a6613166eb9006aea4827
+    at: '2026-09-25T04:42:39+00:00'
   patch_equivalence:
     result: PASS
     by: codex-lead
@@ -173,7 +168,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: PASS
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -189,10 +184,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Track PR340 review and deployment; verify named case only after matching
-    source, configuration and safe admission
-updated_at: '2026-09-25T03:44:25+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-25T04:43:17+00:00'
 configuration_history:
 - at: '2026-09-25T02:45:23+00:00'
   by: codex-lead
@@ -293,10 +288,31 @@ check_history:
   source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
   at: '2026-09-25T02:46:00+00:00'
   contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: db596ca1ab50aa5c51950ddf76c1670542bd70cfe01571a5be9b6034471f81f9
+  source_sha: 2368a409b7fc9754353bae2bfa1a8f94a53f2575
+  at: '2026-09-25T03:41:45+00:00'
+  incident_sha256: 79fc2962f57e66a8335c3e060f06e4be962385e8050a6613166eb9006aea4827
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 9517231da8b2f3031d5eb65afd49223f22c6008ba243b7eebc2fd5eb80a7ddff
+  source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  at: '2026-09-25T02:47:11+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: 'workflow/operations/AUTONOMY.md: standing user delegation for in-scope
+    lead design amendments'
+  rationale: Root corrected initial verification configuration to explicitly require
+    L3, already required by the design and live_required=true. No product-scope change,
+    evidence waiver or new human approval is claimed.
 handoff:
-  id: CAT-MCP-VOICE-MODEL:12:review
+  id: CAT-MCP-VOICE-MODEL:16:review
   from: codex-lead
-  to: codex-lead
-  role: coordinator
+  to: live-readiness
+  role: implementer
   kind: review
-  revision: 12
+  revision: 16
