@@ -57,6 +57,81 @@ func TestPodBoundTokenProfileRequiresProtectedLedgerPin(t *testing.T) {
 	}
 }
 
+func TestPodBoundTokenInstalledEKSNodeName(t *testing.T) {
+	// Exact mounted CPU profile bytes retained from the 2026-09-25 admission
+	// failure. Kubernetes node names are DNS subdomains, not namespace labels.
+	raw, err := os.ReadFile("testdata/pod-bound-token-cpu-installed-20260925.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cpu podBoundTokenProfile
+	if err := yaml.Unmarshal(raw, &cpu); err != nil {
+		t.Fatal(err)
+	}
+	if cpu.Fixture.AllowedNodeName != "ip-172-27-11-9.us-east-2.compute.internal" {
+		t.Fatalf("installed node name changed: %q", cpu.Fixture.AllowedNodeName)
+	}
+	if _, err := parsePodBoundTokenProfileFor(raw, podBoundTokenCPUConfig); err != nil {
+		t.Fatalf("installed CPU profile refused: %v", err)
+	}
+	voice := cpu
+	voice.Namespace = podBoundTokenNamespace
+	voice.ScenarioFilter = []string{podBoundTokenVoiceCaseID}
+	voice.Fixture.EventCreator = podBoundCreator(podBoundTokenConfig)
+	voice.Fixture.ScrapeNamespace = podBoundTokenNamespace
+	voiceRaw, err := yaml.Marshal(voice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parsePodBoundTokenProfileFor(voiceRaw, podBoundTokenConfig); err != nil {
+		t.Fatalf("Voice profile with installed DNS node name refused: %v", err)
+	}
+	for _, tc := range []struct {
+		name string
+		node string
+	}{
+		{"uppercase", "IP-172-27-11-9.us-east-2.compute.internal"},
+		{"underscore", "ip-172-27-11-9.us_east-2.compute.internal"},
+		{"empty-label", "ip-172-27-11-9..compute.internal"},
+		{"leading-hyphen", "-ip-172-27-11-9.us-east-2.compute.internal"},
+		{"trailing-dot", "ip-172-27-11-9.us-east-2.compute.internal."},
+		{"too-long", strings.Repeat("a", 254)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, profile := range []string{podBoundTokenCPUConfig, podBoundTokenConfig} {
+				p := cpu
+				if profile == podBoundTokenConfig {
+					p = voice
+				}
+				p.Fixture.AllowedNodeName = tc.node
+				candidate, err := yaml.Marshal(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := parsePodBoundTokenProfileFor(candidate, profile); err == nil || !strings.Contains(err.Error(), "allowedNodeName") {
+					t.Fatalf("%s invalid node %q did not identify allowedNodeName: %v", profile, tc.node, err)
+				}
+			}
+		})
+	}
+	voice.Namespace = "phorvex-catalogue-cpu"
+	voiceRaw, err = yaml.Marshal(voice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parsePodBoundTokenProfileFor(voiceRaw, podBoundTokenConfig); err == nil {
+		t.Fatal("Voice profile accepted CPU namespace")
+	}
+	cpu.Namespace = podBoundTokenNamespace
+	cpuRaw, err := yaml.Marshal(cpu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parsePodBoundTokenProfileFor(cpuRaw, podBoundTokenCPUConfig); err == nil {
+		t.Fatal("CPU profile accepted Voice namespace")
+	}
+}
+
 func TestPodBoundTokenNamedDestinationBindsReviewedProfileBytes(t *testing.T) {
 	dir := t.TempDir()
 	p := testPodBoundTokenProfile()
