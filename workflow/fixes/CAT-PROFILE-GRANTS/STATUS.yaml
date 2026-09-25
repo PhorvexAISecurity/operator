@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -91,7 +91,7 @@ fix_id: CAT-PROFILE-GRANTS
 issues: []
 title: Authorize enabled catalogue profiles for the existing dev test identity
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -118,11 +118,11 @@ implementation:
   head_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/336
+  reviewed_head: 4af5c12d2d290f452dc9ce8fdc07168d613f80b8
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -152,10 +152,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-25T00:39:49+00:00'
+  owner: codex-lead
+  action: Observe normal release/check status and re-admit exact named profiles after
+    deployed grant reload; retain live pending
+updated_at: '2026-09-25T00:41:41+00:00'
 configuration_history:
 - at: '2026-09-25T00:18:29+00:00'
   by: codex-lead
@@ -174,6 +174,11 @@ configuration_history:
   by: live-readiness
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-25T00:41:39+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -223,6 +228,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T00:41:41+00:00'
+  by: codex-lead
+  artifact: evidence/pr-publication.yaml
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-PROFILE-GRANTS:7:review
