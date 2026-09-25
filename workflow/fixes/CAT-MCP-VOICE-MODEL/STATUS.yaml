@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 14
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -155,11 +155,11 @@ implementation:
   head_sha: 2368a409b7fc9754353bae2bfa1a8f94a53f2575
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/340
+  reviewed_head: 60b7a83cc54db03c02773fd8b71a51976833de2c
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -192,7 +192,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T03:42:31+00:00'
+updated_at: '2026-09-25T03:43:56+00:00'
 configuration_history:
 - at: '2026-09-25T02:45:23+00:00'
   by: codex-lead
@@ -221,6 +221,11 @@ configuration_history:
   by: live-readiness
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-25T03:43:56+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
