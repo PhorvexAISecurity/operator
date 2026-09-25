@@ -1,0 +1,39 @@
+schema_version: 1
+intake_id: RPT-20260925-190000-cpu-mongo-prior
+kind: BUG
+title: CPU response case is blocked by a cleaned, disjoint Mongo predecessor
+state: REPORTED
+reporter: codex-lead
+approval_ref: workflow/campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+created_at: '2026-09-25T19:00:25+00:00'
+updated_at: '2026-09-25T19:00:25+00:00'
+pins:
+  source_main_sha: fa1aec81eecc02e50f5b1ab03069c0be42a3e43b
+  source_release: v0.4.168
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: dev
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: investigator
+  action: Triage the report and pin its environment.
+transitions: []

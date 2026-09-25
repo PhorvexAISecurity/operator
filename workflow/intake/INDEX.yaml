@@ -331,3 +331,10 @@ intakes:
     state: DEDUP_REVIEW
     issue_id: null
     aliases: []
+  RPT-20260925-190000-cpu-mongo-prior:
+    directory: intake/RPT-20260925-190000-cpu-mongo-prior
+    kind: BUG
+    title: CPU response case is blocked by a cleaned, disjoint Mongo predecessor
+    state: REPORTED
+    issue_id: null
+    aliases: []
