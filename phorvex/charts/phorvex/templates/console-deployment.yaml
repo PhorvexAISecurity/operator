@@ -1,3 +1,6 @@
+{{- if and .Values.phorvex.console.catalogueV1.litellm.inferenceEnabled (not .Values.phorvex.console.enabled) }}
+{{- fail "console.catalogueV1.litellm.inferenceEnabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 {{- if not .Values.phorvex.audit.enabled }}
 {{- fail "console.enabled requires audit.enabled: separate console Pod cannot serve live history without authenticated manager audit source" }}
@@ -7,6 +10,19 @@
 {{- end }}
 {{- if and (not .Values.phorvex.console.state.persistence.enabled) (not .Values.phorvex.console.state.allowEphemeral) }}
 {{- fail "console state persistence is required; set console.state.allowEphemeral=true explicitly for nondurable development use" }}
+{{- end }}
+{{- with .Values.phorvex.console.catalogueV1 }}
+{{- with .litellm }}
+{{- if .inferenceEnabled }}
+{{- if not (and $.Values.phorvex.console.catalogueV1.enabled .enabled) }}
+{{- fail "console.catalogueV1.litellm.inferenceEnabled requires catalogueV1 and litellm enabled" }}
+{{- end }}
+{{- $alias := required "console.catalogueV1.litellm.modelAlias is required for inference" .modelAlias }}
+{{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$" $alias) }}
+{{- fail "console.catalogueV1.litellm.modelAlias must be a reviewed model alias" }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- if .Values.phorvex.console.podBoundToken.enabled }}
 {{- $sourceName := required "console.podBoundToken.configMapName is required" .Values.phorvex.console.podBoundToken.configMapName }}
@@ -277,6 +293,12 @@ spec:
         {{- with .litellm }}
         - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_ENABLED
           value: {{ .enabled | default false | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_INFERENCE_ENABLED
+          value: {{ .inferenceEnabled | default false | quote }}
+        {{- if .inferenceEnabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_MODEL_ALIAS
+          value: {{ .modelAlias | quote }}
+        {{- end }}
         {{- if .enabled }}
         - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_NAMESPACE
           value: {{ required "console.catalogueV1.litellm.namespace is required" .namespace | quote }}

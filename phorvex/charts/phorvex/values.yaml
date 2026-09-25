@@ -476,6 +476,10 @@ phorvex:
         schemaSourceSHA256: 2b6ec7c5796309be91f9af97e3bb4379a42652550146b2dda226c801894570b1
       litellm:
         enabled: false
+        # A separate opt-in for bounded authenticated completion requests.
+        # The alias must be reviewed against the SHA-pinned installed config.
+        inferenceEnabled: false
+        modelAlias: ""
         namespace: litellm
         deployment: litellm
         service: litellm
