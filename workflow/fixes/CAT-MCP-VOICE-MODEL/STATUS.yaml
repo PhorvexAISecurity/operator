@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -117,6 +117,13 @@ checks:
     source_sha: 2368a409b7fc9754353bae2bfa1a8f94a53f2575
     at: '2026-09-25T03:41:45+00:00'
     incident_sha256: 79fc2962f57e66a8335c3e060f06e4be962385e8050a6613166eb9006aea4827
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.json
+    sha256: 16392979feb6628b06d326c72c615f18c869582a5ecac97b213b64bf5050ce89
+    source_sha: 2368a409b7fc9754353bae2bfa1a8f94a53f2575
+    at: '2026-09-25T03:42:31+00:00'
 fix_id: CAT-MCP-VOICE-MODEL
 issues: []
 title: Add source-pinned Voice MCP model continuation catalogue observation
@@ -185,7 +192,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T03:41:49+00:00'
+updated_at: '2026-09-25T03:42:31+00:00'
 configuration_history:
 - at: '2026-09-25T02:45:23+00:00'
   by: codex-lead
