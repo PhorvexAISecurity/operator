@@ -392,7 +392,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         </div>}
         {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="modeled">MEASURED GUARDED OUTCOME · INJECTED SIGNAL</Badge>
+            <Badge variant="modeled">MEASURED GUARDED OUTCOME</Badge>
             <span className="font-mono text-foreground" title={effectRecordId}>{effectRecordId}</span>
             <span className="text-muted-foreground">{effectResult?.status || "waiting for exact result"}</span>
           </div>
