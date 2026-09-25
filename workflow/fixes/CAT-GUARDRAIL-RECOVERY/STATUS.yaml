@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 19
+revision: 32
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,15 +11,13 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 330b40b66dbfdbb209ef4eb3472bf76360810a5910255a572e90a98cc1e004a5
+    sha256: e2b3c62acb8430eafff5d6d351ae2b285f4b76d7bbd6330a67603db78438ad8f
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
-    at: '2026-09-25T01:26:51+00:00'
+    at: '2026-09-25T11:14:41+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
-    approval_ref: 'workflow/operations/AUTONOMY.md: standing user delegation for in-scope
-      lead design amendments'
-    rationale: Lead-authored deployability correction under standing user authorization;
-      no new human approval claimed, no evidence waiver, no shared deployment change.
-      Prior decision preserved in check_history and evidence/decision-before-self-identity-amendment.md.
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Existing campaign and owner conflict repair scope; publication packaging
+      only; no behavior or evidence waiver
   red:
     result: PASS
     by: guardrail-comparison
@@ -30,73 +28,80 @@ checks:
   preflight:
     result: UNAVAILABLE
     by: guardrail-comparison
-    artifact: evidence/main-19f29-integration.md
-    sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
-    source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
-    at: '2026-09-25T11:05:44+00:00'
+    artifact: evidence/consolidation/worker-pending.md
+    sha256: fabc7c504871124177216caf73bc82705896cd492c463640d6c33c529ff77b6a
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:03+00:00'
   implementation:
-    result: UNAVAILABLE
+    result: PASS
     by: guardrail-comparison
     artifact: 04-diff.patch
-    sha256: 808548cda4d527131cb4ffd53898a0b63a4be698f2c5cfc8fcc716291c49b069
-    source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
-    at: '2026-09-25T11:05:44+00:00'
+    sha256: 48d92033835af3290b6d702387d6cb434aa1436c79ead6a66d6887b62299ee15
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:03+00:00'
   l0:
     result: UNAVAILABLE
     by: guardrail-comparison
-    artifact: evidence/main-19f29-integration.md
-    sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
-    source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
-    at: '2026-09-25T11:05:45+00:00'
+    artifact: evidence/consolidation/worker-pending.md
+    sha256: fabc7c504871124177216caf73bc82705896cd492c463640d6c33c529ff77b6a
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:03+00:00'
   l1:
     result: UNAVAILABLE
     by: guardrail-comparison
-    artifact: evidence/main-19f29-integration.md
-    sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
-    source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
-    at: '2026-09-25T11:05:45+00:00'
+    artifact: evidence/consolidation/worker-pending.md
+    sha256: fabc7c504871124177216caf73bc82705896cd492c463640d6c33c529ff77b6a
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:04+00:00'
   l2:
     result: UNAVAILABLE
     by: guardrail-comparison
-    artifact: evidence/main-19f29-integration.md
-    sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
-    source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
-    at: '2026-09-25T11:05:45+00:00'
+    artifact: evidence/consolidation/worker-pending.md
+    sha256: fabc7c504871124177216caf73bc82705896cd492c463640d6c33c529ff77b6a
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:04+00:00'
   positive_control:
     result: UNAVAILABLE
     by: guardrail-comparison
-    artifact: evidence/main-19f29-integration.md
-    sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
-    source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
-    at: '2026-09-25T11:05:45+00:00'
+    artifact: evidence/consolidation/worker-pending.md
+    sha256: fabc7c504871124177216caf73bc82705896cd492c463640d6c33c529ff77b6a
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:04+00:00'
   incident:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/incident.md
     sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
-    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
-    at: '2026-09-25T02:58:59+00:00'
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:14:41+00:00'
     baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
   p3:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/p3/verdict.md
     sha256: b0f123399528216c2e5d4ce7bfcdd40849618f45d5a6d5bd7ebfa556c4e57384
-    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
-    at: '2026-09-25T02:58:59+00:00'
-    incident_sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:14:41+00:00'
   patch_equivalence:
-    result: PASS
+    result: UNAVAILABLE
     by: codex-lead
     artifact: evidence/publication-equivalence.md
     sha256: 1431079c8c3dbda56b36b0690595d5ba06dc2bf9169c2d1138e08019a523a672
-    source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
-    at: '2026-09-25T02:59:57+00:00'
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:14:41+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/consolidation/base-review.md
+    sha256: 540acf83a089083474b5559e1d63cfd5dc36991f06a3d5de9b1766415c132f3a
+    source_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+    at: '2026-09-25T11:14:41+00:00'
+    baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
 fix_id: CAT-GUARDRAIL-RECOVERY
 issues: []
 title: Add a causal guardrail availability catalogue case
 profile: standard
-state: IN_PR
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -118,16 +123,16 @@ blind_derivation:
   sha256: null
   sealed_at: null
 implementation:
-  branch: campaign/catalogue-guardrail-recovery-20260925
+  branch: campaign/catalogue-litellm-routing-20260925
   base_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
-  head_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  head_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
   stacked_on: []
 pull_request:
-  url: https://github.com/PhorvexSecurity/operator/pull/339
-  reviewed_head: 2ae369e4288671c7b6e179327b20b6b3956264f9
+  url: https://github.com/PhorvexSecurity/operator/pull/338
+  reviewed_head: null
   merge_sha: null
   checks: pending
-  patch_equivalence: PASS
+  patch_equivalence: UNAVAILABLE
 deployment:
   image: null
   digest: null
@@ -141,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: PASS
+  p3: UNAVAILABLE
   l0: UNAVAILABLE
   l1: UNAVAILABLE
   l2: UNAVAILABLE
@@ -157,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Track PR339 required checks and merge under recorded authorization; live
-    verifier must inspect deployed source and run a fresh named case after opt-in
-updated_at: '2026-09-25T11:05:45+00:00'
+  owner: guardrail-comparison
+  action: Validate shared selected preflight and exact Guardrail recovery case controls,
+    then submit truthful combined-source evidence
+updated_at: '2026-09-25T11:16:12+00:00'
 configuration_history:
 - at: '2026-09-25T00:56:24+00:00'
   by: codex-lead
@@ -189,6 +194,13 @@ configuration_history:
   by: guardrail-comparison
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-25T11:14:39+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -247,6 +259,15 @@ transitions:
   note: null
   approval_ref: operations/AUTONOMY.md
   forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-25T11:16:12+00:00'
+  by: guardrail-comparison
+  artifact: 04-diff.patch
+  note: Combined source implementation re-pinned; prior worker checks unavailable
+    pending shared validation
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -298,6 +319,84 @@ check_history:
   sha256: bf761a7018a49d5f07a21a3064a840fda8283e0907c3f5607b45f977e6e8e438
   source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
   at: '2026-09-25T02:52:36+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 330b40b66dbfdbb209ef4eb3472bf76360810a5910255a572e90a98cc1e004a5
+  source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  at: '2026-09-25T01:26:51+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: 'workflow/operations/AUTONOMY.md: standing user delegation for in-scope
+    lead design amendments'
+  rationale: Lead-authored deployability correction under standing user authorization;
+    no new human approval claimed, no evidence waiver, no shared deployment change.
+    Prior decision preserved in check_history and evidence/decision-before-self-identity-amendment.md.
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
+  source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+  at: '2026-09-25T02:58:59+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: b0f123399528216c2e5d4ce7bfcdd40849618f45d5a6d5bd7ebfa556c4e57384
+  source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+  at: '2026-09-25T02:58:59+00:00'
+  incident_sha256: 5b85dbdf93658555aa8b915c314201436966b1454c4d72772699c3a9b5109a3e
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: 1431079c8c3dbda56b36b0690595d5ba06dc2bf9169c2d1138e08019a523a672
+  source_sha: 4ee5912951c8c8b2ee8bae4404d76f350a67de25
+  at: '2026-09-25T02:59:57+00:00'
+- check: implementation
+  result: UNAVAILABLE
+  by: guardrail-comparison
+  artifact: 04-diff.patch
+  sha256: 808548cda4d527131cb4ffd53898a0b63a4be698f2c5cfc8fcc716291c49b069
+  source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  at: '2026-09-25T11:05:44+00:00'
+- check: preflight
+  result: UNAVAILABLE
+  by: guardrail-comparison
+  artifact: evidence/main-19f29-integration.md
+  sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
+  source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  at: '2026-09-25T11:05:44+00:00'
+- check: l0
+  result: UNAVAILABLE
+  by: guardrail-comparison
+  artifact: evidence/main-19f29-integration.md
+  sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
+  source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  at: '2026-09-25T11:05:45+00:00'
+- check: l1
+  result: UNAVAILABLE
+  by: guardrail-comparison
+  artifact: evidence/main-19f29-integration.md
+  sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
+  source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  at: '2026-09-25T11:05:45+00:00'
+- check: l2
+  result: UNAVAILABLE
+  by: guardrail-comparison
+  artifact: evidence/main-19f29-integration.md
+  sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
+  source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  at: '2026-09-25T11:05:45+00:00'
+- check: positive_control
+  result: UNAVAILABLE
+  by: guardrail-comparison
+  artifact: evidence/main-19f29-integration.md
+  sha256: 39b11eb6a7ba11060426eca1cde7eee82d13e2365a6480bce78d82160a6addb9
+  source_sha: 535267fbf09e82fb8a78539469b9a6909e685d73
+  at: '2026-09-25T11:05:45+00:00'
 handoff:
   id: CAT-GUARDRAIL-RECOVERY:9:review
   from: codex-lead
