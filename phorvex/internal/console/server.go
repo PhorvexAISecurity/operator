@@ -149,13 +149,17 @@ npm run build</pre><p>then restart this binary. (Or pass <code>--web &lt;path-to
 func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
 	items := s.cfg.Catalog()
 	for i := range items {
-		if items[i].Profile != podBoundTokenConfig || !items[i].Available {
+		if !podBoundNamedCase(items[i].Profile) || !items[i].Available {
 			continue
 		}
-		dest, err := s.runs.SuiteDestination(podBoundTokenConfig)
+		dest, err := s.runs.SuiteDestination(items[i].Profile)
 		if err == nil {
 			s.runs.mu.Lock()
-			err = s.runs.podBoundTokenPriorAdmissionLocked(dest)
+			if items[i].Profile == podBoundTokenCPUConfig {
+				err = s.runs.podBoundTokenCPUPriorAdmissionLocked(dest)
+			} else {
+				err = s.runs.podBoundTokenPriorAdmissionLocked(dest)
+			}
 			s.runs.mu.Unlock()
 		}
 		if err != nil {
@@ -491,7 +495,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// The named broker baseline reads a server-owned file at authorization and
 	// launch. Recheck the second snapshot against this verified principal; Start
 	// also requires its digest still to match the exact file it copies.
-	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig || body.Config == guardrailStaticConfig || body.Config == podBoundTokenConfig {
+	if body.Config == natsBaselineConfig || body.Config == natsResponseConfig || body.Config == mongoExposureConfig || body.Config == guardrailStaticConfig || body.Config == guardrailAvailabilityConfig || podBoundNamedCase(body.Config) {
 		p := principalOf(r)
 		for _, target := range dest.Targets {
 			if p == nil || !p.AllowsTarget(target) {
@@ -664,6 +668,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var podBoundToken any
 	var podBoundTokenUnsafe any
 	var guardrailStatic any
+	var guardrailAvailability any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -698,6 +703,19 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 			guardrailStatic = &GuardrailStaticResult{Accepted: false, Status: "UNKNOWN", Issues: []string{reason}, EventMode: "DIRECT_STATIC", NaturalDetector: "NOT_EVALUATED", BrainDecision: "NOT_EVALUATED", Actuator: "NOT_EVALUATED", ExternalRoute: "NOT_TESTED"}
 		}
 	}
+	if result, err := s.runs.GuardrailAvailabilityResult(id); err == nil && result != nil {
+		guardrailAvailability = result
+	} else if err == nil && st.Config == guardrailAvailabilityConfig && st.State != "queued" && st.State != "running" {
+		reason := "guardrail availability terminal artifact absent"
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: reason})
+		guardrailAvailability = &GuardrailAvailabilityResult{Accepted: false, Status: "UNKNOWN", Issues: []string{reason}, EventMode: "NONE", NaturalDetector: "NOT_EVALUATED", SecurityEfficacy: "NOT_EVALUATED", SyntheticThreat: "UNKNOWN", Route: "Pod-loopback-8000"}
+	} else if err != nil {
+		reason := "guardrail availability original evidence unavailable: " + err.Error()
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: reason})
+		if st.Config == guardrailAvailabilityConfig {
+			guardrailAvailability = &GuardrailAvailabilityResult{Accepted: false, Status: "UNKNOWN", Issues: []string{reason}, EventMode: "NONE", NaturalDetector: "NOT_EVALUATED", SecurityEfficacy: "NOT_EVALUATED", SyntheticThreat: "UNKNOWN", Route: "Pod-loopback-8000"}
+		}
+	}
 	if result, err := s.runs.FunctionalResult(id); err == nil && result != nil {
 		functional = map[string]any{"outcome": result.Outcome, "summary": result.Summary, "evidence": result.Evidence,
 			"limits": result.Limits, "cleanup": result.Cleanup, "unsafeToRetry": result.UnsafeToRetry,
@@ -708,14 +726,15 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished, "outcome": st.Outcome,
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
-		"functionalResult":      functional,
-		"configurationResult":   configuration,
-		"natsResponseResult":    natsResponse,
-		"mongoExposureResult":   mongoExposure,
-		"podBoundTokenResult":   podBoundToken,
-		"podBoundTokenUnsafe":   podBoundTokenUnsafe,
-		"guardrailStaticResult": guardrailStatic,
-		"note":                  "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
+		"functionalResult":            functional,
+		"configurationResult":         configuration,
+		"natsResponseResult":          natsResponse,
+		"mongoExposureResult":         mongoExposure,
+		"podBoundTokenResult":         podBoundToken,
+		"podBoundTokenUnsafe":         podBoundTokenUnsafe,
+		"guardrailStaticResult":       guardrailStatic,
+		"guardrailAvailabilityResult": guardrailAvailability,
+		"note":                        "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }
 

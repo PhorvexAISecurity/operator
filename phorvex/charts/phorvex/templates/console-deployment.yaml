@@ -1,3 +1,17 @@
+{{- if and .Values.phorvex.console.catalogueV1.litellm.inferenceEnabled (not .Values.phorvex.console.enabled) }}
+{{- fail "console.catalogueV1.litellm.inferenceEnabled requires console.enabled" }}
+{{- end }}
+{{- if .Values.phorvex.console.catalogueV1.mcpVoiceModel.enabled }}
+{{- if not (and .Values.phorvex.console.enabled .Values.phorvex.console.catalogueV1.enabled .Values.phorvex.console.catalogueV1.voice.enabled .Values.phorvex.console.catalogueV1.mcpSession.enabled .Values.phorvex.console.catalogueV1.litellm.enabled .Values.phorvex.console.catalogueV1.litellm.inferenceEnabled) }}
+{{- fail "console.catalogueV1.mcpVoiceModel requires catalogueV1, Voice, MCP and LiteLLM inference enabled" }}
+{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.litellm.modelAlias "gpt-4o-mini" }}
+{{- fail "console.catalogueV1.mcpVoiceModel requires reviewed gpt-4o-mini alias" }}
+{{- end }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" .Values.phorvex.console.catalogueV1.mcpVoiceModel.voiceSourceSHA256) }}
+{{- fail "console.catalogueV1.mcpVoiceModel.voiceSourceSHA256 requires lowercase SHA-256" }}
+{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 {{- if not .Values.phorvex.audit.enabled }}
 {{- fail "console.enabled requires audit.enabled: separate console Pod cannot serve live history without authenticated manager audit source" }}
@@ -8,6 +22,19 @@
 {{- if and (not .Values.phorvex.console.state.persistence.enabled) (not .Values.phorvex.console.state.allowEphemeral) }}
 {{- fail "console state persistence is required; set console.state.allowEphemeral=true explicitly for nondurable development use" }}
 {{- end }}
+{{- with .Values.phorvex.console.catalogueV1 }}
+{{- with .litellm }}
+{{- if .inferenceEnabled }}
+{{- if not (and $.Values.phorvex.console.catalogueV1.enabled .enabled) }}
+{{- fail "console.catalogueV1.litellm.inferenceEnabled requires catalogueV1 and litellm enabled" }}
+{{- end }}
+{{- $alias := required "console.catalogueV1.litellm.modelAlias is required for inference" .modelAlias }}
+{{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$" $alias) }}
+{{- fail "console.catalogueV1.litellm.modelAlias must be a reviewed model alias" }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.podBoundToken.enabled }}
 {{- $sourceName := required "console.podBoundToken.configMapName is required" .Values.phorvex.console.podBoundToken.configMapName }}
 {{- if or (gt (len $sourceName) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" $sourceName)) }}
@@ -16,6 +43,16 @@
 {{- $profileSHA := required "console.podBoundToken.profileSHA256 is required" .Values.phorvex.console.podBoundToken.profileSHA256 }}
 {{- if not (regexMatch "^[0-9a-f]{64}$" $profileSHA) }}
 {{- fail "console.podBoundToken.profileSHA256 must be 64 lowercase hex characters" }}
+{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+{{- $sourceName := required "console.podBoundTokenCPU.configMapName is required" .Values.phorvex.console.podBoundTokenCPU.configMapName }}
+{{- if or (gt (len $sourceName) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" $sourceName)) }}
+{{- fail "console.podBoundTokenCPU.configMapName must be a DNS subdomain name" }}
+{{- end }}
+{{- $profileSHA := required "console.podBoundTokenCPU.profileSHA256 is required" .Values.phorvex.console.podBoundTokenCPU.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $profileSHA) }}
+{{- fail "console.podBoundTokenCPU.profileSHA256 must be 64 lowercase hex characters" }}
 {{- end }}
 {{- end }}
 {{- if .Values.phorvex.console.mongoExposure.enabled }}
@@ -50,6 +87,24 @@
 {{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.guardrailStatic.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
 {{- $sha := required "console.guardrailStatic.profileSHA256 is required" .Values.phorvex.console.guardrailStatic.profileSHA256 }}
 {{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailStatic.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.guardrailAvailability.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.guardrailAvailability.enabled requires catalogueV1.scopedToken.existingSecret" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.scopedToken.key "token" }}{{- fail "console.guardrailAvailability requires scopedToken key token" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.scopedToken.mountPath "/etc/phorvex-catalogue-v1" }}{{- fail "console.guardrailAvailability requires fixed scopedToken mountPath" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.loopbackURL "http://127.0.0.1:8090" }}{{- fail "console.guardrailAvailability requires fixed catalogue loopbackURL" }}{{- end }}
+{{- if ne (int .Values.phorvex.console.auditTransport.port) 8445 }}{{- fail "console.guardrailAvailability requires auditTransport port 8445" }}{{- end }}
+{{- $auditHost := printf "%s-audit-source.%s.svc" (include "phorvex.fullname" .) .Release.Namespace }}
+{{- if ne .Values.phorvex.console.auditTransport.serverDNSName $auditHost }}{{- fail "console.guardrailAvailability requires the release audit source DNS" }}{{- end }}
+{{- $name := required "console.guardrailAvailability.configMapName is required" .Values.phorvex.console.guardrailAvailability.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}{{- fail "console.guardrailAvailability.configMapName must be a DNS subdomain name" }}{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.guardrailAvailability.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.guardrailAvailability.profileSHA256 is required" .Values.phorvex.console.guardrailAvailability.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailAvailability.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- if ne .Values.phorvex.console.guardrailAvailability.sourceConfigMap "guardrail-proxy" }}{{- fail "console.guardrailAvailability.sourceConfigMap must be guardrail-proxy" }}{{- end }}
+{{- $journal := required "console.guardrailAvailability.guardrailJournalName is required" .Values.phorvex.console.guardrailAvailability.guardrailJournalName }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $journal) }}{{- fail "console.guardrailAvailability.guardrailJournalName must be a DNS label" }}{{- end }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -160,11 +215,31 @@ spec:
         - name: PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailStatic.profileSHA256 | quote }}
         {{- end }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED
+          value: {{ .Values.phorvex.console.guardrailAvailability.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.guardrailAvailability.profileSHA256 | quote }}
+        - name: PHORVEX_CONSOLE_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PHORVEX_CONSOLE_POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        {{- end }}
         - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED
           value: {{ .Values.phorvex.console.podBoundToken.enabled | default false | quote }}
         {{- if .Values.phorvex.console.podBoundToken.enabled }}
         - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256
           value: {{ .Values.phorvex.console.podBoundToken.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED
+          value: {{ .Values.phorvex.console.podBoundTokenCPU.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.podBoundTokenCPU.profileSHA256 | quote }}
         {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
@@ -230,6 +305,14 @@ spec:
           value: {{ required "console.catalogueV1.guardrailCalibration.sourceSHA256 is required" .sourceSHA256 | quote }}
         {{- end }}
         {{- end }}
+        {{- with .mcpVoiceModel }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_VOICE_MODEL_ENABLED
+          value: {{ .enabled | default false | quote }}
+        {{- if .enabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_MCP_VOICE_MODEL_VOICE_SOURCE_SHA256
+          value: {{ .voiceSourceSHA256 | quote }}
+        {{- end }}
+        {{- end }}
         {{- with .mcpSession }}
         - name: PHORVEX_CONSOLE_CATALOGUE_MCP_ENABLED
           value: {{ .enabled | default false | quote }}
@@ -281,6 +364,12 @@ spec:
         {{- with .litellm }}
         - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_ENABLED
           value: {{ .enabled | default false | quote }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_INFERENCE_ENABLED
+          value: {{ .inferenceEnabled | default false | quote }}
+        {{- if .inferenceEnabled }}
+        - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_MODEL_ALIAS
+          value: {{ .modelAlias | quote }}
+        {{- end }}
         {{- if .enabled }}
         - name: PHORVEX_CONSOLE_CATALOGUE_LITELLM_NAMESPACE
           value: {{ required "console.catalogueV1.litellm.namespace is required" .namespace | quote }}
@@ -444,6 +533,16 @@ spec:
           subPath: manifest.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+        - name: pod-bound-token-cpu-reviewed-source
+          mountPath: {{ printf "%s/build/test-harness/config.pod-bound-api-auth-response-cpu.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.pod-bound-api-auth-response-cpu.yaml
+          readOnly: true
+        - name: pod-bound-token-cpu-reviewed-source
+          mountPath: /etc/phorvex-catalogue-pod-bound-token-cpu/manifest.json
+          subPath: manifest.json
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.mongoExposure.enabled }}
         - name: mongo-exposure-reviewed-profile
           mountPath: {{ printf "%s/build/test-harness/config.mongo-exposure-baseline.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
@@ -466,6 +565,12 @@ spec:
         - name: guardrail-static-reviewed-profile
           mountPath: {{ printf "%s/build/test-harness/config.guardrail-confidentiality-static.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
           subPath: config.guardrail-confidentiality-static.yaml
+          readOnly: true
+        {{- end }}
+        {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+        - name: guardrail-availability-reviewed-profile
+          mountPath: {{ printf "%s/build/test-harness/config.guardrail-availability-recovery.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.guardrail-availability-recovery.yaml
           readOnly: true
         {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
@@ -534,6 +639,17 @@ spec:
           - key: manifest.json
             path: manifest.json
       {{- end }}
+      {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+      - name: pod-bound-token-cpu-reviewed-source
+        configMap:
+          name: {{ .Values.phorvex.console.podBoundTokenCPU.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.pod-bound-api-auth-response-cpu.yaml
+            path: config.pod-bound-api-auth-response-cpu.yaml
+          - key: manifest.json
+            path: manifest.json
+      {{- end }}
       {{- if .Values.phorvex.console.mongoExposure.enabled }}
       - name: mongo-exposure-reviewed-profile
         configMap:
@@ -569,6 +685,15 @@ spec:
           items:
           - key: config.guardrail-confidentiality-static.yaml
             path: config.guardrail-confidentiality-static.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
+      - name: guardrail-availability-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.guardrailAvailability.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.guardrail-availability-recovery.yaml
+            path: config.guardrail-availability-recovery.yaml
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

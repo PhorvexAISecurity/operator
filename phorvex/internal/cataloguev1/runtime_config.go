@@ -31,6 +31,7 @@ type RuntimeConfig struct {
 	ExpectedSubject string                       `json:"expectedSubject"`
 	GrantFile       string                       `json:"grantFile"`
 	Voice           VoiceRuntime                 `json:"voice"`
+	MCPVoiceModel   *MCPVoiceModelRuntime        `json:"mcpVoiceModel,omitempty"`
 	GPU             GPUFixtureRuntime            `json:"gpu"`
 	Guardrail       *GuardrailCalibrationRuntime `json:"guardrail,omitempty"`
 	MCP             *MCPSessionRuntime           `json:"mcp,omitempty"`
@@ -67,6 +68,11 @@ func (c RuntimeConfig) Validate() error {
 			return errors.New("catalogue v1 loopback origin is invalid")
 		}
 	}
+	if c.MCPVoiceModel != nil && c.MCPVoiceModel.Enabled {
+		if err := ValidateMCPVoiceModelConfig(*c.MCPVoiceModel, c.Voice, c.MCP, c.LiteLLM); err != nil {
+			return err
+		}
+	}
 	if c.Guardrail != nil {
 		if err := ValidateGuardrailCalibrationRuntime(*c.Guardrail); err != nil {
 			return err
@@ -85,6 +91,11 @@ func (c RuntimeConfig) Validate() error {
 	if c.LiteLLM != nil {
 		if err := ValidateLiteLLMRuntime(*c.LiteLLM); err != nil {
 			return err
+		}
+		if c.LiteLLM.InferenceEnabled {
+			if err := ValidateLiteLLMInferenceRuntime(*c.LiteLLM); err != nil {
+				return err
+			}
 		}
 	}
 	if c.CRM != nil {
@@ -134,6 +145,9 @@ func (c RuntimeConfig) Runtime(restConfig *rest.Config, kube kubernetes.Interfac
 		FixedLoopback: loopback, ScopedTokenFile: c.ScopedTokenFile, AllowedTenant: c.AllowedTenant,
 		DeniedTenant: c.DeniedTenant, DeniedTarget: c.DeniedTarget, ExpectedSubject: c.ExpectedSubject,
 		GrantFile: c.GrantFile, Voice: c.Voice, GPU: c.GPU}
+	if c.MCPVoiceModel != nil {
+		runtime.MCPVoiceModel = *c.MCPVoiceModel
+	}
 	if c.Guardrail != nil {
 		runtime.Guardrail = *c.Guardrail
 	}

@@ -18,43 +18,50 @@ const (
 )
 
 type podTokenRequest struct {
-	Schema              string  `json:"schema"`
-	RunID               string  `json:"runID"`
-	Nonce               string  `json:"nonce"`
-	ClusterUID          string  `json:"clusterUID"`
-	Namespace           string  `json:"namespace"`
-	NamespaceUID        string  `json:"namespaceUID"`
-	SourcePodName       string  `json:"sourcePodName"`
-	SourcePodUID        string  `json:"sourcePodUID"`
-	DeploymentUID       string  `json:"deploymentUID"`
-	ReplicaSetUID       string  `json:"replicaSetUID"`
-	PeerPodName         string  `json:"peerPodName"`
-	PeerPodUID          string  `json:"peerPodUID"`
-	ServiceName         string  `json:"serviceName"`
-	ServiceUID          string  `json:"serviceUID"`
-	PolicyName          string  `json:"policyName"`
-	PolicyUID           string  `json:"policyUID"`
-	PolicyGeneration    int64   `json:"policyGeneration"`
-	PolicySpecSHA256    string  `json:"policySpecSHA256"`
-	ManagerPodUID       string  `json:"managerPodUID"`
-	ManagerContainerID  string  `json:"managerContainerID"`
-	ManagerImageID      string  `json:"managerImageID"`
-	ProfileSHA256       string  `json:"profileSHA256"`
-	SourceBeforeHTTP    int     `json:"sourceBeforeHTTP"`
-	PeerBeforeHTTP      int     `json:"peerBeforeHTTP"`
-	ServiceBeforeHTTP   int     `json:"serviceBeforeHTTP"`
-	SourceExpiry        string  `json:"sourceExpiry"`
-	RequestedAt         string  `json:"requestedAt"`
-	SourceCaptureID     string  `json:"sourceCaptureID"`
-	PeerCaptureID       string  `json:"peerCaptureID"`
-	MetricStatus        string  `json:"metricStatus"`
-	MetricFirstAt       string  `json:"metricFirstAt"`
-	MetricSecondAt      string  `json:"metricSecondAt"`
-	MetricFirstValue    float64 `json:"metricFirstValue"`
-	MetricSecondValue   float64 `json:"metricSecondValue"`
-	MetricSourcePodName string  `json:"metricSourcePodName"`
-	PodMonitorUID       string  `json:"podMonitorUID"`
-	MetricQuerySHA256   string  `json:"metricQuerySHA256"`
+	Schema                string  `json:"schema"`
+	CaseID                string  `json:"caseID,omitempty"`
+	RunID                 string  `json:"runID"`
+	Nonce                 string  `json:"nonce"`
+	ClusterUID            string  `json:"clusterUID"`
+	Namespace             string  `json:"namespace"`
+	NamespaceUID          string  `json:"namespaceUID"`
+	SourcePodName         string  `json:"sourcePodName"`
+	SourcePodUID          string  `json:"sourcePodUID"`
+	DeploymentUID         string  `json:"deploymentUID"`
+	ReplicaSetUID         string  `json:"replicaSetUID"`
+	PeerPodName           string  `json:"peerPodName"`
+	PeerPodUID            string  `json:"peerPodUID"`
+	ServiceName           string  `json:"serviceName"`
+	ServiceUID            string  `json:"serviceUID"`
+	PDBUID                string  `json:"pdbUID,omitempty"`
+	PolicyName            string  `json:"policyName"`
+	PolicyUID             string  `json:"policyUID"`
+	PolicyGeneration      int64   `json:"policyGeneration"`
+	PolicySpecSHA256      string  `json:"policySpecSHA256"`
+	ManagerPodUID         string  `json:"managerPodUID"`
+	ManagerContainerID    string  `json:"managerContainerID"`
+	ManagerImageID        string  `json:"managerImageID"`
+	ProfileSHA256         string  `json:"profileSHA256"`
+	SourceBeforeHTTP      int     `json:"sourceBeforeHTTP"`
+	PeerBeforeHTTP        int     `json:"peerBeforeHTTP"`
+	ServiceBeforeHTTP     int     `json:"serviceBeforeHTTP"`
+	SourceExpiry          string  `json:"sourceExpiry"`
+	PeerExpiry            string  `json:"peerExpiry,omitempty"`
+	SourceBeforeRequestAt string  `json:"sourceBeforeRequestAt,omitempty"`
+	SourceBeforeAt        string  `json:"sourceBeforeAt,omitempty"`
+	PeerBeforeRequestAt   string  `json:"peerBeforeRequestAt,omitempty"`
+	PeerBeforeAt          string  `json:"peerBeforeAt,omitempty"`
+	RequestedAt           string  `json:"requestedAt"`
+	SourceCaptureID       string  `json:"sourceCaptureID"`
+	PeerCaptureID         string  `json:"peerCaptureID"`
+	MetricStatus          string  `json:"metricStatus"`
+	MetricFirstAt         string  `json:"metricFirstAt"`
+	MetricSecondAt        string  `json:"metricSecondAt"`
+	MetricFirstValue      float64 `json:"metricFirstValue"`
+	MetricSecondValue     float64 `json:"metricSecondValue"`
+	MetricSourcePodName   string  `json:"metricSourcePodName"`
+	PodMonitorUID         string  `json:"podMonitorUID"`
+	MetricQuerySHA256     string  `json:"metricQuerySHA256"`
 }
 
 type podTokenStage struct {
@@ -79,6 +86,7 @@ type podTokenAdmission struct {
 	SourcePodUID       string `json:"sourcePodUID"`
 	PeerPodUID         string `json:"peerPodUID"`
 	ServiceUID         string `json:"serviceUID"`
+	PDBUID             string `json:"pdbUID,omitempty"`
 	ProfileSHA256      string `json:"profileSHA256"`
 	Available          bool   `json:"available"`
 	UnavailableReason  string `json:"unavailableReason,omitempty"`
@@ -114,11 +122,19 @@ type podTokenOperation struct {
 }
 type podTokenReplay struct {
 	SourceBeforeHTTP                int    `json:"sourceBeforeHTTP"`
+	SourceBeforeRequestAt           string `json:"sourceBeforeRequestAt,omitempty"`
+	SourceBeforeAt                  string `json:"sourceBeforeAt,omitempty"`
 	SourceAfterHTTP                 int    `json:"sourceAfterHTTP"`
+	SourceAfterRequestAt            string `json:"sourceAfterRequestAt,omitempty"`
 	SourceExpiry                    string `json:"sourceExpiry"`
 	SourceAfterAt                   string `json:"sourceAfterAt"`
 	PeerBeforeHTTP                  int    `json:"peerBeforeHTTP"`
+	PeerBeforeRequestAt             string `json:"peerBeforeRequestAt,omitempty"`
+	PeerBeforeAt                    string `json:"peerBeforeAt,omitempty"`
 	PeerAfterHTTP                   int    `json:"peerAfterHTTP"`
+	PeerAfterRequestAt              string `json:"peerAfterRequestAt,omitempty"`
+	PeerAfterAt                     string `json:"peerAfterAt,omitempty"`
+	PeerExpiry                      string `json:"peerExpiry,omitempty"`
 	ServiceBeforeHTTP               int    `json:"serviceBeforeHTTP"`
 	ServiceAfterHTTP                int    `json:"serviceAfterHTTP"`
 	SameSourceHandle                bool   `json:"sameSourceHandle"`
@@ -151,6 +167,7 @@ type podTokenCleanup struct {
 }
 type podTokenResult struct {
 	Schema            string            `json:"schema"`
+	CaseID            string            `json:"caseID,omitempty"`
 	RunID             string            `json:"runID"`
 	Nonce             string            `json:"nonce"`
 	TerminalStatus    string            `json:"terminalStatus"`

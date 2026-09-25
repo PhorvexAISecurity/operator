@@ -141,6 +141,9 @@ spec:
         {{- if .Values.phorvex.e2eDetector.enabled }}
         {{- $detectors = append $detectors (printf "%s/%s-e2e-detector" .Release.Namespace (include "phorvex.fullname" .)) }}
         {{- end }}
+        {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+        {{- $detectors = append $detectors (printf "%s/%s-e2e-detector-cpu" .Release.Namespace (include "phorvex.fullname" .)) }}
+        {{- end }}
         {{- with $detectors }}
         - --trusted-detectors={{ join "," . }}
         {{- end }}

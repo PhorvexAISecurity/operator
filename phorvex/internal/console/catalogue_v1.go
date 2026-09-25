@@ -104,7 +104,8 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 		Namespace: c.CatalogueV1.LiteLLMNamespace, Deployment: c.CatalogueV1.LiteLLMDeployment,
 		Service: c.CatalogueV1.LiteLLMService, Container: c.CatalogueV1.LiteLLMContainer,
 		Port: c.CatalogueV1.LiteLLMPort, ConfigMap: c.CatalogueV1.LiteLLMConfigMap,
-		ConfigKey: c.CatalogueV1.LiteLLMConfigKey, ExpectedConfigSHA256: c.CatalogueV1.LiteLLMConfigSHA256}
+		ConfigKey: c.CatalogueV1.LiteLLMConfigKey, ExpectedConfigSHA256: c.CatalogueV1.LiteLLMConfigSHA256,
+		InferenceEnabled: c.CatalogueV1.LiteLLMInferenceEnabled, ModelAlias: c.CatalogueV1.LiteLLMModelAlias}
 	liteLLMReady := c.CatalogueV1.Enabled && cataloguev1.ValidateLiteLLMRuntime(liteLLMRuntime) == nil
 	liteLLMReason := "installed LiteLLM config and fixed route are not configured"
 	if liteLLMReady {
@@ -119,10 +120,31 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 	liteCredentialItem := functional(cataloguev1.LiteLLMCredential, string(cataloguev1.LiteLLMCredential), "ai", "Boundary", "Missing and generated invalid bearer on reviewed GET /v1/models authentication route for every exact Pod. NO_CONNECTED_DB is UNKNOWN authorization, not bypass or verified denial. Brain and actuator evidence: NOT_EVALUATED.", []string{"reviewed installed LiteLLM config", "fixed /v1/models path", "per-Pod identity and response"}, liteLLMReady, liteLLMReason)
 	liteCredentialItem.EventMode = "none; direct protocol control"
 	liteCredentialItem.ResponseGuidance = "Direct credential configuration boundary; no SecurityEvent or actuator is expected. Brain and actuator evidence: NOT_EVALUATED."
+	liteRoutingReady := liteLLMReady && cataloguev1.ValidateLiteLLMInferenceRuntime(liteLLMRuntime) == nil
+	liteRoutingReason := "authenticated LiteLLM inference is disabled or its reviewed model alias is unavailable"
+	if liteRoutingReady {
+		liteRoutingReason = "configured only; launch checks the SHA-pinned alias, master-key env reference and each exact Pod before bounded completion requests"
+	}
+	liteRoutingItem := functional(cataloguev1.LiteLLMRouting, string(cataloguev1.LiteLLMRouting), "ai", "Functional", "One fixed harmless authenticated completion and one nonexistent-model request per exact serving Pod. A valid assistant completion proves serving; only an explicit typed model-not-found error proves rejection. Returned model metadata does not prove loaded provider model or weights. Provider internals and absence of upstream requests are not attested. SecurityEvent, brain, actuator and security efficacy: NOT_EVALUATED.", []string{"separate inference opt-in and reviewed configured alias", "SHA-pinned mounted LiteLLM config and master-key env reference", "each exact serving Pod and bounded sanitized response"}, liteRoutingReady, liteRoutingReason)
+	liteRoutingItem.EventMode = "none; direct protocol control"
+	liteRoutingItem.ResponseGuidance = "Direct authenticated inference-routing control; no SecurityEvent or actuator is expected. Brain and actuator evidence: NOT_EVALUATED."
+	mcpVoiceModelReady := c.CatalogueV1.Enabled && cataloguev1.ValidateMCPVoiceModelConfig(
+		cataloguev1.MCPVoiceModelRuntime{Enabled: c.CatalogueV1.MCPVoiceModelEnabled, ExpectedVoiceSourceSHA256: c.CatalogueV1.MCPVoiceSourceSHA256},
+		cataloguev1.VoiceRuntime{Enabled: c.CatalogueV1.VoiceEnabled, Namespace: c.CatalogueV1.VoiceNamespace, Deployment: c.CatalogueV1.VoiceDeployment, Service: c.CatalogueV1.VoiceService, Container: c.CatalogueV1.VoiceContainer, ServicePort: c.CatalogueV1.VoiceServicePort, PDB: c.CatalogueV1.VoicePDB},
+		&mcpRuntime, &liteLLMRuntime) == nil
+	mcpVoiceModelReason := "MCP Voice model continuation is disabled or reviewed Voice/MCP/LiteLLM authority is unavailable"
+	if mcpVoiceModelReady {
+		mcpVoiceModelReason = "configured only; admission checks retained unsafe Voice state and launch rechecks all sources and route"
+	}
+	mcpVoiceModelItem := functional(cataloguev1.MCPVoiceModel, string(cataloguev1.MCPVoiceModel), "application", "Observation", "Two synthetic, source-pinned model continuations with normal and one substituted MCP result; no tool execution, SecurityEvent or defense efficacy claim.", []string{"reviewed Voice prompt and source", "MCP source and image", "LiteLLM alias/config and all three destination grants", "no retained unsafe Voice suite"}, mcpVoiceModelReady, mcpVoiceModelReason)
+	mcpVoiceModelItem.EventMode = "none; model decision observation"
+	mcpVoiceModelItem.ResponseGuidance = "No SecurityEvent is requested. Tool selection is observed without execution; brain, actuator, enforcement and defense efficacy are not evaluated."
 	return []CatalogItem{
 		chromaItem,
 		liteHealthItem,
 		liteCredentialItem,
+		liteRoutingItem,
+		mcpVoiceModelItem,
 		functional(cataloguev1.MCPSessionBaseline, "catalogue-mcp-session-baseline", "application", "Functional", "One synthetic MCP tool read and exact in-memory session invalidation with mounted-file/package hash pins; already-loaded Python bytes, business mutation, provider, authorization, brain, actuator and security efficacy are not attested.", []string{"reviewed installed MCP source and image", "fixed Pod proxy authority", "exact session cleanup"}, mcpReady, mcpReason),
 		functional(cataloguev1.CRMRefund, "c2-crm-refund-capability", "application", "Functional", "DIRECT functional capability: synthetic A refund and cross-record B refund in one disposable Mongo; A/B are record labels, not principals; no phone/provider, customer write, auth-bypass, brain or security efficacy claim.", []string{"approved digest-pinned CRM/Mongo images and dependency closure", "dedicated UID-pinned fixture namespace", "exact Pod and ConfigMap cleanup"}, crmReady, crmReason),
 		functional(cataloguev1.CRMReset, "c2-crm-reset-capability", "application", "Functional", "DIRECT functional capability: synthetic A reset and cross-record B reset in one disposable Mongo; A/B are record labels, not principals; no phone/provider, customer write, auth-bypass, brain or security efficacy claim.", []string{"approved digest-pinned CRM/Mongo images and dependency closure", "dedicated UID-pinned fixture namespace", "exact Pod and ConfigMap cleanup"}, crmReady, crmReason),
@@ -155,7 +177,7 @@ func (c Config) catalogueV1RuntimeContext(profile cataloguev1.ProfileID) string 
 			return value
 		}
 	}
-	if profile == cataloguev1.VoiceMedia || profile == cataloguev1.VoiceRecovery || profile == cataloguev1.GuardrailCalibration || profile == cataloguev1.MCPSessionBaseline || profile == cataloguev1.ChromaOwnedVector || profile == cataloguev1.LiteLLMHealth || profile == cataloguev1.LiteLLMCredential {
+	if profile == cataloguev1.VoiceMedia || profile == cataloguev1.VoiceRecovery || profile == cataloguev1.GuardrailCalibration || profile == cataloguev1.MCPSessionBaseline || profile == cataloguev1.ChromaOwnedVector || profile == cataloguev1.LiteLLMHealth || profile == cataloguev1.LiteLLMCredential || profile == cataloguev1.LiteLLMRouting || profile == cataloguev1.MCPVoiceModel {
 		if value := strings.TrimSpace(c.CatalogueV1.KubeContext); value != "" {
 			return value
 		}

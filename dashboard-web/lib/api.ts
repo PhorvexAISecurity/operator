@@ -572,6 +572,36 @@ export interface RunEvidenceTrial {
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
 export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
+// Server-owned, sanitized projection inside FunctionalResult.evidence for the
+// LiteLLM inference control. Raw prompts, completions, keys and error bodies
+// are never part of this UI contract.
+export interface LiteLLMRoutingPodEvidence {
+  name: string; uid: string; imageID: string; version: string;
+  known: { status: string; state: string; reason: string; returnedModel: string; returnedModelSHA256: string; modelRelation: string; usagePromptCount: string; usageCompletionCount: string };
+  unknown: { status: string; state: string; reason: string; returnedModel: string; returnedModelSHA256: string; modelRelation: string };
+}
+export interface LiteLLMRoutingEvidence {
+  pod1: LiteLLMRoutingPodEvidence; pod2: LiteLLMRoutingPodEvidence;
+  modelAlias: string; knownModelState: string; unknownModelState: string; requestCount: string;
+  authorityBeforeSHA256: string; authorityAfterSHA256: string; configSHA256: string;
+  eventMode: string; securityEvent: string; brain: string; actuator: string; securityOutcome: string;
+}
+// Sanitized decision projection for the fixed Voice MCP model continuation.
+// Returned prose, arbitrary tool arguments and credentials are never public fields.
+export type MCPVoiceModelObservationState =
+  "UNREQUESTED_SYNTHETIC_B_REFUND_SELECTED" | "NO_WRITE_SELECTION_OBSERVED" |
+  "NON_DISCRIMINATING_BASELINE" | "UNKNOWN";
+export interface MCPVoiceModelCallEvidence {
+  httpStatus: string; finishReason: string; responseSHA256: string; responseBytes: string; toolNames: string[];
+  usagePromptCount: string; usageCompletionCount: string;
+}
+export interface MCPVoiceModelEvidence {
+  observationState: MCPVoiceModelObservationState;
+  normal: MCPVoiceModelCallEvidence; substituted: MCPVoiceModelCallEvidence;
+  normalWriteToolSelected: boolean; substitutedSyntheticBRefundSelected: boolean;
+  voicePodUID: string; voiceImageID: string; voiceSourceSHA256: string;
+  mcpSourceSHA256: string; liteLLMConfigSHA256: string; routeSHA256: string; authoritySHA256: string;
+}
 export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; /** Legacy wire field: NO_SIGNAL means this direct configuration control injected no SecurityEvent; it does not report a brain decision. */ brainMode: "NO_SIGNAL" | string; securityEfficacy: "NOT_EVALUATED" | string; sourceAttestation: string; issues?: string[] }
 export interface NATSResponseDecisionTrace {
   schema: string;
@@ -660,9 +690,25 @@ export interface MongoExposureResult {
 }
 export interface GuardrailStaticCall { name: "canary_raw" | "canary_guarded" | "say_ok" | "arithmetic"; port: number; status: number; markerPresent?: boolean; answerIsFour?: boolean; errorType?: string }
 export interface GuardrailStaticResult { accepted: boolean; status: string; sayOK: string; arithmetic: string; calls: GuardrailStaticCall[]; issues: string[]; clusterUID: string; podUID: string; variant: string; sourceSHA256: string; sourceEvidence: string; loadedSource: string; serviceUID: string; endpointSliceSHA256: string; guardrailJournalUID: string; guardrailJournalGeneration: number; kvJournalUID: string; eventMode: "DIRECT_STATIC"; naturalDetector: "NOT_EVALUATED"; brainDecision: "NOT_EVALUATED"; actuator: "NOT_EVALUATED"; externalRoute: "NOT_TESTED" }
+export interface GuardrailAvailabilityResult {
+  accepted: boolean;
+  status: string;
+  issues: string[];
+  eventMode: "INJECTED" | "NONE";
+  naturalDetector: "NOT_EVALUATED";
+  securityEfficacy: "NOT_EVALUATED";
+  syntheticThreat: string;
+  route: "Pod-loopback-8000";
+  loadedWeightsAttested: false;
+  before: { canary: string; sayOK: string; arithmetic: string };
+  after: { canary: string; sayOK: string; arithmetic: string };
+  operation: { eventUID: string; decisionID: string; operationID: string; priorVariant: string; nextVariant: string; generation: number };
+  cleanupVerified: boolean;
+}
 export interface PodBoundTokenStage { name: string; status: "CONFIRMED" | "REFUSED" | "UNKNOWN"; observedAt?: string; evidenceSHA256?: string; reason?: string }
 export interface PodBoundTokenResult {
   schema: "pod-bound-token-result-v1";
+  caseID?: "c2-pod-bound-api-auth-response" | "c2-pod-bound-api-auth-response-cpu";
   runID?: string; nonce?: string; terminalStatus: "COMPLETE" | "INCOMPLETE" | "UNSAFE"; mechanismObserved: boolean;
   securityEfficacy: "NOT_EVALUATED"; signalMode: "explicit-injected-typed-event";
   stages?: PodBoundTokenStage[];
@@ -670,11 +716,11 @@ export interface PodBoundTokenResult {
   event?: { uid?: string; kind?: string; creator?: string; sourcePodUID?: string; trustVerified?: boolean };
   decision?: { id?: string; selectedAction?: string; dispatchOutcome?: string; costCeiling?: number; rotateStatus?: string; rotateReason?: string; rotateExpectedCost?: number; rotateHighCost?: number; requestRateStatus?: "MEASURED_FRESH" | "MISSING_REQUEST_RATE" | "STALE_REQUEST_RATE" | "UNKNOWN"; flowRegime?: string; quarantineStatus?: string; quarantineReason?: string; quarantineUsed?: number; quarantineLimit?: number; auditCoverage?: string };
   operation?: { terminationStatus?: "REQUEST_CONFIRMED" | "NOT_DISPATCHED" | "UNCONFIRMED"; originalPodAbsent?: boolean; receiptSHA256?: string };
-  replay?: { sourceBeforeHTTP?: number; sourceAfterHTTP?: number; sourceExpiry?: string; sourceAfterAt?: string; peerBeforeHTTP?: number; peerAfterHTTP?: number; serviceBeforeHTTP?: number; serviceAfterHTTP?: number; sameSourceHandle?: boolean; samePeerHandle?: boolean; sourceBeforeCaptureID?: string; sourceAfterCaptureID?: string; peerBeforeCaptureID?: string; peerAfterCaptureID?: string; serviceMemberPodUID?: string; serviceAfterAt?: string; serviceAfterServiceUID?: string; serviceAfterEndpointSliceUID?: string; serviceMemberReady?: boolean; serviceMemberOwnerDeploymentUID?: string };
+  replay?: { sourceBeforeHTTP?: number; sourceAfterHTTP?: number; sourceExpiry?: string; sourceBeforeRequestAt?: string; sourceBeforeAt?: string; sourceAfterRequestAt?: string; sourceAfterAt?: string; peerBeforeHTTP?: number; peerAfterHTTP?: number; peerExpiry?: string; peerBeforeRequestAt?: string; peerBeforeAt?: string; peerAfterRequestAt?: string; peerAfterAt?: string; serviceBeforeHTTP?: number; serviceAfterHTTP?: number; sameSourceHandle?: boolean; samePeerHandle?: boolean; sourceBeforeCaptureID?: string; sourceAfterCaptureID?: string; peerBeforeCaptureID?: string; peerAfterCaptureID?: string; serviceMemberPodUID?: string; serviceAfterAt?: string; serviceAfterServiceUID?: string; serviceAfterEndpointSliceUID?: string; serviceMemberReady?: boolean; serviceMemberOwnerDeploymentUID?: string };
   telemetry?: { producerStatus?: string; firstAt?: string; secondAt?: string; firstValue?: number; secondValue?: number; sourcePodName?: string; podMonitorUID?: string; querySHA256?: string };
   cleanup?: { status?: string; inventorySHA256?: string; absent?: boolean };
 }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; podBoundTokenResult?: PodBoundTokenResult; note: string }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; guardrailAvailabilityResult?: GuardrailAvailabilityResult; podBoundTokenResult?: PodBoundTokenResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];

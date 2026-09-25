@@ -1,0 +1,69 @@
+{{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+{{- $name := printf "%s-e2e-detector-cpu" (include "phorvex.fullname" .) }}
+{{- $identity := printf "system:serviceaccount:%s:%s" .Release.Namespace $name }}
+# Separate CPU fixture creator. No permanent token, Pod, exec or impersonation grant.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+rules:
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["create", "get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+# SecurityEvent is cluster-scoped. This fail-closed admission policy confines
+# the CPU creator's exact event target despite its cluster-scoped CREATE grant.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["amtd.r6security.com"]
+      apiVersions: ["v1beta1"]
+      operations: ["CREATE", "UPDATE", "DELETE"]
+      resources: ["securityevents"]
+  matchConditions:
+  - name: dedicated-cpu-e2e-identity
+    expression: {{ printf "request.userInfo.username == '%s'" $identity | quote }}
+  variables:
+  - name: event
+    expression: "request.operation == 'DELETE' ? oldObject : object"
+  validations:
+  - expression: "variables.event.metadata.name.startsWith('phorvex-e2e-')"
+    message: "CPU E2E identity may only manage phorvex-e2e-* events"
+  - expression: "size(variables.event.spec.targets) == 1 && variables.event.spec.targets[0].startsWith('phorvex-catalogue-cpu/')"
+    message: "CPU E2E event must target exactly one pod in phorvex-catalogue-cpu"
+  - expression: "variables.event.spec.rule.source == 'PhorvexE2EDetector'"
+    message: "CPU E2E event source must identify the test fixture"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny"]
+{{- end }}

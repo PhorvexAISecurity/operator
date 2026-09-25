@@ -94,6 +94,14 @@ phorvex:
     console:
       enabled: true
       allowWorkloadMutations: true
+      # No availability recovery dispatch until a reviewed installed profile,
+      # exact digest, scoped token and audit transport are configured.
+      guardrailAvailability:
+        enabled: false
+        configMapName: ""
+        profileSHA256: ""
+        sourceConfigMap: guardrail-proxy
+        guardrailJournalName: ""
       # Fixed functional profiles remain unavailable until DevOps supplies the
       # short-lived scoped identity and exact Voice/GPU fixture authorities.
       #
@@ -128,6 +136,10 @@ phorvex:
           pdb: voice-bot
           transcriptSelector: app=voice-bot
           transcriptContainer: bot
+        # Separate model-continuation observation remains off until admission.
+        mcpVoiceModel:
+          enabled: false
+          voiceSourceSHA256: ""
         # Proposed dev desired state; no live apply from this source change.
         # Pinned read-only 2026-09-24: vllm Service :8000 selects one Ready
         # guardrail Pod; guardrail-proxy CM key hashes as below. Source digest
@@ -147,6 +159,10 @@ phorvex:
           enabled: true
         litellm:
           enabled: true
+          # Health/credential controls remain enabled; inference performs
+          # application requests only after an explicit reviewed alias opt-in.
+          inferenceEnabled: false
+          modelAlias: ""
         mcpSession:
           enabled: true
           imageID: docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff

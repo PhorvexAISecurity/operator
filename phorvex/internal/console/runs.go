@@ -46,7 +46,9 @@ var allowedConfigs = map[string]suite{
 	"nats-exposure-baseline":           {File: "config.nats-exposure-baseline.yaml", OutDir: "out-nats-exposure-baseline", Desc: "Owned NATS no-signal configuration exposure control"},
 	"nats-client-response":             {File: "config.nats-client-response.yaml", OutDir: "out-nats-client-response", Desc: "Owned NATS client response and exact-event observation"},
 	"pod-bound-api-auth-response":      {File: "config.pod-bound-api-auth-response.yaml", OutDir: "out-pod-bound-api-auth-response", Desc: "Injected Pod-bound API bearer response in owned Voice fixture"},
+	"pod-bound-api-auth-response-cpu":  {File: "config.pod-bound-api-auth-response-cpu.yaml", OutDir: "out-pod-bound-api-auth-response-cpu", Desc: "Injected Pod-bound API bearer response in owned CPU fixture"},
 	"guardrail-confidentiality-static": {File: "config.guardrail-confidentiality-static.yaml", OutDir: "out-guardrail-confidentiality-static", Desc: "Fixed synthetic raw-versus-guarded vLLM confidentiality comparison"},
+	"guardrail-availability-recovery":  {File: "config.guardrail-availability-recovery.yaml", OutDir: "out-guardrail-availability-recovery", Desc: "Fixed injected guardrail availability recovery comparison"},
 	"p3-v3":                            {File: "config.p3.v3.yaml", OutDir: "out-p3-v3", Desc: "P3 zero-day dwell (held-out CVE): PX vs blind vs no-MTD"},
 	"pactuator":                        {File: "config.pactuator.yaml", OutDir: "out-pactuator", Desc: "Lead demo: native actuator preserves the stateful job"},
 	"p3-verify":                        {File: "config.p3.verify.yaml", OutDir: "out-p3-verify", Desc: "P3 verification suite"},
@@ -93,6 +95,7 @@ type RunStatus struct {
 	Outcome       string `json:"outcome,omitempty"`
 	CleanupStatus string `json:"cleanupStatus,omitempty"`
 	UnsafeToRetry bool   `json:"unsafeToRetry,omitempty"`
+	ProfileSHA256 string `json:"profileSHA256,omitempty"`
 }
 
 // tsNow is the canonical run timestamp format (UTC) used for the report history.
@@ -115,22 +118,23 @@ type pendingRun struct {
 
 // RunManager tracks triggered runs (in-memory; the console is single-user until P-VCLUSTER).
 type RunManager struct {
-	cfg                     Config
-	mu                      sync.Mutex
-	runs                    map[string]*RunStatus
-	runOut                  map[string]string     // run id -> the out dir its config writes to
-	procs                   map[string]*exec.Cmd  // run id -> the live harness process (for Stop)
-	stopping                map[string]bool       // run id -> a user Stop was requested
-	pending                 map[string]pendingRun // run id -> queued launch args (state=="queued")
-	queue                   []string              // FIFO of queued run ids (auto-started as slots free)
-	seq                     int
-	active                  int       // currently-running exec count
-	lastStart               time.Time // for the min-interval rate limit
-	loadErr                 error
-	functional              map[string]cataloguev1.Job
-	natsReconciling         map[string]bool
-	natsPrincipals          map[string]Principal
-	podBoundTokenPrincipals map[string]Principal
+	cfg                          Config
+	mu                           sync.Mutex
+	runs                         map[string]*RunStatus
+	runOut                       map[string]string     // run id -> the out dir its config writes to
+	procs                        map[string]*exec.Cmd  // run id -> the live harness process (for Stop)
+	stopping                     map[string]bool       // run id -> a user Stop was requested
+	pending                      map[string]pendingRun // run id -> queued launch args (state=="queued")
+	queue                        []string              // FIFO of queued run ids (auto-started as slots free)
+	seq                          int
+	active                       int       // currently-running exec count
+	lastStart                    time.Time // for the min-interval rate limit
+	loadErr                      error
+	functional                   map[string]cataloguev1.Job
+	natsReconciling              map[string]bool
+	natsPrincipals               map[string]Principal
+	podBoundTokenPrincipals      map[string]Principal
+	guardrailAvailabilityCancels map[string]context.CancelFunc
 	// Installed only by Server; a run-private file can trigger this named callback,
 	// but never supplies Kubernetes or audit authority.
 	natsResponse          func(context.Context, string, string) error
@@ -138,7 +142,7 @@ type RunManager struct {
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}}
+	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}, guardrailAvailabilityCancels: map[string]context.CancelFunc{}}
 	rm.loadErr = rm.loadStatuses()
 	if rm.loadErr == nil {
 		go rm.reconcileInterruptedFunctional()
@@ -185,7 +189,7 @@ func (rm *RunManager) loadStatuses() error {
 		}
 		cp := p.Run
 		if cp.State == "running" || cp.State == "queued" {
-			if (cp.ExecutionKind == "fixed-suite" || cp.Config == natsBaselineConfig || cp.Config == natsResponseConfig || cp.Config == mongoExposureConfig || cp.Config == podBoundTokenConfig) && cp.State == "running" {
+			if (cp.ExecutionKind == "fixed-suite" || cp.Config == natsBaselineConfig || cp.Config == natsResponseConfig || cp.Config == mongoExposureConfig || podBoundNamedCase(cp.Config) || cp.Config == guardrailAvailabilityConfig) && cp.State == "running" {
 				cp.State = "partial"
 				cp.Error = "named suite interrupted by console restart; exact cleanup reconciliation pending"
 				cp.UnsafeToRetry = true
@@ -307,11 +311,14 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	if name == mongoExposureConfig && (!rm.cfg.MongoExposureEnabled || nativeActuator || dest.ScopeTenant != mongoExposureNamespace || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 1 || dest.Tenants[0] != mongoExposureNamespace || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "") {
 		return "", fmt.Errorf("named Mongo suite requires opt-in fixed tenant, reviewed target and authenticated audit")
 	}
-	if name == podBoundTokenConfig && (!rm.cfg.PodBoundTokenEnabled || nativeActuator || dest.ScopeTenant != "voice" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 1 || dest.Tenants[0] != "voice" || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "" || rm.podBoundTokenResponse == nil) {
+	if podBoundNamedCase(name) && (nativeActuator || dest.ScopeTenant != podBoundNamespace(name) || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 1 || dest.Tenants[0] != podBoundNamespace(name) || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "" || rm.podBoundTokenResponse == nil) {
 		return "", fmt.Errorf("Pod-bound token suite requires opt-in reviewed target, trusted creator and authenticated audit")
 	}
 	if name == guardrailStaticConfig && (nativeActuator || dest.ScopeTenant != "vllm" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 2 || dest.Tenants[0] != "vllm" || dest.Tenants[1] != "phorvex-system" || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget) {
 		return "", fmt.Errorf("guardrail static suite requires reviewed vLLM and journal destinations")
+	}
+	if name == guardrailAvailabilityConfig && (!rm.cfg.GuardrailAvailabilityEnabled || nativeActuator || dest.ScopeTenant != "vllm" || dest.ScopeTarget == "" || dest.ScopeTarget == "in-cluster" || dest.SuiteSHA256 == "" || len(dest.Tenants) != 2 || dest.Tenants[0] != "vllm" || dest.Tenants[1] != "phorvex-system" || len(dest.Targets) != 2 || dest.Targets[0] != hostTargetID || dest.Targets[1] != dest.ScopeTarget || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity == "") {
+		return "", fmt.Errorf("guardrail availability suite requires reviewed vLLM, console and authenticated audit destinations")
 	}
 	rm.mu.Lock()
 	if name == mongoExposureConfig {
@@ -326,15 +333,21 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 			return "", fmt.Errorf("Pod-bound token prior-run admission refused: %w", err)
 		}
 	}
-	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
+	if name == podBoundTokenCPUConfig {
+		if err := rm.podBoundTokenCPUPriorAdmissionLocked(dest); err != nil {
+			rm.mu.Unlock()
+			return "", fmt.Errorf("CPU Pod-bound token prior-run admission refused: %w", err)
+		}
+	}
+	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig || name == guardrailAvailabilityConfig {
 		if rm.loadErr != nil {
 			rm.mu.Unlock()
 			return "", fmt.Errorf("prior NATS run state unavailable; exact reconciliation is required")
 		}
 		for _, prior := range rm.runs {
-			if (prior.Config == natsBaselineConfig || prior.Config == natsResponseConfig) && prior.UnsafeToRetry {
+			if (prior.Config == natsBaselineConfig || prior.Config == natsResponseConfig || prior.Config == guardrailAvailabilityConfig) && prior.UnsafeToRetry {
 				rm.mu.Unlock()
-				return "", fmt.Errorf("prior NATS run has unresolved cleanup or one-use response repeatability; exact reconciliation is required")
+				return "", fmt.Errorf("prior named run has unresolved cleanup or one-use response repeatability; exact reconciliation is required")
 			}
 		}
 	}
@@ -342,7 +355,7 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 		rm.mu.Unlock()
 		return "", fmt.Errorf("NATS response coordinator is unavailable")
 	}
-	if (name == natsResponseConfig || name == podBoundTokenConfig) && (len(principal) != 1 || principal[0] == nil ||
+	if (name == natsResponseConfig || podBoundNamedCase(name) || name == guardrailAvailabilityConfig) && (len(principal) != 1 || principal[0] == nil ||
 		principalKey(principal[0]) != owner || !principal[0].HasRole(RoleOperator)) {
 		rm.mu.Unlock()
 		return "", fmt.Errorf("NATS response requires an exact verified operator")
@@ -366,11 +379,14 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	// Both halves are recorded so a later run-id lookup is authorized against the cluster AND the
 	// namespace this run actually drives.
 	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator, Owner: owner, ScopeTarget: normalizeTargetID(dest.ScopeTarget), ScopeTenant: dest.ScopeTenant}
-	if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig || name == guardrailStaticConfig || name == podBoundTokenConfig {
+	if name == guardrailAvailabilityConfig {
+		st.ExecutionKind, st.ClaimClass, st.ProfileSHA256 = "named-suite", "effect", dest.SuiteSHA256
+	}
+	if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig || name == guardrailStaticConfig || name == guardrailAvailabilityConfig || podBoundNamedCase(name) {
 		st.Namespace = runtimeSuite.Namespace
-		if name == guardrailStaticConfig {
+		if name == guardrailStaticConfig || name == guardrailAvailabilityConfig {
 			st.FixtureTenant = "phorvex-system"
-		} else if name != mongoExposureConfig && name != podBoundTokenConfig {
+		} else if name != mongoExposureConfig && !podBoundNamedCase(name) {
 			st.FixtureTenant = runtimeSuite.Namespace
 		}
 		st.Target = dest.ScopeTarget
@@ -395,7 +411,7 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 		copy.Targets = append([]string(nil), copy.Targets...)
 		rm.natsPrincipals[id] = copy
 	}
-	if name == podBoundTokenConfig {
+	if podBoundNamedCase(name) {
 		copy := *principal[0]
 		copy.Roles = append([]Role(nil), copy.Roles...)
 		copy.Tenants = append([]string(nil), copy.Tenants...)
@@ -411,9 +427,19 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 		rm.mu.Unlock()
 		return "", fmt.Errorf("persist run status before effect: %w", err)
 	}
+	var availabilityCtx context.Context
+	if name == guardrailAvailabilityConfig {
+		var cancel context.CancelFunc
+		availabilityCtx, cancel = context.WithCancel(context.Background())
+		rm.guardrailAvailabilityCancels[id] = cancel
+	}
 	rm.mu.Unlock()
 
-	go rm.run(id, su, nativeActuator)
+	if name == guardrailAvailabilityConfig {
+		go rm.runGuardrailAvailability(availabilityCtx, id, su)
+	} else {
+		go rm.run(id, su, nativeActuator)
+	}
 	return id, nil
 }
 
@@ -445,6 +471,11 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 			return suite{}, fmt.Errorf("named guardrail static suite is disabled")
 		}
 		raw, err = readPinnedNamedProfile(path, rm.cfg.GuardrailStaticProfileSHA256)
+	case allowedConfigs[guardrailAvailabilityConfig].File:
+		if !rm.cfg.GuardrailAvailabilityEnabled {
+			return suite{}, fmt.Errorf("named guardrail availability suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.GuardrailAvailabilityProfileSHA256)
 	default:
 		raw, err = os.ReadFile(path)
 	}
@@ -483,6 +514,13 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 			}
 			fixture["runID"] = id
 			su.Namespace = "vllm"
+		case "config.guardrail-availability-recovery.yaml":
+			fixture, ok := doc["guardrailAvailabilityFixture"].(map[string]any)
+			if !ok {
+				return suite{}, fmt.Errorf("named guardrail availability fixture missing")
+			}
+			fixture["runID"] = id
+			su.Namespace = "vllm"
 		case "config.mongo-exposure-baseline.yaml":
 			fixture, ok := doc["mongoExposureFixture"].(map[string]any)
 			if !ok {
@@ -494,7 +532,7 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 			}
 			fixture["nonce"], fixture["runID"] = hex.EncodeToString(random), id
 			su.Namespace = mongoExposureNamespace
-		case "config.pod-bound-api-auth-response.yaml":
+		case "config.pod-bound-api-auth-response.yaml", "config.pod-bound-api-auth-response-cpu.yaml":
 			fixture, ok := doc["podBoundTokenFixture"].(map[string]any)
 			if !ok {
 				return suite{}, fmt.Errorf("named Pod-bound token fixture missing")
@@ -504,7 +542,7 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 				return suite{}, fmt.Errorf("allocate owned fixture nonce: %w", err)
 			}
 			fixture["nonce"], fixture["runID"] = hex.EncodeToString(random), id
-			su.Namespace = "voice"
+			su.Namespace = podBoundNamespace(map[string]string{"config.pod-bound-api-auth-response.yaml": podBoundTokenConfig, "config.pod-bound-api-auth-response-cpu.yaml": podBoundTokenCPUConfig}[su.File])
 		default:
 			return suite{}, fmt.Errorf("unrecognized named fixture")
 		}
@@ -554,7 +592,11 @@ func (rm *RunManager) Stop(id string) error {
 	}
 	rm.stopping[id] = true
 	cmd := rm.procs[id]
+	cancel := rm.guardrailAvailabilityCancels[id]
 	rm.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	if cmd != nil && cmd.Process != nil {
 		signal := syscall.SIGKILL
 		if st.ExecutionKind == "fixed-suite" {
@@ -642,6 +684,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		if s == "ai-vllm-guardrail-confidentiality-static" || s == guardrailStaticConfig {
 			return "", fmt.Errorf("guardrail confidentiality comparison requires the server-owned named suite %s", guardrailStaticConfig)
 		}
+		if s == "ai-vllm-guardrail-availability-recovery" || s == guardrailAvailabilityConfig {
+			return "", fmt.Errorf("guardrail availability comparison requires the server-owned named suite %s", guardrailAvailabilityConfig)
+		}
 		if s == "c2-nats-uncredentialed-exposure" {
 			return "", fmt.Errorf("NATS exposure requires the server-owned named suite nats-exposure-baseline")
 		}
@@ -656,6 +701,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		}
 		if s == "c2-pod-bound-api-auth-response" {
 			return "", fmt.Errorf("Pod-bound API bearer response requires the server-owned named suite %s", podBoundTokenConfig)
+		}
+		if s == podBoundTokenCPUCaseID {
+			return "", fmt.Errorf("CPU Pod-bound API bearer response requires the server-owned named suite %s", podBoundTokenCPUConfig)
 		}
 		if s == string(cataloguev1.CRMRefund) || s == string(cataloguev1.CRMReset) {
 			return "", fmt.Errorf("CRM capability %s requires the server-owned fixed-suite profile", s)
@@ -827,16 +875,21 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 			return dest, fmt.Errorf("named guardrail static suite is disabled")
 		}
 		raw, err = readPinnedNamedProfile(path, rm.cfg.GuardrailStaticProfileSHA256)
+	case guardrailAvailabilityConfig:
+		if !rm.cfg.GuardrailAvailabilityEnabled {
+			return dest, fmt.Errorf("named guardrail availability suite is disabled")
+		}
+		raw, err = readPinnedNamedProfile(path, rm.cfg.GuardrailAvailabilityProfileSHA256)
 	default:
 		raw, err = os.ReadFile(path)
 	}
 	if err != nil {
-		if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig || name == guardrailStaticConfig || name == podBoundTokenConfig {
+		if name == natsBaselineConfig || name == natsResponseConfig || name == mongoExposureConfig || name == guardrailStaticConfig || name == guardrailAvailabilityConfig || podBoundNamedCase(name) {
 			return dest, err
 		}
 		return dest, nil
 	}
-	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig {
+	if name == natsBaselineConfig || name == natsResponseConfig || name == guardrailStaticConfig || name == guardrailAvailabilityConfig {
 		if (name == guardrailStaticConfig && bytes.Contains(raw, []byte("__SET_"))) || (name != guardrailStaticConfig && natsProfileHasPlaceholder(raw)) {
 			return dest, fmt.Errorf("named suite is not configured with reviewed installed pins")
 		}
@@ -844,6 +897,19 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 			cfg, err := parseStaticAdmission(raw)
 			if err != nil {
 				return dest, fmt.Errorf("guardrail static suite destination or identity pins differ")
+			}
+			h := sha256.Sum256(raw)
+			return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{"vllm", "phorvex-system"}, ScopeTarget: cfg.Context, ScopeTenant: "vllm", SuiteSHA256: hex.EncodeToString(h[:])}, nil
+		}
+		if name == guardrailAvailabilityConfig {
+			cfg, parseErr := parseGuardrailAvailabilityProfile(raw)
+			if parseErr != nil || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity != cfg.Fixture.AuditURL+"|"+cfg.Fixture.AuditServerName {
+				return dest, fmt.Errorf("guardrail availability suite reviewed route or audit authority unavailable")
+			}
+			for _, file := range []string{cfg.Fixture.ScopedTokenFile, cfg.Fixture.AuditCAFile, cfg.Fixture.AuditClientCertFile, cfg.Fixture.AuditClientKeyFile} {
+				if !validPrivateRegular(file) {
+					return dest, fmt.Errorf("guardrail availability suite credential or mTLS mount unavailable")
+				}
 			}
 			h := sha256.Sum256(raw)
 			return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{"vllm", "phorvex-system"}, ScopeTarget: cfg.Context, ScopeTenant: "vllm", SuiteSHA256: hex.EncodeToString(h[:])}, nil
@@ -906,8 +972,8 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 		h := sha256.Sum256(raw)
 		return runDestination{Targets: []string{hostTargetID, cfg.Context}, Tenants: []string{mongoExposureNamespace}, ScopeTarget: cfg.Context, ScopeTenant: mongoExposureNamespace, SuiteSHA256: hex.EncodeToString(h[:])}, nil
 	}
-	if name == podBoundTokenConfig {
-		return rm.podBoundTokenDestination(raw, dest)
+	if podBoundNamedCase(name) {
+		return rm.podBoundTokenDestination(raw, dest, name)
 	}
 	var cfg suiteConfig
 	// The shipped configs carry a UTF-8 BOM; strip it so the destination is actually parsed
@@ -1096,7 +1162,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	rm.mu.Lock()
 	if st := rm.runs[id]; st != nil && st.Compare3 {
 		cap = 12 * time.Minute
-	} else if st != nil && st.Config == podBoundTokenConfig {
+	} else if st != nil && podBoundNamedCase(st.Config) {
 		cap = 16 * time.Minute
 		isPodBoundToken = true
 	} else if st != nil && st.Config == mongoExposureConfig {
@@ -1151,7 +1217,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		if (isNATS && rm.natsResponse != nil) || rm.podBoundTokenResponse != nil {
 			rm.mu.Lock()
 			responseRun := rm.runs[id] != nil && rm.runs[id].Config == natsResponseConfig
-			tokenRun := rm.runs[id] != nil && rm.runs[id].Config == podBoundTokenConfig
+			tokenRun := rm.runs[id] != nil && podBoundNamedCase(rm.runs[id].Config)
 			rm.mu.Unlock()
 			if responseRun && rm.natsResponse != nil {
 				responseDone = make(chan error, 1)
@@ -1204,7 +1270,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	}()
 	if rm.stopping[id] {
 		delete(rm.stopping, id)
-		if st.Config == natsBaselineConfig || st.Config == natsResponseConfig || st.Config == mongoExposureConfig || st.Config == podBoundTokenConfig {
+		if st.Config == natsBaselineConfig || st.Config == natsResponseConfig || st.Config == mongoExposureConfig || podBoundNamedCase(st.Config) {
 			st.State, st.CleanupStatus, st.UnsafeToRetry = "partial", "UNVERIFIED", true
 			st.Finished, st.Error = tsNow(), "NATS run stopped before exact terminal cleanup; read-only reconciliation required"
 			return
@@ -1244,7 +1310,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		finishNATSResponseStatus(st, result, evidenceErr, responseErr, err, ctx.Err())
 		return
 	}
-	if st.Config == podBoundTokenConfig {
+	if podBoundNamedCase(st.Config) {
 		st.Finished = tsNow()
 		result, evidenceErr := readPodBoundTokenResult(outAbs, id)
 		if !started {

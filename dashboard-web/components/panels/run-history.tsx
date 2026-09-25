@@ -17,6 +17,9 @@ import { NATSClientResponseResult } from "@/components/panels/nats-client-respon
 import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
 import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
+import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
+import { GuardrailAvailabilityResultPanel } from "@/components/panels/guardrail-availability-result";
+import { MCPVoiceModelResult, parseMCPVoiceModelEvidence } from "@/components/panels/mcp-voice-model-result";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -68,6 +71,12 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
   if (evidence.error) return <div className="text-[12px] text-danger">{String((evidence.error as Error).message || evidence.error)} <button className="text-primary" onClick={() => evidence.refetch()}>Retry</button></div>;
   if (!evidence.data) return <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading evidence…</div>;
   const ev = evidence.data;
+  const liteLLMRouting = runConfig === "catalogue-litellm-inference-routing" || ev.scenario === "catalogue-litellm-inference-routing";
+  const mcpVoiceModel = runConfig === "catalogue-mcp-voice-model-continuation" || ev.scenario === "catalogue-mcp-voice-model-continuation";
+  const mcpVoiceAccepted = mcpVoiceModel ? parseMCPVoiceModelEvidence(ev.functionalResult?.evidence, ev.functionalResult?.outcome) : null;
+  const cpuToken = [runConfig, ev.scenario].some((value) => value === "pod-bound-api-auth-response-cpu" || value === "c2-pod-bound-api-auth-response-cpu");
+  const voiceToken = [runConfig, ev.scenario].some((value) => value === "pod-bound-api-auth-response" || value === "c2-pod-bound-api-auth-response");
+  const tokenCase = cpuToken && voiceToken ? null : cpuToken ? "cpu" : voiceToken ? "voice" : null;
   const ms = (x: number) => (x > 0 ? `${x.toFixed(1)}s` : "—");
   return (
     <div className="space-y-3">
@@ -76,12 +85,16 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
       </div>
 
       {ev.functionalResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
-        <div className="flex flex-wrap items-center gap-2"><Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge><span className="text-foreground">{ev.functionalResult.summary}</span></div>
+        <div className="flex flex-wrap items-center gap-2">{mcpVoiceModel ? <Badge variant="neutral">{mcpVoiceAccepted ? "Measurement completed" : "Measurement unverified"}</Badge> : <Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge>}<span className="text-foreground">{mcpVoiceModel ? mcpVoiceAccepted ? "Two source-pinned model continuations were measured; see the decision below." : "Model-decision measurement is incomplete or incompatible." : ev.functionalResult.summary}</span></div>
         <div className="mt-2 text-muted-foreground">cleanup: <span className="text-foreground">{ev.functionalResult.cleanup.status}</span>{ev.functionalResult.cleanup.verified ? " · verified" : " · unverified"}</div>
         {ev.functionalResult.unsafeToRetry && <div className="mt-1 text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
         {ev.functionalResult.limits?.map((limit) => <div key={limit} className="mt-1 text-muted-foreground">limit: {limit}</div>)}
-        <div className="mt-2 grid gap-1 md:grid-cols-2">{Object.entries(ev.functionalResult.evidence || {}).map(([key, value]) => <div key={key} className="break-all font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span>{value}</div>)}</div>
+        {mcpVoiceModel ? <div className="mt-2"><MCPVoiceModelResult evidence={ev.functionalResult.evidence} outcome={ev.functionalResult.outcome} /></div>
+          : liteLLMRouting ? <div className="mt-2"><LiteLLMRoutingResult evidence={ev.functionalResult.evidence} outcome={ev.functionalResult.outcome} /></div>
+          : <div className="mt-2 grid gap-1 md:grid-cols-2">{Object.entries(ev.functionalResult.evidence || {}).map(([key, value]) => <div key={key} className="break-all font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span>{value}</div>)}</div>}
       </div>}
+      {liteLLMRouting && !ev.functionalResult && <LiteLLMRoutingResult evidence={undefined} />}
+      {mcpVoiceModel && !ev.functionalResult && <MCPVoiceModelResult evidence={undefined} />}
 
       {ev.configurationResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
         <div className="font-medium text-foreground">Accepted synthetic NATS configuration finding: {ev.configurationResult.finding}</div>
@@ -91,10 +104,13 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
         {ev.configurationResult.issues?.map((issue) => <div key={issue} className="mt-1 text-warning">unverified: {issue}</div>)}
       </div>}
       {ev.natsResponseResult && <NATSClientResponseResult result={ev.natsResponseResult} unsafeToRetry={unsafeToRetry} />}
-      {runConfig === "pod-bound-api-auth-response" && ev.podBoundTokenResult && <PodBoundTokenResultPanel result={ev.podBoundTokenResult} unsafeToRetry={unsafeToRetry} />}
-      {runConfig === "pod-bound-api-auth-response" && !ev.podBoundTokenResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Pod-bound bearer stage evidence is unavailable. No injected-signal, operation or credential mechanism result is accepted.</div>}
+      {tokenCase && ev.podBoundTokenResult && <PodBoundTokenResultPanel result={ev.podBoundTokenResult} caseProfile={tokenCase} unsafeToRetry={unsafeToRetry} />}
+      {tokenCase && !ev.podBoundTokenResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Pod-bound bearer stage evidence is unavailable. No injected-signal, operation or credential mechanism result is accepted.</div>}
+      {cpuToken && voiceToken && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Pod-bound case identity conflicts between run and evidence. No CPU or Voice mechanism result is accepted.</div>}
       {ev.guardrailStaticResult && <GuardrailStaticResultPanel result={ev.guardrailStaticResult} />}
       {runConfig === "guardrail-confidentiality-static" && !ev.guardrailStaticResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact private guardrail comparison evidence is unavailable or incomplete. No static-filter finding is accepted.</div>}
+      {runConfig === "guardrail-availability-recovery" && ev.guardrailAvailabilityResult && <GuardrailAvailabilityResultPanel result={ev.guardrailAvailabilityResult} unsafeToRetry={unsafeToRetry} />}
+      {runConfig === "guardrail-availability-recovery" && !ev.guardrailAvailabilityResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact guardrail availability evidence is unavailable. No injected operation or before/after recovery is accepted.</div>}
       {runConfig === "nats-client-response" && !ev.natsResponseResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact NATS response evidence is unavailable or incomplete. No injected-signal outcome, packet isolation, or defense result is accepted.</div>}
       {ev.mongoExposureResult && <MongoExposureResult result={ev.mongoExposureResult} unsafeToRetry={unsafeToRetry} />}
       {runConfig === "mongo-exposure-baseline" && !ev.mongoExposureResult && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">Exact Mongo synthetic-document evidence is unavailable or incomplete. No configuration exposure finding, manager causal claim, or defense result is accepted.</div>}

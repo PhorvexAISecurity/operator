@@ -47,7 +47,7 @@ func podTokenLedgerName(namespaceUID types.UID) string {
 	return "phorvex-quarantine-capacity-" + hex.EncodeToString(sum[:20])
 }
 func podTokenAMTDName(f podTokenFixture) string {
-	return "phorvex-voice-" + strings.TrimPrefix(f.name, "pod-token-")
+	return "phorvex-" + f.namespace + "-" + strings.TrimPrefix(f.name, "pod-token-")
 }
 func podTokenPhoenixNPName(namespace, pod string) string {
 	legacy := namespace + "-" + pod + "-policy"
@@ -66,7 +66,7 @@ func podTokenOwnedAMTD(obj unstructured.Unstructured, f podTokenFixture) bool {
 		obj.GetLabels()["app.kubernetes.io/managed-by"] == "phorvex" &&
 		a["phorvex.ai/policy-name"] == f.name && a["phorvex.ai/policy-uid"] == string(f.policyUID) &&
 		a["phorvex.ai/policy-generation"] == fmt.Sprint(f.policyGeneration) &&
-		a["phorvex.ai/identity-version"] == "v1" && a["phorvex.ai/namespace-raw"] == "voice" &&
+		a["phorvex.ai/identity-version"] == "v1" && a["phorvex.ai/namespace-raw"] == f.namespace &&
 		a["phorvex.ai/tenant-raw"] == strings.TrimPrefix(f.name, "pod-token-")
 }
 func podTokenGeneratedNP(np networkingv1.NetworkPolicy, f podTokenFixture, amtdUID types.UID) (bool, error) {
@@ -82,7 +82,7 @@ func podTokenGeneratedNP(np networkingv1.NetworkPolicy, f podTokenFixture, amtdU
 			}
 			return true, nil
 		}
-		if np.Name == podTokenPhoenixNPName("voice", p.Name) {
+		if np.Name == podTokenPhoenixNPName(f.namespace, p.Name) {
 			if np.UID == "" || amtdUID == "" || len(np.OwnerReferences) != 1 ||
 				np.OwnerReferences[0].Kind != "AdaptiveMovingTargetDefense" || np.OwnerReferences[0].UID != amtdUID {
 				return true, errors.New("Phoenix generated NetworkPolicy owner ambiguous")

@@ -91,6 +91,53 @@ func TestPodBoundTokenNamedDestinationBindsReviewedProfileBytes(t *testing.T) {
 	}
 }
 
+func TestPodBoundCPUNamedDestinationAndCurrentGrant(t *testing.T) {
+	dir := t.TempDir()
+	p := testPodBoundTokenProfile()
+	p.Namespace = podBoundTokenCPUNamespace
+	p.ScenarioFilter = []string{podBoundTokenCPUCaseID}
+	p.Fixture.ScrapeNamespace = p.Namespace
+	p.Fixture.EventCreator = podBoundCreator(podBoundTokenCPUConfig)
+	manifest, err := json.Marshal(testPodBoundSourceManifest(p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinPodBoundSource(t, &p, filepath.Join(dir, "manifest.json"), manifest)
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.pod-bound-api-auth-response-cpu.yaml"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{HarnessDir: dir, PodBoundTokenCPUEnabled: true, PodBoundTokenCPUProfileSHA256: podBoundHash(raw), AuditSource: &audittransport.Client{}, AuditSourceIdentity: "audit-source.test"}
+	rm := NewRunManager(cfg)
+	dest, err := rm.SuiteDestination(podBoundTokenCPUConfig)
+	if err != nil || dest.ScopeTenant != podBoundTokenCPUNamespace {
+		t.Fatalf("CPU reviewed destination refused: %+v %v", dest, err)
+	}
+	principal := Principal{Issuer: "https://issuer.example", Subject: "operator", Roles: []Role{RoleOperator}, Tenants: []string{podBoundTokenCPUNamespace}, Targets: []string{hostTargetID, p.Context}}
+	grants, err := ParseGrantPolicy([]byte(`{"version":1,"subjects":[{"issuer":"https://issuer.example","subject":"operator","roles":["operator"],"tenants":["phorvex-catalogue-cpu"],"targets":["default","reviewed-cluster"]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rm.runs["run-1"] = &RunStatus{ID: "run-1", Config: podBoundTokenCPUConfig, State: "running", Owner: principalKey(&principal), ScopeTenant: podBoundTokenCPUNamespace, ScopeTarget: p.Context}
+	rm.podBoundTokenPrincipals["run-1"] = principal
+	s := &Server{runs: rm, auth: &Authenticator{grants: grants}}
+	if err := s.currentPodBoundTokenGrant("run-1"); err != nil {
+		t.Fatalf("CPU grant refused: %v", err)
+	}
+	rm.runs["run-1"].ScopeTenant = "voice"
+	if err := s.currentPodBoundTokenGrant("run-1"); err == nil {
+		t.Fatal("Voice tenant grant substituted for CPU")
+	}
+	p.Namespace = "voice"
+	raw, _ = json.Marshal(p)
+	if _, err := parsePodBoundTokenProfileFor(raw, podBoundTokenCPUConfig); err == nil {
+		t.Fatal("CPU profile accepted Voice namespace")
+	}
+}
+
 func TestPodBoundTokenPreparedRuntimeKeepsTemplateAndCurrentGrant(t *testing.T) {
 	dir := t.TempDir()
 	p := testPodBoundTokenProfile()
@@ -211,6 +258,37 @@ func TestPodBoundTokenMechanismRequiresIndependentControls(t *testing.T) {
 	base.Replay.SourceAfterHTTP = 200
 	if err := validatePodBoundTokenResult(base); err != nil {
 		t.Fatalf("complete negative observation refused: %v", err)
+	}
+}
+
+func TestPodBoundCPUOriginalHandlesNeedBothResponsesBeforeExpiryMargin(t *testing.T) {
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	r := testPodBoundCompleteResult(now)
+	r.CaseID = podBoundTokenCPUCaseID
+	r.Admission.Namespace = podBoundTokenCPUNamespace
+	r.Admission.PDBUID = "pdb-uid"
+	r.Event.Creator = podBoundCreator(podBoundTokenCPUConfig)
+	r.Replay.SourceExpiry = now.Add(60 * time.Second).Format(time.RFC3339Nano)
+	r.Replay.PeerExpiry = now.Add(60 * time.Second).Format(time.RFC3339Nano)
+	r.Replay.SourceBeforeRequestAt = now.Add(time.Second).Format(time.RFC3339Nano)
+	r.Replay.SourceBeforeAt = now.Add(1200 * time.Millisecond).Format(time.RFC3339Nano)
+	r.Replay.PeerBeforeRequestAt = now.Add(1500 * time.Millisecond).Format(time.RFC3339Nano)
+	r.Replay.PeerBeforeAt = now.Add(1700 * time.Millisecond).Format(time.RFC3339Nano)
+	r.Replay.SourceAfterRequestAt = now.Add(6 * time.Second).Format(time.RFC3339Nano)
+	r.Replay.PeerAfterRequestAt = now.Add(6600 * time.Millisecond).Format(time.RFC3339Nano)
+	r.Replay.PeerAfterAt = now.Add(6800 * time.Millisecond).Format(time.RFC3339Nano)
+	if err := validatePodBoundTokenResult(r); err != nil {
+		t.Fatalf("in-margin complete CPU response refused: %v", err)
+	}
+	late := r
+	late.Replay.SourceExpiry = now.Add(36 * time.Second).Format(time.RFC3339Nano)
+	if err := validatePodBoundTokenResult(late); err == nil {
+		t.Fatal("source 401 finished after expiry margin gained response credit")
+	}
+	late = r
+	late.Replay.PeerExpiry = now.Add(36 * time.Second).Format(time.RFC3339Nano)
+	if err := validatePodBoundTokenResult(late); err == nil {
+		t.Fatal("peer 200 finished after expiry margin gained response credit")
 	}
 }
 
@@ -657,6 +735,58 @@ func TestPodBoundTokenProducerRotateWithAuthenticatedAuditSelector(t *testing.T)
 	if err != nil || operation.TerminationStatus != "REQUEST_CONFIRMED" {
 		t.Fatalf("real actuator receipt refused: %+v %v", operation, err)
 	}
+	if os.Getenv("UPDATE_CPU_TOKEN_AUDIT_PROJECTION") == "1" {
+		cpuBase := time.Date(2026, 9, 24, 18, 0, 0, 0, time.UTC)
+		cpuReq := req
+		cpuReq.Namespace = podBoundTokenCPUNamespace
+		cpuReq.CaseID = podBoundTokenCPUCaseID
+		cpuReq.MetricFirstAt = cpuBase.Add(30 * time.Second).Format(time.RFC3339Nano)
+		cpuReq.MetricSecondAt = cpuBase.Add(50 * time.Second).Format(time.RFC3339Nano)
+		cpuReq.RequestedAt = cpuBase.Add(60 * time.Second).Format(time.RFC3339Nano)
+		cpuBarrier := barrier
+		cpuBarrier.Event.Creator = podBoundCreator(podBoundTokenCPUConfig)
+		cpuTrace := trace
+		cpuTrace.Timestamp = cpuBase.Add(65 * time.Second).Format(time.RFC3339Nano)
+		cpuTrace.PolicyNamespace, cpuTrace.AssetNamespace = cpuReq.Namespace, cpuReq.Namespace
+		cpuTrace.Facts = append([]model.DecisionFactV2(nil), trace.Facts...)
+		steering := *trace.Facts[0].SteeredBy
+		steering.Events = append([]model.VectorSteeringEvent(nil), steering.Events...)
+		steering.Events[0].CreatorIdentity = cpuBarrier.Event.Creator
+		cpuTrace.Facts[0].SteeredBy = &steering
+		cpuReceipt := *receipt
+		cpuReceipt.PolicyNamespace = cpuReq.Namespace
+		cpuRec := rec
+		cpuRec.Time = cpuBase.Add(65 * time.Second)
+		cpuRec.Namespace = cpuReq.Namespace
+		cpuRec.DecisionTrace = cpuTrace
+		cpuRec.GracefulTermination = &cpuReceipt
+		cpuRec.Events = append([]model.EventEvidence(nil), rec.Events...)
+		cpuRec.Events[0].CreatorIdentity = cpuBarrier.Event.Creator
+		cpuRaw, marshalErr := json.Marshal(cpuRec)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		cpuDecision, cpuOperation, projectErr := podBoundTypedDecision(cpuRaw, cpuReq, cpuBarrier.Event.UID)
+		if projectErr != nil {
+			t.Fatal(projectErr)
+		}
+		projection, marshalErr := json.Marshal(struct {
+			Raw       json.RawMessage        `json:"raw"`
+			Decision  PodBoundTokenDecision  `json:"decision"`
+			Operation PodBoundTokenOperation `json:"operation"`
+			RowSHA256 string                 `json:"rowSHA256"`
+		}{cpuRaw, cpuDecision, cpuOperation, podBoundHash(cpuRaw)})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		path := filepath.Join("..", "..", "..", "build", "test-harness", "testdata", "pod_bound_token_cpu_positive", "audit-projection.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, projection, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	barrier.RequestSHA256 = podBoundHash(reqRaw)
 	barrier.Decision, barrier.Operation, barrier.DecisionRowSHA = decision, operation, podBoundHash(row)
 	barrierRaw := mongoTestJSON(t, filepath.Join(out, podBoundBarrierFile), barrier)
@@ -809,6 +939,119 @@ func TestPodBoundTokenProducerRotateWithAuthenticatedAuditSelector(t *testing.T)
 			mongoTestJSON(t, filepath.Join(changedOut, podBoundSealFile), s)
 			if got, err := readPodBoundTokenResult(changedOut, r.RunID); err == nil {
 				t.Fatalf("self-consistent adverse producer bytes credited: %+v", got)
+			}
+		})
+	}
+}
+
+func TestPodBoundCPUOriginalPositiveReceiptWithAuthenticatedAudit(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	if err := os.MkdirAll(out, 0700); err != nil {
+		t.Fatal(err)
+	}
+	producer := filepath.Join("..", "..", "..", "build", "test-harness", "testdata", "pod_bound_token_cpu_positive")
+	for _, name := range []string{podBoundRequestFile, podBoundBarrierFile, podBoundObservationEndFile, podBoundObservationCommittedFile, podBoundEventCleanupFile, podBoundReplayFile, podBoundPhaseFile, podBoundArtifactFile, podBoundTerminalFile} {
+		mongoTestWrite(t, filepath.Join(out, name), mustReadPodBoundFile(t, producer, name))
+	}
+	var projection struct {
+		Raw       json.RawMessage        `json:"raw"`
+		Decision  PodBoundTokenDecision  `json:"decision"`
+		Operation PodBoundTokenOperation `json:"operation"`
+		RowSHA256 string                 `json:"rowSHA256"`
+	}
+	if err := json.Unmarshal(mustReadPodBoundFile(t, producer, "audit-projection.json"), &projection); err != nil {
+		t.Fatal(err)
+	}
+	var req podBoundTokenRequest
+	reqRaw, err := readPodBoundJSON(out, podBoundRequestFile, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var barrier podBoundTokenBarrier
+	barrierRaw, err := readPodBoundJSON(out, podBoundBarrierFile, &barrier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.CaseID != podBoundTokenCPUCaseID || req.Namespace != podBoundTokenCPUNamespace || barrier.DecisionRowSHA != podBoundHash(projection.Raw) || barrier.Decision != projection.Decision || barrier.Operation != projection.Operation {
+		t.Fatal("original CPU producer projection changed")
+	}
+	decision, operation, err := podBoundTypedDecision(projection.Raw, req, barrier.Event.UID)
+	if err != nil || decision != projection.Decision || operation != projection.Operation {
+		t.Fatalf("original CPU typed audit row differs: %v decision=%+v projected=%+v operation=%+v projected=%+v", err, decision, projection.Decision, operation, projection.Operation)
+	}
+	sc, sk, cc, ck, ca := m004Certificates(t, dir)
+	auditPath := filepath.Join(dir, "audit.jsonl")
+	mongoTestWrite(t, auditPath, append(append([]byte(nil), projection.Raw...), '\n'))
+	source := audittransport.ServerConfig{AuditPath: auditPath, CertFile: sc, KeyFile: sk, CAFile: ca, ClientDNSName: "audit-console.test"}
+	ts := httptest.NewUnstartedServer(source.Handler())
+	ts.TLS = source.TLSConfig()
+	ts.StartTLS()
+	defer ts.Close()
+	client, err := audittransport.NewClient(audittransport.ClientConfig{URL: ts.URL, ServerDNSName: "audit-source.test", CertFile: cc, KeyFile: ck, CAFile: ca})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := client.Manifest(context.Background())
+	if err != nil || len(manifest.Segments) != 1 {
+		t.Fatalf("local audit manifest: %v", err)
+	}
+	seg := manifest.Segments[0]
+	start := podBoundTokenAuditStart{Schema: "pod-bound-token-audit-start-v1", RunID: req.RunID, Nonce: req.Nonce, SourceIdentity: "fixture-audit-source", Segment: seg, Offset: 0, RequestSHA256: podBoundHash(reqRaw)}
+	mongoTestJSON(t, filepath.Join(out, "pod-bound-token-audit-start.json"), start)
+	var end podBoundTokenObservationEnd
+	endRaw, err := readPodBoundJSON(out, podBoundObservationEndFile, &end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committed podBoundTokenObservationCommitted
+	if _, err := readPodBoundJSON(out, podBoundObservationCommittedFile, &committed); err != nil {
+		t.Fatal(err)
+	}
+	committed.RequestSHA256, committed.BarrierSHA256, committed.ObservationEndSHA256 = podBoundHash(reqRaw), podBoundHash(barrierRaw), podBoundHash(endRaw)
+	committed.Commitment = audittransport.ExactWindowCommitment{Segment: seg, StartOffset: 0, EndOffset: seg.Size, WindowSHA256: podBoundHash(append(append([]byte(nil), projection.Raw...), '\n')), CapturedAtUnixNano: time.Date(2026, 9, 24, 18, 1, 42, 0, time.UTC).UnixNano()}
+	// The commitment is a console-owned authenticated ACK, never a producer
+	// artifact. All producer-authored request, replay, phase, barrier, end,
+	// artifact and terminal bytes remain unchanged from testdata.
+	mongoTestJSON(t, filepath.Join(out, podBoundObservationCommittedFile), committed)
+	rm := &RunManager{cfg: Config{AuditSource: client, AuditSourceIdentity: "fixture-audit-source"}}
+	if err := rm.sealPodBoundTokenAudit(req.RunID, out); err != nil {
+		t.Fatalf("authenticated CPU audit seal refused: %v", err)
+	}
+	result, err := readPodBoundTokenResult(out, req.RunID)
+	if err != nil || !result.MechanismObserved || result.CaseID != podBoundTokenCPUCaseID || result.Replay.SourceAfterHTTP != 401 || result.Replay.PeerAfterHTTP != 200 {
+		t.Fatalf("unchanged CPU original positive receipt refused: %+v %v", result, err)
+	}
+	var original podBoundTokenArtifact
+	if _, err := readPodBoundJSON(out, podBoundArtifactFile, &original); err != nil {
+		t.Fatal(err)
+	}
+	beforeMonitor := req
+	beforeMonitor.MetricFirstAt = time.Date(2026, 9, 24, 18, 0, 20, 0, time.UTC).Format(time.RFC3339Nano)
+	if err := verifyPodBoundPhaseJournal(out, beforeMonitor, barrier, original); err == nil {
+		t.Fatal("metric sample before owned PodMonitor ACK accepted")
+	}
+	for _, tc := range []struct{ name, old, new string }{{"late source response", `"at":"2026-09-24T18:01:20Z","captureID"`, `"at":"2026-09-24T18:20:00Z","captureID"`}, {"recaptured source handle", `"captureID":"` + req.SourceCaptureID + `"`, `"captureID":"` + strings.Repeat("f", 32) + `"`}} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := t.TempDir()
+			entries, e := os.ReadDir(out)
+			if e != nil {
+				t.Fatal(e)
+			}
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				mongoTestWrite(t, filepath.Join(changed, entry.Name()), mustReadPodBoundFile(t, out, entry.Name()))
+			}
+			raw := string(mustReadPodBoundFile(t, changed, podBoundReplayFile))
+			modified := strings.Replace(raw, tc.old, tc.new, 1)
+			if modified == raw {
+				t.Fatal("adverse original replay marker absent")
+			}
+			mongoTestWrite(t, filepath.Join(changed, podBoundReplayFile), []byte(modified))
+			if _, e := readPodBoundTokenResult(changed, req.RunID); e == nil {
+				t.Fatal("altered original CPU replay accepted")
 			}
 		})
 	}

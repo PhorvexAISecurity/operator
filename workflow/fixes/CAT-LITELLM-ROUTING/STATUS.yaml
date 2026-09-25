@@ -1,0 +1,923 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 88
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 27617495cafbe6ff388ce859693d75a016c0053dfcf911990a14e37a42b8fdb1
+    source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+    at: '2026-09-25T11:14:37+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Existing campaign and owner conflict repair scope; publication packaging
+      only; no behavior or evidence waiver
+  red:
+    result: PASS
+    by: stack-case-review
+    artifact: evidence/observed-reply-red.md
+    sha256: 9800b19be1f888b6e8c0f51d2791d67910a97eddd38b49661e3310aa2913e309
+    source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+    at: '2026-09-25T03:52:11+00:00'
+  preflight:
+    result: PASS
+    by: stack-case-review
+    artifact: evidence/preflight/combined-2d39-receipt.json
+    sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:28:47+00:00'
+  implementation:
+    result: PASS
+    by: stack-case-review
+    artifact: 04-diff.patch
+    sha256: 48d92033835af3290b6d702387d6cb434aa1436c79ead6a66d6887b62299ee15
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:16:28+00:00'
+  l0:
+    result: PASS
+    by: stack-case-review
+    artifact: evidence/preflight/run-1790335110375174641/go-phorvex.log
+    sha256: 91a4096cf5cfa8ac50e652706fe8ac03f99091b7a0787e12af36f7a2ed8d473c
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:27:45+00:00'
+  l1:
+    result: PASS
+    by: stack-case-review
+    artifact: evidence/consolidation/focused-controls-2d39.log
+    sha256: bce34fe82be2838e44bc6c6c6ac5b861e66b77338eaf47adaa24b6ac8b4f8a08
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:27:55+00:00'
+  l2:
+    result: PASS
+    by: stack-case-review
+    artifact: evidence/consolidation/focused-controls-2d39.log
+    sha256: bce34fe82be2838e44bc6c6c6ac5b861e66b77338eaf47adaa24b6ac8b4f8a08
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:28:01+00:00'
+  positive_control:
+    result: PASS
+    by: stack-case-review
+    artifact: evidence/consolidation/combined-worker-checks.md
+    sha256: da975ab6789a8bf907549c82199dd738deb14b8f559a5d80eab8c412d3d94c4c
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:28:06+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 9f07da457bd06bde139c45a2f904ea03966240bb5e825a08ed1490816a1e510b
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:08+00:00'
+    baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 06adf1cfc9d58373e0835d9e78780279bf24ef987e389372115c6d6e9b472741
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:09+00:00'
+    incident_sha256: 9f07da457bd06bde139c45a2f904ea03966240bb5e825a08ed1490816a1e510b
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/consolidation/publication-equivalence.json
+    sha256: b3ac41b80c786505b8aaa71c1a21c2e32a0befe342496ded79e8a2a620618a01
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:31:46+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/consolidation/base-review.md
+    sha256: 540acf83a089083474b5559e1d63cfd5dc36991f06a3d5de9b1766415c132f3a
+    source_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+    at: '2026-09-25T11:14:38+00:00'
+    baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+fix_id: CAT-LITELLM-ROUTING
+issues: []
+title: Add installed LiteLLM inference routing catalogue control
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: stack-case-review
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-litellm-routing-20260925
+  code_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-litellm-routing-20260925
+  base_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+  head_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/338
+  reviewed_head: cf010ee147061e33bf81d7bf5d6a4ee4c10e82a0
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Publish consolidated PR338; close superseded PR339–341 after verifying all
+    commits are present; deployment/configuration/live checks remain pending
+updated_at: '2026-09-25T11:31:48+00:00'
+configuration_history:
+- at: '2026-09-25T00:57:02+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-25T00:57:04+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-25T01:47:54+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T02:30:25+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T03:28:51+00:00'
+  by: codex-lead
+  fields:
+  - roles
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-25T03:47:04+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T04:09:23+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T04:51:56+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T05:10:50+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T11:04:27+00:00'
+  by: stack-case-review
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T11:14:35+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:31:46+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-25T00:57:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T00:57:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T01:47:55+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T01:47:57+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T02:22:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T02:22:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T02:30:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-25T03:50:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T04:07:00+00:00'
+  by: stack-case-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T04:07:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T04:07:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T04:09:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-25T04:54:28+00:00'
+  by: codex-lead
+  artifact: evidence/main-integration-lead-pending.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T05:30:06+00:00'
+  by: stack-case-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-25T11:16:51+00:00'
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T11:28:47+00:00'
+  by: stack-case-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T11:29:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T11:29:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T11:31:48+00:00'
+  by: codex-lead
+  artifact: evidence/consolidation/publication-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-LITELLM-ROUTING:85:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 85
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 905356d053fa1b95e50da19df14cb7f5ce8e80ff80f159b5a53374891f75185c
+  source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  at: '2026-09-25T00:57:08+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+- check: implementation
+  result: PASS
+  by: litellm-cases
+  artifact: 04-diff.patch
+  sha256: e4dfbdcf61c5388717d71b4f0def4a034aa894a486ff359f90e3255e7b67234f
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T01:47:54+00:00'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 87ae9239dfea37e80806886fd550962e38b2e821326645730f04a101ac5eae10
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T02:22:24+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: f5e9a36bc2e872ed3001a8e00c2042f2665a047d62dadb4215b54577c38696f7
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T02:22:24+00:00'
+  incident_sha256: 87ae9239dfea37e80806886fd550962e38b2e821326645730f04a101ac5eae10
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.md
+  sha256: 0a3f13ce918d8b60825e199f03f0ef369a3da4ef997645347f35c1b4bb3b9fb4
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T02:29:14+00:00'
+- check: preflight
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/preflight/receipt.json
+  sha256: 40cbc36c12471930eaa4bd7abff1e75ed3435d8df2a69b0930061b87b77be7d5
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T01:47:54+00:00'
+- check: red
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-red.md
+  sha256: 08d6b15837e133dab71d3c2f0b564116e9a3bd6c895363b7d896bddba1f931ff
+  source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  at: '2026-09-25T01:47:43+00:00'
+- check: l0
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/preflight/receipt.json
+  sha256: 40cbc36c12471930eaa4bd7abff1e75ed3435d8df2a69b0930061b87b77be7d5
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T01:47:54+00:00'
+  inputs:
+  - dashboard-web
+  - deploy/helm
+  - phorvex
+  - tools
+  - workflow
+  inputs_sha256: 117c50fb3e39e511243446d58901a4d78a1cc5a69dd682067b577b748f4febca
+- check: l1
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: aab175a818802ce9becee5505d6b1285e31cede6721d8e2edc5b66d1335e8891
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T01:47:55+00:00'
+  inputs:
+  - phorvex/internal/cataloguev1
+  inputs_sha256: c44939877730e43582ec940b1a2545764741418d4c202dbba2e17dd317d23dcc
+- check: l2
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: aab175a818802ce9becee5505d6b1285e31cede6721d8e2edc5b66d1335e8891
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T01:47:55+00:00'
+  inputs:
+  - dashboard-web
+  - phorvex/internal/cataloguev1
+  - phorvex/internal/console
+  inputs_sha256: a85844937976c8d546ec9184109db93a78af70c0e2fd1ccb0e613f6402cb02cd
+- check: positive_control
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: aab175a818802ce9becee5505d6b1285e31cede6721d8e2edc5b66d1335e8891
+  source_sha: 8a60ea8afea1dafe118adde90a0c50e65e413eb5
+  at: '2026-09-25T01:47:55+00:00'
+  inputs:
+  - phorvex/internal/cataloguev1
+  inputs_sha256: c44939877730e43582ec940b1a2545764741418d4c202dbba2e17dd317d23dcc
+- check: l1
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: ef68ab85a67dd788e879a2882c7cf8677f1ac71c7d7d47a0fcc6a4d95bcd634e
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:52:28+00:00'
+- check: l2
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: ef68ab85a67dd788e879a2882c7cf8677f1ac71c7d7d47a0fcc6a4d95bcd634e
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:52:28+00:00'
+- check: positive_control
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: ef68ab85a67dd788e879a2882c7cf8677f1ac71c7d7d47a0fcc6a4d95bcd634e
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:52:28+00:00'
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/preflight/observed-reply-receipt.json
+  sha256: af8114605ae11eb4d5ba5c971981e5611aae045a16219d1fd7f46291b72606b2
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:52:01+00:00'
+- check: incident
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 87ae9239dfea37e80806886fd550962e38b2e821326645730f04a101ac5eae10
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:50:25+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: f5e9a36bc2e872ed3001a8e00c2042f2665a047d62dadb4215b54577c38696f7
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:50:25+00:00'
+- check: patch_equivalence
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/amendment-review-pending.md
+  sha256: 2902e870325d10bc0f6dd422c04a23c004be01109e9ff4b35f3f45a6534409b6
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:50:25+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: f683828b06654df52817e28e8c4d546da31377047157303bdded978768b45fd6
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:47:11+00:00'
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/observed-reply-pass-receipt.json
+  sha256: 0feebece46eb9562acc6599b91049c3f5a87ffcacd9f99ea35d1cc0e6c2ef107
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:07:00+00:00'
+- check: l0
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/run-1790307781245064580/go-phorvex.log
+  sha256: 7f4458a931b1f9fb77184c1f783f0968313e25d14710d266c96f6c3a3d63aa9f
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:52:18+00:00'
+- check: l1
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:54:28+00:00'
+- check: l2
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:54:29+00:00'
+- check: positive_control
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/observed-reply-worker-checks.md
+  sha256: 85365fcb6f37eee0b654f8d91abfe540dce351ad2d5adee8d1c6a78a94490020
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T03:54:29+00:00'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:07:51+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:07:51+00:00'
+  incident_sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/amendment-publication-equivalence.json
+  sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
+  source_sha: bde511670bb2a8db7699d4eb44784993a0fb22e4
+  at: '2026-09-25T04:09:07+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: 0ea6d3a9ef71ddc77d4b679e9bb9980b3d68ca452a7098c9a43284f75a9c0b48
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:07+00:00'
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/merge-main-validation-pending.md
+  sha256: e1999a62ecd97604058cb28133f7411fe482605ae2e28e875d44a807ecd138ac
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:52:24+00:00'
+  rationale: Merge integration changed source to 850ce807; fresh selected validation
+    is pending
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/ec51-selected-receipt.json
+  sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:29:06+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: edb33ac1fb917b010a769361025ab00b69675bb10747088810b72586ec784603
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:07+00:00'
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/ec51-selected-receipt.json
+  sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:30:05+00:00'
+- check: l0
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/ec51-go-phorvex-fixed-toolchain.log
+  sha256: e8f00de8f02b72c82ef7dfa4da3cfa15bca738d78652e262fba386b07dc476f8
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:19:15+00:00'
+- check: l1
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/ec51-worker-checks.md
+  sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:20:48+00:00'
+- check: l2
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/ec51-worker-checks.md
+  sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:20:48+00:00'
+- check: positive_control
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/ec51-worker-checks.md
+  sha256: 347ae2d2f809ba67a2c980135e45adcece1c409a853e87cd48a3f058831df765
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:20:48+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: d8a0e2d7d606406a1787cbe40399355696037c4c32802653b0010f025b016473
+  source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  at: '2026-09-25T03:29:08+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: Existing campaign delegation covers source-grounded compatibility correction
+    and reassignment of implementation worker; prior decision retained; no new human
+    approval or evidence waiver
+- check: base_review
+  result: PASS
+  by: codex-lead
+  artifact: evidence/main-base-review.md
+  sha256: af48248e11ffb5d31e6978764e6446d01ba5f05f0ef384b7ec3ae2729fd048ca
+  source_sha: c4d20703e828b638ba4b9c83fd6ed6d596b3674c
+  at: '2026-09-25T04:54:28+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: incident
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:53:20+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:53:21+00:00'
+- check: patch_equivalence
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/amendment-publication-equivalence.json
+  sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
+  source_sha: 850ce8074c8bb67acc8b3cb6d70b1489629f917f
+  at: '2026-09-25T04:53:21+00:00'
+- check: implementation
+  result: PASS
+  by: stack-case-review
+  artifact: 04-diff.patch
+  sha256: f3afc28dca97a41d772306316016ec6c70041eb422cd92f468e7f1ec3a24db36
+  source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+  at: '2026-09-25T11:04:48+00:00'
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/release-tag-validation-pending.md
+  sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+  source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+  at: '2026-09-25T11:04:48+00:00'
+  rationale: ec51 source evidence retained in check history; exact release-tag merge
+    head requires new attestation
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/release-tag-validation-pending.md
+  sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+  source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+  at: '2026-09-25T11:04:48+00:00'
+  rationale: ec51 source evidence retained in check history; exact release-tag merge
+    head requires new attestation
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/release-tag-validation-pending.md
+  sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+  source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+  at: '2026-09-25T11:04:48+00:00'
+  rationale: ec51 source evidence retained in check history; exact release-tag merge
+    head requires new attestation
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/release-tag-validation-pending.md
+  sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+  source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+  at: '2026-09-25T11:04:49+00:00'
+  rationale: ec51 source evidence retained in check history; exact release-tag merge
+    head requires new attestation
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/release-tag-validation-pending.md
+  sha256: bddfd8739bf4f5986652693492560759313399df3f11048425ccf474c0534631
+  source_sha: da851b61de7abfd4d15161a886f4995f4c140d35
+  at: '2026-09-25T11:04:49+00:00'
+  rationale: ec51 source evidence retained in check history; exact release-tag merge
+    head requires new attestation
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:39+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:39+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:40+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:40+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:40+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/combined-2d39-receipt.json
+  sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:27:39+00:00'
+- check: incident
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:38+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:38+00:00'
+- check: patch_equivalence
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/amendment-publication-equivalence.json
+  sha256: 8db395567061e26feec0a7cfc88d5dd9f83afe44057d52e83a8e48620ce963e9
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:38+00:00'

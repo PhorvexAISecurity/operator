@@ -1,0 +1,158 @@
+{{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+{{- if not .Values.phorvex.console.enabled }}{{ fail "podBoundTokenCPU requires console.enabled" }}{{ end }}
+{{- if ne .Release.Name "phorvex" }}{{ fail "podBoundTokenCPU fixed creator requires release name phorvex" }}{{ end }}
+{{- if ne .Release.Namespace "phorvex-system" }}{{ fail "podBoundTokenCPU fixed creator requires release namespace phorvex-system" }}{{ end }}
+{{- if not .Values.phorvex.eventIdentityPolicy.enabled }}{{ fail "podBoundTokenCPU requires the SecurityEvent creator identity admission guard" }}{{ end }}
+{{- if not .Values.phorvex.console.podBoundTokenCPU.scrapeApproved }}{{ fail "podBoundTokenCPU requires explicit reviewed PodMonitor scrape approval" }}{{ end }}
+{{- if ne .Values.phorvex.console.podBoundTokenCPU.scrapeNamespace "phorvex-catalogue-cpu" }}{{ fail "podBoundTokenCPU scrape namespace must be phorvex-catalogue-cpu" }}{{ end }}
+{{- if ne .Values.phorvex.console.podBoundTokenCPU.podSelectorLabel "fixture.phorvex.ai/token-response" }}{{ fail "podBoundTokenCPU PodMonitor must select the fixed nonce label" }}{{ end }}
+{{- if not .Values.phorvex.prometheusUrl }}{{ fail "podBoundTokenCPU requires the manager Prometheus URL" }}{{ end }}
+{{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor") }}{{ fail "podBoundTokenCPU requires the installed PodMonitor API" }}{{ end }}
+{{- $ledger := .Values.phorvex.console.podBoundTokenCPU.quarantineCapacityLedgerName }}
+{{- if not (regexMatch "^phorvex-quarantine-capacity-[0-9a-f]{40}$" $ledger) }}{{ fail "podBoundTokenCPU requires an exact reviewed quarantineCapacityLedgerName" }}{{ end }}
+---
+# The console launches the in-cluster harness under its own ServiceAccount.
+# Kubernetes RBAC cannot scope these generated names by nonce; the fixed case
+# journals each create and verifies exact UID preconditions at cleanup.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-fixture
+  namespace: phorvex-catalogue-cpu
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "update", "delete"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["services", "serviceaccounts"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list", "watch", "delete"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["podmonitors"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["create", "get", "list", "delete"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["adaptivemovingtargetdefenses"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-fixture
+  namespace: phorvex-catalogue-cpu
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-fixture
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The console verifies the installed E2E creator's admission guard before it
+# requests a token. These policies are cluster-scoped, so a namespaced Role
+# cannot grant the two exact GETs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator-policy-read
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: [{{ printf "%s-e2e-detector-cpu" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator-policy-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator-policy-read
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The console may mint a short-lived token only for the existing admitted
+# E2E creator. That token carries event CREATE/GET/DELETE from e2e-detector's
+# separate ClusterRole and remains subject to both admission policies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  resourceNames: [{{ printf "%s-e2e-detector-cpu" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  resourceNames: [{{ printf "%s-e2e-detector-cpu" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The harness derives the protected reservation name from the live CPU fixture
+# Namespace UID. The reviewed value limits this read to that single ledger.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-capacity-ledger
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ $ledger | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-capacity-ledger
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-capacity-ledger
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

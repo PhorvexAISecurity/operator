@@ -104,6 +104,10 @@ func main() {
 		digest := sha256.Sum256(raw)
 		cfg.ProfileSHA256 = hex.EncodeToString(digest[:])
 	}
+	if cfg.GuardrailAvailabilityFixture != nil {
+		fmt.Fprintln(os.Stderr, "ERROR: guardrail availability is a console-owned named run; direct harness execution is refused")
+		os.Exit(2)
+	}
 	if cfg.NATSExposureFixture != nil && (*natsSafetyID != cfg.NATSExposureFixture.RunID || filepath.Clean(*natsSafetyOut) != filepath.Clean(cfg.OutDir)) {
 		fmt.Fprintln(os.Stderr, "ERROR: NATS safety receipt destination differs from generated run config")
 		os.Exit(2)
@@ -586,7 +590,7 @@ func runPodBoundTokenCase(ctx context.Context, cfg config.TargetConfig, clients 
 	}
 	defer func() { runErr = errors.Join(runErr, closeLogger(logger)) }()
 	env := &core.Env{Ctrl: clients.Ctrl, Kube: clients.Kube, Rest: clients.Rest, Config: cfg,
-		Caps: caps, Log: logger, Guard: guard, Trial: 0, ScenarioName: "c2-pod-bound-api-auth-response",
+		Caps: caps, Log: logger, Guard: guard, Trial: 0, ScenarioName: config.PodBoundTokenCaseID(cfg.Namespace),
 		DefenderName: "injected-response", RestConfigHost: clients.LiveHost}
 	if err := env.EnsureNamespace(ctx); err != nil {
 		return err

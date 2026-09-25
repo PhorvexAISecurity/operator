@@ -47,14 +47,22 @@ type Config struct {
 	// GuardrailStaticEnabled and its digest admit only the reviewed named YAML.
 	GuardrailStaticEnabled       bool
 	GuardrailStaticProfileSHA256 string
+	// GuardrailAvailabilityEnabled admits only the separately reviewed, injected
+	// availability comparison profile. It is disabled unless explicitly mounted.
+	GuardrailAvailabilityEnabled       bool
+	GuardrailAvailabilityProfileSHA256 string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool
 	// PodBoundTokenProfileSHA256 is the installation-reviewed digest of the
 	// read-only named profile, independent of that profile's own manifest pin.
 	PodBoundTokenProfileSHA256 string
-	Addr                       string // http listen address
-	Web                        string // static SPA dir (dashboard-web/out) served at / alongside /api
+	// CPU Pod-bound token control is an independently pinned, default-off
+	// namespace and creator. Its profile cannot authorize the Voice case.
+	PodBoundTokenCPUEnabled       bool
+	PodBoundTokenCPUProfileSHA256 string
+	Addr                          string // http listen address
+	Web                           string // static SPA dir (dashboard-web/out) served at / alongside /api
 	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
 	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
 	MetricsAllow []string
@@ -143,6 +151,10 @@ type CatalogueV1Config struct {
 	LiteLLMConfigMap            string
 	LiteLLMConfigKey            string
 	LiteLLMConfigSHA256         string
+	LiteLLMInferenceEnabled     bool
+	LiteLLMModelAlias           string
+	MCPVoiceModelEnabled        bool
+	MCPVoiceSourceSHA256        string
 	CRMEnabled                  bool
 	CRMNamespace                string
 	CRMServiceAccountName       string

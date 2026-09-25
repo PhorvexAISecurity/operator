@@ -1,0 +1,491 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 28
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e596a9f18a05957273d14adaaf6a29516dcfd51ab829d8982178a80dd3d42cc4
+    source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+    at: '2026-09-25T11:14:46+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+    rationale: Existing campaign and owner conflict repair scope; publication packaging
+      only; no behavior or evidence waiver
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root/red.md
+    sha256: 0c91bd618de960904ca25c366124fd14cd809608c73d0e22ff50cc7594e0e6d4
+    source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+    at: '2026-09-25T04:11:16+00:00'
+  preflight:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/combined-2d39-receipt.json
+    sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:35+00:00'
+  implementation:
+    result: PASS
+    by: litellm-cases
+    artifact: 04-diff.patch
+    sha256: 48d92033835af3290b6d702387d6cb434aa1436c79ead6a66d6887b62299ee15
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:17:04+00:00'
+  l0:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/preflight/combined-2d39-receipt.json
+    sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:35+00:00'
+    inputs:
+    - build/test-harness
+    - dashboard-web
+    - deploy/helm
+    - phorvex
+    - workflow
+    inputs_sha256: ee10dc74c947e2a697216758221ac15b2c582ab9cc57c54da30a441b03330734
+  l1:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/consolidation/cpu-combined-validation.md
+    sha256: 9188bcf675f3cea519e948297c91a3a3e65d9a284006847b539135c000eab6c1
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:35+00:00'
+    inputs:
+    - build/test-harness
+    - dashboard-web
+    - phorvex/charts/phorvex
+    - phorvex/internal/console
+    inputs_sha256: d6eea8947869477bd5af7c5cf3dd259e15c2a8ef01b646bf1187f951d50c88a9
+  l2:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/consolidation/cpu-combined-validation.md
+    sha256: 9188bcf675f3cea519e948297c91a3a3e65d9a284006847b539135c000eab6c1
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:35+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    - build/test-harness/testdata/pod_bound_token_cpu_positive
+    - phorvex/internal/audittransport
+    - phorvex/internal/console
+    inputs_sha256: 06414815a44593f406e456476ebae86f164f0b96bbb5ec9dea3483282e16be0f
+  positive_control:
+    result: PASS
+    by: litellm-cases
+    artifact: evidence/consolidation/cpu-combined-validation.md
+    sha256: 9188bcf675f3cea519e948297c91a3a3e65d9a284006847b539135c000eab6c1
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:29:35+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    - build/test-harness/testdata/pod_bound_token_cpu_positive
+    - phorvex/internal/audittransport
+    - phorvex/internal/console
+    inputs_sha256: 06414815a44593f406e456476ebae86f164f0b96bbb5ec9dea3483282e16be0f
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 352be1cee7527027def922d6f82de9c8006682ae234c1ddd79b021043c2a0de1
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:30:00+00:00'
+    baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f06b4d4b04fe70e5e8d8c36dbd4ac9f05df11a3df4ec6ddb92d36b0596888c51
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:30:00+00:00'
+    incident_sha256: 352be1cee7527027def922d6f82de9c8006682ae234c1ddd79b021043c2a0de1
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/consolidation/publication-equivalence.json
+    sha256: b3ac41b80c786505b8aaa71c1a21c2e32a0befe342496ded79e8a2a620618a01
+    source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+    at: '2026-09-25T11:32:01+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/consolidation/base-review.md
+    sha256: 1f6d21887e5f7c45ce8462a50026eb8a53e333b42010c210844768d8cced174d
+    source_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+    at: '2026-09-25T11:14:47+00:00'
+    baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+fix_id: CAT-CPU-TOKEN-RESPONSE
+issues: []
+title: Add isolated CPU Pod-bound credential response catalogue case
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: litellm-cases
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: campaign/catalogue-cpu-token-response-20260925
+  code_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: campaign/catalogue-litellm-routing-20260925
+  base_sha: 19f29bd630b329bc535f4d55948ad0fe1fa93873
+  head_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/338
+  reviewed_head: cf010ee147061e33bf81d7bf5d6a4ee4c10e82a0
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Publish consolidated PR338; close superseded PR339–341 after verifying all
+    commits are present; deployment/configuration/live checks remain pending
+updated_at: '2026-09-25T11:32:03+00:00'
+configuration_history:
+- at: '2026-09-25T03:09:19+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-25T04:19:28+00:00'
+  by: litellm-cases
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T04:22:31+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:14:44+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:32:01+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-25T03:09:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T03:09:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T04:19:29+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T04:19:31+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T04:20:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T04:20:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T04:22:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-25T11:17:52+00:00'
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  note: Combined source is implemented; prior CPU worker checks are retained as superseded
+    and unavailable
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T11:29:36+00:00'
+  by: litellm-cases
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T11:30:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T11:30:04+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T11:32:03+00:00'
+  by: codex-lead
+  artifact: evidence/consolidation/publication-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-CPU-TOKEN-RESPONSE:25:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 25
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 833b7dc4b10089add3cc4e77a8f98a57e0e93d3adadf1b856c775024f0c15e37
+  source_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+  at: '2026-09-25T03:09:34+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:20:23+00:00'
+  baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: e79469b529ec11616088c9de7b0e2fe7f0e85fc9eddf88b649a17ed191aaaccf
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:20:23+00:00'
+  incident_sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/publication-equivalence.json
+  sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:21:06+00:00'
+- check: implementation
+  result: PASS
+  by: litellm-cases
+  artifact: 04-diff.patch
+  sha256: 2f0ee997c9d1a6181a7b79874ea6b32ed0e94601e43ec91a727b735fcc1deb9c
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+- check: preflight
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/preflight/receipt.json
+  sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+- check: l0
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/preflight/receipt.json
+  sha256: 5ed66ea20e38c56c16b57dbed6556f1bbf6db9359f4c65510761afdb6046671b
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - deploy/helm
+  - phorvex
+  - workflow
+  inputs_sha256: 60fa136529c891e3101f8655092e01d7ae39123647b4f9abbe390f28288cea5d
+- check: l1
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - build/test-harness
+  - dashboard-web
+  - phorvex/charts/phorvex
+  - phorvex/internal/console
+  inputs_sha256: 82aec4fab6228c150bafba1efeaac519db9f0e2fd0dd7a6d2901e0f657c2b05f
+- check: l2
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - build/test-harness/scenarios
+  - build/test-harness/testdata/pod_bound_token_cpu_positive
+  - phorvex/internal/console
+  inputs_sha256: 7587f6e5a6120a59d854e45bfd5047d63e73729edb8b4de038b86c18e678c275
+- check: positive_control
+  result: PASS
+  by: litellm-cases
+  artifact: evidence/worker-checks.md
+  sha256: 48ddf7c17d3d0a0f4062043da25173c192ae4f736b601f326cabaa04272b291f
+  source_sha: 56226445bacfb80ad3883add2df4c986edcd7683
+  at: '2026-09-25T04:19:29+00:00'
+  inputs:
+  - build/test-harness/testdata/pod_bound_token_cpu_positive
+  - phorvex/internal/console
+  inputs_sha256: 9cf034136c415f13b3184a2c4f3e1a251729c4fd857f4c42fbc002bf13a3063b
+- check: preflight
+  result: UNAVAILABLE
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:40+00:00'
+  rationale: Prior source-pinned result preserved in check_history; no combined-source
+    rerun claimed
+- check: l0
+  result: UNAVAILABLE
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:41+00:00'
+  rationale: Prior source-pinned result preserved in check_history; no combined-source
+    rerun claimed
+- check: l1
+  result: UNAVAILABLE
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:41+00:00'
+  rationale: Prior source-pinned result preserved in check_history; no combined-source
+    rerun claimed
+- check: l2
+  result: UNAVAILABLE
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:41+00:00'
+  rationale: Prior source-pinned result preserved in check_history; no combined-source
+    rerun claimed
+- check: positive_control
+  result: UNAVAILABLE
+  by: litellm-cases
+  artifact: evidence/consolidation/worker-checks-superseded.md
+  sha256: d0864233cd311549e75aafe0adf7daa0fae829202e5849554d46d9c707aa542e
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:41+00:00'
+  rationale: Prior source-pinned result preserved in check_history; no combined-source
+    rerun claimed
+- check: incident
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 936acc12c0f7aacd0ee86122d4fd550f39895f82229c6a9967b97fd9b9815b5b
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:47+00:00'
+  baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+- check: p3
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: e79469b529ec11616088c9de7b0e2fe7f0e85fc9eddf88b649a17ed191aaaccf
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:47+00:00'
+- check: patch_equivalence
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/publication-equivalence.json
+  sha256: 5eb97f38222bdb4eaf0e1ac4826b67cfdd17fe68dafc14dfd7144c7125e035b3
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:47+00:00'

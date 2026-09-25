@@ -138,27 +138,36 @@ func podTokenAPIClient(restConfig *rest.Config) (*http.Client, string, error) {
 	return &http.Client{Transport: transport, Timeout: 4 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, strings.TrimRight(cfg.Host, "/"), nil
 }
 func podTokenReplayAPI(ctx context.Context, env *core.Env, h podTokenHandle, peerName string) (int, time.Time, error) {
+	status, _, end, err := podTokenReplayAPIWindow(ctx, env, h, peerName)
+	return status, end, err
+}
+
+// The start and completed response time are both needed for a before-expiry
+// credential observation. A socket return time before body drain is insufficient.
+func podTokenReplayAPIWindow(ctx context.Context, env *core.Env, h podTokenHandle, peerName string) (int, time.Time, time.Time, error) {
 	if h.token == "" || h.captureID == "" || h.podUID == "" {
-		return 0, time.Time{}, errors.New("Pod token capture handle absent")
+		return 0, time.Time{}, time.Time{}, errors.New("Pod token capture handle absent")
 	}
 	client, host, err := podTokenAPIClient(env.Rest)
 	if err != nil {
-		return 0, time.Time{}, err
+		return 0, time.Time{}, time.Time{}, err
 	}
 	url := host + "/api/v1/namespaces/" + env.Config.Namespace + "/pods/" + peerName
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, time.Time{}, err
+		return 0, time.Time{}, time.Time{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+h.token)
+	start := time.Now().UTC()
 	resp, err := client.Do(req)
-	at := time.Now().UTC()
 	if err != nil {
-		return 0, at, errors.New("Pod token API replay transport failed")
+		return 0, start, time.Now().UTC(), errors.New("Pod token API replay transport failed")
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
-	return resp.StatusCode, at, nil
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 2048)); err != nil {
+		return 0, start, time.Now().UTC(), errors.New("Pod token API replay body incomplete")
+	}
+	return resp.StatusCode, start, time.Now().UTC(), nil
 }
 func podTokenHTTPClient() *http.Client {
 	return &http.Client{Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -250,13 +259,13 @@ type podTokenPromResult struct {
 	} `json:"data"`
 }
 
-func podTokenPromQuery(ctx context.Context, base, expression, pod, nonce string) (float64, []byte, error) {
+func podTokenPromQuery(ctx context.Context, base, expression, namespace, pod, nonce, podUID string, evaluation time.Time, sourceLabels bool) (float64, []byte, error) {
 	parsed, err := url.Parse(base)
 	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 		return 0, nil, errors.New("Pod token Prometheus URL invalid")
 	}
 	parsed.Path = "/api/v1/query"
-	parsed.RawQuery = url.Values{"query": {expression}}.Encode()
+	parsed.RawQuery = url.Values{"query": {expression}, "time": {strconv.FormatFloat(float64(evaluation.UnixNano())/float64(time.Second), 'f', 6, 64)}}.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
 	if err != nil {
 		return 0, nil, err
@@ -276,8 +285,12 @@ func podTokenPromQuery(ctx context.Context, base, expression, pod, nonce string)
 		return 0, raw, errors.New("Pod token Prometheus series missing or ambiguous")
 	}
 	row := p.Data.Result[0]
-	if row.Metric["pod"] != pod || len(row.Value) != 2 {
+	if row.Metric["pod"] != pod || len(row.Value) != 2 ||
+		(sourceLabels && (row.Metric["namespace"] != namespace || row.Metric["nonce"] != nonce)) {
 		return 0, raw, errors.New("Pod token Prometheus Pod series differs")
+	}
+	if podUID != "" && row.Metric["pod_uid"] != podUID {
+		return 0, raw, errors.New("CPU token Prometheus source UID differs")
 	}
 	if label := row.Metric["nonce"]; label != "" && label != nonce {
 		return 0, raw, errors.New("Pod token Prometheus nonce differs")
@@ -285,6 +298,10 @@ func podTokenPromQuery(ctx context.Context, base, expression, pod, nonce string)
 	value, ok := row.Value[1].(string)
 	if !ok {
 		return 0, raw, errors.New("Pod token Prometheus value shape differs")
+	}
+	returnedAt, ok := row.Value[0].(float64)
+	if !ok || math.Abs(returnedAt-float64(evaluation.UnixNano())/float64(time.Second)) > 0.000002 {
+		return 0, raw, errors.New("Pod token Prometheus evaluation time differs")
 	}
 	number, err := strconv.ParseFloat(value, 64)
 	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
@@ -295,16 +312,40 @@ func podTokenPromQuery(ctx context.Context, base, expression, pod, nonce string)
 func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture) (time.Time, float64, string, error) {
 	nonce := env.Config.PodBoundTokenFixture.Nonce
 	pod := f.source.Name
-	selector := `http_requests_total{namespace="voice",pod="` + pod + `",nonce="` + nonce + `"}`
-	timestampRaw, partA, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", pod, nonce)
+	ns := env.Config.Namespace
+	uid := ""
+	if ns == "phorvex-catalogue-cpu" {
+		uid = string(f.source.UID)
+		if uid == "" {
+			return time.Time{}, 0, "", errors.New("CPU token metric source Pod UID absent")
+		}
+	}
+	selector := `http_requests_total{namespace="` + ns + `",pod="` + pod + `",nonce="` + nonce + `"`
+	if uid != "" {
+		selector += `,pod_uid="` + uid + `"`
+	}
+	selector += `}`
+	evaluation := time.Now().UTC()
+	timestampRaw, partA, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", ns, pod, nonce, uid, evaluation, true)
 	if err != nil {
 		return time.Time{}, 0, "", err
 	}
-	counter, partB, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, selector, pod, nonce)
+	counter, partB, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, selector, ns, pod, nonce, uid, evaluation, true)
 	if err != nil {
 		return time.Time{}, 0, "", err
 	}
-	rate, partC, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, `sum by (pod) (rate(http_requests_total{namespace="voice",pod="`+pod+`",nonce="`+nonce+`"}[1m]))`, pod, nonce)
+	// A scrape can be ingested between separate instant queries even when both
+	// queries use the same evaluation time. Bracket the counter with the source
+	// series' actual sample timestamp, and refuse a mixed-scrape pair.
+	confirmedTimestamp, partC, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", ns, pod, nonce, uid, evaluation, true)
+	if err != nil || confirmedTimestamp != timestampRaw {
+		return time.Time{}, 0, "", errors.New("Pod token counter and scrape timestamp differ")
+	}
+	group := "pod"
+	if uid != "" {
+		group = "pod,pod_uid"
+	}
+	rate, partD, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, `sum by (`+group+`) (rate(`+selector+`[1m]))`, ns, pod, nonce, uid, evaluation, false)
 	if err != nil || rate <= 0 {
 		return time.Time{}, 0, "", errors.New("Pod token real request rate absent")
 	}
@@ -312,7 +353,7 @@ func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture)
 	if time.Since(at) > 75*time.Second || at.After(time.Now().Add(5*time.Second)) {
 		return at, counter, "", errors.New("Pod token actual scrape sample stale")
 	}
-	digest := podTokenHash(bytes.Join([][]byte{partA, partB, partC}, []byte{'\n'}))
+	digest := podTokenHash(bytes.Join([][]byte{partA, partB, partC, partD}, []byte{'\n'}))
 	return at, counter, digest, nil
 }
 func podTokenWarmMetric(ctx context.Context, env *core.Env, f podTokenFixture) podTokenTelemetry {

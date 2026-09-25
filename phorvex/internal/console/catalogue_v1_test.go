@@ -16,16 +16,19 @@ import (
 func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	cfg := Config{HarnessBin: filepath.Join(t.TempDir(), "missing-harness"), HarnessDir: t.TempDir(), StateDir: t.TempDir()}
 	items := cfg.Catalog()
-	// Published baseline has nine rows. Mongo, guardrail static, three stack
-	// controls and two CRM controls add seven distinct reviewed rows.
+	// Published baseline and reviewed controls remain distinct catalogue rows.
 	want := map[string]struct{ launch, claim string }{
 		"c2-pod-bound-api-auth-response":           {"named-suite", "effect"},
+		"c2-pod-bound-api-auth-response-cpu":       {"named-suite", "effect"},
 		"c2-nats-owned-client-response":            {"named-suite", "effect"},
 		"c2-mongo-uncredentialed-service-exposure": {"named-suite", "configuration"},
 		"ai-vllm-guardrail-confidentiality-static": {"named-suite", "effect"},
+		"ai-vllm-guardrail-availability-recovery": {"named-suite", "effect"},
 		string(cataloguev1.ChromaOwnedVector):      {"fixed-suite", "functional"},
 		string(cataloguev1.LiteLLMHealth):          {"fixed-suite", "functional"},
 		string(cataloguev1.LiteLLMCredential):      {"fixed-suite", "functional"},
+		string(cataloguev1.LiteLLMRouting):         {"fixed-suite", "functional"},
+		string(cataloguev1.MCPVoiceModel):          {"fixed-suite", "functional"},
 		string(cataloguev1.CRMRefund):              {"fixed-suite", "functional"},
 		string(cataloguev1.CRMReset):               {"fixed-suite", "functional"},
 		string(cataloguev1.MCPSessionBaseline):     {"fixed-suite", "functional"},

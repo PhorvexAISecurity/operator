@@ -378,6 +378,14 @@ phorvex:
       sourceConfigMap: guardrail-proxy
       guardrailJournalName: ""
       kvJournalName: ""
+    # Separate injected availability recovery suite. An operator must supply
+    # a reviewed immutable profile ConfigMap and exact raw-byte digest.
+    guardrailAvailability:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:
@@ -416,6 +424,18 @@ phorvex:
       # Set to phorvex-quarantine-capacity-<first 20 SHA256 bytes of the live
       # Voice Namespace UID>. The harness derives the name independently;
       # a mismatch cannot read the ledger and leaves cleanup unsafe.
+      quarantineCapacityLedgerName: ""
+    # Separate, fixed CPU response fixture. This grants nothing until enabled
+    # with a reviewed source ConfigMap and namespace-specific scrape/ledger pins.
+    # It does not enable or alter the original Voice token-response case.
+    podBoundTokenCPU:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      scrapeApproved: false
+      scrapeNamespace: phorvex-catalogue-cpu
+      podSelectorLabel: fixture.phorvex.ai/token-response
+      # Exact name derived from the live phorvex-catalogue-cpu Namespace UID.
       quarantineCapacityLedgerName: ""
     # Opt-in fixed functional catalogue. Rows stay visible when disabled and
     # report their missing prerequisites; browsers cannot override any target.
@@ -462,6 +482,10 @@ phorvex:
         sourceKey: server.py
         imageID: ""
         sourceSHA256: ""
+      # Source-pinned two-call model-decision observation. Always opt in separately.
+      mcpVoiceModel:
+        enabled: false
+        voiceSourceSHA256: ""
       # Fixed direct controls; enabled only against the reviewed installed routes.
       chroma:
         enabled: false
@@ -476,6 +500,10 @@ phorvex:
         schemaSourceSHA256: 2b6ec7c5796309be91f9af97e3bb4379a42652550146b2dda226c801894570b1
       litellm:
         enabled: false
+        # A separate opt-in for bounded authenticated completion requests.
+        # The alias must be reviewed against the SHA-pinned installed config.
+        inferenceEnabled: false
+        modelAlias: ""
         namespace: litellm
         deployment: litellm
         service: litellm
