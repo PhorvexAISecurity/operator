@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 78
+revision: 85
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -26,14 +26,12 @@ checks:
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
     at: '2026-09-25T03:52:11+00:00'
   preflight:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/consolidation/worker-pending.md
-    sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+    artifact: evidence/preflight/combined-2d39-receipt.json
+    sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:16:39+00:00'
-    rationale: Current combined source differs from individual reviewed head; shared
-      integration validation pending
+    at: '2026-09-25T11:28:47+00:00'
   implementation:
     result: PASS
     by: stack-case-review
@@ -42,56 +40,49 @@ checks:
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
     at: '2026-09-25T11:16:28+00:00'
   l0:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/consolidation/worker-pending.md
-    sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+    artifact: evidence/preflight/run-1790335110375174641/go-phorvex.log
+    sha256: 91a4096cf5cfa8ac50e652706fe8ac03f99091b7a0787e12af36f7a2ed8d473c
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:16:39+00:00'
-    rationale: Current combined source differs from individual reviewed head; shared
-      integration validation pending
+    at: '2026-09-25T11:27:45+00:00'
   l1:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/consolidation/worker-pending.md
-    sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+    artifact: evidence/consolidation/focused-controls-2d39.log
+    sha256: bce34fe82be2838e44bc6c6c6ac5b861e66b77338eaf47adaa24b6ac8b4f8a08
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:16:40+00:00'
-    rationale: Current combined source differs from individual reviewed head; shared
-      integration validation pending
+    at: '2026-09-25T11:27:55+00:00'
   l2:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/consolidation/worker-pending.md
-    sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+    artifact: evidence/consolidation/focused-controls-2d39.log
+    sha256: bce34fe82be2838e44bc6c6c6ac5b861e66b77338eaf47adaa24b6ac8b4f8a08
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:16:40+00:00'
-    rationale: Current combined source differs from individual reviewed head; shared
-      integration validation pending
+    at: '2026-09-25T11:28:01+00:00'
   positive_control:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/consolidation/worker-pending.md
-    sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+    artifact: evidence/consolidation/combined-worker-checks.md
+    sha256: da975ab6789a8bf907549c82199dd738deb14b8f559a5d80eab8c412d3d94c4c
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:16:40+00:00'
-    rationale: Current combined source differs from individual reviewed head; shared
-      integration validation pending
+    at: '2026-09-25T11:28:06+00:00'
   incident:
-    result: UNAVAILABLE
+    result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+    sha256: 9f07da457bd06bde139c45a2f904ea03966240bb5e825a08ed1490816a1e510b
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:14:38+00:00'
+    at: '2026-09-25T11:29:08+00:00'
     baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
   p3:
-    result: UNAVAILABLE
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+    sha256: 06adf1cfc9d58373e0835d9e78780279bf24ef987e389372115c6d6e9b472741
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:14:38+00:00'
+    at: '2026-09-25T11:29:09+00:00'
+    incident_sha256: 9f07da457bd06bde139c45a2f904ea03966240bb5e825a08ed1490816a1e510b
   patch_equivalence:
     result: UNAVAILABLE
     by: codex-lead
@@ -111,7 +102,7 @@ fix_id: CAT-LITELLM-ROUTING
 issues: []
 title: Add installed LiteLLM inference routing catalogue control
 profile: standard
-state: IMPLEMENTED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -156,13 +147,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: UNAVAILABLE
-  l0: UNAVAILABLE
-  l1: UNAVAILABLE
-  l2: UNAVAILABLE
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: UNAVAILABLE
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -172,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: stack-case-review
-  action: Run one combined selected preflight at 2d39df2b and submit current-source
-    evidence for independent review
-updated_at: '2026-09-25T11:16:51+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T11:29:14+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -358,13 +349,37 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T11:28:47+00:00'
+  by: stack-case-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T11:29:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T11:29:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: CAT-LITELLM-ROUTING:58:submit
-  from: stack-case-review
+  id: CAT-LITELLM-ROUTING:85:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 58
+  role: coordinator
+  kind: review
+  revision: 85
 check_history:
 - check: decision
   result: PASS
@@ -819,3 +834,70 @@ check_history:
   at: '2026-09-25T11:04:49+00:00'
   rationale: ec51 source evidence retained in check history; exact release-tag merge
     head requires new attestation
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:39+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: l0
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:39+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: l1
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:40+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: l2
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:40+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: positive_control
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/consolidation/worker-pending.md
+  sha256: ac96c52036d382c9fe4ca3db33eb44d500266c6d1d719d83cec9e7a8311ca65f
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:16:40+00:00'
+  rationale: Current combined source differs from individual reviewed head; shared
+    integration validation pending
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/combined-2d39-receipt.json
+  sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:27:39+00:00'
+- check: incident
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 4fb07898c8d0e46167f0e1b2f5284e8ff18815fb29840f3e81eacf535d5d9744
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:38+00:00'
+  baseline_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+- check: p3
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 21ce3e908388e1ba263e9f6ea4ac407af86589be47611b8141d5fc80a2b9a3c6
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:38+00:00'

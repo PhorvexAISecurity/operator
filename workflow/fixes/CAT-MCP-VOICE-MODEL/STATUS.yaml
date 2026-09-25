@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 30
+revision: 32
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -34,13 +34,12 @@ checks:
     at: '2026-09-25T11:14:44+00:00'
     baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
   preflight:
-    result: UNAVAILABLE
+    result: PASS
     by: live-readiness
-    artifact: evidence/consolidation/worker-checks-pending.md
-    sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+    artifact: evidence/preflight/combined-2d39-receipt.json
+    sha256: e5afe3e37f579267e3b9d09cc718b5b94fe366b85464ff3e8a15bdde570085b5
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:17:49+00:00'
-    rationale: Prior-source evidence retained; no combined-source PASS yet
+    at: '2026-09-25T11:28:18+00:00'
   implementation:
     result: PASS
     by: live-readiness
@@ -49,52 +48,49 @@ checks:
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
     at: '2026-09-25T11:17:03+00:00'
   l0:
-    result: UNAVAILABLE
+    result: PASS
     by: live-readiness
-    artifact: evidence/consolidation/worker-checks-pending.md
-    sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+    artifact: evidence/preflight/run-1790335110375174641/go-phorvex.log
+    sha256: 91a4096cf5cfa8ac50e652706fe8ac03f99091b7a0787e12af36f7a2ed8d473c
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:17:49+00:00'
-    rationale: Prior-source evidence retained; no combined-source PASS yet
+    at: '2026-09-25T11:28:18+00:00'
   l1:
-    result: UNAVAILABLE
+    result: PASS
     by: live-readiness
-    artifact: evidence/consolidation/worker-checks-pending.md
-    sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+    artifact: evidence/consolidation/focused-go-combined.log
+    sha256: 0dbabbf1d642f8a2895f6b742d95e4458fd5ef64d6af2a14b1a43128843958af
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:17:50+00:00'
-    rationale: Prior-source evidence retained; no combined-source PASS yet
+    at: '2026-09-25T11:28:18+00:00'
   l2:
-    result: UNAVAILABLE
+    result: PASS
     by: live-readiness
-    artifact: evidence/consolidation/worker-checks-pending.md
-    sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+    artifact: evidence/consolidation/CASE-CONTROLS.json
+    sha256: b94f13bec99927e61522cdcacf80acc55daebba186a7fe53f9bdc918ba80ad1e
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:17:50+00:00'
-    rationale: Prior-source evidence retained; no combined-source PASS yet
+    at: '2026-09-25T11:28:18+00:00'
   positive_control:
-    result: UNAVAILABLE
+    result: PASS
     by: live-readiness
-    artifact: evidence/consolidation/worker-checks-pending.md
-    sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+    artifact: evidence/consolidation/focused-go-combined.log
+    sha256: 0dbabbf1d642f8a2895f6b742d95e4458fd5ef64d6af2a14b1a43128843958af
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:17:50+00:00'
-    rationale: Prior-source evidence retained; no combined-source PASS yet
+    at: '2026-09-25T11:28:18+00:00'
   incident:
-    result: UNAVAILABLE
+    result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 79fc2962f57e66a8335c3e060f06e4be962385e8050a6613166eb9006aea4827
+    sha256: b95ea099f8b1ea35154b73341c626070dc6e420f7b824823cdb0bce4a9ee9f28
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:14:44+00:00'
+    at: '2026-09-25T11:29:01+00:00'
     baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
   p3:
-    result: UNAVAILABLE
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: b2be6251f0cf61cb10053ca751cbe50f39c1c9ba32c24b9442d37bfc167103ce
+    sha256: 422bbbde71c443ed12a080aee14e566cd5b4cfbb2936a2f8643101e8573b6f86
     source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
-    at: '2026-09-25T11:14:44+00:00'
+    at: '2026-09-25T11:29:01+00:00'
+    incident_sha256: b95ea099f8b1ea35154b73341c626070dc6e420f7b824823cdb0bce4a9ee9f28
   patch_equivalence:
     result: UNAVAILABLE
     by: codex-lead
@@ -106,7 +102,7 @@ fix_id: CAT-MCP-VOICE-MODEL
 issues: []
 title: Add source-pinned Voice MCP model continuation catalogue observation
 profile: standard
-state: IMPLEMENTED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -151,13 +147,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: UNAVAILABLE
-  l0: UNAVAILABLE
-  l1: UNAVAILABLE
-  l2: UNAVAILABLE
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: UNAVAILABLE
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -167,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: live-readiness
-  action: Validate shared combined-source preflight receipt and MCP Voice controls,
-    then submit for independent review
-updated_at: '2026-09-25T11:17:56+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T11:29:07+00:00'
 configuration_history:
 - at: '2026-09-25T02:45:23+00:00'
   by: codex-lead
@@ -211,6 +207,11 @@ configuration_history:
   - implementation
   - next_action
   - pull_request
+  approval_ref: null
+- at: '2026-09-25T11:28:17+00:00'
+  by: live-readiness
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -276,6 +277,30 @@ transitions:
   artifact: 04-diff.patch
   note: Combined source 2d39df2b implementation patch refreshed; prior worker checks
     superseded and retained
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T11:28:18+00:00'
+  by: live-readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T11:29:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T11:29:04+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
   approval_ref: null
   forced: false
 check_history:
@@ -413,10 +438,65 @@ check_history:
   inputs:
   - phorvex/internal/cataloguev1
   inputs_sha256: dbb7c063e2b946baf5860eed5cc9efabb468e3abd364342557af7a3f85f0620d
+- check: preflight
+  result: UNAVAILABLE
+  by: live-readiness
+  artifact: evidence/consolidation/worker-checks-pending.md
+  sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:49+00:00'
+  rationale: Prior-source evidence retained; no combined-source PASS yet
+- check: l0
+  result: UNAVAILABLE
+  by: live-readiness
+  artifact: evidence/consolidation/worker-checks-pending.md
+  sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:49+00:00'
+  rationale: Prior-source evidence retained; no combined-source PASS yet
+- check: l1
+  result: UNAVAILABLE
+  by: live-readiness
+  artifact: evidence/consolidation/worker-checks-pending.md
+  sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:50+00:00'
+  rationale: Prior-source evidence retained; no combined-source PASS yet
+- check: l2
+  result: UNAVAILABLE
+  by: live-readiness
+  artifact: evidence/consolidation/worker-checks-pending.md
+  sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:50+00:00'
+  rationale: Prior-source evidence retained; no combined-source PASS yet
+- check: positive_control
+  result: UNAVAILABLE
+  by: live-readiness
+  artifact: evidence/consolidation/worker-checks-pending.md
+  sha256: bac52c3ca6db9570ea127acf5cf0129724208a7d1f4bc62de8f00e5e45380dc9
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:17:50+00:00'
+  rationale: Prior-source evidence retained; no combined-source PASS yet
+- check: incident
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 79fc2962f57e66a8335c3e060f06e4be962385e8050a6613166eb9006aea4827
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:44+00:00'
+  baseline_sha: 2793a065b3a7117e59f9960dcd22e3462c6fad6b
+- check: p3
+  result: UNAVAILABLE
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: b2be6251f0cf61cb10053ca751cbe50f39c1c9ba32c24b9442d37bfc167103ce
+  source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
+  at: '2026-09-25T11:14:44+00:00'
 handoff:
-  id: CAT-MCP-VOICE-MODEL:16:review
+  id: CAT-MCP-VOICE-MODEL:32:review
   from: codex-lead
-  to: live-readiness
-  role: implementer
+  to: codex-lead
+  role: coordinator
   kind: review
-  revision: 16
+  revision: 32

@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 35
+revision: 34
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -102,7 +102,7 @@ fix_id: CAT-GUARDRAIL-RECOVERY
 issues: []
 title: Add a causal guardrail availability catalogue case
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -163,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-25T11:27:00+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-25T11:27:06+00:00'
 configuration_history:
 - at: '2026-09-25T00:56:24+00:00'
   by: codex-lead
@@ -278,6 +278,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-25T11:26:43+00:00'
   by: guardrail-comparison
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T11:27:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T11:27:04+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -469,9 +485,9 @@ check_history:
   source_sha: 2d39df2bd20aa374a97797cd35ab93e1f2772ab1
   at: '2026-09-25T11:14:41+00:00'
 handoff:
-  id: CAT-GUARDRAIL-RECOVERY:33:submit
-  from: guardrail-comparison
+  id: CAT-GUARDRAIL-RECOVERY:34:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 33
+  role: coordinator
+  kind: review
+  revision: 34
