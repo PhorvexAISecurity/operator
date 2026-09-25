@@ -1,8 +1,11 @@
 package console
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +18,153 @@ import (
 )
 
 const podBoundCPUExpiryMargin = 30 * time.Second
+
+type mongoEarlyCleanupProof struct {
+	Present                                   bool
+	NamespaceUID, ClientPodName, ClientPodUID string
+}
+
+// This accepts only the early-client Mongo producer shape observed in run-20:
+// its old artifact could not credit cleanup after a measurement error, but its
+// create-once terminal and exact phase journal did confirm both owned absences.
+// It does not change that run's partial/unsafe status or make a Mongo claim.
+func mongoEarlyCleanupProofAt(prior *RunStatus, out, expectedTarget string) (mongoEarlyCleanupProof, error) {
+	var proof mongoEarlyCleanupProof
+	if expectedTarget == "" || expectedTarget == defaultTargetID {
+		return proof, errors.New("CPU token reviewed cluster context unavailable")
+	}
+	if prior == nil || !prior.UnsafeToRetry || prior.Config != mongoExposureConfig || prior.ExecutionKind != "" ||
+		prior.State != "partial" || prior.CleanupStatus != "UNVERIFIED" || prior.Namespace != mongoExposureNamespace ||
+		prior.ScopeTenant != mongoExposureNamespace || prior.ScopeTarget != expectedTarget || prior.Finished == "" || prior.Owner == "" ||
+		prior.Error != "Mongo measurement, audit join or exact cleanup unverified; original result remains partial" ||
+		prior.ID == "" || filepath.Base(out) != prior.ID {
+		return proof, errors.New("CPU token Mongo predecessor status differs")
+	}
+	read := func(name string, limit int) ([]byte, error) {
+		raw, err := readNATSResponseSizedFile(out, name, int64(limit))
+		if err != nil {
+			return nil, errors.New("CPU token Mongo original unavailable or ambiguous")
+		}
+		if !strings.HasSuffix(name, ".jsonl") && rejectAmbiguousMongoJSON(raw) != nil {
+			return nil, errors.New("CPU token Mongo original unavailable or ambiguous")
+		}
+		return raw, nil
+	}
+	claimRaw, e1 := read("mongo-exposure-claim.json", 4096)
+	startRaw, e2 := read("mongo-exposure-audit-start.json", 4096)
+	artifactRaw, e3 := read("mongo-exposure.json", 64<<10)
+	terminalRaw, e4 := read("mongo-exposure-terminal.json", 4096)
+	auditRaw, e5 := read("mongo-exposure-audit-terminal.json", 256<<10)
+	phaseRaw, e6 := read("mongo-exposure-phases.jsonl", 64<<10)
+	if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || e6 != nil || len(phaseRaw) == 0 || phaseRaw[len(phaseRaw)-1] != '\n' {
+		return proof, errors.New("CPU token Mongo original cleanup chain incomplete")
+	}
+	var start mongoAuditStart
+	var artifact mongoArtifactEvidence
+	var terminal struct {
+		mongoTerminalEvidence
+		ObservedAt string `json:"observedAt"`
+	}
+	var auditEnd mongoAuditTerminal
+	if json.Unmarshal(startRaw, &start) != nil ||
+		json.Unmarshal(artifactRaw, &artifact) != nil || json.Unmarshal(terminalRaw, &terminal) != nil ||
+		json.Unmarshal(auditRaw, &auditEnd) != nil {
+		return proof, errors.New("CPU token Mongo original cleanup JSON invalid")
+	}
+	// Claim's persisted spelling is runId; decode it independently of the
+	// in-memory Go field name to avoid silently dropping the run identity.
+	var claimIdentity struct {
+		Schema string `json:"schema"`
+		RunID  string `json:"runId"`
+		Nonce  string `json:"nonce"`
+	}
+	if json.Unmarshal(claimRaw, &claimIdentity) != nil || claimIdentity.Schema != "mongo-exposure-claim-v1" ||
+		claimIdentity.RunID != prior.ID || !mongoNonce.MatchString(claimIdentity.Nonce) ||
+		start.Schema != "mongo-exposure-audit-start-v1" || start.RunID != prior.ID || !mongoSHA.MatchString(start.ConfigSHA256) ||
+		start.Segment.ID != "live" || start.Offset != start.Segment.Size ||
+		artifact.Schema != "mongo-exposure-artifact-v1" || artifact.RunID != prior.ID || artifact.Nonce != claimIdentity.Nonce ||
+		artifact.Namespace != mongoExposureNamespace || artifact.Database != "cc_"+artifact.Nonce || artifact.Collection != "owned_"+artifact.Nonce ||
+		artifact.ClientPodName != "cat-mongo-read-"+artifact.Nonce[:12] || !mongoKubeUID.MatchString(string(artifact.ClientPodUID)) ||
+		!mongoNonce.MatchString(artifact.CollectionUUID) || !mongoKubeUID.MatchString(string(artifact.Source.NamespaceUID)) ||
+		artifact.Source.PodUID == "" || artifact.Source.PolicyUID == "" || artifact.SecurityOutcome != "NOT_EVALUATED" ||
+		artifact.ClientRead != "UNKNOWN" || artifact.LegitimateBefore != "EXACT_READ" || artifact.LegitimateAfter != "UNKNOWN" ||
+		artifact.ObservedFinding != "UNKNOWN" || artifact.Validity != "INCONCLUSIVE" || artifact.Cleanup != "UNCONFIRMED" ||
+		artifact.ObservationEndedAt != "" || artifact.RawReplyBytes != 0 || artifact.RawReplySHA256 != "" ||
+		artifact.ClientContainerID != "" || artifact.ClientImageID != "" ||
+		terminal.Schema != "mongo-exposure-terminal-v1" || terminal.RunID != prior.ID || terminal.Nonce != artifact.Nonce ||
+		terminal.NamespaceUID != artifact.Source.NamespaceUID || terminal.ArtifactSHA256 != mongoHash(artifactRaw) ||
+		terminal.Cleanup != "UNCONFIRMED" || !terminal.ClientPodAbsent || !terminal.CollectionAbsent || !terminal.NamespacePreserved ||
+		auditEnd.Schema != "mongo-exposure-audit-terminal-v1" || auditEnd.RunID != prior.ID ||
+		auditEnd.StartSHA256 != mongoHash(startRaw) || auditEnd.ArtifactSHA256 != mongoHash(artifactRaw) ||
+		auditEnd.SourceIdentity != start.SourceIdentity || auditEnd.ObservationEnd != "" ||
+		auditEnd.BrainTrace != "GAP" || auditEnd.IssueCode != "AUDIT_GAP" || len(auditEnd.BrainDecisions) != 0 {
+		return proof, errors.New("CPU token Mongo original identities or exact cleanup differ")
+	}
+	started, e1 := time.Parse(time.RFC3339Nano, artifact.StartedAt)
+	finished, e2 := time.Parse(time.RFC3339Nano, artifact.FinishedAt)
+	terminalAt, e3 := time.Parse(time.RFC3339Nano, terminal.ObservedAt)
+	if e1 != nil || e2 != nil || e3 != nil || finished.Before(started) || terminalAt.Before(finished) {
+		return proof, errors.New("CPU token Mongo original chronology differs")
+	}
+	lines := bytes.Split(phaseRaw[:len(phaseRaw)-1], []byte{'\n'})
+	if len(lines) != 12 {
+		return proof, errors.New("CPU token Mongo exact cleanup phases incomplete")
+	}
+	collection := artifact.Database + "." + artifact.Collection
+	want := []struct{ phase, resource, name, identity string }{
+		{"CREATE_INTENT", "collection", collection, ""}, {"CREATE_ACK", "collection", collection, ""},
+		{"UUID_CONFIRMED", "collection", collection, artifact.CollectionUUID}, {"INSERT_INTENT", "document", artifact.Nonce, ""},
+		{"INSERT_ACK", "document", artifact.Nonce, artifact.Nonce}, {"CREATE_INTENT", "pod", artifact.ClientPodName, ""},
+		{"CREATED", "pod", artifact.ClientPodName, string(artifact.ClientPodUID)},
+		{"DELETE_INTENT", "pod", artifact.ClientPodName, string(artifact.ClientPodUID)},
+		{"ABSENT", "pod", artifact.ClientPodName, string(artifact.ClientPodUID)},
+		{"DROP_INTENT", "collection", collection, artifact.CollectionUUID},
+		{"DROP_ACK", "collection", collection, artifact.CollectionUUID},
+		{"ABSENT", "collection", collection, artifact.CollectionUUID},
+	}
+	previous := started
+	for i, line := range lines {
+		var got mongoPhaseEvidence
+		if rejectAmbiguousMongoJSON(line) != nil || json.Unmarshal(line, &got) != nil ||
+			got.Schema != "mongo-exposure-phase-v1" || got.RunID != prior.ID || got.Nonce != artifact.Nonce ||
+			got.Phase != want[i].phase || got.Resource != want[i].resource || got.Name != want[i].name || got.Identity != want[i].identity {
+			return proof, errors.New("CPU token Mongo exact cleanup phase identity differs")
+		}
+		at, err := time.Parse(time.RFC3339Nano, got.At)
+		if err != nil || at.Before(previous) || at.After(finished) {
+			return proof, errors.New("CPU token Mongo exact cleanup phase chronology differs")
+		}
+		previous = at
+	}
+	proof.Present, proof.NamespaceUID, proof.ClientPodName, proof.ClientPodUID = true, string(artifact.Source.NamespaceUID), artifact.ClientPodName, string(artifact.ClientPodUID)
+	return proof, nil
+}
+
+// Caller holds rm.mu. A second Mongo unsafe run, a live process, or any
+// changed original refuses CPU admission; historical run status is untouched.
+func (rm *RunManager) mongoEarlyCleanupProofLocked(expectedTarget string) (mongoEarlyCleanupProof, error) {
+	var proof mongoEarlyCleanupProof
+	var prior *RunStatus
+	for _, status := range rm.runs {
+		if status == nil {
+			return proof, errors.New("CPU token prior run history ambiguous")
+		}
+		if status.UnsafeToRetry && status.Config == mongoExposureConfig {
+			if prior != nil {
+				return proof, errors.New("CPU token has multiple unsafe Mongo predecessors")
+			}
+			prior = status
+		}
+	}
+	if prior == nil {
+		return proof, nil
+	}
+	if rm.procs[prior.ID] != nil || rm.stopping[prior.ID] || strings.Contains(prior.Error, "reconciliation pending") ||
+		!cataloguev1.ExecutionLockAvailable(rm.cfg.runOutputPath(prior.ID)) {
+		return proof, errors.New("CPU token Mongo predecessor is active or unresolved")
+	}
+	return mongoEarlyCleanupProofAt(prior, rm.cfg.runOutputPath(prior.ID), expectedTarget)
+}
 
 func podBoundCPUReplayTimes(startText, endText string, expiry time.Time) bool {
 	start, e1 := time.Parse(time.RFC3339Nano, startText)
@@ -58,30 +208,45 @@ func (rm *RunManager) podBoundTokenCPUPriorAdmissionLocked(destination runDestin
 		destination.ScopeTarget == "" || destination.ScopeTarget != destination.Targets[1] || !mongoSHA.MatchString(destination.SuiteSHA256) {
 		return errors.New("CPU token destination or retained run history unavailable")
 	}
-	var prior *RunStatus
+	var voice, mongo *RunStatus
 	for _, status := range rm.runs {
 		if status == nil {
 			return errors.New("CPU token prior history ambiguous")
 		}
 		if status.UnsafeToRetry {
-			if prior != nil {
-				return errors.New("CPU token has multiple unsafe predecessors")
+			switch status.Config {
+			case string(cataloguev1.VoiceRecovery):
+				if voice != nil {
+					return errors.New("CPU token has multiple unsafe Voice predecessors")
+				}
+				voice = status
+			case mongoExposureConfig:
+				if mongo != nil {
+					return errors.New("CPU token has multiple unsafe Mongo predecessors")
+				}
+				mongo = status
+			default:
+				return errors.New("CPU token has unclassified unsafe predecessor")
 			}
-			prior = status
 		}
 	}
-	if prior == nil {
+	if mongo != nil {
+		if _, err := rm.mongoEarlyCleanupProofLocked(destination.ScopeTarget); err != nil {
+			return err
+		}
+	}
+	if voice == nil {
 		return nil
 	}
-	if prior.ID != podBoundPriorVoiceID || prior.ExecutionKind != "fixed-suite" ||
-		prior.Config != string(cataloguev1.VoiceRecovery) || prior.State != "partial" ||
-		prior.Outcome != string(cataloguev1.OutcomeTestFailed) || prior.CleanupStatus != "FAIL" ||
-		prior.ScopeTenant != podBoundTokenNamespace || prior.ScopeTarget != defaultTargetID ||
-		prior.Finished == "" || prior.Owner == "" || rm.procs[prior.ID] != nil || rm.stopping[prior.ID] ||
-		strings.Contains(prior.Error, "reconciliation pending") || !cataloguev1.ExecutionLockAvailable(rm.cfg.runOutputPath(prior.ID)) {
+	if voice.ID != podBoundPriorVoiceID || voice.ExecutionKind != "fixed-suite" ||
+		voice.Config != string(cataloguev1.VoiceRecovery) || voice.State != "partial" ||
+		voice.Outcome != string(cataloguev1.OutcomeTestFailed) || voice.CleanupStatus != "FAIL" ||
+		voice.ScopeTenant != podBoundTokenNamespace || voice.ScopeTarget != defaultTargetID ||
+		voice.Finished == "" || voice.Owner == "" || rm.procs[voice.ID] != nil || rm.stopping[voice.ID] ||
+		strings.Contains(voice.Error, "reconciliation pending") || !cataloguev1.ExecutionLockAvailable(rm.cfg.runOutputPath(voice.ID)) {
 		return errors.New("CPU token unsafe predecessor differs from exact retained Voice run")
 	}
-	return rm.validatePriorVoiceFiles(prior)
+	return rm.validatePriorVoiceFiles(voice)
 }
 
 // Before the CPU event, independently recheck all selectors in its dedicated
@@ -165,7 +330,34 @@ func podBoundCPUSelectorDisjoint(ctx context.Context, kc kubernetes.Interface, r
 	return nil
 }
 
-func (s *Server) podBoundCPUGraph(ctx context.Context, kc kubernetes.Interface, r podBoundTokenRequest, allowSourceLifecycle bool) error {
+func podBoundCPUMongoLiveAbsence(ctx context.Context, kc kubernetes.Interface, proof mongoEarlyCleanupProof) error {
+	if !proof.Present {
+		return nil
+	}
+	if kc == nil || !mongoKubeUID.MatchString(proof.NamespaceUID) || !mongoKubeUID.MatchString(proof.ClientPodUID) || proof.ClientPodName == "" {
+		return errors.New("CPU token prior Mongo cleanup source incomplete")
+	}
+	mongoNS, err := kc.CoreV1().Namespaces().Get(ctx, mongoExposureNamespace, metav1.GetOptions{})
+	if err != nil || string(mongoNS.UID) != proof.NamespaceUID || mongoNS.DeletionTimestamp != nil {
+		return errors.New("CPU token prior Mongo namespace identity changed")
+	}
+	_, err = kc.CoreV1().Pods(mongoExposureNamespace).Get(ctx, proof.ClientPodName, metav1.GetOptions{})
+	if !apierrors.IsNotFound(err) {
+		return errors.New("CPU token prior Mongo owned client Pod absence unconfirmed")
+	}
+	return nil
+}
+
+func (s *Server) podBoundCPUGraph(ctx context.Context, kc kubernetes.Interface, r podBoundTokenRequest, expectedTarget string, allowSourceLifecycle bool) error {
+	s.runs.mu.Lock()
+	mongoProof, mongoErr := s.runs.mongoEarlyCleanupProofLocked(expectedTarget)
+	s.runs.mu.Unlock()
+	if mongoErr != nil {
+		return mongoErr
+	}
+	if err := podBoundCPUMongoLiveAbsence(ctx, kc, mongoProof); err != nil {
+		return err
+	}
 	if err := podBoundCPUSelectorDisjoint(ctx, kc, r, allowSourceLifecycle); err != nil {
 		return err
 	}
