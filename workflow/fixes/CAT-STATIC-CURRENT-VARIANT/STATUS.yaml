@@ -1,0 +1,253 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e9eaf25a4d19cbbe4fb1542567e8768cfc54e0771584b7c28f34d8a465253170
+    source_sha: 980fa0f5e859038e8e4b7ad8f7f711fe8601a8c7
+    at: '2026-09-25T14:12:26+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/BASELINE-REVIEW.json
+    sha256: 9a3e25a755b7db1ff09faceec020cbb57de0578afffded6d3c0481bd0de7b47f
+    source_sha: 980fa0f5e859038e8e4b7ad8f7f711fe8601a8c7
+    at: '2026-09-25T14:34:18+00:00'
+  preflight:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/preflight/receipt.json
+    sha256: 85c4d083e14d39835fad8db855591c0bc9f54816e3728f8be94fcbe20e660f43
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:36:41+00:00'
+  implementation:
+    result: PASS
+    by: guardrail-comparison
+    artifact: 04-diff.patch
+    sha256: e2d206d07fae46ffcf899655db892702258cfb8caa2fd3006b02f521a8154e68
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:36:41+00:00'
+  l0:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/preflight/run-1790346747816641959/go-phorvex.log
+    sha256: f3a5bea8cb1e84792aa9599c31e36b36f4369a329c0b9194963d86d47cc4552e
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:36:41+00:00'
+  l1:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/offline-focused.log
+    sha256: a8b86e97487ed12bf1e73a7bf6b53d7029b0c818c602f1dabd252128261de711
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:36:41+00:00'
+  l2:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/offline-focused.log
+    sha256: a8b86e97487ed12bf1e73a7bf6b53d7029b0c818c602f1dabd252128261de711
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:36:41+00:00'
+  positive_control:
+    result: PASS
+    by: guardrail-comparison
+    artifact: evidence/offline-focused.log
+    sha256: a8b86e97487ed12bf1e73a7bf6b53d7029b0c818c602f1dabd252128261de711
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:36:41+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 358230cd0972c7bfd11a95ccf9e42c32ebb2750a5379682b348e5ef62fbfa5a5
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:38:05+00:00'
+    baseline_sha: 980fa0f5e859038e8e4b7ad8f7f711fe8601a8c7
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f7feaaa255ce25266467dd4054d0c713ee39a4f53570c7c593979ce7ffbf5451
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:38:05+00:00'
+    incident_sha256: 358230cd0972c7bfd11a95ccf9e42c32ebb2750a5379682b348e5ef62fbfa5a5
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.md
+    sha256: 90ad1ebddeb843ea645fa9cee3bf9aa76a0efc74bf56b4c4b16168e1ff2ce7db
+    source_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+    at: '2026-09-25T14:45:07+00:00'
+fix_id: CAT-STATIC-CURRENT-VARIANT
+issues: []
+title: Allow the existing static guardrail comparison on its pinned current variant
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: guardrail-comparison
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: fix/catalogue-existing22-chain-20260925
+  code_sha: 980fa0f5e859038e8e4b7ad8f7f711fe8601a8c7
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/catalogue-existing22-chain-20260925
+  base_sha: 980fa0f5e859038e8e4b7ad8f7f711fe8601a8c7
+  head_sha: 76b165f9987e5b64a945e9d691e884c846e4d1a3
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/343
+  reviewed_head: 83d2a48aee2de59c85c1de970b3e5d6c8da35371
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Complete normal PR merge and exact installed-source/profile live verification;
+    continue existing22 chain repairs and retain live gaps
+updated_at: '2026-09-25T14:45:08+00:00'
+follow_up_to: CAT-GUARDRAIL-COMPARISON
+configuration_history:
+- at: '2026-09-25T14:11:27+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-25T14:23:05+00:00'
+  by: guardrail-comparison
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T14:28:13+00:00'
+  by: guardrail-comparison
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T14:36:41+00:00'
+  by: guardrail-comparison
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-25T14:44:35+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-25T14:12:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T14:12:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-25T14:36:42+00:00'
+  by: guardrail-comparison
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T14:36:44+00:00'
+  by: guardrail-comparison
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-25T14:38:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-25T14:38:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-25T14:45:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-STATIC-CURRENT-VARIANT:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

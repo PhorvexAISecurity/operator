@@ -39,3 +39,7 @@ workflow/assessments/20260910-readiness/evidence/tier1-composition/workflow-eigh
 
 workflow/assessments/20260910-readiness/evidence/run-1789081493917758977/diff.log -whitespace
 workflow/assessments/20260910-readiness/evidence/run-1789081493917758977/workflow.log -whitespace
+
+# Original HTTP status receipts require CRLF; preserve their bytes in the
+# producer-to-consumer fixture and treat carriage return as part of line ending.
+phorvex/internal/console/testdata/guardrail-static-producer-pgv2/*.http -text whitespace=cr-at-eol

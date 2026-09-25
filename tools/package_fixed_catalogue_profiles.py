@@ -340,6 +340,8 @@ def package(args):
              profile[fixture].get("transport") == "in-cluster", "fixed named profile scope differs: " + kind)
         if kind == "pod-token":
             f = profile[fixture]
+            need(f.get("prometheusURL") == phorvex["prometheusUrl"],
+                 "Pod-token fixture/manager Prometheus URL differs")
             need(f.get("sourceManifestPath") == "/etc/phorvex-catalogue-pod-bound-token/manifest.json" and
                  f.get("sourceManifestSHA256") == digest(manifest_raw) and
                  f.get("managerImageID") == manifest["managerImageID"] and
@@ -352,7 +354,8 @@ def package(args):
             need(profile[fixture].get("observerImage") == rollout["console"] and
                  profile[fixture].get("clusterUID") == rollout["clusterUID"], "NATS observer/cluster differs from rollout")
         if kind == "guardrail-static" and block["enabled"]:
-            need(profile[fixture].get("variant") == "pgv1", "enabled static suite requires reviewed pgv1 source")
+            need(profile[fixture].get("variant") in ("pgv1", "pgv2"),
+                 "enabled static suite requires one exact reviewed pgv1 or pgv2 source")
         if kind == "guardrail-availability":
             f = profile[fixture]
             creator = str(f.get("eventCreator", ""))

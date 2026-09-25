@@ -252,6 +252,28 @@ func TestGuardrailStaticReadsRealProducerProtocolFixture(t *testing.T) {
 	}
 }
 
+func TestGuardrailStaticReadsRealPgv2ProducerProtocolFixture(t *testing.T) {
+	out, err := filepath.Abs("testdata/guardrail-static-producer-pgv2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(t.TempDir(), "run-1.yaml")
+	profile := "guardrailStaticFixture:\n  runID: run-1\n  clusterUID: cluster-uid\n  podUID: pod-uid\n  variant: pgv2\n  serviceUID: service-uid\n  sourceSHA256: " + strings.Repeat("b", 64) + "\n  guardrailJournalUID: gj-uid\n  kvJournalUID: kj-uid\n"
+	if err := os.WriteFile(cfg, []byte(profile), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readGuardrailStaticResult(out, "run-1", cfg)
+	if err != nil || !got.Accepted || got.Variant != "pgv2" || got.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" || got.SayOK == "SAY_OK_FALSE_POSITIVE_OBSERVED" || got.Calls[2].Status != 200 || got.EventMode != "DIRECT_STATIC" || got.BrainDecision != "NOT_EVALUATED" {
+		t.Fatalf("real pgv2 producer fixture rejected: %+v %v", got, err)
+	}
+	if err := os.WriteFile(cfg, []byte(strings.Replace(profile, "variant: pgv2", "variant: pgv1", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readGuardrailStaticResult(out, "run-1", cfg); err == nil {
+		t.Fatal("pgv1 profile accepted pgv2 original state and replies")
+	}
+}
+
 func TestGuardrailStaticRejectsRelabeledHTTPAndProgress(t *testing.T) {
 	out, cfg, a := staticFixture(t)
 	// A terminal claim cannot turn a distinct private HTTP status receipt into a typed refusal.

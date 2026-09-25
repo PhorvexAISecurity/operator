@@ -42,10 +42,17 @@ func TestGuardrailStaticRequiresExactReadOnlyPins(t *testing.T) {
 	if err := base.Validate(); err != nil {
 		t.Fatalf("valid static fixture rejected: %v", err)
 	}
+	pgv2 := base
+	pgv2Fixture := *base.GuardrailStaticFixture
+	pgv2Fixture.Variant = "pgv2"
+	pgv2.GuardrailStaticFixture = &pgv2Fixture
+	if err := pgv2.Validate(); err != nil {
+		t.Fatalf("exact pgv2 static fixture rejected: %v", err)
+	}
 	for _, tc := range []struct {
 		name   string
 		change func(*TargetConfig)
-	}{{"missing source", func(c *TargetConfig) { c.GuardrailStaticFixture.SourceSHA256 = "" }}, {"wrong namespace", func(c *TargetConfig) { c.Namespace = "customer" }}, {"kubeconfig override", func(c *TargetConfig) { c.Kubeconfig = "/tmp/other" }}, {"extra scenario", func(c *TargetConfig) { c.ScenarioFilter = []string{"ai-probe"} }}, {"longer time", func(c *TargetConfig) { c.GuardrailStaticFixture.MaxRunSeconds = 601 }}} {
+	}{{"missing source", func(c *TargetConfig) { c.GuardrailStaticFixture.SourceSHA256 = "" }}, {"unknown variant", func(c *TargetConfig) { c.GuardrailStaticFixture.Variant = "pgv3" }}, {"missing variant", func(c *TargetConfig) { c.GuardrailStaticFixture.Variant = "" }}, {"wrong namespace", func(c *TargetConfig) { c.Namespace = "customer" }}, {"kubeconfig override", func(c *TargetConfig) { c.Kubeconfig = "/tmp/other" }}, {"extra scenario", func(c *TargetConfig) { c.ScenarioFilter = []string{"ai-probe"} }}, {"longer time", func(c *TargetConfig) { c.GuardrailStaticFixture.MaxRunSeconds = 601 }}} {
 		t.Run(tc.name, func(t *testing.T) {
 			copy := base
 			fixture := *base.GuardrailStaticFixture

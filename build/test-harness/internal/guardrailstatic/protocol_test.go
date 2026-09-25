@@ -53,6 +53,10 @@ func fakeWire(name, model, variant, marker, mode string) []byte {
 		status = 403
 		reply = []byte(`{"error":{"type":"guardrail_blocked"}}`)
 	}
+	if name == "say_ok" && variant == "pgv2" {
+		status = 200
+		reply = []byte(`{"choices":[{"message":{"content":"OK"}}]}`)
+	}
 	if name == "canary_guarded" && mode == "untyped403" {
 		reply = []byte(`{"error":{"type":"OTHER"}}`)
 	}
@@ -68,7 +72,7 @@ func fakeWire(name, model, variant, marker, mode string) []byte {
 	if name == "arithmetic" {
 		reply = []byte(`{"choices":[{"message":{"content":"4"}}]}`)
 	}
-	stateFields := map[string]any{"active": "pgv1", "ready": true, "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]float64{"pgv1": 0.5, "pgv2": 0.5}, "bodySHA256": strings.Repeat("e", 64)}
+	stateFields := map[string]any{"active": variant, "ready": true, "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]float64{"pgv1": 0.5, "pgv2": 0.5}, "bodySHA256": strings.Repeat("e", 64)}
 	switch mode {
 	case "declared_enforce":
 		stateFields["mode"] = "enforce"
@@ -110,7 +114,6 @@ func fakeWire(name, model, variant, marker, mode string) []byte {
 		ModelBefore string          `json:"modelBefore"`
 		ModelAfter  string          `json:"modelAfter"`
 	}{status, fmt.Sprintf("HTTP/1.1 %d\r\n", status), digest(request), base64.StdEncoding.EncodeToString(request), base64.StdEncoding.EncodeToString(reply), state, afterState, model, after})
-	_ = variant
 	return output
 }
 
@@ -223,9 +226,13 @@ except Exception as exc:print(json.dumps({'error':str(exc),'posts':posts}))
 }
 
 func runProtocolFixture(t *testing.T, mode string) (string, Result, int, error) {
+	return runProtocolFixtureVariant(t, mode, "pgv1")
+}
+
+func runProtocolFixtureVariant(t *testing.T, mode, variant string) (string, Result, int, error) {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "run-1")
-	c := config.TargetConfig{OutDir: out, GuardrailStaticFixture: &config.GuardrailStaticFixtureConfig{RunID: "run-1", ClusterUID: "cluster-uid", PodUID: "pod-uid", Variant: "pgv1", SourceSHA256: strings.Repeat("b", 64)}}
+	c := config.TargetConfig{OutDir: out, GuardrailStaticFixture: &config.GuardrailStaticFixtureConfig{RunID: "run-1", ClusterUID: "cluster-uid", PodUID: "pod-uid", Variant: variant, SourceSHA256: strings.Repeat("b", 64)}}
 	snapshots, chats, clusterChecks := 0, 0, 0
 	ops := runOps{cluster: func(context.Context) error {
 		clusterChecks++
@@ -236,11 +243,16 @@ func runProtocolFixture(t *testing.T, mode string) (string, Result, int, error) 
 	}, snapshot: func(context.Context) (Snapshot, error) {
 		snapshots++
 		s := protocolSnapshot()
+		s.Variant = variant
 		if mode == "source_drift" && snapshots == 2 {
 			s.SourceSHA256 = strings.Repeat("f", 64)
 		}
 		if mode == "variant_drift" && snapshots == 2 {
-			s.Variant = "pgv2"
+			if variant == "pgv1" {
+				s.Variant = "pgv2"
+			} else {
+				s.Variant = "pgv1"
+			}
 		}
 		if mode == "guardrail_journal_drift" && snapshots == 2 {
 			s.GuardrailJournal.Generation++
@@ -294,6 +306,31 @@ func TestRunProtocolWritesPrivateBoundedEvidence(t *testing.T) {
 				t.Fatal(e)
 			}
 		}
+	}
+}
+
+func TestRunProtocolPgv2FixedComparisonAndDrift(t *testing.T) {
+	out, r, chats, err := runProtocolFixtureVariant(t, "declared_enforce", "pgv2")
+	if err != nil || chats != 4 || !r.Complete || r.Target.Variant != "pgv2" || r.Status != "RAW_DISCLOSED_GUARDED_TYPED_403_STATIC_FILTER_FOR_FIXED_PROBE" || r.SayOK == "SAY_OK_FALSE_POSITIVE_OBSERVED" || r.Responses[2].Status != 200 || r.EventMode != "DIRECT_STATIC" || r.BrainDecision != "NOT_EVALUATED" {
+		t.Fatalf("pinned pgv2 comparison: %+v chats=%d err=%v", r, chats, err)
+	}
+	if destination := os.Getenv("GUARDRAIL_STATIC_PGV2_FIXTURE_OUT"); destination != "" {
+		if err := os.MkdirAll(destination, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"intent.json", "progress.jsonl", "marker.txt", "request-1.json", "request-2.json", "request-3.json", "request-4.json", "reply-1.json", "reply-2.json", "reply-3.json", "reply-4.json", "status-1.http", "status-2.http", "status-3.http", "status-4.http", terminalName} {
+			data, e := os.ReadFile(filepath.Join(out, name))
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = os.WriteFile(filepath.Join(destination, name), data, 0600); e != nil {
+				t.Fatal(e)
+			}
+		}
+	}
+	_, drift, driftChats, driftErr := runProtocolFixtureVariant(t, "variant_drift", "pgv2")
+	if driftErr == nil || driftChats != 1 || drift.Complete || drift.Status != "INCONCLUSIVE" {
+		t.Fatalf("pgv2 to pgv1 drift accepted: %+v chats=%d err=%v", drift, driftChats, driftErr)
 	}
 }
 

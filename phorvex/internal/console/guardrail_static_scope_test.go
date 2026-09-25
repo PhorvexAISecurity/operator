@@ -48,9 +48,18 @@ func TestGuardrailStaticSuiteDestinationRejectsIncompleteProfile(t *testing.T) {
 	if err != nil || dest.ScopeTarget != "reviewed-cluster" || len(dest.Tenants) != 2 {
 		t.Fatalf("valid reviewed profile refused: %+v %v", dest, err)
 	}
+	pgv2Raw := []byte(strings.Replace(string(raw), "  variant: pgv1", "  variant: pgv2", 1))
+	rm.cfg.GuardrailStaticProfileSHA256 = fmt.Sprintf("%x", sha256.Sum256(pgv2Raw))
+	if err := os.WriteFile(path, pgv2Raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rm.SuiteDestination(guardrailStaticConfig); err != nil {
+		t.Fatalf("exact pgv2 profile refused: %v", err)
+	}
 	for _, tc := range []struct{ name, old, new string }{
 		{"missing pod", "  podName: \"reviewed-vllm-pod\"\n", ""},
-		{"wrong variant", "  variant: pgv1", "  variant: pgv2"},
+		{"unknown variant", "  variant: pgv1", "  variant: pgv3"},
+		{"missing variant", "  variant: pgv1", "  variant: ''"},
 		{"wrong run bound", "  maxRunSeconds: 600", "  maxRunSeconds: 601"},
 		{"wrong source shape", strings.Repeat("a", 64), "bad-source"},
 		{"invalid UID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "not-a-uid"},

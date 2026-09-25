@@ -62,6 +62,35 @@ class PackageProfiles(unittest.TestCase):
                                rollout_join="evidence/JOIN.json", output=self.root / "output",
                                namespace="phorvex-system", profile=list(kinds), allow_enabled=enabled)
 
+    def test_guardrail_static_exact_current_variant(self):
+        profile = {"kubeconfig": "", "context": "reviewed-cluster", "namespace": "vllm",
+                   "ownedAck": True, "trialsPerArm": 1,
+                   "guardrailStaticFixture": {"runID": "run-1", "transport": "in-cluster",
+                                              "variant": "pgv2", "clusterUID": CLUSTER,
+                                              "podName": "reviewed-vllm", "podUID": "44444444-4444-4444-8444-444444444444",
+                                              "serviceUID": "55555555-5555-4555-8555-555555555555",
+                                              "sourceSHA256": "f" * 64,
+                                              "guardrailJournalName": "reviewed-gj",
+                                              "guardrailJournalUID": "66666666-6666-4666-8666-666666666666",
+                                              "kvJournalName": "reviewed-kj",
+                                              "kvJournalUID": "77777777-7777-4777-8777-777777777777",
+                                              "maxRunSeconds": 600}}
+        path = self.input / "config.guardrail-confidentiality-static.yaml"
+        self.write_overlay({"guardrailStatic": {"enabled": True, "sourceConfigMap": "guardrail-proxy",
+                                                "guardrailJournalName": "reviewed-gj", "kvJournalName": "reviewed-kj"}})
+        for variant in ("pgv1", "pgv2"):
+            profile["guardrailStaticFixture"]["variant"] = variant
+            path.write_text(yaml.safe_dump(profile, sort_keys=False))
+            receipt = pack.package(self.args("guardrail-static", enabled=True))
+            self.assertEqual(receipt["profiles"]["guardrail-static"]["sha256"], sha(path.read_bytes()))
+            (self.root / "output").rename(self.root / ("accepted-" + variant))
+        for variant in ("pgv3", ""):
+            profile["guardrailStaticFixture"]["variant"] = variant
+            path.write_text(yaml.safe_dump(profile, sort_keys=False))
+            with self.assertRaisesRegex(ValueError, "one exact reviewed pgv1 or pgv2"):
+                pack.package(self.args("guardrail-static", enabled=True))
+            self.assertFalse((self.root / "output").exists())
+
     def test_guardrail_availability_exact_reviewed_profile(self):
         fixture = {
             "runID": "run-1", "transport": "in-cluster", "clusterUID": CLUSTER,
@@ -228,6 +257,7 @@ class PackageProfiles(unittest.TestCase):
         profile = ("context: reviewed-cluster\nnamespace: voice\nkubeconfig: ''\n"
                    "ownedAck: true\ntrialsPerArm: 1\npodBoundTokenFixture:\n"
                    f"  transport: in-cluster\n  clusterUID: {CLUSTER}\n  managerImageID: {MANAGER}\n"
+                   "  prometheusURL: http://prometheus.example\n"
                    "  sourceManifestPath: /etc/phorvex-catalogue-pod-bound-token/manifest.json\n"
                    f"  sourceManifestSHA256: {pack.PLACEHOLDER}\n")
         (self.input / "config.pod-bound-api-auth-response.yaml").write_text(profile)
@@ -244,6 +274,34 @@ class PackageProfiles(unittest.TestCase):
         self.assertIn(sha(manifest_raw), cm["data"]["config.pod-bound-api-auth-response.yaml"])
         self.assertEqual((self.root / "output/evidence/source-review.json").read_bytes(), review_raw)
         self.assertEqual((self.root / "output/evidence/PODS.json").read_bytes(), pods_raw)
+        console["podBoundToken"]["enabled"] = False
+        self.write_overlay(console, prometheusUrl="http://prometheus.example",
+                           eventIdentityPolicy={"enabled": True}, e2eDetector={"enabled": True, "targetNamespace": "voice"})
+        disabled = self.args("pod-token")
+        disabled.output = self.root / "valid-disabled"
+        self.assertFalse(pack.package(disabled)["profiles"]["pod-token"]["enabledInProposal"])
+        (self.root / "output").rename(self.root / "valid-enabled")
+        for enabled in (False, True):
+            console["podBoundToken"]["enabled"] = enabled
+            self.write_overlay(console, prometheusUrl="http://prometheus.example",
+                               eventIdentityPolicy={"enabled": True}, e2eDetector={"enabled": True, "targetNamespace": "voice"})
+            for label, value in (("absent", None), ("blank", ""), ("different", "http://other-prometheus.example")):
+                with self.subTest(enabled=enabled, fixtureURL=label):
+                    if value is None:
+                        changed = profile.replace("  prometheusURL: http://prometheus.example\n", "")
+                    else:
+                        changed = profile.replace("  prometheusURL: http://prometheus.example",
+                                                  "  prometheusURL: " + value)
+                    (self.input / "config.pod-bound-api-auth-response.yaml").write_text(changed)
+                    bad = self.args("pod-token", enabled=enabled)
+                    bad.output = self.root / ("invalid-url-" + str(enabled).lower() + "-" + label)
+                    with self.assertRaisesRegex(ValueError, "Prometheus URL differs"):
+                        pack.package(bad)
+                    self.assertFalse(bad.output.exists())
+        (self.input / "config.pod-bound-api-auth-response.yaml").write_text(profile)
+        console["podBoundToken"]["enabled"] = True
+        self.write_overlay(console, prometheusUrl="http://prometheus.example",
+                           eventIdentityPolicy={"enabled": True}, e2eDetector={"enabled": True, "targetNamespace": "voice"})
         pods_path.write_bytes(pods_raw.replace(b'"ready": true', b'"ready": false', 1))
         bad = self.args("pod-token", enabled=True)
         bad.output = self.root / "changed-pods"

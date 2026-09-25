@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -87,6 +87,14 @@ checks:
     sha256: e343b0fad532d8bad02c2e4799d42c07d62b6c59da6afc4cc323372598956e18
     source_sha: dc3d920452f252fc151f33dfe84421eadbfc433a
     at: '2026-09-25T12:22:39+00:00'
+  l3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/l3-live.md
+    sha256: cdcc787508c59346fce605b3f30e93ec4fcebac8653c8ec5a67b011cc3bdc4ae
+    source_sha: 0316a578624a1d19662c87bfa8d0fea08d1b3729
+    at: '2026-09-25T12:43:01+00:00'
+    deployment_digest: sha256:98b5327be6b53a72cd13078f7fbb1a013c92335847053ab41e425197d287b3bd
 fix_id: CAT-AUTH-CONTROL-SCOPE
 issues: []
 title: Keep the console negative authorization control outside the test identity grants
@@ -124,10 +132,10 @@ pull_request:
   checks: pending
   patch_equivalence: PASS
 deployment:
-  image: null
-  digest: null
-  git_sha: null
-  rolled_out_at: null
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console:0.4.165
+  digest: sha256:98b5327be6b53a72cd13078f7fbb1a013c92335847053ab41e425197d287b3bd
+  git_sha: 0316a578624a1d19662c87bfa8d0fea08d1b3729
+  rolled_out_at: '2026-09-25T12:24:05Z'
 verification:
   required:
   - L0
@@ -140,7 +148,7 @@ verification:
   l0: PASS
   l1: PASS
   l2: PASS
-  l3: pending
+  l3: PASS
   l4: pending
   positive_control: PASS
 synchronization:
@@ -155,7 +163,7 @@ next_action:
   owner: codex-lead
   action: Normal owner-authorized merge and deployment-aware verification; L3 remains
     pending
-updated_at: '2026-09-25T12:22:42+00:00'
+updated_at: '2026-09-25T12:43:01+00:00'
 follow_up_to: CAT-PROFILE-GRANTS
 configuration_history:
 - at: '2026-09-25T12:08:06+00:00'
@@ -177,6 +185,11 @@ configuration_history:
   by: codex-lead
   fields:
   - pull_request
+  approval_ref: null
+- at: '2026-09-25T12:42:59+00:00'
+  by: codex-lead
+  fields:
+  - deployment
   approval_ref: null
 transitions:
 - from: TRIAGED
