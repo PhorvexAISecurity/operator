@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 56
+revision: 58
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -27,14 +27,12 @@ checks:
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
     at: '2026-09-25T03:52:11+00:00'
   preflight:
-    result: UNAVAILABLE
+    result: PASS
     by: stack-case-review
-    artifact: evidence/mongo-fixture-validation-pending.md
-    sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+    artifact: evidence/preflight/ec51-selected-receipt.json
+    sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
     source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
-    at: '2026-09-25T05:11:13+00:00'
-    rationale: Exact Mongo fixture test repair changed head; previous checks remain
-      historical and current-source selected validation is pending
+    at: '2026-09-25T05:30:05+00:00'
   implementation:
     result: PASS
     by: stack-case-review
@@ -104,7 +102,7 @@ fix_id: CAT-LITELLM-ROUTING
 issues: []
 title: Add installed LiteLLM inference routing catalogue control
 profile: standard
-state: IMPLEMENTED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -165,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: stack-case-review
-  action: Run selected combined-source preflight and submit source 850ce807 for lead
-    review
-updated_at: '2026-09-25T05:20:48+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-25T05:30:09+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -323,13 +321,21 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-25T05:30:06+00:00'
+  by: stack-case-review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: CAT-LITELLM-ROUTING:30:review
-  from: codex-lead
+  id: CAT-LITELLM-ROUTING:58:submit
+  from: stack-case-review
   to: codex-lead
-  role: coordinator
-  kind: review
-  revision: 30
+  role: skeptic
+  kind: submit
+  revision: 58
 check_history:
 - check: decision
   result: PASS
@@ -632,3 +638,19 @@ check_history:
   at: '2026-09-25T05:11:13+00:00'
   rationale: Exact Mongo fixture test repair changed head; previous checks remain
     historical and current-source selected validation is pending
+- check: preflight
+  result: UNAVAILABLE
+  by: stack-case-review
+  artifact: evidence/mongo-fixture-validation-pending.md
+  sha256: 832f8c7010f8d2315c041d44eea6b918bc5c5daac5beb60a4f04c2b23afaa069
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:11:13+00:00'
+  rationale: Exact Mongo fixture test repair changed head; previous checks remain
+    historical and current-source selected validation is pending
+- check: preflight
+  result: PASS
+  by: stack-case-review
+  artifact: evidence/preflight/ec51-selected-receipt.json
+  sha256: 8520878853669ace84fe0b3d4d40e6ea4e13259217a1b929203b251e54d8ae81
+  source_sha: ec51c09a9498cf82de0f10ac870647e6a8e291d7
+  at: '2026-09-25T05:29:06+00:00'
