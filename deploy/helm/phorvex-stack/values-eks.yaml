@@ -106,6 +106,13 @@ phorvex:
         quarantineCapacityLedgerName: phorvex-quarantine-capacity-d9372a8fb610e8aac611abf95dbad3f8874f09e4
       # No availability recovery dispatch until a reviewed installed profile,
       # exact digest, scoped token and audit transport are configured.
+      guardrailStatic:
+        enabled: true
+        configMapName: phorvex-catalogue-guardrail-static-e57580678bd1
+        profileSHA256: e57580678bd10559cd22ad9bc21b6edfa529b9025b635edf4f38f9adfa5621ba
+        sourceConfigMap: guardrail-proxy
+        guardrailJournalName: phorvex-serving-effect-a63da83e4ffcd99478d7dc594d61a12cf1753f26
+        kvJournalName: phorvex-serving-effect-09339a314f06fc30ed070c16156d4a20fbac2258
       guardrailAvailability:
         enabled: false
         configMapName: ""
@@ -148,10 +155,10 @@ phorvex:
           pdb: voice-bot
           transcriptSelector: app=voice-bot
           transcriptContainer: bot
-        # Separate model-continuation observation remains off until admission.
+        # Existing model continuation still requires verified Voice cleanup admission.
         mcpVoiceModel:
-          enabled: false
-          voiceSourceSHA256: ""
+          enabled: true
+          voiceSourceSHA256: "23b2e6e72912b11a545e06f54af4159789dc3a79f0aaed74cd2ec636cbb371cf"
         # Proposed dev desired state; no live apply from this source change.
         # Pinned read-only 2026-09-24: vllm Service :8000 selects one Ready
         # guardrail Pod; guardrail-proxy CM key hashes as below. Source digest
@@ -464,6 +471,10 @@ catalogueV1TokenRefresher:
 # This is not a credential or a new scenario; the normal console profile SHA
 # and manager image gates independently verify these bytes before a run.
 catalogueProfiles:
+  guardrailStatic:
+    enabled: true
+    configMapName: phorvex-catalogue-guardrail-static-e57580678bd1
+    profileBase64: IyBTZXJ2ZXItb3duZWQgbmFtZWQgc3VpdGUgdGVtcGxhdGUuIFRoaXMgcmVtYWlucyB1bmF2YWlsYWJsZSB1bnRpbCB0aGUgZXhhY3QKIyBpbnN0YWxsZWQgY2x1c3RlciwgUG9kLCBTZXJ2aWNlLCBzb3VyY2UsIGFuZCBqb3VybmFscyBhcmUgaW5kZXBlbmRlbnRseSBwaW5uZWQuCmt1YmVjb25maWc6ICIiCmNvbnRleHQ6ICJhcm46YXdzOmVrczp1cy1lYXN0LTI6NzUzNTU2NDM3MTgwOmNsdXN0ZXIvcGhvcnZleC1kZXYtZWtzIgpuYW1lc3BhY2U6IHZsbG0Kb3duZWRBY2s6IHRydWUKdHJpYWxzUGVyQXJtOiAxCm1hc3RlclNlZWQ6IDEzMzcKb3V0RGlyOiBvdXQtZ3VhcmRyYWlsLWNvbmZpZGVudGlhbGl0eS1zdGF0aWMKZGVmZW5kZXJGaWx0ZXI6IFtdCnNjZW5hcmlvRmlsdGVyOiBbXQpndWFyZHJhaWxTdGF0aWNGaXh0dXJlOgogIHJ1bklEOiBydW4tMQogIHRyYW5zcG9ydDogaW4tY2x1c3RlcgogIGNsdXN0ZXJVSUQ6ICJmMTEzZDQ2NC1kOGNiLTQxNDUtYjgzZC00NTYzOGMyYTE5NmUiCiAgcG9kTmFtZTogInZsbG0tNzdkNGI1ZmM1Zi14Y3BudCIKICBwb2RVSUQ6ICJmZGI5MmY4NS1jOThkLTQwYzgtODNkYi03ODgxMDQxYjFmOGIiCiAgdmFyaWFudDogcGd2MQogIHNlcnZpY2VVSUQ6ICI0ZTg0YmMwMi0zZmViLTRmOWEtYjRiMS01NmFjNWFkMDRlZmMiCiAgc291cmNlU0hBMjU2OiAiZmJhMzllNjhkZWE3NjMwNDMxMjViMjk0MTZiODMyNDE4Mzg3YTY3ODBlOGNjZTA2N2NiZTAxMjExMDRkMDljZSIKICBndWFyZHJhaWxKb3VybmFsTmFtZTogInBob3J2ZXgtc2VydmluZy1lZmZlY3QtYTYzZGE4M2U0ZmZjZDk5NDc4ZDdkYzU5NGQ2MWExMmNmMTc1M2YyNiIKICBndWFyZHJhaWxKb3VybmFsVUlEOiAiM2Y3YTA3NTctNDAyNS00NWNlLWFkYzktZWVmZTg4MWI0NmRmIgogIGt2Sm91cm5hbE5hbWU6ICJwaG9ydmV4LXNlcnZpbmctZWZmZWN0LTA5MzM5YTMxNGYwNmZjMzBlZDA3MGMxNjE1NmQ0YTIwZmJhYzIyNTgiCiAga3ZKb3VybmFsVUlEOiAiYTYxNzg2ZjgtYjdkYy00OGNkLTg2NDAtYjZkYjdhZWU4YTBjIgogIG1heFJ1blNlY29uZHM6IDYwMAo=
   podBoundTokenCPU:
     enabled: true
     configMapName: phorvex-catalogue-pod-bound-token-cpu-166-20260925
