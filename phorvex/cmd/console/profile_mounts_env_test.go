@@ -11,12 +11,13 @@ func TestNamedProfileMountEnvironmentRequiresReviewedHashes(t *testing.T) {
 	values := map[string]string{}
 	lookup := func(key string) (string, bool) { value, ok := values[key]; return value, ok }
 	var cfg console.Config
-	if err := applyCatalogueV1Environment(&cfg, lookup); err != nil || cfg.MongoExposureEnabled || cfg.GuardrailStaticEnabled || cfg.NATSExposureEnabled || cfg.NATSClientResponseEnabled {
+	if err := applyCatalogueV1Environment(&cfg, lookup); err != nil || cfg.MongoExposureEnabled || cfg.GuardrailStaticEnabled || cfg.GuardrailEffectEnabled || cfg.NATSExposureEnabled || cfg.NATSClientResponseEnabled {
 		t.Fatalf("default-off named profiles: %+v %v", cfg, err)
 	}
 	for _, tc := range []struct{ enabled, hash string }{
 		{"PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED", "PHORVEX_CONSOLE_MONGO_EXPOSURE_PROFILE_SHA256"},
 		{"PHORVEX_CONSOLE_GUARDRAIL_STATIC_ENABLED", "PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256"},
+		{"PHORVEX_CONSOLE_GUARDRAIL_EFFECT_ENABLED", "PHORVEX_CONSOLE_GUARDRAIL_EFFECT_PROFILE_SHA256"},
 		{"PHORVEX_CONSOLE_NATS_EXPOSURE_ENABLED", "PHORVEX_CONSOLE_NATS_EXPOSURE_PROFILE_SHA256"},
 	} {
 		values[tc.enabled] = "true"

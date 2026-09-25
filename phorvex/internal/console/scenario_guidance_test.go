@@ -67,7 +67,7 @@ func TestLimitedV1EffectGuidanceIsExplicitAndBounded(t *testing.T) {
 	items := (Config{}).limitedV1Catalogue()
 	for _, item := range items {
 		if item.EntryID == limitedV1GuardrailID {
-			if item.ResponseGuidanceBasis != "explicit-effect" || len(item.ExpectedActuators) != 1 || item.ExpectedActuators[0] != "guardrail-rotate" || !strings.Contains(item.ResponseGuidance, "does not establish behavioral bypass or mitigation") {
+			if item.ResponseGuidanceBasis != "explicit-effect" || len(item.ExpectedActuators) != 1 || item.ExpectedActuators[0] != "guardrail-rotate" || !strings.Contains(item.ResponseGuidance, "variant change alone is not defense") {
 				t.Fatalf("guardrail guidance=%+v", item)
 			}
 			return

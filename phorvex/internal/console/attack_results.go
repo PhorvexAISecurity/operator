@@ -72,13 +72,14 @@ type attackRecord struct {
 	// StimulusEvidence and EffectEvidence keep setup, controller effect and attacker outcome
 	// separate. A selector or guardrail-state transition is useful operational evidence, but it
 	// does not by itself establish that an attack was executed or mitigated.
-	StimulusEvidence *attackStimulusEvidence `json:"stimulusEvidence,omitempty"`
-	EffectEvidence   *attackEffectEvidence   `json:"effectEvidence,omitempty"`
-	OutcomeClass     string                  `json:"outcomeClass,omitempty"`
-	ProducerRoute    string                  `json:"producerRoute,omitempty"`
-	ResultSchema     string                  `json:"resultSchemaVersion,omitempty"`
-	ObservationStart string                  `json:"observationStartedAt,omitempty"`
-	ObservationEnd   string                  `json:"observationDeadline,omitempty"`
+	StimulusEvidence     *attackStimulusEvidence     `json:"stimulusEvidence,omitempty"`
+	EffectEvidence       *attackEffectEvidence       `json:"effectEvidence,omitempty"`
+	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
+	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
+	ProducerRoute        string                      `json:"producerRoute,omitempty"`
+	ResultSchema         string                      `json:"resultSchemaVersion,omitempty"`
+	ObservationStart     string                      `json:"observationStartedAt,omitempty"`
+	ObservationEnd       string                      `json:"observationDeadline,omitempty"`
 
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
@@ -157,6 +158,10 @@ type attackStimulusEvidence struct {
 	Correlation        string `json:"correlation"`
 	BehavioralExecuted bool   `json:"behavioralExecuted"`
 	Limitation         string `json:"limitation"`
+	// Original create request/reply are retained only in the private measured
+	// effect package; these never appear in attack history JSON.
+	createManifest []byte
+	createReply    []byte
 }
 
 type attackEffectEvidence struct {
@@ -296,11 +301,18 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 	c := *r
 	if r.StimulusEvidence != nil {
 		stimulus := *r.StimulusEvidence
+		stimulus.createManifest = append([]byte(nil), r.StimulusEvidence.createManifest...)
+		stimulus.createReply = append([]byte(nil), r.StimulusEvidence.createReply...)
 		c.StimulusEvidence = &stimulus
 	}
 	if r.EffectEvidence != nil {
 		effect := *r.EffectEvidence
 		c.EffectEvidence = &effect
+	}
+	if r.GuardrailEffectProbe != nil {
+		probe := *r.GuardrailEffectProbe
+		probe.Issues = append([]string(nil), r.GuardrailEffectProbe.Issues...)
+		c.GuardrailEffectProbe = &probe
 	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect

@@ -277,6 +277,10 @@ func TestCreateCorrelatedVLLMEventRequiresExactAPIAcknowledgement(t *testing.T) 
 	if err != nil || !evidence.Observed || evidence.EventUID != "event-uid" || evidence.BehavioralExecuted {
 		t.Fatalf("evidence=%+v err=%v", evidence, err)
 	}
+	if !strings.Contains(string(evidence.createManifest), "phorvex.ai/attack-correlation: "+`"`+evidence.Correlation+`"`) ||
+		!strings.Contains(string(evidence.createReply), `"uid":"event-uid"`) {
+		t.Fatal("original fixed event create request/reply not retained for independent effect projection")
+	}
 	s.cfg.Exec = func(_ time.Duration, _ string, args ...string) (string, error) {
 		return "request timed out after server may have accepted it", errors.New("timeout")
 	}

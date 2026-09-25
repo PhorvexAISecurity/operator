@@ -14,6 +14,7 @@ import { useExactRecord } from "@/lib/query";
 import { attackCSVActuator, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
+import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
 // observations. Signal-only rows never contribute behavioral outcomes or economics.
@@ -161,6 +162,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         <ClaimScopeNote claim={r.claim} />
         {unversioned && <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[11px] text-muted-foreground">Legacy/unversioned result: the recorded text is preserved, but it predates the typed catalogue-signal provenance contract and must not be reinterpreted as evidence for that producer.</div>}
         {signal && <CatalogueSignalResult result={r} />}
+        {r.guardrailEffectProbe && <GuardrailEffectProbe result={r.guardrailEffectProbe} />}
         {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Mechanism evidence</div>
@@ -175,7 +177,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
             <span className={cn("ml-1 font-mono font-semibold", defended ? "text-success" : "text-foreground")}>{r.phorvexAction || "—"}</span>
           </span>
           {!r.phorvexAction && <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{r.expectedActuator || "—"}</span> (not observed)</span>}
-          {effectOnly && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.effectEvidence?.seconds}s</span> · controller attribution remains temporal</span>}
+          {effectOnly && !r.guardrailEffectProbe && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.effectEvidence?.seconds}s</span> · controller attribution remains temporal</span>}
           {defended && r.timeToDefendSec > 0 && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.timeToDefendSec}s</span></span>}
           <span className="text-muted-foreground">target pod <span className="font-mono text-[11px] text-foreground/80">{r.pod?.split("-").slice(-1)[0]}</span></span>
           {!running && confirmed && cinfo.line && <span className={cinfo.cls}>{cinfo.line}</span>}

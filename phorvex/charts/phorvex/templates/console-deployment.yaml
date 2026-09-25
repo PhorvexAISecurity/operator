@@ -106,6 +106,24 @@
 {{- $journal := required "console.guardrailAvailability.guardrailJournalName is required" .Values.phorvex.console.guardrailAvailability.guardrailJournalName }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $journal) }}{{- fail "console.guardrailAvailability.guardrailJournalName must be a DNS label" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.guardrailEffect.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.guardrailEffect.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.guardrailEffect.enabled requires catalogueV1.scopedToken.existingSecret" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.scopedToken.key "token" }}{{- fail "console.guardrailEffect requires scopedToken key token" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.scopedToken.mountPath "/etc/phorvex-catalogue-v1" }}{{- fail "console.guardrailEffect requires fixed scopedToken mountPath" }}{{- end }}
+{{- if ne .Values.phorvex.console.catalogueV1.loopbackURL "http://127.0.0.1:8090" }}{{- fail "console.guardrailEffect requires fixed catalogue loopbackURL" }}{{- end }}
+{{- if ne (int .Values.phorvex.console.auditTransport.port) 8445 }}{{- fail "console.guardrailEffect requires auditTransport port 8445" }}{{- end }}
+{{- $auditHost := printf "%s-audit-source.%s.svc" (include "phorvex.fullname" .) .Release.Namespace }}
+{{- if ne .Values.phorvex.console.auditTransport.serverDNSName $auditHost }}{{- fail "console.guardrailEffect requires the release audit source DNS" }}{{- end }}
+{{- $name := required "console.guardrailEffect.configMapName is required" .Values.phorvex.console.guardrailEffect.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}{{- fail "console.guardrailEffect.configMapName must be a DNS subdomain name" }}{{- end }}
+{{- range (splitList "." $name) }}{{- if gt (len .) 63 }}{{- fail "console.guardrailEffect.configMapName DNS label exceeds 63 characters" }}{{- end }}{{- end }}
+{{- $sha := required "console.guardrailEffect.profileSHA256 is required" .Values.phorvex.console.guardrailEffect.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailEffect.profileSHA256 must be 64 lowercase hex characters" }}{{- end }}
+{{- if ne .Values.phorvex.console.guardrailEffect.sourceConfigMap "guardrail-proxy" }}{{- fail "console.guardrailEffect.sourceConfigMap must be guardrail-proxy" }}{{- end }}
+{{- $journal := required "console.guardrailEffect.guardrailJournalName is required" .Values.phorvex.console.guardrailEffect.guardrailJournalName }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $journal) }}{{- fail "console.guardrailEffect.guardrailJournalName must be a DNS label" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -220,6 +238,14 @@ spec:
         {{- if .Values.phorvex.console.guardrailAvailability.enabled }}
         - name: PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailAvailability.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_EFFECT_ENABLED
+          value: {{ .Values.phorvex.console.guardrailEffect.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.guardrailEffect.enabled }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_EFFECT_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.guardrailEffect.profileSHA256 | quote }}
+        {{- end }}
+        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
           valueFrom:
             fieldRef:
@@ -573,6 +599,12 @@ spec:
           subPath: config.guardrail-availability-recovery.yaml
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.guardrailEffect.enabled }}
+        - name: guardrail-effect-reviewed-profile
+          mountPath: /etc/phorvex-guardrail-effect/config.guardrail-effect.yaml
+          subPath: config.guardrail-effect.yaml
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -694,6 +726,15 @@ spec:
           items:
           - key: config.guardrail-availability-recovery.yaml
             path: config.guardrail-availability-recovery.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.guardrailEffect.enabled }}
+      - name: guardrail-effect-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.guardrailEffect.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.guardrail-effect.yaml
+            path: config.guardrail-effect.yaml
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

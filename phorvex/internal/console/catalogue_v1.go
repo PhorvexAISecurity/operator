@@ -162,12 +162,12 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 			LaunchKind: "fixed-suite", ClaimClass: "calibration", Profile: string(cataloguev1.GuardrailCalibration),
 			Available: guardrailReady, UnavailableReason: guardrailReason, RuntimeContext: c.catalogueV1RuntimeContext(cataloguev1.GuardrailCalibration)},
 		{EntryID: limitedV1GuardrailID, Name: limitedV1GuardrailID, Product: "ai", Category: "Effect observation", R6Tag: "not-applicable",
-			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(true),
+			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false),
 			ExpectedActuators: []string{"guardrail-rotate"}, ResponseGuidanceBasis: "explicit-effect",
-			ResponseGuidance: "guardrail-rotate names the operation observed for an exact-target runtime variant effect. A variant change does not establish behavioral bypass or mitigation.",
-			MeaningfulWhen:   "Observes an exact-target runtime variant transition; behavioral bypass and mitigation are not measured.",
-			RunnableNote:     "Uses the existing installed vLLM guardrail-effect handler and exact-ID result polling.", Prereqs: []string{"installed vLLM guardrail sidecar", "eligible guardrail-rotate policy"},
-			LaunchKind: "live-vllm-effect", ClaimClass: "effect", Profile: "guardrail-rotate", Available: true, RuntimeContext: "in-cluster"},
+			ResponseGuidance: "The fixed guarded canary and benign controls are measured before any injected event. An already-blocked or failed baseline stops without an event. A landed baseline may be compared after one exact event, selected decision and protected rotation; a variant change alone is not defense.",
+			MeaningfulWhen:   "Separates static filtering and legitimate-control failures from an exact injected event-to-operation-to-original-reply outcome. Natural detection and general security efficacy remain untested.",
+			RunnableNote:     guardrailEffectCatalogueReason(c), Prereqs: []string{"separate SHA-pinned effect profile with exact active variant", "installed vLLM guardrail sidecar", "authenticated audit source and eligible guardrail-rotate policy"},
+			LaunchKind: "live-vllm-effect", ClaimClass: "effect", Profile: "guardrail-rotate", Available: guardrailEffectCatalogueAvailable(c), RuntimeContext: "in-cluster"},
 	}
 }
 
