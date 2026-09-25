@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,10 +11,14 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 905356d053fa1b95e50da19df14cb7f5ce8e80ff80f159b5a53374891f75185c
+    sha256: d8a0e2d7d606406a1787cbe40399355696037c4c32802653b0010f025b016473
     source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
-    at: '2026-09-25T00:57:08+00:00'
+    at: '2026-09-25T03:29:08+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+    rationale: Existing campaign delegation covers source-grounded compatibility correction
+      and reassignment of implementation worker; prior decision retained; no new human
+      approval or evidence waiver
   red:
     result: PASS
     by: litellm-cases
@@ -113,7 +117,7 @@ state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
-  implementer: litellm-cases
+  implementer: stack-case-review
   skeptic: codex-lead
   live_verifier: codex-lead
   coordinator: codex-lead
@@ -173,7 +177,7 @@ next_action:
   owner: coordinator
   action: PR338 open targeting main; track release and then verify configured live
     routing and console outcomes.
-updated_at: '2026-09-25T02:30:27+00:00'
+updated_at: '2026-09-25T03:29:08+00:00'
 configuration_history:
 - at: '2026-09-25T00:57:02+00:00'
   by: codex-lead
@@ -198,6 +202,11 @@ configuration_history:
   fields:
   - pull_request
   approval_ref: null
+- at: '2026-09-25T03:28:51+00:00'
+  by: codex-lead
+  fields:
+  - roles
+  approval_ref: operations/AUTONOMY.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -262,3 +271,12 @@ handoff:
   role: coordinator
   kind: review
   revision: 8
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 905356d053fa1b95e50da19df14cb7f5ce8e80ff80f159b5a53374891f75185c
+  source_sha: d20e3b4de9bb657a24d852d26dc699c59157d837
+  at: '2026-09-25T00:57:08+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
