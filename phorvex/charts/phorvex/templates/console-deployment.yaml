@@ -34,6 +34,16 @@
 {{- fail "console.podBoundToken.profileSHA256 must be 64 lowercase hex characters" }}
 {{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+{{- $sourceName := required "console.podBoundTokenCPU.configMapName is required" .Values.phorvex.console.podBoundTokenCPU.configMapName }}
+{{- if or (gt (len $sourceName) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" $sourceName)) }}
+{{- fail "console.podBoundTokenCPU.configMapName must be a DNS subdomain name" }}
+{{- end }}
+{{- $profileSHA := required "console.podBoundTokenCPU.profileSHA256 is required" .Values.phorvex.console.podBoundTokenCPU.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $profileSHA) }}
+{{- fail "console.podBoundTokenCPU.profileSHA256 must be 64 lowercase hex characters" }}
+{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.mongoExposure.enabled }}
 {{- $name := required "console.mongoExposure.configMapName is required" .Values.phorvex.console.mongoExposure.configMapName }}
 {{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}
@@ -177,6 +187,12 @@ spec:
         {{- if .Values.phorvex.console.podBoundToken.enabled }}
         - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_PROFILE_SHA256
           value: {{ .Values.phorvex.console.podBoundToken.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED
+          value: {{ .Values.phorvex.console.podBoundTokenCPU.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.podBoundTokenCPU.profileSHA256 | quote }}
         {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
@@ -462,6 +478,16 @@ spec:
           subPath: manifest.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+        - name: pod-bound-token-cpu-reviewed-source
+          mountPath: {{ printf "%s/build/test-harness/config.pod-bound-api-auth-response-cpu.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
+          subPath: config.pod-bound-api-auth-response-cpu.yaml
+          readOnly: true
+        - name: pod-bound-token-cpu-reviewed-source
+          mountPath: /etc/phorvex-catalogue-pod-bound-token-cpu/manifest.json
+          subPath: manifest.json
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.mongoExposure.enabled }}
         - name: mongo-exposure-reviewed-profile
           mountPath: {{ printf "%s/build/test-harness/config.mongo-exposure-baseline.yaml" (trimSuffix "/" .Values.phorvex.console.root) }}
@@ -549,6 +575,17 @@ spec:
           items:
           - key: config.pod-bound-api-auth-response.yaml
             path: config.pod-bound-api-auth-response.yaml
+          - key: manifest.json
+            path: manifest.json
+      {{- end }}
+      {{- if .Values.phorvex.console.podBoundTokenCPU.enabled }}
+      - name: pod-bound-token-cpu-reviewed-source
+        configMap:
+          name: {{ .Values.phorvex.console.podBoundTokenCPU.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.pod-bound-api-auth-response-cpu.yaml
+            path: config.pod-bound-api-auth-response-cpu.yaml
           - key: manifest.json
             path: manifest.json
       {{- end }}
