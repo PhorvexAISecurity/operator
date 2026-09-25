@@ -239,6 +239,7 @@ func (s *Server) compatibleCatalogue(st appStack) ([]map[string]any, bool) {
 }
 
 func catalogueCompatProjection(it CatalogItem, compatible bool, reason string) map[string]any {
+	signalEligible, signalReason := catalogueSignalEligibility(it)
 	return map[string]any{
 		"name": it.Name, "product": it.Product, "category": it.Category,
 		"techniques": it.Techniques, "exercisedTechniques": it.ExercisedTechniques,
@@ -247,6 +248,7 @@ func catalogueCompatProjection(it CatalogItem, compatible bool, reason string) m
 		"responseGuidanceBasis": it.ResponseGuidanceBasis,
 		"responseGuidance":      it.ResponseGuidance,
 		"prereqs":               it.Prereqs, "compatible": compatible, "reason": reason,
+		"signalEligible": signalEligible, "signalEligibilityReason": signalReason,
 	}
 }
 

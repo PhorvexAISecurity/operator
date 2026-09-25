@@ -397,6 +397,7 @@ export interface AppStack {
 }
 export interface CatalogCompat {
   name: string; product: string; category: string; techniques: string[]; benignControl?: boolean;
+  signalEligible?: boolean; signalEligibilityReason?: string;
   expectedActuators: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
   responseGuidance?: string; prereqs: string[]; compatible: boolean; reason: string;
 }
@@ -571,7 +572,7 @@ export interface RunEvidenceTrial {
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
 export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
-export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; brainMode: "NO_SIGNAL"; securityEfficacy: "NOT_EVALUATED"; sourceAttestation: string; issues?: string[] }
+export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; /** Legacy wire field: NO_SIGNAL means this direct configuration control injected no SecurityEvent; it does not report a brain decision. */ brainMode: "NO_SIGNAL" | string; securityEfficacy: "NOT_EVALUATED" | string; sourceAttestation: string; issues?: string[] }
 export interface NATSResponseDecisionTrace {
   schema: string;
   runId: string;

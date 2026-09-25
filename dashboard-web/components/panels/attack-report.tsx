@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, readLiveSelection } from "@/lib/live-selection";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { useExactRecord } from "@/lib/query";
-import { isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
+import { attackCSVActuator, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 
@@ -63,8 +63,8 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
     const rs = pager.items;
     const head = ["fired", "service", "attack", "mitre", "outcome", "actuator", "containment", "time_to_action_s", "dwell_s", "dwell_ongoing", "uptime_before", "uptime_dip", "uptime_after", "cost_without", "cost_r6", "cost_with", "savings", "why"];
     const body = rs.map((r) => isCatalogueSignalResult(r)
-      ? [r.firedAt, r.service, r.attack, r.mitre, "CATALOGUE SIGNAL · UNSCORED", r.responseAction || "", "", "", "", "", "", "", "", "", "", "", "", r.observationError || r.stimulusEvidence?.limitation || "behavioral outcome not measured"]
-      : [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, r.phorvexAction, r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
+      ? [r.firedAt, r.service, r.attack, r.mitre, "CATALOGUE SIGNAL · UNSCORED", attackCSVActuator(r), "", "", "", "", "", "", "", "", "", "", "", "", r.observationError || r.stimulusEvidence?.limitation || "behavioral outcome not measured"]
+      : [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, attackCSVActuator(r), r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
     csvDownload("phorvex-attack-results-page.csv", [head, ...body]);
   }
 
