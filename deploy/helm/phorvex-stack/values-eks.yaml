@@ -94,6 +94,11 @@ phorvex:
     console:
       enabled: true
       allowWorkloadMutations: true
+      # Reviewed fixed synthetic Mongo exposure profile; opt-in named run only.
+      mongoExposure:
+        enabled: true
+        configMapName: phorvex-catalogue-mongo-8b56fbee01a0
+        profileSHA256: 8b56fbee01a0f286317e4494e7b28ad2e24e92468abdb5a99da66264dc500a6b
       # Existing owned CPU response profile; its source bytes are the immutable
       # catalogueProfiles ConfigMap below. These values do not force a decision.
       podBoundTokenCPU:
@@ -196,10 +201,23 @@ phorvex:
           bearerTokenKey: bearer-token
           runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
           kubeContext: ""
-        # Await owner-reviewed immutable CRM/Mongo images, a dedicated labelled
-        # fixture namespace and a scoped fixture identity before opt-in.
+        # Dedicated owned CRM fixture; exact image manifest and short-lived scoped
+        # fixture identity are pinned by the reviewed bootstrap receipts.
         crm:
-          enabled: false
+          enabled: true
+          namespace: phorvex-catalogue-crm
+          namespaceUID: 196e6ece-f383-4ecd-a4fe-bf24cda7a120
+          serviceAccountName: phorvex-catalogue-crm-fixture
+          manifestConfigMap: phorvex-catalogue-crm-manifest
+          manifestKey: manifest.json
+          manifestMountPath: /etc/phorvex-catalogue-v1-crm
+          manifestSHA256: 7400f88230b11659649e0fd77e739b48d4f800fc8b3b99010b2dde11d2c86c46
+          harnessSHA256: 77b4fdeae4224ca3a31d0e502dfa2bb4052b7b92531c22143ecf8ac5a413b891
+          runtimeSecret: phorvex-catalogue-crm-runtime-20260925
+          kubeconfigKey: kubeconfig
+          runtimeMountPath: /etc/phorvex-catalogue-v1-crm-runtime
+          kubeconfigSHA256: e0d49d73419f39a8f79b9aebc2e26fe92f14d6ddfd29a65c3448009f0206fe8f
+          kubeContext: phorvex-catalogue-crm
       auditTransport:
         port: 8445
         serverSecretName: phorvex-audit-server-release-dns-20260925
@@ -274,7 +292,7 @@ phorvex:
                   "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
                   "subject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
                   "roles": ["operator"],
-                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu", "phorvex-system"],
+                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu", "phorvex-system", "phorvex-catalogue-crm"],
                   "targets": ["default", "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"],
                   "note": "End-to-End pipeline (CI) and reviewed fixed catalogue profiles in the listed namespaces; token minted per run, never stored."
                 }
@@ -471,6 +489,10 @@ catalogueV1TokenRefresher:
 # This is not a credential or a new scenario; the normal console profile SHA
 # and manager image gates independently verify these bytes before a run.
 catalogueProfiles:
+  mongoExposure:
+    enabled: true
+    configMapName: phorvex-catalogue-mongo-8b56fbee01a0
+    profileBase64: IyBPRkZMSU5FIENBTkRJREFURSBmcm9tIGJvdW5kZWQgMjAyNi0wOS0yNSAxNjozMiBVVEMgR0VUczsgcmVmcmVzaCBhdCBhZG1pc3Npb24uCiMgRGVmYXVsdC1vZmYgc2VydmVyLW93bmVkIE1vbmdvIGNvbmZpZ3VyYXRpb24gZXhwb3N1cmUgY29udHJvbC4gUmVwbGFjZSBldmVyeQojIHNvdXJjZSBwbGFjZWhvbGRlciB3aXRoIHJldmlld2VkIGluc3RhbGxlZCBwaW5zIGJlZm9yZSBlbmFibGluZyB0aGUgcHJvZmlsZS4KIyBUaGUgbmFtZWQtc3VpdGUgc2VydmVyIHJlcGxhY2VzIHJ1bklELCBub25jZSBhbmQgb3V0RGlyIHdpdGggb25lIHByaXZhdGUKIyBhYnNvbHV0ZSBydW4gcGF0aCBiZWZvcmUgaGFybmVzcyB2YWxpZGF0aW9uOyB0aGlzIGZpbGUgY2Fubm90IGxhdW5jaCBpdHNlbGYuCmt1YmVjb25maWc6ICIiCmNvbnRleHQ6ICJhcm46YXdzOmVrczp1cy1lYXN0LTI6NzUzNTU2NDM3MTgwOmNsdXN0ZXIvcGhvcnZleC1kZXYtZWtzIgpuYW1lc3BhY2U6IGRvY3VtZW50LXN0b3JlCm93bmVkQWNrOiB0cnVlCnRyaWFsc1BlckFybTogMQptYXN0ZXJTZWVkOiAxMzM3Cm91dERpcjogb3V0LW1vbmdvLWV4cG9zdXJlLWJhc2VsaW5lCnNjZW5hcmlvRmlsdGVyOiBbYzItbW9uZ28tdW5jcmVkZW50aWFsZWQtc2VydmljZS1leHBvc3VyZV0KZGVmZW5kZXJGaWx0ZXI6IFtdCm1vbmdvRXhwb3N1cmVGaXh0dXJlOgogIHJ1bklEOiBydW4tMQogIG5vbmNlOiAiMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiCiAgdHJhbnNwb3J0OiBpbi1jbHVzdGVyCiAgY2x1c3RlclVJRDogImYxMTNkNDY0LWQ4Y2ItNDE0NS1iODNkLTQ1NjM4YzJhMTk2ZSIKICBtb25nb0RlcGxveW1lbnQ6IG1vbmdvCiAgbW9uZ29TZXJ2aWNlOiBtb25nbwogIG1vbmdvSW1hZ2VJRDogImRvY2tlci5pby9saWJyYXJ5L21vbmdvQHNoYTI1NjpiZTNkNjM1M2YzZWEzZmQzZDIyZTAxNmQxOWRhMjBmY2Q2OTM3ZWRhMDczOWViNmQyYWVlZDMzNWJhYTYwZjkwIgogIHBvbGljeU5hbWU6IG1vbmdvLWRlZmVuc2UKICBtYW5hZ2VyTmFtZXNwYWNlOiBwaG9ydmV4LXN5c3RlbQogIG1hbmFnZXJEZXBsb3ltZW50OiBwaG9ydmV4LXBob3J2ZXgKICBtYW5hZ2VySW1hZ2VJRDogIjc1MzU1NjQzNzE4MC5ka3IuZWNyLnVzLWVhc3QtMi5hbWF6b25hd3MuY29tL3Bob3J2ZXhAc2hhMjU2OmVkMmMyYTRkN2UxY2RlZTkxNDBhODA5NmRmZDc1ZDU5ZjM2NzFiYTlhMjNhYmY2ZmMzZTY1ZDk0ZDQzODQxYzgiCiAgYWxsb3dlZE5vZGVOYW1lczogWyJpcC0xNzItMjctMTEtOS51cy1lYXN0LTIuY29tcHV0ZS5pbnRlcm5hbCJdCiAgbWF4UnVuU2Vjb25kczogNjAwCg==
   guardrailStatic:
     enabled: true
     configMapName: phorvex-catalogue-guardrail-static-e57580678bd1
