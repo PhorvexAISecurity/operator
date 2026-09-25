@@ -2,16 +2,24 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 4
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 23799fb0a59a7276cf4b6f3ae48c4eb6e3efbb081767be0a292dc3a1137999a6
+    source_sha: 96a27625d94b97701f856d8ec789f40f89c08491
+    at: '2026-09-25T12:08:34+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
 fix_id: CAT-AUTH-CONTROL-SCOPE
 issues: []
 title: Keep the console negative authorization control outside the test identity grants
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -72,10 +80,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Assign participants and pins; deliver independently reviewed PR under standing
-    scope.
-updated_at: '2026-09-25T12:08:06+00:00'
+  owner: live-readiness
+  action: Implement exact EKS negative-control tenant and rendered-grant regression;
+    submit independently reviewable source
+updated_at: '2026-09-25T12:08:41+00:00'
 follow_up_to: CAT-PROFILE-GRANTS
 configuration_history:
 - at: '2026-09-25T12:08:06+00:00'
@@ -88,3 +96,20 @@ configuration_history:
   - roles
   - verification
   approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-25T12:08:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T12:08:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
