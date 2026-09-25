@@ -659,6 +659,21 @@ export interface MongoExposureResult {
 }
 export interface GuardrailStaticCall { name: "canary_raw" | "canary_guarded" | "say_ok" | "arithmetic"; port: number; status: number; markerPresent?: boolean; answerIsFour?: boolean; errorType?: string }
 export interface GuardrailStaticResult { accepted: boolean; status: string; sayOK: string; arithmetic: string; calls: GuardrailStaticCall[]; issues: string[]; clusterUID: string; podUID: string; variant: string; sourceSHA256: string; sourceEvidence: string; loadedSource: string; serviceUID: string; endpointSliceSHA256: string; guardrailJournalUID: string; guardrailJournalGeneration: number; kvJournalUID: string; eventMode: "DIRECT_STATIC"; naturalDetector: "NOT_EVALUATED"; brainDecision: "NOT_EVALUATED"; actuator: "NOT_EVALUATED"; externalRoute: "NOT_TESTED" }
+export interface GuardrailAvailabilityResult {
+  accepted: boolean;
+  status: string;
+  issues: string[];
+  eventMode: "INJECTED" | "NONE";
+  naturalDetector: "NOT_EVALUATED";
+  securityEfficacy: "NOT_EVALUATED";
+  syntheticThreat: string;
+  route: "Pod-loopback-8000";
+  loadedWeightsAttested: false;
+  before: { canary: string; sayOK: string; arithmetic: string };
+  after: { canary: string; sayOK: string; arithmetic: string };
+  operation: { eventUID: string; decisionID: string; operationID: string; priorVariant: string; nextVariant: string; generation: number };
+  cleanupVerified: boolean;
+}
 export interface PodBoundTokenStage { name: string; status: "CONFIRMED" | "REFUSED" | "UNKNOWN"; observedAt?: string; evidenceSHA256?: string; reason?: string }
 export interface PodBoundTokenResult {
   schema: "pod-bound-token-result-v1";
@@ -673,7 +688,7 @@ export interface PodBoundTokenResult {
   telemetry?: { producerStatus?: string; firstAt?: string; secondAt?: string; firstValue?: number; secondValue?: number; sourcePodName?: string; podMonitorUID?: string; querySHA256?: string };
   cleanup?: { status?: string; inventorySHA256?: string; absent?: boolean };
 }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; podBoundTokenResult?: PodBoundTokenResult; note: string }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; guardrailAvailabilityResult?: GuardrailAvailabilityResult; podBoundTokenResult?: PodBoundTokenResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];
