@@ -33,6 +33,8 @@ type LiteLLMRuntime struct {
 	ConfigMap            string `json:"configMap"`
 	ConfigKey            string `json:"configKey"`
 	ExpectedConfigSHA256 string `json:"expectedConfigSHA256"`
+	InferenceEnabled     bool   `json:"inferenceEnabled,omitempty"`
+	ModelAlias           string `json:"modelAlias,omitempty"`
 }
 
 const (
@@ -80,14 +82,15 @@ func (h liteHandler) Reconcile(_ context.Context, _ JobContext, _ Journal) Clean
 }
 
 type litePod struct {
-	Name            string `json:"name"`
-	UID             string `json:"uid"`
-	ResourceVersion string `json:"resourceVersion"`
-	IP              string `json:"ip"`
-	RSUID           string `json:"replicaSetUID"`
-	ContainerID     string `json:"containerID"`
-	ImageID         string `json:"imageID"`
-	RestartCount    int32  `json:"restartCount"`
+	Name              string `json:"name"`
+	UID               string `json:"uid"`
+	ResourceVersion   string `json:"resourceVersion"`
+	IP                string `json:"ip"`
+	RSUID             string `json:"replicaSetUID"`
+	ContainerID       string `json:"containerID"`
+	ImageID           string `json:"imageID"`
+	RestartCount      int32  `json:"restartCount"`
+	MasterKeyDeclared bool   `json:"masterKeyDeclared"`
 }
 type liteAuthority struct {
 	DeploymentUID        string    `json:"deploymentUID"`
@@ -236,7 +239,13 @@ func (t liteKubeTransport) snapshot(ctx context.Context, c LiteLLMRuntime) (lite
 		if epCount != 1 {
 			return liteAuthority{}, errors.New("LiteLLM Pod endpoint differs")
 		}
-		a.Pods = append(a.Pods, litePod{Name: p.Name, UID: string(p.UID), ResourceVersion: p.ResourceVersion, IP: p.Status.PodIP, RSUID: string(rs.UID), ContainerID: status.ContainerID, ImageID: status.ImageID, RestartCount: status.RestartCount})
+		masterCount := 0
+		for _, env := range container.Env {
+			if env.Name == "LITELLM_MASTER_KEY" && env.ValueFrom == nil && env.Value != "" {
+				masterCount++
+			}
+		}
+		a.Pods = append(a.Pods, litePod{Name: p.Name, UID: string(p.UID), ResourceVersion: p.ResourceVersion, IP: p.Status.PodIP, RSUID: string(rs.UID), ContainerID: status.ContainerID, ImageID: status.ImageID, RestartCount: status.RestartCount, MasterKeyDeclared: len(p.Spec.Containers[0].EnvFrom) == 0 && masterCount == 1})
 	}
 	sort.Slice(a.Pods, func(i, j int) bool { return a.Pods[i].Name < a.Pods[j].Name })
 	if a.Pods[0].Name == a.Pods[1].Name {

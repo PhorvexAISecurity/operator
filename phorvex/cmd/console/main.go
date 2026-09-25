@@ -386,6 +386,14 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if err != nil {
 		return err
 	}
+	liteLLMInferenceEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_LITELLM_INFERENCE_ENABLED")
+	if err != nil {
+		return err
+	}
+	liteLLMModelAlias := read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_MODEL_ALIAS")
+	if liteLLMInferenceEnabled && (!liteLLMEnabled || liteLLMModelAlias == "") {
+		return errors.New("LiteLLM inference requires the installed LiteLLM profile and a reviewed model alias")
+	}
 	crmEnabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_CRM_ENABLED")
 	if err != nil {
 		return err
@@ -473,6 +481,8 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	cfg.CatalogueV1.ChromaServerSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_SERVER_SOURCE_SHA256")
 	cfg.CatalogueV1.ChromaSchemaSourceSHA256 = read("PHORVEX_CONSOLE_CATALOGUE_CHROMA_SCHEMA_SOURCE_SHA256")
 	cfg.CatalogueV1.LiteLLMEnabled = liteLLMEnabled
+	cfg.CatalogueV1.LiteLLMInferenceEnabled = liteLLMInferenceEnabled
+	cfg.CatalogueV1.LiteLLMModelAlias = liteLLMModelAlias
 	cfg.CatalogueV1.LiteLLMNamespace = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_NAMESPACE")
 	cfg.CatalogueV1.LiteLLMDeployment = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_DEPLOYMENT")
 	cfg.CatalogueV1.LiteLLMService = read("PHORVEX_CONSOLE_CATALOGUE_LITELLM_SERVICE")
@@ -544,7 +554,7 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		cataloguev1.NewGPUDrainHandler(),
 		cataloguev1.NewAuthUnauthHandler(), cataloguev1.NewAuthScopeHandler(),
 		cataloguev1.NewGuardrailCalibrationHandler(), cataloguev1.NewMCPSessionHandler(),
-		cataloguev1.NewChromaHandler(), cataloguev1.NewLiteLLMHealthHandler(), cataloguev1.NewLiteLLMCredentialHandler(),
+		cataloguev1.NewChromaHandler(), cataloguev1.NewLiteLLMHealthHandler(), cataloguev1.NewLiteLLMCredentialHandler(), cataloguev1.NewLiteLLMRoutingHandler(),
 		cataloguev1.NewCRMCapabilityHandler(cataloguev1.CRMRefund), cataloguev1.NewCRMCapabilityHandler(cataloguev1.CRMReset))
 	if err != nil {
 		log.Printf("catalogue v1 registry: %v", err)
@@ -577,7 +587,7 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 func workerKubernetesRuntime(profile cataloguev1.ProfileID, runtimeConfig cataloguev1.RuntimeConfig) (*rest.Config, kubernetes.Interface, error) {
 	if profile != cataloguev1.VoiceMedia && profile != cataloguev1.VoiceRecovery &&
 		profile != cataloguev1.GuardrailCalibration && profile != cataloguev1.MCPSessionBaseline &&
-		profile != cataloguev1.ChromaOwnedVector && profile != cataloguev1.LiteLLMHealth && profile != cataloguev1.LiteLLMCredential {
+		profile != cataloguev1.ChromaOwnedVector && profile != cataloguev1.LiteLLMHealth && profile != cataloguev1.LiteLLMCredential && profile != cataloguev1.LiteLLMRouting {
 		return nil, nil, nil
 	}
 	var restConfig *rest.Config

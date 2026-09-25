@@ -86,6 +86,11 @@ func (c RuntimeConfig) Validate() error {
 		if err := ValidateLiteLLMRuntime(*c.LiteLLM); err != nil {
 			return err
 		}
+		if c.LiteLLM.InferenceEnabled {
+			if err := ValidateLiteLLMInferenceRuntime(*c.LiteLLM); err != nil {
+				return err
+			}
+		}
 	}
 	if c.CRM != nil {
 		if err := ValidateCRMLocalAuthority(*c.CRM); err != nil {

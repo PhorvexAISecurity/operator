@@ -143,6 +143,8 @@ type CatalogueV1Config struct {
 	LiteLLMConfigMap            string
 	LiteLLMConfigKey            string
 	LiteLLMConfigSHA256         string
+	LiteLLMInferenceEnabled     bool
+	LiteLLMModelAlias           string
 	CRMEnabled                  bool
 	CRMNamespace                string
 	CRMServiceAccountName       string

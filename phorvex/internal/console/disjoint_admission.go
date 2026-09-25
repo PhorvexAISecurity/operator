@@ -70,7 +70,7 @@ var priorVoiceJournalKeys = map[string][]string{
 // failure is retained unchanged; this classifies its possible resource effects.
 func disjointVoiceCandidate(profile cataloguev1.ProfileID) bool {
 	switch profile {
-	case cataloguev1.ChromaOwnedVector, cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential,
+	case cataloguev1.ChromaOwnedVector, cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential, cataloguev1.LiteLLMRouting,
 		cataloguev1.CRMRefund, cataloguev1.CRMReset:
 		return true
 	default:
@@ -97,7 +97,7 @@ func (rm *RunManager) disjointVoiceAdmissionLocked(profile cataloguev1.ProfileID
 		if destination.ScopeTenant != "document-store" || rm.cfg.CatalogueV1.ChromaNamespace != "document-store" {
 			return false
 		}
-	case cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential:
+	case cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential, cataloguev1.LiteLLMRouting:
 		if destination.ScopeTenant != "litellm" || rm.cfg.CatalogueV1.LiteLLMNamespace != "litellm" {
 			return false
 		}

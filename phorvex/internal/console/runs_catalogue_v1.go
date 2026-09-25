@@ -46,7 +46,7 @@ func (rm *RunManager) FunctionalDestination(profile cataloguev1.ProfileID) (runD
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.MCPNamespace)
 	case cataloguev1.ChromaOwnedVector:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.ChromaNamespace)
-	case cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential:
+	case cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential, cataloguev1.LiteLLMRouting:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.LiteLLMNamespace)
 	case cataloguev1.CRMRefund, cataloguev1.CRMReset:
 		tenant = strings.TrimSpace(rm.cfg.CatalogueV1.CRMNamespace)
@@ -102,7 +102,8 @@ func (c Config) catalogueV1RuntimeConfig() cataloguev1.RuntimeConfig {
 			Namespace: c.CatalogueV1.LiteLLMNamespace, Deployment: c.CatalogueV1.LiteLLMDeployment,
 			Service: c.CatalogueV1.LiteLLMService, Container: c.CatalogueV1.LiteLLMContainer,
 			Port: c.CatalogueV1.LiteLLMPort, ConfigMap: c.CatalogueV1.LiteLLMConfigMap,
-			ConfigKey: c.CatalogueV1.LiteLLMConfigKey, ExpectedConfigSHA256: c.CatalogueV1.LiteLLMConfigSHA256}
+			ConfigKey: c.CatalogueV1.LiteLLMConfigKey, ExpectedConfigSHA256: c.CatalogueV1.LiteLLMConfigSHA256,
+			InferenceEnabled: c.CatalogueV1.LiteLLMInferenceEnabled, ModelAlias: c.CatalogueV1.LiteLLMModelAlias}
 	}
 	if c.CatalogueV1.CRMEnabled {
 		runtime.CRM = &cataloguev1.CRMCapabilityRuntime{Enabled: true,
@@ -586,6 +587,11 @@ func (rm *RunManager) FunctionalResult(id string) (*cataloguev1.Result, error) {
 	}
 	if err = cataloguev1.ValidateTerminalArtifacts(job, result, filepath.Join(dir, "metrics.jsonl")); err != nil {
 		return nil, err
+	}
+	if job.Profile == cataloguev1.LiteLLMRouting && result.Outcome != cataloguev1.OutcomeTestFailed {
+		if err = cataloguev1.ValidateLiteLLMRoutingArtifacts(job, result); err != nil {
+			return nil, err
+		}
 	}
 	if string(result.Outcome) != status.Outcome || result.Cleanup.Status != status.CleanupStatus {
 		return nil, errors.New("fixed-suite terminal result differs from the accepted run status")

@@ -12,7 +12,7 @@ import (
 func TestStackCasesClosedCatalogueAndRuntimeAuthority(t *testing.T) {
 	cfg := Config{StateDir: t.TempDir()}
 	rows := cfg.limitedV1Catalogue()
-	for _, id := range []cataloguev1.ProfileID{cataloguev1.ChromaOwnedVector, cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential} {
+	for _, id := range []cataloguev1.ProfileID{cataloguev1.ChromaOwnedVector, cataloguev1.LiteLLMHealth, cataloguev1.LiteLLMCredential, cataloguev1.LiteLLMRouting} {
 		var found *CatalogItem
 		for i := range rows {
 			if rows[i].Profile == string(id) {
@@ -37,7 +37,7 @@ func TestStackCasesClosedCatalogueAndRuntimeAuthority(t *testing.T) {
 	cfg.CatalogueV1.LiteLLMEnabled = true
 	cfg.CatalogueV1.LiteLLMNamespace = "litellm"
 	for id, want := range map[cataloguev1.ProfileID]string{
-		cataloguev1.ChromaOwnedVector: "document-store", cataloguev1.LiteLLMHealth: "litellm", cataloguev1.LiteLLMCredential: "litellm",
+		cataloguev1.ChromaOwnedVector: "document-store", cataloguev1.LiteLLMHealth: "litellm", cataloguev1.LiteLLMCredential: "litellm", cataloguev1.LiteLLMRouting: "litellm",
 	} {
 		rm := NewRunManager(cfg)
 		d, err := rm.FunctionalDestination(id)
@@ -55,6 +55,7 @@ func TestStackCasesRealRouteChecksResolvedTenantAndTargetBeforeAdmission(t *test
 		{cataloguev1.ChromaOwnedVector, "document-store"},
 		{cataloguev1.LiteLLMHealth, "litellm"},
 		{cataloguev1.LiteLLMCredential, "litellm"},
+		{cataloguev1.LiteLLMRouting, "litellm"},
 	} {
 		t.Run(string(tc.profile), func(t *testing.T) {
 			cfg := functionalLedgerTestConfig(t)
