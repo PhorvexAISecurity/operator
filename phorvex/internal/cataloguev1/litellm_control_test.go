@@ -90,6 +90,10 @@ func liteFixture(t *testing.T) (Runtime, *liteFixtureTransport, *liteRecorder, *
 }
 
 func liteFixtureWithAuth(t *testing.T, masterReply func(http.ResponseWriter, *http.Request)) (Runtime, *liteFixtureTransport, *liteRecorder, *httptest.Server) {
+	return liteFixtureWithAuthReplies(t, masterReply, nil)
+}
+
+func liteFixtureWithAuthReplies(t *testing.T, masterReply, invalidReply func(http.ResponseWriter, *http.Request)) (Runtime, *liteFixtureTransport, *liteRecorder, *httptest.Server) {
 	t.Helper()
 	yes, no := true, false
 	two := int32(2)
@@ -136,6 +140,10 @@ func liteFixtureWithAuth(t *testing.T, masterReply func(http.ResponseWriter, *ht
 			}
 			if !strings.HasPrefix(auth, "Bearer sk-catalogue-") {
 				t.Errorf("unexpected bearer shape")
+			}
+			if invalidReply != nil {
+				invalidReply(w, r)
+				return
 			}
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte(`{"error":{"message":"No connected db."}}`))
@@ -256,6 +264,37 @@ func TestLiteLLMMasterMalformedAndDeniedStayInconclusive(t *testing.T) {
 				t.Fatalf("bad master positive was credited: %+v", result)
 			}
 		})
+	}
+}
+
+func TestLiteLLMNegativeAcceptanceIsNotMaskedByMasterFailure(t *testing.T) {
+	masterRequests, invalidRequests := 0, 0
+	runtime, transport, _, server := liteFixtureWithAuthReplies(t,
+		func(w http.ResponseWriter, _ *http.Request) {
+			masterRequests++
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"master path unavailable"}`))
+		},
+		func(w http.ResponseWriter, _ *http.Request) {
+			invalidRequests++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+		})
+	defer server.Close()
+	runtime.StateDir = t.TempDir()
+	runtime.ConfigSHA256 = strings.Repeat("b", 64)
+	runner, err := New(runtime, liteHandler{profile: LiteLLMCredential, transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := liteJobForTest(t, runtime, LiteLLMCredential)
+	result := runner.Execute(context.Background(), job)
+	if masterRequests != 2 || invalidRequests != 2 || result.Outcome != OutcomeFunctionalFail || result.Evidence["masterPathState"] != "UNVERIFIED" || result.Evidence["authBoundaryState"] != "NEGATIVE_GET_ACCEPTED" || result.Evidence["pod1.invalidBearer.status"] != "200" || result.Evidence["pod2.invalidBearer.status"] != "200" {
+		t.Fatalf("observed negative acceptance was masked: master=%d invalid=%d result=%+v", masterRequests, invalidRequests, result)
+	}
+	if err = ValidateTerminalArtifacts(job, result, filepath.Join(job.OutputDir, "metrics.jsonl")); err != nil {
+		t.Fatal(err)
 	}
 }
 

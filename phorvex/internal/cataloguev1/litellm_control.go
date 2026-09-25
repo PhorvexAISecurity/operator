@@ -521,15 +521,19 @@ func (h liteHandler) Run(ctx context.Context, jc JobContext) (out Result) {
 		out.Summary = "each exact serving LiteLLM Pod returned bounded liveness 200"
 		return
 	}
-	if !masterPass {
+	if masterPass {
+		out.Evidence["masterPathState"] = "AVAILABLE"
+	} else {
 		out.Evidence["masterPathState"] = "UNVERIFIED"
-		out.Summary = "LiteLLM master-key model-list path did not return reviewed shape on every Pod"
-		return
 	}
-	out.Evidence["masterPathState"] = "AVAILABLE"
 	if denialFailure {
 		out.Outcome = OutcomeFunctionalFail
 		out.Summary = "one or more negative auth GETs returned success"
+		out.Evidence["authBoundaryState"] = "NEGATIVE_GET_ACCEPTED"
+		return
+	}
+	if !masterPass {
+		out.Summary = "LiteLLM master-key model-list path did not return reviewed shape on every Pod"
 		return
 	}
 	if configLimited {
