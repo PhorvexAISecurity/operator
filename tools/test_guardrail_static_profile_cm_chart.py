@@ -113,11 +113,33 @@ class GuardrailStaticProfileCMChart(unittest.TestCase):
         self.assertEqual(mount["mountPath"], "/data/build/test-harness/" + KEY)
         self.assertIs(mount["readOnly"], True)
 
+    def test_existing_external_configmap_path_preserves_console_projection(self):
+        managed, name, digest = options(console=True)
+        managed_result, managed_docs = render(managed)
+        self.assertEqual(managed_result.returncode, 0, managed_result.stderr)
+        external = yaml.safe_load(yaml.safe_dump(managed))
+        external["catalogueProfiles"]["guardrailStatic"]["enabled"] = False
+        external_result, external_docs = render(external)
+        self.assertEqual(external_result.returncode, 0, external_result.stderr)
+        self.assertEqual(static_source(external_docs), [])
+        def console_projection(docs):
+            return [x for x in docs if
+                    (x.get("kind") == "Deployment" and
+                     x.get("metadata", {}).get("name") == "phorvex-phorvex-console") or
+                    "console-guardrail-static" in x.get("metadata", {}).get("name", "")]
+        self.assertEqual(console_projection(external_docs), console_projection(managed_docs))
+        deployment = next(x for x in external_docs if x.get("kind") == "Deployment" and
+                          x["metadata"]["name"] == "phorvex-phorvex-console")
+        pod = deployment["spec"]["template"]["spec"]
+        volume = next(x for x in pod["volumes"] if x["name"] == "guardrail-static-reviewed-profile")
+        self.assertEqual(volume["configMap"]["name"], name)
+        console = next(x for x in pod["containers"] if x["name"] == "console")
+        env = {x["name"]: x.get("value") for x in console["env"]}
+        self.assertEqual(env["PHORVEX_CONSOLE_GUARDRAIL_STATIC_PROFILE_SHA256"], digest)
+
     def test_source_and_child_mismatches_refuse(self):
         base, _, _ = options(console=True)
         controls = [
-            ("no owned source", lambda x: x["catalogueProfiles"]["guardrailStatic"].update(enabled=False),
-             "requires catalogueProfiles.guardrailStatic.enabled"),
             ("wrong source name", lambda x: x["catalogueProfiles"]["guardrailStatic"].update(configMapName="arbitrary-source"),
              "must match decoded profile SHA prefix"),
             ("wrong child name", lambda x: x["phorvex"]["phorvex"]["console"]["guardrailStatic"].update(configMapName="other-source"),

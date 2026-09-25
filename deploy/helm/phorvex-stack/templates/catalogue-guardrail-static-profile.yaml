@@ -2,9 +2,6 @@
 {{- $child := get .Values.phorvex "phorvex" | default dict -}}
 {{- $console := get $child "console" | default dict -}}
 {{- $static := get $console "guardrailStatic" | default dict -}}
-{{- if and (get $static "enabled") (not $source.enabled) -}}
-{{- fail "console.guardrailStatic.enabled requires catalogueProfiles.guardrailStatic.enabled" -}}
-{{- end -}}
 {{- if $source.enabled -}}
 {{- $name := required "catalogueProfiles.guardrailStatic.configMapName is required" $source.configMapName -}}
 {{- if not (kindIs "string" $name) -}}{{- fail "catalogueProfiles.guardrailStatic.configMapName must be a string" -}}{{- end -}}
