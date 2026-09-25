@@ -17,6 +17,7 @@ import { NATSClientResponseResult } from "@/components/panels/nats-client-respon
 import { MongoExposureResult } from "@/components/panels/mongo-exposure-result";
 import { GuardrailStaticResultPanel } from "@/components/panels/guardrail-static-result";
 import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-result";
+import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 const catalogDisplayName = (item: CatalogItem) => item.profile === "pod-bound-api-auth-response" ? "Injected Pod-bound API bearer response" : item.name;
@@ -351,7 +352,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
             <div className="text-foreground">{fixedEvidence.functionalResult.summary}</div>
             {fixedEvidence.functionalResult.unsafeToRetry && <div className="text-warning">This run remains unsafe to retry; inspect its run status and exact cleanup evidence.</div>}
             {item.claimClass === "calibration" && <GuardrailCalibrationResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
-            {item.eventMode && <div className="space-y-1 border-t border-border pt-2">{Object.entries(fixedEvidence.functionalResult.evidence || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => <div key={key}><span className="font-mono text-foreground/80">{key}:</span> {value}</div>)}</div>}
+            {fixedProfile === "catalogue-litellm-inference-routing" && <LiteLLMRoutingResult evidence={fixedEvidence.functionalResult.evidence} outcome={fixedEvidence.functionalResult.outcome} />}
+            {item.eventMode && fixedProfile !== "catalogue-litellm-inference-routing" && <div className="space-y-1 border-t border-border pt-2">{Object.entries(fixedEvidence.functionalResult.evidence || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => <div key={key}><span className="font-mono text-foreground/80">{key}:</span> {value}</div>)}</div>}
             {(fixedProfile === "c2-crm-refund-capability" || fixedProfile === "c2-crm-reset-capability") && <CRMCapabilityResult evidence={fixedEvidence.functionalResult.evidence || {}} />}
             <div className="text-muted-foreground">limits: {fixedEvidence.functionalResult.limits.join(" · ")}</div>
           </div>}

@@ -571,6 +571,20 @@ export interface RunEvidenceTrial {
 }
 export interface RunEvidenceIssue { line: number; outcome: "unverified"; reason: string }
 export interface FunctionalResult { outcome: TrialOutcome; summary: string; evidence: Record<string, string>; limits: string[]; cleanup: { attempted: boolean; verified: boolean; status: string; details?: Record<string, string>; unsafeToRetry?: boolean }; unsafeToRetry?: boolean; startedAt: string; finishedAt: string }
+// Server-owned, sanitized projection inside FunctionalResult.evidence for the
+// LiteLLM inference control. Raw prompts, completions, keys and error bodies
+// are never part of this UI contract.
+export interface LiteLLMRoutingPodEvidence {
+  name: string; uid: string; imageID: string; version: string;
+  known: { status: string; state: string; reason: string; returnedModel: string; usagePromptCount: string; usageCompletionCount: string };
+  unknown: { status: string; state: string; reason: string };
+}
+export interface LiteLLMRoutingEvidence {
+  pod1: LiteLLMRoutingPodEvidence; pod2: LiteLLMRoutingPodEvidence;
+  modelAlias: string; knownModelState: string; unknownModelState: string; requestCount: string;
+  authorityBeforeSHA256: string; authorityAfterSHA256: string; configSHA256: string;
+  eventMode: string; securityEvent: string; brain: string; actuator: string; securityOutcome: string;
+}
 export interface NATSConfigurationResult { finding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; observedFinding: "EXPOSED" | "NOT_EXPOSED_IN_THIS_CONTROL" | "UNKNOWN"; accepted: boolean; remoteStatus: string; remotePodUID?: string; brokerPodUID?: string; legitimateAcked: boolean; storedPayloadSHA256?: string; streamCleanup: string; observerCleanup: string; fixtureResourcesCleanup: string; brainMode: "NO_SIGNAL"; securityEfficacy: "NOT_EVALUATED"; sourceAttestation: string; issues?: string[] }
 export interface NATSResponseDecisionTrace {
   schema: string;
