@@ -22,6 +22,18 @@ func ValidateLiteLLMRoutingResult(result Result) error {
 	if err != nil || count < 0 || count > 4 {
 		return errors.New("LiteLLM routing request bound differs")
 	}
+	if result.Outcome == OutcomeFunctionalFail {
+		unexpected := false
+		for i := 1; i <= 2; i++ {
+			p := fmt.Sprintf("pod%d.unknown.", i)
+			if e[p+"status"] == "200" && e[p+"reason"] == "VALID_ASSISTANT_COMPLETION" && e[p+"state"] == "UNVERIFIED" && liteHexSHA256(e[p+"returnedModelSHA256"]) {
+				unexpected = true
+			}
+		}
+		if count != 4 || !unexpected || e["authorityBeforeSHA256"] == "" || e["authorityAfterSHA256"] != e["authorityBeforeSHA256"] || !liteModelAliasPattern.MatchString(e["modelAlias"]) {
+			return errors.New("LiteLLM routing functional failure lacks exact unexpected completion authority")
+		}
+	}
 	if result.Outcome != OutcomeFunctionalPass {
 		if e["knownModelState"] == "COMPLETION_SERVED" && e["unknownModelState"] == "MODEL_REJECTED" {
 			return errors.New("LiteLLM routing positive aggregate conflicts with terminal outcome")
@@ -36,8 +48,11 @@ func ValidateLiteLLMRoutingResult(result Result) error {
 	}
 	for i := 1; i <= 2; i++ {
 		p := fmt.Sprintf("pod%d.", i)
-		if e[p+"name"] == "" || e[p+"imageID"] == "" || e[p+"version"] == "" || e[p+"known.status"] != "200" || e[p+"known.state"] != "COMPLETION_SERVED" || e[p+"known.reason"] != "VALID_ASSISTANT_COMPLETION" || e[p+"known.returnedModel"] != e["modelAlias"] || e[p+"unknown.state"] != "MODEL_REJECTED" || e[p+"unknown.reason"] != "MODEL_NOT_FOUND" {
+		if e[p+"name"] == "" || e[p+"imageID"] == "" || e[p+"version"] == "" || e[p+"known.status"] != "200" || e[p+"known.state"] != "COMPLETION_SERVED" || e[p+"known.reason"] != "VALID_ASSISTANT_COMPLETION" || !liteHexSHA256(e[p+"known.returnedModelSHA256"]) || e[p+"unknown.state"] != "MODEL_REJECTED" || e[p+"unknown.reason"] != "MODEL_NOT_FOUND" {
 			return errors.New("LiteLLM routing Pod positive stage incomplete")
+		}
+		if !((e[p+"known.modelRelation"] == "REQUEST_ALIAS" && e[p+"known.returnedModel"] == e["modelAlias"]) || (e[p+"known.modelRelation"] == "OTHER_REDACTED" && e[p+"known.returnedModel"] == "")) {
+			return errors.New("LiteLLM routing returned model is not safely related to requested alias")
 		}
 		if e[p+"unknown.status"] != "400" && e[p+"unknown.status"] != "404" {
 			return errors.New("LiteLLM routing unknown-model status is not a typed rejection")
@@ -59,7 +74,7 @@ func ValidateLiteLLMRoutingArtifacts(job Job, result Result) error {
 	if err := ValidateLiteLLMRoutingResult(result); err != nil {
 		return err
 	}
-	if result.Outcome == OutcomeFunctionalPass {
+	if result.Outcome == OutcomeFunctionalPass || result.Outcome == OutcomeFunctionalFail {
 		configured, err := LoadRuntimeConfig(filepath.Join(job.OutputDir, "runtime.json"))
 		if err != nil || configured.LiteLLM == nil || !configured.LiteLLM.InferenceEnabled {
 			return errors.New("LiteLLM routing original reviewed runtime unavailable")
@@ -83,6 +98,7 @@ func ValidateLiteLLMRoutingArtifacts(job Job, result Result) error {
 		return err
 	}
 	intents, events := 0, 0
+	unexpectedCompletion := false
 	wantOrder := [...]string{"pod1.known", "pod1.unknown", "pod2.known", "pod2.unknown"}
 	var pending *Intent
 	for _, record := range journal.Records {
@@ -146,19 +162,31 @@ func ValidateLiteLLMRoutingArtifacts(job Job, result Result) error {
 		if step == "unknown" && response.Reason == "MODEL_NOT_FOUND" {
 			state = "MODEL_REJECTED"
 		}
+		if step == "unknown" && response.Reason == "VALID_ASSISTANT_COMPLETION" {
+			unexpectedCompletion = true
+		}
 		p := fmt.Sprintf("pod%d.%s.", i, step)
 		if record.Event.Identity["state"] != state || result.Evidence[p+"status"] != strconv.Itoa(response.Status) || result.Evidence[p+"state"] != state || result.Evidence[p+"reason"] != response.Reason || result.Evidence[p+"bodySHA256"] != response.BodySHA256 || result.Evidence[p+"bodyBytes"] != strconv.Itoa(response.BodyBytes) {
 			return errors.New("LiteLLM routing terminal stage differs from original response")
 		}
-		if step == "known" && state == "COMPLETION_SERVED" && (response.ReturnedModel != result.Evidence["modelAlias"] || result.Evidence[p+"returnedModel"] != response.ReturnedModel || result.Evidence[p+"usagePromptCount"] != strconv.Itoa(response.UsagePromptTokens) || result.Evidence[p+"usageCompletionCount"] != strconv.Itoa(response.UsageCompletionTokens)) {
+		if response.Reason == "VALID_ASSISTANT_COMPLETION" && response.ModelRelation == "REQUEST_ALIAS" && response.ReturnedModel != pending.Identity["modelAlias"] {
+			return errors.New("LiteLLM routing original completion model differs from requested alias")
+		}
+		if response.Reason == "VALID_ASSISTANT_COMPLETION" && (result.Evidence[p+"returnedModel"] != response.ReturnedModel || result.Evidence[p+"returnedModelSHA256"] != response.ReturnedModelSHA256 || result.Evidence[p+"modelRelation"] != response.ModelRelation) {
+			return errors.New("LiteLLM routing terminal returned model metadata differs from original response")
+		}
+		if step == "known" && state == "COMPLETION_SERVED" && (result.Evidence[p+"usagePromptCount"] != strconv.Itoa(response.UsagePromptTokens) || result.Evidence[p+"usageCompletionCount"] != strconv.Itoa(response.UsageCompletionTokens)) {
 			return errors.New("LiteLLM routing terminal completion differs from original response")
 		}
 		pending = nil
 		events++
 	}
-	if result.Outcome == OutcomeFunctionalPass {
+	if result.Outcome == OutcomeFunctionalPass || result.Outcome == OutcomeFunctionalFail {
 		if intents != 4 || events != 4 || pending != nil {
-			return errors.New("LiteLLM routing positive result lacks all four original response receipts")
+			return errors.New("LiteLLM routing terminal claim lacks all four original response receipts")
+		}
+		if (result.Outcome == OutcomeFunctionalFail) != unexpectedCompletion {
+			return errors.New("LiteLLM routing unexpected completion differs from terminal outcome")
 		}
 	}
 	return nil
@@ -174,7 +202,7 @@ func liteRoutingResponseFromEvent(event *Event) (liteRoutingResponse, error) {
 	if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil {
 		return liteRoutingResponse{}, errors.New("LiteLLM routing original response fields malformed")
 	}
-	r := liteRoutingResponse{Status: status, ContentType: v["contentType"], BodySHA256: v["bodySHA256"], BodyBytes: bodyBytes, CompletionValid: completion, ReturnedModel: v["returnedModel"], UsagePromptTokens: prompt, UsageCompletionTokens: output, Reason: v["reason"], ErrorCode: v["errorCode"]}
+	r := liteRoutingResponse{Status: status, ContentType: v["contentType"], BodySHA256: v["bodySHA256"], BodyBytes: bodyBytes, CompletionValid: completion, ReturnedModel: v["returnedModel"], ReturnedModelSHA256: v["returnedModelSHA256"], ModelRelation: v["modelRelation"], UsagePromptTokens: prompt, UsageCompletionTokens: output, Reason: v["reason"], ErrorCode: v["errorCode"]}
 	if err := validateLiteRoutingResponse(r); err != nil {
 		return liteRoutingResponse{}, err
 	}

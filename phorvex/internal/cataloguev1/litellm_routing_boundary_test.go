@@ -3,8 +3,10 @@ package cataloguev1
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -139,7 +141,8 @@ func TestLiteLLMRoutingRealHTTPProbeClassifiesBoundaries(t *testing.T) {
 
 func TestLiteLLMRoutingRealHTTPResponseCannotRetainCredential(t *testing.T) {
 	// A misbehaving provider may echo an input credential in the model field.
-	// Neither the subprocess envelope nor a positive result may retain it.
+	// A structurally valid completion remains a serving observation, but the
+	// subprocess must replace the returned model string with a hash/relation.
 	fixture := newRoutingHTTPFixture(t, routingSyntheticMasterKey, func(string) routingFixtureReply {
 		return routingValidCompletion(t, routingSyntheticMasterKey)
 	})
@@ -149,8 +152,25 @@ func TestLiteLLMRoutingRealHTTPResponseCannotRetainCredential(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(raw, []byte(routingSyntheticMasterKey)) || response.CompletionValid || response.Reason == "VALID_ASSISTANT_COMPLETION" {
-		t.Fatalf("credential echoed in sanitized envelope or credited: %+v", response)
+	want := sha256.Sum256([]byte(routingSyntheticMasterKey))
+	if bytes.Contains(raw, []byte(routingSyntheticMasterKey)) || !response.CompletionValid || response.Reason != "VALID_ASSISTANT_COMPLETION" ||
+		response.ReturnedModel != "" || response.ModelRelation != "OTHER_REDACTED" || response.ReturnedModelSHA256 != fmt.Sprintf("%x", want) {
+		t.Fatalf("credential echoed or valid completion lost: %+v", response)
+	}
+}
+
+func TestLiteLLMRoutingRealHTTPVersionedReturnedModel(t *testing.T) {
+	versioned := "openai/gpt-4o-mini-2026-09-25"
+	fixture := newRoutingHTTPFixture(t, routingSyntheticMasterKey, func(string) routingFixtureReply {
+		return routingValidCompletion(t, versioned)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	response, raw, err := runRoutingFixtureProbe(ctx, fixture, routingKnownAlias, routingSyntheticMasterKey)
+	want := sha256.Sum256([]byte(versioned))
+	if err != nil || !response.CompletionValid || response.Reason != "VALID_ASSISTANT_COMPLETION" || response.ModelRelation != "OTHER_REDACTED" ||
+		response.ReturnedModel != "" || response.ReturnedModelSHA256 != fmt.Sprintf("%x", want) || bytes.Contains(raw, []byte(versioned)) {
+		t.Fatalf("valid versioned completion was rejected or leaked: %+v, error=%v", response, err)
 	}
 }
 

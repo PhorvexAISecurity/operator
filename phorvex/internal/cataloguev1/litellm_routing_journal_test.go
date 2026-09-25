@@ -89,6 +89,10 @@ func TestLiteLLMRoutingOriginalJournalConsumer(t *testing.T) {
 		{"event-reason", func(_ Result, j *Journal) { j.Records[1].Event.Identity["reason"] = "OTHER_REDACTED" }},
 		{"event-status", func(_ Result, j *Journal) { j.Records[1].Event.Identity["httpStatus"] = "500" }},
 		{"event-body-hash", func(_ Result, j *Journal) { j.Records[1].Event.Identity["bodySHA256"] = strings.Repeat("0", 64) }},
+		{"event-model-hash", func(_ Result, j *Journal) {
+			j.Records[1].Event.Identity["returnedModelSHA256"] = strings.Repeat("0", 64)
+		}},
+		{"event-model-relation", func(_ Result, j *Journal) { j.Records[1].Event.Identity["modelRelation"] = "OTHER_REDACTED" }},
 		{"event-pod-uid", func(_ Result, j *Journal) { j.Records[1].Event.Identity["podUID"] = "other-pod" }},
 		{"known-intent-alias", func(_ Result, j *Journal) { j.Records[0].Intent.Identity["modelAlias"] = "gpt-3.5-turbo" }},
 		{"unknown-intent-alias", func(_ Result, j *Journal) { j.Records[2].Intent.Identity["modelAlias"] = "gpt-4o-mini" }},
@@ -119,6 +123,92 @@ func TestLiteLLMRoutingOriginalJournalConsumer(t *testing.T) {
 			write(t, copyJob, copyJournal.Records)
 			if err := ValidateLiteLLMRoutingArtifacts(copyJob, copyResult); err == nil {
 				t.Fatal("altered original journal or terminal result was accepted")
+			}
+		})
+	}
+	t.Run("forged-functional-fail-with-no-original-requests", func(t *testing.T) {
+		copyJob, copyResult, _ := clone(t)
+		copyResult.Outcome = OutcomeFunctionalFail
+		copyResult.Evidence["requestCount"] = "0"
+		copyResult.Evidence["unknownModelState"] = "UNVERIFIED"
+		if err := ValidateLiteLLMRoutingArtifacts(copyJob, copyResult); err == nil {
+			t.Fatal("functional failure credited without an original request journal")
+		}
+	})
+	t.Run("forged-functional-fail-over-original-typed-rejections", func(t *testing.T) {
+		copyJob, copyResult, copyJournal := clone(t)
+		copyResult.Outcome = OutcomeFunctionalFail
+		copyResult.Evidence["unknownModelState"] = "UNVERIFIED"
+		write(t, copyJob, copyJournal.Records)
+		if err := WriteRuntimeConfig(filepath.Join(copyJob.OutputDir, "runtime.json"), config); err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateLiteLLMRoutingArtifacts(copyJob, copyResult); err == nil {
+			t.Fatal("functional failure credited without an original unknown-model completion")
+		}
+	})
+}
+
+func TestLiteLLMRoutingRunnerRetainsRedactedModelsAndUnknownFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name, knownReturned, unknownReturned string
+		outcome                              Outcome
+	}{
+		{"versioned-known", "openai/gpt-4o-mini-2026-09-25", "", OutcomeFunctionalPass},
+		{"secret-echo-known", routingSyntheticMasterKey, "", OutcomeFunctionalPass},
+		{"unknown-falls-back-to-known", routingKnownAlias, routingKnownAlias, OutcomeFunctionalFail},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			respond := func(alias string) routingFixtureReply {
+				if alias == routingKnownAlias {
+					return routingValidCompletion(t, tc.knownReturned)
+				}
+				if tc.unknownReturned != "" {
+					return routingValidCompletion(t, tc.unknownReturned)
+				}
+				return routingTypedError(t, 404, "ModelNotFoundError", "model_not_found", "unknown model")
+			}
+			runtime, transport, _, podA, podB := routingRunFixture(t, respond, respond)
+			runtime.StateDir = t.TempDir()
+			config := RuntimeConfig{Version: RuntimeConfigVersion, StateDir: runtime.StateDir, LiteLLM: &runtime.LiteLLM}
+			sha, err := config.SHA256()
+			if err != nil {
+				t.Fatal(err)
+			}
+			runtime.ConfigSHA256 = sha
+			runner, err := New(runtime, liteRoutingHandler{transport: transport})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job := liteJobForTest(t, runtime, LiteLLMRouting)
+			job.RuntimeConfigSHA256 = sha
+			if err := WriteRuntimeConfig(filepath.Join(job.OutputDir, "runtime.json"), config); err != nil {
+				t.Fatal(err)
+			}
+			result := runner.Execute(context.Background(), job)
+			if result.Outcome != tc.outcome || result.Evidence["requestCount"] != "4" || len(podA.requestedModels()) != 2 || len(podB.requestedModels()) != 2 {
+				t.Fatalf("returned-model result: %s, %s, evidence=%v", result.Outcome, result.Summary, result.Evidence)
+			}
+			if err := ValidateLiteLLMRoutingArtifacts(job, result); err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateTerminalArtifacts(job, result, filepath.Join(job.OutputDir, "metrics.jsonl")); err != nil {
+				t.Fatal(err)
+			}
+			journalBytes, err := os.ReadFile(filepath.Join(job.OutputDir, "journal.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			retained, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(journalBytes), routingSyntheticMasterKey) || strings.Contains(string(retained), routingSyntheticMasterKey) ||
+				(tc.knownReturned != routingKnownAlias && (strings.Contains(string(journalBytes), tc.knownReturned) || strings.Contains(string(retained), tc.knownReturned))) {
+				t.Fatal("returned model or synthetic credential retained in original journal/result")
+			}
+			if tc.outcome == OutcomeFunctionalFail && result.Evidence["pod1.unknown.status"] != "200" {
+				t.Fatal("unknown-model fallback did not preserve the observed 200")
 			}
 		})
 	}

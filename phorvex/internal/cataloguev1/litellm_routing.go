@@ -52,6 +52,8 @@ type liteRoutingResponse struct {
 	BoundExceeded         bool   `json:"boundExceeded"`
 	CompletionValid       bool   `json:"completionValid"`
 	ReturnedModel         string `json:"returnedModel"`
+	ReturnedModelSHA256   string `json:"returnedModelSHA256"`
+	ModelRelation         string `json:"modelRelation"`
 	UsagePromptTokens     int    `json:"usagePromptTokens"`
 	UsageCompletionTokens int    `json:"usageCompletionTokens"`
 	Reason                string `json:"reason"`
@@ -143,7 +145,7 @@ try:
  response=conn.getresponse()
  body=response.read(16385)
  ct=response.getheader('Content-Type','').split(';',1)[0].strip().lower()
- out={'status':response.status,'contentType':ct,'bodySHA256':hashlib.sha256(body).hexdigest(),'bodyBytes':len(body),'boundExceeded':len(body)>16384,'completionValid':False,'returnedModel':'','usagePromptTokens':0,'usageCompletionTokens':0,'reason':'OTHER_REDACTED','errorCode':''}
+ out={'status':response.status,'contentType':ct,'bodySHA256':hashlib.sha256(body).hexdigest(),'bodyBytes':len(body),'boundExceeded':len(body)>16384,'completionValid':False,'returnedModel':'','returnedModelSHA256':'','modelRelation':'','usagePromptTokens':0,'usageCompletionTokens':0,'reason':'OTHER_REDACTED','errorCode':''}
  if not out['boundExceeded'] and ct=='application/json':
   try:
    value=json.loads(body)
@@ -151,11 +153,12 @@ try:
     choices=value.get('choices'); usage=value.get('usage'); model=value.get('model')
     if isinstance(choices,list) and len(choices)==1 and isinstance(choices[0],dict):
      choice=choices[0]; message=choice.get('message')
-     model_safe=isinstance(model,str) and model==alias
+     model_safe=isinstance(model,str) and 0<len(model.encode('utf-8'))<=128
      if isinstance(message,dict) and message.get('role')=='assistant' and isinstance(message.get('content'),str) and message['content'].strip() and choice.get('finish_reason')=='stop' and model_safe and isinstance(usage,dict):
       p=usage.get('prompt_tokens'); c=usage.get('completion_tokens'); total=usage.get('total_tokens')
       if type(p)==int and type(c)==int and type(total)==int and p>=0 and c>0 and total==p+c:
-       out.update(completionValid=True,returnedModel=model,usagePromptTokens=p,usageCompletionTokens=c,reason='VALID_ASSISTANT_COMPLETION')
+       relation='REQUEST_ALIAS' if model==alias else 'OTHER_REDACTED'
+       out.update(completionValid=True,returnedModel=alias if relation=='REQUEST_ALIAS' else '',returnedModelSHA256=hashlib.sha256(model.encode('utf-8')).hexdigest(),modelRelation=relation,usagePromptTokens=p,usageCompletionTokens=c,reason='VALID_ASSISTANT_COMPLETION')
    elif isinstance(value,dict) and isinstance(value.get('error'),dict):
     err=value['error']; code=err.get('code'); typ=err.get('type'); msg=err.get('message')
     if response.status==400 and isinstance(msg,str) and 'no connected db' in msg.lower():out['reason']='NO_CONNECTED_DB'
@@ -209,21 +212,30 @@ func validateLiteRoutingResponse(r liteRoutingResponse) error {
 	}
 	switch r.Reason {
 	case "VALID_ASSISTANT_COMPLETION":
-		if r.Status != 200 || r.ContentType != "application/json" || !r.CompletionValid || !liteModelAliasPattern.MatchString(r.ReturnedModel) || r.UsagePromptTokens < 0 || r.UsageCompletionTokens <= 0 || r.ErrorCode != "" {
+		if r.Status != 200 || r.ContentType != "application/json" || !r.CompletionValid || !liteHexSHA256(r.ReturnedModelSHA256) || r.UsagePromptTokens < 0 || r.UsageCompletionTokens <= 0 || r.ErrorCode != "" ||
+			!((r.ModelRelation == "REQUEST_ALIAS" && liteModelAliasPattern.MatchString(r.ReturnedModel)) || (r.ModelRelation == "OTHER_REDACTED" && r.ReturnedModel == "")) {
 			return errors.New("LiteLLM completion receipt contradictory")
 		}
 	case "MODEL_NOT_FOUND":
-		if (r.Status != 400 && r.Status != 404) || r.ContentType != "application/json" || r.ErrorCode != "MODEL_NOT_FOUND" || r.CompletionValid || r.ReturnedModel != "" || r.UsagePromptTokens != 0 || r.UsageCompletionTokens != 0 {
+		if (r.Status != 400 && r.Status != 404) || r.ContentType != "application/json" || r.ErrorCode != "MODEL_NOT_FOUND" || r.CompletionValid || r.ReturnedModel != "" || r.ReturnedModelSHA256 != "" || r.ModelRelation != "" || r.UsagePromptTokens != 0 || r.UsageCompletionTokens != 0 {
 			return errors.New("LiteLLM unknown-model receipt contradictory")
 		}
 	case "NO_CONNECTED_DB", "AUTH_DENIED", "RATE_LIMITED", "PROVIDER_OR_GATEWAY_ERROR", "CONFIGURATION_ERROR", "MALFORMED_RESPONSE", "OTHER_REDACTED":
-		if r.CompletionValid || r.ReturnedModel != "" || r.ErrorCode != "" || r.UsagePromptTokens != 0 || r.UsageCompletionTokens != 0 {
+		if r.CompletionValid || r.ReturnedModel != "" || r.ReturnedModelSHA256 != "" || r.ModelRelation != "" || r.ErrorCode != "" || r.UsagePromptTokens != 0 || r.UsageCompletionTokens != 0 {
 			return errors.New("LiteLLM error receipt contains completion")
 		}
 	default:
 		return errors.New("LiteLLM inference reason is unrecognized")
 	}
 	return nil
+}
+
+func liteHexSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil && value == strings.ToLower(value)
 }
 
 func (h liteRoutingHandler) Run(ctx context.Context, jc JobContext) (out Result) {
@@ -286,7 +298,7 @@ func (h liteRoutingHandler) Run(ctx context.Context, jc JobContext) (out Result)
 			response, callErr := t.post(ctx, c, pod, step.alias)
 			requests++
 			out.Evidence["requestCount"] = strconv.Itoa(requests)
-			if callErr != nil || validateLiteRoutingResponse(response) != nil || (step.name == "known" && response.Reason == "VALID_ASSISTANT_COMPLETION" && response.ReturnedModel != c.ModelAlias) {
+			if callErr != nil || validateLiteRoutingResponse(response) != nil || (response.Reason == "VALID_ASSISTANT_COMPLETION" && response.ModelRelation == "REQUEST_ALIAS" && response.ReturnedModel != step.alias) {
 				out.Evidence[prefix+step.name+".state"] = "UNVERIFIED"
 				out.Evidence[prefix+step.name+".reason"] = "REQUEST_UNAVAILABLE"
 				out.Summary = "LiteLLM inference POST receipt unavailable or ambiguous"
@@ -300,7 +312,11 @@ func (h liteRoutingHandler) Run(ctx context.Context, jc JobContext) (out Result)
 			if step.name == "known" {
 				if response.Reason == "VALID_ASSISTANT_COMPLETION" {
 					state = "COMPLETION_SERVED"
-					out.Evidence[prefix+"known.returnedModel"] = response.ReturnedModel
+					out.Evidence[prefix+"known.returnedModelSHA256"] = response.ReturnedModelSHA256
+					out.Evidence[prefix+"known.modelRelation"] = response.ModelRelation
+					if response.ModelRelation == "REQUEST_ALIAS" {
+						out.Evidence[prefix+"known.returnedModel"] = response.ReturnedModel
+					}
 					out.Evidence[prefix+"known.usagePromptCount"] = strconv.Itoa(response.UsagePromptTokens)
 					out.Evidence[prefix+"known.usageCompletionCount"] = strconv.Itoa(response.UsageCompletionTokens)
 				} else {
@@ -313,6 +329,11 @@ func (h liteRoutingHandler) Run(ctx context.Context, jc JobContext) (out Result)
 					unknownOK = false
 					if response.Reason == "VALID_ASSISTANT_COMPLETION" {
 						unexpectedSuccess = true
+						out.Evidence[prefix+"unknown.returnedModelSHA256"] = response.ReturnedModelSHA256
+						out.Evidence[prefix+"unknown.modelRelation"] = response.ModelRelation
+						if response.ModelRelation == "REQUEST_ALIAS" {
+							out.Evidence[prefix+"unknown.returnedModel"] = response.ReturnedModel
+						}
 					}
 				}
 			}
@@ -359,6 +380,7 @@ func liteRoutingEventIdentity(pod litePod, response liteRoutingResponse, state s
 		"podUID": pod.UID, "podName": pod.Name, "httpStatus": strconv.Itoa(response.Status),
 		"contentType": response.ContentType, "bodySHA256": response.BodySHA256, "bodyBytes": strconv.Itoa(response.BodyBytes),
 		"completionValid": strconv.FormatBool(response.CompletionValid), "returnedModel": response.ReturnedModel,
+		"returnedModelSHA256": response.ReturnedModelSHA256, "modelRelation": response.ModelRelation,
 		"usagePromptCount": strconv.Itoa(response.UsagePromptTokens), "usageCompletionCount": strconv.Itoa(response.UsageCompletionTokens),
 		"reason": response.Reason, "errorCode": response.ErrorCode, "state": state,
 	}
