@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -80,6 +80,13 @@ checks:
     source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
     at: '2026-09-25T00:33:19+00:00'
     incident_sha256: 1eff94e876c9c8646ddffae4cccc12b44856a438f5697467845b4adbdf1fcfe0
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/publication-equivalence.md
+    sha256: 3a626f02164abc9913b1e920c10271915154029c09c7f9d51f46274e3a7d802f
+    source_sha: 1d5b3b66f7a3e83b27ae5c2590a48efff8cb1e9b
+    at: '2026-09-25T00:39:49+00:00'
 fix_id: CAT-PROFILE-GRANTS
 issues: []
 title: Authorize enabled catalogue profiles for the existing dev test identity
@@ -148,7 +155,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-25T00:33:24+00:00'
+updated_at: '2026-09-25T00:39:49+00:00'
 configuration_history:
 - at: '2026-09-25T00:18:29+00:00'
   by: codex-lead
