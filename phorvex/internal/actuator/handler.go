@@ -8,10 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actionset"
@@ -45,20 +47,23 @@ type Rollbacker interface {
 // implementations when nil (production); tests inject mocks so the handler logic is exercised
 // without GPU hardware (see gpu_stack.go).
 type EnactCtx struct {
-	Reader           client.Reader // authoritative boundary reader
-	Client           client.Client
-	JournalNamespace string // protected operator namespace; empty refuses recoverable writes
-	DryRun           bool
-	VLLM             vLLMClient           // serving-stack control plane; nil => real httpVLLM default
-	MIG              migController        // GPU MIG control plane; nil => real nvidia-smi default
-	Guardrail        guardrailController  // safety/guardrail-tier control plane; nil => real default
-	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
-	AdapterSources   AdapterSources
-	MIGProfiles      *MIGProfiles
-	ServingSecurity  *ServingSecurityConfig
-	ServingAttempt   *servingCredentialSnapshot
-	ServingTarget    *corev1.Pod
-	ServingRequest   Request
+	Reader                       client.Reader // authoritative boundary reader
+	Client                       client.Client
+	JournalNamespace             string // protected operator namespace; empty refuses recoverable writes
+	DryRun                       bool
+	VLLM                         vLLMClient           // serving-stack control plane; nil => real httpVLLM default
+	MIG                          migController        // GPU MIG control plane; nil => real nvidia-smi default
+	Guardrail                    guardrailController  // safety/guardrail-tier control plane; nil => real default
+	KVXfer                       kvTransferController // disaggregated KV-transfer control plane; nil => real default
+	AdapterSources               AdapterSources
+	MIGProfiles                  *MIGProfiles
+	ServingSecurity              *ServingSecurityConfig
+	ServingAttempt               *servingCredentialSnapshot
+	ServingTarget                *corev1.Pod
+	ServingRequest               Request
+	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
+	OutputPolicyReadbackTimeout  time.Duration
+	OutputPolicyReadbackInterval time.Duration
 	// Request-drain observation bounds default to production constants. Tests that
 	// emulate an EndpointSlice controller may shorten them without changing behavior.
 	DrainObservationTimeout    time.Duration
@@ -107,6 +112,15 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	}
 	if req.Action == model.ActionIdentityRotate {
 		return Result{}, fmt.Errorf("native actuator: %s", model.IdentityRotateUnsupportedReason)
+	}
+	if req.Action != model.ActionSensitiveOutputPolicyActivate && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
+		_, receipt, fenceErr := outputPolicyJournalGet(ctx, ec, req.TargetUID)
+		if fenceErr == nil && receipt.PolicyNamespace == req.Namespace && (receipt.Phase == "prepared" || receipt.Phase == "rollback-intent") {
+			return Result{}, fmt.Errorf("native actuator: exact Pod has pending output policy operation")
+		}
+		if fenceErr != nil && !apierrors.IsNotFound(fenceErr) {
+			return Result{}, fenceErr
+		}
 	}
 	if err := prepareServingAttempt(ctx, &ec, req); err != nil {
 		if pending, lookupErr := pendingProtectedServingReceipt(ctx, ec, req); pending {

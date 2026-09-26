@@ -42,6 +42,10 @@ rules:
   - apiGroups: [""]
     resources: ["pods/eviction"]
     verbs: ["create"]
+  # One preinstalled Pod-owned response policy activation is changed by CAS.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "update"]
   # quarantine: create/reconcile deny-all NetworkPolicy; migration/rollback delete verified policies.
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]

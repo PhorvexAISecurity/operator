@@ -35,4 +35,5 @@ package actuator
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=batch,resources=jobs,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=services,verbs=get;list;update
+// +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=configmaps,verbs=get;update
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=discovery.k8s.io,resources=endpointslices,verbs=list
