@@ -1,0 +1,287 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 13
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 24a7daf2aef78fd728d722ed3fc39f8c02b1ca0b6410f7ed99ee86c4a84897c0
+    source_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+    at: '2026-09-26T20:35:21+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+    rationale: Final interface records reviewed implementation without changing authorized
+      scope or waiving live evidence
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root-RESULT.json
+    sha256: 543c0a144582b31e14721edc4a6fbd487646260097a08b3b223133fe43caf467
+    source_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+    at: '2026-09-26T20:18:15+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 41ef5e2454467a9c417fc348d1fdb4a22ea346606363c85c2dcc1251bac38aa9
+    source_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+    at: '2026-09-26T20:34:50+00:00'
+    baseline_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  preflight:
+    result: PASS
+    by: output_chain_review
+    artifact: evidence/preflight/combined-cf37ea79-receipt.json
+    sha256: 3a65f8d7510b950d2319210e7c47c03ee6e5fb43049a93bfc43b9f1749a43a21
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:04:10+00:00'
+  implementation:
+    result: PASS
+    by: output_chain_review
+    artifact: 04-diff.patch
+    sha256: 2c753a9f60d8d03872811a4d8ce74c21af82c6b773464623fbc7c74bc7fe0e33
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:04:10+00:00'
+  l0:
+    result: PASS
+    by: output_chain_review
+    artifact: evidence/preflight/combined-cf37ea79-receipt.json
+    sha256: 3a65f8d7510b950d2319210e7c47c03ee6e5fb43049a93bfc43b9f1749a43a21
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:04:10+00:00'
+    inputs:
+    - build/test-harness
+    - dashboard-web
+    - deploy/helm
+    - phorvex
+    - workflow
+    inputs_sha256: 473d4ef9f33d5cee6867c93855662b2cf9e1a05e7dcce12c4c32d21a983c10dc
+  l1:
+    result: PASS
+    by: output_chain_review
+    artifact: evidence/combined-focused-cf37ea79.log
+    sha256: 34ee7ff4f4880a7e4d5e5fc9845da1320e08f04395427f32f18dd67d6695ce2d
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:04:10+00:00'
+    inputs:
+    - build/test-harness
+    - phorvex
+    inputs_sha256: 56e14d7a29f72f900cd1cb6db26c7cf783150c7cd5b1fca02910e3b70a49865a
+  l2:
+    result: PASS
+    by: output_chain_review
+    artifact: evidence/combined-focused-cf37ea79.log
+    sha256: 34ee7ff4f4880a7e4d5e5fc9845da1320e08f04395427f32f18dd67d6695ce2d
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:04:10+00:00'
+    inputs:
+    - build/test-harness
+    - phorvex
+    inputs_sha256: 56e14d7a29f72f900cd1cb6db26c7cf783150c7cd5b1fca02910e3b70a49865a
+  positive_control:
+    result: PASS
+    by: output_chain_review
+    artifact: evidence/combined-focused-cf37ea79.log
+    sha256: 34ee7ff4f4880a7e4d5e5fc9845da1320e08f04395427f32f18dd67d6695ce2d
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:04:11+00:00'
+    inputs:
+    - build/test-harness
+    - phorvex
+    inputs_sha256: 56e14d7a29f72f900cd1cb6db26c7cf783150c7cd5b1fca02910e3b70a49865a
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 5872aad36c4f283d591740662ec3fd4cf3f5c808649926152e78aaa8f1df29f3
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:05:38+00:00'
+    baseline_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 5d41f2f9ed46be98ca5ebd8ad04329f3867a25838055edeaba3af5679715a593
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:05:38+00:00'
+    incident_sha256: 5872aad36c4f283d591740662ec3fd4cf3f5c808649926152e78aaa8f1df29f3
+fix_id: CAT-CPU-COORDINATOR
+issues: []
+title: Preserve exact CPU coordinator failures and stop futile barrier waits
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: output_chain_review
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/guardrail-output-response-20260926
+  base_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  head_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-26T21:05:44+00:00'
+configuration_history:
+- at: '2026-09-26T20:10:41+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-26T20:41:02+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T20:44:35+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T20:51:44+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T21:04:10+00:00'
+  by: output_chain_review
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-26T20:11:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-26T20:11:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-26T21:04:11+00:00'
+  by: output_chain_review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-26T21:04:13+00:00'
+  by: output_chain_review
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T21:05:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T21:05:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 89f25c8ae4be3944fbc0fb48db4bd7a9e9c47ec2a1313f7e25114db7dc4798c2
+  source_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  at: '2026-09-26T20:11:15+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 24a7daf2aef78fd728d722ed3fc39f8c02b1ca0b6410f7ed99ee86c4a84897c0
+  source_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  at: '2026-09-26T20:14:50+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: Owner requires completion of same CPU case; bounded recovery preserves
+    original outcome and rejects unresolved effects
+handoff:
+  id: CAT-CPU-COORDINATOR:13:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 13

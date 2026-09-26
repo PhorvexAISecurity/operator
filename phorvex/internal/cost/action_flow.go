@@ -89,7 +89,7 @@ func flowFamilyForAction(action model.Action) flowFamily {
 		return flowCutover
 	case model.ActionKVReset:
 		return flowKVResetMeasured
-	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate:
+	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate:
 		return flowServingState
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:

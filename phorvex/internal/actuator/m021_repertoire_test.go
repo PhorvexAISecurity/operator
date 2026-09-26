@@ -146,6 +146,14 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 		}
 		for _, e := range Repertoire(backend) {
 			ok, why := act.SupportsAction(t.Context(), e.Action, Target{Namespace: "ns", Pod: "p", UID: "target-uid"})
+			// The static row describes handler acceptance. This empty fake client has
+			// no exact Pod, policy, or preinstalled rule source for a live capability.
+			if e.Action == model.ActionSensitiveOutputPolicyActivate && e.Accepted {
+				if ok || why != "output-policy-pod-read-failed" || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing output-policy authority must be an explicit prerequisite refusal: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
 			// mig-rebind on a native route has a runtime prerequisite the static table
 			// records separately; everywhere else acceptance and support must agree.
 			if e.Prerequisite != "" && !ok {

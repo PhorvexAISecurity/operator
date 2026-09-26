@@ -75,6 +75,7 @@ type attackRecord struct {
 	StimulusEvidence     *attackStimulusEvidence     `json:"stimulusEvidence,omitempty"`
 	EffectEvidence       *attackEffectEvidence       `json:"effectEvidence,omitempty"`
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
+	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	ProducerRoute        string                      `json:"producerRoute,omitempty"`
 	ResultSchema         string                      `json:"resultSchemaVersion,omitempty"`
@@ -313,6 +314,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe := *r.GuardrailEffectProbe
 		probe.Issues = append([]string(nil), r.GuardrailEffectProbe.Issues...)
 		c.GuardrailEffectProbe = &probe
+	}
+	if r.GuardrailOutputProbe != nil {
+		probe := *r.GuardrailOutputProbe
+		probe.Issues = append([]string(nil), r.GuardrailOutputProbe.Issues...)
+		c.GuardrailOutputProbe = &probe
 	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect

@@ -199,6 +199,10 @@ type Manager struct {
 	// BoundaryReader bypasses informer staleness for admission enforcement and
 	// actuation-brake authority reads.
 	BoundaryReader client.Reader
+	// OperatorNamespace locates exact-UID protected output-policy journal slots.
+	// Production wires it independently of the chosen actuator backend so a
+	// pending output operation fences any later same-Pod move.
+	OperatorNamespace string
 	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
 	// leaves representation history honestly unavailable.
 	LossHistory losshistory.Ledger
@@ -3007,6 +3011,28 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
+		if decisions[i].Action == model.ActionSensitiveOutputPolicyActivate &&
+			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "") {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "sensitive-output-selection-id-unavailable")
+			continue
+		}
+		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
+			pending, fenceErr := actuator.PendingOutputPolicyOperation(ctx, m.BoundaryReader,
+				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			if fenceErr != nil || pending {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "protected-output-policy-operation-unresolved")
+				m.Log.Info("same-Pod protected output policy operation fences dispatch",
+					"namespace", decisions[i].Namespace, "pod", decisions[i].Pod,
+					"action", decisions[i].Action, "error", fenceErr)
+				continue
+			}
+		} else if decisions[i].Action == model.ActionSensitiveOutputPolicyActivate {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "protected-output-policy-journal-authority-unavailable")
+			continue
+		}
 		var capacityReservation *sharedcapacity.Reservation
 		if m.SharedCapacity != nil {
 			capacityRequest := sharedCapacityRequest(pol, decisions[i], v)
@@ -3063,26 +3089,28 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
-			AdapterObservation:    v.Pod.AdapterObservation,
-			PolicyName:            pol.PolicyName,
-			PolicyUID:             pol.PolicyUID,
-			PolicyGeneration:      pol.PolicyGeneration,
-			MaxGracePeriodSeconds: pol.MaxGracePeriodSeconds,
-			Tenant:                pol.Tenant,
-			Namespace:             decisions[i].Namespace,
-			Pod:                   decisions[i].Pod,
-			Action:                decisions[i].Action,
-			Reason:                decisions[i].Reason,
-			Score:                 score,
-			CoverageValue:         coverageValue,
-			TargetUID:             v.Pod.UID,
-			TickID:                pol.TickID,
+			AdapterObservation:      v.Pod.AdapterObservation,
+			OutputPolicyObservation: v.Pod.OutputPolicyObservation,
+			PolicyName:              pol.PolicyName,
+			PolicyUID:               pol.PolicyUID,
+			PolicyGeneration:        pol.PolicyGeneration,
+			MaxGracePeriodSeconds:   pol.MaxGracePeriodSeconds,
+			Tenant:                  pol.Tenant,
+			Namespace:               decisions[i].Namespace,
+			Pod:                     decisions[i].Pod,
+			Action:                  decisions[i].Action,
+			Reason:                  decisions[i].Reason,
+			Score:                   score,
+			CoverageValue:           coverageValue,
+			TargetUID:               v.Pod.UID,
+			TickID:                  pol.TickID,
 			ServingObservation: &actuator.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
 			},
 		}
-		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate {
+		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate ||
+			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}

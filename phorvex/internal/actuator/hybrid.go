@@ -46,6 +46,10 @@ func NewHybridActuator(c client.Client) *HybridActuator {
 
 func (h *HybridActuator) Name() string { return "hybrid" }
 
+func (h *HybridActuator) PendingOutputPolicyOperation(ctx context.Context, namespace, podUID string) (bool, error) {
+	return h.native.PendingOutputPolicyOperation(ctx, namespace, podUID)
+}
+
 // ConfigureNativeJournal wires only the native leg. Phoenix actions never enter it.
 func (h *HybridActuator) ConfigureNativeJournal(reader client.Reader, namespace string) {
 	h.native.Reader = reader

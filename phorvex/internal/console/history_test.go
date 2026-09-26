@@ -114,6 +114,36 @@ func TestM010HistoryRetainsTopLevelDispatchWithoutTrace(t *testing.T) {
 	}
 }
 
+func TestHistoryKeepsPreOutputFifteenActionV7RowsReadable(t *testing.T) {
+	legacy, err := model.DecisionTraceActions("")
+	if err != nil || len(legacy) != 15 {
+		t.Fatal("historical action vocabulary unavailable")
+	}
+	row := historyRecord(15, false)
+	row.Selected = true
+	row.Action = string(model.ActionRotate)
+	row.DecisionTrace = &model.DecisionTraceV2{SchemaVersion: model.DecisionTraceSchemaV7,
+		SelectedAction: string(model.ActionRotate), ActionStatus: make([]model.DecisionActionStatusV3, 0, len(legacy))}
+	for _, action := range legacy {
+		row.DecisionTrace.ActionStatus = append(row.DecisionTrace.ActionStatus,
+			model.DecisionActionStatusV3{Action: string(action), Status: model.ActionStatusNotEnabled})
+	}
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	writeHistory(t, path, row)
+	s := NewServer(Config{AuditPath: path})
+	operator, _ := getHistory(t, s, url.Values{"lens": {"operator"}, "limit": {"1"}}, http.StatusOK)
+	if len(operator.Events) != 1 || operator.Events[0].Event.(map[string]any)["action"] != "rotate" {
+		t.Fatal("historical v7 operator summary missing")
+	}
+	if _, retained := operator.Events[0].Event.(map[string]any)["decisionTrace"]; retained {
+		t.Fatal("operator history unexpectedly exposed full historical trace")
+	}
+	owner, _ := getHistoryAs(t, s, testOwnerPrincipal("acme"), url.Values{"lens": {"owner"}, "tenant": {"acme"}, "limit": {"1"}}, http.StatusOK)
+	if len(owner.Events) != 1 || owner.Events[0].Event.(map[string]any)["action"] != "rotate" {
+		t.Fatal("historical v7 owner summary missing")
+	}
+}
+
 func TestHistoryRetainedActuationAfterLargeNoops(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
 	writer, e := audit.NewRotatingWriter(path, 12<<20, 8)

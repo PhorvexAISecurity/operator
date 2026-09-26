@@ -1,21 +1,94 @@
 package scenarios
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
 const (
-	podTokenRequestFile  = "pod-bound-token-request.json"
-	podTokenBarrierFile  = "pod-bound-token-barrier.json"
-	podTokenArtifactFile = "pod-bound-token-artifact.json"
-	podTokenTerminalFile = "pod-bound-token-terminal.json"
+	podTokenRequestFile            = "pod-bound-token-request.json"
+	podTokenBarrierFile            = "pod-bound-token-barrier.json"
+	podTokenArtifactFile           = "pod-bound-token-artifact.json"
+	podTokenTerminalFile           = "pod-bound-token-terminal.json"
+	podTokenCoordinatorFailureFile = "pod-bound-token-coordinator-failure.json"
 )
+
+type podTokenCoordinatorFailure struct {
+	Schema        string `json:"schema"`
+	RunID         string `json:"runID"`
+	Nonce         string `json:"nonce"`
+	RequestSHA256 string `json:"requestSHA256"`
+	Stage         string `json:"stage"`
+	Reason        string `json:"reason"`
+	ErrorSHA256   string `json:"errorSHA256"`
+	RecordedAt    string `json:"recordedAt"`
+}
+
+func readPodTokenCoordinatorFailure(dir string, req podTokenRequest, reqSHA string) (*podTokenCoordinatorFailure, error) {
+	fd, err := syscall.Open(filepath.Join(dir, podTokenCoordinatorFailureFile), syscall.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	f := os.NewFile(uintptr(fd), podTokenCoordinatorFailureFile)
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 4096 {
+		return nil, errors.New("Pod token coordinator diagnostic invalid")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, 4097))
+	if err != nil || len(raw) == 0 || len(raw) > 4096 || int64(len(raw)) != info.Size() || rejectDuplicateJSONFields(raw) != nil {
+		return nil, errors.New("Pod token coordinator diagnostic invalid")
+	}
+	var failure podTokenCoordinatorFailure
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&failure) != nil || decoder.Decode(new(any)) != io.EOF {
+		return nil, errors.New("Pod token coordinator diagnostic malformed")
+	}
+	if failure.Schema != "pod-bound-token-coordinator-failure-v1" ||
+		failure.RunID != req.RunID || failure.Nonce != req.Nonce || failure.RequestSHA256 != reqSHA {
+		return nil, os.ErrNotExist // A foreign receipt cannot terminate this request.
+	}
+	reasonByStage := map[string]string{
+		"request-validation": "REQUEST_INVALID", "authorization": "AUTHORIZATION_FAILED",
+		"source-validation": "SOURCE_VALIDATION_FAILED", "audit-start": "AUDIT_START_FAILED",
+		"post-audit-authorization": "AUTHORIZATION_CHANGED", "post-audit-source": "SOURCE_RECHECK_FAILED",
+		"post-audit-source-manifest": "SOURCE_MANIFEST_FAILED", "post-audit-disjointness": "DISJOINTNESS_FAILED",
+		"signal-intent": "SIGNAL_INTENT_FAILED", "typed-event-create": "EVENT_CREATION_FAILED",
+		"decision-observation": "DECISION_OBSERVATION_FAILED", "observation-commit": "OBSERVATION_COMMIT_FAILED",
+		"event-cleanup": "EVENT_CLEANUP_FAILED",
+	}
+	_, hashErr := hex.DecodeString(failure.ErrorSHA256)
+	validReason := reasonByStage[failure.Stage] != "" && failure.Reason == reasonByStage[failure.Stage]
+	if failure.Stage == "typed-event-create" && !validReason {
+		switch failure.Reason {
+		case "CREATOR_SERVICEACCOUNT_FAILED", "CREATOR_POLICY_FAILED", "CREATOR_SCOPE_FAILED",
+			"CREATOR_BINDING_FAILED", "TOKEN_REQUEST_FAILED", "TOKEN_REQUEST_FORBIDDEN",
+			"TOKEN_REQUEST_INVALID", "TOKEN_REQUEST_TIMEOUT", "CREATOR_CLIENT_FAILED",
+			"EVENT_CREATE_FAILED", "EVENT_CREATE_FORBIDDEN", "EVENT_CREATE_INVALID", "EVENT_CREATE_TIMEOUT",
+			"EVENT_READBACK_FAILED", "EVENT_STAMP_FAILED":
+			validReason = true
+		}
+	}
+	if !validReason ||
+		len(failure.ErrorSHA256) != 64 || hashErr != nil {
+		return nil, errors.New("Pod token coordinator diagnostic invalid")
+	}
+	requested, reqTimeErr := time.Parse(time.RFC3339Nano, req.RequestedAt)
+	recorded, recordedErr := time.Parse(time.RFC3339Nano, failure.RecordedAt)
+	if reqTimeErr != nil || recordedErr != nil || recorded.Before(requested) || recorded.After(time.Now().Add(2*time.Second)) {
+		return nil, errors.New("Pod token coordinator diagnostic time invalid")
+	}
+	return &failure, nil
+}
 
 type podTokenRequest struct {
 	Schema                string  `json:"schema"`

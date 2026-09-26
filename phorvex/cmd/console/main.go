@@ -393,6 +393,17 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.GuardrailEffectProfileSHA256 = guardrailEffectProfileSHA256
 	cfg.GuardrailEffectProfilePath = "/etc/phorvex-guardrail-effect/config.guardrail-effect.yaml"
+	guardrailOutputEnabled, err := readBool("PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.GuardrailOutputEnabled = guardrailOutputEnabled
+	guardrailOutputProfileSHA256, _ := lookup("PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256")
+	if guardrailOutputEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(guardrailOutputProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.GuardrailOutputProfileSHA256 = guardrailOutputProfileSHA256
+	cfg.GuardrailOutputProfilePath = "/etc/phorvex-guardrail-output/config.guardrail-output-response.yaml"
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err

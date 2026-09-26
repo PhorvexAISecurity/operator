@@ -161,14 +161,32 @@ func (c Config) limitedV1Catalogue() []CatalogItem {
 			RunnableNote:     guardrailReason, Prereqs: []string{"explicit installed guardrail route and source configuration", "read-only Pod, Service, EndpointSlice and ConfigMap access", "fixed Pod proxy state and classify access"},
 			LaunchKind: "fixed-suite", ClaimClass: "calibration", Profile: string(cataloguev1.GuardrailCalibration),
 			Available: guardrailReady, UnavailableReason: guardrailReason, RuntimeContext: c.catalogueV1RuntimeContext(cataloguev1.GuardrailCalibration)},
-		{EntryID: limitedV1GuardrailID, Name: limitedV1GuardrailID, Product: "ai", Category: "Effect observation", R6Tag: "not-applicable",
-			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false),
-			ExpectedActuators: []string{"guardrail-rotate"}, ResponseGuidanceBasis: "explicit-effect",
-			ResponseGuidance: "The fixed guarded canary and benign controls are measured before any injected event. An already-blocked or failed baseline stops without an event. A landed baseline may be compared after one exact event, selected decision and protected rotation; a variant change alone is not defense.",
-			MeaningfulWhen:   "Separates static filtering and legitimate-control failures from an exact injected event-to-operation-to-original-reply outcome. Natural detection and general security efficacy remain untested.",
-			RunnableNote:     guardrailEffectCatalogueReason(c), Prereqs: []string{"separate SHA-pinned effect profile with exact active variant", "installed vLLM guardrail sidecar", "authenticated audit source and eligible guardrail-rotate policy"},
-			LaunchKind: "live-vllm-effect", ClaimClass: "effect", Profile: "guardrail-rotate", Available: guardrailEffectCatalogueAvailable(c), RuntimeContext: "in-cluster"},
+		guardrailCurrentCatalogueItem(c),
 	}
+}
+
+func guardrailCurrentCatalogueItem(c Config) CatalogItem {
+	if c.GuardrailOutputEnabled {
+		_, _, err := loadGuardrailOutputProfile(c)
+		reason := "Version 2 reviewed support output profile, owned fixture, or authenticated audit source unavailable"
+		if err == nil {
+			reason = "Configured only; launch rechecks original guarded disclosure, exact model and fixture source, event, selected decision, protected output rule, public answer and controls"
+		}
+		return CatalogItem{EntryID: limitedV1GuardrailID, Name: limitedV1GuardrailID, Product: "ai", Category: "Application output confidentiality", R6Tag: "not-applicable",
+			Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false),
+			ExpectedActuators: []string{"sensitive-output-policy-activate"}, ResponseGuidanceBasis: "explicit-effect",
+			ResponseGuidance: "Version 2 measures one seeded excessive-serialization defect on the owned synthetic support route. An original guarded disclosure is required before one explicitly injected event. Only an exact brain-selected terminal policy activation followed by the identical marker-free request, public answer and benign controls earns the narrow DEFENDED result; the first disclosure remains landed. This is application output protection, not a model jailbreak or general DLP claim.",
+			MeaningfulWhen:   "One preinstalled immutable field rule on one owned route and Pod; real vLLM supplies public wording. Natural detection and general model guardrail efficacy remain untested. Historical version 1 static-block receipts remain separate.",
+			RunnableNote:     reason, Prereqs: []string{"SHA-pinned version 2 profile", "owned CPU support/proxy fixture and exact real vLLM source", "immutable Pod-owned output rule", "authenticated audit and ordinary policy alternatives"},
+			LaunchKind: "live-vllm-effect", ClaimClass: "effect", Profile: "guardrail-output-v2", Available: err == nil, UnavailableReason: reason, RuntimeContext: "in-cluster"}
+	}
+	return CatalogItem{EntryID: limitedV1GuardrailID, Name: limitedV1GuardrailID, Product: "ai", Category: "Effect observation", R6Tag: "not-applicable",
+		Techniques: []string{}, ExercisedTechniques: []string{}, Caps: []string{}, Realism: "executable-mechanism", BenignControl: boolPtr(false),
+		ExpectedActuators: []string{"guardrail-rotate"}, ResponseGuidanceBasis: "explicit-effect",
+		ResponseGuidance: "The fixed guarded canary and benign controls are measured before any injected event. An already-blocked or failed baseline stops without an event. A landed baseline may be compared after one exact event, selected decision and protected rotation; a variant change alone is not defense.",
+		MeaningfulWhen:   "Separates static filtering and legitimate-control failures from an exact injected event-to-operation-to-original-reply outcome. Natural detection and general security efficacy remain untested.",
+		RunnableNote:     guardrailEffectCatalogueReason(c), Prereqs: []string{"separate SHA-pinned effect profile with exact active variant", "installed vLLM guardrail sidecar", "authenticated audit source and eligible guardrail-rotate policy"},
+		LaunchKind: "live-vllm-effect", ClaimClass: "effect", Profile: "guardrail-rotate", Available: guardrailEffectCatalogueAvailable(c), RuntimeContext: "in-cluster"}
 }
 
 func (c Config) catalogueV1RuntimeContext(profile cataloguev1.ProfileID) string {

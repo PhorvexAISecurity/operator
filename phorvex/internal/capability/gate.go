@@ -70,7 +70,8 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionKVReset: true, model.ActionEndpointRotate: true,
 	model.ActionModelShardReplace: true, model.ActionAdapterRotate: true,
 	model.ActionRequestDrain: true, model.ActionGuardrailRotate: true,
-	model.ActionKVMigrateInvalidate: true,
+	model.ActionKVMigrateInvalidate:           true,
+	model.ActionSensitiveOutputPolicyActivate: true,
 }
 
 // Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
@@ -256,6 +257,12 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 		}
 		return &Reason{Excluded: true, Kind: ReasonNoCover, Detail: reason}
 	}
+	if action == model.ActionSensitiveOutputPolicyActivate {
+		o := v.Pod.OutputPolicyObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "sensitive-output-policy: event policy identity differs from current policy"}
+		}
+	}
 	if ok, why := w.Capable(v, action); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
 	}
@@ -343,6 +350,8 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasGPU
 	case model.ActionAdapterRotate:
 		return pod.HasBoundAdapterObservation()
+	case model.ActionSensitiveOutputPolicyActivate:
+		return pod.HasBoundSensitiveOutputObservation()
 	default:
 		return pod.HasServingDeclaration()
 	}
@@ -424,6 +433,11 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 	case model.ActionGuardrailRotate:
 		if !(pod.Labels[labelGuardrailTier] == "true" && pod.GuardrailVariants >= 2) {
 			return "pod is not a guardrail tier declaring at least 2 distinct variants"
+		}
+	case model.ActionSensitiveOutputPolicyActivate:
+		if !pod.HasBoundSensitiveOutputObservation() || pod.OutputPolicyObservation.PolicyName != w.policyName ||
+			pod.OutputPolicyObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/source-bound sensitive-output observation"
 		}
 	case model.ActionEndpointRotate:
 		if pod.RouteService == "" {

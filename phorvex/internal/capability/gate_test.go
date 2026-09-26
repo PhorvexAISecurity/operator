@@ -63,9 +63,36 @@ func capFleet() ([]*model.WorkloadView, Witness) {
 func TestCapable_AllPredicatesGreen(t *testing.T) {
 	views, wit := capFleet()
 	for action := range AICapabilityActions {
+		if action == model.ActionSensitiveOutputPolicyActivate {
+			continue // unlike generic AI actions, this requires an exact trusted event
+		}
 		if ok, why := wit.Capable(views[0], action); !ok {
 			t.Errorf("leader not capable for %s: %s", action, why)
 		}
+	}
+}
+
+func TestSensitiveOutputCapabilityRequiresExactPolicyObservation(t *testing.T) {
+	p := model.Pod{Namespace: "ns", Name: "fixture", UID: "pod-uid", ServingDeclared: true,
+		OutputPolicyConfigMap: "policy-cm", OutputPolicyRuleSHA256: "rule", OutputProxySourceSHA256: "proxy",
+		OutputSupportSourceSHA256: "support", OutputEventCreator: "creator"}
+	v := &model.WorkloadView{Pod: p}
+	w := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+		WithPolicyIdentity("guardrail-output-fixture", "policy-uid")
+	if ok, _ := w.Capable(v, model.ActionSensitiveOutputPolicyActivate); ok {
+		t.Fatal("missing event accepted")
+	}
+	v.Pod.OutputPolicyObservation = &model.SensitiveOutputObservation{EventName: "event", EventUID: "event-uid",
+		CreatorIdentity: "creator", TargetPodUID: "pod-uid", ConfigMapUID: "cm-uid",
+		PolicyName: "guardrail-output-fixture", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		RuleSHA256: "rule", ProxySourceSHA256: "proxy", SupportSourceSHA256: "support",
+		ProxyImageID: "image-a", SupportImageID: "image-b"}
+	if ok, why := w.Capable(v, model.ActionSensitiveOutputPolicyActivate); !ok {
+		t.Fatalf("bound event excluded: %s", why)
+	}
+	w = w.WithPolicyIdentity("other", "other-uid")
+	if ok, _ := w.Capable(v, model.ActionSensitiveOutputPolicyActivate); ok {
+		t.Fatal("wrong policy accepted")
 	}
 }
 

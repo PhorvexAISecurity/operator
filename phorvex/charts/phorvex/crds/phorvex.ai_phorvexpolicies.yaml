@@ -113,6 +113,7 @@ spec:
                       - adapter-rotate
                       - request-drain
                       - guardrail-rotate
+                      - sensitive-output-policy-activate
                       - kv-migrate-invalidate
                       - disable
                       type: string

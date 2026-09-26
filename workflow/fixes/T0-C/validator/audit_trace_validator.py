@@ -58,15 +58,31 @@ SELECTOR_M99 = "m99_bounded_full_containment"
 # Canonical action order. Hard-coded copy of `MutatingActions` in
 # phorvex/internal/model/types.go lines ~105-114 (the SINGLE SOURCE OF TRUTH
 # comment there says order is load-bearing: rotate precedes quarantine so the
-# strict-`>` tie-break stays byte-identical). 15 actions.
-MUTATING_ACTIONS = [
+# strict-`>` tie-break stays byte-identical). The historical unmarked trace
+# vocabulary is frozen at 15; the explicit output16 marker names all 16.
+LEGACY_MUTATING_ACTIONS = [
     "rotate", "quarantine",
     "debugger", "custom-inject",
     "identity-rotate", "route-rotate",
     "warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace",
     "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate",
 ]
+MUTATING_ACTIONS = LEGACY_MUTATING_ACTIONS + ["sensitive-output-policy-activate"]
+ACTION_VOCABULARY_OUTPUT16 = "v2-output16"
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
+
+
+def trace_action_vocabulary(tr: dict) -> tuple[list[str] | None, str | None]:
+    if "actionVocabularyVersion" not in tr:
+        return LEGACY_MUTATING_ACTIONS, None
+    version = tr["actionVocabularyVersion"]
+    if version == "":
+        return LEGACY_MUTATING_ACTIONS, None
+    if tr.get("schemaVersion") == TRACE_V2:
+        return None, "decisionTrace.actionVocabularyVersion is not defined for v2 traces"
+    if version == ACTION_VOCABULARY_OUTPUT16:
+        return MUTATING_ACTIONS, None
+    return None, f"decisionTrace.actionVocabularyVersion={version!r} is unknown"
 
 # Candidate selectionReason strings, verbatim from coverage.go buildDecisionTrace.
 SR_SELECTED = "selected_strict_positive_gain"
@@ -560,6 +576,11 @@ def check_ordering(tr: dict) -> Check:
         problems.append("decisionTrace.facts has empty or duplicate factKey")
 
     cands = tr.get("candidates") or []
+    vocabulary, vocabulary_error = trace_action_vocabulary(tr)
+    if vocabulary_error:
+        problems.append(vocabulary_error)
+        vocabulary = []
+    rank = {action: i for i, action in enumerate(vocabulary)}
 
     def asset_key(ck: str) -> str:
         at = ck.rfind("|")
@@ -567,7 +588,7 @@ def check_ordering(tr: dict) -> Check:
 
     def sort_key(c: dict):
         ck = c.get("candidateKey") or ""
-        return (asset_key(ck), ACTION_RANK.get(c.get("action"), len(MUTATING_ACTIONS)), ck)
+        return (asset_key(ck), rank.get(c.get("action"), len(vocabulary)), ck)
 
     order = [sort_key(c) for c in cands]
     if order != sorted(order):
@@ -579,7 +600,7 @@ def check_ordering(tr: dict) -> Check:
     if len(set(ckeys)) != len(ckeys) or any(not k for k in ckeys):
         problems.append("decisionTrace.candidates has empty or duplicate candidateKey")
     unknown = [f"{cand_path(i)}.action={c.get('action')!r}" for i, c in enumerate(cands)
-               if c.get("action") not in ACTION_RANK]
+               if c.get("action") not in rank]
     if unknown:
         problems.append("action not in MutatingActions: " + ", ".join(unknown))
     for i, c in enumerate(cands):
@@ -766,17 +787,31 @@ def check_economics(rec: dict, tr: dict) -> Check:
 # --- v3 hooks --------------------------------------------------------------
 
 def v3_action_status(tr: dict) -> list[str]:
+    vocabulary, vocabulary_error = trace_action_vocabulary(tr)
+    if vocabulary_error:
+        return [vocabulary_error]
+    assert vocabulary is not None
     rows = tr.get("actionStatus")
     if not isinstance(rows, list):
         return ["decisionTrace.actionStatus missing or not a list"]
     problems = []
-    if len(rows) != len(MUTATING_ACTIONS):
-        problems.append(f"decisionTrace.actionStatus has {len(rows)} rows (want {len(MUTATING_ACTIONS)})")
+    if len(rows) != len(vocabulary):
+        problems.append(f"decisionTrace.actionStatus has {len(rows)} rows (want {len(vocabulary)})")
+    if any(not isinstance(r, dict) for r in rows):
+        return problems + ["decisionTrace.actionStatus contains a non-object row"]
     actions = [r.get("action") for r in rows]
+    if any(not isinstance(action, str) for action in actions):
+        return problems + ["decisionTrace.actionStatus contains a non-string action"]
     if len(set(actions)) != len(actions):
         problems.append("decisionTrace.actionStatus has duplicate actions")
-    if actions != MUTATING_ACTIONS[:len(actions)] and sorted(actions, key=lambda a: ACTION_RANK.get(a, 99)) != actions:
-        problems.append("decisionTrace.actionStatus rows not in canonical MutatingActions order")
+    if actions != vocabulary:
+        problems.append("decisionTrace.actionStatus rows not in the selected canonical action vocabulary")
+    for i, candidate in enumerate(tr.get("candidates") or []):
+        if not isinstance(candidate, dict) or candidate.get("action") not in vocabulary:
+            problems.append(f"{cand_path(i)}.action is outside the selected action vocabulary")
+    selected = tr.get("selectedAction")
+    if selected and selected != "noop" and selected not in vocabulary:
+        problems.append("decisionTrace.selectedAction is outside the selected action vocabulary")
     for i, r in enumerate(rows):
         p = f"decisionTrace.actionStatus[{i}]"
         st, ek = r.get("status"), r.get("exclusionKind")

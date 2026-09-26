@@ -33,6 +33,10 @@ const (
 	// DecisionTraceSchemaV7 adds an explicit resource-capacity exclusion kind.
 	// Earlier closed vocabularies remain readable and cannot carry the new kind.
 	DecisionTraceSchemaV7 = "phorvex.decision-trace.v7"
+	// DecisionActionVocabularyOutput16 identifies the first trace vocabulary
+	// containing sensitive-output-policy-activate. An absent marker retains the
+	// frozen 15-action historical vocabulary, regardless of future actions.
+	DecisionActionVocabularyOutput16 = "v2-output16"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -49,8 +53,34 @@ const (
 	SelectorM99Containment     = "m99_bounded_full_containment"
 )
 
+// The trace vocabulary is versioned independently of the schema: historical
+// v3-v7 records must remain reconstructable after an action is added. Keep this
+// literal list frozen; the current optimizer vocabulary is checked against it
+// plus the output action by a regression test.
+var legacyDecisionTraceActions = [...]Action{
+	ActionRotate, ActionQuarantine,
+	ActionDebugger, ActionCustomInject,
+	ActionIdentityRotate, ActionRouteRotate,
+	ActionWarmSwap, ActionMIGRebind, ActionKVReset, ActionEndpointRotate, ActionModelShardReplace,
+	ActionAdapterRotate, ActionRequestDrain, ActionGuardrailRotate, ActionKVMigrateInvalidate,
+}
+
+// DecisionTraceActions returns a copy of the declared canonical action order.
+// Empty means the historical 15-action order; unknown markers fail closed.
+func DecisionTraceActions(version string) ([]Action, error) {
+	actions := append([]Action(nil), legacyDecisionTraceActions[:]...)
+	switch version {
+	case "":
+		return actions, nil
+	case DecisionActionVocabularyOutput16:
+		return append(actions, ActionSensitiveOutputPolicyActivate), nil
+	default:
+		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
+	}
+}
+
 // T0-C: the closed per-action status vocabulary (the ticket's ten values). Exactly one
-// row per model.MutatingActions member is recorded, in canonical order.
+// row per action in the trace's declared vocabulary is recorded, in canonical order.
 const (
 	ActionStatusNotEnabled      = "not-enabled"
 	ActionStatusNoCover         = "no-cover"
@@ -448,14 +478,15 @@ type DecisionDualUpdateV2 struct {
 // DecisionTraceV2 is the nested structured audit contract for one asset outcome.
 // Candidate/fact arrays are canonicalized during JSON serialization.
 type DecisionTraceV2 struct {
-	Existential    *ExistentialDecision `json:"existential,omitempty"`
-	SchemaVersion  string               `json:"schemaVersion"`
-	DecisionID     string               `json:"decisionID"`
-	TickID         string               `json:"tickID"`
-	Timestamp      string               `json:"timestamp"`
-	BrainImage     string               `json:"brainImage"`
-	GitSHA         string               `json:"gitSHA"`
-	DecisionEngine string               `json:"decisionEngine"`
+	Existential             *ExistentialDecision `json:"existential,omitempty"`
+	SchemaVersion           string               `json:"schemaVersion"`
+	ActionVocabularyVersion string               `json:"actionVocabularyVersion,omitempty"`
+	DecisionID              string               `json:"decisionID"`
+	TickID                  string               `json:"tickID"`
+	Timestamp               string               `json:"timestamp"`
+	BrainImage              string               `json:"brainImage"`
+	GitSHA                  string               `json:"gitSHA"`
+	DecisionEngine          string               `json:"decisionEngine"`
 	// PolicyActionVocabulary records the one CRD observation used by this tick's
 	// installability witness. Unknown reads preserve historical identity only.
 	PolicyActionVocabulary *PolicyActionVocabularyObservation `json:"policyActionVocabulary,omitempty"`
@@ -521,7 +552,7 @@ type DecisionTraceV2 struct {
 	Candidates []DecisionCandidateV2        `json:"candidates"`
 	Resources  []DecisionResourceCapacityV6 `json:"resources,omitempty"`
 
-	// T0-C: ActionStatus carries exactly one row per model.MutatingActions member
+	// T0-C: ActionStatus carries exactly one row per declared action vocabulary member
 	// in canonical order (R-2: the complete action accounting, including actions
 	// the current model never considered). DispatchOutcome/DispatchReason are
 	// stamped by the runner after the actuation attempt, before the audit write.
@@ -821,6 +852,23 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 func (t DecisionTraceV2) Validate() error {
 	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 && t.SchemaVersion != DecisionTraceSchemaV7 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
+	}
+	actions, err := DecisionTraceActions(t.ActionVocabularyVersion)
+	if err != nil {
+		return err
+	}
+	if t.SchemaVersion == DecisionTraceSchemaV2 && t.ActionVocabularyVersion != "" {
+		return errors.New("v2 trace cannot declare an actionStatus vocabulary")
+	}
+	if t.SchemaVersion != DecisionTraceSchemaV2 {
+		// Canonical() sorts rows for wire emission. Validate must check their
+		// original order first so a stored or received noncanonical trace cannot
+		// be silently repaired during verification.
+		for i, row := range t.ActionStatus {
+			if i < len(actions) && row.Action != string(actions[i]) {
+				return fmt.Errorf("actionStatus[%d] = %q, canonical order wants %q", i, row.Action, actions[i])
+			}
+		}
 	}
 	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
 	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
@@ -1223,9 +1271,25 @@ func (t DecisionTraceV2) validateV3() error {
 	}
 	// (1) The action accounting is complete: exactly one row per canonical
 	// mutating action, in canonical order, from the closed vocabularies.
-	if len(t.ActionStatus) != len(MutatingActions) {
-		return fmt.Errorf("actionStatus carries %d rows, want exactly %d (one per MutatingActions member)",
-			len(t.ActionStatus), len(MutatingActions))
+	actions, err := DecisionTraceActions(t.ActionVocabularyVersion)
+	if err != nil {
+		return err
+	}
+	if len(t.ActionStatus) != len(actions) {
+		return fmt.Errorf("actionStatus carries %d rows, want exactly %d for actionVocabularyVersion %q",
+			len(t.ActionStatus), len(actions), t.ActionVocabularyVersion)
+	}
+	allowedActions := make(map[string]bool, len(actions))
+	for _, action := range actions {
+		allowedActions[string(action)] = true
+	}
+	for _, candidate := range t.Candidates {
+		if !allowedActions[candidate.Action] {
+			return fmt.Errorf("candidate %q action %q is outside actionVocabularyVersion %q", candidate.CandidateKey, candidate.Action, t.ActionVocabularyVersion)
+		}
+	}
+	if t.SelectedAction != string(ActionNoop) && !allowedActions[t.SelectedAction] {
+		return fmt.Errorf("selected action %q is outside actionVocabularyVersion %q", t.SelectedAction, t.ActionVocabularyVersion)
 	}
 	statusOK := map[string]bool{
 		ActionStatusNotEnabled: true, ActionStatusNoCover: true, ActionStatusInfeasible: true,
@@ -1242,8 +1306,8 @@ func (t DecisionTraceV2) validateV3() error {
 	}
 	selectedRows := 0
 	for i, row := range t.ActionStatus {
-		if row.Action != string(MutatingActions[i]) {
-			return fmt.Errorf("actionStatus[%d] = %q, canonical order wants %q", i, row.Action, MutatingActions[i])
+		if row.Action != string(actions[i]) {
+			return fmt.Errorf("actionStatus[%d] = %q, canonical order wants %q", i, row.Action, actions[i])
 		}
 		if !statusOK[row.Status] {
 			return fmt.Errorf("actionStatus[%d] status %q is outside the closed vocabulary", i, row.Status)

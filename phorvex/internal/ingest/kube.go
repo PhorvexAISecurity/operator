@@ -306,6 +306,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		snap.PhoenixReceipts = receipts
 		for i := range snap.Pods {
 			bindAdapterObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+			bindSensitiveOutputObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 		}
 	}
 
@@ -726,6 +727,11 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 		p.Annotations["phorvex.ai/guardrail-variant"],
 		p.Annotations["phorvex.ai/guardrail-variants"],
 	)
+	out.OutputPolicyConfigMap = p.Annotations["phorvex.ai/output-policy-configmap"]
+	out.OutputPolicyRuleSHA256 = p.Annotations["phorvex.ai/output-policy-rule-sha256"]
+	out.OutputProxySourceSHA256 = p.Annotations["phorvex.ai/output-proxy-source-sha256"]
+	out.OutputSupportSourceSHA256 = p.Annotations["phorvex.ai/output-support-source-sha256"]
+	out.OutputEventCreator = p.Annotations["phorvex.ai/output-event-creator"]
 	// Serving is an explicit workload declaration, never inferred from a GPU allocation.
 	// A model-id is itself a serving declaration; otherwise serving-port must be a valid
 	// TCP port. Readiness and PodIP are separate structural prerequisites and do not prove

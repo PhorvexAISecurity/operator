@@ -159,31 +159,31 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	creatorName := strings.TrimPrefix(creatorIdentity, "system:serviceaccount:phorvex-system:")
 	sa, err := kc.CoreV1().ServiceAccounts("phorvex-system").Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || sa.UID == "" || sa.DeletionTimestamp != nil || sa.AutomountServiceAccountToken == nil || *sa.AutomountServiceAccountToken {
-		return nil, nil, errors.New("dedicated trusted creator ServiceAccount unavailable")
+		return nil, nil, podBoundEventError("CREATOR_SERVICEACCOUNT_FAILED", err)
 	}
 	vap, err := kc.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || vap.DeletionTimestamp != nil || vap.Spec.FailurePolicy == nil ||
 		*vap.Spec.FailurePolicy != "Fail" || len(vap.Spec.Validations) < 3 ||
 		len(vap.Spec.MatchConditions) == 0 {
-		return nil, nil, errors.New("dedicated creator admission policy unavailable")
+		return nil, nil, podBoundEventError("CREATOR_POLICY_FAILED", err)
 	}
 	if vap.Spec.MatchConditions[0].Expression !=
 		"request.userInfo.username == '"+creatorIdentity+"'" ||
 		vap.Spec.Validations[0].Expression != "variables.event.metadata.name.startsWith('phorvex-e2e-')" ||
 		vap.Spec.Validations[1].Expression != "size(variables.event.spec.targets) == 1 && variables.event.spec.targets[0].startsWith('"+r.Namespace+"/')" ||
 		vap.Spec.Validations[2].Expression != "variables.event.spec.rule.source == 'PhorvexE2EDetector'" {
-		return nil, nil, errors.New("dedicated creator admission scope changed")
+		return nil, nil, podBoundEventError("CREATOR_SCOPE_FAILED", nil)
 	}
 	binding, err := kc.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || binding.DeletionTimestamp != nil || binding.Spec.PolicyName != creatorName ||
 		len(binding.Spec.ValidationActions) != 1 || binding.Spec.ValidationActions[0] != "Deny" {
-		return nil, nil, errors.New("dedicated creator admission binding unavailable")
+		return nil, nil, podBoundEventError("CREATOR_BINDING_FAILED", err)
 	}
 	ttl := int64(600)
 	token, err := kc.CoreV1().ServiceAccounts("phorvex-system").CreateToken(ctx, creatorName,
 		&authenticationv1.TokenRequest{Spec: authenticationv1.TokenRequestSpec{ExpirationSeconds: &ttl}}, metav1.CreateOptions{})
 	if err != nil || token.Status.Token == "" || token.Status.ExpirationTimestamp.Time.Before(time.Now().Add(5*time.Minute)) {
-		return nil, nil, errors.New("dedicated trusted creator token authority unavailable")
+		return nil, nil, podBoundEventError("TOKEN_REQUEST_FAILED", err)
 	}
 	cfg := rest.CopyConfig(base)
 	cfg.BearerToken, cfg.BearerTokenFile = token.Status.Token, ""
@@ -191,7 +191,7 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	cfg.Impersonate = rest.ImpersonationConfig{}
 	creator, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, podBoundEventError("CREATOR_CLIENT_FAILED", err)
 	}
 	event := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
@@ -204,11 +204,11 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	gvr := schema.GroupVersionResource{Group: "amtd.r6security.com", Version: "v1beta1", Resource: "securityevents"}
 	created, err := creator.Resource(gvr).Create(ctx, event, metav1.CreateOptions{})
 	if err != nil {
-		return nil, creator, fmt.Errorf("typed event CREATE outcome unknown; one-use fence: %w", err)
+		return nil, creator, podBoundEventError("EVENT_CREATE_FAILED", fmt.Errorf("typed event CREATE outcome unknown; one-use fence: %w", err))
 	}
 	readback, err := creator.Resource(gvr).Get(ctx, created.GetName(), metav1.GetOptions{})
 	if err != nil || readback == nil {
-		return nil, creator, errors.New("typed event readback unavailable")
+		return nil, creator, podBoundEventError("EVENT_READBACK_FAILED", err)
 	}
 	targets, targetOK, targetErr := unstructured.NestedStringSlice(readback.Object, "spec", "targets")
 	ruleType, typeOK, typeErr := unstructured.NestedString(readback.Object, "spec", "rule", "type")
@@ -222,7 +222,7 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 		typeErr != nil || !typeOK || ruleType != model.AttackVectorPodBoundAPIAuth ||
 		sourceErr != nil || !sourceOK || ruleSource != "PhorvexE2EDetector" ||
 		threatErr != nil || !threatOK || threat != "critical" {
-		return nil, creator, errors.New("typed event creator stamp or exact UID not confirmed")
+		return nil, creator, podBoundEventError("EVENT_STAMP_FAILED", nil)
 	}
 	return readback, creator, nil
 }
@@ -371,7 +371,7 @@ func podBoundCompetingUnattributedOperation(raw []byte) bool {
 	return rec.DispatchOutcome != "" && rec.DispatchOutcome != model.DispatchNotAttempted
 }
 
-func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out string) error {
+func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out string) (runErr error) {
 	ctx, cancel := context.WithTimeout(parent, 15*time.Minute)
 	defer cancel()
 	s.runs.mu.Lock()
@@ -389,6 +389,20 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if err != nil {
 		return err
 	}
+	// Bind diagnostics only after the request identity is established. A failure
+	// before this point cannot be safely attributed to a harness request.
+	if r.Schema != "pod-bound-token-request-v1" || r.RunID != id || !podBoundTokenNonce.MatchString(r.Nonce) {
+		return errors.New("Pod-bound token request identity differs")
+	}
+	stage := "request-validation"
+	requestSHA := podBoundHash(rawReq)
+	defer func() {
+		if runErr != nil {
+			if receiptErr := recordPodBoundCoordinatorFailure(out, r, requestSHA, stage, runErr); receiptErr != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("Pod-bound token coordinator diagnostic receipt unavailable: %w", receiptErr))
+			}
+		}
+	}()
 	if r.Schema != "pod-bound-token-request-v1" || r.RunID != id ||
 		!podBoundTokenNonce.MatchString(r.Nonce) || r.Namespace != podBoundNamespace(profile) ||
 		r.SourcePodUID == "" || r.PeerPodUID == "" || r.SourcePodUID == r.PeerPodUID ||
@@ -405,6 +419,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	} else if r.CaseID != "" && r.CaseID != podBoundTokenVoiceCaseID {
 		return errors.New("Voice token case differs")
 	}
+	stage = "authorization"
 	if err := s.currentPodBoundTokenGrant(id); err != nil {
 		return err
 	}
@@ -426,6 +441,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 		p.Fixture.RunID != id || p.Context == "" {
 		return errors.New("Pod-bound token runtime profile differs")
 	}
+	stage = "source-validation"
 	restCfg, err := s.podBoundRESTConfig()
 	if err != nil {
 		return err
@@ -437,6 +453,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if err := s.podBoundTokenCurrentSource(ctx, kc, r, p, false); err != nil {
 		return err
 	}
+	stage = "audit-start"
 	manifest, err := s.cfg.AuditSource.Manifest(ctx)
 	if err != nil || len(manifest.Segments) == 0 || manifest.Segments[0].ID != "live" {
 		return errors.New("Pod-bound token authenticated audit start unavailable")
@@ -453,24 +470,30 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if _, err := writePodBoundOwnedFile(out, "pod-bound-token-audit-start.json", start); err != nil {
 		return err
 	}
+	stage = "post-audit-authorization"
 	if err := s.currentPodBoundTokenGrant(id); err != nil {
 		return err
 	}
+	stage = "post-audit-source"
 	if err := s.podBoundTokenCurrentSource(ctx, kc, r, p, false); err != nil {
 		return err
 	}
+	stage = "post-audit-source-manifest"
 	if _, err := verifyPodBoundTokenSourceManifest(p); err != nil {
 		return err
 	}
+	stage = "post-audit-disjointness"
 	if err := s.podBoundTokenDisjointLive(ctx, kc, r, p); err != nil {
 		return err
 	}
+	stage = "signal-intent"
 	if err := s.persistCatalogueSignalIntent("/api/runs/start", "pod-bound-token", r.Namespace,
 		profile, r.SourcePodUID, &attackStimulusEvidence{Kind: "synthetic-catalogue-signal",
 			TargetUID: r.SourcePodUID, EventName: "phorvex-e2e-" + r.Nonce,
 			EventRule: model.AttackVectorPodBoundAPIAuth, Correlation: r.Nonce}); err != nil {
 		return err
 	}
+	stage = "typed-event-create"
 	created, creator, err := s.podBoundCreateTypedEvent(ctx, kc, restCfg, r)
 	if err != nil {
 		return err
@@ -481,6 +504,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 		defer done()
 		_ = creator.Resource(gvr).Delete(cleanupCtx, created.GetName(), metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: ptrUID(created.GetUID())}})
 	}()
+	stage = "decision-observation"
 	deadline := time.NewTimer(90 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(5 * time.Second)
@@ -544,6 +568,7 @@ decisionLoop:
 		case <-tick.C:
 		}
 	}
+	stage = "observation-commit"
 	var observation podBoundTokenObservationEnd
 	endRaw, err := podBoundTokenWaitFile(ctx, out, podBoundObservationEndFile, &observation)
 	if err != nil {
@@ -596,6 +621,7 @@ decisionLoop:
 		return err
 	}
 	// The event belongs to this run and is removed only with its exact API UID.
+	stage = "event-cleanup"
 	if err := creator.Resource(gvr).Delete(ctx, created.GetName(), metav1.DeleteOptions{
 		Preconditions: &metav1.Preconditions{UID: ptrUID(created.GetUID())}}); err != nil {
 		return fmt.Errorf("Pod-bound token exact event cleanup unconfirmed: %w", err)

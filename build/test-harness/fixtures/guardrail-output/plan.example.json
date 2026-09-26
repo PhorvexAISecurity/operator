@@ -1,0 +1,14 @@
+{
+  "namespace": "vllm",
+  "context": "__REVIEWED_EXTERNAL_CONTEXT__",
+  "clusterUID": "__REVIEWED_KUBE_SYSTEM_UID__",
+  "proxyImage": "__REVIEWED_PYTHON_IMAGE_WITH_FASTAPI_HTTPX_UVICORN_AT_SHA256__",
+  "supportImage": "__REVIEWED_PYTHON_IMAGE_WITH_FASTAPI_HTTPX_UVICORN_AT_SHA256__",
+  "modelServiceName": "vllm",
+  "modelServiceUID": "__REVIEWED_GUARDED_SERVICE_UID__",
+  "modelTargetPodName": "__REVIEWED_REAL_VLLM_POD_NAME__",
+  "modelTargetPodUID": "__REVIEWED_REAL_VLLM_POD_UID__",
+  "modelTargetImageID": "__REVIEWED_REAL_VLLM_IMAGE_ID__",
+  "modelID": "Qwen/Qwen2.5-7B-Instruct-AWQ",
+  "eventCreator": "system:serviceaccount:phorvex-system:__REVIEWED_CONSOLE_SERVICE_ACCOUNT__"
+}

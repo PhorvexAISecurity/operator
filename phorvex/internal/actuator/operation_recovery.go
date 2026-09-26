@@ -35,11 +35,16 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 	if err != nil {
 		return nil, err
 	}
+	outputEvents, err := recoverOutputPolicyOperations(ctx, ec, allow)
+	if err != nil {
+		return nil, err
+	}
 	entries, err := journalList(ctx, ec)
 	if err != nil {
 		return nil, err
 	}
-	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(entries)), guardEvents...)
+	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(entries)), guardEvents...)
+	events = append(events, outputEvents...)
 	for i := range entries {
 		entry := &entries[i]
 		r := entry.Receipt

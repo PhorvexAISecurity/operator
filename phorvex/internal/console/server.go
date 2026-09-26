@@ -510,6 +510,22 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if body.Config == podBoundTokenCPUConfig {
+		raw, profileErr := readPinnedNamedProfile(filepath.Join(s.cfg.HarnessDir, allowedConfigs[body.Config].File), s.cfg.PodBoundTokenCPUProfileSHA256)
+		if profileErr != nil || podBoundHash(raw) != dest.SuiteSHA256 {
+			writeJSON(w, 400, map[string]string{"error": "CPU token reviewed profile unavailable before admission"})
+			return
+		}
+		profile, profileErr := parsePodBoundTokenProfileFor(raw, body.Config)
+		if profileErr != nil || profile.Context != dest.ScopeTarget {
+			writeJSON(w, 400, map[string]string{"error": "CPU token reviewed destination changed before admission"})
+			return
+		}
+		if err := s.podBoundCPUPriorLiveAbsence(r.Context(), dest.ScopeTarget, profile.Fixture.ManagerNamespace, profile.Fixture.ProtectedLedgerName); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "CPU token prior exact cleanup not confirmed before admission"})
+			return
+		}
+	}
 	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest, principalOf(r))
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})

@@ -27,6 +27,7 @@ const (
 	podBoundObservationCommittedFile = "pod-bound-token-observation-committed.json"
 	podBoundEventCleanupFile         = "pod-bound-token-event-cleanup.json"
 	podBoundReplayFile               = "pod-bound-token-replays.jsonl"
+	podBoundCoordinatorFailureFile   = "pod-bound-token-coordinator-failure.json"
 )
 
 type podBoundReplayRow struct {

@@ -163,6 +163,17 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, ai)
 		af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 	}
+	if view.Pod.HasBoundSensitiveOutputObservation() {
+		o := view.Pod.OutputPolicyObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactSensitiveOutputExposure, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorSensitiveOutput,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorSensitiveOutput, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionSensitiveOutputPolicyActivate] = append(af.CoverByAction[model.ActionSensitiveOutputPolicyActivate], f.Key())
+	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
 	if view.Pod.ServingEndpointReady {

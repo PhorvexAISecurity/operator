@@ -22,6 +22,7 @@ func m007Expected(codeexec bool) map[string]bool {
 		}
 	}
 	add("", "pods", "get", "list", "delete", "update", "patch")
+	add("", "configmaps", "get", "update")
 	add("", "pods/eviction", "create")
 	add("", "services", "get", "list", "update")
 	add("discovery.k8s.io", "endpointslices", "list")

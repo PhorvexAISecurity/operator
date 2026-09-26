@@ -123,6 +123,7 @@ type StandingPolicyMaintainer interface {
 // Request is one actuation: perform Action on Namespace/Pod for Tenant.
 type Request struct {
 	AdapterObservation *model.AdapterObservation // selection-time detector assertion; runtime rechecks event
+	OutputPolicyObservation *model.SensitiveOutputObservation // selection-time exact response-field authority
 	TargetUID          string                    // Bound identity from the selecting snapshot.
 	TargetNamespaceUID string                    // Bound by the protected quarantine-capacity reservation.
 	OperationID        string                    // Stable decision identity for protected quarantine and route operations.

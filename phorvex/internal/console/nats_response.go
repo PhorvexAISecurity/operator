@@ -697,38 +697,39 @@ func natsAMTDController(ref metav1.OwnerReference, name string, uid types.UID) b
 // natsDecisionEvidence is an exact-run projection of a validated manager audit
 // record. No full audit row, unrelated tenant, or request-supplied WHY is copied.
 type natsDecisionEvidence struct {
-	Schema              string                     `json:"schema"`
-	RunID               string                     `json:"runId"`
-	NamespaceUID        string                     `json:"namespaceUID"`
-	ClientPodUID        string                     `json:"clientPodUID"`
-	PolicyUID           string                     `json:"policyUID"`
-	PolicyGeneration    int64                      `json:"policyGeneration"`
-	ManagerPodUID       string                     `json:"managerPodUID"`
-	ManagerContainerID  string                     `json:"managerContainerID"`
-	M0ReceiptSHA256     string                     `json:"m0ReceiptSHA256"`
-	PeerM0ReceiptSHA256 string                     `json:"peerM0ReceiptSHA256"`
-	EventName           string                     `json:"eventName"`
-	EventUID            string                     `json:"eventUID"`
-	DecisionID          string                     `json:"decisionId"`
-	TickID              string                     `json:"tickId"`
-	DecisionTraceSHA256 string                     `json:"decisionTraceSHA256"`
-	BrainImage          string                     `json:"brainImage"`
-	BrainImageSHA256    string                     `json:"brainImageSHA256"`
-	GitSHA              string                     `json:"gitSHA"`
-	InputPhase          string                     `json:"inputPhase"`
-	InputStage          string                     `json:"inputStage"`
-	PHold               model.OptionalFloat        `json:"pHold"`
-	ThreatPosture       model.OptionalFloat        `json:"threatPosture"`
-	SLOHeadroom         model.OptionalFloat        `json:"sloHeadroom"`
-	Facts               []natsDecisionFact         `json:"facts"`
-	Candidates          []natsDecisionCandidate    `json:"candidates"`
-	ActionStatus        []natsDecisionActionStatus `json:"actionStatus"`
-	SelectedAction      string                     `json:"selectedAction"`
-	NoopReason          string                     `json:"noopReason"`
-	DispatchOutcome     string                     `json:"dispatchOutcome"`
-	DispatchReason      string                     `json:"dispatchReason"`
-	ObjectEffect        *natsQuarantineEffect      `json:"objectEffect,omitempty"`
-	Claim               string                     `json:"claim"`
+	Schema                  string                     `json:"schema"`
+	RunID                   string                     `json:"runId"`
+	NamespaceUID            string                     `json:"namespaceUID"`
+	ClientPodUID            string                     `json:"clientPodUID"`
+	PolicyUID               string                     `json:"policyUID"`
+	PolicyGeneration        int64                      `json:"policyGeneration"`
+	ManagerPodUID           string                     `json:"managerPodUID"`
+	ManagerContainerID      string                     `json:"managerContainerID"`
+	M0ReceiptSHA256         string                     `json:"m0ReceiptSHA256"`
+	PeerM0ReceiptSHA256     string                     `json:"peerM0ReceiptSHA256"`
+	EventName               string                     `json:"eventName"`
+	EventUID                string                     `json:"eventUID"`
+	DecisionID              string                     `json:"decisionId"`
+	TickID                  string                     `json:"tickId"`
+	DecisionTraceSHA256     string                     `json:"decisionTraceSHA256"`
+	BrainImage              string                     `json:"brainImage"`
+	BrainImageSHA256        string                     `json:"brainImageSHA256"`
+	GitSHA                  string                     `json:"gitSHA"`
+	InputPhase              string                     `json:"inputPhase"`
+	InputStage              string                     `json:"inputStage"`
+	PHold                   model.OptionalFloat        `json:"pHold"`
+	ThreatPosture           model.OptionalFloat        `json:"threatPosture"`
+	SLOHeadroom             model.OptionalFloat        `json:"sloHeadroom"`
+	Facts                   []natsDecisionFact         `json:"facts"`
+	Candidates              []natsDecisionCandidate    `json:"candidates"`
+	ActionVocabularyVersion string                     `json:"actionVocabularyVersion,omitempty"`
+	ActionStatus            []natsDecisionActionStatus `json:"actionStatus"`
+	SelectedAction          string                     `json:"selectedAction"`
+	NoopReason              string                     `json:"noopReason"`
+	DispatchOutcome         string                     `json:"dispatchOutcome"`
+	DispatchReason          string                     `json:"dispatchReason"`
+	ObjectEffect            *natsQuarantineEffect      `json:"objectEffect,omitempty"`
+	Claim                   string                     `json:"claim"`
 }
 
 type natsDecisionFact struct {
@@ -757,6 +758,33 @@ type natsDecisionActionStatus struct {
 	RBACUnknown   bool   `json:"rbacUnknown"`
 }
 
+// A retained WHY receipt predating the output action has no vocabulary marker
+// and carries the frozen 15-action accounting. Newly produced receipts copy
+// the trace's named 16-action vocabulary. Never infer a new action from count.
+func natsDecisionVocabularyValid(version string, rows []natsDecisionActionStatus, candidates []natsDecisionCandidate, selected string) bool {
+	actions, err := model.DecisionTraceActions(version)
+	if err != nil || len(rows) != len(actions) {
+		return false
+	}
+	allowed := make(map[string]bool, len(actions))
+	for i, action := range actions {
+		name := string(action)
+		if rows[i].Action != name {
+			return false
+		}
+		allowed[name] = true
+	}
+	if selected != "" && selected != string(model.ActionNoop) && !allowed[selected] {
+		return false
+	}
+	for _, candidate := range candidates {
+		if !allowed[candidate.Action] {
+			return false
+		}
+	}
+	return true
+}
+
 var natsWhyText = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9 ._,:;()/-]{0,159}$`)
 
 func safeNATSWhy(s string) string {
@@ -773,10 +801,13 @@ func publishNATSDecisionEvidence(out string, r natsResponseRequest, rec *audit.R
 	if rec == nil || rec.DecisionTrace == nil || created == nil {
 		return "", errors.New("exact decision unavailable")
 	}
+	if rec.DecisionTrace.Validate() != nil {
+		return "", errors.New("decision trace invalid")
+	}
 	t := rec.DecisionTrace.Canonical()
-	if t.Validate() != nil || t.AssetNamespace != r.Namespace || t.AssetName != r.ClientPod || t.AssetUID != r.ClientPodUID ||
+	if t.AssetNamespace != r.Namespace || t.AssetName != r.ClientPod || t.AssetUID != r.ClientPodUID ||
 		t.PolicyNamespace != r.Namespace || t.PolicyName != r.PolicyName || t.PolicyUID != r.PolicyUID ||
-		len(t.Facts) > 32 || len(t.Candidates) > 32 || len(t.ActionStatus) != len(model.MutatingActions) ||
+		len(t.Facts) > 32 || len(t.Candidates) > 32 ||
 		rec.Action != t.SelectedAction || rec.DispatchOutcome != t.DispatchOutcome {
 		return "", errors.New("decision projection authority or bound differs")
 	}
@@ -787,7 +818,8 @@ func publishNATSDecisionEvidence(out string, r natsResponseRequest, rec *audit.R
 		DecisionID: t.DecisionID, TickID: t.TickID, DecisionTraceSHA256: traceSHA, BrainImage: safeNATSWhy(t.BrainImage), BrainImageSHA256: natsSHA([]byte(t.BrainImage)), GitSHA: safeNATSWhy(t.GitSHA),
 		InputPhase: safeNATSWhy(t.Inputs.Phase), InputStage: safeNATSWhy(t.Inputs.Stage), PHold: t.Inputs.PHold,
 		ThreatPosture: t.Inputs.ThreatPosture, SLOHeadroom: t.Inputs.SLOHeadroom,
-		SelectedAction: safeNATSWhy(t.SelectedAction), NoopReason: safeNATSWhy(t.NoopReason),
+		ActionVocabularyVersion: t.ActionVocabularyVersion,
+		SelectedAction:          safeNATSWhy(t.SelectedAction), NoopReason: safeNATSWhy(t.NoopReason),
 		DispatchOutcome: safeNATSWhy(t.DispatchOutcome), DispatchReason: safeNATSWhy(t.DispatchReason), ObjectEffect: effect,
 		Claim: "OBJECT_EFFECT_AND_PACKET_OUTCOME_SEPARATE_SECURITY_NOT_EVALUATED"}
 	for _, fact := range t.Facts {
@@ -805,6 +837,9 @@ func publishNATSDecisionEvidence(out string, r natsResponseRequest, rec *audit.R
 	for _, a := range t.ActionStatus {
 		e.ActionStatus = append(e.ActionStatus, natsDecisionActionStatus{Action: safeNATSWhy(a.Action), Status: safeNATSWhy(a.Status),
 			ExclusionKind: safeNATSWhy(a.ExclusionKind), Reason: safeNATSWhy(a.Reason), Scored: a.Scored, RBACUnknown: a.RBACUnknown})
+	}
+	if !natsDecisionVocabularyValid(e.ActionVocabularyVersion, e.ActionStatus, e.Candidates, e.SelectedAction) {
+		return "", errors.New("decision projection action vocabulary invalid")
 	}
 	raw, err := json.Marshal(e)
 	if err != nil || len(raw) > 32<<10 {
@@ -1711,7 +1746,7 @@ func projectNATSPartialWHY(out, id, ns, nonce, namespaceUID string, result NATSR
 		why.M0ReceiptSHA256 != r.M0ReceiptSHA256 || why.PeerM0ReceiptSHA256 != r.PeerM0ReceiptSHA256 || why.EventName == "" || why.EventUID == "" ||
 		why.DecisionID == "" || !natsHex64.MatchString(why.DecisionTraceSHA256) ||
 		!natsHex64.MatchString(why.BrainImageSHA256) || len(why.Facts) > 32 || len(why.Candidates) > 32 ||
-		len(why.ActionStatus) != len(model.MutatingActions) ||
+		!natsDecisionVocabularyValid(why.ActionVocabularyVersion, why.ActionStatus, why.Candidates, why.SelectedAction) ||
 		why.Claim != "OBJECT_EFFECT_AND_PACKET_OUTCOME_SEPARATE_SECURITY_NOT_EVALUATED" {
 		return result
 	}
@@ -1856,7 +1891,7 @@ func readNATSResponseResult(out, id, ns string) (NATSResponseResult, error) {
 		why.M0ReceiptSHA256 != r.M0ReceiptSHA256 || why.PeerM0ReceiptSHA256 != r.PeerM0ReceiptSHA256 || why.EventName != d.EventName || why.EventUID != d.EventUID ||
 		why.DecisionID != d.DecisionID || why.DecisionTraceSHA256 != d.DecisionTraceSHA256 || why.SelectedAction != d.SelectedAction ||
 		why.DispatchOutcome != d.DispatchOutcome || !natsHex64.MatchString(why.BrainImageSHA256) || why.Claim != "OBJECT_EFFECT_AND_PACKET_OUTCOME_SEPARATE_SECURITY_NOT_EVALUATED" ||
-		len(why.Facts) > 32 || len(why.Candidates) > 32 || len(why.ActionStatus) != len(model.MutatingActions) ||
+		len(why.Facts) > 32 || len(why.Candidates) > 32 || !natsDecisionVocabularyValid(why.ActionVocabularyVersion, why.ActionStatus, why.Candidates, why.SelectedAction) ||
 		(d.SelectedAction == "quarantine") != (why.ObjectEffect != nil) {
 		return result, errors.New("response decision WHY differs")
 	}

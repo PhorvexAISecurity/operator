@@ -201,6 +201,12 @@ phorvex:
   # endpoint-rotate can restitch selectors; Secrets and EndpointSlice mutation remain denied.
   # request-drain receives namespaced EndpointSlice list only to confirm withdrawal/return.
   actuatorNamespaces: []
+  # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update
+  # only to this one preinstalled ConfigMap in the named fixture namespace.
+  outputPolicy:
+    enabled: false
+    targetNamespace: ""
+    configMapName: ""
   # Operator-administered exact namespace+adapter reload mappings. Empty disables
   # adapter reload and mounts nothing. Changes take effect after manager restart.
   loraCleanSources:
@@ -394,6 +400,14 @@ phorvex:
       profileSHA256: ""
       sourceConfigMap: guardrail-proxy
       guardrailJournalName: ""
+    guardrailOutput:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-output-fixture
+      outputPolicyConfigMapName: ""
+      outputPolicyJournalName: ""
+      targetNamespace: vllm
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

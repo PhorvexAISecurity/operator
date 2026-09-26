@@ -100,6 +100,11 @@ const (
 	// variant is not proof that the same request stops working. The fact retains exact event
 	// attribution, but no deterministic actuator currently earns its cover.
 	FactGuardrailBypass = "guardrailBypass"
+	// FactSensitiveOutputExposure is a fresh, UID/source-bound observed
+	// application response field that remains exposed on identical repeats
+	// until its preinstalled exact-field policy is activated. First loss is
+	// irreversible; this fact describes only the repeat path.
+	FactSensitiveOutputExposure = "sensitiveOutputExposure"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement

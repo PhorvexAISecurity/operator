@@ -77,21 +77,22 @@ func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
 	view.Pod.RouteServiceReady = true
 	view.Pod.ParallelSize = 4
 	want := map[model.Action]float64{
-		model.ActionRotate:              1.00,
-		model.ActionQuarantine:          1.0 / 3.0,
-		model.ActionDebugger:            0.10,
-		model.ActionCustomInject:        0.10,
-		model.ActionIdentityRotate:      0.15,
-		model.ActionRouteRotate:         0.10,
-		model.ActionWarmSwap:            1.00,
-		model.ActionMIGRebind:           1.25,
-		model.ActionKVReset:             0.20,
-		model.ActionEndpointRotate:      0.35,
-		model.ActionModelShardReplace:   4.00,
-		model.ActionAdapterRotate:       0.25,
-		model.ActionRequestDrain:        0.10,
-		model.ActionGuardrailRotate:     0.20,
-		model.ActionKVMigrateInvalidate: 0.20,
+		model.ActionRotate:                        1.00,
+		model.ActionQuarantine:                    1.0 / 3.0,
+		model.ActionDebugger:                      0.10,
+		model.ActionCustomInject:                  0.10,
+		model.ActionIdentityRotate:                0.15,
+		model.ActionRouteRotate:                   0.10,
+		model.ActionWarmSwap:                      1.00,
+		model.ActionMIGRebind:                     1.25,
+		model.ActionKVReset:                       0.20,
+		model.ActionEndpointRotate:                0.35,
+		model.ActionModelShardReplace:             4.00,
+		model.ActionAdapterRotate:                 0.25,
+		model.ActionSensitiveOutputPolicyActivate: 0.25,
+		model.ActionRequestDrain:                  0.10,
+		model.ActionGuardrailRotate:               0.20,
+		model.ActionKVMigrateInvalidate:           0.20,
 	}
 	for _, action := range model.MutatingActions {
 		got := normCostP1(view, model.Move{Action: action})

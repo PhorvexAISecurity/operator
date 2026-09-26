@@ -54,6 +54,7 @@ route-key with the target Ready and at least two Ready backends.
 | `request-drain` | phoenix | no | backend-unsupported: phoenix cannot enact "request-drain" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `guardrail-rotate` | phoenix | no | backend-unsupported: phoenix cannot enact "guardrail-rotate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `kv-migrate-invalidate` | phoenix | no | backend-unsupported: phoenix cannot enact "kv-migrate-invalidate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `sensitive-output-policy-activate` | phoenix | no | backend-unsupported: phoenix cannot enact "sensitive-output-policy-activate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -76,6 +77,7 @@ route-key with the target Ready and at least two Ready backends.
 | `request-drain` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `guardrail-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `kv-migrate-invalidate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `sensitive-output-policy-activate` | native | yes | — | exact live Pod, preinstalled rule ConfigMap and operation journal | support does not verify the authenticated event, CAS activation, mounted projection or proxy effect; dispatch and recovery check these |
 
 ## hybrid
 
@@ -98,3 +100,4 @@ route-key with the target Ready and at least two Ready backends.
 | `request-drain` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `guardrail-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `kv-migrate-invalidate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `sensitive-output-policy-activate` | native | yes | — | exact live Pod, preinstalled rule ConfigMap and operation journal | support does not verify the authenticated event, CAS activation, mounted projection or proxy effect; dispatch and recovery check these |

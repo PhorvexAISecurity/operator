@@ -47,7 +47,8 @@ func mongoTestDecision(at time.Time, source mongoSourceEvidence) audit.Record {
 	trace.TenantName = "mongo"
 	trace.NoopReason = "reactive-only: no direct foothold"
 	trace.DispatchOutcome = model.DispatchNotAttempted
-	for _, action := range model.MutatingActions {
+	legacyActions, _ := model.DecisionTraceActions("")
+	for _, action := range legacyActions {
 		trace.ActionStatus = append(trace.ActionStatus, model.DecisionActionStatusV3{Action: string(action), Status: model.ActionStatusNotEnabled, ExclusionKind: model.ExclusionNotEnabled})
 	}
 	return audit.Record{Kind: "phorvex.decision", Time: at, Tenant: "mongo", Namespace: mongoExposureNamespace, Pod: source.PodName,
@@ -187,7 +188,8 @@ func TestMongoExposureAuthenticatedSealAndImmutableResult(t *testing.T) {
 	}
 	rm.runs[id], rm.runOut[id] = &RunStatus{ID: id, Config: mongoExposureConfig, State: "done"}, outName
 	result, err := rm.MongoExposureResult(id)
-	if err != nil || result == nil || !result.Accepted || result.Finding != "EXPOSED" || result.BrainTrace != "JOINED" || len(result.BrainDecisions) != 1 || result.BrainDecisions[0].PolicyGeneration != 3 || len(result.BrainDecisions[0].CandidateStatuses) != len(model.MutatingActions) {
+	legacyActions, _ := model.DecisionTraceActions("")
+	if err != nil || result == nil || !result.Accepted || result.Finding != "EXPOSED" || result.BrainTrace != "JOINED" || len(result.BrainDecisions) != 1 || result.BrainDecisions[0].PolicyGeneration != 3 || len(result.BrainDecisions[0].CandidateStatuses) != len(legacyActions) {
 		t.Fatalf("producer/audit join failed: %+v %v", result, err)
 	}
 	if err := rm.sealMongoAudit(id, out); err == nil {
@@ -353,7 +355,8 @@ func TestMongoExposureDecisionWindowAndRawReplyControls(t *testing.T) {
 	selected.DecisionTrace.AssetNamespace, selected.DecisionTrace.AssetName, selected.DecisionTrace.AssetUID = mongoExposureNamespace, source.PodName, source.PodUID
 	selected.DecisionTrace.TenantName = "mongo"
 	selected.DecisionTrace.DispatchOutcome = model.DispatchEmitted
-	for _, action := range model.MutatingActions {
+	legacyActions, _ := model.DecisionTraceActions("")
+	for _, action := range legacyActions {
 		row := model.DecisionActionStatusV3{Action: string(action), Status: model.ActionStatusNotEnabled, ExclusionKind: model.ExclusionNotEnabled}
 		if action == model.ActionRotate {
 			row.Status, row.ExclusionKind, row.Scored = model.ActionStatusSelected, model.ExclusionNone, true

@@ -19,7 +19,8 @@ func isAIMove(a model.Action) bool {
 	switch a {
 	case model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
 		model.ActionKVReset, model.ActionEndpointRotate,
-		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate:
+		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
+		model.ActionSensitiveOutputPolicyActivate:
 		return true
 	}
 	return false
@@ -42,6 +43,8 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 		available = view.Pod.HasGPU
 	case model.ActionAdapterRotate:
 		available = view.Pod.HasBoundAdapterObservation()
+	case model.ActionSensitiveOutputPolicyActivate:
+		available = view.Pod.HasBoundSensitiveOutputObservation()
 	default:
 		available = view.Pod.HasServingDeclaration()
 	}

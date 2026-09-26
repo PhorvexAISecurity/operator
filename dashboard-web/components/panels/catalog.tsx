@@ -21,13 +21,14 @@ import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-re
 import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
 import { GuardrailAvailabilityResultPanel } from "@/components/panels/guardrail-availability-result";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
+import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
 import { MCPVoiceModelResult, parseMCPVoiceModelEvidence } from "@/components/panels/mcp-voice-model-result";
 
 const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Partial") ? "modeled" : "danger");
 const guardrailAvailabilityProfile = "guardrail-availability-recovery";
 const cpuTokenProfile = "pod-bound-api-auth-response-cpu";
 const isPodBoundTokenProfile = (profile?: string) => profile === "pod-bound-api-auth-response" || profile === cpuTokenProfile;
-const catalogDisplayName = (item: CatalogItem) => item.profile === "pod-bound-api-auth-response" ? "Injected Pod-bound API bearer response" : item.profile === cpuTokenProfile ? "Injected CPU Pod-bound API bearer response" : item.name;
+const catalogDisplayName = (item: CatalogItem) => item.profile === "pod-bound-api-auth-response" ? "Injected Pod-bound API bearer response" : item.profile === cpuTokenProfile ? "Injected CPU Pod-bound API bearer response" : item.profile === "guardrail-output-v2" ? "Guardrail response · synthetic support output (v2)" : item.name;
 
 type FixedAdmissionState = { key: string; profile: string; phase: "checking" | "ready" | "blocked" | "error"; reasonCode?: FunctionalAdmissionReason; observedAt?: string };
 const admissionReasons = new Set<FunctionalAdmissionReason>(["READY", "CONFIG_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RETAINED_STATE_UNAVAILABLE", "PRIOR_UNSAFE_FIXED_SUITE", "CONCURRENCY_LIMIT", "RATE_LIMIT"]);
@@ -135,9 +136,9 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-mono text-[13px] text-foreground">{catalogDisplayName(it)}</span>
-            {isPodBoundTokenProfile(it.profile) || it.profile === guardrailAvailabilityProfile ? <Badge variant="neutral">injected named case</Badge> : <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>}
+            {isPodBoundTokenProfile(it.profile) || it.profile === guardrailAvailabilityProfile || it.profile === "guardrail-output-v2" ? <Badge variant="neutral">injected named case</Badge> : <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>}
             {it.hasRun && <Badge variant="accent">ran</Badge>}
-            {it.benignControl ? <Badge variant="neutral">{it.claimClass === "calibration" ? "benign calibration" : "benign functional"}</Badge> : it.product === "ai" && it.profile !== "guardrail-confidentiality-static" && it.profile !== guardrailAvailabilityProfile && <Badge variant="pending">SP-0</Badge>}
+            {it.benignControl ? <Badge variant="neutral">{it.claimClass === "calibration" ? "benign calibration" : "benign functional"}</Badge> : it.product === "ai" && it.profile !== "guardrail-confidentiality-static" && it.profile !== guardrailAvailabilityProfile && it.profile !== "guardrail-output-v2" && <Badge variant="pending">SP-0</Badge>}
             {it.launchKind === "fixed-suite" && it.available === true ? <Badge variant="neutral">configured · admission checked on open</Badge> : it.available === false && <Badge variant="pending">unavailable</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
@@ -295,13 +296,15 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         return;
       }
       if (item!.launchKind === "live-vllm-effect") {
-        const result = await api.vllmAttack("guardrail-rotate", selectedLens);
+        const result = await api.vllmAttack(item!.profile === "guardrail-output-v2" ? "guardrail-output-v2" : "guardrail-rotate", selectedLens);
         if (!result.attackId) throw new Error("guardrail effect launch returned no correlated attack ID");
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
         const context = item!.runtimeContext || "in-cluster";
         if (selectedTarget?.context === context) selectLiveRecord({ kind: "attack", id: result.attackId, lens: selectedLens, context });
         setEffectRecordId(result.attackId); setEffectResult(null); setEffectReadError("");
-        setMsg(`Started ${result.attackId}. The fixed guarded baseline runs before any injected event; exact before/after replies and the decision and operation receipts determine the outcome.`);
+        setMsg(item!.profile === "guardrail-output-v2"
+          ? `Started ${result.attackId}. Version 2 requires an actual synthetic support field disclosure before one injected signal. Exact brain selection, protected rule activation, repeated public answer and benign controls determine the narrow result; the first disclosure remains landed.`
+          : `Started ${result.attackId}. The fixed guarded baseline runs before any injected event; exact before/after replies and the decision and operation receipts determine the outcome.`);
         return;
       }
       if (!selectedTarget?.runnable || !selectedTarget.id || !selectedTarget.context) throw new Error("Select a runnable target for this harness scenario.");
@@ -337,16 +340,17 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         {item.benignControl
           ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
           : item.profile === "catalogue-mcp-voice-model-continuation" ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">Two fixed model continuations compare an ordinary store-hours result with one synthetic substituted result. A model-selected tool is never executed; no SecurityEvent or Phorvex defense is tested. {item.meaningfulWhen}</div>
-          : item.profile === "guardrail-confidentiality-static" || item.profile === guardrailAvailabilityProfile ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.meaningfulWhen}</div>
+          : item.profile === "guardrail-confidentiality-static" || item.profile === guardrailAvailabilityProfile || item.profile === "guardrail-output-v2" ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.meaningfulWhen}</div>
           : item.product === "ai" && <div className="rounded-md border border-warning/25 bg-warning/[0.05] p-3 text-[12px] text-muted-foreground">AI scenario — the attack surface is real; Phorvex's <span className="text-foreground">defense efficacy is [SP-0-PENDING-P4]</span>, validated on real GPU at P4. No AI effectiveness is implied here.</div>}
         {item.unavailableReason && <div className="text-[11px] text-muted-foreground">{item.unavailableReason}</div>}
         {isPodBoundTokenProfile(item.profile) && <div className="text-[12px] text-muted-foreground">Signal mode: explicitly injected typed SecurityEvent. Brain selection, native actuation, original source-bearer invalidation, peer and routed Service samples, and cleanup require separate exact receipts. {item.profile === cpuTokenProfile ? "CPU availability is sampled at recorded checks; no zero-downtime claim follows." : ""} Natural detector coverage and calibrated security efficacy are not evaluated.</div>}
         {item.profile === guardrailAvailabilityProfile && <div className="text-[12px] text-muted-foreground">Signal mode: explicitly injected. This measures whether guarded Say OK availability recovers after an exact selected rotation while the synthetic canary remains blocked and arithmetic stays available. Natural detection, loaded model weights and security efficacy are not evaluated.</div>}
+        {item.profile === "guardrail-output-v2" && <div className="text-[12px] text-muted-foreground">Signal mode: explicitly injected after the first response discloses the run-owned synthetic field. Version 1 static-filter history stays separate. This measures one application response field and route; natural detection, model jailbreak resistance and general output protection are untested.</div>}
         {item.eventMode && <div className="text-[12px] text-muted-foreground">Event mode: <span className="text-foreground">{item.eventMode}</span>{item.profile === "catalogue-mcp-voice-model-continuation" ? " · no SecurityEvent requested · brain, actuator and enforcement NOT_EVALUATED" : isPodBoundTokenProfile(item.profile) || item.profile === guardrailAvailabilityProfile ? " · signal is explicitly injected; decision and operation require their own exact receipts" : " · brain: NOT_EVALUATED · actuator: NOT_EVALUATED"}</div>}
         {item.launchKind === "fixed-suite" && <FixedSuiteAdmissionNotice configured={item.available !== false} state={fixedAdmission?.key === admissionKey ? fixedAdmission : null} refreshes={admissionRefreshes} onRefresh={() => setAdmissionRefreshes((count) => Math.min(3, count + 1))} />}
         {item.launchKind === "named-suite" && namedLaunchUncertain && <div className="text-[11px] text-warning">{item.profile === "guardrail-confidentiality-static" ? "The last comparison launch response was indeterminate. Inspect Run History for the exact run before starting a new one." : "The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one."} This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === guardrailAvailabilityProfile ? "Run injected guardrail availability case" : item.profile === cpuTokenProfile ? "Run injected CPU Pod-bound bearer case" : item.profile === "pod-bound-api-auth-response" ? "Run injected Pod-bound bearer case" : item.profile === "guardrail-confidentiality-static" ? "Run fixed confidentiality comparison" : item.profile === "nats-client-response" ? "Run NATS client response" : item.profile === "mongo-exposure-baseline" ? "Run Mongo Service exposure control" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : "Run bounded effect observation"}</Button> : <>
+          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === guardrailAvailabilityProfile ? "Run injected guardrail availability case" : item.profile === cpuTokenProfile ? "Run injected CPU Pod-bound bearer case" : item.profile === "pod-bound-api-auth-response" ? "Run injected Pod-bound bearer case" : item.profile === "guardrail-confidentiality-static" ? "Run fixed confidentiality comparison" : item.profile === "nats-client-response" ? "Run NATS client response" : item.profile === "mongo-exposure-baseline" ? "Run Mongo Service exposure control" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : item.profile === "guardrail-output-v2" ? "Run support output response (v2)" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
           <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           </>}
@@ -398,7 +402,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           </div>
           {effectResult ? <div className="mt-2 space-y-1.5">
             {effectResult.guardrailEffectProbe && <GuardrailEffectProbe result={effectResult.guardrailEffectProbe} />}
-            {!effectResult.guardrailEffectProbe && effectResult.status !== "running" && <div className="text-warning">The typed original-receipt guardrail result is unavailable; no measured outcome is accepted.</div>}
+            {effectResult.guardrailOutputProbe && <GuardrailOutputProbe result={effectResult.guardrailOutputProbe} />}
+            {!effectResult.guardrailEffectProbe && !effectResult.guardrailOutputProbe && effectResult.status !== "running" && <div className="text-warning">The typed original-receipt guardrail result is unavailable; no measured outcome is accepted.</div>}
             {effectResult.effectEvidence?.observed
               ? <div>fresh exact-target effect: <span className="font-mono text-foreground">{effectResult.effectEvidence.before || "—"} → {effectResult.effectEvidence.after || "—"}</span>{effectResult.effectEvidence.seconds > 0 ? ` in ${effectResult.effectEvidence.seconds}s` : ""}</div>
               : <div className="text-warning">No fresh exact-target runtime effect was confirmed by this record.</div>}

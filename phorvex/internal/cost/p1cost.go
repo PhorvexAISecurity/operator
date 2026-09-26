@@ -154,7 +154,7 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 			return NormCostServiceRekey
 		}
 		return NormCostMetadataMutation
-	case model.ActionAdapterRotate:
+	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate:
 		return NormCostServingConfiguration
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate:
 		return NormCostStateReset

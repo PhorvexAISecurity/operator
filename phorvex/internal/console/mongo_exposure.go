@@ -55,8 +55,8 @@ type MongoExposureResult struct {
 }
 
 type mongoExposureDecision struct {
-	DecisionID        string                 `json:"decisionID"`
-	PolicyUID         string                 `json:"policyUID"`
+	DecisionID string `json:"decisionID"`
+	PolicyUID  string `json:"policyUID"`
 	// PolicyGeneration is copied from the pinned policy API source snapshot.
 	// DecisionTraceV2 does not record the generation consumed by this decision.
 	PolicyGeneration  int64                  `json:"policyGeneration"`
@@ -412,13 +412,29 @@ func projectMongoDecision(rec audit.Record, source mongoSourceEvidence, startAt,
 	if traceErr != nil || rec.Time.IsZero() || rec.Time.Before(startAt) || rec.Time.After(terminalAt) || traceAt.Before(startAt) || traceAt.After(terminalAt) || traceAt.After(rec.Time.Add(2*time.Second)) || rec.Time.Sub(traceAt) > 30*time.Second {
 		return row, errors.New("Mongo decision clock is outside sealed audit window")
 	}
-	if t == nil || t.Validate() != nil || t.PolicyUID != source.PolicyUID || t.AssetUID != source.PodUID || t.PolicyNamespace != mongoExposureNamespace || t.AssetNamespace != mongoExposureNamespace || t.AssetName != source.PodName || t.TenantName != "mongo" || rec.Tenant != "mongo" || rec.Namespace != mongoExposureNamespace || rec.Pod != source.PodName || rec.Action != t.SelectedAction || rec.DispatchOutcome != t.DispatchOutcome || len(t.ActionStatus) != len(model.MutatingActions) {
+	if t == nil || t.Validate() != nil || t.PolicyUID != source.PolicyUID || t.AssetUID != source.PodUID || t.PolicyNamespace != mongoExposureNamespace || t.AssetNamespace != mongoExposureNamespace || t.AssetName != source.PodName || t.TenantName != "mongo" || rec.Tenant != "mongo" || rec.Namespace != mongoExposureNamespace || rec.Pod != source.PodName || rec.Action != t.SelectedAction || rec.DispatchOutcome != t.DispatchOutcome {
 		return row, errors.New("exact Mongo decision trace invalid")
+	}
+	actions, err := model.DecisionTraceActions(t.ActionVocabularyVersion)
+	if err != nil || len(t.ActionStatus) != len(actions) {
+		return row, errors.New("Mongo decision action vocabulary invalid")
+	}
+	allowed := make(map[string]bool, len(actions))
+	for _, action := range actions {
+		allowed[string(action)] = true
+	}
+	if t.SelectedAction != string(model.ActionNoop) && !allowed[t.SelectedAction] {
+		return row, errors.New("Mongo selected action outside decision vocabulary")
+	}
+	for _, candidate := range t.Candidates {
+		if !allowed[candidate.Action] {
+			return row, errors.New("Mongo candidate outside decision vocabulary")
+		}
 	}
 	row.CandidateStatuses = make([]mongoCandidateStatus, 0, len(t.ActionStatus))
 	row.ActionStatus = "no-action-selected"
 	for i, status := range t.ActionStatus {
-		if status.Action != string(model.MutatingActions[i]) || status.Status == "" {
+		if status.Action != string(actions[i]) || status.Status == "" {
 			return row, errors.New("Mongo candidate accounting differs")
 		}
 		row.CandidateStatuses = append(row.CandidateStatuses, mongoCandidateStatus{Action: status.Action, Status: status.Status, ExclusionKind: status.ExclusionKind, Scored: status.Scored})

@@ -66,6 +66,13 @@ phorvex:
     e2eDetector:
       enabled: true
       targetNamespace: voice
+    # Reviewed owned fixture capability. This changes only the manager's exact
+    # ConfigMap authority; the console case stays off until the installed manager
+    # Pod UID and fixture identities can be pinned in a separate profile.
+    outputPolicy:
+      enabled: true
+      targetNamespace: vllm
+      configMapName: phorvex-output-policy-guardrail-output-fixture
     # PHVX-9b requires every NaN-cost veto to be visible. The live EKS cluster
     # already runs kube-prometheus-stack, so render the dedicated rule here.
     costNaNAlert:

@@ -7,6 +7,9 @@
 {{- if and .Values.phorvex.console.guardrailEffect.enabled (not .Values.phorvex.console.enabled) }}
 {{- fail "guardrailEffect.enabled requires console.enabled" }}
 {{- end }}
+{{- if and .Values.phorvex.console.guardrailOutput.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "guardrailOutput.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -319,6 +322,63 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "phorvex.fullname" $ }}-console-litellm-control
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- with .Values.phorvex.console.guardrailOutput }}
+{{- if and $.Values.phorvex.console.enabled .enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-output-source
+  namespace: {{ .targetNamespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .sourceConfigMap | quote }}, {{ .outputPolicyConfigMapName | quote }}]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-output-source
+  namespace: {{ .targetNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-output-source
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-output-journal
+  namespace: {{ default $.Release.Namespace $.Values.phorvex.operatorNamespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .outputPolicyJournalName | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-output-journal
+  namespace: {{ default $.Release.Namespace $.Values.phorvex.operatorNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-guardrail-output-journal
 subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.consoleServiceAccountName" $ }}
