@@ -244,10 +244,11 @@ func outputPolicyEvent(ctx context.Context, ec EnactCtx, r outputPolicyReceipt) 
 	if err := ec.Reader.Get(ctx, client.ObjectKey{Name: r.EventName}, event); err != nil {
 		return err
 	}
+	now := time.Now()
 	if string(event.UID) != r.EventUID || event.DeletionTimestamp != nil || event.Annotations["phorvex.ai/creator-identity"] != r.CreatorIdentity ||
 		event.Annotations[model.ConsoleTargetPodUIDAnnotation] != r.TargetUID || event.Spec.Rule.Type != model.AttackVectorSensitiveOutput ||
 		len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != r.PolicyNamespace+"/"+r.TargetName ||
-		event.CreationTimestamp.IsZero() || time.Since(event.CreationTimestamp.Time) < 0 || time.Since(event.CreationTimestamp.Time) > 60*time.Second {
+		event.CreationTimestamp.IsZero() || event.CreationTimestamp.Time.After(now) || now.Sub(event.CreationTimestamp.Time) > 60*time.Second {
 		return fmt.Errorf("output policy event identity, target or freshness changed")
 	}
 	raw := event.Annotations[outputpolicy.EventAnnotation]
@@ -270,7 +271,8 @@ func outputPolicyEvent(ctx context.Context, ec EnactCtx, r outputPolicyReceipt) 
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&payload) != nil || decoder.Decode(new(any)) != io.EOF || payload.Version != 1 || payload.RuleID != outputpolicy.RuleID ||
 		payload.RuleSHA256 != r.RuleSHA256 || payload.ConfigMapUID != r.ConfigMapUID || payload.PodUID != r.TargetUID || payload.PolicyName != r.PolicyName || payload.PolicyUID != r.PolicyUID || payload.PolicyGeneration != r.PolicyGeneration || payload.RequestPath != outputpolicy.Route ||
-		payload.ObservedAt.IsZero() || payload.ObservedAt.After(event.CreationTimestamp.Time) || event.CreationTimestamp.Time.Sub(payload.ObservedAt) > 60*time.Second || time.Since(payload.ObservedAt) >= 60*time.Second {
+		payload.ObservedAt.IsZero() || !payload.ObservedAt.Before(event.CreationTimestamp.Time.Add(time.Second)) || payload.ObservedAt.After(now) ||
+		event.CreationTimestamp.Time.Sub(payload.ObservedAt) > 60*time.Second || now.Sub(payload.ObservedAt) >= 60*time.Second {
 		return fmt.Errorf("output policy event assertion changed")
 	}
 	return nil
@@ -735,6 +737,16 @@ func recoverOutputPolicyOperations(ctx context.Context, ec EnactCtx, allow func(
 			result = append(result, event)
 			continue
 		}
+		policy, policyErr := receiptAuthority(ctx, ec.Reader, operationReceipt{
+			PolicyNamespace: r.PolicyNamespace, PolicyName: r.PolicyName,
+			PolicyUID: r.PolicyUID, TargetName: r.TargetName, TargetUID: r.TargetUID,
+		}, model.ActionSensitiveOutputPolicyActivate)
+		if policyErr != nil {
+			event.Err = policyErr
+			result = append(result, event)
+			continue
+		}
+		event.Tenant = policy.EffectiveTenant()
 		switch r.Phase {
 		case "rollback-intent", "rolled-back":
 			event.Err = outputPolicyRollback(ctx, ec, journal, r)

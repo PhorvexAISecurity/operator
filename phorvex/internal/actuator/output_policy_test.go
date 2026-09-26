@@ -534,3 +534,67 @@ func TestOutputPolicyJournalCreateRaceRefusesCompetingSelection(t *testing.T) {
 		}
 	})
 }
+
+func TestOutputPolicyRecoveryTenantFromLivePolicy(t *testing.T) {
+	ctx := context.Background()
+	f := newOutputFixture(t)
+	policy := &v1alpha1.PhorvexPolicy{}
+	if err := f.c.Get(ctx, client.ObjectKey{Namespace: "tenant", Name: "policy"}, policy); err != nil {
+		t.Fatal(err)
+	}
+	policy.Spec.Tenant = "customer-a"
+	if err := f.c.Update(ctx, policy); err != nil {
+		t.Fatal(err)
+	}
+	f.state.Store(0)
+	if _, err := (outputPolicyHandler{}).Enact(ctx, f.ec, f.req); err == nil {
+		t.Fatal("unprojected activation unexpectedly confirmed")
+	}
+	f.state.Store(1)
+	events, err := recoverOutputPolicyOperations(ctx, f.ec, nil)
+	if err != nil || len(events) != 1 || events[0].Outcome != "confirmed" || events[0].Tenant != "customer-a" {
+		t.Fatalf("recovery must route via live policy tenant: events=%+v err=%v", events, err)
+	}
+}
+
+func TestOutputPolicyEventTimestampPrecisionAndFuture(t *testing.T) {
+	cases := []struct {
+		name              string
+		created, observed func(time.Time) time.Time
+		allow             bool
+	}{
+		{name: "same-second Kubernetes creation truncation", created: func(now time.Time) time.Time { return now.Truncate(time.Second).Add(-time.Second) }, observed: func(now time.Time) time.Time { return now.Truncate(time.Second).Add(-200 * time.Millisecond) }, allow: true},
+		{name: "beyond one-second creation tolerance", created: func(now time.Time) time.Time { return now.Truncate(time.Second).Add(-3 * time.Second) }, observed: func(now time.Time) time.Time { return now.Truncate(time.Second).Add(-1900 * time.Millisecond) }, allow: false},
+		{name: "observed time actually in future", created: func(now time.Time) time.Time { return now.Truncate(time.Second) }, observed: func(now time.Time) time.Time { return now.Add(time.Second) }, allow: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			f := newOutputFixture(t)
+			r := competingOutputReceipt(t, f)
+			event := &amtdv1beta1.SecurityEvent{}
+			if err := f.c.Get(ctx, client.ObjectKey{Name: "event"}, event); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().UTC()
+			event.CreationTimestamp = metav1.NewTime(tc.created(now))
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(event.Annotations[outputpolicy.EventAnnotation]), &payload); err != nil {
+				t.Fatal(err)
+			}
+			payload["observedAt"] = tc.observed(now).Format(time.RFC3339Nano)
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			event.Annotations[outputpolicy.EventAnnotation] = string(raw)
+			if err := f.c.Update(ctx, event); err != nil {
+				t.Fatal(err)
+			}
+			err = outputPolicyEvent(ctx, f.ec, r)
+			if (err == nil) != tc.allow {
+				t.Fatalf("timestamp check allow=%v err=%v", tc.allow, err)
+			}
+		})
+	}
+}
