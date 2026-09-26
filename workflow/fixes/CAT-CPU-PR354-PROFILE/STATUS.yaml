@@ -1,0 +1,241 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a2664e3d1722bad62fc9d917c6803ed99fc1c30d4b09f9af0ba3aa5a3aa24f56
+    source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+    at: '2026-09-26T19:05:38+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: live_readiness
+    artifact: evidence/red-baseline.log
+    sha256: 7134f1b45d8901cc4e0f440572fe2a6b73722611cf6e9393b9498033e5474c69
+    source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+    at: '2026-09-26T19:35:27+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 9bf89be4c1643753464b2ae3c0b714d116ded8bfc9a43847c73cd12a8fe3818c
+    source_sha: 9489040b80835ab342a5173e0248eded341b3870
+    at: '2026-09-26T19:40:52+00:00'
+    baseline_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  preflight:
+    result: PASS
+    by: live_readiness
+    artifact: evidence/preflight/receipt.json
+    sha256: d1c8a8dbcabd739e5cb848f2e643503934f079ca6cf0d41b30ea59180b0855ce
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:02+00:00'
+  implementation:
+    result: PASS
+    by: live_readiness
+    artifact: 04-diff.patch
+    sha256: 309074cca7b2c3d3be8f50a777922e974a7161be7d2fa2c6ea96502a2525a872
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:02+00:00'
+  l0:
+    result: PASS
+    by: live_readiness
+    artifact: evidence/preflight/receipt.json
+    sha256: d1c8a8dbcabd739e5cb848f2e643503934f079ca6cf0d41b30ea59180b0855ce
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:02+00:00'
+  l1:
+    result: PASS
+    by: live_readiness
+    artifact: evidence/offline-focused.log
+    sha256: f3cfa9c9920b6f646a239317ad223a11de286c22c8b56a817af82353f26fe1a8
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:02+00:00'
+  l2:
+    result: PASS
+    by: live_readiness
+    artifact: evidence/render-validation.json
+    sha256: 2ffeef0972189f8aaa08938a75a190c01eec11d9d024bbe4cc2e48b734e9493a
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:02+00:00'
+  positive_control:
+    result: PASS
+    by: live_readiness
+    artifact: evidence/offline-focused.log
+    sha256: f3cfa9c9920b6f646a239317ad223a11de286c22c8b56a817af82353f26fe1a8
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:02+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 21a788d2b54401e84d43fe2d47216ae1128ab0671804b5d92ed109e7368df47f
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:35+00:00'
+    baseline_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 66dc775a28c70d93462262948153495bc9667431cc877dc2198304cedafc810b
+    source_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+    at: '2026-09-26T19:44:35+00:00'
+    incident_sha256: 21a788d2b54401e84d43fe2d47216ae1128ab0671804b5d92ed109e7368df47f
+fix_id: CAT-CPU-PR354-PROFILE
+issues: []
+title: Refresh CPU catalogue profile for the PR354 source images
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: live_readiness
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/cpu-pr354-profile-20260926
+  base_sha: 9489040b80835ab342a5173e0248eded341b3870
+  head_sha: 9f018fa57d35004ef102b166ae448104e50373b8
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-26T19:44:40+00:00'
+follow_up_to: CAT-CPU-METRIC-WARMUP
+configuration_history:
+- at: '2026-09-26T19:05:34+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-26T19:28:37+00:00'
+  by: live_readiness
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T19:38:33+00:00'
+  by: live_readiness
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T19:44:02+00:00'
+  by: live_readiness
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-26T19:05:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-26T19:05:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-26T19:44:02+00:00'
+  by: live_readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-26T19:44:04+00:00'
+  by: live_readiness
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T19:44:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T19:44:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CAT-CPU-PR354-PROFILE:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10
