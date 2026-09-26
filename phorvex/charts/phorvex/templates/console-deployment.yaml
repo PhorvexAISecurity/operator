@@ -277,7 +277,7 @@ spec:
         - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailOutput.profileSHA256 | quote }}
         {{- end }}
-        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled }}
+        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
           valueFrom:
             fieldRef:

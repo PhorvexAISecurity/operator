@@ -83,6 +83,28 @@ def console_doc(docs):
 
 
 class ProfileMountChart(unittest.TestCase):
+    def test_guardrail_output_alone_receives_console_pod_identity(self):
+        result = render(
+            "--set", "phorvex.console.catalogueV1.enabled=true",
+            "--set", "phorvex.console.catalogueV1.scopedToken.existingSecret=reviewed-token",
+            "--set", "phorvex.trustedDetectors[0]=phorvex-system/phorvex-phorvex-console",
+            "--set", "phorvex.console.guardrailOutput.enabled=true",
+            "--set", "phorvex.console.guardrailOutput.configMapName=reviewed-output",
+            "--set-string", "phorvex.console.guardrailOutput.profileSHA256=" + "a" * 64,
+            "--set", "phorvex.console.guardrailOutput.outputPolicyConfigMapName=phorvex-output-policy-fixture",
+            "--set", "phorvex.console.guardrailOutput.outputPolicyJournalName=phorvex-output-" + "b" * 32,
+        )
+        docs = list(rendered_objects(result).values())
+        dep = console_doc(docs)
+        container = next(c for c in dep["spec"]["template"]["spec"]["containers"] if c["name"] == "console")
+        env = {item["name"]: item for item in container["env"]}
+        self.assertEqual(env["PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED"]["value"], "true")
+        self.assertEqual(env["PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED"]["value"], "false")
+        self.assertEqual(env["PHORVEX_CONSOLE_GUARDRAIL_EFFECT_ENABLED"]["value"], "false")
+        for name, field in (("PHORVEX_CONSOLE_POD_NAME", "metadata.name"),
+                            ("PHORVEX_CONSOLE_POD_UID", "metadata.uid")):
+            self.assertEqual(env[name], {"name": name, "valueFrom": {"fieldRef": {"fieldPath": field}}})
+
     def test_eks_cpu_activation_uses_reviewed_source_and_exact_authority(self):
         eks_values = yaml.safe_load((STACK / "values-eks.yaml").read_text())
         reviewed = eks_values["catalogueProfiles"]["podBoundTokenCPU"]
