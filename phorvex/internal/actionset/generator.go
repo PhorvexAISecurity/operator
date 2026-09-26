@@ -307,6 +307,16 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			generationRank := rank
 			rank++
 			coverKeys := af.CoverByAction[action]
+			if action == model.ActionSensitiveOutputPolicyActivate {
+				o := v.Pod.OutputPolicyObservation
+				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "sensitive-output-policy: event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
 			if action == model.ActionIdentityRotate {
 				out.Excluded = append(out.Excluded, Exclusion{
 					GenerationRank: generationRank, Key: key, Action: action,

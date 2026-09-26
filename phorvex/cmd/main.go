@@ -494,6 +494,7 @@ func main() {
 		hybrid.SetServingSecurity(servingSecurity)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
+	rmgr.OperatorNamespace = operatorNS
 	rmgr.LossHistoryReader = mgr.GetAPIReader()
 	if lossHistoryDir != "" {
 		lossStore, storeErr := losshistory.New(lossHistoryDir)

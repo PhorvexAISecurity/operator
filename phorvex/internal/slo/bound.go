@@ -122,6 +122,8 @@ var classifications = map[model.Action]Bound{
 		"guardrail cutover and rollback do not have enforced safe-return deadlines"),
 	model.ActionKVMigrateInvalidate: unknown(model.ActionKVMigrateInvalidate, -1,
 		"distributed invalidate/migration and recovery paths do not have enforced safe-return deadlines"),
+	model.ActionSensitiveOutputPolicyActivate: unknown(model.ActionSensitiveOutputPolicyActivate, -1,
+		"response-field policy activation and rollback have no calibrated safe-return deadline"),
 }
 
 func init() {

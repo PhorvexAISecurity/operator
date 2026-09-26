@@ -124,6 +124,32 @@
 {{- $journal := required "console.guardrailEffect.guardrailJournalName is required" .Values.phorvex.console.guardrailEffect.guardrailJournalName }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $journal) }}{{- fail "console.guardrailEffect.guardrailJournalName must be a DNS label" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.guardrailOutput.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.guardrailOutput.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.guardrailOutput.enabled requires catalogueV1.scopedToken.existingSecret" }}{{- end }}
+{{- $consoleSA := include "phorvex.consoleServiceAccountName" . }}
+{{- $shortCreator := printf "%s/%s" .Release.Namespace $consoleSA }}
+{{- $colonCreator := printf "%s:%s" .Release.Namespace $consoleSA }}
+{{- $fullCreator := printf "system:serviceaccount:%s:%s" .Release.Namespace $consoleSA }}
+{{- $creatorTrusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}
+{{- range splitList "," . }}
+{{- $entry := trim . }}
+{{- if or (eq $entry $shortCreator) (eq $entry $colonCreator) (eq $entry $fullCreator) }}{{- $creatorTrusted = true }}{{- end }}
+{{- end }}
+{{- end }}
+{{- if not $creatorTrusted }}{{- fail (printf "console.guardrailOutput.enabled requires exact console creator %s in phorvex.trustedDetectors" $shortCreator) }}{{- end }}
+{{- $name := required "console.guardrailOutput.configMapName is required" .Values.phorvex.console.guardrailOutput.configMapName }}
+{{- if or (gt (len $name) 253) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name)) }}{{- fail "console.guardrailOutput.configMapName must be a DNS subdomain" }}{{- end }}
+{{- $sha := required "console.guardrailOutput.profileSHA256 is required" .Values.phorvex.console.guardrailOutput.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.guardrailOutput.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- if ne .Values.phorvex.console.guardrailOutput.sourceConfigMap "guardrail-output-fixture" }}{{- fail "console.guardrailOutput.sourceConfigMap must be guardrail-output-fixture" }}{{- end }}
+{{- if ne .Values.phorvex.console.guardrailOutput.targetNamespace "vllm" }}{{- fail "console.guardrailOutput.targetNamespace must be vllm" }}{{- end }}
+{{- $cm := required "console.guardrailOutput.outputPolicyConfigMapName is required" .Values.phorvex.console.guardrailOutput.outputPolicyConfigMapName }}
+{{- if not (regexMatch "^phorvex-output-policy-[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $cm) }}{{- fail "console.guardrailOutput.outputPolicyConfigMapName is invalid" }}{{- end }}
+{{- $journal := required "console.guardrailOutput.outputPolicyJournalName is required" .Values.phorvex.console.guardrailOutput.outputPolicyJournalName }}
+{{- if not (regexMatch "^phorvex-output-[0-9a-f]{32}$" $journal) }}{{- fail "console.guardrailOutput.outputPolicyJournalName is invalid" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -244,6 +270,12 @@ spec:
         {{- if .Values.phorvex.console.guardrailEffect.enabled }}
         - name: PHORVEX_CONSOLE_GUARDRAIL_EFFECT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailEffect.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED
+          value: {{ .Values.phorvex.console.guardrailOutput.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.guardrailOutput.enabled }}
+        - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.guardrailOutput.profileSHA256 | quote }}
         {{- end }}
         {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
@@ -605,6 +637,12 @@ spec:
           subPath: config.guardrail-effect.yaml
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.guardrailOutput.enabled }}
+        - name: guardrail-output-reviewed-profile
+          mountPath: /etc/phorvex-guardrail-output/config.guardrail-output-response.yaml
+          subPath: config.guardrail-output-response.yaml
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -735,6 +773,15 @@ spec:
           items:
           - key: config.guardrail-effect.yaml
             path: config.guardrail-effect.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.guardrailOutput.enabled }}
+      - name: guardrail-output-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.guardrailOutput.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: config.guardrail-output-response.yaml
+            path: config.guardrail-output-response.yaml
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

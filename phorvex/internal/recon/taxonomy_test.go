@@ -165,6 +165,14 @@ func TestNoDeadFactKinds(t *testing.T) {
 			PodBoundKubeAPIAuth: &model.PodBoundKubeAPIAuthProjection{PodUID: "api-uid", PodResourceVersion: "10",
 				ServiceAccountName: "reader", ServiceAccountUID: "sa-uid", VolumeName: "api-token", MountedContainer: "api",
 				AudienceSource: "kube-apiserver-default", EvidenceSource: "admitted-pod-and-serviceaccount"}}},
+		{Pod: model.Pod{Namespace: "ns", Name: "output", UID: "output-uid", OutputPolicyConfigMap: "policy-cm",
+			OutputPolicyRuleSHA256: "rule-hash", OutputProxySourceSHA256: "proxy-hash",
+			OutputSupportSourceSHA256: "support-hash", OutputEventCreator: "console-creator",
+			OutputPolicyObservation: &model.SensitiveOutputObservation{EventName: "observed", EventUID: "event-uid",
+				CreatorIdentity: "console-creator", TargetPodUID: "output-uid", ConfigMapUID: "cm-uid",
+				PolicyName: "guardrail-output-fixture", PolicyUID: "policy-uid", PolicyGeneration: 1,
+				RuleSHA256: "rule-hash", ProxySourceSHA256: "proxy-hash", SupportSourceSHA256: "support-hash",
+				ProxyImageID: "proxy-image", SupportImageID: "support-image"}}},
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

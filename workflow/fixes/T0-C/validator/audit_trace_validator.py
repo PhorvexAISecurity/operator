@@ -58,13 +58,14 @@ SELECTOR_M99 = "m99_bounded_full_containment"
 # Canonical action order. Hard-coded copy of `MutatingActions` in
 # phorvex/internal/model/types.go lines ~105-114 (the SINGLE SOURCE OF TRUTH
 # comment there says order is load-bearing: rotate precedes quarantine so the
-# strict-`>` tie-break stays byte-identical). 15 actions.
+# strict-`>` tie-break stays byte-identical). 16 actions.
 MUTATING_ACTIONS = [
     "rotate", "quarantine",
     "debugger", "custom-inject",
     "identity-rotate", "route-rotate",
     "warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace",
     "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate",
+    "sensitive-output-policy-activate",
 ]
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
 

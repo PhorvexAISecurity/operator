@@ -436,7 +436,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;disable
 type ActionType string
 
 const (
@@ -453,18 +453,19 @@ const (
 	ActionDebugger     ActionType = "debugger"
 	ActionCustomInject ActionType = "custom-inject"
 	// ActionIdentityRotate is retained for stored policy compatibility, not execution.
-	ActionIdentityRotate      ActionType = "identity-rotate"
-	ActionRouteRotate         ActionType = "route-rotate"
-	ActionWarmSwap            ActionType = "warm-swap"
-	ActionMIGRebind           ActionType = "mig-rebind"
-	ActionKVReset             ActionType = "kv-reset"
-	ActionEndpointRotate      ActionType = "endpoint-rotate"
-	ActionModelShardReplace   ActionType = "model-shard-replace"
-	ActionAdapterRotate       ActionType = "adapter-rotate"
-	ActionRequestDrain        ActionType = "request-drain"
-	ActionGuardrailRotate     ActionType = "guardrail-rotate"
-	ActionKVMigrateInvalidate ActionType = "kv-migrate-invalidate"
-	ActionDisable             ActionType = "disable"
+	ActionIdentityRotate                ActionType = "identity-rotate"
+	ActionRouteRotate                   ActionType = "route-rotate"
+	ActionWarmSwap                      ActionType = "warm-swap"
+	ActionMIGRebind                     ActionType = "mig-rebind"
+	ActionKVReset                       ActionType = "kv-reset"
+	ActionEndpointRotate                ActionType = "endpoint-rotate"
+	ActionModelShardReplace             ActionType = "model-shard-replace"
+	ActionAdapterRotate                 ActionType = "adapter-rotate"
+	ActionRequestDrain                  ActionType = "request-drain"
+	ActionGuardrailRotate               ActionType = "guardrail-rotate"
+	ActionSensitiveOutputPolicyActivate ActionType = "sensitive-output-policy-activate"
+	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
+	ActionDisable                       ActionType = "disable"
 )
 
 // ModeDryRun decides + logs + emits metrics but never actuates (the P0 default).

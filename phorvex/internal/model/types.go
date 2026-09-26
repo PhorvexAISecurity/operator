@@ -101,6 +101,9 @@ const (
 	// ActionGuardrailRotate cycles the safety/guardrail variant. Its protected
 	// operation confirms the variant change, not invalidation of a found bypass.
 	ActionGuardrailRotate Action = "guardrail-rotate"
+	// ActionSensitiveOutputPolicyActivate activates a preinstalled, exact-Pod
+	// response-field rule after a trusted observation of that field escaping.
+	ActionSensitiveOutputPolicyActivate Action = "sensitive-output-policy-activate"
 	// ActionKVMigrateInvalidate invalidates/migrates KV across disaggregated prefill/decode
 	// (kv-reset is local-only). Local invalidate is real; cross-worker migrate is DEFERRED
 	// [PENDING-GPU-VALIDATION] (needs a disaggregated P/D deployment).
@@ -129,6 +132,7 @@ var MutatingActions = []Action{
 	// rotate+quarantine, so default decisions stay byte-identical — 1.62x/P3/lead-demo parity).
 	// Appended AFTER the existing set so the engine's strict-`>` tie-break order is unchanged.
 	ActionAdapterRotate, ActionRequestDrain, ActionGuardrailRotate, ActionKVMigrateInvalidate,
+	ActionSensitiveOutputPolicyActivate,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -466,16 +470,22 @@ type Pod struct {
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
-	ImageID            string              // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
-	CPURequestMilli    int64               // sum of container CPU requests (millicores) — scheduler-slack input
-	MemRequestBytes    int64               // sum of container memory requests (bytes) — scheduler-slack input
-	GPURequestCount    int64               // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
-	VRAMRequestBytes   int64               // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
-	SMFraction         float64             // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
-	ModelID            string              // served model identity/version fingerprint (AI; "" if not a model server)
-	EndpointPath       string              // inference endpoint/API route the attacker can map (AI; "" if none)
-	SuspectAdapter     string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
-	AdapterObservation *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
+	ImageID                   string              // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
+	CPURequestMilli           int64               // sum of container CPU requests (millicores) — scheduler-slack input
+	MemRequestBytes           int64               // sum of container memory requests (bytes) — scheduler-slack input
+	GPURequestCount           int64               // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
+	VRAMRequestBytes          int64               // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
+	SMFraction                float64             // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
+	ModelID                   string              // served model identity/version fingerprint (AI; "" if not a model server)
+	EndpointPath              string              // inference endpoint/API route the attacker can map (AI; "" if none)
+	SuspectAdapter            string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
+	AdapterObservation        *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
+	OutputPolicyConfigMap     string
+	OutputPolicyRuleSHA256    string
+	OutputProxySourceSHA256   string
+	OutputSupportSourceSHA256 string
+	OutputEventCreator        string
+	OutputPolicyObservation   *SensitiveOutputObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -519,6 +529,18 @@ func (p Pod) HasBoundAdapterObservation() bool {
 		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
 }
 
+func (p Pod) HasBoundSensitiveOutputObservation() bool {
+	o := p.OutputPolicyObservation
+	return o != nil && p.UID != "" && p.OutputPolicyConfigMap != "" &&
+		o.TargetPodUID == p.UID && o.RuleSHA256 == p.OutputPolicyRuleSHA256 &&
+		o.ProxySourceSHA256 == p.OutputProxySourceSHA256 &&
+		o.SupportSourceSHA256 == p.OutputSupportSourceSHA256 &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.ConfigMapUID != "" && o.ProxyImageID != "" && o.SupportImageID != "" &&
+		o.CreatorIdentity == p.OutputEventCreator && o.PolicyName == "guardrail-output-fixture" &&
+		o.PolicyUID != "" && o.PolicyGeneration > 0
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -534,6 +556,7 @@ const (
 	// default-audience bearer for this exact Pod. It does not establish that a
 	// generic copied credential was erased, or request a particular action.
 	AttackVectorPodBoundAPIAuth = "phorvex.attack.pod-bound-api-auth"
+	AttackVectorSensitiveOutput = "phorvex.attack.sensitive-output"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -602,6 +625,7 @@ type SecurityEventInfo struct {
 	CurrentInventoryAdmissionContract string
 	AdapterName                       string // event-owned phorvex.ai/adapter-name, never copied from a Pod
 	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
+	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -647,6 +671,27 @@ type AdapterObservation struct {
 	TargetPodUID    string    `json:"targetPodUID"`
 	AdapterName     string    `json:"adapterName"`
 	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// SensitiveOutputObservation licenses only one source-bound response-field rule.
+// It contains no secret marker or raw customer response.
+type SensitiveOutputObservation struct {
+	EventName                        string    `json:"eventName"`
+	EventUID                         string    `json:"eventUID"`
+	CreatorIdentity                  string    `json:"creatorIdentity"`
+	TargetPodUID                     string    `json:"targetPodUID"`
+	ConfigMapUID                     string    `json:"configMapUID"`
+	SelectedRevision                 uint64    `json:"selectedRevision"`
+	SelectedConfigMapResourceVersion string    `json:"selectedConfigMapResourceVersion"`
+	PolicyName                       string    `json:"policyName"`
+	PolicyUID                        string    `json:"policyUID"`
+	PolicyGeneration                 int64     `json:"policyGeneration"`
+	RuleSHA256                       string    `json:"ruleSHA256"`
+	ProxySourceSHA256                string    `json:"proxySourceSHA256"`
+	SupportSourceSHA256              string    `json:"supportSourceSHA256"`
+	ProxyImageID                     string    `json:"proxyImageID"`
+	SupportImageID                   string    `json:"supportImageID"`
+	ObservedAt                       time.Time `json:"observedAt"`
 }
 
 // VectorSteeringAttribution describes the one factor applied to one recon fact.
@@ -894,8 +939,9 @@ type GracefulTerminationReceipt struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	AdapterObservation *AdapterObservation `json:"adapterObservation,omitempty"`
-	Existential        *ExistentialDecision
+	AdapterObservation      *AdapterObservation         `json:"adapterObservation,omitempty"`
+	OutputPolicyObservation *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
+	Existential             *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
 	Claim          *ClaimScope
