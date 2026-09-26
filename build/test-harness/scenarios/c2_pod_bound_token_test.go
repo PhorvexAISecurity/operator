@@ -393,6 +393,60 @@ func TestPodTokenCPUOriginalSourceAndPeerHandlesThroughRealAPI(t *testing.T) {
 	}
 }
 
+func TestPodTokenPromRun21MillisecondEvaluationAndWrongInstant(t *testing.T) {
+	// An independent historical query of run 21's exact source series requested
+	// 1790367000.123456 and Prometheus returned 1790367000.123. The retained
+	// counter, sample time and positive rate reproduce the producer's precision
+	// mismatch; these were not captured outbound producer queries.
+	const pod = "pod-token-60bf41c9878d9056727f1b15-5fffbbfdc7-8z9k5"
+	const nonce = "60bf41c9878d9056727f1b15"
+	const uid = "95c1b8ab-ffd1-4f95-ba9e-c166c0f120c0"
+	const namespace = "phorvex-catalogue-cpu"
+	selector := `http_requests_total{namespace="` + namespace + `",pod="` + pod + `",nonce="` + nonce + `",pod_uid="` + uid + `"}`
+	evaluation := time.Unix(1790367000, 123456000).UTC()
+	responseTime := "1790367000.123"
+	var requested []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = append(requested, r.URL.Query().Get("time"))
+		expression := r.URL.Query().Get("query")
+		value := "53"
+		metric := fmt.Sprintf(`"namespace":%q,"pod":%q,"nonce":%q,"pod_uid":%q`, namespace, pod, nonce, uid)
+		if strings.HasPrefix(expression, "timestamp(") {
+			value = "1790366975.963"
+		}
+		if strings.HasPrefix(expression, "sum by (pod,pod_uid)") {
+			value = "0.5333333333333333"
+			metric = fmt.Sprintf(`"pod":%q,"pod_uid":%q`, pod, uid)
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{%s},"value":[%s,%q]}]}}`, metric, responseTime, value)
+	}))
+	defer server.Close()
+	for _, step := range []struct {
+		expression, value string
+		sourceLabels      bool
+	}{
+		{"timestamp(" + selector + ")", "1790366975.963", true},
+		{selector, "53", true},
+		{"timestamp(" + selector + ")", "1790366975.963", true},
+		{`sum by (pod,pod_uid) (rate(` + selector + `[1m]))`, "0.5333333333333333", false},
+	} {
+		got, _, err := podTokenPromQuery(context.Background(), server.URL, step.expression, namespace, pod, nonce, uid, evaluation, step.sourceLabels)
+		want, _ := strconv.ParseFloat(step.value, 64)
+		if err != nil || got != want {
+			t.Fatalf("run21 Prometheus row rejected: got=%g want=%g err=%v", got, want, err)
+		}
+	}
+	for _, got := range requested {
+		if got != "1790367000.123" {
+			t.Fatalf("queries did not share one millisecond-aligned instant: %q", got)
+		}
+	}
+	responseTime = "1790367000.124"
+	if _, _, err := podTokenPromQuery(context.Background(), server.URL, selector, namespace, pod, nonce, uid, evaluation, true); err == nil || !strings.Contains(err.Error(), "evaluation time differs") {
+		t.Fatalf("different evaluation instant accepted: %v", err)
+	}
+}
+
 func TestPodTokenPromUsesActualScrapeTimestampAndSourceSeries(t *testing.T) {
 	const pod = "source-abc"
 	const nonce = "0123456789abcdef01234567"

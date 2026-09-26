@@ -1,0 +1,266 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: d1fad90ea5112f4f60a1d68ed1c0752b83915854f66712a996ccbc64ecef2220
+    source_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+    at: '2026-09-25T20:26:06+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+  red:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/root-red.txt
+    sha256: 6ce7db8243d0bd83040f43201caa943760695d2058b5d42e5b330e9734319d68
+    source_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+    at: '2026-09-26T09:57:38+00:00'
+  preflight:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/preflight
+    sha256: bd999749477fccd38ef7acd172552462746f8cc4e5370d5269a8a1bca2788b91
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T09:57:38+00:00'
+  implementation:
+    result: PASS
+    by: mongo-finish
+    artifact: 04-diff.patch
+    sha256: 74f635d491773686bec53a7ac59e8d95ef52fe2a7eea4e03de4ebf806552cf4c
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T09:57:38+00:00'
+  l0:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/preflight
+    sha256: bd999749477fccd38ef7acd172552462746f8cc4e5370d5269a8a1bca2788b91
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T09:57:38+00:00'
+    inputs:
+    - build/test-harness
+    - deploy/helm
+    - phorvex
+    - tools
+    inputs_sha256: 4439eeffb9e3f55f1da0837cbc93b7f3e3351a11a9e25ca31e9b68e14706d239
+  l1:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/focused-console.log
+    sha256: 81005da84f17d4ff8d9c58b5d149b453cea92bd11fc54ed8c48bd5b6fdc8ad38
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T09:57:38+00:00'
+    inputs:
+    - phorvex/internal/console
+    inputs_sha256: 4a124d1693dfde929fb0f0d318c3038a1b81c8971431d18c11ab8ff7b04c16d3
+  l2:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/harness-all.txt
+    sha256: 1e9c1f2e79891a297a6c3a4ec846fb6cc0daccf99db15d0e2a4a824ad260a279
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T09:57:38+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: 089298b74de058619c433dada5f1b12ef2c994f536a46f623936b293dc216ea0
+  positive_control:
+    result: PASS
+    by: mongo-finish
+    artifact: evidence/focused-harness.log
+    sha256: 4c332a597c33541fa7139b27e3fe9f529dd8645e8ccaa3a7fc89cf20ce7c25ed
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T09:57:38+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    inputs_sha256: dcb544d591c45bb765875ac1ec413d17d73ac39954278050d072eb0c5e42c2f3
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 7bd1762012ab9fd7a7d8c2e60efe3dababed02cf4eb9d3ea64bb96d9d2ace4d9
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T10:01:20+00:00'
+    baseline_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 95534a7dca6d0b5d9c1c5495220b9d500bcd02e29ef1d6b37e461d0f8188cb2b
+    source_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+    at: '2026-09-26T10:01:20+00:00'
+    incident_sha256: 7bd1762012ab9fd7a7d8c2e60efe3dababed02cf4eb9d3ea64bb96d9d2ace4d9
+fix_id: CAT-CPU-PROM-TIME
+issues: []
+title: Use Prometheus timestamp precision and reconcile cleaned CPU pre-event failures
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: mongo-finish
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+  deployed_image: 0.4.169
+  deployed_git_sha: fb91e4cfb987010c119c1a97687eadb105272935
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/cpu-single-case-telemetry-20260925
+  base_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+  head_sha: 85ea005613a91bfc6970eb9aa9ab6d060869508a
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/352
+  reviewed_head: 27bf6d5da08fbb8c5d3254ba00a1205e019573d3
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Await PR CI/review; record the actual reviewed head and preserve the live
+    verification obligation.
+updated_at: '2026-09-26T10:04:16+00:00'
+follow_up_to: CAT-CPU-MONGO-PRIOR
+configuration_history:
+- at: '2026-09-25T20:20:12+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-26T09:57:38+00:00'
+  by: mongo-finish
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T10:02:34+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-09-26T10:04:16+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-25T20:23:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-25T20:23:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-26T09:57:38+00:00'
+  by: mongo-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-26T09:57:41+00:00'
+  by: mongo-finish
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T10:01:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T10:01:23+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 332a1ba1a0be1c1a1c2b9ac4604ace688538ea8912482c291a27c5e33d15f95f
+  source_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+  at: '2026-09-25T20:23:24+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- check: red
+  result: PASS
+  by: codex-lead
+  artifact: evidence/root-red.txt
+  sha256: 6ce7db8243d0bd83040f43201caa943760695d2058b5d42e5b330e9734319d68
+  source_sha: f9ed3d54ad7cd801e0a7d34d0dbbd55ad27adae2
+  at: '2026-09-25T20:23:37+00:00'
+handoff:
+  id: CAT-CPU-PROM-TIME:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8

@@ -264,8 +264,13 @@ func podTokenPromQuery(ctx context.Context, base, expression, namespace, pod, no
 	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 		return 0, nil, errors.New("Pod token Prometheus URL invalid")
 	}
+	// Prometheus serializes vector evaluation timestamps to milliseconds. Send
+	// that same instant and compare its decoded value exactly, so a legitimate
+	// millisecond response is accepted without admitting a different instant.
+	evaluation = evaluation.UTC().Truncate(time.Millisecond)
+	evaluationText := strconv.FormatFloat(float64(evaluation.UnixMilli())/1000, 'f', 3, 64)
 	parsed.Path = "/api/v1/query"
-	parsed.RawQuery = url.Values{"query": {expression}, "time": {strconv.FormatFloat(float64(evaluation.UnixNano())/float64(time.Second), 'f', 6, 64)}}.Encode()
+	parsed.RawQuery = url.Values{"query": {expression}, "time": {evaluationText}}.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
 	if err != nil {
 		return 0, nil, err
@@ -300,7 +305,8 @@ func podTokenPromQuery(ctx context.Context, base, expression, namespace, pod, no
 		return 0, raw, errors.New("Pod token Prometheus value shape differs")
 	}
 	returnedAt, ok := row.Value[0].(float64)
-	if !ok || math.Abs(returnedAt-float64(evaluation.UnixNano())/float64(time.Second)) > 0.000002 {
+	expectedAt, _ := strconv.ParseFloat(evaluationText, 64)
+	if !ok || returnedAt != expectedAt {
 		return 0, raw, errors.New("Pod token Prometheus evaluation time differs")
 	}
 	number, err := strconv.ParseFloat(value, 64)
@@ -318,7 +324,7 @@ func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture)
 		return time.Time{}, 0, "", errors.New("Pod token metric source Pod UID absent")
 	}
 	selector := `http_requests_total{namespace="` + ns + `",pod="` + pod + `",nonce="` + nonce + `",pod_uid="` + uid + `"}`
-	evaluation := time.Now().UTC()
+	evaluation := time.Now().UTC().Truncate(time.Millisecond)
 	timestampRaw, partA, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", ns, pod, nonce, uid, evaluation, true)
 	if err != nil {
 		return time.Time{}, 0, "", err
