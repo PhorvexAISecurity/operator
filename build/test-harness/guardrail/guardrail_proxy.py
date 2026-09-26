@@ -16,17 +16,20 @@ from dataclasses import dataclass
 from functools import wraps
 import importlib.metadata
 import hmac
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import sys
 import threading
+import types
 from typing import Mapping
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 try:
     from drain_v11 import (Coordinator, DrainError, EngineHTTPClient, Ledger,
@@ -48,6 +51,10 @@ VARIANT_MODELS = {
 DEFAULT_THRESHOLD = 0.5
 MODES = frozenset(("enforce", "observe"))
 RESET_RESPONSE_MAX_BYTES = 1 << 16
+SUPPORT_REQUEST_MAX_BYTES = 128
+SUPPORT_TIMEOUT_SECONDS = 20.0
+SUPPORT_URL = "http://127.0.0.1:8002"
+SUPPORT_RESPONSE_MAX_BYTES = 65536
 
 
 def _finite_threshold(name: str, raw: str) -> float:
@@ -253,10 +260,50 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
                load_models: bool = True,
                upstream_api_key: str | None = None,
                admin_api_key: str | None = None,
-               drain_coordinator=None) -> FastAPI:
+               drain_coordinator=None, support_fixture_enabled: bool | None = None,
+               support_fixture_url: str | None = None,
+               output_policy_dir: str | Path | None = None,
+               output_policy_state_dir: str | Path | None = None,
+               pod_uid: str | None = None) -> FastAPI:
     runtime = runtime or GuardrailRuntime(load_config())
     upstream_api_key = upstream_api_key if upstream_api_key is not None else os.environ.get("VLLM_API_KEY", "")
     admin_api_key = admin_api_key if admin_api_key is not None else upstream_api_key
+    support_fixture_enabled = (os.environ.get("PHORVEX_SUPPORT_FIXTURE_ENABLED") == "1"
+                               if support_fixture_enabled is None else support_fixture_enabled)
+    support_fixture_url = (support_fixture_url or os.environ.get("SUPPORT_FIXTURE_URL")
+                           or SUPPORT_URL).rstrip("/")
+    policy_reader = None
+    proxy_source_sha256 = ""
+    PolicyError = ValueError
+    strict_json = transform_response = None
+    if support_fixture_enabled:
+        # Execute exactly the policy bytes included in the frozen composite
+        # source digest; Python's module cache cannot substitute other bytes.
+        policy_path = Path(__file__).resolve().parent / "output_policy.py"
+        policy_bytes = policy_path.read_bytes()
+        module_name = f"phorvex_output_policy_{hashlib.sha256(policy_bytes).hexdigest()[:16]}"
+        policy_module = types.ModuleType(module_name)
+        policy_module.__file__ = str(policy_path)
+        sys.modules[module_name] = policy_module
+        exec(compile(policy_bytes, str(policy_path), "exec"), policy_module.__dict__)
+        PolicyError = policy_module.PolicyError
+        PolicyReader = policy_module.PolicyReader
+        strict_json = policy_module.strict_json
+        transform_response = policy_module.transform_response
+        pod_uid = pod_uid if pod_uid is not None else os.environ.get("POD_UID", "")
+        directory = output_policy_dir or os.environ.get(
+            "PHORVEX_SENSITIVE_OUTPUT_POLICY_DIR", "/etc/phorvex/output-policy")
+        state_dir = output_policy_state_dir or os.environ.get(
+            "PHORVEX_SENSITIVE_OUTPUT_STATE_DIR", "/var/lib/phorvex-output-policy")
+        policy_reader = PolicyReader(Path(directory), pod_uid, Path(state_dir))
+        proxy_source_sha256 = hashlib.sha256(
+            Path(__file__).read_bytes() + b"\x00" + policy_bytes).hexdigest()
+        parsed_support = urlparse(support_fixture_url)
+        if (parsed_support.scheme != "http" or parsed_support.hostname != "127.0.0.1"
+                or parsed_support.port is None or parsed_support.path not in ("", "/")
+                or parsed_support.query or parsed_support.fragment
+                or parsed_support.username or parsed_support.password):
+            raise ValueError("support fixture must be on loopback")
     inflight = set()  # asyncio tasks proxying generation requests — the drain target
 
     async def snapshot_proxy():
@@ -302,6 +349,115 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
 
     app = FastAPI(lifespan=lifespan)
     app.state.guardrail_runtime = runtime
+
+    @app.get("/v1/output-policy/state")
+    async def output_policy_state():
+        if policy_reader is None:
+            return JSONResponse({"error": "output_policy_unavailable"}, status_code=503)
+        try:
+            result = policy_reader.read().public()
+            result["proxySourceSHA256"] = proxy_source_sha256
+            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0, connect=1.0),
+                                         trust_env=False) as client:
+                async with asyncio.timeout(2.0):
+                    async with client.stream("GET", f"{support_fixture_url}/v1/support/state",
+                                             headers={"Accept": "application/json",
+                                                      "Accept-Encoding": "identity"}) as response:
+                        if response.status_code != 200 or response.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+                            raise PolicyError("support source unavailable")
+                        raw = bytearray()
+                        async for chunk in response.aiter_raw():
+                            raw.extend(chunk)
+                            if len(raw) > 1024:
+                                raise PolicyError("support state too large")
+            support_state = strict_json(bytes(raw))
+            source = support_state.get("supportSourceSHA256") if type(support_state) is dict else None
+            if (type(support_state) is not dict
+                    or set(support_state) != {"version", "supportSourceSHA256", "completedModelCalls", "model"}
+                    or type(support_state["version"]) is not int or support_state["version"] != 1
+                    or type(source) is not str or len(source) != 64
+                    or any(char not in "0123456789abcdef" for char in source)
+                    or type(support_state["completedModelCalls"]) is not int
+                    or support_state["completedModelCalls"] < 0
+                    or type(support_state["model"]) is not str or not support_state["model"]):
+                raise PolicyError("support state invalid")
+            result["supportSourceSHA256"] = source
+            return result
+        except (PolicyError, httpx.HTTPError, TimeoutError, OSError):
+            return JSONResponse({"error": "output_policy_unavailable"}, status_code=503)
+
+    @app.api_route("/v1/support/case", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+    async def support_case(req: Request):
+        if policy_reader is None:
+            return JSONResponse({"error": "support_fixture_disabled"}, status_code=404)
+        if req.method != "POST":
+            return JSONResponse({"error": "method_not_allowed"}, status_code=405)
+        if req.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+            return JSONResponse({"error": "invalid_support_request"}, status_code=415)
+        if "text/event-stream" in req.headers.get("accept", "").lower():
+            return JSONResponse({"error": "support_stream_unsupported"}, status_code=400)
+        try:
+            length_text = req.headers.get("content-length")
+            if length_text is not None and (not length_text.isdecimal()
+                                            or int(length_text) > SUPPORT_REQUEST_MAX_BYTES):
+                raise PolicyError("request length invalid")
+            raw = bytearray()
+            async with asyncio.timeout(2.0):
+                async for chunk in req.stream():
+                    raw.extend(chunk)
+                    if len(raw) > SUPPORT_REQUEST_MAX_BYTES:
+                        raise PolicyError("request too large")
+            request_value = strict_json(bytes(raw))
+            if type(request_value) is not dict or request_value not in (
+                    {"caseId": "CAT-001"}, {"caseId": "CAT-002"}):
+                raise PolicyError("request schema invalid")
+        except (PolicyError, TimeoutError):
+            return JSONResponse({"error": "invalid_support_request"}, status_code=400)
+        try:
+            initial = policy_reader.read()
+        except PolicyError:
+            return JSONResponse({"error": "output_policy_unavailable"}, status_code=503)
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(SUPPORT_TIMEOUT_SECONDS,
+                                                              connect=3.0),
+                                         trust_env=False) as client:
+                async with asyncio.timeout(SUPPORT_TIMEOUT_SECONDS):
+                    async with client.stream("POST", f"{support_fixture_url}/v1/support/case",
+                                             content=bytes(raw), headers={
+                                                 "Content-Type": "application/json",
+                                                 "Accept": "application/json",
+                                                 "Accept-Encoding": "identity",
+                                             }) as upstream_response:
+                        if upstream_response.status_code != 200:
+                            raise PolicyError("support upstream returned error")
+                        if (upstream_response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                                != "application/json"):
+                            raise PolicyError("support upstream content type invalid")
+                        if upstream_response.headers.get("content-encoding", "identity").lower() != "identity":
+                            raise PolicyError("support upstream content encoding invalid")
+                        if upstream_response.headers.get("transfer-encoding"):
+                            raise PolicyError("support upstream streaming unsupported")
+                        length_text = upstream_response.headers.get("content-length", "")
+                        if not length_text.isdecimal() or not 0 < int(length_text) <= SUPPORT_RESPONSE_MAX_BYTES:
+                            raise PolicyError("support upstream length invalid")
+                        expected_length = int(length_text)
+                        response_raw = bytearray()
+                        async for chunk in upstream_response.aiter_raw():
+                            response_raw.extend(chunk)
+                            if len(response_raw) > SUPPORT_RESPONSE_MAX_BYTES:
+                                raise PolicyError("support upstream too large")
+                        if len(response_raw) != expected_length:
+                            raise PolicyError("support upstream truncated")
+            final = policy_reader.read()
+            # The mount can update while the upstream call is in flight. Either
+            # active snapshot requires removal before any response bytes leave.
+            transformed = transform_response(bytes(response_raw),
+                                             initial.active or final.active
+                                             or initial.revision != final.revision)
+        except (PolicyError, httpx.HTTPError, TimeoutError):
+            return JSONResponse({"error": "support_response_unavailable"}, status_code=502)
+        return Response(content=transformed, status_code=200, media_type="application/json")
 
     @app.get("/v1/guardrail/state")
     def state():
@@ -467,6 +623,8 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
 
     @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
     async def proxy(path: str, req: Request):
+        if path.startswith("v1/output-policy/"):
+            return JSONResponse({"error": "method_not_allowed"}, status_code=405)
         body = await req.body()
         if req.method == "POST" and path in ("v1/chat/completions", "v1/completions"):
             active, mode, threshold, ready, _ = runtime.snapshot()
