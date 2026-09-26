@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 14
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -99,7 +99,7 @@ fix_id: CAT-GUARDRAIL-COVER
 issues: []
 title: Remove unsupported cyclic guardrail bypass cover
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: root
@@ -126,8 +126,8 @@ implementation:
   head_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/354
+  reviewed_head: 7cecfcb7332539aaaa40dd6dbdfe043db55b5aff
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -160,10 +160,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-26T18:11:12+00:00'
+  owner: root
+  action: PR354 deployment and independent live observation of selection at former
+    floor; preserve open guardrail response capability work
+updated_at: '2026-09-26T18:13:09+00:00'
 configuration_history:
 - at: '2026-09-26T17:46:13+00:00'
   by: root
@@ -193,6 +193,11 @@ configuration_history:
   by: guardrail_response_chain
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-26T18:12:49+00:00'
+  by: root
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -244,6 +249,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-26T18:13:09+00:00'
+  by: root
+  artifact: evidence/integration-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CAT-GUARDRAIL-COVER:11:review
