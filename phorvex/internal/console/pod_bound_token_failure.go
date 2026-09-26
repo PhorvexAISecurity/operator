@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // This receipt contains only stable diagnostics. The original error may contain
@@ -17,6 +19,67 @@ type podBoundCoordinatorFailure struct {
 	Reason        string `json:"reason"`
 	ErrorSHA256   string `json:"errorSHA256"`
 	RecordedAt    string `json:"recordedAt"`
+}
+
+type podBoundEventFailure struct {
+	reason string
+	cause  error
+}
+
+func (e *podBoundEventFailure) Error() string { return e.cause.Error() }
+func (e *podBoundEventFailure) Unwrap() error { return e.cause }
+
+func podBoundEventError(reason string, cause error) error {
+	if cause == nil {
+		cause = errors.New(reason)
+	}
+	return &podBoundEventFailure{reason: reason, cause: cause}
+}
+
+func podBoundCoordinatorFailureReason(stage string, cause error) string {
+	reason := podBoundFailureReason(stage)
+	if stage != "typed-event-create" {
+		return reason
+	}
+	var event *podBoundEventFailure
+	if !errors.As(cause, &event) {
+		return reason
+	}
+	reason = event.reason
+	if reason != "TOKEN_REQUEST_FAILED" && reason != "EVENT_CREATE_FAILED" {
+		return reason
+	}
+	var status apierrors.APIStatus
+	if !errors.As(event.cause, &status) {
+		return reason
+	}
+	switch {
+	case apierrors.IsForbidden(event.cause):
+		return reason[:len(reason)-len("FAILED")] + "FORBIDDEN"
+	case apierrors.IsInvalid(event.cause):
+		return reason[:len(reason)-len("FAILED")] + "INVALID"
+	case apierrors.IsTimeout(event.cause), apierrors.IsServerTimeout(event.cause):
+		return reason[:len(reason)-len("FAILED")] + "TIMEOUT"
+	}
+	return reason
+}
+
+func validPodBoundFailureReason(stage, reason string) bool {
+	if reason == podBoundFailureReason(stage) && reason != "" {
+		return true
+	}
+	if stage != "typed-event-create" {
+		return false
+	}
+	switch reason {
+	case "CREATOR_SERVICEACCOUNT_FAILED", "CREATOR_POLICY_FAILED", "CREATOR_SCOPE_FAILED",
+		"CREATOR_BINDING_FAILED", "TOKEN_REQUEST_FAILED", "TOKEN_REQUEST_FORBIDDEN",
+		"TOKEN_REQUEST_INVALID", "TOKEN_REQUEST_TIMEOUT", "CREATOR_CLIENT_FAILED",
+		"EVENT_CREATE_FAILED", "EVENT_CREATE_FORBIDDEN", "EVENT_CREATE_INVALID",
+		"EVENT_CREATE_TIMEOUT", "EVENT_READBACK_FAILED", "EVENT_STAMP_FAILED":
+		return true
+	}
+	return false
 }
 
 func podBoundFailureReason(stage string) string {
@@ -58,7 +121,7 @@ func recordPodBoundCoordinatorFailure(out string, req podBoundTokenRequest, requ
 	}
 	_, err := writePodBoundOwnedFile(out, podBoundCoordinatorFailureFile, podBoundCoordinatorFailure{
 		Schema: "pod-bound-token-coordinator-failure-v1", RunID: req.RunID, Nonce: req.Nonce,
-		RequestSHA256: requestSHA, Stage: stage, Reason: podBoundFailureReason(stage),
+		RequestSHA256: requestSHA, Stage: stage, Reason: podBoundCoordinatorFailureReason(stage, cause),
 		ErrorSHA256: podBoundHash([]byte(cause.Error())), RecordedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	})
 	return err
@@ -79,7 +142,7 @@ func readPodBoundCoordinatorFailure(out, id string) (*podBoundCoordinatorFailure
 	}
 	if failure.Schema != "pod-bound-token-coordinator-failure-v1" || failure.RunID != id ||
 		failure.Nonce != req.Nonce || failure.RequestSHA256 != podBoundHash(rawReq) ||
-		podBoundFailureReason(failure.Stage) == "" || failure.Reason != podBoundFailureReason(failure.Stage) ||
+		!validPodBoundFailureReason(failure.Stage, failure.Reason) ||
 		!mongoSHA.MatchString(failure.ErrorSHA256) {
 		return nil, errors.New("Pod-bound token coordinator failure identity differs")
 	}

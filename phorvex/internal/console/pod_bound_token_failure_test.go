@@ -3,10 +3,14 @@ package console
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestPodBoundCoordinatorRecordsRealEarlyFailure(t *testing.T) {
@@ -24,6 +28,73 @@ func TestPodBoundCoordinatorRecordsRealEarlyFailure(t *testing.T) {
 	failure, err := readPodBoundCoordinatorFailure(out, id)
 	if err != nil || failure.Stage != "request-validation" || failure.Reason != "REQUEST_INVALID" {
 		t.Fatalf("real coordinator error not recorded: %+v, %v", failure, err)
+	}
+}
+
+func TestPodBoundEventFailureExposesOnlySafeAPIClass(t *testing.T) {
+	for _, tc := range []struct {
+		apiReason  metav1.StatusReason
+		base, want string
+	}{
+		{metav1.StatusReasonForbidden, "EVENT_CREATE_FAILED", "EVENT_CREATE_FORBIDDEN"},
+		{metav1.StatusReasonInvalid, "EVENT_CREATE_FAILED", "EVENT_CREATE_INVALID"},
+		{metav1.StatusReasonTimeout, "EVENT_CREATE_FAILED", "EVENT_CREATE_TIMEOUT"},
+		{metav1.StatusReasonForbidden, "TOKEN_REQUEST_FAILED", "TOKEN_REQUEST_FORBIDDEN"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			out := t.TempDir()
+			req := podBoundTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1",
+				Nonce: strings.Repeat("a", 24), RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+			reqSHA, err := writePodBoundOwnedFile(out, podBoundRequestFile, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			secret := "private bearer token and API message"
+			apiErr := &apierrors.StatusError{ErrStatus: metav1.Status{Reason: tc.apiReason, Message: secret}}
+			cause := podBoundEventError(tc.base, fmt.Errorf("request failed: %w", apiErr))
+			if err := recordPodBoundCoordinatorFailure(out, req, reqSHA, "typed-event-create", cause); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(out + "/" + podBoundCoordinatorFailureFile)
+			if err != nil || strings.Contains(string(raw), secret) {
+				t.Fatalf("raw API message leaked or unreadable: %v", err)
+			}
+			failure, err := readPodBoundCoordinatorFailure(out, req.RunID)
+			if err != nil || failure.Reason != tc.want {
+				t.Fatalf("safe API class missing: %+v, %v", failure, err)
+			}
+		})
+	}
+}
+
+func TestPodBoundCoordinatorCancellationReceiptPrecedesFinalStatus(t *testing.T) {
+	out := t.TempDir()
+	req := podBoundTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1",
+		Nonce: strings.Repeat("a", 24), RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	reqSHA, err := writePodBoundOwnedFile(out, podBoundRequestFile, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		<-ctx.Done()
+		time.Sleep(20 * time.Millisecond)
+		if err := recordPodBoundCoordinatorFailure(out, req, reqSHA, "decision-observation", ctx.Err()); err != nil {
+			done <- err
+			return
+		}
+		done <- ctx.Err()
+	}()
+	responseErr := awaitNamedResponse(done, cancel, true, 5*time.Millisecond, 200*time.Millisecond)
+	if responseErr == nil || !strings.Contains(responseErr.Error(), "did not terminate") {
+		t.Fatalf("timed-out response was promoted: %v", responseErr)
+	}
+	status := &RunStatus{}
+	finishPodBoundTokenStatus(status, out, req.RunID, true, PodBoundTokenResult{},
+		errors.New("incomplete"), responseErr, nil, nil, nil)
+	if status.State != "partial" || !status.UnsafeToRetry || !strings.Contains(status.Error, "decision-observation") {
+		t.Fatalf("diagnostic raced status persistence: %+v", status)
 	}
 }
 

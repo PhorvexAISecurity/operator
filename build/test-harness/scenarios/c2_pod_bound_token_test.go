@@ -125,6 +125,23 @@ func TestPodTokenBarrierWaitExitsOnMatchingCoordinatorFailure(t *testing.T) {
 	}
 }
 
+func TestPodTokenBarrierWaitReportsSafeEventCreateClass(t *testing.T) {
+	dir := t.TempDir()
+	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
+		RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1", RunID: req.RunID,
+		Nonce: req.Nonce, RequestSHA256: requestSHA, Stage: "typed-event-create", Reason: "EVENT_CREATE_FORBIDDEN",
+		ErrorSHA256: strings.Repeat("3", 64), RecordedAt: podTokenUTC()}
+	if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := podTokenWaitBarrier(context.Background(), dir, req, requestSHA); err == nil ||
+		!strings.Contains(err.Error(), "EVENT_CREATE_FORBIDDEN") {
+		t.Fatalf("safe event creation class not reported: %v", err)
+	}
+}
+
 func TestPodTokenCoordinatorFailureMalformedOrStaleCannotPassBarrier(t *testing.T) {
 	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
 		RequestedAt: time.Now().UTC().Format(time.RFC3339Nano)}

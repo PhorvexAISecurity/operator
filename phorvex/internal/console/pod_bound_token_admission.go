@@ -209,7 +209,7 @@ func (s *Server) podBoundTokenDisjointLiveMode(ctx context.Context, kc kubernete
 		if err != nil {
 			return err
 		}
-		return s.podBoundCPUGraph(ctx, kc, r, p.Context, allowSourceLifecycle)
+		return s.podBoundCPUGraph(ctx, kc, r, p, allowSourceLifecycle)
 	}
 	if r.Namespace != podBoundTokenNamespace || r.CaseID != "" && r.CaseID != podBoundTokenVoiceCaseID {
 		return errors.New("Voice token case identity differs")

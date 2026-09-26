@@ -159,31 +159,31 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	creatorName := strings.TrimPrefix(creatorIdentity, "system:serviceaccount:phorvex-system:")
 	sa, err := kc.CoreV1().ServiceAccounts("phorvex-system").Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || sa.UID == "" || sa.DeletionTimestamp != nil || sa.AutomountServiceAccountToken == nil || *sa.AutomountServiceAccountToken {
-		return nil, nil, errors.New("dedicated trusted creator ServiceAccount unavailable")
+		return nil, nil, podBoundEventError("CREATOR_SERVICEACCOUNT_FAILED", err)
 	}
 	vap, err := kc.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || vap.DeletionTimestamp != nil || vap.Spec.FailurePolicy == nil ||
 		*vap.Spec.FailurePolicy != "Fail" || len(vap.Spec.Validations) < 3 ||
 		len(vap.Spec.MatchConditions) == 0 {
-		return nil, nil, errors.New("dedicated creator admission policy unavailable")
+		return nil, nil, podBoundEventError("CREATOR_POLICY_FAILED", err)
 	}
 	if vap.Spec.MatchConditions[0].Expression !=
 		"request.userInfo.username == '"+creatorIdentity+"'" ||
 		vap.Spec.Validations[0].Expression != "variables.event.metadata.name.startsWith('phorvex-e2e-')" ||
 		vap.Spec.Validations[1].Expression != "size(variables.event.spec.targets) == 1 && variables.event.spec.targets[0].startsWith('"+r.Namespace+"/')" ||
 		vap.Spec.Validations[2].Expression != "variables.event.spec.rule.source == 'PhorvexE2EDetector'" {
-		return nil, nil, errors.New("dedicated creator admission scope changed")
+		return nil, nil, podBoundEventError("CREATOR_SCOPE_FAILED", nil)
 	}
 	binding, err := kc.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Get(ctx, creatorName, metav1.GetOptions{})
 	if err != nil || binding.DeletionTimestamp != nil || binding.Spec.PolicyName != creatorName ||
 		len(binding.Spec.ValidationActions) != 1 || binding.Spec.ValidationActions[0] != "Deny" {
-		return nil, nil, errors.New("dedicated creator admission binding unavailable")
+		return nil, nil, podBoundEventError("CREATOR_BINDING_FAILED", err)
 	}
 	ttl := int64(600)
 	token, err := kc.CoreV1().ServiceAccounts("phorvex-system").CreateToken(ctx, creatorName,
 		&authenticationv1.TokenRequest{Spec: authenticationv1.TokenRequestSpec{ExpirationSeconds: &ttl}}, metav1.CreateOptions{})
 	if err != nil || token.Status.Token == "" || token.Status.ExpirationTimestamp.Time.Before(time.Now().Add(5*time.Minute)) {
-		return nil, nil, errors.New("dedicated trusted creator token authority unavailable")
+		return nil, nil, podBoundEventError("TOKEN_REQUEST_FAILED", err)
 	}
 	cfg := rest.CopyConfig(base)
 	cfg.BearerToken, cfg.BearerTokenFile = token.Status.Token, ""
@@ -191,7 +191,7 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	cfg.Impersonate = rest.ImpersonationConfig{}
 	creator, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, podBoundEventError("CREATOR_CLIENT_FAILED", err)
 	}
 	event := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
@@ -204,11 +204,11 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 	gvr := schema.GroupVersionResource{Group: "amtd.r6security.com", Version: "v1beta1", Resource: "securityevents"}
 	created, err := creator.Resource(gvr).Create(ctx, event, metav1.CreateOptions{})
 	if err != nil {
-		return nil, creator, fmt.Errorf("typed event CREATE outcome unknown; one-use fence: %w", err)
+		return nil, creator, podBoundEventError("EVENT_CREATE_FAILED", fmt.Errorf("typed event CREATE outcome unknown; one-use fence: %w", err))
 	}
 	readback, err := creator.Resource(gvr).Get(ctx, created.GetName(), metav1.GetOptions{})
 	if err != nil || readback == nil {
-		return nil, creator, errors.New("typed event readback unavailable")
+		return nil, creator, podBoundEventError("EVENT_READBACK_FAILED", err)
 	}
 	targets, targetOK, targetErr := unstructured.NestedStringSlice(readback.Object, "spec", "targets")
 	ruleType, typeOK, typeErr := unstructured.NestedString(readback.Object, "spec", "rule", "type")
@@ -222,7 +222,7 @@ func (s *Server) podBoundCreateTypedEvent(ctx context.Context, kc kubernetes.Int
 		typeErr != nil || !typeOK || ruleType != model.AttackVectorPodBoundAPIAuth ||
 		sourceErr != nil || !sourceOK || ruleSource != "PhorvexE2EDetector" ||
 		threatErr != nil || !threatOK || threat != "critical" {
-		return nil, creator, errors.New("typed event creator stamp or exact UID not confirmed")
+		return nil, creator, podBoundEventError("EVENT_STAMP_FAILED", nil)
 	}
 	return readback, creator, nil
 }

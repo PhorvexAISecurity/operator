@@ -1249,15 +1249,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if started && su.Namespace == mongoExposureNamespace {
 		mongoSealErr = rm.sealMongoAudit(id, outAbs)
 	}
-	var responseErr error
-	if responseDone != nil {
-		select {
-		case responseErr = <-responseDone:
-		case <-time.After(12 * time.Second):
-			responseErr = fmt.Errorf("named response coordinator did not terminate after harness exit")
-		}
-	}
-	responseCancel()
+	responseErr := awaitNamedResponse(responseDone, responseCancel, isPodBoundToken, 12*time.Second, 2*time.Second)
 	var podBoundSealErr error
 	if started && isPodBoundToken && responseErr == nil {
 		podBoundSealErr = rm.sealPodBoundTokenAudit(id, outAbs)
@@ -1404,6 +1396,34 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		dc.Env = envBase()
 		_ = dc.Run()
 	}(su.OutDir)
+}
+
+// A timed-out token coordinator gets a short bounded cancellation join before
+// the run status reads its create-once failure receipt. Even if it later exits
+// cleanly, the original timeout remains a partial outcome.
+func awaitNamedResponse(done <-chan error, cancel context.CancelFunc, token bool, wait, join time.Duration) error {
+	if done == nil {
+		cancel()
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		cancel()
+		return err
+	case <-timer.C:
+		cancel()
+		if token {
+			grace := time.NewTimer(join)
+			defer grace.Stop()
+			select {
+			case <-done:
+			case <-grace.C:
+			}
+		}
+		return fmt.Errorf("named response coordinator did not terminate after harness exit")
+	}
 }
 
 func finishNATSResponseStatus(st *RunStatus, result NATSResponseResult, evidenceErr, responseErr, processErr, contextErr error) {

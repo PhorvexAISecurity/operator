@@ -67,7 +67,18 @@ func readPodTokenCoordinatorFailure(dir string, req podTokenRequest, reqSHA stri
 		"event-cleanup": "EVENT_CLEANUP_FAILED",
 	}
 	_, hashErr := hex.DecodeString(failure.ErrorSHA256)
-	if reasonByStage[failure.Stage] == "" || failure.Reason != reasonByStage[failure.Stage] ||
+	validReason := reasonByStage[failure.Stage] != "" && failure.Reason == reasonByStage[failure.Stage]
+	if failure.Stage == "typed-event-create" && !validReason {
+		switch failure.Reason {
+		case "CREATOR_SERVICEACCOUNT_FAILED", "CREATOR_POLICY_FAILED", "CREATOR_SCOPE_FAILED",
+			"CREATOR_BINDING_FAILED", "TOKEN_REQUEST_FAILED", "TOKEN_REQUEST_FORBIDDEN",
+			"TOKEN_REQUEST_INVALID", "TOKEN_REQUEST_TIMEOUT", "CREATOR_CLIENT_FAILED",
+			"EVENT_CREATE_FORBIDDEN", "EVENT_CREATE_INVALID", "EVENT_CREATE_TIMEOUT",
+			"EVENT_READBACK_FAILED", "EVENT_STAMP_FAILED":
+			validReason = true
+		}
+	}
+	if !validReason ||
 		len(failure.ErrorSHA256) != 64 || hashErr != nil {
 		return nil, errors.New("Pod token coordinator diagnostic invalid")
 	}
