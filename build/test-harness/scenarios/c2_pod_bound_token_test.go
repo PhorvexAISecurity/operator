@@ -142,6 +142,35 @@ func TestPodTokenBarrierWaitReportsSafeEventCreateClass(t *testing.T) {
 	}
 }
 
+func TestPodTokenReaderAcceptsAllEmittedEventFailureReasons(t *testing.T) {
+	// Keep this list aligned with console.validPodBoundFailureReason. In
+	// particular, an unclassified API CREATE error must still stop the wait.
+	reasons := []string{
+		"EVENT_CREATION_FAILED", "CREATOR_SERVICEACCOUNT_FAILED", "CREATOR_POLICY_FAILED",
+		"CREATOR_SCOPE_FAILED", "CREATOR_BINDING_FAILED", "TOKEN_REQUEST_FAILED",
+		"TOKEN_REQUEST_FORBIDDEN", "TOKEN_REQUEST_INVALID", "TOKEN_REQUEST_TIMEOUT",
+		"CREATOR_CLIENT_FAILED", "EVENT_CREATE_FAILED", "EVENT_CREATE_FORBIDDEN",
+		"EVENT_CREATE_INVALID", "EVENT_CREATE_TIMEOUT", "EVENT_READBACK_FAILED", "EVENT_STAMP_FAILED",
+	}
+	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
+		RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	for _, reason := range reasons {
+		t.Run(reason, func(t *testing.T) {
+			dir := t.TempDir()
+			failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1", RunID: req.RunID,
+				Nonce: req.Nonce, RequestSHA256: requestSHA, Stage: "typed-event-create", Reason: reason,
+				ErrorSHA256: strings.Repeat("3", 64), RecordedAt: podTokenUTC()}
+			if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := readPodTokenCoordinatorFailure(dir, req, requestSHA); err != nil || got.Reason != reason {
+				t.Fatalf("emitted failure reason rejected: %+v, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestPodTokenCoordinatorFailureMalformedOrStaleCannotPassBarrier(t *testing.T) {
 	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
 		RequestedAt: time.Now().UTC().Format(time.RFC3339Nano)}
