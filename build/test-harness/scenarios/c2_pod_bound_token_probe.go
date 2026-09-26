@@ -286,8 +286,14 @@ func podTokenPromQuery(ctx context.Context, base, expression, namespace, pod, no
 		return 0, nil, errors.New("Pod token Prometheus response incomplete")
 	}
 	var p podTokenPromResult
-	if json.Unmarshal(raw, &p) != nil || p.Status != "success" || p.Data.ResultType != "vector" || len(p.Data.Result) != 1 {
-		return 0, raw, errors.New("Pod token Prometheus series missing or ambiguous")
+	if json.Unmarshal(raw, &p) != nil || p.Status != "success" || p.Data.ResultType != "vector" {
+		return 0, raw, errors.New("Pod token Prometheus vector response invalid")
+	}
+	if len(p.Data.Result) == 0 {
+		return 0, raw, errors.New("Pod token Prometheus source series absent")
+	}
+	if len(p.Data.Result) != 1 {
+		return 0, raw, errors.New("Pod token Prometheus source series ambiguous")
 	}
 	row := p.Data.Result[0]
 	if row.Metric["pod"] != pod || len(row.Value) != 2 ||
@@ -327,21 +333,27 @@ func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture)
 	evaluation := time.Now().UTC().Truncate(time.Millisecond)
 	timestampRaw, partA, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", ns, pod, nonce, uid, evaluation, true)
 	if err != nil {
-		return time.Time{}, 0, "", err
+		return time.Time{}, 0, "", fmt.Errorf("Pod token source scrape timestamp: %w", err)
 	}
 	counter, partB, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, selector, ns, pod, nonce, uid, evaluation, true)
 	if err != nil {
-		return time.Time{}, 0, "", err
+		return time.Time{}, 0, "", fmt.Errorf("Pod token source counter: %w", err)
 	}
 	// A scrape can be ingested between separate instant queries even when both
 	// queries use the same evaluation time. Bracket the counter with the source
 	// series' actual sample timestamp, and refuse a mixed-scrape pair.
 	confirmedTimestamp, partC, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, "timestamp("+selector+")", ns, pod, nonce, uid, evaluation, true)
-	if err != nil || confirmedTimestamp != timestampRaw {
+	if err != nil {
+		return time.Time{}, 0, "", fmt.Errorf("Pod token source confirming timestamp: %w", err)
+	}
+	if confirmedTimestamp != timestampRaw {
 		return time.Time{}, 0, "", errors.New("Pod token counter and scrape timestamp differ")
 	}
 	rate, partD, err := podTokenPromQuery(ctx, env.Config.PodBoundTokenFixture.PrometheusURL, `sum by (pod,pod_uid) (rate(`+selector+`[1m]))`, ns, pod, nonce, uid, evaluation, false)
-	if err != nil || rate <= 0 {
+	if err != nil {
+		return time.Time{}, 0, "", fmt.Errorf("Pod token source request rate: %w", err)
+	}
+	if rate <= 0 {
 		return time.Time{}, 0, "", errors.New("Pod token real request rate absent")
 	}
 	at := time.Unix(0, int64(timestampRaw*float64(time.Second))).UTC()
@@ -351,18 +363,56 @@ func podTokenMetricSample(ctx context.Context, env *core.Env, f podTokenFixture)
 	digest := podTokenHash(bytes.Join([][]byte{partA, partB, partC, partD}, []byte{'\n'}))
 	return at, counter, digest, nil
 }
-func podTokenWarmMetric(ctx context.Context, env *core.Env, f podTokenFixture) podTokenTelemetry {
+
+// CPU discovery of a new PodMonitor can take much longer than its 30-second
+// scrape interval. The CPU bound still leaves time for the 900-second case's
+// replay, decision, observation and cleanup, while requiring two distinct
+// positive-rate source samples. The caller's run context remains authoritative.
+const podTokenMetricWarmBudget = 270 * time.Second
+
+func podTokenWarmMetric(ctx context.Context, env *core.Env, f podTokenFixture) (podTokenTelemetry, error) {
+	budget := 125 * time.Second // Preserve optional telemetry timing for Voice.
+	if env.Config.Namespace == "phorvex-catalogue-cpu" {
+		budget = podTokenMetricWarmBudget
+	}
+	return podTokenWarmMetricWith(ctx, env, f, budget, 5*time.Second, podTokenMetricSample, podTokenDirectReady)
+}
+
+func podTokenWarmMetricWith(ctx context.Context, env *core.Env, f podTokenFixture, budget, interval time.Duration,
+	sample func(context.Context, *core.Env, podTokenFixture) (time.Time, float64, string, error),
+	ready func(context.Context, corev1.Pod, string) (int, error)) (podTokenTelemetry, error) {
 	result := podTokenTelemetry{ProducerStatus: "MISSING_REQUEST_RATE", SourcePodName: f.source.Name, PodMonitorUID: string(f.monitorUID)}
-	deadline := time.NewTimer(125 * time.Second)
-	defer deadline.Stop()
-	tick := time.NewTicker(5 * time.Second)
+	warmCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	var firstAt time.Time
 	var firstValue float64
 	var firstHash string
+	var lastErr error
+	stop := func() (podTokenTelemetry, error) {
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
+		if lastErr == nil {
+			lastErr = errors.New("Pod token source samples unavailable")
+		}
+		return result, fmt.Errorf("Pod token metric warm-up deadline: %w; last metric failure: %v", warmCtx.Err(), lastErr)
+	}
 	for {
-		_, _ = podTokenDirectReady(ctx, f.source, env.Config.PodBoundTokenFixture.Nonce)
-		at, value, hash, err := podTokenMetricSample(ctx, env, f)
+		if warmCtx.Err() != nil {
+			return stop()
+		}
+		if _, err := ready(warmCtx, f.source, env.Config.PodBoundTokenFixture.Nonce); err != nil {
+			lastErr = errors.New("Pod token direct source readiness unavailable")
+		}
+		if warmCtx.Err() != nil {
+			return stop()
+		}
+		at, value, hash, err := sample(warmCtx, env, f)
+		if warmCtx.Err() != nil {
+			return stop()
+		}
 		if err == nil && at.After(firstAt) {
 			if firstAt.IsZero() {
 				firstAt, firstValue, firstHash = at, value, hash
@@ -373,16 +423,21 @@ func podTokenWarmMetric(ctx context.Context, env *core.Env, f podTokenFixture) p
 				result.SecondValue = value
 				result.QuerySHA256 = podTokenHash([]byte(firstHash + hash))
 				result.ProducerStatus = "MEASURED_FRESH"
-				return result
+				return result, nil
+			} else {
+				lastErr = errors.New("Pod token source scrape not yet increasing after distinct interval")
 			}
-		} else if !at.IsZero() {
+		} else if err != nil && !at.IsZero() {
 			result.ProducerStatus = "STALE_REQUEST_RATE"
+			lastErr = err
+		} else if err != nil {
+			lastErr = err
+		} else {
+			lastErr = errors.New("Pod token source scrape timestamp not advancing")
 		}
 		select {
-		case <-ctx.Done():
-			return result
-		case <-deadline.C:
-			return result
+		case <-warmCtx.Done():
+			return stop()
 		case <-tick.C:
 		}
 	}

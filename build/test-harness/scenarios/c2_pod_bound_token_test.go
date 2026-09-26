@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -546,6 +550,228 @@ func TestPodTokenPromRejectsScrapeIngestedBetweenTimestampAndCounter(t *testing.
 	}
 	if queries != 3 {
 		t.Fatalf("mixed-scrape counter should stop before rate query, got %d requests", queries)
+	}
+}
+
+func TestPodTokenWarmMetricDelayedPodMonitorDiscovery(t *testing.T) {
+	const pod, nonce, uid, namespace = "source-abc", "0123456789abcdef01234567", "source-uid", "phorvex-catalogue-cpu"
+	// Scale the retained run22 timing by 100: discovery at 1s,
+	// 300ms between scrapes, then the first positive rate after scrape two.
+	// Each query still traverses the actual Prometheus parser and exact UID
+	// selector. Two increasing post-discovery source samples are required.
+	started := time.Now()
+	base := started.Add(-70 * time.Second).UTC().Truncate(time.Millisecond)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		if r.URL.Path != "/api/v1/query" || !strings.Contains(query, `pod_uid="`+uid+`"`) || !strings.Contains(query, `nonce="`+nonce+`"`) {
+			http.Error(w, "wrong source selector", http.StatusBadRequest)
+			return
+		}
+		elapsed := time.Since(started)
+		if elapsed < time.Second || (strings.HasPrefix(query, "sum by (pod,pod_uid)") && elapsed < 1300*time.Millisecond) {
+			fmt.Fprint(w, `{"status":"success","data":{"resultType":"vector","result":[]}}`)
+			return
+		}
+		at, count := base, "55"
+		if elapsed >= 1600*time.Millisecond {
+			at, count = base.Add(60*time.Second), "65"
+		} else if elapsed >= 1300*time.Millisecond {
+			at, count = base.Add(30*time.Second), "60"
+		}
+		metric := fmt.Sprintf(`"namespace":%q,"pod":%q,"nonce":%q,"pod_uid":%q`, namespace, pod, nonce, uid)
+		value := count
+		if strings.HasPrefix(query, "timestamp(") {
+			value = strconv.FormatFloat(float64(at.UnixMilli())/1000, 'f', 3, 64)
+		}
+		if strings.HasPrefix(query, "sum by (pod,pod_uid)") {
+			metric = fmt.Sprintf(`"pod":%q,"pod_uid":%q`, pod, uid)
+			value = "0.16666666666666666"
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{%s},"value":[%s,%q]}]}}`, metric, r.URL.Query().Get("time"), value)
+	}))
+	defer server.Close()
+	env := &core.Env{Config: config.TargetConfig{Namespace: namespace, PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
+	fixture := podTokenFixture{source: testPodTokenReadyPod(pod, uid, "image"), monitorUID: "monitor-uid"}
+	ready := func(context.Context, corev1.Pod, string) (int, error) { return 200, nil }
+	tooShort, oldErr := podTokenWarmMetricWith(context.Background(), env, fixture, 1250*time.Millisecond, 25*time.Millisecond, podTokenMetricSample, ready)
+	if !errors.Is(oldErr, context.DeadlineExceeded) || tooShort.ProducerStatus == "MEASURED_FRESH" {
+		t.Fatalf("old 125-second-equivalent bound unexpectedly admitted one-scrape source: telemetry=%+v err=%v", tooShort, oldErr)
+	}
+	got, err := podTokenWarmMetricWith(context.Background(), env, fixture, 2700*time.Millisecond, 25*time.Millisecond, podTokenMetricSample, ready)
+	if err != nil || got.ProducerStatus != "MEASURED_FRESH" || got.FirstValue != 60 || got.SecondValue != 65 || len(got.QuerySHA256) != 64 {
+		t.Fatalf("delayed real-query warmup rejected: telemetry=%+v err=%v", got, err)
+	}
+	first, _ := time.Parse(time.RFC3339Nano, got.FirstAt)
+	second, _ := time.Parse(time.RFC3339Nano, got.SecondAt)
+	if second.Sub(first) != 30*time.Second {
+		t.Fatalf("warmup did not require distinct source scrapes: %s and %s", first, second)
+	}
+}
+
+func TestPodTokenRealResponderProducesSourceUIDCounter(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("Python fixture runtime unavailable")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	serverSource := strings.Replace(podTokenServerSource, `("0.0.0.0",8080)`, fmt.Sprintf(`("127.0.0.1",%d)`, port), 1)
+	if serverSource == podTokenServerSource {
+		t.Fatal("real Pod token responder bind declaration changed")
+	}
+	const uid, nonce, pod, namespace = "source-uid", "0123456789abcdef01234567", "source-abc", "phorvex-catalogue-cpu"
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, python, "-B", "-c", serverSource)
+	cmd.Env = append(os.Environ(), "POD_UID="+uid, "NONCE="+nonce, "POD_NAME="+pod, "POD_NAMESPACE="+namespace)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	base := fmt.Sprintf("http://127.0.0.1:%d", port)
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+	var reply podTokenReadyReply
+	for {
+		resp, err := client.Get(base + "/ready")
+		if err == nil {
+			raw, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil || json.Unmarshal(raw, &reply) != nil || reply.PodUID != uid || reply.Nonce != nonce {
+				t.Fatalf("real responder identity differs: %v", readErr)
+			}
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatal("real responder did not start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	readCounter := func() int {
+		resp, err := client.Get(base + "/metrics")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("real source metric unavailable: %v status=%d", err, resp.StatusCode)
+		}
+		line := strings.TrimSpace(strings.Split(string(raw), "\n")[1])
+		for _, label := range []string{`namespace="` + namespace + `"`, `pod="` + pod + `"`, `pod_uid="` + uid + `"`, `nonce="` + nonce + `"`} {
+			if !strings.Contains(line, label) {
+				t.Fatalf("real source metric lost %s", label)
+			}
+		}
+		count, err := strconv.Atoi(line[strings.LastIndexByte(line, ' ')+1:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	first := readCounter()
+	for i := 0; i < 3; i++ {
+		resp, err := client.Get(base + "/ready")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	if second := readCounter(); second != first+3 {
+		t.Fatalf("real /ready traffic did not advance source counter: %d to %d", first, second)
+	}
+}
+
+func TestPodTokenWarmMetricMissingRateRemainsBoundedAndSpecific(t *testing.T) {
+	const nonce = "0123456789abcdef01234567"
+	const pod, uid, namespace = "source-abc", "uid", "phorvex-catalogue-cpu"
+	scrapedAt := time.Now().Add(-20 * time.Second).Unix()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		if strings.HasPrefix(query, "sum by (pod,pod_uid)") {
+			fmt.Fprint(w, `{"status":"success","data":{"resultType":"vector","result":[]}}`)
+			return
+		}
+		value := "7"
+		if strings.HasPrefix(query, "timestamp(") {
+			value = strconv.FormatInt(scrapedAt, 10)
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":%q,"pod":%q,"pod_uid":%q,"nonce":%q},"value":[%s,%q]}]}}`, namespace, pod, uid, nonce, r.URL.Query().Get("time"), value)
+	}))
+	defer server.Close()
+	env := &core.Env{Config: config.TargetConfig{Namespace: namespace, PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
+	fixture := podTokenFixture{source: testPodTokenReadyPod(pod, uid, "image")}
+	ready := func(context.Context, corev1.Pod, string) (int, error) { return 200, nil }
+	start := time.Now()
+	got, err := podTokenWarmMetricWith(context.Background(), env, fixture, 300*time.Millisecond, 10*time.Millisecond, podTokenMetricSample, ready)
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "source request rate: Pod token Prometheus source series absent") || got.ProducerStatus == "MEASURED_FRESH" || time.Since(start) > 2*time.Second {
+		t.Fatalf("missing source rate was admitted or detail lost: telemetry=%+v err=%v", got, err)
+	}
+}
+
+func TestPodTokenWarmMetricCancelsSlowQueryAndRejectsLateSuccess(t *testing.T) {
+	const nonce = "0123456789abcdef01234567"
+	ready := func(context.Context, corev1.Pod, string) (int, error) { return 200, nil }
+	fixture := podTokenFixture{source: testPodTokenReadyPod("source-abc", "uid", "image")}
+	started := make(chan struct{})
+	canceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	}))
+	defer server.Close()
+	env := &core.Env{Config: config.TargetConfig{Namespace: "phorvex-catalogue-cpu", PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce, PrometheusURL: server.URL}}}
+	got, err := podTokenWarmMetricWith(context.Background(), env, fixture, 300*time.Millisecond, 10*time.Millisecond, podTokenMetricSample, ready)
+	if !errors.Is(err, context.DeadlineExceeded) || got.ProducerStatus == "MEASURED_FRESH" {
+		t.Fatalf("slow query crossed admission deadline: telemetry=%+v err=%v", got, err)
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("slow Prometheus query was not attempted")
+	}
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("warm-up deadline did not cancel in-flight Prometheus query")
+	}
+	first := time.Now().Add(-40 * time.Second).UTC().Truncate(time.Millisecond)
+	queries := 0
+	late := func(context.Context, *core.Env, podTokenFixture) (time.Time, float64, string, error) {
+		queries++
+		if queries == 1 {
+			return first, 1, "first", nil
+		}
+		time.Sleep(250 * time.Millisecond) // A misbehaving sample ignores cancellation.
+		return first.Add(30 * time.Second), 2, "second", nil
+	}
+	got, err = podTokenWarmMetricWith(context.Background(), env, fixture, 150*time.Millisecond, 10*time.Millisecond, late, ready)
+	if !errors.Is(err, context.DeadlineExceeded) || queries < 2 || got.ProducerStatus == "MEASURED_FRESH" || got.SecondAt != "" {
+		t.Fatalf("late sample was credited after budget: telemetry=%+v err=%v", got, err)
+	}
+}
+
+func TestPodTokenWarmMetricPreservesCallerCancellation(t *testing.T) {
+	const nonce = "0123456789abcdef01234567"
+	env := &core.Env{Config: config.TargetConfig{PodBoundTokenFixture: &config.PodBoundTokenFixtureConfig{Nonce: nonce}}}
+	fixture := podTokenFixture{source: testPodTokenReadyPod("source-abc", "uid", "image")}
+	ready := func(context.Context, corev1.Pod, string) (int, error) { return 200, nil }
+	entered := make(chan struct{})
+	sample := func(ctx context.Context, _ *core.Env, _ podTokenFixture) (time.Time, float64, string, error) {
+		close(entered)
+		<-ctx.Done()
+		return time.Time{}, 0, "", ctx.Err()
+	}
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { <-entered; cancel() }()
+	got, err := podTokenWarmMetricWith(parent, env, fixture, time.Second, 5*time.Millisecond, sample, ready)
+	if !errors.Is(err, context.Canceled) || got.ProducerStatus == "MEASURED_FRESH" {
+		t.Fatalf("caller cancellation was converted into telemetry admission: telemetry=%+v err=%v", got, err)
 	}
 }
 
