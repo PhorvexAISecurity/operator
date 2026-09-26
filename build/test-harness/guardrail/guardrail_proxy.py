@@ -623,6 +623,8 @@ def create_app(*, runtime: GuardrailRuntime | None = None, upstream: str = UPSTR
 
     @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
     async def proxy(path: str, req: Request):
+        if support_fixture_enabled:
+            return JSONResponse({"error": "support_fixture_route_only"}, status_code=404)
         if path.startswith("v1/output-policy/"):
             return JSONResponse({"error": "method_not_allowed"}, status_code=405)
         body = await req.body()

@@ -166,6 +166,10 @@ class OutputPolicyHandlerTest(unittest.TestCase):
 
     def test_inactive_baseline_then_active_removes_only_owned_field(self):
         with fake_support() as upstream, serve_app(self.app(upstream)) as base:
+            self.assertEqual(request(base, "/v1/models")[0], 404)
+            self.assertEqual(request(base, "/v1/chat/completions", b"{}",
+                                     {"Content-Type": "application/json"})[0], 404)
+            self.assertEqual(FakeSupport.calls, 0)
             status, raw, _ = self.support(base)
             self.assertEqual(status, 200)
             self.assertIn(MARKER.encode(), raw)
@@ -201,7 +205,7 @@ class OutputPolicyHandlerTest(unittest.TestCase):
             mutate_code, _, _ = request(base, "/v1/output-policy/state", b'{"active":false}',
                                         {"Content-Type": "application/json",
                                          "Authorization": "Bearer model-client-key"})
-            self.assertEqual(mutate_code, 405)
+            self.assertEqual(mutate_code, 404)
             self.assertTrue(json.loads(request(base, "/v1/output-policy/state")[1])["active"])
 
     def test_missing_corrupt_and_replayed_policy_fail_closed_across_restart(self):
