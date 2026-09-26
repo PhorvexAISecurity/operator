@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -128,7 +128,7 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/352
-  reviewed_head: dc75d46b1360725e7a3a1ab8d0fe772fd37d888a
+  reviewed_head: 27bf6d5da08fbb8c5d3254ba00a1205e019573d3
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -164,7 +164,7 @@ next_action:
   owner: coordinator
   action: Await PR CI/review; record the actual reviewed head and preserve the live
     verification obligation.
-updated_at: '2026-09-26T10:02:34+00:00'
+updated_at: '2026-09-26T10:04:16+00:00'
 follow_up_to: CAT-CPU-MONGO-PRIOR
 configuration_history:
 - at: '2026-09-25T20:20:12+00:00'
@@ -184,6 +184,11 @@ configuration_history:
   by: codex-lead
   fields:
   - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-09-26T10:04:16+00:00'
+  by: codex-lead
+  fields:
   - pull_request
   approval_ref: null
 transitions:
