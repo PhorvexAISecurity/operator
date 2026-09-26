@@ -338,3 +338,11 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20260926-223257-live-vllm-kv-precursor-is-rejected-by-the-prompt:
+    directory: intake/RPT-20260926-223257-live-vllm-kv-precursor-is-rejected-by-the-prompt
+    kind: BUG
+    title: Live vLLM KV precursor is rejected by the prompt guardrail before cache
+      response testing
+    state: REPORTED
+    issue_id: null
+    aliases: []
