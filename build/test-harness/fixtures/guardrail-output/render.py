@@ -26,6 +26,7 @@ PLAN_KEYS = {"namespace", "context", "clusterUID", "proxyImage", "supportImage",
              "modelServiceName", "modelServiceUID", "modelTargetPodName",
              "modelTargetPodUID", "modelTargetImageID", "modelID",
              "modelAPIKeySecretName", "modelAPIKeySecretKey", "eventCreator"}
+API_KEY_FIELDS = {"modelAPIKeySecretName", "modelAPIKeySecretKey"}
 SOURCE_FILES = ("guardrail_proxy.py", "output_policy.py", "support_fixture.py")
 SOURCE_DIR = Path(__file__).resolve().parents[2] / "guardrail"
 
@@ -35,7 +36,7 @@ def canonical(value):
 
 
 def validate_plan(value):
-    if type(value) is not dict or set(value) != PLAN_KEYS:
+    if type(value) is not dict or set(value) not in (PLAN_KEYS, PLAN_KEYS - API_KEY_FIELDS):
         raise ValueError("fixture plan has missing or unknown fields")
     if value["namespace"] != "vllm":
         raise ValueError("fixture namespace must be vllm")
@@ -51,8 +52,7 @@ def validate_plan(value):
     for key in ("proxyImage", "supportImage"):
         if type(value[key]) is not str or not IMAGE.fullmatch(value[key]):
             raise ValueError(f"{key} must be an image digest reference")
-    for key in ("modelServiceName", "modelTargetPodName", "modelAPIKeySecretName",
-                "modelAPIKeySecretKey"):
+    for key in ("modelServiceName", "modelTargetPodName", *(API_KEY_FIELDS if API_KEY_FIELDS <= set(value) else ())):
         if type(value[key]) is not str or not DNS.fullmatch(value[key]) or len(value[key]) > 63:
             raise ValueError(f"{key} must be a DNS label")
     if value["modelServiceName"] == SERVICE_NAME:
@@ -171,9 +171,10 @@ def documents(plan, marker, source):
                         _env("SUPPORT_FIXTURE_MODEL_URL",
                              f"http://{plan['modelServiceName']}.{namespace}.svc:8000"),
                         _env("SUPPORT_FIXTURE_MODEL", plan["modelID"]),
-                        _env("SUPPORT_FIXTURE_MARKER_FILE", PRIVATE_MARKER_PATH),
-                        _secret_env("VLLM_API_KEY", plan["modelAPIKeySecretName"],
-                                    plan["modelAPIKeySecretKey"])],
+                        _env("SUPPORT_FIXTURE_MARKER_FILE", PRIVATE_MARKER_PATH)]
+                       + ([_secret_env("VLLM_API_KEY", plan["modelAPIKeySecretName"],
+                                       plan["modelAPIKeySecretKey"])]
+                          if API_KEY_FIELDS <= set(plan) else []),
                 "ports": [{"name": "support", "containerPort": 8002}],
                 "readinessProbe": {"exec": {"command": ["python3", "-B", "-c",
                     "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8002/v1/support/state',timeout=2); assert r.status==200 and len(r.read(1025))<=1024"]},

@@ -10,7 +10,5 @@
   "modelTargetPodUID": "__REVIEWED_REAL_VLLM_POD_UID__",
   "modelTargetImageID": "__REVIEWED_REAL_VLLM_IMAGE_ID__",
   "modelID": "Qwen/Qwen2.5-7B-Instruct-AWQ",
-  "modelAPIKeySecretName": "__REVIEWED_EXISTING_MODEL_CLIENT_SECRET_NAME__",
-  "modelAPIKeySecretKey": "__REVIEWED_EXISTING_MODEL_CLIENT_SECRET_KEY__",
   "eventCreator": "system:serviceaccount:phorvex-system:__REVIEWED_CONSOLE_SERVICE_ACCOUNT__"
 }

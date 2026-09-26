@@ -13,7 +13,7 @@ a model jailbreak or a found model leak. CAT-002 is the public-only control.
 `plan.example.json` is deliberately incomplete and cannot render. Fill a
 private plan with freshly reviewed cluster UID, existing guarded Service and
 single ready model target UIDs/image ID, actual console service-account
-creator, model-client Secret reference, and **digest-pinned** proxy/support
+creator, and **digest-pinned** proxy/support
 Python images. The reviewed `Dockerfile` is a candidate for both containers:
 it pins the Linux/amd64 Python 3.11 base by digest and installs exactly the
 16 hash-locked FastAPI/httpx/Uvicorn runtime wheels, without app source. The
@@ -21,7 +21,13 @@ proxy image does not need a
 second vLLM or classifier weights: this fixture's chat route is closed and
 the existing guarded Service performs input filtering. No container performs
 `pip install` at startup. The support app alone receives the model-client
-credential; neither container receives Kubernetes API credentials.
+credential when one is configured; neither container receives Kubernetes API credentials.
+For a guarded Service that requires a model-client credential, include both
+`modelAPIKeySecretName` and `modelAPIKeySecretKey` in the plan. The provisioner
+checks the existing Secret key before any mutation and only the support app
+receives it. Omit both fields for a reviewed guarded Service that accepts
+ordinary requests without an API key; this omits the Secret reference and
+`VLLM_API_KEY` environment variable. A single field is invalid.
 
 To prepare the image build context, obtain the exact wheel files named in
 `wheelhouse.sha256` into this directory's ignored `wheelhouse/`. A private
@@ -74,7 +80,7 @@ python3 provision.py --package /private/guardrail-output-package \
 ```
 
 The provisioner checks the exact cluster, guarded Service UID, single ready
-EndpointSlice target, real vLLM Pod UID/image ID, model-client Secret key, and
+EndpointSlice target, real vLLM Pod UID/image ID, any configured model-client Secret key, and
 console service account before any mutation. It refuses pre-existing fixture
 object names. It then creates only the immutable source ConfigMap, private
 marker Secret, and bare fixture Pod. The Pod's optional policy ConfigMap mount

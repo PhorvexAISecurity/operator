@@ -119,6 +119,50 @@ class FixturePackageTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 render.validate_plan(plan)
 
+    def test_model_client_secret_pair_is_optional_for_no_auth_service(self):
+        without_key = self.plan()
+        without_key.pop("modelAPIKeySecretName")
+        without_key.pop("modelAPIKeySecretKey")
+        render.validate_plan(without_key)
+        documents = render.documents(without_key,
+            "ownedSyntheticMarker_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
+            {name: "fixture source" for name in render.SOURCE_FILES})
+        support = next(c for c in documents["fixture-pod.json"]["spec"]["containers"]
+                       if c["name"] == "support-app")
+        self.assertNotIn("VLLM_API_KEY", {entry["name"] for entry in support["env"]})
+        paired = render.documents(self.plan(),
+            "ownedSyntheticMarker_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
+            {name: "fixture source" for name in render.SOURCE_FILES})
+        with_key = next(c for c in paired["fixture-pod.json"]["spec"]["containers"]
+                        if c["name"] == "support-app")
+        self.assertIn("VLLM_API_KEY", {entry["name"] for entry in with_key["env"]})
+        for missing in render.API_KEY_FIELDS:
+            partial = self.plan()
+            partial.pop(missing)
+            with self.assertRaises(ValueError):
+                render.validate_plan(partial)
+
+        class PreflightClient:
+            def __init__(self):
+                self.calls = []
+            def get(self, kind, name, namespace="vllm"):
+                self.calls.append((kind, name, namespace))
+                if kind == "namespace":
+                    return {"metadata": {"uid": without_key["clusterUID"]}}
+                if kind == "service":
+                    return {"metadata": {"uid": without_key["modelServiceUID"]}}
+                if kind == "pod":
+                    return {"metadata": {"uid": without_key["modelTargetPodUID"]},
+                            "status": {"containerStatuses": [{"name": "vllm",
+                                "imageID": without_key["modelTargetImageID"]}]}}
+                if kind == "serviceaccount":
+                    return {"metadata": {"name": name}}
+                raise AssertionError("unexpected Secret lookup")
+        client = PreflightClient()
+        with mock.patch.object(provision, "_exact_service_route"):
+            provision._model_preflight(client, without_key)
+        self.assertNotIn("secret", {kind for kind, _, _ in client.calls})
+
     def test_two_phase_provisioning_binds_pod_and_configmap_uids(self):
         class FakeKubectl:
             last = None

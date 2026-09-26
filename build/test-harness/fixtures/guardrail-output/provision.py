@@ -204,9 +204,10 @@ def _model_preflight(kube, plan):
     if len(vllm) != 1 or vllm[0].get("imageID") != plan["modelTargetImageID"]:
         raise ValueError("guarded model image drift")
     _exact_service_route(kube, model_service, model_pod, plan["modelServiceName"])
-    api_key = kube.get("secret", plan["modelAPIKeySecretName"])
-    if plan["modelAPIKeySecretKey"] not in api_key.get("data", {}):
-        raise ValueError("guarded model-client Secret key missing")
+    if render.API_KEY_FIELDS <= set(plan):
+        api_key = kube.get("secret", plan["modelAPIKeySecretName"])
+        if plan["modelAPIKeySecretKey"] not in api_key.get("data", {}):
+            raise ValueError("guarded model-client Secret key missing")
     creator = plan["eventCreator"].rsplit(":", 1)[-1]
     kube.get("serviceaccount", creator, namespace="phorvex-system")
 
