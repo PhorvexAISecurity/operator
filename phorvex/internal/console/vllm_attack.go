@@ -25,6 +25,11 @@ import (
 
 const vllmAttackNS = "vllm"
 
+// A cache precursor only needs a bounded, repeatable public prefix. The former
+// confidential/instruction-like text was blocked by the input guardrail before
+// it could exercise the serving cache path.
+const kvCachePublicPrefix = "A short public example about clouds. Continue with one word."
+
 // Scenarios NEVER rewrite vllm-defense. They used to merge-patch actions.enabled down to
 // [rotate, <the one expected actuator>] (+ reactiveOnly) before firing, and "reset" shrank it
 // to a two-action hygiene baseline — which made every demo's outcome a property of the patch,
@@ -217,7 +222,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"attackId": attackID,
 			"message":  "An unapproved adapter load and exact detector stimulus were confirmed on " + pod + ". The console will report an exact adapter completion effect if observed; model behavior mitigation is not established."})
 	case "kvcache":
-		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": "SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal", "max_tokens": 1}
+		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": kvCachePublicPrefix, "max_tokens": 1}
 		attempted, producerErr := runBoundedProducer(func() error { return runVLLMCompletion(execIn, false, payload) })
 		if producerErr != nil {
 			setupFailure(body.Action, "producer", nil, attempted, producerErr)
