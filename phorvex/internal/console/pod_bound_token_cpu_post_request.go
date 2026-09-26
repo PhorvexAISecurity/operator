@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -23,6 +24,22 @@ type cpuCleanupProof struct {
 
 func cpuPostRequestCleanupProofAt(prior *RunStatus, out, expectedTarget string) (cpuCleanupProof, error) {
 	var proof cpuCleanupProof
+	for _, name := range []string{"pod-bound-token-unsafe.json", podBoundRequestFile,
+		"pod-bound-token-audit-start.json"} {
+		raw, err := readNATSResponseSizedFile(out, name, 256<<10)
+		if err != nil || rejectAmbiguousMongoJSON(raw) != nil {
+			return proof, errors.New("CPU token post-request original JSON is ambiguous")
+		}
+	}
+	phaseRaw, err := readNATSResponseSizedFile(out, podBoundPhaseFile, 256<<10)
+	if err != nil || len(phaseRaw) == 0 || phaseRaw[len(phaseRaw)-1] != '\n' {
+		return proof, errors.New("CPU token post-request phase original unavailable")
+	}
+	for _, line := range bytes.Split(phaseRaw[:len(phaseRaw)-1], []byte{'\n'}) {
+		if rejectAmbiguousMongoJSON(line) != nil {
+			return proof, errors.New("CPU token post-request phase JSON is ambiguous")
+		}
+	}
 	base, err := cpuCleanupBaseProofAt(prior, out, expectedTarget, true)
 	if err != nil {
 		return proof, err
@@ -80,6 +97,10 @@ func cpuPostRequestCleanupProofAt(prior *RunStatus, out, expectedTarget string) 
 	} else if err != nil {
 		return proof, errors.New("CPU token post-request coordinator diagnostic ambiguous")
 	} else {
+		failureRaw, readErr := readNATSResponseSizedFile(out, podBoundCoordinatorFailureFile, 256<<10)
+		if readErr != nil || rejectAmbiguousMongoJSON(failureRaw) != nil {
+			return proof, errors.New("CPU token post-request coordinator diagnostic JSON ambiguous")
+		}
 		failure, err := readPodBoundCoordinatorFailure(out, prior.ID)
 		if err != nil || failure.RequestSHA256 != podBoundHash(reqRaw) ||
 			prior.Error != baseStatus+podBoundCoordinatorStatus(out, prior.ID, nil) {

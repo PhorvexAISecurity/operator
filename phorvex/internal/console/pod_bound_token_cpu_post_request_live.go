@@ -180,29 +180,38 @@ func cpuCleanupOwnedInventoryAbsent(ctx context.Context, kc kubernetes.Interface
 			policy.Spec.PodSelector.MatchLabels[podBoundOwnerLabel] == p.nonce {
 			return errors.New("CPU token predecessor NetworkPolicy remains")
 		}
+		for _, owner := range policy.OwnerReferences {
+			if string(owner.UID) == p.sourcePodUID || string(owner.UID) == p.peerPodUID ||
+				string(owner.UID) == p.amtdUID {
+				return errors.New("CPU token predecessor owned NetworkPolicy remains")
+			}
+		}
 	}
 	for _, gvr := range []schema.GroupVersionResource{
 		{Group: "amtd.r6security.com", Version: "v1beta1", Resource: "adaptivemovingtargetdefenses"},
 		{Group: "amtd.r6security.com", Version: "v1beta1", Resource: "securityevents"},
 	} {
-		var listErr error
-		var count int
-		var continuation string
 		if gvr.Resource == "securityevents" {
 			items, err := dc.Resource(gvr).List(ctx, metav1.ListOptions{FieldSelector: "metadata.name=" + "phorvex-e2e-" + p.nonce, Limit: 2})
-			listErr = err
-			if err == nil {
-				count, continuation = len(items.Items), items.GetContinue()
+			if err != nil || len(items.Items) != 0 || items.GetContinue() != "" {
+				return errors.New("CPU token predecessor SecurityEvent inventory incomplete")
 			}
 		} else {
-			items, err := dc.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{FieldSelector: "metadata.name=" + "phorvex-" + ns + "-" + p.nonce, Limit: 2})
-			listErr = err
-			if err == nil {
-				count, continuation = len(items.Items), items.GetContinue()
+			items, err := dc.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{Limit: limit})
+			if err != nil || items.GetContinue() != "" {
+				return errors.New("CPU token predecessor AMTD inventory incomplete")
 			}
-		}
-		if listErr != nil || count != 0 || continuation != "" {
-			return errors.New("CPU token predecessor generated object inventory incomplete")
+			for _, item := range items.Items {
+				if item.GetName() == "phorvex-"+ns+"-"+p.nonce ||
+					item.GetAnnotations()["phorvex.ai/policy-uid"] == p.created["phorvexpolicies"] {
+					return errors.New("CPU token predecessor owned AMTD remains")
+				}
+				for _, owner := range item.GetOwnerReferences() {
+					if string(owner.UID) == p.created["phorvexpolicies"] || string(owner.UID) == p.amtdUID {
+						return errors.New("CPU token predecessor owned AMTD remains")
+					}
+				}
+			}
 		}
 	}
 	return nil

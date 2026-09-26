@@ -19,6 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -235,6 +236,30 @@ func TestCPUPostRequestCleanupOriginalAndTamper(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(out, "pod-bound-token-audit-start.json"), auditRaw, 0600); err != nil {
 		t.Fatal(err)
 	}
+	// This would otherwise decode to the same UID: only the case-folded key
+	// ambiguity guard distinguishes it after the audit SHA is recomputed.
+	aliased := append(append([]byte{}, requestRaw[:len(requestRaw)-1]...),
+		[]byte(`,"SourcePodUID":"`+req.SourcePodUID+`"}`)...)
+	if err := json.Unmarshal(auditRaw, &start); err != nil {
+		t.Fatal(err)
+	}
+	start.RequestSHA256 = podBoundHash(aliased)
+	aliasStart, _ := json.Marshal(start)
+	if err := os.WriteFile(filepath.Join(out, podBoundRequestFile), aliased, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "pod-bound-token-audit-start.json"), aliasStart, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rm.cpuCleanupProofsLocked(prior.ScopeTarget); err == nil {
+		t.Fatal("case-alias request with matching audit SHA admitted")
+	}
+	if err := os.WriteFile(filepath.Join(out, podBoundRequestFile), requestRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "pod-bound-token-audit-start.json"), auditRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
 	prior.ScopeTarget = "unknown-target"
 	if _, err := rm.cpuCleanupProofsLocked("arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"); err == nil {
 		t.Fatal("changed destination scope admitted")
@@ -311,6 +336,32 @@ func TestCPUPostRequestLiveCleanupRefusesReplacementAndLedger(t *testing.T) {
 		t.Fatal("old source NetworkPolicy admitted")
 	}
 	if err := kc.NetworkingV1().NetworkPolicies(policy.Namespace).Delete(context.Background(), policy.Name, metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	renamedPolicy := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{
+		Name: "renamed-neutral-policy", Namespace: podBoundTokenCPUNamespace, UID: "renamed-policy-uid",
+		OwnerReferences: []metav1.OwnerReference{{UID: types.UID(proof.amtdUID), Kind: "AdaptiveMovingTargetDefense"}}}}
+	if _, err := kc.NetworkingV1().NetworkPolicies(renamedPolicy.Namespace).Create(context.Background(), renamedPolicy, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(); err == nil {
+		t.Fatal("renamed NetworkPolicy owned by old AMTD admitted")
+	}
+	if err := kc.NetworkingV1().NetworkPolicies(renamedPolicy.Namespace).Delete(context.Background(), renamedPolicy.Name, metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	amtd := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "AdaptiveMovingTargetDefense",
+		"metadata": map[string]any{"name": "renamed-amtd", "namespace": podBoundTokenCPUNamespace,
+			"annotations": map[string]any{"phorvex.ai/policy-uid": proof.created["phorvexpolicies"]}},
+	}}
+	if _, err := dc.Resource(gvrAMTD).Namespace(podBoundTokenCPUNamespace).Create(context.Background(), amtd, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(); err == nil {
+		t.Fatal("renamed AMTD bound to old policy UID admitted")
+	}
+	if err := dc.Resource(gvrAMTD).Namespace(podBoundTokenCPUNamespace).Delete(context.Background(), "renamed-amtd", metav1.DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	ledger := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: ledgerName, Namespace: "phorvex-system", UID: "ledger-uid", Labels: map[string]string{"phorvex.ai/quarantine-capacity": "v1"}}, Data: map[string]string{"ledger": fmt.Sprintf(`{"version":1,"namespace":%q,"namespaceUID":%q,"records":{%q:{"podUID":%q,"namespaceUID":%q}}}`, podBoundTokenCPUNamespace, proof.namespaceUID, proof.sourcePodUID, proof.sourcePodUID, proof.namespaceUID)}}
