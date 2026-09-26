@@ -96,8 +96,9 @@ const (
 	// engine can pick a surgical drain over a full rotate on an inference workload.
 	FactInflightRequests = "inflightRequests"
 	// FactGuardrailBypass = a learned jailbreak / prompt-injection that BYPASSES the pod's CURRENT
-	// safety-guardrail variant. Covered by guardrail-rotate (swap the guardrail variant so the learned
-	// bypass no longer works) — a targeted AI-safety move the engine can pick instead of a blunt rotate.
+	// safety-guardrail variant. It is audit-only for the cyclic guardrail-rotate action: a different
+	// variant is not proof that the same request stops working. The fact retains exact event
+	// attribution, but no deterministic actuator currently earns its cover.
 	FactGuardrailBypass = "guardrailBypass"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact

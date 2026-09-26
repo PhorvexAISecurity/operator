@@ -361,8 +361,12 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					rbacUnknown = e.RBACUnknown
 				}
 			} else if len(coverKeys) == 0 {
+				reason := emptyReconCoverReason
+				if action == model.ActionGuardrailRotate {
+					reason = model.GuardrailBypassNoCoverReason
+				}
 				out.Excluded = append(out.Excluded, Exclusion{
-					GenerationRank: generationRank, Key: key, Action: action, Reason: emptyReconCoverReason,
+					GenerationRank: generationRank, Key: key, Action: action, Reason: reason,
 				})
 				continue
 			}

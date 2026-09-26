@@ -1,0 +1,267 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: root
+    artifact: 03-decision.md
+    sha256: 230d962600ad01c3c42183ea5d5e4e02d7c13641f2444bfb6536045c31b4f246
+    source_sha: 76fdc87439681294bcf02a7ced872ace262ab6f8
+    at: '2026-09-26T17:52:20+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: evidence/red-repro.md
+    sha256: 8dc0d6d1c9dc3ca0b8f34084ad232035077b6eb707fe92b9421d737a31a149ed
+    source_sha: 76fdc87439681294bcf02a7ced872ace262ab6f8
+    at: '2026-09-26T18:02:07+00:00'
+  base_review:
+    result: PASS
+    by: root
+    artifact: evidence/base-review.md
+    sha256: d67549fa37d4f9263642f9d9c71e7c71f7b46a83ab27a2b6dfd06e82abc88f4a
+    source_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+    at: '2026-09-26T18:03:17+00:00'
+    baseline_sha: 76fdc87439681294bcf02a7ced872ace262ab6f8
+  preflight:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: evidence/preflight/receipt.json
+    sha256: 53107e853ce5eeb5de5d9d5cd02de0571aacb78a36eb4675f59334077317a642
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:03:37+00:00'
+  implementation:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: 04-diff.patch
+    sha256: bddbaf35edaccd8b5ca24e16b44566d960dd33c74f215c7f47c9ed4882736a64
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:03:37+00:00'
+  l0:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: evidence/preflight/receipt.json
+    sha256: 53107e853ce5eeb5de5d9d5cd02de0571aacb78a36eb4675f59334077317a642
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:03:37+00:00'
+  l1:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: evidence/preflight/run-1790445522335336475/go-phorvex.log
+    sha256: 3e1ce43ae024f3319b5eb2501094c3a52eb856f21a19e2e20dc4c39532373b2d
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:03:37+00:00'
+  l2:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: 05-worker-evidence.md
+    sha256: 3a352c619c3f1c85316aef63d50ea14df1c542c0c6adfb710adec9de2980f3c3
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:03:37+00:00'
+  positive_control:
+    result: PASS
+    by: guardrail_response_chain
+    artifact: evidence/red-repro.md
+    sha256: 8dc0d6d1c9dc3ca0b8f34084ad232035077b6eb707fe92b9421d737a31a149ed
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:03:37+00:00'
+  incident:
+    result: PASS
+    by: root
+    artifact: evidence/incident.md
+    sha256: d29e1e6ce087cb738a2d6ecb6723ba7dbae7791168c82115058933700a13f117
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:05:02+00:00'
+    baseline_sha: 76fdc87439681294bcf02a7ced872ace262ab6f8
+  p3:
+    result: PASS
+    by: root
+    artifact: evidence/p3/verdict.md
+    sha256: 469356d7ed0c4de1d34c204c473693c97c9808af1b6fed7bdcad5e7a44caf3ca
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:05:02+00:00'
+    incident_sha256: d29e1e6ce087cb738a2d6ecb6723ba7dbae7791168c82115058933700a13f117
+  patch_equivalence:
+    result: PASS
+    by: root
+    artifact: evidence/integration-equivalence.json
+    sha256: f125f856a0d59a348c81c1161f5bf210d8725cadf32c68fb67fe80d8642ef894
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:11:12+00:00'
+fix_id: CAT-GUARDRAIL-COVER
+issues: []
+title: Remove unsupported cyclic guardrail bypass cover
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: root
+  implementer: guardrail_response_chain
+  skeptic: root
+  live_verifier: root
+  coordinator: root
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 76fdc87439681294bcf02a7ced872ace262ab6f8
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.170
+  deployed_git_sha: c6db1ace9b6958f53bbab8318c57b747ef18d90e
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/guardrail-response-chain-20260926
+  base_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+  head_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/354
+  reviewed_head: 7cecfcb7332539aaaa40dd6dbdfe043db55b5aff
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: root
+  action: PR354 deployment and independent live observation of selection at former
+    floor; preserve open guardrail response capability work
+updated_at: '2026-09-26T18:13:09+00:00'
+configuration_history:
+- at: '2026-09-26T17:46:13+00:00'
+  by: root
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: campaigns/2026-09-23-catalogue-coverage/AUTHORIZATION.md
+- at: '2026-09-26T17:47:00+00:00'
+  by: root
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-26T17:53:49+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T17:58:28+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T18:03:37+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T18:12:49+00:00'
+  by: root
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-26T17:48:13+00:00'
+  by: root
+  artifact: 03-decision.md
+  note: Metadata records the already performed lead investigation and signed worker
+    direction; no new live claim.
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-26T17:52:32+00:00'
+  by: root
+  artifact: 03-decision.md
+  note: Lead decision recorded from actual prior investigation and signed plan; deployed
+    verification remains outstanding.
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-26T18:03:37+00:00'
+  by: guardrail_response_chain
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-26T18:03:39+00:00'
+  by: guardrail_response_chain
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T18:05:03+00:00'
+  by: root
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T18:05:05+00:00'
+  by: root
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-26T18:13:09+00:00'
+  by: root
+  artifact: evidence/integration-equivalence.json
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: CAT-GUARDRAIL-COVER:11:review
+  from: root
+  to: root
+  role: coordinator
+  kind: review
+  revision: 11

@@ -57,19 +57,22 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 		t.Errorf("identity-rotate claims cover %v, but it changes no identity or credential fact", got)
 	}
 
-	// (2) AI serving pod — preserve the existing grants for these serving actuators.
+	// (2) AI serving pod — preserve the physically justified grants for these serving actuators.
 	// This pod has no verified scalar shard pool, so model-shard-replace receives neither
 	// process-retirement cover nor the separately withheld model-fingerprint credit (M-037).
 	ai := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil", ServingEndpointReady: true}}
 	detectorAdapter(&ai.Pod, "evil")
 	ac := prof.AssetFacts(ai, fctx).CoverByAction
 	for _, a := range []model.Action{
-		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset,
+		model.ActionRequestDrain, model.ActionKVReset,
 		model.ActionKVMigrateInvalidate, model.ActionAdapterRotate,
 	} {
 		if len(ac[a]) == 0 {
 			t.Errorf("AI serving pod: %q has EMPTY cover set — optimizer can never select it", a)
 		}
+	}
+	if got := ac[model.ActionGuardrailRotate]; len(got) != 0 {
+		t.Errorf("cyclic guardrail variant change cannot claim bypass cover: %v", got)
 	}
 
 	if got := ac[model.ActionEndpointRotate]; len(got) != 0 {
