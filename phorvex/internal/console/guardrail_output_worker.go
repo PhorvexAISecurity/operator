@@ -222,15 +222,7 @@ func (s *Server) runGuardrailOutput(r *attackRecord, p guardrailOutputProfile, r
 		_ = w.saveJSON("guardrail-output-terminal.json", w.t)
 	}
 	result, readErr := readGuardrailOutputProbeResult(out, r.ID, s.cfg.GuardrailOutputProfileSHA256)
-	if readErr != nil || result == nil {
-		result = newGuardrailOutputProbeResult(s.cfg.GuardrailOutputProfileSHA256)
-		result.Issues = append(result.Issues, "independent original-receipt projection unavailable")
-	}
-	if err != nil {
-		result.Accepted = false
-		result.Status = "UNKNOWN"
-		result.Issues = append(result.Issues, guardrailEffectSafeIssue(err))
-	}
+	result = projectGuardrailOutputResult(result, readErr, err, s.cfg.GuardrailOutputProfileSHA256)
 	r.GuardrailOutputProbe = result
 	r.OutcomeClass = "guardrail-output-" + result.Status
 	r.Outcome, r.Containment, r.DefendedPod = "", "", ""
@@ -246,4 +238,24 @@ func (s *Server) runGuardrailOutput(r *attackRecord, p guardrailOutputProfile, r
 		s.recordStateError(fmt.Errorf("persist measured guardrail output: %w", e))
 		publishAttack(r)
 	}
+}
+
+// The independent reader returns a partial result only after it has verified
+// the original support response. Keep that verified first disclosure visible
+// when later action, audit, replay, or cleanup evidence fails.
+func projectGuardrailOutputResult(result *guardrailOutputProbeResult, readErr, runErr error, profileSHA string) *guardrailOutputProbeResult {
+	if result == nil {
+		result = newGuardrailOutputProbeResult(profileSHA)
+	}
+	if readErr != nil {
+		result.Accepted = false
+		result.Status = "UNKNOWN"
+		result.Issues = append(result.Issues, "independent original-receipt projection unavailable")
+	}
+	if runErr != nil {
+		result.Accepted = false
+		result.Status = "UNKNOWN"
+		result.Issues = append(result.Issues, guardrailEffectSafeIssue(runErr))
+	}
+	return result
 }

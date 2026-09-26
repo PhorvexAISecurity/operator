@@ -2,6 +2,7 @@ package console
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -225,5 +226,20 @@ func TestOutputDispatchPathPreservesFailedInitialAudit(t *testing.T) {
 	result.ActivationPath = ""
 	if outputActivationJoined(base, post, final, result) {
 		t.Fatal("later readback without selected journal path accepted")
+	}
+}
+
+func TestOutputPartialProjectionRetainsOnlyVerifiedInitialDisclosure(t *testing.T) {
+	sha := strings.Repeat("a", 64)
+	verifiedBefore := newGuardrailOutputProbeResult(sha)
+	verifiedBefore.InitialDisclosureLanded = true
+	verifiedBefore.BeforeSupport = "DISCLOSED"
+	got := projectGuardrailOutputResult(verifiedBefore, errors.New("later audit gap"), nil, sha)
+	if got != verifiedBefore || !got.InitialDisclosureLanded || got.BeforeSupport != "DISCLOSED" || got.Status != "UNKNOWN" || got.Accepted {
+		t.Fatal("verified original disclosure lost or later evidence error promoted")
+	}
+	missing := projectGuardrailOutputResult(nil, errors.New("original baseline unreadable"), nil, sha)
+	if missing.InitialDisclosureLanded || missing.Status != "UNKNOWN" || missing.Accepted {
+		t.Fatal("unverified original disclosure was invented")
 	}
 }
