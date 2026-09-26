@@ -236,6 +236,9 @@ func TestRemainingVLLMHandlersRejectHTTPFailureBeforeSignal(t *testing.T) {
 
 func TestKVCacheHandlerPublicPrecursorReachesEventOnlyAfterValidGuardedCompletion(t *testing.T) {
 	const formerPrompt = "SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal"
+	if len(kvCachePublicPrefix) < 500 || len(kvCachePublicPrefix) > 1024 {
+		t.Fatalf("public cache precursor lost its bounded paragraph: %d bytes", len(kvCachePublicPrefix))
+	}
 	for _, tc := range []struct {
 		name       string
 		newReply   string

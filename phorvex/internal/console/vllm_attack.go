@@ -25,10 +25,18 @@ import (
 
 const vllmAttackNS = "vllm"
 
-// A cache precursor only needs a bounded, repeatable public prefix. The former
-// confidential/instruction-like text was blocked by the input guardrail before
-// it could exercise the serving cache path.
-const kvCachePublicPrefix = "A short public example about clouds. Continue with one word."
+// This fixed public paragraph was accepted by the guarded endpoint at 118 input
+// tokens with one output token. It is a bounded cache precursor, not a cache-hit
+// or occupancy measurement. The former confidential/instruction-like prompt was
+// blocked before it could exercise the serving cache path.
+const kvCachePublicPrefix = "Clouds consist of tiny water droplets and ice crystals suspended in the atmosphere. " +
+	"Warm air rises from the ground and cools as it reaches higher elevations. " +
+	"Water vapor then gathers around small particles in the air. " +
+	"The resulting clouds vary in shape and height with local weather conditions. " +
+	"Some clouds look like thin sheets, while others form tall towers. " +
+	"Sunlight passes through their edges and reflects from the droplets. " +
+	"Winds carry these formations across fields, forests, mountains, and oceans. " +
+	"The water cycle connects rainfall, rivers, lakes, evaporation, and the changing patterns visible in the sky."
 
 // Scenarios NEVER rewrite vllm-defense. They used to merge-patch actions.enabled down to
 // [rotate, <the one expected actuator>] (+ reactiveOnly) before firing, and "reset" shrank it
