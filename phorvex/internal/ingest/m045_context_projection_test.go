@@ -71,10 +71,10 @@ func TestM045ProjectedContextScopesFactsAndActionSet(t *testing.T) {
 		{name: "whitespace declarations", annotations: map[string]string{modelID: " \t", servingPort: " \n"}, ready: true, ip: true},
 		{name: "declared but unready", annotations: map[string]string{modelID: "model-v1"}, ip: true,
 			wantModel: true, wantServing: true,
-			wantActions: map[model.Action]bool{model.ActionRequestDrain: true, model.ActionGuardrailRotate: true}},
+			wantActions: map[model.Action]bool{model.ActionRequestDrain: true}},
 		{name: "declared without pod ip", annotations: map[string]string{modelID: "model-v1"}, ready: true,
 			wantModel: true, wantServing: true,
-			wantActions: map[model.Action]bool{model.ActionRequestDrain: true, model.ActionGuardrailRotate: true}},
+			wantActions: map[model.Action]bool{model.ActionRequestDrain: true}},
 	}
 
 	for _, tc := range tests {
@@ -143,13 +143,24 @@ func TestM045ProjectedContextScopesFactsAndActionSet(t *testing.T) {
 					t.Errorf("candidate %s=%v, want %v; exclusions=%+v", action, gotActions[action], tc.wantActions[action], set.Excluded)
 				}
 			}
+			if tc.wantServing {
+				found := false
+				for _, exclusion := range set.Excluded {
+					if exclusion.Action == model.ActionGuardrailRotate && exclusion.Reason == model.GuardrailBypassNoCoverReason {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("serving guardrail bypass fact lacked precise no-cover exclusion: %+v", set.Excluded)
+				}
+			}
 		})
 	}
 }
 
 func servingActions() map[model.Action]bool {
 	return map[model.Action]bool{
-		model.ActionRequestDrain: true, model.ActionGuardrailRotate: true,
+		model.ActionRequestDrain: true,
 		model.ActionKVReset: true, model.ActionKVMigrateInvalidate: true,
 	}
 }

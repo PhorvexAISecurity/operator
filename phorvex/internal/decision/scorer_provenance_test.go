@@ -125,8 +125,8 @@ func TestFallbackActionUsesTheSameProvenancedScore(t *testing.T) {
 	// governs the first move. Route-rotate is deliberately absent: selector membership no longer
 	// claims locator invalidation under M44.
 	pol.EnabledActions = map[model.Action]bool{
-		model.ActionQuarantine:      true,
-		model.ActionGuardrailRotate: true,
+		model.ActionQuarantine:   true,
+		model.ActionRequestDrain: true,
 	}
 	asset := covView("attacked", true, 90*time.Second, false) // fresh → prov < 1
 	asset.ExposureByVariable = realisticClocks(90 * time.Second)
@@ -137,7 +137,7 @@ func TestFallbackActionUsesTheSameProvenancedScore(t *testing.T) {
 		t.Fatal("missing real UCW producer")
 	}
 	// Keep the default neighbor so quarantine carries the larger network+edge cover while the
-	// serving producer supplies guardrail-bypass cover to guardrail-rotate.
+	// serving producer supplies the independently grounded in-flight-request cover to request-drain.
 	set, ctx := probe.AssembleSet([]*model.WorkloadView{asset}, pol)
 	prov := provFn(ctx, pol.ProactiveFloor.Seconds())("ns/attacked")
 	type cand struct {

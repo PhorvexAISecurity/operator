@@ -61,13 +61,15 @@ func TestM037FingerprintWithheld(t *testing.T) {
 			if tc.alias != "" {
 				for action, kind := range map[model.Action]string{
 					model.ActionRequestDrain:        FactInflightRequests,
-					model.ActionGuardrailRotate:     FactGuardrailBypass,
 					model.ActionKVMigrateInvalidate: FactSession,
 				} {
 					keys := af.CoverByAction[action]
 					if len(keys) != 1 || keys[0] != byKind[kind].Key() {
 						t.Errorf("control %s cover = %v", action, keys)
 					}
+				}
+				if keys := af.CoverByAction[model.ActionGuardrailRotate]; len(keys) != 0 {
+					t.Errorf("cyclic guardrail rotation claimed unsupported bypass cover: %v", keys)
 				}
 			}
 			if keys := af.CoverByAction[model.ActionAdapterRotate]; len(keys) != 1 || keys[0] != byKind[FactAdapterIntegrity].Key() {

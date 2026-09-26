@@ -98,14 +98,19 @@ const (
 	// ActionRequestDrain drains/aborts in-flight requests against a foothold (request-
 	// granular eviction; also supplies warm-swap's drain). [PENDING-GPU-VALIDATION].
 	ActionRequestDrain Action = "request-drain"
-	// ActionGuardrailRotate rotates the safety/guardrail tier (variant/ruleset) to stale a
-	// found jailbreak/filter-bypass — MTD for the filter. [PENDING-GPU-VALIDATION].
+	// ActionGuardrailRotate cycles the safety/guardrail variant. Its protected
+	// operation confirms the variant change, not invalidation of a found bypass.
 	ActionGuardrailRotate Action = "guardrail-rotate"
 	// ActionKVMigrateInvalidate invalidates/migrates KV across disaggregated prefill/decode
 	// (kv-reset is local-only). Local invalidate is real; cross-worker migrate is DEFERRED
 	// [PENDING-GPU-VALIDATION] (needs a disaggregated P/D deployment).
 	ActionKVMigrateInvalidate Action = "kv-migrate-invalidate"
 )
+
+// GuardrailBypassNoCoverReason is shared by the production capability gate and
+// the action-set fallback so their diagnostics agree when no action-specific
+// deterministic bypass invalidation exists.
+const GuardrailBypassNoCoverReason = "recon-cover: cyclic guardrail variant change does not prove bypass invalidation"
 
 // MutatingActions is the compatible action order for policy and trace enumeration.
 // identity-rotate remains here as stored vocabulary but is explicitly excluded by the

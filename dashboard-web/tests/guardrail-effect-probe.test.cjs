@@ -35,9 +35,24 @@ test("joined same-request change shows separate objective, benign controls and c
 test("already-blocked baseline has zero events and never earns an injected improvement", () => {
   const stopped = { ...joined, status: "STOP_STATIC_BLOCKED_NO_RESPONSE_NEEDED", eventMode: "NONE", before: { canary: "GUARDRAIL_BLOCKED", sayOK: "OK", arithmetic: "FOUR" }, after: { canary: "", sayOK: "", arithmetic: "" }, guardedChatsAttempted: 3, securityEventsAttempted: 0, eventUID: "", decisionID: "", operationID: "" };
   assert.match(render(stopped), /data-guardrail-effect="pre-event-stop"/);
-  assert.match(render(stopped), /No injected response improvement was tested/);
-  assert.match(render({ ...stopped, status: "STOP_LEGITIMATE_BASELINE_FAILED", before: { canary: "DISCLOSED", sayOK: "GUARDRAIL_BLOCKED", arithmetic: "FOUR" } }), /No injected response improvement was tested/);
+  assert.match(render(stopped), /already blocked before any SecurityEvent or actuation/);
+  assert.match(render({ ...stopped, status: "STOP_STATIC_BLOCKED_LEGITIMATE_BASELINE_FAILED", before: { canary: "GUARDRAIL_BLOCKED", sayOK: "GUARDRAIL_BLOCKED", arithmetic: "FOUR" } }), /legitimate baseline request failed/);
+  assert.match(render({ ...stopped, status: "STOP_LEGITIMATE_BASELINE_FAILED", before: { canary: "DISCLOSED", sayOK: "GUARDRAIL_BLOCKED", arithmetic: "FOUR" } }), /cannot establish a service-preserving defense/);
+  assert.match(render({ ...stopped, status: "STOP_STATIC_BLOCKED_LEGITIMATE_BASELINE_FAILED" }), /data-guardrail-effect="incompatible"/);
   assert.match(render({ ...stopped, securityEventsAttempted: 1 }), /data-guardrail-effect="incompatible"/);
   assert.match(render({ ...joined, eventUID: "" }), /data-guardrail-effect="incompatible"/);
   assert.match(render({ ...joined, issues: ["missing audit" ] }), /data-guardrail-effect="incompatible"/);
+});
+
+test("joined negative outcomes distinguish continued disclosure and legitimate regression", () => {
+  const disclosed = { ...joined, status: "SYNTHETIC_OBJECTIVE_STILL_DISCLOSED", after: { canary: "DISCLOSED", sayOK: "OK", arithmetic: "FOUR" } };
+  assert.match(render(disclosed), /marker was still disclosed after the exactly joined rotation/);
+  assert.doesNotMatch(render(disclosed), /This defends only the declared synthetic objective/);
+  assert.match(render({ ...disclosed, decisionID: "" }), /data-guardrail-effect="incompatible"/);
+  assert.match(render({ ...disclosed, issues: ["incomplete originals"] }), /data-guardrail-effect="incompatible"/);
+  const regression = { ...joined, status: "OBJECTIVE_STOPPED_WITH_LEGITIMATE_REGRESSION", after: { canary: "GUARDRAIL_BLOCKED", sayOK: "GUARDRAIL_BLOCKED", arithmetic: "FOUR" } };
+  assert.match(render(regression), /Service-preserving defense was not established/);
+  assert.doesNotMatch(render(regression), /This defends only the declared synthetic objective/);
+  assert.match(render({ ...regression, after: joined.after }), /data-guardrail-effect="incompatible"/);
+  assert.match(render({ ...regression, after: { canary: "GUARDRAIL_BLOCKED", sayOK: "UNKNOWN_HTTP_RECEIPT", arithmetic: "FOUR" } }), /data-guardrail-effect="incompatible"/);
 });

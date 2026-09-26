@@ -71,12 +71,16 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 					}
 					if asset.model != "" {
 						// M-037 also withholds modelFingerprint; preserve independent serving grants.
-						for a, kind := range map[model.Action]string{model.ActionKVMigrateInvalidate: FactSession, model.ActionRequestDrain: FactInflightRequests, model.ActionGuardrailRotate: FactGuardrailBypass} {
+						// Cyclic guardrail rotation no longer claims deterministic bypass invalidation.
+						for a, kind := range map[model.Action]string{model.ActionKVMigrateInvalidate: FactSession, model.ActionRequestDrain: FactInflightRequests} {
 							keys := af.CoverByAction[a]
 							expected := (Fact{Scope: ScopePod, Asset: "ns/llm", Kind: kind}).Key()
 							if len(keys) != 1 || keys[0] != expected {
 								t.Errorf("preserved %s grant=%v, want %s", a, keys, expected)
 							}
+						}
+						if keys := af.CoverByAction[model.ActionGuardrailRotate]; len(keys) != 0 {
+							t.Errorf("unsupported guardrail bypass grant=%v", keys)
 						}
 					}
 					keys := af.CoverByAction[model.ActionAdapterRotate]

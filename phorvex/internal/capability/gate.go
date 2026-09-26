@@ -250,7 +250,11 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: model.IdentityRotateUnsupportedReason}
 	}
 	if len(coverKeys) == 0 {
-		return &Reason{Excluded: true, Kind: ReasonNoCover, Detail: "recon-cover: action invalidates no facts for this asset"}
+		reason := "recon-cover: action invalidates no facts for this asset"
+		if action == model.ActionGuardrailRotate {
+			reason = model.GuardrailBypassNoCoverReason
+		}
+		return &Reason{Excluded: true, Kind: ReasonNoCover, Detail: reason}
 	}
 	if ok, why := w.Capable(v, action); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}

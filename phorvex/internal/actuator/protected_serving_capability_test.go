@@ -321,6 +321,14 @@ func TestProtectedServingTerminalGuardrailDriftIsExcludedFromActionSet(t *testin
 	receipt := m064PreparedReceipt(pod, model.ActionGuardrailRotate, "candidate-terminal-drift")
 	receipt.Phase = "terminal-full"
 	native := protectedCapabilityNative(t, fakeC(pod, m064LiteralReceipt(receipt)))
+	// The protected actuator still rejects a drifted terminal receipt directly.
+	// The decision action set now excludes cyclic guardrail rotation even earlier:
+	// it has no proven bypass-invalidating cover, so its capability leg is not run.
+	driftTarget := Target{Namespace: pod.Namespace, Pod: pod.Name, UID: string(pod.UID), Labels: copyLabels(pod.Labels),
+		PolicyName: "policy", PolicyUID: "policy-uid", ServiceAccount: "default"}
+	if supported, why := native.SupportsAction(t.Context(), model.ActionGuardrailRotate, driftTarget); supported || !strings.Contains(why, guardrailEffectDomain) {
+		t.Fatalf("terminal drift was not rejected by protected actuator capability: supported=%t why=%q", supported, why)
+	}
 	view := &model.WorkloadView{
 		Pod: model.Pod{Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID), Labels: copyLabels(pod.Labels),
 			Ready: true, DesiredReplicas: 2, ReadyReplicas: 2, ServingDeclared: true, ServingEndpointReady: true},
@@ -363,11 +371,11 @@ func TestProtectedServingTerminalGuardrailDriftIsExcludedFromActionSet(t *testin
 		foundRotate = foundRotate || candidate.Action == model.ActionRotate
 	}
 	for _, exclusion := range set.Excluded {
-		if exclusion.Action == model.ActionGuardrailRotate && exclusion.EligibilityKind == "capability-unsupported" && strings.Contains(exclusion.Reason, guardrailEffectDomain) {
+		if exclusion.Action == model.ActionGuardrailRotate && exclusion.EligibilityKind == "no-cover" && exclusion.Reason == "no cover" {
 			foundGuardrailExclusion = true
 		}
 	}
 	if !foundRotate || !foundGuardrailExclusion {
-		t.Fatalf("terminal drift did not preserve an alternative candidate: rotate=%t guardrailExclusion=%t set=%+v", foundRotate, foundGuardrailExclusion, set)
+		t.Fatalf("no-cover guardrail exclusion did not preserve an alternative candidate: rotate=%t guardrailExclusion=%t set=%+v", foundRotate, foundGuardrailExclusion, set)
 	}
 }

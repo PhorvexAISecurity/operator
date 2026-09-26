@@ -112,9 +112,9 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	}
 	if view.Pod.HasServingDeclaration() {
 		ep := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
-		// In-flight-request + guardrail-bypass recon on a serving pod — each invalidated by its own
-		// gentle AI actuator (request-drain / guardrail-rotate) so the engine can pick the surgical
-		// serving move over a blunt rotate. Distinct facts => distinct, meaningful cover per action.
+		// In-flight-request and guardrail-bypass recon on a serving pod are distinct audit facts.
+		// Request-drain invalidates its in-flight state. A cyclic guardrail variant swap does not
+		// establish that a learned bypass stops working, so guardrailBypass has no selectable cover.
 		rq := Fact{Scope: ScopePod, Asset: asset, Kind: FactInflightRequests, Weight: base * urg}
 		gb := Fact{Scope: ScopePod, Asset: asset, Kind: FactGuardrailBypass, Weight: base * urg}
 		af.Facts = append(af.Facts, ep, rq, gb)
@@ -129,19 +129,17 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
 		// class as PHVX-9e.
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
-		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
-		// A NAMED attack vector targeting this pod makes the matching serving fact DOMINATE — the
-		// same ×3 structural dominance as adapter-integrity — so the engine picks the SURGICAL
-		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
-		// jailbreak, request-drain for a request hijack) over other eligible moves.
-		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
-		// only the weight is lifted. There is deliberately no age predicate here: an event
-		// retained in the workload view remains an observation until ingestion removes it.
+		// A NAMED attack vector targeting this pod lifts the corresponding fact's AUDIT weight.
+		// For session and in-flight state the matching actuator retains physical cover. A
+		// GuardrailBypass event does not prove that the next variant blocks the same request;
+		// its weight and exact attribution remain visible without creating a candidate gain.
+		// There is deliberately no age predicate here: an event retained in the workload
+		// view remains an observation until ingestion removes it.
 		if refs := vectorEvents(view.Events, model.AttackVectorKV, view.Pod.UID); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactSession, model.AttackVectorKV, vectorDominance, refs) // -> kv-reset
 		}
 		if refs := vectorEvents(view.Events, model.AttackVectorGuardrail, view.Pod.UID); len(refs) > 0 {
-			boostFactWeight(af.Facts, FactGuardrailBypass, model.AttackVectorGuardrail, vectorDominance, refs) // -> guardrail-rotate
+			boostFactWeight(af.Facts, FactGuardrailBypass, model.AttackVectorGuardrail, vectorDominance, refs)
 		}
 		if refs := vectorEvents(view.Events, model.AttackVectorInflight, view.Pod.UID); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactInflightRequests, model.AttackVectorInflight, vectorDominance, refs) // -> request-drain

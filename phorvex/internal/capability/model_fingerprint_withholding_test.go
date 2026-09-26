@@ -103,7 +103,12 @@ func TestM037CandidateWithholding(t *testing.T) {
 					}
 				}
 			}
-			control := false
+			guardrailExcluded := false
+			for _, e := range set.Excluded {
+				if e.Action == model.ActionGuardrailRotate {
+					guardrailExcluded = e.EligibilityKind == ReasonNoCover && e.Reason == model.GuardrailBypassNoCoverReason
+				}
+			}
 			for _, c := range set.Candidates {
 				if c.Action == model.ActionModelShardReplace {
 					candidate = true
@@ -121,15 +126,15 @@ func TestM037CandidateWithholding(t *testing.T) {
 						t.Error("candidate received fingerprint credit")
 					}
 				}
-				if c.Action == model.ActionGuardrailRotate && len(c.CoverKeys) == 1 && set.FactWeights[c.CoverKeys[0]] > 0 {
-					control = true
+				if c.Action == model.ActionGuardrailRotate {
+					t.Error("cyclic variant change received unsupported bypass candidate")
 				}
 			}
 			if candidate != wantCandidate || excluded == wantCandidate {
 				t.Fatalf("model-shard candidate=%v excluded=%v, want candidate=%v: exclusions=%+v", candidate, excluded, wantCandidate, set.Excluded)
 			}
-			if control != (tc.leaderAlias != "") {
-				t.Fatalf("guardrail candidate=%v, want declared model=%v: exclusions %+v", control, tc.leaderAlias != "", set.Excluded)
+			if !guardrailExcluded {
+				t.Fatalf("guardrail no-cover reason absent: exclusions %+v", set.Excluded)
 			}
 		})
 	}
