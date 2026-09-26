@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 22
+revision: 23
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -100,11 +100,27 @@ checks:
     - phorvex
     - workflow
     inputs_sha256: 9df7914d8f4ace6263ec05c0aaa6eead429bb6633dc0da298fbc7938a3be1939
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 195a4db7d9d5f7668c99c5ed8aa642bb58df8f0dff8faffd103b0077db5ce618
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:05:25+00:00'
+    baseline_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 5d41f2f9ed46be98ca5ebd8ad04329f3867a25838055edeaba3af5679715a593
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:05:25+00:00'
+    incident_sha256: 195a4db7d9d5f7668c99c5ed8aa642bb58df8f0dff8faffd103b0077db5ce618
 fix_id: CAT-GUARDRAIL-OUTPUT
 issues: []
 title: Add scoped response-field enforcement and a verifiable guardrail response case
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -149,7 +165,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -165,10 +181,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-26T21:00:37+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-26T21:05:31+00:00'
 follow_up_to: CAT-GUARDRAIL-COVER
 configuration_history:
 - at: '2026-09-26T18:36:05+00:00'
@@ -262,6 +278,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T21:05:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T21:05:29+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -324,9 +356,9 @@ check_history:
   at: '2026-09-26T20:23:04+00:00'
   baseline_sha: 8912602d44284efa304b614faa8dc5ff0be859df
 handoff:
-  id: CAT-GUARDRAIL-OUTPUT:22:submit
-  from: guardrail_response_chain
+  id: CAT-GUARDRAIL-OUTPUT:23:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 22
+  role: coordinator
+  kind: review
+  revision: 23

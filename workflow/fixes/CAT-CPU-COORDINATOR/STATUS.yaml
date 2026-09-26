@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -94,11 +94,27 @@ checks:
     - build/test-harness
     - phorvex
     inputs_sha256: 56e14d7a29f72f900cd1cb6db26c7cf783150c7cd5b1fca02910e3b70a49865a
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 5872aad36c4f283d591740662ec3fd4cf3f5c808649926152e78aaa8f1df29f3
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:05:38+00:00'
+    baseline_sha: ee220b093d50a4a2be103ed91b9139a730a3d598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 5d41f2f9ed46be98ca5ebd8ad04329f3867a25838055edeaba3af5679715a593
+    source_sha: cf37ea798df24383c182790b1d8af3039d047dbf
+    at: '2026-09-26T21:05:38+00:00'
+    incident_sha256: 5872aad36c4f283d591740662ec3fd4cf3f5c808649926152e78aaa8f1df29f3
 fix_id: CAT-CPU-COORDINATOR
 issues: []
 title: Preserve exact CPU coordinator failures and stop futile barrier waits
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -143,7 +159,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -159,10 +175,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-26T21:04:15+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-26T21:05:44+00:00'
 configuration_history:
 - at: '2026-09-26T20:10:41+00:00'
   by: codex-lead
@@ -226,6 +242,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T21:05:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T21:05:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -247,9 +279,9 @@ check_history:
   rationale: Owner requires completion of same CPU case; bounded recovery preserves
     original outcome and rejects unresolved effects
 handoff:
-  id: CAT-CPU-COORDINATOR:12:submit
-  from: output_chain_review
+  id: CAT-CPU-COORDINATOR:13:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 12
+  role: coordinator
+  kind: review
+  revision: 13
