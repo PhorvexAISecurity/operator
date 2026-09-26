@@ -1,0 +1,214 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 17
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 59c5bd03537e46309d79d9ca1776007a6785300f651cf015d4ab912bf1e92f97
+    source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+    at: '2026-09-26T20:40:08+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+    rationale: Correct rollout explanation to actual rendered behavior, same narrow
+      authorized dev scope
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/root-source-gap.json
+    sha256: fe23ea5e144b8b927e7af1f48456582305d0c485a8b8dd121d1ecf35881ce8ed
+    source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+    at: '2026-09-26T20:15:34+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 38fdbd52e0a7750c110b84fc85c82db569cad075ffb1a7e7d040ea295d5450e7
+    source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+    at: '2026-09-26T20:23:04+00:00'
+    baseline_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+fix_id: CAT-GUARDRAIL-OUTPUT
+issues: []
+title: Add scoped response-field enforcement and a verifiable guardrail response case
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: guardrail_response_chain
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/guardrail-output-response-20260926
+  base_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  head_sha: 2ca078e608924b5811e606b494caf9f5cf3890b8
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: guardrail_response_chain
+  action: Implement signed plan; coordinate proxy and console contract; no live or
+    shared deployments
+updated_at: '2026-09-26T20:40:08+00:00'
+follow_up_to: CAT-GUARDRAIL-COVER
+configuration_history:
+- at: '2026-09-26T18:36:05+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  approval_ref: null
+- at: '2026-09-26T18:36:41+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-26T18:36:53+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-26T19:28:36+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T19:34:43+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T19:43:56+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-26T19:50:06+00:00'
+  by: guardrail_response_chain
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-26T18:36:31+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-26T18:37:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 2e29e24df863a9b5897cbbb51ef998e70843f88b0c276da12738f846708d56dd
+  source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  at: '2026-09-26T18:36:33+00:00'
+  contract_sha256: 23156f984707c19cca4a8e2102df2173de485e8a2bd294cd1c7e4553442ab181
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 2e29e24df863a9b5897cbbb51ef998e70843f88b0c276da12738f846708d56dd
+  source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  at: '2026-09-26T18:37:20+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: Delegated routine plan clarification; requiring independent live verification
+    matches latest owner mandate. No human signature invented.
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 911b63758b35346453fbaed0b6220d626119062682ed25da0fb6141b588b184e
+  source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  at: '2026-09-26T18:40:41+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: Routine delegated worker ownership clarification; no product scope or
+    verification waiver
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 85b2c3a368c3b5a8c4247430c443018b47704829f6659df04338fea8b67d325d
+  source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  at: '2026-09-26T20:35:21+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: Owner requires both cases end-to-end; reviewed combined source delivery
+    preserves independent evidence and live requirements
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 140bc53d5c78f56a9614c2582f9da88a2a6c04f2a312c39a0ac066f68f81e5d9
+  source_sha: 8912602d44284efa304b614faa8dc5ff0be859df
+  at: '2026-09-26T20:38:51+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: Existing owner devtest and ownPR authorization covers narrow manager
+    capability activation through normal pipeline; no manual deployment
