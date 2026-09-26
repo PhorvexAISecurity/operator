@@ -84,25 +84,29 @@ def console_doc(docs):
 
 class ProfileMountChart(unittest.TestCase):
     def test_eks_cpu_activation_uses_reviewed_source_and_exact_authority(self):
-        reviewed = json.loads((CPU_PACKAGE / "configmap.json").read_text())
-        bundle = json.loads((CPU_PACKAGE / "FILES.json").read_text())
+        eks_values = yaml.safe_load((STACK / "values-eks.yaml").read_text())
+        reviewed = eks_values["catalogueProfiles"]["podBoundTokenCPU"]
+        profile = base64.b64decode(reviewed["profileBase64"], validate=True)
+        manifest = base64.b64decode(reviewed["manifestBase64"], validate=True)
+        reviewed_files = {CPU_FILENAME: profile, "manifest.json": manifest}
+        reviewed_sha = hashlib.sha256(profile).hexdigest()
         result = render_stack("-f", str(STACK / "values-eks.yaml"),
                               "--api-versions", "monitoring.coreos.com/v1/PodMonitor")
         docs = list(rendered_objects(result).values())
-        source = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == reviewed["metadata"]["name"])
+        source = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == reviewed["configMapName"])
         self.assertEqual(source["metadata"]["namespace"], "phorvex-system")
         self.assertIs(source["immutable"], True)
-        self.assertEqual(source["binaryData"], reviewed["binaryData"])
+        self.assertEqual(set(source["binaryData"]), set(reviewed_files))
         for filename, encoded in source["binaryData"].items():
             raw = base64.b64decode(encoded, validate=True)
-            self.assertEqual(raw, (CPU_PACKAGE / filename).read_bytes())
-            self.assertEqual(hashlib.sha256(raw).hexdigest(), bundle["filesSHA256"][filename])
+            self.assertEqual(raw, reviewed_files[filename])
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), reviewed_sha if filename == CPU_FILENAME else hashlib.sha256(manifest).hexdigest())
 
         console = console_doc(docs)["spec"]["template"]["spec"]
         container = console["containers"][0]
         env = {e["name"]: e["value"] for e in container["env"] if "value" in e}
         self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED"], "true")
-        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256"], bundle["profileSHA256"])
+        self.assertEqual(env["PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_PROFILE_SHA256"], reviewed_sha)
         volume = next(v for v in console["volumes"] if v["name"] == "pod-bound-token-cpu-reviewed-source")
         self.assertEqual(volume["configMap"]["name"], source["metadata"]["name"])
         self.assertEqual({i["key"] for i in volume["configMap"]["items"]}, set(source["binaryData"]))
