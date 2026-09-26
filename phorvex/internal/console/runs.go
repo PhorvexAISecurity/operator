@@ -371,7 +371,17 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	rm.active++
 	rm.lastStart = time.Now()
 	id := fmt.Sprintf("run-%d", rm.seq)
-	runtimeSuite, err := rm.prepareSuite(id, su, dest.SuiteSHA256)
+	var cpuPriorProofs []cpuCleanupProof
+	if name == podBoundTokenCPUConfig {
+		var proofErr error
+		cpuPriorProofs, proofErr = rm.cpuCleanupProofsLocked(dest.ScopeTarget)
+		if proofErr != nil {
+			rm.active--
+			rm.mu.Unlock()
+			return "", fmt.Errorf("CPU token predecessor nonce scope unavailable: %w", proofErr)
+		}
+	}
+	runtimeSuite, err := rm.prepareSuite(id, su, dest.SuiteSHA256, cpuPriorProofs)
 	if err != nil {
 		rm.active--
 		rm.mu.Unlock()
@@ -446,7 +456,7 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	return id, nil
 }
 
-func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (suite, error) {
+func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string, cpuPrior ...[]cpuCleanupProof) (suite, error) {
 	if rm.cfg.runsDir() == "" {
 		return suite{}, fmt.Errorf("console state directory is not configured")
 	}
@@ -544,7 +554,17 @@ func (rm *RunManager) prepareSuite(id string, su suite, authorizedSHA string) (s
 			if _, err := rand.Read(random); err != nil {
 				return suite{}, fmt.Errorf("allocate owned fixture nonce: %w", err)
 			}
-			fixture["nonce"], fixture["runID"] = hex.EncodeToString(random), id
+			nonce := hex.EncodeToString(random)
+			if su.File == allowedConfigs[podBoundTokenCPUConfig].File {
+				var priors []cpuCleanupProof
+				if len(cpuPrior) > 0 {
+					priors = cpuPrior[0]
+				}
+				if err := cpuNewNonceDisjoint(nonce, priors); err != nil {
+					return suite{}, err
+				}
+			}
+			fixture["nonce"], fixture["runID"] = nonce, id
 			su.Namespace = podBoundNamespace(map[string]string{"config.pod-bound-api-auth-response.yaml": podBoundTokenConfig, "config.pod-bound-api-auth-response-cpu.yaml": podBoundTokenCPUConfig}[su.File])
 		default:
 			return suite{}, fmt.Errorf("unrecognized named fixture")
