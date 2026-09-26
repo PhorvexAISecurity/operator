@@ -371,7 +371,7 @@ func podBoundCompetingUnattributedOperation(raw []byte) bool {
 	return rec.DispatchOutcome != "" && rec.DispatchOutcome != model.DispatchNotAttempted
 }
 
-func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out string) error {
+func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out string) (runErr error) {
 	ctx, cancel := context.WithTimeout(parent, 15*time.Minute)
 	defer cancel()
 	s.runs.mu.Lock()
@@ -389,6 +389,20 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if err != nil {
 		return err
 	}
+	// Bind diagnostics only after the request identity is established. A failure
+	// before this point cannot be safely attributed to a harness request.
+	if r.Schema != "pod-bound-token-request-v1" || r.RunID != id || !podBoundTokenNonce.MatchString(r.Nonce) {
+		return errors.New("Pod-bound token request identity differs")
+	}
+	stage := "request-validation"
+	requestSHA := podBoundHash(rawReq)
+	defer func() {
+		if runErr != nil {
+			if receiptErr := recordPodBoundCoordinatorFailure(out, r, requestSHA, stage, runErr); receiptErr != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("Pod-bound token coordinator diagnostic receipt unavailable: %w", receiptErr))
+			}
+		}
+	}()
 	if r.Schema != "pod-bound-token-request-v1" || r.RunID != id ||
 		!podBoundTokenNonce.MatchString(r.Nonce) || r.Namespace != podBoundNamespace(profile) ||
 		r.SourcePodUID == "" || r.PeerPodUID == "" || r.SourcePodUID == r.PeerPodUID ||
@@ -405,6 +419,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	} else if r.CaseID != "" && r.CaseID != podBoundTokenVoiceCaseID {
 		return errors.New("Voice token case differs")
 	}
+	stage = "authorization"
 	if err := s.currentPodBoundTokenGrant(id); err != nil {
 		return err
 	}
@@ -426,6 +441,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 		p.Fixture.RunID != id || p.Context == "" {
 		return errors.New("Pod-bound token runtime profile differs")
 	}
+	stage = "source-validation"
 	restCfg, err := s.podBoundRESTConfig()
 	if err != nil {
 		return err
@@ -437,6 +453,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if err := s.podBoundTokenCurrentSource(ctx, kc, r, p, false); err != nil {
 		return err
 	}
+	stage = "audit-start"
 	manifest, err := s.cfg.AuditSource.Manifest(ctx)
 	if err != nil || len(manifest.Segments) == 0 || manifest.Segments[0].ID != "live" {
 		return errors.New("Pod-bound token authenticated audit start unavailable")
@@ -453,24 +470,30 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 	if _, err := writePodBoundOwnedFile(out, "pod-bound-token-audit-start.json", start); err != nil {
 		return err
 	}
+	stage = "post-audit-authorization"
 	if err := s.currentPodBoundTokenGrant(id); err != nil {
 		return err
 	}
+	stage = "post-audit-source"
 	if err := s.podBoundTokenCurrentSource(ctx, kc, r, p, false); err != nil {
 		return err
 	}
+	stage = "post-audit-source-manifest"
 	if _, err := verifyPodBoundTokenSourceManifest(p); err != nil {
 		return err
 	}
+	stage = "post-audit-disjointness"
 	if err := s.podBoundTokenDisjointLive(ctx, kc, r, p); err != nil {
 		return err
 	}
+	stage = "signal-intent"
 	if err := s.persistCatalogueSignalIntent("/api/runs/start", "pod-bound-token", r.Namespace,
 		profile, r.SourcePodUID, &attackStimulusEvidence{Kind: "synthetic-catalogue-signal",
 			TargetUID: r.SourcePodUID, EventName: "phorvex-e2e-" + r.Nonce,
 			EventRule: model.AttackVectorPodBoundAPIAuth, Correlation: r.Nonce}); err != nil {
 		return err
 	}
+	stage = "typed-event-create"
 	created, creator, err := s.podBoundCreateTypedEvent(ctx, kc, restCfg, r)
 	if err != nil {
 		return err
@@ -481,6 +504,7 @@ func (s *Server) coordinatePodBoundTokenResponse(parent context.Context, id, out
 		defer done()
 		_ = creator.Resource(gvr).Delete(cleanupCtx, created.GetName(), metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: ptrUID(created.GetUID())}})
 	}()
+	stage = "decision-observation"
 	deadline := time.NewTimer(90 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(5 * time.Second)
@@ -544,6 +568,7 @@ decisionLoop:
 		case <-tick.C:
 		}
 	}
+	stage = "observation-commit"
 	var observation podBoundTokenObservationEnd
 	endRaw, err := podBoundTokenWaitFile(ctx, out, podBoundObservationEndFile, &observation)
 	if err != nil {
@@ -596,6 +621,7 @@ decisionLoop:
 		return err
 	}
 	// The event belongs to this run and is removed only with its exact API UID.
+	stage = "event-cleanup"
 	if err := creator.Resource(gvr).Delete(ctx, created.GetName(), metav1.DeleteOptions{
 		Preconditions: &metav1.Preconditions{UID: ptrUID(created.GetUID())}}); err != nil {
 		return fmt.Errorf("Pod-bound token exact event cleanup unconfirmed: %w", err)

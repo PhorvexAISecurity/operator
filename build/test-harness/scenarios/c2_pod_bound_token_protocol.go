@@ -11,11 +11,61 @@ import (
 )
 
 const (
-	podTokenRequestFile  = "pod-bound-token-request.json"
-	podTokenBarrierFile  = "pod-bound-token-barrier.json"
-	podTokenArtifactFile = "pod-bound-token-artifact.json"
-	podTokenTerminalFile = "pod-bound-token-terminal.json"
+	podTokenRequestFile            = "pod-bound-token-request.json"
+	podTokenBarrierFile            = "pod-bound-token-barrier.json"
+	podTokenArtifactFile           = "pod-bound-token-artifact.json"
+	podTokenTerminalFile           = "pod-bound-token-terminal.json"
+	podTokenCoordinatorFailureFile = "pod-bound-token-coordinator-failure.json"
 )
+
+type podTokenCoordinatorFailure struct {
+	Schema        string `json:"schema"`
+	RunID         string `json:"runID"`
+	Nonce         string `json:"nonce"`
+	RequestSHA256 string `json:"requestSHA256"`
+	Stage         string `json:"stage"`
+	Reason        string `json:"reason"`
+	ErrorSHA256   string `json:"errorSHA256"`
+	RecordedAt    string `json:"recordedAt"`
+}
+
+func readPodTokenCoordinatorFailure(dir string, req podTokenRequest, reqSHA string) (*podTokenCoordinatorFailure, error) {
+	raw, err := os.ReadFile(filepath.Join(dir, podTokenCoordinatorFailureFile))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 || len(raw) > 4096 {
+		return nil, errors.New("Pod token coordinator diagnostic invalid")
+	}
+	var failure podTokenCoordinatorFailure
+	if err := json.Unmarshal(raw, &failure); err != nil {
+		return nil, errors.New("Pod token coordinator diagnostic malformed")
+	}
+	if failure.Schema != "pod-bound-token-coordinator-failure-v1" ||
+		failure.RunID != req.RunID || failure.Nonce != req.Nonce || failure.RequestSHA256 != reqSHA {
+		return nil, os.ErrNotExist // A foreign receipt cannot terminate this request.
+	}
+	reasonByStage := map[string]string{
+		"request-validation": "REQUEST_INVALID", "authorization": "AUTHORIZATION_FAILED",
+		"source-validation": "SOURCE_VALIDATION_FAILED", "audit-start": "AUDIT_START_FAILED",
+		"post-audit-authorization": "AUTHORIZATION_CHANGED", "post-audit-source": "SOURCE_RECHECK_FAILED",
+		"post-audit-source-manifest": "SOURCE_MANIFEST_FAILED", "post-audit-disjointness": "DISJOINTNESS_FAILED",
+		"signal-intent": "SIGNAL_INTENT_FAILED", "typed-event-create": "EVENT_CREATION_FAILED",
+		"decision-observation": "DECISION_OBSERVATION_FAILED", "observation-commit": "OBSERVATION_COMMIT_FAILED",
+		"event-cleanup": "EVENT_CLEANUP_FAILED",
+	}
+	_, hashErr := hex.DecodeString(failure.ErrorSHA256)
+	if reasonByStage[failure.Stage] == "" || failure.Reason != reasonByStage[failure.Stage] ||
+		len(failure.ErrorSHA256) != 64 || hashErr != nil {
+		return nil, errors.New("Pod token coordinator diagnostic invalid")
+	}
+	requested, reqTimeErr := time.Parse(time.RFC3339Nano, req.RequestedAt)
+	recorded, recordedErr := time.Parse(time.RFC3339Nano, failure.RecordedAt)
+	if reqTimeErr != nil || recordedErr != nil || recorded.Before(requested) || recorded.After(time.Now().Add(2*time.Second)) {
+		return nil, errors.New("Pod token coordinator diagnostic time invalid")
+	}
+	return &failure, nil
+}
 
 type podTokenRequest struct {
 	Schema                string  `json:"schema"`

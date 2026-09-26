@@ -1325,15 +1325,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if podBoundNamedCase(st.Config) {
 		st.Finished = tsNow()
 		result, evidenceErr := readPodBoundTokenResult(outAbs, id)
-		if !started {
-			st.State, st.CleanupStatus, st.UnsafeToRetry = "error", "NO_EFFECT", false
-			st.Error = "Pod-bound token harness process did not start"
-		} else if evidenceErr == nil && responseErr == nil && podBoundSealErr == nil && err == nil && ctx.Err() == nil && result.TerminalStatus == "COMPLETE" && result.Cleanup.Status == "CONFIRMED_ABSENT" && result.Cleanup.Absent {
-			st.State, st.CleanupStatus, st.UnsafeToRetry = "done", "VERIFIED", false
-		} else {
-			st.State, st.CleanupStatus, st.UnsafeToRetry = "partial", "UNVERIFIED", true
-			st.Error = podBoundUnsafeStatus(outAbs, id)
-		}
+		finishPodBoundTokenStatus(st, outAbs, id, started, result, evidenceErr, responseErr, podBoundSealErr, err, ctx.Err())
 		return
 	}
 	if st.Config == mongoExposureConfig {
