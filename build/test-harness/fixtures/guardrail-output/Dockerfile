@@ -5,6 +5,8 @@ ENV PIP_NO_INDEX=1 \
     PIP_NO_INPUT=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+RUN install -d -m 0755 /opt/guardrail-output
+
 COPY --chmod=0644 requirements.lock wheelhouse.sha256 verify_wheelhouse.py verify_runtime.py /opt/guardrail-output/
 COPY wheelhouse/ /opt/guardrail-output/wheelhouse/
 

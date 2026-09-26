@@ -20,6 +20,7 @@
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update);
  *                                 quarantine/request-drain inspect Services, scalar warm actions bind one (get/list)
  * endpointslices                : request-drain and scalar warm actions observe exact routes only (list)
+ * configmaps                    : fixed Pod-bound output policy source activation (get/update)
  *
  * Identity-rotate deliberately receives no ServiceAccount/Secret permission: projected tokens
  * cannot be revoked by a pod-scoped action. EndpointSlice mutation remains denied.

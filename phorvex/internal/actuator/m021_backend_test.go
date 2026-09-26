@@ -269,6 +269,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if !NodeExecWired() && why != ReasonTransportUnwired {
 				t.Fatalf("unwired reason=%q", why)
 			}
+		case model.ActionSensitiveOutputPolicyActivate:
+			if ok || !registered || why != "output-policy-authority-unavailable" {
+				t.Fatalf("output policy requires a target and policy authority: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		default:
 			if ok != registered {
 				t.Fatalf("native %s: support=%v but handler registered=%v (%s)", a, ok, registered, why)

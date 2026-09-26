@@ -336,9 +336,14 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionMIGRebind {
 					e.Prerequisite = ReasonTransportUnwired + " is reported unless the node-exec transport is wired (M-79)"
 				}
+				if a == model.ActionSensitiveOutputPolicyActivate {
+					e.Prerequisite = "exact live Pod, preinstalled rule ConfigMap and operation journal"
+				}
 				if a == model.ActionModelShardReplace {
 					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
 					e.UnverifiedEffect = "registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable"
+				} else if a == model.ActionSensitiveOutputPolicyActivate {
+					e.UnverifiedEffect = "support does not verify the authenticated event, CAS activation, mounted projection or proxy effect; dispatch and recovery check these"
 				} else {
 					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
 				}

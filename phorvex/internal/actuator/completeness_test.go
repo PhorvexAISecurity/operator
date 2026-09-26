@@ -98,21 +98,22 @@ type feasibilityExpectation struct {
 // (a new action needs an explicit expectation) or when a row names an action that is not
 // generatable (a stale or misspelled row proves nothing).
 var feasibilityTable = map[model.Action]feasibilityExpectation{
-	model.ActionRotate:              {},
-	model.ActionQuarantine:          {},
-	model.ActionDebugger:            {},
-	model.ActionCustomInject:        {},
-	model.ActionIdentityRotate:      {},
-	model.ActionRouteRotate:         {},
-	model.ActionWarmSwap:            {plain: "ai-context-required:"},
-	model.ActionMIGRebind:           {plain: "ai-context-required:"},
-	model.ActionKVReset:             {plain: "ai-context-required:"},
-	model.ActionEndpointRotate:      {plain: "ai-context-required:"},
-	model.ActionModelShardReplace:   {plain: "ai-context-required:"},
-	model.ActionAdapterRotate:       {plain: "ai-context-required:"},
-	model.ActionRequestDrain:        {plain: "ai-context-required:"},
-	model.ActionGuardrailRotate:     {plain: "ai-context-required:"},
-	model.ActionKVMigrateInvalidate: {plain: "ai-context-required:"},
+	model.ActionRotate:                        {},
+	model.ActionQuarantine:                    {},
+	model.ActionDebugger:                      {},
+	model.ActionCustomInject:                  {},
+	model.ActionIdentityRotate:                {},
+	model.ActionRouteRotate:                   {},
+	model.ActionWarmSwap:                      {plain: "ai-context-required:"},
+	model.ActionMIGRebind:                     {plain: "ai-context-required:"},
+	model.ActionKVReset:                       {plain: "ai-context-required:"},
+	model.ActionEndpointRotate:                {plain: "ai-context-required:"},
+	model.ActionModelShardReplace:             {plain: "ai-context-required:"},
+	model.ActionAdapterRotate:                 {plain: "ai-context-required:"},
+	model.ActionRequestDrain:                  {plain: "ai-context-required:"},
+	model.ActionGuardrailRotate:               {plain: "ai-context-required:"},
+	model.ActionKVMigrateInvalidate:           {plain: "ai-context-required:"},
+	model.ActionSensitiveOutputPolicyActivate: {plain: "ai-context-required:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -134,6 +135,26 @@ func aiView() *model.WorkloadView {
 		CreatorIdentity: "system:serviceaccount:ns:detector",
 		TargetPodUID:    v.Pod.UID,
 		AdapterName:     v.Pod.SuspectAdapter,
+	}
+	v.Pod.OutputPolicyConfigMap = "phorvex-output-policy-p"
+	v.Pod.OutputPolicyRuleSHA256 = "rule-sha"
+	v.Pod.OutputProxySourceSHA256 = "proxy-sha"
+	v.Pod.OutputSupportSourceSHA256 = "support-sha"
+	v.Pod.OutputEventCreator = "system:serviceaccount:ns:detector"
+	v.Pod.OutputPolicyObservation = &model.SensitiveOutputObservation{
+		EventName:           "output-detected",
+		EventUID:            "output-event-uid",
+		CreatorIdentity:     v.Pod.OutputEventCreator,
+		TargetPodUID:        v.Pod.UID,
+		ConfigMapUID:        "cm-uid",
+		PolicyName:          "guardrail-output-fixture",
+		PolicyUID:           "policy-uid",
+		PolicyGeneration:    1,
+		RuleSHA256:          v.Pod.OutputPolicyRuleSHA256,
+		ProxySourceSHA256:   v.Pod.OutputProxySourceSHA256,
+		SupportSourceSHA256: v.Pod.OutputSupportSourceSHA256,
+		ProxyImageID:        "proxy@sha256:1",
+		SupportImageID:      "support@sha256:1",
 	}
 	return v
 }
