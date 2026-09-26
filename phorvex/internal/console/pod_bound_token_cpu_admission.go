@@ -219,6 +219,8 @@ func (rm *RunManager) podBoundTokenCPUPriorAdmissionLocked(destination runDestin
 		}
 		if status.UnsafeToRetry {
 			switch status.Config {
+			case podBoundTokenCPUConfig:
+				// Exact pre-event CPU originals are checked below, one by one.
 			case string(cataloguev1.VoiceRecovery):
 				if voice != nil {
 					return errors.New("CPU token has multiple unsafe Voice predecessors")
@@ -238,6 +240,9 @@ func (rm *RunManager) podBoundTokenCPUPriorAdmissionLocked(destination runDestin
 		if _, err := rm.mongoEarlyCleanupProofLocked(destination.ScopeTarget); err != nil {
 			return err
 		}
+	}
+	if _, err := rm.cpuPreEventProofsLocked(destination.ScopeTarget); err != nil {
+		return err
 	}
 	if voice == nil {
 		return nil
