@@ -1,0 +1,257 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: root
+    artifact: 03-decision.md
+    sha256: d0af8b5578692a14ecd3a7148fc583f26fb5ede1dadd949bf3e005c832feb921
+    source_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+    at: '2026-09-26T17:58:43+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: 03-decision.md
+    rationale: Initial verification metadata completed while still DESIGNING under
+      existing owner delegation to lead; no behavioral plan change, evidence waiver,
+      or new owner approval claimed.
+  base_review:
+    result: PASS
+    by: root
+    artifact: evidence/base-review.md
+    sha256: dfe849b912112bb8234285dbde967c839daaa3135cc4933c25f6476efb4acb88
+    source_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+    at: '2026-09-26T18:03:46+00:00'
+    baseline_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+  red:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: evidence/l2-targeted.log
+    sha256: c8877013d7085a1cc198d951cae793d028d0ce5b66ebcbbed6351e6ecc2f0e4f
+    source_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+    at: '2026-09-26T18:08:11+00:00'
+    rationale: Delayed PodMonitor protocol regression asserts the old 125-second-equivalent
+      bound refuses before rate exists, then the 270-second-equivalent bound accepts
+      two exact-source increasing positive-rate samples; retained live run22 originals
+      independently show the baseline failure.
+  preflight:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: evidence/preflight/receipt.json
+    sha256: e4f69f65cd84efb4173fea8dfc09df0ca5460e26e9b11bcb6d387337e5c24de2
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:09:36+00:00'
+  implementation:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: 04-diff.patch
+    sha256: 00f32a30fbcd8b5f69bbf6bc6cb0d27adcaaf10b8bd4363188f32ae7286a3411
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:09:36+00:00'
+  l0:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: evidence/l2-targeted.log
+    sha256: c8877013d7085a1cc198d951cae793d028d0ce5b66ebcbbed6351e6ecc2f0e4f
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:09:36+00:00'
+  l1:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: evidence/l1-prom-parser.log
+    sha256: 75a7e07ade47667e92f4c8a7787f42c9b409f94e40e80e7c86c793f22a12e562
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:09:36+00:00'
+  l2:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: evidence/l2-warmup.log
+    sha256: ffe437d9729257b6d39080efd0165ca45fb233ffb49d15b30f06590f1dd77fd8
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:09:36+00:00'
+  positive_control:
+    result: PASS
+    by: cpu_rate_repair
+    artifact: evidence/positive-control.log
+    sha256: 51242793ab023eb4511cc854f6ec78b82d9cbb2224a2443b08d38552b2e12998
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:09:36+00:00'
+  incident:
+    result: PASS
+    by: root
+    artifact: evidence/incident.md
+    sha256: bdbef76e7879b0dc0c18831afda8870e3430b7bd04b7c652269c0ae58edb4f2c
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:10:24+00:00'
+    baseline_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+  p3:
+    result: PASS
+    by: root
+    artifact: evidence/p3/verdict.md
+    sha256: f989d5e2f00366cc6bd3bcffda4279294e4b8df90df4bf2ee0fc223076d8f98a
+    source_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+    at: '2026-09-26T18:10:24+00:00'
+    incident_sha256: bdbef76e7879b0dc0c18831afda8870e3430b7bd04b7c652269c0ae58edb4f2c
+fix_id: CAT-CPU-METRIC-WARMUP
+issues: []
+title: Wait for measured CPU request rate after monitor discovery
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: root
+  implementer: cpu_rate_repair
+  skeptic: root
+  live_verifier: root
+  coordinator: root
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+  deployed_image: v0.4.170
+  deployed_git_sha: c6db1ace9b6958f53bbab8318c57b747ef18d90e
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/cpu-request-rate-run22-20260926
+  base_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+  head_sha: 0ded7c840396ab732ef9b7beebc4f778ae57c66b
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-26T18:10:29+00:00'
+configuration_history:
+- at: '2026-09-26T17:55:39+00:00'
+  by: root
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-26T17:55:49+00:00'
+  by: root
+  fields:
+  - approvals
+  approval_ref: operations/AUTONOMY.md
+- at: '2026-09-26T17:57:39+00:00'
+  by: root
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-26T18:09:36+00:00'
+  by: cpu_rate_repair
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-26T17:56:55+00:00'
+  by: root
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-26T17:58:43+00:00'
+  by: root
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-26T18:09:36+00:00'
+  by: cpu_rate_repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-26T18:09:38+00:00'
+  by: cpu_rate_repair
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T18:10:25+00:00'
+  by: root
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T18:10:27+00:00'
+  by: root
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: root
+  artifact: 03-decision.md
+  sha256: d0af8b5578692a14ecd3a7148fc583f26fb5ede1dadd949bf3e005c832feb921
+  source_sha: c0491b69e56dc91e55cbe787877c9077f3053d8e
+  at: '2026-09-26T17:57:16+00:00'
+  contract_sha256: 9b711176a47a37e1a4bbb1ef4d14d730974bc084bd568ecbb1c7911a0eee5c2e
+handoff:
+  id: CAT-CPU-METRIC-WARMUP:11:review
+  from: root
+  to: root
+  role: coordinator
+  kind: review
+  revision: 11

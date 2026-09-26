@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -443,10 +444,10 @@ func RunPodBoundTokenCase(ctx context.Context, env *core.Env) (runErr error) {
 		return err
 	}
 	podTokenStageSet(&result, 1, "CONFIRMED", podTokenHash([]byte(podTokenFixtureSummary(fixture))), "two controller-owned Ready Pods")
-	telemetry := podTokenWarmMetric(ctx, env, fixture)
+	telemetry, metricErr := podTokenWarmMetric(ctx, env, fixture)
 	result.Telemetry = telemetry
 	if env.Config.Namespace == "phorvex-catalogue-cpu" && telemetry.ProducerStatus != "MEASURED_FRESH" {
-		return errors.New("CPU token source-Pod measured request rate unavailable before event")
+		return fmt.Errorf("CPU token source-Pod measured request rate unavailable before event: %w", metricErr)
 	}
 	sa, err := env.Kube.CoreV1().ServiceAccounts(env.Config.Namespace).Get(ctx, fixture.name, metav1.GetOptions{})
 	if err != nil || sa.UID == "" {
