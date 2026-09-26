@@ -14,12 +14,37 @@ a model jailbreak or a found model leak. CAT-002 is the public-only control.
 private plan with freshly reviewed cluster UID, existing guarded Service and
 single ready model target UIDs/image ID, actual console service-account
 creator, model-client Secret reference, and **digest-pinned** proxy/support
-Python images. Both images must contain Python 3.11 or newer plus compatible
-FastAPI, httpx and Uvicorn at build time. The proxy image does not need a
+Python images. The reviewed `Dockerfile` is a candidate for both containers:
+it pins the Linux/amd64 Python 3.11 base by digest and installs exactly the
+16 hash-locked FastAPI/httpx/Uvicorn runtime wheels, without app source. The
+proxy image does not need a
 second vLLM or classifier weights: this fixture's chat route is closed and
 the existing guarded Service performs input filtering. No container performs
 `pip install` at startup. The support app alone receives the model-client
 credential; neither container receives Kubernetes API credentials.
+
+To prepare the image build context, obtain the exact wheel files named in
+`wheelhouse.sha256` into this directory's ignored `wheelhouse/`. A private
+staging directory may be populated with `python3 -m pip download --no-deps
+--only-binary=:all: --require-hashes -r requirements.lock -d wheelhouse` in
+a separately reviewed networked environment. Verify the context before any
+build:
+
+```sh
+python3 verify_wheelhouse.py requirements.lock wheelhouse.sha256 wheelhouse
+```
+
+The verifier rejects missing, extra, symlinked or changed wheels. The
+Dockerfile repeats that verification, installs without an index or network,
+checks dependency compatibility, and verifies the package versions/imports
+both as root at build time and as UID 10001. Its final image contains no
+fixture source; the Pod mounts the separate immutable three-file source
+ConfigMap read-only. After separate review and authorization, build with
+Linux/amd64 and no build network, run `verify_runtime.py requirements.lock`
+in a read-only networkless container, publish to a unique fixture-only
+repository, and put the resulting immutable image digest in both image fields
+of the private plan. A tag or the base Python digest is not a valid fixture
+image pin. This candidate has not been built or published.
 
 Render and inspect a private package without Kubernetes access:
 

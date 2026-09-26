@@ -132,6 +132,65 @@ def _owner(pod):
             "uid": _uid(pod), "controller": True}
 
 
+def _exact_service_route(kube, service, pod, service_name):
+    ports = service.get("spec", {}).get("ports", [])
+    matched = [port for port in ports if port.get("port") == 8000
+               and port.get("protocol", "TCP") == "TCP"]
+    if len(matched) != 1:
+        raise ValueError(f"{service_name} Service port differs from reviewed TCP:8000")
+    target = matched[0].get("targetPort", 8000)
+    if type(target) is str:
+        named = [entry for container in pod.get("spec", {}).get("containers", [])
+                 for entry in container.get("ports", [])
+                 if entry.get("name") == target and entry.get("containerPort") == 8000
+                 and entry.get("protocol", "TCP") == "TCP"]
+        if len(named) != 1:
+            raise ValueError(f"{service_name} named targetPort does not resolve to TCP:8000")
+    elif type(target) is not int or target != 8000:
+        raise ValueError(f"{service_name} targetPort differs from reviewed TCP:8000")
+    selector = service.get("spec", {}).get("selector", {})
+    labels = pod.get("metadata", {}).get("labels", {})
+    if not selector or any(labels.get(key) != value for key, value in selector.items()):
+        raise ValueError(f"{service_name} selector differs from target Pod labels")
+    pod_ip = pod.get("status", {}).get("podIP")
+    if not isinstance(pod_ip, str) or not pod_ip:
+        raise ValueError(f"{service_name} target Pod IP unavailable")
+    slices = _strict(kube.call("-n", "vllm", "get", "endpointslices.discovery.k8s.io",
+                               "-l", "kubernetes.io/service-name=" + service_name,
+                               "-o", "json"))
+    if slices.get("metadata", {}).get("continue"):
+        raise ValueError(f"{service_name} EndpointSlice list is incomplete")
+    for item in slices.get("items", []):
+        if item.get("metadata", {}).get("labels", {}).get("kubernetes.io/service-name") != service_name:
+            raise ValueError(f"{service_name} EndpointSlice ownership differs")
+    ready = [(item, ep) for item in slices.get("items", [])
+             for ep in item.get("endpoints", [])
+             if ep.get("conditions", {}).get("ready") is True]
+    if len(ready) != 1:
+        raise ValueError(f"{service_name} has ambiguous Ready EndpointSlice targets")
+    item, endpoint = ready[0]
+    slice_ports = item.get("ports", [])
+    route_ports = [port for port in slice_ports if port.get("port") == 8000
+                   and port.get("protocol", "TCP") == "TCP"]
+    if (len(route_ports) != 1
+            or endpoint.get("targetRef", {}).get("kind") != "Pod"
+            or endpoint.get("targetRef", {}).get("uid") != _uid(pod)
+            or endpoint.get("addresses") != [pod_ip]):
+        raise ValueError(f"{service_name} Ready EndpointSlice route differs")
+
+
+def _wait_exact_service_route(kube, service, pod, service_name, timeout=30):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            _exact_service_route(kube, service, pod, service_name)
+            return
+        except ValueError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(1)
+
+
 def _model_preflight(kube, plan):
     cluster = kube.get("namespace", "kube-system", namespace="kube-system")
     if _uid(cluster) != plan["clusterUID"]:
@@ -144,13 +203,7 @@ def _model_preflight(kube, plan):
     vllm = [row for row in statuses if row.get("name") == "vllm"]
     if len(vllm) != 1 or vllm[0].get("imageID") != plan["modelTargetImageID"]:
         raise ValueError("guarded model image drift")
-    slices = _strict(kube.call("-n", "vllm", "get", "endpointslices.discovery.k8s.io",
-                               "-l", "kubernetes.io/service-name=" + plan["modelServiceName"],
-                               "-o", "json"))
-    ready = [ep for item in slices.get("items", []) for ep in item.get("endpoints", [])
-             if ep.get("conditions", {}).get("ready") is True]
-    if len(ready) != 1 or ready[0].get("targetRef", {}).get("uid") != plan["modelTargetPodUID"]:
-        raise ValueError("guarded model Service EndpointSlice differs")
+    _exact_service_route(kube, model_service, model_pod, plan["modelServiceName"])
     api_key = kube.get("secret", plan["modelAPIKeySecretName"])
     if plan["modelAPIKeySecretKey"] not in api_key.get("data", {}):
         raise ValueError("guarded model-client Secret key missing")
@@ -237,6 +290,7 @@ def provision(directory: Path, kubeconfig: Path, context: str, cluster_uid: str)
     kube.create_file(directory / "fixture-policy.json")
     policy = kube.get("phorvexpolicy", render.POD_NAME)
     service = kube.get("service", render.SERVICE_NAME)
+    _wait_exact_service_route(kube, service, ready_pod, render.SERVICE_NAME)
     source = kube.get("configmap", render.SOURCE_NAME)
     pins = {**summary, "podUID": _uid(ready_pod),
             "proxyImageID": statuses["guardrail-proxy"]["imageID"],

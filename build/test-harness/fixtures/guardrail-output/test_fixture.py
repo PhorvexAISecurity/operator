@@ -11,6 +11,7 @@ from unittest import mock
 
 import provision
 import render
+import verify_wheelhouse
 
 
 class FixturePackageTest(unittest.TestCase):
@@ -145,7 +146,7 @@ class FixturePackageTest(unittest.TestCase):
                 if kind == "phorvexpolicy":
                     item["metadata"]["generation"] = 1
                 if kind == "pod":
-                    item["status"] = {"containerStatuses": [
+                    item["status"] = {"podIP": "10.20.30.40", "containerStatuses": [
                         {"name": "guardrail-proxy", "ready": True,
                          "imageID": "containerd://sha256:" + "a" * 64},
                         {"name": "support-app", "ready": True,
@@ -182,8 +183,16 @@ class FixturePackageTest(unittest.TestCase):
                 self.patches.append((kind, name, operations))
 
             def call(self, *args, **_kwargs):
-                assert args[2:4] == ("wait", "--for=condition=Ready")
-                return ""
+                if args[2:4] == ("wait", "--for=condition=Ready"):
+                    return ""
+                assert args[2:4] == ("get", "endpointslices.discovery.k8s.io")
+                pod = self.get("pod", render.POD_NAME)
+                return json.dumps({"items": [{"metadata": {"labels": {
+                    "kubernetes.io/service-name": render.SERVICE_NAME}},
+                    "ports": [{"port": 8000, "protocol": "TCP"}],
+                    "endpoints": [{"conditions": {"ready": True},
+                                   "targetRef": {"kind": "Pod", "uid": pod["metadata"]["uid"]},
+                                   "addresses": [pod["status"]["podIP"]]}]}]})
 
         with tempfile.TemporaryDirectory() as directory:
             out, _, marker = self.package(Path(directory))
@@ -209,6 +218,58 @@ class FixturePackageTest(unittest.TestCase):
             pins = json.loads((out / "runtime-pins.json").read_bytes())
             self.assertEqual(pins["podUID"], pod["metadata"]["uid"])
             self.assertEqual(pins["outputPolicyConfigMapUID"], cm["metadata"]["uid"])
+
+    def test_service_route_rejects_multiple_ready_targets_and_wrong_ip(self):
+        pod = {"metadata": {"uid": "11111111-1111-4111-8111-111111111111",
+                            "labels": {"app": "route-test"}},
+               "spec": {"containers": [{"ports": [{"name": "guarded", "containerPort": 8000}]}]},
+               "status": {"podIP": "10.20.30.40"}}
+        service = {"spec": {"selector": {"app": "route-test"},
+                            "ports": [{"port": 8000, "targetPort": 8000,
+                                       "protocol": "TCP"}]}}
+        good = {"conditions": {"ready": True},
+                "targetRef": {"kind": "Pod", "uid": pod["metadata"]["uid"]},
+                "addresses": [pod["status"]["podIP"]]}
+        class RouteClient:
+            def __init__(self, endpoints):
+                self.endpoints = endpoints
+            def call(self, *_args):
+                return json.dumps({"items": [{"metadata": {"labels": {
+                    "kubernetes.io/service-name": "fixture"}},
+                    "ports": [{"port": 8000, "protocol": "TCP"}],
+                                              "endpoints": self.endpoints}]})
+        provision._exact_service_route(RouteClient([good]), service, pod, "fixture")
+        named = copy.deepcopy(service)
+        named["spec"]["ports"][0]["targetPort"] = "guarded"
+        provision._exact_service_route(RouteClient([good]), named, pod, "fixture")
+        for endpoints in ([good, copy.deepcopy(good)],
+                          [{**good, "addresses": ["10.20.30.41"]}],
+                          [{**good, "targetRef": {"kind": "Pod", "uid":
+                            "22222222-2222-4222-8222-222222222222"}}]):
+            with self.subTest(endpoints=endpoints), self.assertRaises(ValueError):
+                provision._exact_service_route(RouteClient(endpoints), service, pod, "fixture")
+
+    def test_wheelhouse_rejects_missing_extra_and_symlink_wheels(self):
+        fixture_dir = Path(__file__).resolve().parent
+        lock = fixture_dir / "requirements.lock"
+        manifest = fixture_dir / "wheelhouse.sha256"
+        lines = manifest.read_text().splitlines()
+        with tempfile.TemporaryDirectory() as directory:
+            wheelhouse = Path(directory)
+            first = lines[0].split("  ", 1)[1]
+            (wheelhouse / first).write_bytes(b"not a pinned wheel")
+            with self.assertRaisesRegex(ValueError, "missing or extra"):
+                verify_wheelhouse.verify(lock, manifest, wheelhouse)
+            (wheelhouse / first).unlink()
+            for line in lines:
+                filename = line.split("  ", 1)[1]
+                (wheelhouse / filename).write_bytes(b"not a pinned wheel")
+            with self.assertRaisesRegex(ValueError, "SHA-256 differs"):
+                verify_wheelhouse.verify(lock, manifest, wheelhouse)
+            (wheelhouse / first).unlink()
+            (wheelhouse / first).symlink_to(wheelhouse / lines[1].split("  ", 1)[1])
+            with self.assertRaisesRegex(ValueError, "regular file"):
+                verify_wheelhouse.verify(lock, manifest, wheelhouse)
 
 
 if __name__ == "__main__":
