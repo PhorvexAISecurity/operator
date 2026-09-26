@@ -382,7 +382,7 @@ export interface WorkloadNS { namespace: string; system: boolean; podCount: numb
 // The live-attack action set the /api/vllm/attack endpoint accepts (vllm_attack.go). `reset` is
 // the cleanup action, not an attack — it clears the last one.
 export type VllmAttackAction =
-  | "poison" | "kvcache" | "endpoint-rotate" | "guardrail-rotate" | "request-drain"
+  | "poison" | "kvcache" | "endpoint-rotate" | "guardrail-rotate" | "guardrail-output-v2" | "request-drain"
   | "kv-migrate-invalidate" | "warm-swap" | "model-shard-replace" | "reset";
 
 // --- per-app attack compatibility (GET /api/workload/attacks) ---
@@ -488,6 +488,7 @@ export interface AttackResult {
   stimulusEvidence?: { kind: string; observed: boolean; targetUid: string; eventName: string; eventUid: string; eventCreatedAt: string; eventRule: string; correlation: string; behavioralExecuted: boolean; limitation: string };
   effectEvidence?: { kind: string; observed: boolean; observedAt?: string; targetUid: string; before?: string; after?: string; serviceUid?: string; correlation: string; limitation: string; seconds: number };
   guardrailEffectProbe?: GuardrailEffectProbeResult;
+  guardrailOutputProbe?: GuardrailOutputProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
   decisionTraceEvidence?: AttackDecisionEvidence[];
   temporalDecisionEvidence?: AttackDecisionEvidence;
@@ -513,6 +514,21 @@ export interface GuardrailEffectProbeResult {
   guardedChatsAttempted: number; consoleLaunchPOSTs: number; securityEventsAttempted: number;
   eventUID?: string; decisionID?: string; operationID?: string;
   priorVariant?: string; nextVariant?: string; cleanupVerified: boolean;
+}
+export interface GuardrailOutputProbeResult {
+  schema: "guardrail-output-probe-result-v2";
+  objective: "synthetic-support-internal-field-egress-v1";
+  status: string; accepted: boolean; issues: string[];
+  eventMode: "NONE" | "INJECTED_AFTER_MEASURED_DISCLOSURE";
+  naturalDetector: "NOT_EVALUATED"; generalSecurityEfficacy: "NOT_EVALUATED";
+  profileSHA256: string; supportRoute: string; modelControlRoute: string; initialDisclosureLanded: boolean;
+  beforeSupport: string; afterSupport: string;
+  beforeSayOK: string; beforeArithmetic: string;
+  afterSayOK: string; afterArithmetic: string;
+  unrelatedSupport: string;
+  eventUID?: string; decisionID?: string; operationID?: string;
+  activationPath?: "DIRECT_EMITTED" | "RECOVERED_AFTER_PENDING" | "TERMINAL_CONFIRMED_AFTER_DISPATCH_ERROR";
+  policyRevision?: number; cleanupVerified: boolean;
 }
 // --- Optimizer Bench: config sweep over the real p1-coverage engine (in-process, no live attack) ---
 export interface BenchConfigInput {

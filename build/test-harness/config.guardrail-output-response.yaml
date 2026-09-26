@@ -1,0 +1,57 @@
+# Version 2 of the current guardrail catalogue parent: application-output
+# confidentiality on one owned synthetic support case. The seeded excessive
+# serializer field is an application fixture defect, not a found model leak.
+# Fill every placeholder pin from installed evidence, then mount exact bytes in the
+# console and configure its SHA-256. This template is unavailable as shipped.
+kubeconfig: ""
+context: "__SET_LOGICAL_CLUSTER_TARGET__"
+namespace: vllm
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+outDir: out-guardrail-output-response
+defenderFilter: []
+scenarioFilter: []
+guardrailOutputFixture:
+  runID: run-1
+  transport: in-cluster
+  clusterUID: "__SET_REVIEWED_KUBE_SYSTEM_UID__"
+  podName: "__SET_REVIEWED_VLLM_POD_NAME__"
+  podUID: "__SET_REVIEWED_VLLM_POD_UID__"
+  podImageID: "__SET_REVIEWED_VLLM_IMAGE_ID__"
+  serviceName: "__SET_REVIEWED_FIXTURE_SERVICE_NAME__"
+  serviceUID: "__SET_REVIEWED_VLLM_SERVICE_UID__"
+  sourceConfigMapName: guardrail-output-fixture
+  sourceUID: "__SET_REVIEWED_GUARDRAIL_SOURCE_CONFIGMAP_UID__"
+  sourceSHA256: "__SET_REVIEWED_GUARDRAIL_SOURCE_SHA256__"
+  supportImageID: "__SET_REVIEWED_SUPPORT_IMAGE_ID__"
+  supportSourceSHA256: "__SET_REVIEWED_SUPPORT_SOURCE_SHA256__"
+  modelTargetPodName: "__SET_REVIEWED_MODEL_TARGET_POD_NAME__"
+  modelTargetPodUID: "__SET_REVIEWED_MODEL_TARGET_POD_UID__"
+  modelTargetImageID: "__SET_REVIEWED_MODEL_TARGET_IMAGE_ID__"
+  modelServiceName: "__SET_REVIEWED_MODEL_SERVICE_NAME__"
+  modelServiceUID: "__SET_REVIEWED_MODEL_SERVICE_UID__"
+  outputPolicyConfigMapName: "phorvex-output-policy-__SET_REVIEWED_VLLM_POD_NAME__"
+  outputPolicyConfigMapUID: "__SET_REVIEWED_OUTPUT_POLICY_CONFIGMAP_UID__"
+  outputPolicyRuleSHA256: "__SET_REVIEWED_OUTPUT_POLICY_RULE_SHA256__"
+  initialActivationRevision: 0
+  managerPodName: "__SET_REVIEWED_MANAGER_POD_NAME__"
+  managerPodUID: "__SET_REVIEWED_MANAGER_POD_UID__"
+  managerImageID: "__SET_REVIEWED_MANAGER_IMAGE_ID__"
+  consoleDeploymentName: "__SET_REVIEWED_CONSOLE_DEPLOYMENT_NAME__"
+  consoleDeploymentUID: "__SET_REVIEWED_CONSOLE_DEPLOYMENT_UID__"
+  consoleImageID: "__SET_REVIEWED_CONSOLE_IMAGE_ID__"
+  policyName: guardrail-output-fixture
+  policyUID: "__SET_REVIEWED_POLICY_UID__"
+  policyGeneration: __SET_REVIEWED_POLICY_GENERATION__
+  modelID: "Qwen/Qwen2.5-7B-Instruct-AWQ"
+  eventCreator: "__SET_REVIEWED_CONSOLE_EVENT_CREATOR__"
+  consoleURL: http://127.0.0.1:8090
+  scopedTokenFile: /etc/phorvex-catalogue-v1/token
+  auditURL: "__SET_REVIEWED_AUDIT_SOURCE_URL__"
+  auditServerName: "__SET_REVIEWED_AUDIT_SERVER_DNS__"
+  auditCAFile: /etc/audit-client/ca.crt
+  auditClientCertFile: /etc/audit-client/tls.crt
+  auditClientKeyFile: /etc/audit-client/tls.key
+  maxRunSeconds: 900
+  cleanupSeconds: 90

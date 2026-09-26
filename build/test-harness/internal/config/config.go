@@ -151,6 +151,8 @@ type TargetConfig struct {
 	GuardrailStaticFixture *GuardrailStaticFixtureConfig `json:"guardrailStaticFixture,omitempty"`
 	// GuardrailAvailabilityFixture is a separate, injected, fixed availability case.
 	GuardrailAvailabilityFixture *GuardrailAvailabilityFixtureConfig `json:"guardrailAvailabilityFixture,omitempty"`
+	// GuardrailOutputFixture selects the versioned synthetic support response case.
+	GuardrailOutputFixture *GuardrailOutputFixtureConfig `json:"guardrailOutputFixture,omitempty"`
 
 	// InstalledManagerFixture attaches one catalogue arm to an already installed
 	// manager and its existing authenticated audit API. It is a complete runtime
@@ -331,6 +333,53 @@ type GuardrailAvailabilityFixtureConfig struct {
 	AuditClientKeyFile    string `json:"auditClientKeyFile"`
 	MaxRunSeconds         int    `json:"maxRunSeconds"`
 	CleanupSeconds        int    `json:"cleanupSeconds"`
+}
+
+// GuardrailOutputFixtureConfig is a separate authority from the historical
+// input-filter effect case. The route, request and field are fixed in source.
+type GuardrailOutputFixtureConfig struct {
+	RunID                     string `json:"runID"`
+	Transport                 string `json:"transport"`
+	ClusterUID                string `json:"clusterUID"`
+	PodName                   string `json:"podName"`
+	PodUID                    string `json:"podUID"`
+	PodImageID                string `json:"podImageID"`
+	ServiceName               string `json:"serviceName"`
+	ServiceUID                string `json:"serviceUID"`
+	SourceConfigMapName       string `json:"sourceConfigMapName"`
+	SourceUID                 string `json:"sourceUID"`
+	SourceSHA256              string `json:"sourceSHA256"`
+	SupportImageID            string `json:"supportImageID"`
+	SupportSourceSHA256       string `json:"supportSourceSHA256"`
+	ModelTargetPodName        string `json:"modelTargetPodName"`
+	ModelTargetPodUID         string `json:"modelTargetPodUID"`
+	ModelTargetImageID        string `json:"modelTargetImageID"`
+	ModelServiceName          string `json:"modelServiceName"`
+	ModelServiceUID           string `json:"modelServiceUID"`
+	OutputPolicyConfigMapName string `json:"outputPolicyConfigMapName"`
+	OutputPolicyConfigMapUID  string `json:"outputPolicyConfigMapUID"`
+	OutputPolicyRuleSHA256    string `json:"outputPolicyRuleSHA256"`
+	InitialActivationRevision int64  `json:"initialActivationRevision"`
+	ManagerPodName            string `json:"managerPodName"`
+	ManagerPodUID             string `json:"managerPodUID"`
+	ManagerImageID            string `json:"managerImageID"`
+	ConsoleDeploymentName     string `json:"consoleDeploymentName"`
+	ConsoleDeploymentUID      string `json:"consoleDeploymentUID"`
+	ConsoleImageID            string `json:"consoleImageID"`
+	PolicyName                string `json:"policyName"`
+	PolicyUID                 string `json:"policyUID"`
+	PolicyGeneration          int64  `json:"policyGeneration"`
+	ModelID                   string `json:"modelID"`
+	EventCreator              string `json:"eventCreator"`
+	ConsoleURL                string `json:"consoleURL"`
+	ScopedTokenFile           string `json:"scopedTokenFile"`
+	AuditURL                  string `json:"auditURL"`
+	AuditServerName           string `json:"auditServerName"`
+	AuditCAFile               string `json:"auditCAFile"`
+	AuditClientCertFile       string `json:"auditClientCertFile"`
+	AuditClientKeyFile        string `json:"auditClientKeyFile"`
+	MaxRunSeconds             int    `json:"maxRunSeconds"`
+	CleanupSeconds            int    `json:"cleanupSeconds"`
 }
 
 type InstalledManagerFixtureConfig struct {
@@ -535,6 +584,9 @@ func (c TargetConfig) Validate() error {
 		if err := validateGuardrailAvailabilityFixture(c); err != nil {
 			return err
 		}
+		if err := validateGuardrailOutputFixture(c); err != nil {
+			return err
+		}
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
@@ -577,6 +629,9 @@ func (c TargetConfig) Validate() error {
 		return err
 	}
 	if err := validateGuardrailAvailabilityFixture(c); err != nil {
+		return err
+	}
+	if err := validateGuardrailOutputFixture(c); err != nil {
 		return err
 	}
 	if err := validateGPUFunctionalFixture(c); err != nil {
@@ -720,7 +775,7 @@ func validatePodBoundTokenFixture(c TargetConfig) error {
 		c.TrialsPerArm != 1 || len(c.DefenderFilter) != 0 ||
 		len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != PodBoundTokenCaseID(c.Namespace) ||
 		c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
-		c.GuardrailStaticFixture != nil || c.InstalledManagerFixture != nil ||
+		c.GuardrailStaticFixture != nil || c.GuardrailOutputFixture != nil || c.InstalledManagerFixture != nil ||
 		c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil ||
 		!natsExposureRunID.MatchString(f.RunID) || !natsExposureNonce.MatchString(f.Nonce) ||
 		!kubernetesUIDPattern.MatchString(f.ClusterUID) || f.Transport != "in-cluster" ||
@@ -778,7 +833,7 @@ func validateGuardrailStaticFixture(c TargetConfig) error {
 		!kubernetesUIDPattern.MatchString(f.ServiceUID) || !natsExposureDigest.MatchString(f.SourceSHA256) ||
 		f.GuardrailJournalName == "" || len(validation.IsDNS1123Subdomain(f.GuardrailJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.GuardrailJournalUID) ||
 		f.KVJournalName == "" || len(validation.IsDNS1123Subdomain(f.KVJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.KVJournalUID) ||
-		f.MaxRunSeconds != 600 || c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.InstalledManagerFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+		f.MaxRunSeconds != 600 || c.GuardrailAvailabilityFixture != nil || c.GuardrailOutputFixture != nil || c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.InstalledManagerFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: guardrailStaticFixture requires exact installed source and target pins, one 600-second in-cluster vLLM comparison, and no other fixture")
 	}
 	return nil

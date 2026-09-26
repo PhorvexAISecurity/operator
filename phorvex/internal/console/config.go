@@ -56,6 +56,11 @@ type Config struct {
 	GuardrailEffectEnabled       bool
 	GuardrailEffectProfileSHA256 string
 	GuardrailEffectProfilePath   string
+	// Version 2 of the same guardrail catalogue parent. This opt-in profile
+	// binds the synthetic support app, proxy, rule, and real model source.
+	GuardrailOutputEnabled       bool
+	GuardrailOutputProfileSHA256 string
+	GuardrailOutputProfilePath   string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool

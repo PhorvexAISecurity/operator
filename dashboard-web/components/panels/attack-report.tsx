@@ -15,6 +15,7 @@ import { attackCSVActuator, isCatalogueSignalResult, isUnversionedResult, showSe
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
+import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
 // observations. Signal-only rows never contribute behavioral outcomes or economics.
@@ -163,6 +164,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {unversioned && <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[11px] text-muted-foreground">Legacy/unversioned result: the recorded text is preserved, but it predates the typed catalogue-signal provenance contract and must not be reinterpreted as evidence for that producer.</div>}
         {signal && <CatalogueSignalResult result={r} />}
         {r.guardrailEffectProbe && <GuardrailEffectProbe result={r.guardrailEffectProbe} />}
+        {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
         {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Mechanism evidence</div>

@@ -19,7 +19,7 @@ func validateGuardrailAvailabilityFixture(c TargetConfig) error {
 	bad := errors.New("config: guardrail availability requires one reviewed, exact-target, six-call injected case")
 	if !c.OwnedAck || c.Namespace != "vllm" || c.Context == "" || c.Context == "in-cluster" || c.Kubeconfig != "" || c.ExpectedNamespaceUID != "" ||
 		c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 0 || len(c.DefenderFilter) != 0 ||
-		c.GuardrailStaticFixture != nil || c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
+		c.GuardrailStaticFixture != nil || c.GuardrailOutputFixture != nil || c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
 		c.PodBoundTokenFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil ||
 		c.InstalledManagerFixture != nil || c.NativeRouteFixture != nil || c.CRMCapabilityFixture != nil ||
 		c.BenignCheckpointLocalFixture || f.Transport != "in-cluster" || !natsExposureRunID.MatchString(f.RunID) ||
