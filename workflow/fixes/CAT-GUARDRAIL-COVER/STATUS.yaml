@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -72,11 +72,27 @@ checks:
     sha256: 8dc0d6d1c9dc3ca0b8f34084ad232035077b6eb707fe92b9421d737a31a149ed
     source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
     at: '2026-09-26T18:03:37+00:00'
+  incident:
+    result: PASS
+    by: root
+    artifact: evidence/incident.md
+    sha256: d29e1e6ce087cb738a2d6ecb6723ba7dbae7791168c82115058933700a13f117
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:05:02+00:00'
+    baseline_sha: 76fdc87439681294bcf02a7ced872ace262ab6f8
+  p3:
+    result: PASS
+    by: root
+    artifact: evidence/p3/verdict.md
+    sha256: 469356d7ed0c4de1d34c204c473693c97c9808af1b6fed7bdcad5e7a44caf3ca
+    source_sha: e1be84fd4ec80361b68ae3f825870a3c111bd56a
+    at: '2026-09-26T18:05:02+00:00'
+    incident_sha256: d29e1e6ce087cb738a2d6ecb6723ba7dbae7791168c82115058933700a13f117
 fix_id: CAT-GUARDRAIL-COVER
 issues: []
 title: Remove unsupported cyclic guardrail bypass cover
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: root
@@ -121,7 +137,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -137,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-26T18:03:41+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-26T18:05:07+00:00'
 configuration_history:
 - at: '2026-09-26T17:46:13+00:00'
   by: root
@@ -206,10 +222,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-26T18:05:03+00:00'
+  by: root
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-26T18:05:05+00:00'
+  by: root
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: CAT-GUARDRAIL-COVER:10:submit
-  from: guardrail_response_chain
+  id: CAT-GUARDRAIL-COVER:11:review
+  from: root
   to: root
-  role: skeptic
-  kind: submit
-  revision: 10
+  role: coordinator
+  kind: review
+  revision: 11
