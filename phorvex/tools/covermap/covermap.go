@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/outputpolicy"
 	"github.com/phorvex/phorvex/internal/recon"
 )
 
@@ -48,7 +49,7 @@ const DefaultOutput = "docs/recon-cover-map.generated.md"
 // report. recon and registry are the producers; model declares the Action vocabulary,
 // the Pod/WorkloadView inputs and the attack-vector constants; this tool's own source
 // defines the fixtures and the rendering.
-var inputPackages = []string{"internal/recon", "internal/registry", "internal/model", "tools/covermap"}
+var inputPackages = []string{"internal/recon", "internal/registry", "internal/model", "internal/outputpolicy", "tools/covermap"}
 
 // profileNames are executed in this order. Both are looked up in recon.Registry so the
 // report exercises the registered producers, not a private copy.
@@ -63,26 +64,32 @@ var declaredOnlyActions = []model.Action{model.ActionNoop, model.ActionDisable}
 // PodSpec is the subset of model.Pod a fixture sets. Every field is copied verbatim
 // onto model.Pod in buildView; unset fields keep the zero value.
 type PodSpec struct {
-	Namespace            string                               `json:"namespace"`
-	Name                 string                               `json:"name"`
-	UID                  string                               `json:"uid,omitempty"`
-	PodResourceVersion   string                               `json:"podResourceVersion,omitempty"`
-	ServiceAccount       string                               `json:"serviceAccount,omitempty"`
-	PodBoundKubeAPIAuth  *model.PodBoundKubeAPIAuthProjection `json:"podBoundKubeAPIAuth,omitempty"`
-	Node                 string                               `json:"node,omitempty"`
-	HasGPU               bool                                 `json:"hasGPU,omitempty"`
-	MIGDevice            string                               `json:"migDevice,omitempty"`
-	ModelID              string                               `json:"modelID,omitempty"`
-	SuspectAdapter       string                               `json:"suspectAdapter,omitempty"`
-	RouteService         string                               `json:"routeService,omitempty"`
-	Stateful             bool                                 `json:"stateful,omitempty"`
-	ServingEndpointReady bool                                 `json:"servingEndpointReady,omitempty"`
-	WarmPoolConfigured   bool                                 `json:"warmPoolConfigured,omitempty"`
-	WarmPoolOwnerUID     string                               `json:"warmPoolOwnerUID,omitempty"`
-	SwapGroup            string                               `json:"swapGroup,omitempty"`
-	ModelShard           string                               `json:"modelShard,omitempty"`
-	ParallelGroup        string                               `json:"parallelGroup,omitempty"`
-	Role                 string                               `json:"role,omitempty"`
+	Namespace                 string                               `json:"namespace"`
+	Name                      string                               `json:"name"`
+	UID                       string                               `json:"uid,omitempty"`
+	PodResourceVersion        string                               `json:"podResourceVersion,omitempty"`
+	ServiceAccount            string                               `json:"serviceAccount,omitempty"`
+	PodBoundKubeAPIAuth       *model.PodBoundKubeAPIAuthProjection `json:"podBoundKubeAPIAuth,omitempty"`
+	OutputPolicyConfigMap     string                               `json:"outputPolicyConfigMap,omitempty"`
+	OutputPolicyRuleSHA256    string                               `json:"outputPolicyRuleSHA256,omitempty"`
+	OutputProxySourceSHA256   string                               `json:"outputProxySourceSHA256,omitempty"`
+	OutputSupportSourceSHA256 string                               `json:"outputSupportSourceSHA256,omitempty"`
+	OutputEventCreator        string                               `json:"outputEventCreator,omitempty"`
+	OutputPolicyObservation   *model.SensitiveOutputObservation    `json:"outputPolicyObservation,omitempty"`
+	Node                      string                               `json:"node,omitempty"`
+	HasGPU                    bool                                 `json:"hasGPU,omitempty"`
+	MIGDevice                 string                               `json:"migDevice,omitempty"`
+	ModelID                   string                               `json:"modelID,omitempty"`
+	SuspectAdapter            string                               `json:"suspectAdapter,omitempty"`
+	RouteService              string                               `json:"routeService,omitempty"`
+	Stateful                  bool                                 `json:"stateful,omitempty"`
+	ServingEndpointReady      bool                                 `json:"servingEndpointReady,omitempty"`
+	WarmPoolConfigured        bool                                 `json:"warmPoolConfigured,omitempty"`
+	WarmPoolOwnerUID          string                               `json:"warmPoolOwnerUID,omitempty"`
+	SwapGroup                 string                               `json:"swapGroup,omitempty"`
+	ModelShard                string                               `json:"modelShard,omitempty"`
+	ParallelGroup             string                               `json:"parallelGroup,omitempty"`
+	Role                      string                               `json:"role,omitempty"`
 }
 
 // PhysicsSpec is the dispersion witness a fixture supplies. nil means model.NeutralPhysics().
@@ -198,6 +205,24 @@ func Fixtures() []Fixture {
 	staleProjection := *apiPod.PodBoundKubeAPIAuth
 	staleProjection.PodUID = "old-pod-uid"
 	staleAPIPod.PodBoundKubeAPIAuth = &staleProjection
+	const outputUID = "11111111-1111-4111-8111-111111111111"
+	const outputCMUID = "22222222-2222-4222-8222-222222222222"
+	const outputCreator = "system:serviceaccount:covermap:console"
+	outputRuleSHA := outputpolicy.RuleSHA256(outputUID)
+	outputPod := PodSpec{Namespace: ns, Name: "sensitive-output", UID: outputUID, Node: "node-a",
+		OutputPolicyConfigMap: "phorvex-output-policy-sensitive-output", OutputPolicyRuleSHA256: outputRuleSHA,
+		OutputProxySourceSHA256: strings.Repeat("a", 64), OutputSupportSourceSHA256: strings.Repeat("b", 64),
+		OutputEventCreator: outputCreator,
+		OutputPolicyObservation: &model.SensitiveOutputObservation{
+			EventName: "observed", EventUID: "33333333-3333-4333-8333-333333333333",
+			CreatorIdentity: outputCreator, TargetPodUID: outputUID, ConfigMapUID: outputCMUID,
+			PolicyName: "guardrail-output-fixture", PolicyUID: "44444444-4444-4444-8444-444444444444", PolicyGeneration: 1,
+			RuleSHA256: outputRuleSHA, ProxySourceSHA256: strings.Repeat("a", 64), SupportSourceSHA256: strings.Repeat("b", 64),
+			ProxyImageID: "proxy@sha256:aaa", SupportImageID: "support@sha256:bbb", ObservedAt: time.Unix(1, 0).UTC(),
+		}}
+	unboundOutputPod := outputPod
+	unboundOutputPod.Name = "sensitive-output-unbound"
+	unboundOutputPod.OutputPolicyObservation = nil
 	vector := func(name, why, typ string, targetsPod bool, age float64) Fixture {
 		pod := gpuPod
 		pod.Name = name
@@ -211,6 +236,14 @@ func Fixtures() []Fixture {
 			Pod: apiPod, Ctx: unit},
 		{Name: "pod-bound-api-stale-uid", Why: "Projection names an old Pod UID: no API-auth capability fact or related rotate grant, despite otherwise complete witness fields.",
 			Pod: staleAPIPod, Ctx: unit},
+		{Name: "sensitive-output-admitted", Why: "The typed output observation already carries the authenticated event identity; recon receives it from ingest even if the raw event slice is absent.",
+			Pod: outputPod, Ctx: unit},
+		{Name: "sensitive-output", Why: "Ingestion-bound exact policy/Pod/rule/source observation: sensitiveOutputExposure appears at 3x and only the dedicated output-policy action covers it.",
+			Pod: outputPod, Ctx: unit, Events: []EventSpec{{Type: model.AttackVectorSensitiveOutput, TargetsPod: true, Trust: "trusted"}}},
+		{Name: "sensitive-output-no-assertion", Why: "Matching Pod source bindings without an admitted typed output observation do not mint response-field cover.",
+			Pod: unboundOutputPod, Ctx: unit},
+		{Name: "sensitive-output-unbound", Why: "An otherwise identical raw event without a typed admitted output observation does not mint response-field cover.",
+			Pod: unboundOutputPod, Ctx: unit, Events: []EventSpec{{Type: model.AttackVectorSensitiveOutput, TargetsPod: true, Trust: "trusted"}}},
 		{Name: "stateful", Why: "Stateful CPU pod without a serving endpoint: the session fact reaches full weight but neither endpoint-dependent eraser earns cover.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "neighbors", Why: "Two blast-graph neighbours: one lateralEdge fact per neighbour, quarantine-only cover, weight scales with neighbour value.",
@@ -270,6 +303,9 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 	pod := model.Pod{
 		Namespace: f.Pod.Namespace, Name: f.Pod.Name, UID: f.Pod.UID, PodResourceVersion: f.Pod.PodResourceVersion,
 		ServiceAccount: f.Pod.ServiceAccount, PodBoundKubeAPIAuth: f.Pod.PodBoundKubeAPIAuth, Node: f.Pod.Node,
+		OutputPolicyConfigMap: f.Pod.OutputPolicyConfigMap, OutputPolicyRuleSHA256: f.Pod.OutputPolicyRuleSHA256,
+		OutputProxySourceSHA256: f.Pod.OutputProxySourceSHA256, OutputSupportSourceSHA256: f.Pod.OutputSupportSourceSHA256,
+		OutputEventCreator: f.Pod.OutputEventCreator, OutputPolicyObservation: f.Pod.OutputPolicyObservation,
 		HasGPU: f.Pod.HasGPU, MIGDevice: f.Pod.MIGDevice, ModelID: f.Pod.ModelID,
 		SuspectAdapter: f.Pod.SuspectAdapter, RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
