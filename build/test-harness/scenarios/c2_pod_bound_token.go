@@ -157,6 +157,13 @@ func podTokenWaitBarrier(ctx context.Context, dir string, req podTokenRequest, r
 		if !os.IsNotExist(err) {
 			return b, "", err
 		}
+		failure, failureErr := readPodTokenCoordinatorFailure(dir, req, reqSHA)
+		if failureErr == nil {
+			return b, "", fmt.Errorf("Pod token coordinator failed at %s (%s; error SHA-256 %s)", failure.Stage, failure.Reason, failure.ErrorSHA256)
+		}
+		if !os.IsNotExist(failureErr) {
+			return b, "", failureErr
+		}
 		select {
 		case <-ctx.Done():
 			return b, "", ctx.Err()

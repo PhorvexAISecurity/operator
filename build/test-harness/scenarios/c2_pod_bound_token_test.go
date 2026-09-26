@@ -75,6 +75,182 @@ func TestPodTokenAtomicCreateOncePublish(t *testing.T) {
 	}
 }
 
+func TestPodTokenBarrierWaitRejectsForeignCoordinatorFailure(t *testing.T) {
+	base := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24), RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	for _, tc := range []struct {
+		name string
+		edit func(*podTokenCoordinatorFailure)
+	}{
+		{"run", func(f *podTokenCoordinatorFailure) { f.RunID = "run-2" }},
+		{"nonce", func(f *podTokenCoordinatorFailure) { f.Nonce = strings.Repeat("b", 24) }},
+		{"request", func(f *podTokenCoordinatorFailure) { f.RequestSHA256 = strings.Repeat("2", 64) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1",
+				RunID: base.RunID, Nonce: base.Nonce, RequestSHA256: requestSHA,
+				Stage: "decision-observation", Reason: "DECISION_OBSERVATION_FAILED", ErrorSHA256: strings.Repeat("3", 64), RecordedAt: podTokenUTC()}
+			tc.edit(&failure)
+			if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+			defer cancel()
+			if _, _, err := podTokenWaitBarrier(ctx, dir, base, requestSHA); !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("foreign failure ended barrier wait: %v", err)
+			}
+		})
+	}
+}
+
+func TestPodTokenBarrierWaitExitsOnMatchingCoordinatorFailure(t *testing.T) {
+	dir := t.TempDir()
+	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24), RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1",
+		RunID: req.RunID, Nonce: req.Nonce, RequestSHA256: requestSHA,
+		Stage: "post-audit-disjointness", Reason: "DISJOINTNESS_FAILED", ErrorSHA256: strings.Repeat("3", 64), RecordedAt: podTokenUTC()}
+	if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, _, err := podTokenWaitBarrier(context.Background(), dir, req, requestSHA); err == nil ||
+		!strings.Contains(err.Error(), failure.Stage) || time.Since(start) > time.Second {
+		t.Fatalf("matching coordinator failure did not stop wait promptly: %v", err)
+	}
+	// Even a matching diagnostic is never a decision barrier.
+	if _, _, err := readPodTokenBarrier(dir, req, requestSHA); !os.IsNotExist(err) {
+		t.Fatalf("diagnostic satisfied decision barrier: %v", err)
+	}
+}
+
+func TestPodTokenBarrierWaitReportsSafeEventCreateClass(t *testing.T) {
+	dir := t.TempDir()
+	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
+		RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1", RunID: req.RunID,
+		Nonce: req.Nonce, RequestSHA256: requestSHA, Stage: "typed-event-create", Reason: "EVENT_CREATE_FORBIDDEN",
+		ErrorSHA256: strings.Repeat("3", 64), RecordedAt: podTokenUTC()}
+	if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := podTokenWaitBarrier(context.Background(), dir, req, requestSHA); err == nil ||
+		!strings.Contains(err.Error(), "EVENT_CREATE_FORBIDDEN") {
+		t.Fatalf("safe event creation class not reported: %v", err)
+	}
+}
+
+func TestPodTokenReaderAcceptsAllEmittedEventFailureReasons(t *testing.T) {
+	// Keep this list aligned with console.validPodBoundFailureReason. In
+	// particular, an unclassified API CREATE error must still stop the wait.
+	reasons := []string{
+		"EVENT_CREATION_FAILED", "CREATOR_SERVICEACCOUNT_FAILED", "CREATOR_POLICY_FAILED",
+		"CREATOR_SCOPE_FAILED", "CREATOR_BINDING_FAILED", "TOKEN_REQUEST_FAILED",
+		"TOKEN_REQUEST_FORBIDDEN", "TOKEN_REQUEST_INVALID", "TOKEN_REQUEST_TIMEOUT",
+		"CREATOR_CLIENT_FAILED", "EVENT_CREATE_FAILED", "EVENT_CREATE_FORBIDDEN",
+		"EVENT_CREATE_INVALID", "EVENT_CREATE_TIMEOUT", "EVENT_READBACK_FAILED", "EVENT_STAMP_FAILED",
+	}
+	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
+		RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	for _, reason := range reasons {
+		t.Run(reason, func(t *testing.T) {
+			dir := t.TempDir()
+			failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1", RunID: req.RunID,
+				Nonce: req.Nonce, RequestSHA256: requestSHA, Stage: "typed-event-create", Reason: reason,
+				ErrorSHA256: strings.Repeat("3", 64), RecordedAt: podTokenUTC()}
+			if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := readPodTokenCoordinatorFailure(dir, req, requestSHA); err != nil || got.Reason != reason {
+				t.Fatalf("emitted failure reason rejected: %+v, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestPodTokenCoordinatorFailureMalformedOrStaleCannotPassBarrier(t *testing.T) {
+	req := podTokenRequest{Schema: "pod-bound-token-request-v1", RunID: "run-1", Nonce: strings.Repeat("a", 24),
+		RequestedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	for _, malformed := range []bool{false, true} {
+		dir := t.TempDir()
+		if malformed {
+			if err := os.WriteFile(filepath.Join(dir, podTokenCoordinatorFailureFile), []byte(`{"schema":`), 0600); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			failure := podTokenCoordinatorFailure{Schema: "pod-bound-token-coordinator-failure-v1", RunID: req.RunID,
+				Nonce: req.Nonce, RequestSHA256: requestSHA, Stage: "decision-observation",
+				Reason: "DECISION_OBSERVATION_FAILED", ErrorSHA256: strings.Repeat("3", 64),
+				RecordedAt: time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)}
+			if _, err := writePodTokenFile(dir, podTokenCoordinatorFailureFile, failure); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, _, err := podTokenWaitBarrier(context.Background(), dir, req, requestSHA); err == nil ||
+			!strings.Contains(err.Error(), "diagnostic") {
+			t.Fatalf("malformed=%v diagnostic accepted or hidden: %v", malformed, err)
+		}
+		if _, _, err := readPodTokenBarrier(dir, req, requestSHA); !os.IsNotExist(err) {
+			t.Fatalf("malformed=%v diagnostic satisfied barrier: %v", malformed, err)
+		}
+	}
+}
+
+func TestPodTokenCoordinatorFailureRejectsAmbiguousAndUnboundedFiles(t *testing.T) {
+	req := podTokenRequest{RunID: "run-1", Nonce: strings.Repeat("a", 24), RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	valid := fmt.Sprintf(`{"schema":"pod-bound-token-coordinator-failure-v1","runID":%q,"nonce":%q,"requestSHA256":%q,"stage":"decision-observation","reason":"DECISION_OBSERVATION_FAILED","errorSHA256":%q,"recordedAt":%q}`,
+		req.RunID, req.Nonce, requestSHA, strings.Repeat("3", 64), podTokenUTC())
+	for _, tc := range []struct{ name, raw string }{
+		{"duplicate", strings.Replace(valid, `"stage":"decision-observation"`, `"stage":"decision-observation","stage":"audit-start"`, 1)},
+		{"unknown", strings.Replace(valid, `"stage":"decision-observation"`, `"extra":"x","stage":"decision-observation"`, 1)},
+		{"oversize", valid + strings.Repeat(" ", 4096)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, podTokenCoordinatorFailureFile), []byte(tc.raw), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readPodTokenCoordinatorFailure(dir, req, requestSHA); err == nil {
+				t.Fatal("ambiguous or unbounded receipt accepted")
+			}
+		})
+	}
+	t.Run("symlink", func(t *testing.T) {
+		dir := t.TempDir()
+		outside := filepath.Join(t.TempDir(), "outside.json")
+		if err := os.WriteFile(outside, []byte(valid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(dir, podTokenCoordinatorFailureFile)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readPodTokenCoordinatorFailure(dir, req, requestSHA); err == nil {
+			t.Fatal("symlinked coordinator receipt accepted")
+		}
+	})
+}
+
+func TestPodTokenBarrierWaitStillRequiresRealBarrier(t *testing.T) {
+	dir := t.TempDir()
+	req := podTokenRequest{RunID: "run-1", Nonce: strings.Repeat("a", 24), SourcePodUID: "source-uid"}
+	requestSHA := strings.Repeat("1", 64)
+	barrier := podTokenBarrier{Schema: "pod-bound-token-barrier-v1", RunID: req.RunID, Nonce: req.Nonce,
+		RequestSHA256: requestSHA, Event: podTokenEvent{UID: "event-uid", SourcePodUID: req.SourcePodUID, TrustVerified: true},
+		Decision: podTokenDecision{ID: "decision-id", AuditCoverage: "COMPLETE"}, DecisionRowSHA: strings.Repeat("2", 64)}
+	if _, err := writePodTokenFile(dir, podTokenBarrierFile, barrier); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := podTokenWaitBarrier(context.Background(), dir, req, requestSHA)
+	if err != nil || got.Event.UID != barrier.Event.UID {
+		t.Fatalf("real matching barrier rejected: %+v, %v", got, err)
+	}
+}
+
 func TestPodTokenDisjointOldVoiceSelectors(t *testing.T) {
 	nonce := strings.Repeat("a", 24)
 	old := map[string]string{"app": "voice-bot"}

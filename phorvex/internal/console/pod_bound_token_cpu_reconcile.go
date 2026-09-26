@@ -21,8 +21,10 @@ type cpuPreEventProof struct {
 	runID, nonce, namespaceUID, name                       string
 	created                                                map[string]string
 	deploymentUID, replicaSetUID, sourcePodUID, peerPodUID string
+	sourcePodName                                          string
 	amtdUID                                                string
 	phaseSHA256, inventorySHA256                           string
+	lastCreateAt, firstDeleteAt                            time.Time
 }
 
 var cpuPreEventResources = map[string]bool{
@@ -41,6 +43,13 @@ var cpuPostFixtureFiles = [...]string{
 }
 
 func cpuPreEventProofAt(prior *RunStatus, out, expectedTarget string) (cpuPreEventProof, error) {
+	return cpuCleanupBaseProofAt(prior, out, expectedTarget, false)
+}
+
+// The post-request proof uses the same exact cleanup journal, with only the
+// request/audit-start boundary and error-hash treatment differing. The public
+// pre-event verifier continues to reject those files and its fixed error.
+func cpuCleanupBaseProofAt(prior *RunStatus, out, expectedTarget string, postRequest bool) (cpuPreEventProof, error) {
 	var proof cpuPreEventProof
 	if prior == nil || !prior.UnsafeToRetry || prior.Config != podBoundTokenCPUConfig ||
 		prior.ExecutionKind != "" || prior.State != "partial" || prior.Outcome != "" ||
@@ -54,11 +63,15 @@ func cpuPreEventProofAt(prior *RunStatus, out, expectedTarget string) (cpuPreEve
 	unsafe, err := readPodBoundTokenUnsafe(out, prior.ID)
 	if err != nil || unsafe.CleanupStatus != "CONFIRMED_ABSENT" || !mongoSHA.MatchString(unsafe.InventorySHA256) ||
 		!mongoKubeUID.MatchString(unsafe.NamespaceUID) || len(unsafe.CreatedUIDs) == 0 ||
-		unsafe.ErrorSHA256 != podBoundHash([]byte("CPU token source-Pod measured request rate unavailable before event")) ||
-		prior.Error != fmt.Sprintf("Pod-bound token early unsafe receipt: %d created UIDs, cleanup CONFIRMED_ABSENT; exact reconciliation required", len(unsafe.CreatedUIDs)) {
+		(!postRequest && unsafe.ErrorSHA256 != podBoundHash([]byte("CPU token source-Pod measured request rate unavailable before event"))) ||
+		(!postRequest && prior.Error != fmt.Sprintf("Pod-bound token early unsafe receipt: %d created UIDs, cleanup CONFIRMED_ABSENT; exact reconciliation required", len(unsafe.CreatedUIDs))) ||
+		(postRequest && !strings.HasPrefix(prior.Error, fmt.Sprintf("Pod-bound token early unsafe receipt: %d created UIDs, cleanup CONFIRMED_ABSENT; exact reconciliation required", len(unsafe.CreatedUIDs)))) {
 		return proof, errors.New("CPU token original unsafe cleanup or status differs")
 	}
 	for _, name := range cpuPostFixtureFiles {
+		if postRequest && (name == podBoundRequestFile || name == "pod-bound-token-audit-start.json") {
+			continue
+		}
 		if _, err := os.Lstat(filepath.Join(out, name)); !errors.Is(err, os.ErrNotExist) {
 			return proof, errors.New("CPU token predecessor has request, event or terminal artifacts")
 		}
@@ -77,6 +90,7 @@ func cpuPreEventProofAt(prior *RunStatus, out, expectedTarget string) (cpuPreEve
 	}
 	states := map[string]*phaseState{}
 	var last time.Time
+	var lastCreate, firstDelete time.Time
 	var deleting, patchIntent, patched, amtdIntent, amtdDeleted bool
 	var patchName string
 	var amtdUID string
@@ -96,6 +110,12 @@ func cpuPreEventProofAt(prior *RunStatus, out, expectedTarget string) (cpuPreEve
 			return proof, errors.New("CPU token original phase chronology differs")
 		}
 		last = at
+		if row.Operation == "DELETE_INTENT" && firstDelete.IsZero() {
+			firstDelete = at
+		}
+		if row.Operation == "CREATE_INTENT" || row.Operation == "CREATE_ACK" || row.Operation == "PATCH_INTENT" || row.Operation == "PATCH_ACK" {
+			lastCreate = at
+		}
 		if row.Operation == "PATCH_INTENT" || row.Operation == "PATCH_ACK" {
 			if deleting || row.Resource != "pods" || unsafe.SourcePodUID == "" ||
 				row.UID != unsafe.SourcePodUID || !strings.HasPrefix(row.Name, "pod-token-"+unsafe.Nonce+"-") {
@@ -204,9 +224,9 @@ func cpuPreEventProofAt(prior *RunStatus, out, expectedTarget string) (cpuPreEve
 	}
 	proof = cpuPreEventProof{runID: prior.ID, nonce: unsafe.Nonce, namespaceUID: unsafe.NamespaceUID,
 		name: "pod-token-" + unsafe.Nonce, created: created, deploymentUID: unsafe.DeploymentUID,
-		replicaSetUID: unsafe.ReplicaSetUID, sourcePodUID: unsafe.SourcePodUID,
+		replicaSetUID: unsafe.ReplicaSetUID, sourcePodUID: unsafe.SourcePodUID, sourcePodName: patchName,
 		peerPodUID: unsafe.PeerPodUID, amtdUID: amtdUID, phaseSHA256: unsafe.PhaseJournalSHA256,
-		inventorySHA256: unsafe.InventorySHA256}
+		inventorySHA256: unsafe.InventorySHA256, lastCreateAt: lastCreate, firstDeleteAt: firstDelete}
 	return proof, nil
 }
 

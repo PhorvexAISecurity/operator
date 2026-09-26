@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -241,7 +242,7 @@ func (rm *RunManager) podBoundTokenCPUPriorAdmissionLocked(destination runDestin
 			return err
 		}
 	}
-	if _, err := rm.cpuPreEventProofsLocked(destination.ScopeTarget); err != nil {
+	if _, err := rm.cpuCleanupProofsLocked(destination.ScopeTarget); err != nil {
 		return err
 	}
 	if voice == nil {
@@ -357,7 +358,67 @@ func podBoundCPUMongoLiveAbsence(ctx context.Context, kc kubernetes.Interface, p
 	return nil
 }
 
-func (s *Server) podBoundCPUGraph(ctx context.Context, kc kubernetes.Interface, r podBoundTokenRequest, expectedTarget string, allowSourceLifecycle bool) error {
+// A parsed predecessor proof is only evidence of historical cleanup. Each new
+// admission and the event boundary must confirm the exact old footprint is
+// still absent in the current cluster before a different nonce can proceed.
+func cpuNewNonceDisjoint(newNonce string, priors []cpuCleanupProof) error {
+	if !podBoundTokenNonce.MatchString(newNonce) {
+		return errors.New("CPU token successor nonce invalid")
+	}
+	for _, proof := range priors {
+		if proof.nonce == newNonce {
+			return errors.New("CPU token successor reused an unsafe predecessor nonce")
+		}
+	}
+	return nil
+}
+
+func (s *Server) podBoundCPUPriorLiveAbsence(ctx context.Context, expectedTarget, ledgerNamespace, ledgerName string, newNonce ...string) error {
+	if s == nil || s.runs == nil || expectedTarget == "" || ledgerNamespace == "" || ledgerName == "" {
+		return errors.New("CPU token prior cleanup authority unavailable")
+	}
+	s.runs.mu.Lock()
+	proofs, err := s.runs.cpuCleanupProofsLocked(expectedTarget)
+	s.runs.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if len(newNonce) > 1 {
+		return errors.New("CPU token successor nonce ambiguous")
+	}
+	if len(newNonce) == 1 {
+		if err := cpuNewNonceDisjoint(newNonce[0], proofs); err != nil {
+			return err
+		}
+	}
+	if len(proofs) == 0 {
+		return nil
+	}
+	restCfg, err := s.podBoundRESTConfig()
+	if err != nil {
+		return err
+	}
+	kc, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return err
+	}
+	dc, err := dynamic.NewForConfig(restCfg)
+	if err != nil {
+		return err
+	}
+	for _, proof := range proofs {
+		if err := podBoundCPUCleanupLiveAbsence(ctx, kc, dc, proof, ledgerNamespace, ledgerName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Server) podBoundCPUGraph(ctx context.Context, kc kubernetes.Interface, r podBoundTokenRequest, p podBoundTokenProfile, allowSourceLifecycle bool) error {
+	expectedTarget := p.Context
+	if err := s.podBoundCPUPriorLiveAbsence(ctx, expectedTarget, p.Fixture.ManagerNamespace, p.Fixture.ProtectedLedgerName, p.Fixture.Nonce); err != nil {
+		return err
+	}
 	s.runs.mu.Lock()
 	mongoProof, mongoErr := s.runs.mongoEarlyCleanupProofLocked(expectedTarget)
 	s.runs.mu.Unlock()
