@@ -88,7 +88,11 @@ func TestNATSResponseProduceWireDecision(t *testing.T) {
 	trace.AssetNamespace, trace.AssetName, trace.AssetUID = r.Namespace, r.ClientPod, r.ClientPodUID
 	trace.DispatchOutcome = model.DispatchNotAttempted
 	trace.ActionStatus = nil
-	for _, action := range model.MutatingActions {
+	legacyActions, err := model.DecisionTraceActions("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range legacyActions {
 		trace.ActionStatus = append(trace.ActionStatus, model.DecisionActionStatusV3{Action: string(action), Status: model.ActionStatusNotEnabled, ExclusionKind: model.ExclusionNotEnabled})
 	}
 	if err := trace.Validate(); err != nil {
@@ -100,6 +104,25 @@ func TestNATSResponseProduceWireDecision(t *testing.T) {
 	}
 	rec := &audit.Record{Action: "noop", DispatchOutcome: model.DispatchNotAttempted, DecisionTrace: trace}
 	created := &attackStimulusEvidence{EventName: "synthetic-owned-event", EventUID: "synthetic-event-uid"}
+	misordered := *trace
+	misordered.ActionStatus = append([]model.DecisionActionStatusV3(nil), trace.ActionStatus...)
+	misordered.ActionStatus[0], misordered.ActionStatus[1] = misordered.ActionStatus[1], misordered.ActionStatus[0]
+	if _, err := publishNATSDecisionEvidence(t.TempDir(), r, &audit.Record{Action: "noop", DispatchOutcome: model.DispatchNotAttempted, DecisionTrace: &misordered}, natsSHA(traceRaw), created, nil); err == nil {
+		t.Fatal("producer repaired misordered historical action accounting")
+	}
+	v2NewAction := *trace
+	v2NewAction.Candidates = append([]model.DecisionCandidateV2(nil), trace.Candidates...)
+	v2NewAction.Candidates[0].Action = string(model.ActionSensitiveOutputPolicyActivate)
+	if err := v2NewAction.Validate(); err != nil {
+		t.Fatalf("v2 vocabulary edge fixture did not reach publisher: %v", err)
+	}
+	invalidOut := t.TempDir()
+	if _, err := publishNATSDecisionEvidence(invalidOut, r, &audit.Record{Action: "noop", DispatchOutcome: model.DispatchNotAttempted, DecisionTrace: &v2NewAction}, natsSHA(traceRaw), created, nil); err == nil {
+		t.Fatal("producer wrote unmarked v2 WHY with a new candidate action")
+	}
+	if _, err := os.Stat(filepath.Join(invalidOut, "nats-response-decision-evidence.json")); !os.IsNotExist(err) {
+		t.Fatal("invalid v2 vocabulary left a WHY receipt")
+	}
 	evidenceSHA, err := publishNATSDecisionEvidence(out, r, rec, natsSHA(traceRaw), created, nil)
 	if err != nil {
 		t.Fatal(err)

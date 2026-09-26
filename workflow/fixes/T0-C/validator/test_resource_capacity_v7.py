@@ -13,7 +13,8 @@ class ResourceCapacityV7Test(unittest.TestCase):
             "action": "rotate", "status": status, "exclusionKind": "resource-capacity", "scored": scored,
             "reason": "resource-capacity: fixture",
         }
-        return {"schemaVersion": version, "actionStatus": rows,
+        return {"schemaVersion": version, "actionVocabularyVersion": validator.ACTION_VOCABULARY_OUTPUT16,
+                "actionStatus": rows,
                 "candidates": [{"action": "rotate", "coverKeys": ["pod|owned/source|identity"],
                                 "existingExclusionReason": "resource-capacity: fixture",
                                 "selected": False}],

@@ -7,7 +7,9 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
+	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -52,6 +54,68 @@ func TestNATSResponseRequestRefusesAmbiguousAndLinkedInput(t *testing.T) {
 	}
 	if _, err := readNATSResponseRequest(out, "run-8"); err == nil {
 		t.Fatal("other run's request admitted")
+	}
+}
+
+func TestNATSDecisionVocabularyPreservesHistoricalWHYReceipts(t *testing.T) {
+	legacy, err := model.DecisionTraceActions("")
+	if err != nil || len(legacy) != 15 {
+		t.Fatal("frozen legacy action vocabulary unavailable")
+	}
+	current, err := model.DecisionTraceActions(model.DecisionActionVocabularyOutput16)
+	if err != nil || len(current) != 16 {
+		t.Fatal("named current action vocabulary unavailable")
+	}
+	rows := func(actions []model.Action) []natsDecisionActionStatus {
+		out := make([]natsDecisionActionStatus, len(actions))
+		for i, action := range actions {
+			out[i].Action = string(action)
+		}
+		return out
+	}
+	if !natsDecisionVocabularyValid("", rows(legacy), nil, "quarantine") ||
+		!natsDecisionVocabularyValid(model.DecisionActionVocabularyOutput16, rows(current), nil, "quarantine") {
+		t.Fatal("valid retained legacy or named current WHY rejected")
+	}
+	if natsDecisionVocabularyValid(model.DecisionActionVocabularyOutput16, rows(legacy), nil, "quarantine") ||
+		natsDecisionVocabularyValid("", rows(current), nil, "quarantine") ||
+		natsDecisionVocabularyValid("unknown", rows(current), nil, "quarantine") {
+		t.Fatal("wrong marker or row count accepted")
+	}
+	newAction := string(model.ActionSensitiveOutputPolicyActivate)
+	if natsDecisionVocabularyValid("", rows(legacy), []natsDecisionCandidate{{Action: newAction}}, "quarantine") ||
+		natsDecisionVocabularyValid("", rows(legacy), nil, newAction) {
+		t.Fatal("new action accepted under historical unmarked vocabulary")
+	}
+}
+
+func TestNATSDecisionProducerRefusesV2NewActionBeforeWritingWHY(t *testing.T) {
+	r := natsResponseRequest{Namespace: natsFixtureNamespace, ClientPod: "client", ClientPodUID: "client-uid",
+		PolicyName: "policy", PolicyUID: "policy-uid"}
+	trace := caseTraceValidTrace(time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC), false, false)
+	trace.PolicyNamespace, trace.PolicyName, trace.PolicyUID = r.Namespace, r.PolicyName, r.PolicyUID
+	trace.AssetNamespace, trace.AssetName, trace.AssetUID = r.Namespace, r.ClientPod, r.ClientPodUID
+	trace.DispatchOutcome = model.DispatchNotAttempted
+	trace.ActionStatus = nil
+	actions, err := model.DecisionTraceActions("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range actions {
+		trace.ActionStatus = append(trace.ActionStatus, model.DecisionActionStatusV3{Action: string(action), Status: model.ActionStatusNotEnabled, ExclusionKind: model.ExclusionNotEnabled})
+	}
+	trace.Candidates[0].Action = string(model.ActionSensitiveOutputPolicyActivate)
+	if err := trace.Validate(); err != nil {
+		t.Fatalf("v2 edge fixture did not reach publisher: %v", err)
+	}
+	out := t.TempDir()
+	rec := &audit.Record{Action: string(model.ActionNoop), DispatchOutcome: model.DispatchNotAttempted, DecisionTrace: trace}
+	created := &attackStimulusEvidence{EventName: "owned-event", EventUID: "event-uid"}
+	if _, err := publishNATSDecisionEvidence(out, r, rec, strings.Repeat("a", 64), created, nil); err == nil {
+		t.Fatal("producer wrote unmarked v2 WHY with a new candidate action")
+	}
+	if _, err := os.Stat(filepath.Join(out, "nats-response-decision-evidence.json")); !os.IsNotExist(err) {
+		t.Fatal("invalid v2 vocabulary left a WHY receipt")
 	}
 }
 
@@ -228,7 +292,15 @@ func TestNATSResponseTerminalJoinsPacketDecisionAndCleanup(t *testing.T) {
 			AMTDName:    "phorvex-" + req.Namespace + "-" + nonce, AMTDUID: "amtd-uid",
 			PhoenixNetworkPolicyName: req.Namespace + "-" + req.ClientPod + "-policy", PhoenixNetworkPolicyUID: "phoenix-np-uid",
 			SourcePodUID: req.ClientPodUID, PeerPodUID: req.PeerPodUID}, Claim: "OBJECT_EFFECT_AND_PACKET_OUTCOME_SEPARATE_SECURITY_NOT_EVALUATED",
-		ActionStatus: make([]natsDecisionActionStatus, len(model.MutatingActions))}
+		ActionStatus: []natsDecisionActionStatus{}}
+	legacyActions, err := model.DecisionTraceActions("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range legacyActions {
+		why.ActionStatus = append(why.ActionStatus, natsDecisionActionStatus{Action: string(action), Status: model.ActionStatusNotEnabled,
+			ExclusionKind: model.ExclusionNotEnabled})
+	}
 	whyRaw := write("nats-response-decision-evidence.json", why)
 	d.DecisionEvidenceSHA256 = natsSHA(whyRaw)
 	write("nats-response-signal-decision.json", d)
