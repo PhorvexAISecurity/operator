@@ -154,6 +154,41 @@ func TestPodTokenCoordinatorFailureMalformedOrStaleCannotPassBarrier(t *testing.
 	}
 }
 
+func TestPodTokenCoordinatorFailureRejectsAmbiguousAndUnboundedFiles(t *testing.T) {
+	req := podTokenRequest{RunID: "run-1", Nonce: strings.Repeat("a", 24), RequestedAt: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}
+	requestSHA := strings.Repeat("1", 64)
+	valid := fmt.Sprintf(`{"schema":"pod-bound-token-coordinator-failure-v1","runID":%q,"nonce":%q,"requestSHA256":%q,"stage":"decision-observation","reason":"DECISION_OBSERVATION_FAILED","errorSHA256":%q,"recordedAt":%q}`,
+		req.RunID, req.Nonce, requestSHA, strings.Repeat("3", 64), podTokenUTC())
+	for _, tc := range []struct{ name, raw string }{
+		{"duplicate", strings.Replace(valid, `"stage":"decision-observation"`, `"stage":"decision-observation","stage":"audit-start"`, 1)},
+		{"unknown", strings.Replace(valid, `"stage":"decision-observation"`, `"extra":"x","stage":"decision-observation"`, 1)},
+		{"oversize", valid + strings.Repeat(" ", 4096)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, podTokenCoordinatorFailureFile), []byte(tc.raw), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readPodTokenCoordinatorFailure(dir, req, requestSHA); err == nil {
+				t.Fatal("ambiguous or unbounded receipt accepted")
+			}
+		})
+	}
+	t.Run("symlink", func(t *testing.T) {
+		dir := t.TempDir()
+		outside := filepath.Join(t.TempDir(), "outside.json")
+		if err := os.WriteFile(outside, []byte(valid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(dir, podTokenCoordinatorFailureFile)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readPodTokenCoordinatorFailure(dir, req, requestSHA); err == nil {
+			t.Fatal("symlinked coordinator receipt accepted")
+		}
+	})
+}
+
 func TestPodTokenBarrierWaitStillRequiresRealBarrier(t *testing.T) {
 	dir := t.TempDir()
 	req := podTokenRequest{RunID: "run-1", Nonce: strings.Repeat("a", 24), SourcePodUID: "source-uid"}

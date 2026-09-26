@@ -1,12 +1,15 @@
 package scenarios
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -30,15 +33,24 @@ type podTokenCoordinatorFailure struct {
 }
 
 func readPodTokenCoordinatorFailure(dir string, req podTokenRequest, reqSHA string) (*podTokenCoordinatorFailure, error) {
-	raw, err := os.ReadFile(filepath.Join(dir, podTokenCoordinatorFailureFile))
+	fd, err := syscall.Open(filepath.Join(dir, podTokenCoordinatorFailureFile), syscall.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) == 0 || len(raw) > 4096 {
+	f := os.NewFile(uintptr(fd), podTokenCoordinatorFailureFile)
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 4096 {
+		return nil, errors.New("Pod token coordinator diagnostic invalid")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, 4097))
+	if err != nil || len(raw) == 0 || len(raw) > 4096 || int64(len(raw)) != info.Size() || rejectDuplicateJSONFields(raw) != nil {
 		return nil, errors.New("Pod token coordinator diagnostic invalid")
 	}
 	var failure podTokenCoordinatorFailure
-	if err := json.Unmarshal(raw, &failure); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&failure) != nil || decoder.Decode(new(any)) != io.EOF {
 		return nil, errors.New("Pod token coordinator diagnostic malformed")
 	}
 	if failure.Schema != "pod-bound-token-coordinator-failure-v1" ||
