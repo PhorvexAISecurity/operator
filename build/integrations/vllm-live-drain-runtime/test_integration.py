@@ -39,7 +39,7 @@ class CandidateTest(unittest.TestCase):
                         "ports": [{"port": 8000, "targetPort": 8000}]}}
         return dep, cm, policy, svc
 
-    def render(self, dep, cm, policy, svc, receipt):
+    def render(self, dep, cm, policy, svc, receipt, route_state=None):
         class Base:
             PUBLISHED_IMAGE = "reset-image"
             @staticmethod
@@ -53,7 +53,31 @@ class CandidateTest(unittest.TestCase):
         with mock.patch.object(renderer, "base_renderer", return_value=Base):
             return renderer.render(dep, cm, policy, svc, receipt, "vllm-control", "vllm-serving-admin",
                                    "vllm-admin.vllm.svc", "b25037543e9394b818fdfca67ab2a00ecc7dd641",
-                                   "ec0c1f5f875ad8bc1f78c5140c22dbdde1b55478442ad358e7a4d9ecf947a327")
+                                   "ec0c1f5f875ad8bc1f78c5140c22dbdde1b55478442ad358e7a4d9ecf947a327",
+                                   route_state)
+
+    def route_state(self, dep, cm, svc):
+        pod = {"kind": "Pod", "metadata": {"name": "vllm-one", "namespace": "vllm",
+               "uid": "pod-uid", "resourceVersion": "9",
+               "labels": {"app": "vllm", "phorvex.ai/role": "leader", "phorvex.ai/route-key": "ep-old"},
+               "ownerReferences": [{"kind": "ReplicaSet", "name": "vllm-rs", "uid": "rs-uid", "controller": True}]},
+               "spec": {"containers": [{"name": row["name"], "image": row["image"]} for row in
+                                      dep["spec"]["template"]["spec"]["containers"]],
+                        "volumes": [{"name": "guardrail-src", "configMap": {"name": cm["metadata"]["name"]}}]},
+               "status": {"conditions": [{"type": "Ready", "status": "True"}]}}
+        rs = {"kind": "ReplicaSet", "metadata": {"name": "vllm-rs", "namespace": "vllm",
+              "uid": "rs-uid", "resourceVersion": "8",
+              "ownerReferences": [{"kind": "Deployment", "name": "vllm", "uid": dep["metadata"]["uid"],
+                                   "controller": True}]}}
+        slices = {"kind": "List", "items": [{"kind": "EndpointSlice",
+                  "metadata": {"name": "vllm-one", "namespace": "vllm", "uid": "slice-uid",
+                               "resourceVersion": "10", "labels": {"kubernetes.io/service-name": "vllm"},
+                               "ownerReferences": [{"kind": "Service", "name": "vllm",
+                                                    "uid": svc["metadata"]["uid"], "controller": True}]},
+                  "endpoints": [{"conditions": {"ready": True},
+                                 "targetRef": {"kind": "Pod", "namespace": "vllm",
+                                               "name": pod["metadata"]["name"], "uid": pod["metadata"]["uid"]}}]}]}
+        return pod, rs, slices
 
     def test_current_service_selector_and_ledger_are_bound(self):
         dep, cm, policy, svc = self.inputs()
@@ -94,6 +118,40 @@ class CandidateTest(unittest.TestCase):
         svc["metadata"]["uid"] = ""
         with self.assertRaises(ValueError):
             self.render(dep, cm, policy, svc, good)
+
+    def test_current_pod_route_key_requires_exact_owner_and_sole_endpoint(self):
+        dep, cm, policy, svc = self.inputs()
+        svc["spec"]["selector"]["phorvex.ai/route-key"] = "ep-old"
+        route = self.route_state(dep, cm, svc)
+        with self.assertRaisesRegex(ValueError, "existing Service"):
+            self.render(dep, cm, policy, svc, self.publication())
+        outputs = self.render(dep, cm, policy, svc, self.publication(), route)
+        candidate = json.loads(outputs["deployment.candidate.json"])
+        service = json.loads(outputs["service.candidate.json"])
+        join = json.loads(outputs["publication-join.json"])
+        self.assertEqual(candidate["spec"]["template"]["metadata"]["labels"]["phorvex.ai/route-key"], "ep-old")
+        self.assertEqual(service["spec"]["selector"], {"phorvex.ai/role": "leader",
+                         "phorvex.ai/route-key": "ep-old", "phorvex.ai/serving": "true"})
+        self.assertEqual(join["currentRouteAuthority"]["podUID"], "pod-uid")
+        self.assertEqual(dep["spec"]["template"]["metadata"]["labels"].get("phorvex.ai/route-key"), None)
+        mutations = (
+            lambda r: r[0]["metadata"]["ownerReferences"][0].update(uid="foreign-rs"),
+            lambda r: r[1]["metadata"]["ownerReferences"][0].update(uid="foreign-deployment"),
+            lambda r: r[2]["items"][0]["endpoints"].append({"conditions": {"ready": True},
+                       "targetRef": {"kind": "Pod", "namespace": "vllm", "name": "other", "uid": "other"}}),
+            lambda r: r[2]["items"][0]["endpoints"][0]["targetRef"].update(uid="stale-pod"),
+            lambda r: r[2]["items"][0]["metadata"]["ownerReferences"][0].update(uid="foreign-service"),
+            lambda r: r[0]["metadata"]["labels"].update(**{"phorvex.ai/route-key": "different"}),
+        )
+        for mutate in mutations:
+            bad = copy.deepcopy(route)
+            mutate(bad)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                self.render(dep, cm, policy, svc, self.publication(), bad)
+        unrelated = copy.deepcopy(svc)
+        unrelated["spec"]["selector"]["phorvex.ai/other"] = "anything"
+        with self.assertRaisesRegex(ValueError, "only current route-key"):
+            self.render(dep, cm, policy, unrelated, self.publication(), route)
 
     def test_initializer_runs_without_http_dependency(self):
         import subprocess
