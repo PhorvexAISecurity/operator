@@ -3035,6 +3035,16 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			continue
 		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
+			pendingLease, leaseFenceErr := actuator.PendingEndpointLeaseOperation(ctx, m.BoundaryReader,
+				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			if leaseFenceErr != nil || pendingLease {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-operation-unresolved")
+				m.Log.Info("same-Pod protected endpoint lease operation fences dispatch",
+					"namespace", decisions[i].Namespace, "pod", decisions[i].Pod,
+					"action", decisions[i].Action, "error", leaseFenceErr)
+				continue
+			}
 			pendingClient, clientFenceErr := actuator.PendingLiteLLMClientOperation(ctx, m.BoundaryReader,
 				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
 			if clientFenceErr != nil || pendingClient {
@@ -3062,6 +3072,10 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					"action", decisions[i].Action, "error", fenceErr)
 				continue
 			}
+		} else if decisions[i].Action == model.ActionEndpointLeaseRevoke {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-journal-authority-unavailable")
+			continue
 		} else if decisions[i].Action == model.ActionSensitiveOutputPolicyActivate {
 			recordExistentialEffect(&decisions[i], false)
 			stampDispatch(model.DispatchNotAttempted, "protected-output-policy-journal-authority-unavailable")

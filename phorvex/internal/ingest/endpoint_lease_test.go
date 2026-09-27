@@ -123,3 +123,21 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 		t.Fatalf("live validator called %d times, want positive, policy UID and revision cases", validations)
 	}
 }
+
+func TestEndpointLeaseAuthorityRequiresIndependentCompletePins(t *testing.T) {
+	const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const image = "example.test/proxy@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	t.Cleanup(func() { _ = ConfigureEndpointLeaseApprovedAuthority("", "") })
+	for _, pins := range [][2]string{{sha, ""}, {"", image}, {"upper", image}, {sha, "proxy:latest"}} {
+		if err := ConfigureEndpointLeaseApprovedAuthority(pins[0], pins[1]); err == nil {
+			t.Fatalf("invalid endpoint lease source/image pair accepted: %q %q", pins[0], pins[1])
+		}
+	}
+	if err := ConfigureEndpointLeaseApprovedAuthority(sha, image); err != nil {
+		t.Fatal(err)
+	}
+	gotSHA, gotImage := endpointLeaseApprovedAuthority()
+	if gotSHA != sha || gotImage != image {
+		t.Fatalf("approved source/image pair drifted: %q %q", gotSHA, gotImage)
+	}
+}
