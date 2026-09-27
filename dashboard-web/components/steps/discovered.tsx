@@ -24,8 +24,9 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   const [tab, setTab] = useScopedUIState<"graph" | "jewels" | "killchain" | "physics">(`discovered-tab\u0000${scopeKey}`, "graph");
   const [listQuery, setListQuery] = useScopedUIState(`discovered-filter\u0000${scopeKey}`, "");
   const scanQuery = useScanSnapshot(lens, sel.context, "", lens !== "owner");
-  const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant, lens !== "owner");
   const scan = scanQuery.data;
+  const expectedPods = React.useMemo(() => (scan?.graphNodes ?? []).filter((node) => !!node.uid).map((node) => ({ key: node.key, uid: node.uid! })), [scan?.graphNodes]);
+  const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant, lens !== "owner", expectedPods);
   const edges = scan?.graphEdges ?? [];
   const nodes = scan?.nodeList ?? [];
   const reportedNodeCount = typeof scan?.nodes === "number" ? scan.nodes : null;
@@ -41,7 +42,7 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   const streamSettled = lens === "owner" && !tenant ? true : !!auditQuery.data || !!auditQuery.error;
   const loading = (lens !== "owner" && !scan && scanQuery.isPending) || !streamSettled;
   const scanPhase = lens === "owner" ? "Owner view" : scanQuery.isFetching && !scan ? "Scanning nodes" : visibleError ? "Scan error" : `${visibleNodes.length} nodes listed${scanQuery.dataUpdatedAt ? ` · snapshot ${new Date(scanQuery.dataUpdatedAt).toISOString().slice(11, 16)} UTC` : ""}`;
-  const evidencePhase = !scoped || !streamSettled ? "Loading initial evidence" : `${pods.length} workloads loaded`;
+  const evidencePhase = !scoped || !streamSettled ? "Loading decision evidence" : auditQuery.data?.length ? `${auditQuery.data.length} decision records sampled` : "No decision evidence in bounded sample";
   const query = listQuery.trim().toLowerCase();
   const matchingPods = pods.filter((p) => !query || p.key.toLowerCase().includes(query));
   const matchingNodes = visibleNodes.filter((n) => !query || n.name.toLowerCase().includes(query));
@@ -70,6 +71,8 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
         <div className="rounded-md border border-border/60 px-3 py-2"><span className="font-medium text-foreground">Scan:</span> {scanPhase}</div>
         <div className="rounded-md border border-border/60 px-3 py-2"><span className="font-medium text-foreground">Evidence:</span> {evidencePhase}</div>
       </div>
+
+      {!owner && <Button disabled={scanQuery.isFetching || auditQuery.isFetching} onClick={() => { void scanQuery.refetch(); void auditQuery.refetch(); }}>Refresh scan and decisions</Button>}
 
       {visibleError && <div className="space-y-2"><ErrorBox msg={`The scan request failed: ${visibleError}. Decision-stream workloads are still shown when available.`} /><Button onClick={() => void scanQuery.refetch()}>Retry scan</Button></div>}
       {(lens !== "owner" || tenant) && <ReadStatus error={auditQuery.error} hasData={false} refreshing={auditQuery.isFetching} onRetry={() => void auditQuery.refetch()} />}
@@ -150,7 +153,7 @@ function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
         </defs>
         {cols.map((c, i) => (
           <g key={c}>
-            <text x={colW * i + colW / 2} y={24} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>{c}</text>
+            <text x={colW * i + colW / 2} y={24} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>{c === "unknown" ? "stage not sampled" : c}</text>
             <line x1={colW * (i + 1)} y1={40} x2={colW * (i + 1)} y2={H - 20} stroke="hsl(222 18% 16%)" strokeDasharray="3 5" />
           </g>
         ))}
@@ -161,7 +164,7 @@ function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
         })}
         {placed.map((p) => (
           <g key={p.key}>
-            <title>{p.key} · asset {p.asset == null ? "unknown" : p.asset.toFixed(2)} · stage {p.stage ?? "unknown"} · blast {p.blast == null ? "unknown" : p.blast.toFixed(2)}{p.ai ? " · AI" : ""}</title>
+            <title>{p.key} · asset {p.asset == null ? "unknown" : p.asset.toFixed(2)} · stage {p.stage ?? "not sampled"} · blast {p.blast == null ? "unknown" : p.blast.toFixed(2)}{p.ai ? " · AI" : ""}</title>
             <circle cx={p.x} cy={p.y} r={p.r + (placed.length > 8 ? 4 : 8) + (p.blast ?? 0) * (placed.length > 8 ? 6 : 10)} fill="hsl(184 78% 46% / 0.06)" />
             <circle cx={p.x} cy={p.y} r={p.r} fill={p.ai ? "hsl(212 80% 60% / 0.25)" : "hsl(184 78% 46% / 0.22)"} stroke={p.ai ? "hsl(212 80% 60%)" : "hsl(184 78% 46%)"} strokeWidth={1.5} />
             {placed.length <= 8 && <text x={p.x} y={p.y + p.r + 13} textAnchor="middle" className="fill-foreground/70" style={{ fontSize: 10, fontFamily: "monospace" }}>{p.pod}</text>}
@@ -172,7 +175,7 @@ function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary/40 ring-1 ring-primary" /> node size = observed asset value; small = unknown · halo = blast radius</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-info/40 ring-1 ring-info" /> AI/inference workload</span>
         <span>→ = lateral reach (network + RBAC + co-location)</span>
-        <span>column = observed stage group; unknown means no matching decision in this sample</span>
+        <span>column = observed stage group; stage not sampled means no matching stage in this sample</span>
       </div>
     </CardContent></Card>
   );
@@ -210,11 +213,11 @@ function KillChain({ pods }: { pods: PodNode[] }) {
         {stages.map((s, i) => (
           <div key={s} className="rounded-lg border border-border bg-elevated/30 p-3 text-center">
             <div className="text-2xl font-semibold tabular">{counts[i]}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{s}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{s === "unknown" ? "stage not sampled" : s}</div>
           </div>
         ))}
       </div>
-      <div className="mt-3 text-[11px] text-muted-foreground">Counts cover Pods in the scan snapshot, using UID-matched decision stages. AI includes gpu-side-channel, model-theft, llm-jacking and prompt-inject-persist. Unknown means no matching stage was observed in the bounded decision sample.</div>
+      <div className="mt-3 text-[11px] text-muted-foreground">Counts cover Pods in the scan snapshot, using current-Pod decision stages. AI includes gpu-side-channel, model-theft, llm-jacking and prompt-inject-persist. Stage not sampled means no matching stage was observed in the bounded decision sample.</div>
     </CardContent></Card>
   );
 }

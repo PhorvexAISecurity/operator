@@ -36,3 +36,44 @@ export function recordAuditSnapshot<T extends SnapshotDecision>(records: Map<str
   records.set(key, event);
   if (records.size > limit) records.delete(records.keys().next().value!);
 }
+
+export interface AuditSampleClock {
+  set(callback: () => void, ms: number): ReturnType<typeof setTimeout>;
+  clear(timer: ReturnType<typeof setTimeout>): void;
+}
+
+const browserClock: AuditSampleClock = { set: (callback, ms) => setTimeout(callback, ms), clear: clearTimeout };
+
+// Remote replay can take longer than 2.5s to yield a current-Pod decision.
+// Discovered settles 2.5s after its first scan-epoch match, with a 15s absolute
+// bound when that match never arrives. Other consumers keep their 2.5s bound.
+export function sampleAuditSnapshot<T extends SnapshotDecision>({ lens, signal, preserveEpochs, eligible, subscribe, clock = browserClock }: {
+  lens: Lens;
+  signal: AbortSignal;
+  preserveEpochs: boolean;
+  eligible?: (event: T) => boolean;
+  subscribe: (onEvent: (event: T) => void, onError: (error: unknown) => void) => () => void;
+  clock?: AuditSampleClock;
+}): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
+    const records = new Map<string, T>();
+    let stop = () => {};
+    let settled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => { clock.clear(timer); if (settleTimer !== undefined) clock.clear(settleTimer); signal.removeEventListener("abort", abort); stop(); };
+    const finish = () => { if (settled) return; settled = true; cleanup(); resolve(Array.from(records.values())); };
+    const fail = (error: unknown) => { if (settled) return; settled = true; cleanup(); reject(error instanceof Error ? error : new Error("Decision stream failed")); };
+    const abort = () => fail(new DOMException("Aborted", "AbortError"));
+    const timer = clock.set(finish, preserveEpochs ? 15_000 : 2_500);
+    signal.addEventListener("abort", abort, { once: true });
+    try {
+      stop = subscribe((event) => {
+        if (settled) return;
+        recordAuditSnapshot(records, event, lens, preserveEpochs);
+        if (preserveEpochs && settleTimer === undefined && eligible?.(event)) settleTimer = clock.set(finish, 2_500);
+      }, fail);
+      if (settled) stop(); // A test or transport may settle synchronously while subscribing.
+    } catch (error) { fail(error); }
+  });
+}

@@ -15,7 +15,28 @@ function load(relative, dependencies = {}) {
 }
 const snapshot = load("../lib/audit-snapshot.ts");
 const { projectDiscoveredPods, stageGroup } = load("../lib/discovered-projection.ts", { "@/lib/audit-snapshot": snapshot });
-const { recordAuditSnapshot, auditTimeMillis } = snapshot;
+const { recordAuditSnapshot, auditTimeMillis, sampleAuditSnapshot } = snapshot;
+
+function fakeClock() {
+  let now = 0, next = 0;
+  const timers = new Map();
+  return {
+    set(callback, ms) { const id = ++next; timers.set(id, { at: now + ms, callback }); return id; },
+    clear(id) { timers.delete(id); },
+    advance(ms) {
+      const end = now + ms;
+      while (true) {
+        const due = [...timers.entries()].filter(([, timer]) => timer.at <= end).sort((a, b) => a[1].at - b[1].at)[0];
+        if (!due) break;
+        now = due[1].at;
+        timers.delete(due[0]);
+        due[1].callback();
+      }
+      now = end;
+    },
+    get pending() { return timers.size; },
+  };
+}
 
 const graph = [{ key: "vllm/current", uid: "pod-new", blast: 0.949, ai: true }];
 const decision = (assetUID, assetValue, stage, time) => ({
@@ -115,4 +136,90 @@ test("invalid or missing time cannot displace a valid decision", () => {
   assert.equal(Array.from(records.values())[0].assetValue, 2.5);
   const [projected] = projectDiscoveredPods(graph, [decision("pod-new", 2.5, "exploit", "2026-09-27T12:00:00Z"), decision("pod-new", 0, "recon", "not-a-time")]);
   assert.equal(projected.asset, 2.5);
+});
+
+test("Discovered waits for delayed remote replay and retains the current UID match", async () => {
+  const clock = fakeClock();
+  const abort = new AbortController();
+  let emit, stopped = 0, resolved = false;
+  const sample = sampleAuditSnapshot({ lens: "operator", signal: abort.signal, preserveEpochs: true, clock,
+    eligible: (event) => event.kind === "phorvex.decision" && event.decisionTrace?.assetUID === "pod-new",
+    subscribe: (onEvent) => { emit = onEvent; return () => { stopped++; }; },
+  }).then((rows) => { resolved = true; return rows; });
+  clock.advance(2_500);
+  await Promise.resolve();
+  assert.equal(resolved, false, "the old 2.5s cutoff would commit an empty sample");
+  clock.advance(174); // observed first decision arrived at 2.674s, for another Pod
+  emit({ kind: "phorvex.decision", ...decision("pod-old", 9, "impact", "2026-09-27T17:49:49Z") });
+  clock.advance(179); // exact current-Pod match arrived at 2.853s
+  emit({ kind: "phorvex.decision", ...decision("pod-new", 2.5504, "recon", "2026-09-27T17:49:50Z") });
+  clock.advance(2_499);
+  await Promise.resolve();
+  assert.equal(resolved, false, "matching replay receives its own settle window");
+  clock.advance(1);
+  const rows = await sample;
+  assert.equal(rows.length, 2);
+  assert.equal(projectDiscoveredPods(graph, rows)[0].asset, 2.5504);
+  assert.equal(projectDiscoveredPods(graph, rows)[0].stage, "recon");
+  assert.equal(stopped, 1);
+  assert.equal(clock.pending, 0);
+  emit({ kind: "phorvex.decision", ...decision("pod-new", 7, "impact", "2026-09-27T17:50:00Z") });
+  assert.equal(clock.pending, 0, "queued event after closure cannot restart settlement");
+});
+
+test("Discovered no-event sample stays bounded; abort and stream errors close owned listeners", async () => {
+  for (const mode of ["empty", "abort", "error"]) {
+    const clock = fakeClock();
+    const controller = new AbortController();
+    let emit, fail, stopped = 0;
+    const sample = sampleAuditSnapshot({ lens: "operator", signal: controller.signal, preserveEpochs: true, clock,
+      eligible: (event) => event.decisionTrace?.assetUID === "pod-new",
+      subscribe: (onEvent, onError) => { emit = onEvent; fail = onError; return () => { stopped++; }; },
+    });
+    if (mode === "empty") {
+      clock.advance(14_999);
+      assert.equal(clock.pending, 1);
+      clock.advance(1);
+      assert.deepEqual(await sample, []);
+    } else if (mode === "abort") {
+      emit({ kind: "phorvex.decision", ...decision("pod-new", 2, "recon", "2026-09-27T17:49:50Z") });
+      assert.equal(clock.pending, 2);
+      controller.abort();
+      await assert.rejects(sample, { name: "AbortError" });
+    } else {
+      emit({ kind: "phorvex.decision", ...decision("pod-new", 2, "recon", "2026-09-27T17:49:50Z") });
+      assert.equal(clock.pending, 2);
+      fail(new Error("audit unavailable"));
+      await assert.rejects(sample, /audit unavailable/);
+    }
+    assert.equal(stopped, 1, mode);
+    assert.equal(clock.pending, 0, mode);
+  }
+});
+
+test("late matching replay still stops at the absolute 15s bound", async () => {
+  const clock = fakeClock();
+  let emit, stopped = 0;
+  const sample = sampleAuditSnapshot({ lens: "operator", signal: new AbortController().signal, preserveEpochs: true, clock,
+    eligible: (event) => event.decisionTrace?.assetUID === "pod-new",
+    subscribe: (onEvent) => { emit = onEvent; return () => { stopped++; }; },
+  });
+  clock.advance(14_000);
+  emit({ kind: "phorvex.decision", ...decision("pod-new", 2, "recon", "2026-09-27T17:49:50Z") });
+  assert.equal(clock.pending, 2);
+  clock.advance(1_000);
+  assert.equal((await sample)[0].assetValue, 2);
+  assert.equal(stopped, 1);
+  assert.equal(clock.pending, 0);
+});
+
+test("shared non-Discovered snapshot keeps its 2.5s bound", async () => {
+  const clock = fakeClock();
+  let stopped = 0;
+  const sample = sampleAuditSnapshot({ lens: "operator", signal: new AbortController().signal, preserveEpochs: false, clock,
+    subscribe: () => () => { stopped++; },
+  });
+  clock.advance(2_500);
+  assert.deepEqual(await sample, []);
+  assert.equal(stopped, 1);
 });
