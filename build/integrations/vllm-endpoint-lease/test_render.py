@@ -236,6 +236,12 @@ class LeaseActivationTest(unittest.TestCase):
             renderer.adopt(prepared, source, policy, journal, self.tenant,
                            self.console, self.service, self.base(), self.image_receipt(prepared), self.recipe_dir,
                            wrong_receipt, journal_receipt)
+        wrong_count = copy.deepcopy(policy_receipt)
+        wrong_count["dispatchCount"] = True
+        with self.assertRaisesRegex(ValueError, "create receipt"):
+            renderer.adopt(prepared, source, policy, journal, self.tenant,
+                           self.console, self.service, self.base(), self.image_receipt(prepared), self.recipe_dir,
+                           wrong_count, journal_receipt)
         late_journal = copy.deepcopy(journal_receipt)
         late_journal["completedAt"] = policy_receipt["completedAt"]
         with self.assertRaisesRegex(ValueError, "journal must be created before"):

@@ -295,7 +295,8 @@ def published_proxy_image(receipt: dict, recipe_dir: Path):
     source = receipt.get("sourceSHA")
     image = receipt.get("image")
     digest = receipt.get("digest")
-    if (set(receipt) != expected_keys or receipt.get("schemaVersion") != 1
+    if (set(receipt) != expected_keys or type(receipt.get("schemaVersion")) is not int
+            or receipt["schemaVersion"] != 1
             or not isinstance(source, str) or not COMMIT.fullmatch(source)
             or image != "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:vllm-lease-proxy-" + source
             or not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
@@ -339,7 +340,8 @@ def created(receipt: dict, kind: str, namespace: str, name: str, candidate_hash:
             or receipt["requestSHA256"] != candidate_hash
             or receipt["uid"] != meta["uid"]
             or receipt["resourceVersion"] != meta["resourceVersion"]
-            or receipt["dispatchCount"] != 1 or receipt["operation"] != "create"):
+            or type(receipt["dispatchCount"]) is not int or receipt["dispatchCount"] != 1
+            or receipt["operation"] != "create"):
         raise ValueError("owner create receipt does not bind installed UID")
     try:
         completed = datetime.fromisoformat(receipt["completedAt"].replace("Z", "+00:00"))
