@@ -558,6 +558,8 @@ export interface VoiceOutputProbeResult {
   targetPodUID?: string; deploymentUID?: string; policyUID?: string; sourceSHA256?: string;
   firstRawModelMarker: boolean; firstAssistantDisclosure: boolean; firstAudioEmitted: boolean; firstLanded: boolean;
   eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  noopDecisionId?: string; noopTickId?: string; noopReason?: string;
+  outputCandidateStatus?: string; outputCandidateExclusion?: string; outputCandidateReason?: string;
   protectedJournalTerminal: boolean; everyServingPodEffective: boolean; recoveredAfterPending: boolean;
   repeatRawModelMarker: boolean; repeatOutputBlocked: boolean; benignSpeechMaintained: boolean;
   cleanup: string; issues: string[];

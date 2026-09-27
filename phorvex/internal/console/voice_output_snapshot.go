@@ -155,6 +155,14 @@ func (s *Server) voiceOutputSnapshot(ctx context.Context, p voiceOutputProfile, 
 	if err != nil || dep.UID == "" || dep.Spec.Replicas == nil {
 		return snap, errors.New("Voice Deployment unavailable")
 	}
+	sourceName := dep.Spec.Template.Annotations[voiceoutputpolicy.SourceConfigMapAnnotation]
+	if sourceName == "" {
+		return snap, errors.New("Voice source bundle not declared")
+	}
+	sourceCM, err := kube.CoreV1().ConfigMaps("voice").Get(ctx, sourceName, metav1.GetOptions{})
+	if err != nil {
+		return snap, errors.New("Voice immutable source bundle unavailable")
+	}
 	selector, err := metav1.LabelSelectorAsSelector(dep.Spec.Selector)
 	if err != nil || selector.Empty() {
 		return snap, errors.New("Voice selector unavailable")
@@ -229,6 +237,10 @@ func (s *Server) voiceOutputSnapshot(ctx context.Context, p voiceOutputProfile, 
 		pod := &snap.Pods[i]
 		if !voiceOutputServingPod(pod, p.SourceSHA256) {
 			return voiceOutputSnapshot{}, errors.New("Voice output serving Pod differs")
+		}
+		source, sourceErr := voiceoutputpolicy.VerifySourceObjects(pod, dep, sourceCM)
+		if sourceErr != nil || source.SourceSHA256 != p.SourceSHA256 {
+			return voiceOutputSnapshot{}, errors.New("Voice output mounted source graph differs")
 		}
 		rs, getErr := kube.AppsV1().ReplicaSets("voice").Get(ctx, pod.OwnerReferences[0].Name, metav1.GetOptions{})
 		if getErr != nil || rs.UID != pod.OwnerReferences[0].UID || len(rs.OwnerReferences) != 1 ||

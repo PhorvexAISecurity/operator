@@ -42,6 +42,12 @@ type voiceOutputProbeResult struct {
 	SelectedAction           string   `json:"selectedAction,omitempty"`
 	SelectedDecisionID       string   `json:"selectedDecisionId,omitempty"`
 	SelectedTickID           string   `json:"selectedTickId,omitempty"`
+	NoopDecisionID           string   `json:"noopDecisionId,omitempty"`
+	NoopTickID               string   `json:"noopTickId,omitempty"`
+	NoopReason               string   `json:"noopReason,omitempty"`
+	OutputCandidateStatus    string   `json:"outputCandidateStatus,omitempty"`
+	OutputCandidateExclusion string   `json:"outputCandidateExclusion,omitempty"`
+	OutputCandidateReason    string   `json:"outputCandidateReason,omitempty"`
 	ProtectedJournalTerminal bool     `json:"protectedJournalTerminal"`
 	EveryServingPodEffective bool     `json:"everyServingPodEffective"`
 	RecoveredAfterPending    bool     `json:"recoveredAfterPending"`
@@ -308,9 +314,13 @@ func (s *Server) runVoiceOutputLive(record *attackRecord, p voiceOutputProfile, 
 	}
 	probe.EventUID, record.StimulusEvidence = stimulus.EventUID, stimulus
 	probe.SignalMode = "TEST_INJECTED_AFTER_FIRST_LOSS"
-	decision, err := s.waitVoiceOutputDecision(ctx, record, snap, stimulus.EventUID)
+	decision, noop, err := s.waitVoiceOutputDecision(ctx, record, snap, stimulus.EventUID)
 	if err != nil {
-		probe.Issues = append(probe.Issues, "normal brain decision for exact Voice output event unavailable")
+		if noop != nil {
+			voiceOutputApplyNoop(probe, noop)
+		} else {
+			probe.Issues = append(probe.Issues, "normal brain decision for exact Voice output event absent or untrusted")
+		}
 		return
 	}
 	probe.SelectedAction, probe.SelectedDecisionID, probe.SelectedTickID = decision.Action, decision.DecisionID, decision.TickID
@@ -356,4 +366,13 @@ func (s *Server) runVoiceOutputLive(record *attackRecord, p voiceOutputProfile, 
 		return
 	}
 	probe.Status, record.Outcome, record.Containment = "DEFENDED", "DEFENDED", "exact-run-owned-output-marker-blocked-before-TTS"
+}
+
+func voiceOutputApplyNoop(probe *voiceOutputProbeResult, noop *voiceOutputNoopDiagnostic) {
+	if probe == nil || noop == nil {
+		return
+	}
+	probe.NoopDecisionID, probe.NoopTickID, probe.NoopReason = noop.DecisionID, noop.TickID, noop.Reason
+	probe.OutputCandidateStatus, probe.OutputCandidateExclusion, probe.OutputCandidateReason = noop.CandidateStatus, noop.CandidateExclusion, noop.CandidateReason
+	probe.Issues = append(probe.Issues, "normal brain observed exact event-bound NOOP; output action not selected")
 }

@@ -130,7 +130,7 @@ func voiceOutputBenignMaintained(session, receipts, stored voiceOutputProbeReply
 		!guard.Blocked && !guard.MarkerObserved && guard.RawSHA256 == guard.OutputSHA256 &&
 		!transcript.MarkerObserved && transcript.Persisted && transcript.AssistantPresent && audio.AudioFrames > 0 &&
 		proof.Phase == "benign" && proof.CallSIDHash == session.CallSIDHash && proof.AssistantSHA256 == transcript.AssistantSHA256 &&
-		proof.AssistantPresent && !proof.MarkerObserved && proof.MarkerSHA256 == ""
+		proof.AssistantPresent && proof.BenignSemanticOK && !proof.MarkerObserved && proof.MarkerSHA256 == ""
 }
 
 func (s *Server) createVoiceOutputEvent(ctx context.Context, privateDir, caseID string, pod corev1.Pod,
@@ -149,7 +149,7 @@ func (s *Server) createVoiceOutputEvent(ctx context.Context, privateDir, caseID 
 		"rawModelMarkerObserved": true, "assistantOutputMarkerObserved": true,
 		"markerSHA256": markerSHA, "configMapUID": snap.ConfigMapUID,
 		"deploymentUID": snap.DeploymentUID, "sourceSHA256": snap.SourceSHA256,
-		"targetPodUID": string(pod.UID), "policyName": voiceAgencyPolicyName,
+		"podUID": string(pod.UID), "policyName": voiceAgencyPolicyName,
 		"policyUID": snap.PolicyUID, "policyGeneration": snap.PolicyGeneration,
 		"observedAt": observedAt.Format(time.RFC3339Nano), "requestPath": "/ws"})
 	if err != nil {

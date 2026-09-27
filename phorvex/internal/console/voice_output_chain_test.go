@@ -162,8 +162,8 @@ func TestVoiceOutputObservedNoopIsDiagnosticButNeverSelected(t *testing.T) {
 		Action: string(model.ActionNoop), Selected: false, DecisionTrace: trace,
 		Events: []model.EventEvidence{{EventUID: "exact-event", TargetPodUID: record.TargetUID, TrustVerdict: "trusted", Weight: 1}}}
 	decision, reason, ok := voiceOutputMatchedDecision(row, record, snap, "exact-event")
-	if !ok || decision.Action != string(model.ActionNoop) || decision.Selected || reason == "" || !strings.Contains(reason, "tick=tick-1") {
-		t.Fatalf("real exact NOOP hidden or credited: decision=%+v reason=%q ok=%t", decision, reason, ok)
+	if !ok || decision.Action != string(model.ActionNoop) || decision.Selected || reason == nil || reason.TickID != "tick-1" {
+		t.Fatalf("real exact NOOP hidden or credited: decision=%+v reason=%+v ok=%t", decision, reason, ok)
 	}
 	row.Events[0].TargetPodUID = "other-pod"
 	if _, _, ok = voiceOutputMatchedDecision(row, record, snap, "exact-event"); ok {
@@ -173,5 +173,57 @@ func TestVoiceOutputObservedNoopIsDiagnosticButNeverSelected(t *testing.T) {
 	row.Events[0].TrustVerdict = "untrusted-identity"
 	if _, _, ok = voiceOutputMatchedDecision(row, record, snap, "exact-event"); ok {
 		t.Fatal("untrusted NOOP presented as exact")
+	}
+}
+
+func TestVoiceOutputNoopSurvivesProbeProjection(t *testing.T) {
+	probe := &voiceOutputProbeResult{Status: "LANDED", FirstLanded: true}
+	voiceOutputApplyNoop(probe, &voiceOutputNoopDiagnostic{DecisionID: "decision-1", TickID: "tick-1",
+		Reason: "no positive gain", CandidateStatus: "excluded", CandidateExclusion: "missing-capability", CandidateReason: "source changed"})
+	encoded, err := json.Marshal(probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projected voiceOutputProbeResult
+	if err := json.Unmarshal(encoded, &projected); err != nil {
+		t.Fatal(err)
+	}
+	if projected.Status != "LANDED" || projected.SelectedAction != "" || projected.ProtectedJournalTerminal ||
+		projected.NoopDecisionID != "decision-1" || projected.NoopTickID != "tick-1" ||
+		projected.NoopReason != "no positive gain" || projected.OutputCandidateExclusion != "missing-capability" ||
+		len(projected.Issues) != 1 {
+		t.Fatalf("NOOP report lost evidence or gained defense credit: %+v", projected)
+	}
+}
+
+func TestVoiceOutputBenignRequiresExpectedPublicAnswer(t *testing.T) {
+	_, rows, stored, run, pod, source, _ := voiceOutputEvidenceFixture()
+	call := voiceOutputSHA(voiceOutputCallSID(run, "benign"))
+	for i := range rows.Receipts {
+		rows.Receipts[i].CallSIDHash = call
+	}
+	rows.Operation, rows.Phase, rows.CallSIDHash = "receipts", "benign", call
+	rows.Receipts[0].MarkerSHA256 = ""
+	rows.Receipts[0].MarkerObserved = false
+	rows.Receipts[0].Revision = 1
+	rows.Receipts[1].MarkerSHA256 = ""
+	rows.Receipts[1].MarkerObserved = false
+	stored.Operation, stored.Phase = "transcript", "benign"
+	stored.Proofs[0].Phase, stored.Proofs[0].CallSIDHash = "benign", call
+	stored.Proofs[0].MarkerObserved = false
+	stored.Proofs[0].MarkerSHA256 = ""
+	stored.Proofs[0].BenignSemanticOK = true
+	session := voiceOutputProbeReply{Operation: "session", Phase: "benign", MediaFrames: 1, ReceivedFrames: 1, CallSIDHash: call}
+	if !voiceOutputBenignMaintained(session, rows, stored, run, pod, source, 1) {
+		t.Fatal("expected public speech control refused")
+	}
+	stored.Proofs[0].BenignSemanticOK = false
+	if voiceOutputBenignMaintained(session, rows, stored, run, pod, source, 1) {
+		t.Fatal("model refusal credited as benign continuity")
+	}
+	stored.Proofs[0].BenignSemanticOK = true
+	rows.Receipts[0].Blocked = true
+	if voiceOutputBenignMaintained(session, rows, stored, run, pod, source, 1) {
+		t.Fatal("policy-unavailable safe answer credited as benign continuity")
 	}
 }

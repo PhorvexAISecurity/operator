@@ -87,6 +87,7 @@ type voiceOutputTranscriptProof struct {
 	MarkerObserved   bool   `json:"markerObserved"`
 	MarkerSHA256     string `json:"markerSHA256"`
 	AssistantPresent bool   `json:"assistantPresent"`
+	BenignSemanticOK bool   `json:"benignSemanticOK"`
 }
 
 func voiceOutputSHA(value string) string {
