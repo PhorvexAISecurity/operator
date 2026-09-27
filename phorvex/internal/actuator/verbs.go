@@ -46,6 +46,7 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionSensitiveOutputPolicyActivate: {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}},
 	model.ActionVoiceMemoryNoteRevoke:         {{Resource: "configmaps", Name: "voice-memory-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-memory-policy", Verb: "update"}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}},
 	model.ActionVoiceRefundPairDeny:           {{Resource: "configmaps", Name: "voice-refund-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-refund-policy", Verb: "update"}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}},
+	model.ActionVoiceOutputPolicyActivate:     {{Resource: "configmaps", Name: "voice-output-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-output-policy", Verb: "update"}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}},
 	model.ActionLiteLLMClientRevoke:           {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 }
 
