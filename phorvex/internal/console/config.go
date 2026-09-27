@@ -61,6 +61,11 @@ type Config struct {
 	GuardrailOutputEnabled       bool
 	GuardrailOutputProfileSHA256 string
 	GuardrailOutputProfilePath   string
+	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
+	// cannot be enabled by a catalogue row or caller-supplied destination.
+	LiteLLMLiveEnabled       bool
+	LiteLLMLiveProfileSHA256 string
+	LiteLLMLiveProfilePath   string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool

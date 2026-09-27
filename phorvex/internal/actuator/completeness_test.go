@@ -114,6 +114,8 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionGuardrailRotate:               {plain: "ai-context-required:"},
 	model.ActionKVMigrateInvalidate:           {plain: "ai-context-required:"},
 	model.ActionSensitiveOutputPolicyActivate: {plain: "ai-context-required:"},
+	model.ActionVoiceMemoryNoteRevoke:         {plain: "ai-context-required:"},
+	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -125,6 +127,7 @@ func plainView() *model.WorkloadView {
 // MIG device mig-rebind requires and the exact detector binding adapter-rotate requires.
 func aiView() *model.WorkloadView {
 	v := plainView()
+	v.Pod.Namespace = "litellm"
 	v.Pod.HasGPU = true
 	v.Pod.ModelID = "llama-3-8b"
 	v.Pod.MIGDevice = "MIG-GPU-0/1g.5gb"
@@ -155,6 +158,21 @@ func aiView() *model.WorkloadView {
 		SupportSourceSHA256: v.Pod.OutputSupportSourceSHA256,
 		ProxyImageID:        "proxy@sha256:1",
 		SupportImageID:      "support@sha256:1",
+	}
+	v.Pod.VoiceMemoryConfigMap = "voice-memory-policy"
+	v.Pod.VoiceMemorySourceSHA256 = "source-sha"
+	v.Pod.VoiceMemoryDeploymentUID = "deployment-uid"
+	v.Pod.VoiceMemoryEventCreator = "system:serviceaccount:ns:detector"
+	v.Pod.VoiceMemoryObservation = &model.VoiceMemoryObservation{EventName: "voice-detected", EventUID: "voice-event-uid", CreatorIdentity: v.Pod.VoiceMemoryEventCreator,
+		ScenarioID: "voice-live", CaseID: "owned-memory",
+		TargetPodUID: v.Pod.UID, DeploymentUID: v.Pod.VoiceMemoryDeploymentUID, ConfigMapUID: "voice-cm-uid", SourceSHA256: v.Pod.VoiceMemorySourceSHA256,
+		CallerID: "+15551234567", NoteSHA256: "note-sha", PolicyUID: "policy-uid", PolicyGeneration: 1}
+	v.Pod.LiteLLMClientObservation = &model.LiteLLMClientObservation{
+		EventName: "client-observed", EventUID: "client-event-uid", CreatorIdentity: "console-creator",
+		TargetPodUID: v.Pod.UID, PeerPodUID: "peer-uid", ClientSHA256: "client-hash",
+		ConfigMapUID: "cm-uid", ClientsConfigMapUID: "clients-cm-uid", SeedSHA256: "seed-hash",
+		ServiceUID: "service-uid", GatewaySourceSHA256: "source-hash",
+		PolicyName: "litellm-policy", PolicyUID: "litellm-policy-uid", PolicyGeneration: 1,
 	}
 	return v
 }
@@ -260,6 +278,9 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		family := ""
 		if a == model.ActionDebugger || a == model.ActionCustomInject {
 			family = "code-exec-guard:"
+		}
+		if a == model.ActionLiteLLMClientRevoke {
+			family = "ai-context-required:"
 		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
 		stateful := aiView()

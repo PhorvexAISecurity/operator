@@ -278,7 +278,7 @@ func RouteFor(b Backend, a model.Action) Backend {
 	}
 	// Hybrid owns a native client-go path that can enforce the current-policy
 	// grace contract. Pure Phoenix cannot, so bounded rotate is routed native.
-	if a != model.ActionRotate && RuleTypeFor(a) != "" {
+	if a != model.ActionRotate && a != model.ActionVoiceMemoryNoteRevoke && RuleTypeFor(a) != "" {
 		return BackendPhoenix
 	}
 	return BackendNative
@@ -339,11 +339,21 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionSensitiveOutputPolicyActivate {
 					e.Prerequisite = "exact live Pod, preinstalled rule ConfigMap and operation journal"
 				}
+				if a == model.ActionVoiceMemoryNoteRevoke {
+					e.Prerequisite = "exact live Voice Deployment, owned policy ConfigMap, private readback Secret and operation journal"
+				}
+				if a == model.ActionLiteLLMClientRevoke {
+					e.Prerequisite = "reviewed LiteLLM gateway on two Ready Service Pods, one owned-client observation, policy ConfigMap and protected journal"
+				}
 				if a == model.ActionModelShardReplace {
 					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
 					e.UnverifiedEffect = "registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable"
 				} else if a == model.ActionSensitiveOutputPolicyActivate {
 					e.UnverifiedEffect = "support does not verify the authenticated event, CAS activation, mounted projection or proxy effect; dispatch and recovery check these"
+				} else if a == model.ActionVoiceMemoryNoteRevoke {
+					e.UnverifiedEffect = "support does not verify the observed note, CAS append or per-Pod application effect; dispatch checks these"
+				} else if a == model.ActionLiteLLMClientRevoke {
+					e.UnverifiedEffect = "support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks"
 				} else {
 					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
 				}

@@ -11,11 +11,13 @@ import { cn } from "@/lib/utils";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, readLiveSelection } from "@/lib/live-selection";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { useExactRecord } from "@/lib/query";
-import { attackCSVActuator, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
+import { attackCSVRow, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
 import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
+import { VoiceMemoryProbe } from "@/components/panels/voice-memory-probe";
+import { LiteLLMLiveProbe } from "@/components/panels/litellm-live-probe";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
 // observations. Signal-only rows never contribute behavioral outcomes or economics.
@@ -64,9 +66,7 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
   function exportCSV() {
     const rs = pager.items;
     const head = ["fired", "service", "attack", "mitre", "outcome", "actuator", "containment", "time_to_action_s", "dwell_s", "dwell_ongoing", "uptime_before", "uptime_dip", "uptime_after", "cost_without", "cost_r6", "cost_with", "savings", "why"];
-    const body = rs.map((r) => isCatalogueSignalResult(r)
-      ? [r.firedAt, r.service, r.attack, r.mitre, "CATALOGUE SIGNAL · UNSCORED", attackCSVActuator(r), "", "", "", "", "", "", "", "", "", "", "", "", r.observationError || r.stimulusEvidence?.limitation || "behavioral outcome not measured"]
-      : [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, attackCSVActuator(r), r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
+    const body = rs.map(attackCSVRow);
     csvDownload("phorvex-attack-results-page.csv", [head, ...body]);
   }
 
@@ -165,6 +165,8 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {signal && <CatalogueSignalResult result={r} />}
         {r.guardrailEffectProbe && <GuardrailEffectProbe result={r.guardrailEffectProbe} />}
         {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
+        {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
+        {r.litellmLiveProbe && <LiteLLMLiveProbe result={r.litellmLiveProbe} />}
         {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Mechanism evidence</div>

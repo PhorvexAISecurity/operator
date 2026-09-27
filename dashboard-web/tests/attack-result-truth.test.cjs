@@ -12,6 +12,7 @@ const compiled = ts.transpileModule(source, {
 const moduleUnderTest = { exports: {} };
 new Function("require", "module", "exports", compiled)(require, moduleUnderTest, moduleUnderTest.exports);
 const { attackCSVActuator, catalogueSignalState, exactCatalogueDecision, canSendCatalogueSignal, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } = moduleUnderTest.exports;
+const { attackCSVRow } = moduleUnderTest.exports;
 
 const base = {
   id: "atk-signal-1",
@@ -112,4 +113,20 @@ test("unversioned historical rows retain a separate provenance classification", 
   assert.equal(isCatalogueSignalResult(legacy), false);
   assert.equal(isUnversionedResult(legacy), true);
   assert.equal(showSecurityOutcomeSections(legacy), true);
+});
+
+test("scoped Live CSV leaves unmeasured dwell, availability and economics blank", () => {
+  for (const evidenceKind of ["voice-memory-live", "litellm-live-client-policy"]) {
+    const r = { evidenceKind, status: "done", outcome: "DEFENDED", actuated: true, phorvexAction: "native-action",
+      containment: "exact-scope", dwellOngoing: false, dwellSec: 0, timeToDefendSec: 0,
+      uptimeBefore: 0, uptimeDip: 0, uptimeAfter: 0, cost: { without: 0, r6: 0, with: 0, savings: 0 } };
+    const cells = attackCSVRow(r);
+    assert.equal(cells.length, 18);
+    assert.equal(cells[4], "DEFENDED");
+    assert.equal(cells[5], "native-action");
+    assert.deepEqual(cells.slice(7, 17), Array(10).fill(""));
+    assert.match(cells[17], /not measured/);
+    assert.equal(attackCSVRow({ ...r, actuated: false })[5], "");
+  }
+  assert.equal(attackCSVRow(base).length, 18);
 });

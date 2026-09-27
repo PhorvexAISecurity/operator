@@ -317,6 +317,26 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					continue
 				}
 			}
+			if action == model.ActionVoiceMemoryNoteRevoke {
+				o := v.Pod.VoiceMemoryObservation
+				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "voice-memory-policy: event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
+			if action == model.ActionLiteLLMClientRevoke {
+				o := v.Pod.LiteLLMClientObservation
+				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "litellm-client-revoke: event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
 			if action == model.ActionIdentityRotate {
 				out.Excluded = append(out.Excluded, Exclusion{
 					GenerationRank: generationRank, Key: key, Action: action,

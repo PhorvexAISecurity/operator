@@ -124,6 +124,8 @@ var classifications = map[model.Action]Bound{
 		"distributed invalidate/migration and recovery paths do not have enforced safe-return deadlines"),
 	model.ActionSensitiveOutputPolicyActivate: unknown(model.ActionSensitiveOutputPolicyActivate, -1,
 		"response-field policy activation and rollback have no calibrated safe-return deadline"),
+	model.ActionVoiceMemoryNoteRevoke: unknown(model.ActionVoiceMemoryNoteRevoke, -1,
+		"voice memory quarantine and projection readback have no calibrated safe-return deadline"),
 }
 
 func init() {

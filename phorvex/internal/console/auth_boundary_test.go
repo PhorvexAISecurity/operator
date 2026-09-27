@@ -171,6 +171,8 @@ func TestInvestorIsReadOnly(t *testing.T) {
 		{"/api/workload/attack", `{"namespace":"vllm","action":"foothold"}`},
 		{"/api/workload/fire-scenario", `{"namespace":"vllm","scenario":"kv-poison"}`},
 		{"/api/vllm/attack", `{"action":"poison"}`},
+		{"/api/voice/live/fire", `{"scenario":"ai2-agent-memory-contamination"}`},
+		{"/api/litellm/live/fire", `{"scenario":"ai2-query-extraction"}`},
 		{"/api/live/clear", `{}`},
 		{"/api/runs/start", `{"config":"p3-v3"}`},
 	}
@@ -251,6 +253,36 @@ func TestFixedNamespaceControlIsScoped(t *testing.T) {
 	}
 	if len(calls) != 0 {
 		t.Fatalf("a refused attack reached the dispatcher: %v", calls)
+	}
+}
+
+func TestConvertedLiveControlsRequireExactTenantAndTarget(t *testing.T) {
+	for _, tc := range []struct{ path, tenant string }{
+		{"/api/voice/live/fire", "voice"},
+		{"/api/litellm/live/fire", "litellm"},
+	} {
+		t.Run(tc.tenant, func(t *testing.T) {
+			var calls []string
+			f := newAuthFixture(t, execRecordingConfig(&calls),
+				operatorGrant("wrong-tenant", []string{"other"}, []string{defaultTargetID}),
+				operatorGrant("no-target", []string{tc.tenant}, []string{}),
+				operatorGrant("permitted", []string{tc.tenant}, []string{defaultTargetID}),
+			)
+			for _, subject := range []string{"wrong-tenant", "no-target"} {
+				w := f.do(f.albReqAs(t, http.MethodPost, tc.path, `{}`, subject))
+				if w.Code != http.StatusForbidden {
+					t.Fatalf("%s denied subject %s: got %d", tc.path, subject, w.Code)
+				}
+			}
+			// An authorized actor reaches body validation without starting a run.
+			w := f.do(f.albReqAs(t, http.MethodPost, tc.path, `{}`, "permitted"))
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("%s permitted actor did not reach validation: %d %s", tc.path, w.Code, w.Body.String())
+			}
+			if len(calls) != 0 {
+				t.Fatalf("rejected request reached workload executor: %v", calls)
+			}
+		})
 	}
 }
 

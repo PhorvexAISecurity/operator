@@ -44,6 +44,8 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionGuardrailRotate:               {{Resource: "pods", Verb: "update"}},
 	model.ActionKVMigrateInvalidate:           {{Resource: "pods", Verb: "update"}},
 	model.ActionSensitiveOutputPolicyActivate: {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}},
+	model.ActionVoiceMemoryNoteRevoke:         {{Resource: "configmaps", Name: "voice-memory-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-memory-policy", Verb: "update"}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}},
+	model.ActionLiteLLMClientRevoke:           {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

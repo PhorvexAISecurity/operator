@@ -39,9 +39,32 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
         self.assertIn("unknown", "; ".join(validator.v3_action_status(null)))
 
     def test_new_marked_sixteen_is_accepted(self):
-        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
+        current = self.trace(validator.OUTPUT16_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
         self.assertEqual(validator.v3_action_status(current), [])
         self.assertEqual(validator.check_ordering(current).status, validator.PASS)
+        expanded = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
+        self.assertIn("want 16", "; ".join(validator.v3_action_status(expanded)))
+
+    def test_both_historical_seventeen_orders_are_preserved(self):
+        for actions, marker in (
+            (validator.VOICE17_ACTIONS, validator.ACTION_VOCABULARY_VOICE17),
+            (validator.LITELLM17_ACTIONS, validator.ACTION_VOCABULARY_LITELLM17),
+        ):
+            with self.subTest(marker=marker):
+                historical = self.trace(actions, marker)
+                self.assertEqual(validator.v3_action_status(historical), [])
+                self.assertEqual(validator.check_ordering(historical).status, validator.PASS)
+                prior = self.trace(validator.OUTPUT16_ACTIONS, marker)
+                self.assertIn("want 17", "; ".join(validator.v3_action_status(prior)))
+                combined = self.trace(validator.MUTATING_ACTIONS, marker)
+                self.assertIn("want 17", "; ".join(validator.v3_action_status(combined)))
+
+    def test_current_eighteen_requires_its_new_marker(self):
+        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE18)
+        self.assertEqual(validator.v3_action_status(current), [])
+        self.assertEqual(validator.check_ordering(current).status, validator.PASS)
+        prior = self.trace(validator.VOICE17_ACTIONS, validator.ACTION_VOCABULARY_LIVE18)
+        self.assertIn("want 18", "; ".join(validator.v3_action_status(prior)))
 
     def test_new_marked_fifteen_and_unknown_marker_are_refused(self):
         incomplete = self.trace(validator.LEGACY_MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
@@ -56,17 +79,18 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
 
     def test_unmarked_new_action_in_status_candidate_or_selection_is_refused(self):
         historical = self.trace(validator.LEGACY_MUTATING_ACTIONS)
-        new_action = validator.MUTATING_ACTIONS[-1]
-        bad_status = copy.deepcopy(historical)
-        bad_status["actionStatus"][-1]["action"] = new_action
-        self.assertTrue(validator.v3_action_status(bad_status))
-        bad_candidate = copy.deepcopy(historical)
-        bad_candidate["candidates"] = [{"action": new_action}]
-        self.assertIn("outside", "; ".join(validator.v3_action_status(bad_candidate)))
-        self.assertEqual(validator.check_ordering(bad_candidate).status, validator.FAIL)
-        bad_selection = copy.deepcopy(historical)
-        bad_selection["selectedAction"] = new_action
-        self.assertIn("outside", "; ".join(validator.v3_action_status(bad_selection)))
+        for new_action in validator.MUTATING_ACTIONS[16:]:
+            with self.subTest(action=new_action):
+                bad_status = copy.deepcopy(historical)
+                bad_status["actionStatus"][-1]["action"] = new_action
+                self.assertTrue(validator.v3_action_status(bad_status))
+                bad_candidate = copy.deepcopy(historical)
+                bad_candidate["candidates"] = [{"action": new_action}]
+                self.assertIn("outside", "; ".join(validator.v3_action_status(bad_candidate)))
+                self.assertEqual(validator.check_ordering(bad_candidate).status, validator.FAIL)
+                bad_selection = copy.deepcopy(historical)
+                bad_selection["selectedAction"] = new_action
+                self.assertIn("outside", "; ".join(validator.v3_action_status(bad_selection)))
 
 
 if __name__ == "__main__":

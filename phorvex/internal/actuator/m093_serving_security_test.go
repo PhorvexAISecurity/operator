@@ -627,6 +627,7 @@ func TestM093NativeSecureAdapterMultiStepPersistsBoundReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := f.request(model.ActionAdapterRotate)
+	req.OperationID = "selected-adapter-decision"
 	req.AdapterObservation = &observation
 	result, err := native.Actuate(t.Context(), req)
 	if err != nil || !result.Emitted || loaded {

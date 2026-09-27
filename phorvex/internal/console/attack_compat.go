@@ -64,17 +64,25 @@ var liveAttackCatalogue = []LiveAttack{
 		"vllm-serving", "Emits an exact synthetic signal; model tampering, known-good replacement and behavior mitigation are not claimed."},
 	{"foothold", "Container-escape foothold", "/api/workload/attack", "T1611 / lateral", "rotate-or-quarantine",
 		"any-workload", "A real SecurityEvent at the workload's pod; Phorvex rotates a stateless pod or quarantines a stateful one."},
+	{voiceMemoryScenario, "Cross-call Voice memory contamination", "/api/voice/live/fire", "AML.T0054 / T1565", "voice-memory-note-revoke",
+		"voice-memory", "Plants one run-owned stored note, opens real direct Voice WebSocket sessions, and checks exact memory context and benign-note replay after the brain's selected action."},
+	{"ai2-unbounded-consumption", "LiteLLM abusive client containment", "/api/litellm/live/fire", "OWASP LLM10", "litellm-client-revoke",
+		"litellm-live", "Measures bounded accepted requests, injects a labeled test event, then checks whether the brain revokes that client while legitimate requests continue. It does not measure unlimited spending."},
+	{"ai2-query-extraction", "LiteLLM repeated-query client containment", "/api/litellm/live/fire", "AML.T0024", "litellm-client-revoke",
+		"litellm-live", "Runs bounded distinct queries through the installed LiteLLM Service and checks client revocation, replay denial and benign continuity. It does not establish successful model replication."},
 }
 
 // appStack is the set of signals the compatibility rules read off a namespace.
 type appStack struct {
-	Namespace   string `json:"namespace"`
-	ServedModel bool   `json:"servedModel"` // runs an LLM/inference server (vLLM, ollama, litellm, triton, ...)
-	VLLM        bool   `json:"vllm"`        // runs the vLLM serving image specifically
-	GPU         bool   `json:"gpu"`         // schedules onto a GPU node pool
-	Stateful    bool   `json:"stateful"`    // has a StatefulSet (rotate is unsafe -> quarantine)
-	Workload    bool   `json:"workload"`    // has any Deployment/StatefulSet at all
-	Armed       bool   `json:"armed"`       // the console may fire a live attack here right now
+	Namespace       string `json:"namespace"`
+	ServedModel     bool   `json:"servedModel"`     // runs an LLM/inference server (vLLM, ollama, litellm, triton, ...)
+	VLLM            bool   `json:"vllm"`            // runs the vLLM serving image specifically
+	GPU             bool   `json:"gpu"`             // schedules onto a GPU node pool
+	Stateful        bool   `json:"stateful"`        // has a StatefulSet (rotate is unsafe -> quarantine)
+	Workload        bool   `json:"workload"`        // has any Deployment/StatefulSet at all
+	Armed           bool   `json:"armed"`           // the console may fire a live attack here right now
+	VoiceMemoryHook bool   `json:"voiceMemoryHook"` // declared source and owner-bound rule are installed
+	LiteLLMLive     bool   `json:"litellmLive"`     // reviewed configuration is present; Fire verifies runtime
 }
 
 // servedModelImage matches the serving stacks the AI attacks are meaningful against. Substring
@@ -101,6 +109,11 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 	if deps, e := cs.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{}); e == nil {
 		for i := range deps.Items {
 			st.Workload = true
+			if ns == "voice" && deps.Items[i].Name == "voice-bot" &&
+				deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-memory-source-sha256"] == voiceMemorySourceSHA256 &&
+				deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-memory-policy-configmap"] == "voice-memory-policy" {
+				st.VoiceMemoryHook = true
+			}
 			for _, img := range containerImages(deps.Items[i].Spec.Template.Spec.Containers) {
 				if served, vllm := servedModelImage(img); served {
 					st.ServedModel = true
@@ -124,6 +137,14 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 		}
 	}
 	st.Armed = ns == vllmAttackNS || armedWorkloads[ns] || s.namespaceHasPolicy(ns)
+	if ns == "litellm" {
+		_, _, err := loadLiteLiveProfile(s.cfg)
+		st.LiteLLMLive = err == nil
+	}
+	if st.VoiceMemoryHook {
+		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-memory-policy", metav1.GetOptions{})
+		st.VoiceMemoryHook = err == nil
+	}
 	return st, nil
 }
 
@@ -165,6 +186,12 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.GPU {
 		out = append(out, "warm-swap", "mig-rebind")
 	}
+	if st.VoiceMemoryHook {
+		out = append(out, "voice-memory-note-revoke")
+	}
+	if st.LiteLLMLive {
+		out = append(out, "litellm-client-revoke")
+	}
 	return out
 }
 
@@ -174,6 +201,22 @@ func compatibleLive(st appStack) []compatEntry {
 	for _, a := range liveAttackCatalogue {
 		e := compatEntry{LiveAttack: a}
 		switch a.StackLabel {
+		case "litellm-live":
+			e.Compatible = st.Namespace == "litellm" && st.Workload
+			e.Armed = e.Compatible && st.Armed && st.LiteLLMLive
+			if e.Armed {
+				e.Reason = "LiteLLM Live configuration is present; Fire verifies current Service, Pods, policy and control paths before running"
+			} else {
+				e.Reason = "LiteLLM Live gateway, console configuration or governance is unavailable"
+			}
+		case "voice-memory":
+			e.Compatible = st.Namespace == "voice" && st.Workload
+			e.Armed = e.Compatible && st.Armed && st.VoiceMemoryHook
+			if e.Armed {
+				e.Reason = "Voice source and owned rule are declared; Fire verifies every Pod and policy identity before mutation"
+			} else {
+				e.Reason = "Voice memory source/rule rollout or governance is unavailable"
+			}
 		case "vllm-serving":
 			// The vLLM fire path only targets the in-cluster vllm namespace, so "compatible AND
 			// armed" collapses to that namespace; another namespace running vLLM is compatible in
@@ -256,6 +299,12 @@ func catalogueCompatProjection(it CatalogItem, compatible bool, reason string) m
 // scenario is meaningful only on a served model; a GPU-capability scenario needs a GPU node pool;
 // a structural/k8s scenario runs wherever there is a pod to gain a foothold in.
 func scenarioFitsStack(it CatalogItem, st appStack) (bool, string) {
+	if it.Name == voiceMemoryScenario && st.Namespace == "voice" {
+		if st.VoiceMemoryHook {
+			return true, "actual Voice memory source and rule are declared; Live Fire verifies runtime readiness"
+		}
+		return false, "Voice memory source/rule rollout is unavailable"
+	}
 	needsGPU := false
 	for _, c := range it.Caps {
 		if c == "CapGPU" {

@@ -72,6 +72,8 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionRequestDrain: true, model.ActionGuardrailRotate: true,
 	model.ActionKVMigrateInvalidate:           true,
 	model.ActionSensitiveOutputPolicyActivate: true,
+	model.ActionVoiceMemoryNoteRevoke:         true,
+	model.ActionLiteLLMClientRevoke:           true,
 }
 
 // Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
@@ -263,6 +265,18 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "sensitive-output-policy: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionVoiceMemoryNoteRevoke {
+		o := v.Pod.VoiceMemoryObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "voice-memory-policy: event policy identity differs from current policy"}
+		}
+	}
+	if action == model.ActionLiteLLMClientRevoke {
+		o := v.Pod.LiteLLMClientObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "litellm-client-revoke: event policy identity differs from current policy"}
+		}
+	}
 	if ok, why := w.Capable(v, action); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
 	}
@@ -352,6 +366,10 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasBoundAdapterObservation()
 	case model.ActionSensitiveOutputPolicyActivate:
 		return pod.HasBoundSensitiveOutputObservation()
+	case model.ActionVoiceMemoryNoteRevoke:
+		return pod.HasBoundVoiceMemoryObservation()
+	case model.ActionLiteLLMClientRevoke:
+		return pod.HasBoundLiteLLMClientObservation()
 	default:
 		return pod.HasServingDeclaration()
 	}
@@ -438,6 +456,16 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if !pod.HasBoundSensitiveOutputObservation() || pod.OutputPolicyObservation.PolicyName != w.policyName ||
 			pod.OutputPolicyObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/source-bound sensitive-output observation"
+		}
+	case model.ActionVoiceMemoryNoteRevoke:
+		if !pod.HasBoundVoiceMemoryObservation() || pod.VoiceMemoryObservation.PolicyName != w.policyName ||
+			pod.VoiceMemoryObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/source-bound voice-memory observation"
+		}
+	case model.ActionLiteLLMClientRevoke:
+		if !pod.HasBoundLiteLLMClientObservation() || pod.LiteLLMClientObservation.PolicyName != w.policyName ||
+			pod.LiteLLMClientObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/source-bound LiteLLM owned-client observation"
 		}
 	case model.ActionEndpointRotate:
 		if pod.RouteService == "" {

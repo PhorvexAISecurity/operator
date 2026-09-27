@@ -1046,6 +1046,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		decision := model.Decision{
 			AdapterObservation:      v.Pod.AdapterObservation,
 			OutputPolicyObservation: v.Pod.OutputPolicyObservation,
+			VoiceMemoryObservation:  v.Pod.VoiceMemoryObservation,
 			Tenant:                  pol.Tenant,
 			Namespace:               v.Pod.Namespace,
 			Pod:                     v.Pod.Name,
@@ -1354,7 +1355,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	}
 	trace := &model.DecisionTraceV2{
 		SchemaVersion:             model.DecisionTraceSchemaV7,
-		ActionVocabularyVersion:   model.DecisionActionVocabularyOutput16,
+		ActionVocabularyVersion:   model.DecisionActionVocabularyLive18,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
