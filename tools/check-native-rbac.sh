@@ -7,5 +7,10 @@ trap 'rm -rf "$rbac_tmp"' EXIT
 diff -u phorvex/config/rbac/generated-native/role.yaml "$rbac_tmp/generated/role.yaml"
 helm template m007 phorvex/charts/phorvex -n phorvex-system \
  --set 'phorvex.actuatorNamespaces[0]=phorvex-tenant' > "$rbac_tmp/rendered.yaml"
-M007_RENDERED_RBAC="$rbac_tmp/rendered.yaml" GOMAXPROCS=2 go -C phorvex test -p 2 ./internal/actuator \
+helm template m007 phorvex/charts/phorvex -n phorvex-system \
+ --set 'phorvex.actuatorNamespaces[0]=phorvex-tenant' \
+ --set phorvex.actuator=native \
+ --set phorvex.litellmClientRevoke.enabled=true \
+ --set phorvex.litellmClientRevoke.statusSecret=exact-status-token > "$rbac_tmp/litellm-enabled.yaml"
+M007_RENDERED_RBAC="$rbac_tmp/rendered.yaml" M007_LITELLM_RENDERED_RBAC="$rbac_tmp/litellm-enabled.yaml" GOMAXPROCS=2 go -C phorvex test -p 2 ./internal/actuator \
  -run 'TestM007|TestNativeRBAC|TestServiceRestitch|TestRouteRotate' -count=1 -v
