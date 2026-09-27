@@ -3011,12 +3011,17 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke) &&
-			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "") {
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
+			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
+			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
 			reason := "sensitive-output-selection-id-unavailable"
 			if decisions[i].Action == model.ActionVoiceMemoryNoteRevoke {
 				reason = "voice-memory-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionAdapterRotate {
+				reason = "adapter-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
+				reason = "litellm-client-selection-id-unavailable"
 			}
 			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
@@ -3125,7 +3130,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
 			},
 		}
-		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate ||
+		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate || decisions[i].Action == model.ActionAdapterRotate ||
 			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke {

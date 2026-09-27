@@ -62,7 +62,7 @@ func vllmRuleType(evType string) string {
 	return evType
 }
 
-func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, action, phase, targetUID, serviceUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error) {
+func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, action, phase, targetUID, serviceUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error, adapterName ...string) {
 	if restoration == "" {
 		if mutated {
 			restoration = "required"
@@ -70,11 +70,15 @@ func (s *Server) writeVLLMSetupFailure(w http.ResponseWriter, r *http.Request, a
 			restoration = "not-needed"
 		}
 	}
-	if err := s.persistVLLMSetupFailure(actorOf(r), action, phase, targetUID, serviceUID, candidate, mutated, restoration, cause); err != nil {
+	if err := s.persistVLLMSetupFailure(actorOf(r), action, phase, targetUID, serviceUID, candidate, mutated, restoration, cause, adapterName...); err != nil {
 		writeJSON(w, 503, map[string]string{"error": cause.Error() + "; failure evidence persistence failed: " + err.Error(), "verdict": "unsafe-to-retry"})
 		return
 	}
-	writeJSON(w, 502, map[string]any{"error": cause.Error(), "verdict": phase + "-failed", "targetUid": targetUID, "serviceUid": serviceUID, "restoration": restoration})
+	verdict := phase + "-failed"
+	if strings.Contains(restoration, "unsafe-to-retry") {
+		verdict = "unsafe-to-retry"
+	}
+	writeJSON(w, 502, map[string]any{"error": cause.Error(), "verdict": verdict, "targetUid": targetUID, "serviceUid": serviceUID, "restoration": restoration})
 }
 
 func (s *Server) refuseVLLMReset(w http.ResponseWriter, r *http.Request, targetUID string) {
@@ -134,7 +138,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	execIn := func(sh string) (string, error) {
-		return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "--", "sh", "-c", sh)
+		return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "-c", "vllm", "--", "sh", "-c", sh)
 	}
 
 	target, err := s.readVLLMPod(pod)
@@ -183,18 +187,29 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		return stimulus, createErr
 	}
+	var selectedAdapterName string
+	adapterEventAbsent := false
 	setupFailure := func(action, phase string, candidate *attackStimulusEvidence, possibleEffect bool, cause error) {
 		restoration := "not-needed"
 		if possibleEffect {
 			restoration = "unavailable: exact attempted effect identity retained; reconciliation required"
 		}
-		s.writeVLLMSetupFailure(w, r, action, phase, targetUID, "", candidate, possibleEffect, restoration, cause)
+		if action == "poison" && validRunOwnedLoRA(selectedAdapterName) {
+			if candidate != nil && !adapterEventAbsent {
+				restoration = "unknown: event candidate " + candidate.EventName + " and owned adapter " + selectedAdapterName + " on Pod UID " + targetUID + "; unsafe-to-retry"
+			} else if cleanupErr := s.reconcileOwnedLoRA(pod, targetUID, selectedAdapterName); cleanupErr != nil {
+				restoration = "unknown: owned adapter " + selectedAdapterName + " on Pod UID " + targetUID + "; unsafe-to-retry: " + cleanupErr.Error()
+			} else {
+				restoration = "completed: owned adapter " + selectedAdapterName + " on Pod UID " + targetUID + " absent and artifact removed"
+			}
+		}
+		s.writeVLLMSetupFailure(w, r, action, phase, targetUID, "", candidate, possibleEffect, restoration, cause, selectedAdapterName)
 	}
 	startEffect := func(attack, action, evidenceLabel, expected, kind, before, limitation string, stimulus *attackStimulusEvidence) string {
 		stimulus.Limitation = limitation
 		base.stimulus = stimulus
 		base.outcomeClass = "behavioral-oracle-unsupported"
-		base.vllmEffect = &vllmEffectBaseline{kind: kind, before: before}
+		base.vllmEffect = &vllmEffectBaseline{kind: kind, before: before, adapterName: selectedAdapterName}
 		return s.startVLLMEffectRecord(vllmAttackNS, pod, attack, action, evidenceLabel, expected, base)
 	}
 	startUnsupported := func(attack, action, evidenceLabel, expected, limitation string, stimulus *attackStimulusEvidence) string {
@@ -211,24 +226,55 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 
 	switch body.Action {
 	case "poison":
-		if stringMapValue(target.Metadata.Labels, "phorvex.ai/lora-enabled") != "true" {
-			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("target does not declare LoRA support"))
+		if err := liveLoRAPrerequisites(target); err != nil {
+			setupFailure(body.Action, "setup", nil, false, err)
 			return
 		}
-		attempted, producerErr := runBoundedProducer(func() error { return loadVLLMAdapter(execIn, "evil", "/tmp/evil-lora") })
+		models, inventoryErr := readVLLMModels(execIn)
+		if inventoryErr != nil || len(models) != 1 || models[0] != liveLoRABaseModel {
+			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("exact installed base-model inventory is unavailable or differs: %v", inventoryErr))
+			return
+		}
+		if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err != nil {
+			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("base-model control failed: %w", err))
+			return
+		}
+		var adapterName string
+		attempted, producerErr := runBoundedProducer(func() error {
+			name, path, err := s.stageZeroLoRA(pod, targetUID)
+			adapterName = name
+			selectedAdapterName = name
+			if err != nil {
+				return err
+			}
+			if err := loadVLLMAdapter(execIn, name, path); err != nil {
+				return err
+			}
+			return probeLoRARoute(execIn, name, true)
+		})
 		if producerErr != nil {
 			setupFailure(body.Action, "producer", nil, attempted, producerErr)
 			return
 		}
-		stimulus, eventErr := createStimulus("AdapterPoisoning", "verified unapproved LoRA adapter inventory entry", "0.9", "evil")
+		stimulus, eventErr := createStimulus("AdapterPoisoning", "verified unapproved zero-delta LoRA adapter route and inventory entry", "0.9", adapterName)
 		if eventErr != nil {
-			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
-			return
+			reconciled, present, reconcileErr := s.reconcileAdapterEventCreate(stimulus, pod, targetUID, adapterName)
+			if reconcileErr != nil {
+				setupFailure(body.Action, "stimulus", stimulus, true, fmt.Errorf("%w; exact event reconciliation unresolved: %v", eventErr, reconcileErr))
+				return
+			}
+			if !present {
+				adapterEventAbsent = true
+				setupFailure(body.Action, "stimulus", stimulus, true, fmt.Errorf("%w; exact event readback confirmed absence", eventErr))
+				return
+			}
+			stimulus = reconciled
 		}
-		attackID := startEffect("Unapproved LoRA load observation", "poison", "adapter-effect-only", "adapter-rotate", "adapter-epoch", base.epoch, "adapter load and inventory were confirmed; no same-probe model behavior corruption or mitigation was measured", stimulus)
+		selectedAdapterName = adapterName
+		attackID := startEffect("Unapproved LoRA load observation", "poison", "adapter-effect-only", "adapter-rotate", "adapter-epoch", base.epoch, "zero-delta adapter route and inventory were confirmed; no model answer corruption is claimed", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
 			"attackId": attackID,
-			"message":  "An unapproved adapter load and exact detector stimulus were confirmed on " + pod + ". The console will report an exact adapter completion effect if observed; model behavior mitigation is not established."})
+			"message":  "An unapproved zero-delta adapter route and exact detector stimulus were confirmed on " + pod + ". The console will report exact adapter removal if observed; model answer corruption is not claimed."})
 	case "kvcache":
 		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": kvCachePublicPrefix, "max_tokens": 1}
 		attempted, producerErr := runBoundedProducer(func() error { return runVLLMCompletion(execIn, false, payload) })

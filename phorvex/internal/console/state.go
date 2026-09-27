@@ -46,6 +46,7 @@ type vllmSetupFailureRecord struct {
 	Namespace   string `json:"namespace"`
 	Action      string `json:"action"`
 	TargetUID   string `json:"targetUid"`
+	AdapterName string `json:"adapterName,omitempty"`
 	ServiceUID  string `json:"serviceUid,omitempty"`
 	EventName   string `json:"eventName,omitempty"`
 	Correlation string `json:"correlation,omitempty"`
@@ -123,11 +124,14 @@ func (s *Server) persistCatalogueSignalIntent(endpoint, actor, namespace, scenar
 	return s.cfg.appendState(s.cfg.statePath("effect-intents.jsonl"), b)
 }
 
-func (s *Server) persistVLLMSetupFailure(actor, action, phase, targetUID, serviceUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error) error {
+func (s *Server) persistVLLMSetupFailure(actor, action, phase, targetUID, serviceUID string, candidate *attackStimulusEvidence, mutated bool, restoration string, cause error, adapterName ...string) error {
 	if targetUID == "" || cause == nil {
 		return fmt.Errorf("vLLM setup failure identity or cause is unavailable")
 	}
 	record := vllmSetupFailureRecord{Kind: "phorvex.console.vllm.setup", Phase: phase, Time: s.cfg.now().UTC().Format(time.RFC3339Nano), Endpoint: "/api/vllm/attack", Actor: actor, Namespace: vllmAttackNS, Action: action, TargetUID: targetUID, ServiceUID: serviceUID, Mutated: mutated, Restoration: restoration, Error: cause.Error()}
+	if len(adapterName) > 0 && validRunOwnedLoRA(adapterName[0]) {
+		record.AdapterName = adapterName[0]
+	}
 	if candidate != nil {
 		record.EventName = candidate.EventName
 		record.Correlation = candidate.Correlation
