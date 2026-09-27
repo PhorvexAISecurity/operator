@@ -106,6 +106,12 @@ phorvex:
     # through the mutually authenticated transport below. Before the first rollout,
     # provision these exact identities with deploy/eks/provision-audit-mtls.sh.
     console:
+      endpointLease:
+        callerSecretName: vllm-endpoint-lease-callers
+        configMapName: phorvex-catalogue-endpoint-lease-15418dce5949
+        enabled: true
+        profileSHA256: 15418dce5949a522f22d4f5937c7ce4460637d8501b0080a07a9a2f460196666
+        sourceConfigMapName: guardrail-proxy
       guardrailEffect:
         configMapName: phorvex-catalogue-guardrail-effect-a3a74b15537c
         enabled: true
@@ -350,7 +356,7 @@ phorvex:
         - namespace: vllm
           policyName: vllm-defense
           policyUID: 5cef9d07-12ed-48a2-9f51-f8f45fb2442d
-          serviceAccount: default
+          serviceAccount: phorvex-endpoint-lease-proxy
           profileID: vllm-drain-v11
           secretName: vllm-serving-admin
           bearerKey: bearer
@@ -365,7 +371,7 @@ phorvex:
       - vllm/detector-kv-canary
       - vllm/detector-adapter-inv
       - phorvex-system/operator-controller-manager
-      - phorvex-system/phorvex-phorvex-console
+      - system:serviceaccount:phorvex-system:phorvex-phorvex-console
     actuatorNamespaces:
       - voice
       - nats
@@ -530,6 +536,10 @@ catalogueV1TokenRefresher:
 # This is not a credential or a new scenario; the normal console profile SHA
 # and manager image gates independently verify these bytes before a run.
 catalogueProfiles:
+  endpointLease:
+    configMapName: phorvex-catalogue-endpoint-lease-15418dce5949
+    enabled: true
+    profileBase64: eyJhcHByb3ZlZEVuZ2luZUltYWdlIjoiNzUzNTU2NDM3MTgwLmRrci5lY3IudXMtZWFzdC0yLmFtYXpvbmF3cy5jb20vcGhvcnZleEBzaGEyNTY6MzUzNGRlYzZiOTdjMWI2ZTQwNDJiM2NiMjk4N2M2Y2Y4YzRkNGU0MTY3YTgzMzMyMGUyZjFiN2Y0MTM1ZDA1MCIsImF1ZGl0U291cmNlSWRlbnRpdHkiOiJodHRwczovL3Bob3J2ZXgtcGhvcnZleC1hdWRpdC1zb3VyY2UucGhvcnZleC1zeXN0ZW0uc3ZjOjg0NDV8cGhvcnZleC1waG9ydmV4LWF1ZGl0LXNvdXJjZS5waG9ydmV4LXN5c3RlbS5zdmMiLCJjbGllbnRBSE1BQyI6ImI2MTBjZDE3MjlkZGExY2Q0MzA2MjA3ZTc3MWQ1ZTEyNDc1MWI4MWRjM2FkYzhkM2RkZjkyYWI2MmZmYmQ3MWQiLCJjbGllbnRBU0hBMjU2IjoiZDQxYmY5ZjJkNThhMGU1MTRjMTYzNzlhY2ExNjZjZDZiMzU4ODBkODY0NjQ0ZGYxMzI0OWRlNjljM2Y3MDU2OCIsImNsaWVudEJITUFDIjoiMDdiMTI0MmI1OTc5N2ViOTBiYjZmYWFiY2Q1MWJkY2JhZDI3Y2JhZGIxOWExZGY0ZmU5MzNmNDAxYTI1ZDgxZSIsImNsaWVudEJTSEEyNTYiOiIyOWEzNDE1ZGQyOTFjNmZjM2IxMDI0M2U1MDNlOGYwZjE2M2UzZDk1ZGQ4OTY1YjU1ZDE2MzkxYjBlY2RkODZhIiwiY29uc29sZVNlY3JldFVJRCI6IjM0YjlhNzdmLWMwMTktNDEzZC1hZTYxLTUzMDMxYjliOWRiYSIsImV2ZW50Q3JlYXRvciI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDpwaG9ydmV4LXN5c3RlbTpwaG9ydmV4LXBob3J2ZXgtY29uc29sZSIsImpvdXJuYWxVSUQiOiI5OWRkN2Q0OC1iYWEwLTQ1MDctODcyMi0zOGEyMzgxOTFmYjAiLCJtYXhSdW5TZWNvbmRzIjo5MDAsIm1vZGVsSWQiOiJRd2VuL1F3ZW4yLjUtN0ItSW5zdHJ1Y3QtQVdRIiwicG9saWN5Q29uZmlnTWFwVUlEIjoiOGJkZmVmMDUtMGRhNy00N2E4LWI0ODUtNjZjODk1MDIwMmJiIiwicG9saWN5R2VuZXJhdGlvbiI6NTksInBvbGljeU5hbWUiOiJ2bGxtLWRlZmVuc2UiLCJwb2xpY3lVSUQiOiI1Y2VmOWQwNy0xMmVkLTQ4YTItOWY1MS1mOGY0NWZiMjQ0MmQiLCJwcm94eUltYWdlIjoiNzUzNTU2NDM3MTgwLmRrci5lY3IudXMtZWFzdC0yLmFtYXpvbmF3cy5jb20vcGhvcnZleEBzaGEyNTY6OTFjZDQ4MTJkY2I4MDhkMDQ5OGRkZDBmN2Y3NjhkNjRjMzRlODZkMDUyMjljZWMyNTI1MGFiZGQxNDAyZGIzMiIsInByb3h5U291cmNlU0hBMjU2IjoiYzAzMTY5MzE3MGMxZDIxZDBhMjM0MDVhZjI1NWY4MzMxOWVmYTI0MGNlODRkOWMyNWQyNDM2Mzg4NTI4YTNmZiIsInNlZWRTSEEyNTYiOiJjZWEwNTFjN2Q5NWNjYTMyN2U5M2E2M2E1YWU4MmIzMmVkYjc2MjM0OTNmOTdkMjc1OGZkOGRmN2FjNWVmYjJlIiwic2VydmljZU5hbWUiOiJ2bGxtIiwic2VydmljZVVJRCI6IjRlODRiYzAyLTNmZWItNGY5YS1iNGIxLTU2YWM1YWQwNGVmYyIsInNvdXJjZUNvbmZpZ01hcE5hbWUiOiJndWFyZHJhaWwtcHJveHkiLCJzb3VyY2VDb25maWdNYXBVSUQiOiJhMWJmNTQ2YS0yNjk5LTQ1M2YtODRjMy04ZmY5NjIwOWViN2EiLCJ0ZW5hbnRTZWNyZXRVSUQiOiI0NWY0NGU3ZC1hNzJhLTRmNGItOGE1MC00ZjU0MTAzNzA2M2UiLCJ2ZXJzaW9uIjoxfQ==
   guardrailEffect:
     configMapName: phorvex-catalogue-guardrail-effect-a3a74b15537c
     enabled: true
