@@ -32,20 +32,25 @@ import (
 // (ZERO Phoenix imports); every handler is authored from the published k8s.io API
 // contract (clean-room), so the standalone product IP carries no SSPL-derived Go.
 type NativeActuator struct {
-	Client                   client.Client
-	Reader                   client.Reader
-	JournalNamespace         string
-	RecoveryVLLM             vLLMClient // optional serving-stack seam for recovery tests; nil uses live client
-	AdapterSources           AdapterSources
-	RouteObservationTimeout  time.Duration
-	RouteObservationInterval time.Duration
-	VoiceMemoryTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
-	VoiceRefundTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
-	VoiceMCPTransport        http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
-	VoiceMCPApprovedImage    string            // reviewed immutable MCP image from manager configuration
-	VoiceOutputTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
-	migProfiles              *MIGProfiles
-	servingSecurity          *ServingSecurityConfig
+	Client                            client.Client
+	Reader                            client.Reader
+	JournalNamespace                  string
+	RecoveryVLLM                      vLLMClient // optional serving-stack seam for recovery tests; nil uses live client
+	AdapterSources                    AdapterSources
+	RouteObservationTimeout           time.Duration
+	RouteObservationInterval          time.Duration
+	VoiceMemoryTransport              http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	VoiceRefundTransport              http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	VoiceMCPTransport                 http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	VoiceMCPApprovedImage             string            // reviewed immutable MCP image from manager configuration
+	VoiceOutputTransport              http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	EndpointLeaseApprovedSourceSHA256 string            // reviewed five-file proxy source digest
+	EndpointLeaseApprovedProxyImage   string            // reviewed immutable proxy runtime image
+	EndpointLeaseApprovedEngineImage  string            // reviewed immutable loopback engine image
+	EndpointLeaseStatusTransport      http.RoundTripper // fixed Pod-IP TLS status seam for tests
+	EndpointLeaseStatusToken          string            // test-only; production uses serving security
+	migProfiles                       *MIGProfiles
+	servingSecurity                   *ServingSecurityConfig
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -69,6 +74,16 @@ type tenantNamespaceBinding struct {
 
 // NewNativeActuator constructs the native actuator over a controller-runtime client.
 func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator{Client: c} }
+
+func (n *NativeActuator) SetEndpointLeaseApprovedSourceSHA256(sha string) {
+	n.EndpointLeaseApprovedSourceSHA256 = sha
+}
+func (n *NativeActuator) SetEndpointLeaseApprovedProxyImage(image string) {
+	n.EndpointLeaseApprovedProxyImage = image
+}
+func (n *NativeActuator) SetEndpointLeaseApprovedEngineImage(image string) {
+	n.EndpointLeaseApprovedEngineImage = image
+}
 
 // SupportsAction answers package-owned runtime prerequisites. MIG support requires the
 // configured transport, an exact operator profile, a current authoritative Pod identity,
@@ -106,6 +121,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	}
 	if a == model.ActionLiteLLMClientRevoke {
 		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
+	}
+	if a == model.ActionEndpointLeaseRevoke {
+		return endpointLeaseCapability(ctx, n.Reader, n.JournalNamespace, t, n.servingSecurity, n.EndpointLeaseApprovedSourceSHA256, n.EndpointLeaseApprovedProxyImage, n.EndpointLeaseApprovedEngineImage, n.EndpointLeaseStatusTransport, n.EndpointLeaseStatusToken)
 	}
 	// Transport is checked before its dependent allocation evidence.
 	if a == model.ActionMIGRebind && !NodeExecWired() {
@@ -288,7 +306,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future

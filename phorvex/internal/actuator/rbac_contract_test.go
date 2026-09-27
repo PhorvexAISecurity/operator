@@ -62,8 +62,13 @@ func TestServiceRestitchRBACIsNamespacedAndExact(t *testing.T) {
 		}
 		text := string(raw)
 		verbs := singleResourceVerbs(text, `resources: ["services"]`)
-		if len(verbs) != 1 || verbs[0] != `verbs: ["get", "list", "update"]` {
-			t.Errorf("%s Service grants = %v, want exactly get/list/update", path, verbs)
+		wantServiceVerbs := []string{`verbs: ["get", "list", "update"]`}
+		if path == "../../charts/phorvex/templates/rbac.yaml" {
+			// The default-off lease Role adds only a named read of vllm Service.
+			wantServiceVerbs = append(wantServiceVerbs, `verbs: ["get"]`)
+		}
+		if strings.Join(verbs, "\n") != strings.Join(wantServiceVerbs, "\n") {
+			t.Errorf("%s Service grants = %v, want %v", path, verbs, wantServiceVerbs)
 		}
 		if path == "../../config/rbac/phorvex-actuator-role.yaml" && strings.Contains(text, `resources: ["secrets"]`) {
 			t.Errorf("%s must not gain an unconfigured standing Secret grant", path)

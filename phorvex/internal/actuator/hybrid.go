@@ -61,6 +61,15 @@ func (h *HybridActuator) SetServingSecurity(c *ServingSecurityConfig) { h.native
 func (h *HybridActuator) SetVoiceMCPApprovedImage(image string) {
 	h.native.VoiceMCPApprovedImage = image
 }
+func (h *HybridActuator) SetEndpointLeaseApprovedSourceSHA256(sha string) {
+	h.native.EndpointLeaseApprovedSourceSHA256 = sha
+}
+func (h *HybridActuator) SetEndpointLeaseApprovedProxyImage(image string) {
+	h.native.EndpointLeaseApprovedProxyImage = image
+}
+func (h *HybridActuator) SetEndpointLeaseApprovedEngineImage(image string) {
+	h.native.EndpointLeaseApprovedEngineImage = image
+}
 
 func (h *HybridActuator) RecoverOperations(ctx context.Context, globalKill bool) ([]RecoveryEvent, error) {
 	return h.native.recoverOperations(ctx, globalKill, func(a model.Action) bool { return RouteFor(BackendHybrid, a) == BackendNative })

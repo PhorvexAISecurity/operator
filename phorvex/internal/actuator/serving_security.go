@@ -258,7 +258,8 @@ func servingBindingDigest(operatorNamespace string, b ServingSecurityBinding) st
 func servingHTTPAction(action model.Action) bool {
 	switch action {
 	case model.ActionWarmSwap, model.ActionModelShardReplace, model.ActionMIGRebind, model.ActionKVReset,
-		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate:
+		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
+		model.ActionEndpointLeaseRevoke:
 		return true
 	default:
 		return false

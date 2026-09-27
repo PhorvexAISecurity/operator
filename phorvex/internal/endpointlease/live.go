@@ -17,7 +17,7 @@ import (
 
 // Pod is one current Ready public Service backend, identified by API UID and
 // exact Pod IP. Status readback uses only these addresses, never event URLs.
-type Pod struct{ Name, UID, IP, ProxyImageID string }
+type Pod struct{ Name, UID, IP, ProxyImageID, ProxyContainerID string }
 
 type Live struct {
 	State         State
@@ -39,9 +39,9 @@ var sourceFiles = []string{"guardrail_proxy.py", "dual_server.py", "endpoint_lea
 // and every Ready proxy incarnation. It intentionally never reads a Secret:
 // only the authenticated proxy can attest Secret UID and seed from its own
 // named API read and mounted bytes.
-func ValidateLive(ctx context.Context, reader client.Reader, targetUID, approvedSourceSHA256, approvedProxyImage string) (Live, error) {
+func ValidateLive(ctx context.Context, reader client.Reader, targetUID, approvedSourceSHA256, approvedProxyImage, approvedEngineImage string) (Live, error) {
 	var out Live
-	if reader == nil || !ValidUID(targetUID) || !ValidSHA(approvedSourceSHA256) || !validApprovedImage(approvedProxyImage) {
+	if reader == nil || !ValidUID(targetUID) || !ValidSHA(approvedSourceSHA256) || !validApprovedImage(approvedProxyImage) || !validApprovedImage(approvedEngineImage) {
 		return out, errors.New("endpoint lease trusted source or target authority unavailable")
 	}
 	svc := &corev1.Service{}
@@ -93,7 +93,7 @@ func ValidateLive(ctx context.Context, reader client.Reader, targetUID, approved
 		return out, err
 	}
 	if dep.DeletionTimestamp != nil || !ValidUID(string(dep.UID)) ||
-		!proxySpecMatches(dep.Spec.Template.Spec, dep.Spec.Template.Annotations, approvedProxyImage, approvedSourceSHA256, string(policy.UID), state) {
+		!proxySpecMatches(dep.Spec.Template.Spec, dep.Spec.Template.Annotations, approvedProxyImage, approvedEngineImage, approvedSourceSHA256, string(policy.UID), state) {
 		return out, errors.New("endpoint lease Deployment template source/Secret/image gate differs")
 	}
 	list := &corev1.PodList{}
@@ -133,6 +133,9 @@ func ValidateLive(ctx context.Context, reader client.Reader, targetUID, approved
 			if ep.Conditions.Ready == nil || !*ep.Conditions.Ready {
 				continue
 			}
+			if ep.Conditions.Terminating != nil && *ep.Conditions.Terminating || ep.Conditions.Serving != nil && !*ep.Conditions.Serving {
+				return out, errors.New("endpoint lease Ready endpoint is terminating or not serving")
+			}
 			if ep.TargetRef == nil || ep.TargetRef.Kind != "Pod" || (ep.TargetRef.Namespace != "" && ep.TargetRef.Namespace != Namespace) || !ValidUID(string(ep.TargetRef.UID)) ||
 				readyUIDs[string(ep.TargetRef.UID)] || len(ep.Addresses) != 1 {
 				return out, errors.New("endpoint lease Ready endpoint identity ambiguous")
@@ -144,7 +147,7 @@ func ValidateLive(ctx context.Context, reader client.Reader, targetUID, approved
 			if _, err := netip.ParseAddr(p.Status.PodIP); err != nil {
 				return out, errors.New("endpoint lease Ready Pod IP invalid")
 			}
-			if !ownedByDeployment(ctx, reader, p, dep) || !proxySpecMatches(p.Spec, p.Annotations, approvedProxyImage, approvedSourceSHA256, string(policy.UID), state) {
+			if !ownedByDeployment(ctx, reader, p, dep) || !proxySpecMatches(p.Spec, p.Annotations, approvedProxyImage, approvedEngineImage, approvedSourceSHA256, string(policy.UID), state) {
 				return out, errors.New("endpoint lease Ready Pod owner or source gate differs")
 			}
 			imageID := ""
@@ -156,8 +159,44 @@ func ValidateLive(ctx context.Context, reader client.Reader, targetUID, approved
 			if imageID == "" {
 				return out, errors.New("endpoint lease Ready proxy imageID unavailable or unreviewed")
 			}
+			engineReady := false
+			for _, status := range p.Status.ContainerStatuses {
+				if status.Name == "vllm" && status.Ready && status.ContainerID != "" && imageIDMatches(approvedEngineImage, status.ImageID) {
+					engineReady = true
+				}
+			}
+			if !engineReady {
+				return out, errors.New("endpoint lease engine runtime image or readiness unverified")
+			}
 			readyUIDs[string(p.UID)] = true
-			out.Pods = append(out.Pods, Pod{Name: p.Name, UID: string(p.UID), IP: p.Status.PodIP, ProxyImageID: imageID})
+			containerID := ""
+			for _, status := range p.Status.ContainerStatuses {
+				if status.Name == ProxyContainerName {
+					containerID = status.ContainerID
+				}
+			}
+			out.Pods = append(out.Pods, Pod{Name: p.Name, UID: string(p.UID), IP: p.Status.PodIP, ProxyImageID: imageID, ProxyContainerID: containerID})
+		}
+	}
+	// A still-running Deployment sibling may retain an A request admitted while
+	// it was a Ready backend, even after becoming NotReady or leaving the slice.
+	// Do not start a cutover from a current Ready set that omits that process.
+	for i := range list.Items {
+		pod := &list.Items[i]
+		if readyUIDs[string(pod.UID)] || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			continue
+		}
+		possiblyLease := selectorMatches(svc.Spec.Selector, pod.Labels) || pod.Annotations[SourceConfigMapAnnotation] == SourceConfigMapName
+		if owner := metav1.GetControllerOf(pod); owner != nil && owner.Kind == "ReplicaSet" && strings.HasPrefix(owner.Name, ServiceName+"-") {
+			possiblyLease = true
+		}
+		if !possiblyLease {
+			continue
+		}
+		for _, status := range pod.Status.ContainerStatuses {
+			if status.Name == ProxyContainerName && status.ContainerID != "" {
+				return Live{}, errors.New("endpoint lease non-Ready possible proxy may retain an admitted old request")
+			}
 		}
 	}
 	if len(out.Pods) == 0 || len(out.Pods) > 16 || !readyUIDs[targetUID] {
@@ -207,13 +246,16 @@ func ownedByDeployment(ctx context.Context, r client.Reader, p *corev1.Pod, d *a
 	return parent != nil && parent.Kind == "Deployment" && parent.APIVersion == "apps/v1" && parent.UID == d.UID
 }
 
-func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image, sourceSHA, policyUID string, state State) bool {
+func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image, engineImage, sourceSHA, policyUID string, state State) bool {
 	if annotations[SourceConfigMapAnnotation] != SourceConfigMapName || annotations[SourceSHAAnnotation] != sourceSHA || annotations[PolicyUIDAnnotation] != policyUID {
+		return false
+	}
+	if annotations[EventCreatorAnnotation] != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" {
 		return false
 	}
 	var sourceVolume, secretVolume string
 	for _, v := range spec.Volumes {
-		if v.ConfigMap != nil && v.ConfigMap.Name == SourceConfigMapName && v.ConfigMap.Optional != nil && *v.ConfigMap.Optional {
+		if v.ConfigMap != nil && v.ConfigMap.Name == SourceConfigMapName && (v.ConfigMap.Optional != nil && *v.ConfigMap.Optional || len(v.ConfigMap.Items) != 0) {
 			return false
 		}
 		if v.ConfigMap != nil && v.ConfigMap.Name == SourceConfigMapName {
@@ -223,7 +265,7 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 			sourceVolume = v.Name
 		}
 		if v.Secret != nil && v.Secret.SecretName == SecretName {
-			if v.Secret.Optional != nil && *v.Secret.Optional || secretVolume != "" {
+			if v.Secret.Optional != nil && *v.Secret.Optional || len(v.Secret.Items) != 0 || secretVolume != "" {
 				return false
 			}
 			secretVolume = v.Name
@@ -232,10 +274,22 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 	if sourceVolume == "" || secretVolume == "" {
 		return false
 	}
+	if len(spec.Containers) != 2 {
+		return false
+	}
+	engineSeen, proxySeen := false, false
 	for _, c := range spec.Containers {
-		if c.Name != ProxyContainerName {
+		if c.Name == "vllm" {
+			if engineSeen || !engineSpecMatches(c, engineImage) {
+				return false
+			}
+			engineSeen = true
 			continue
 		}
+		if c.Name != ProxyContainerName || proxySeen {
+			return false
+		}
+		proxySeen = true
 		if c.Image != image || len(c.Command) != 3 || c.Command[0] != "python3" || c.Command[1] != "-B" || c.Command[2] != "/src/dual_server.py" || len(c.Args) != 0 {
 			return false
 		}
@@ -269,11 +323,16 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 				if !m.ReadOnly {
 					return false
 				}
+				known := false
 				for _, file := range sourceFiles {
 					if m.MountPath == "/src/"+file && m.SubPath == file {
 						mounted[file]++
+						known = true
 						break
 					}
+				}
+				if !known {
+					return false
 				}
 			}
 			if m.Name == secretVolume && m.MountPath == "/etc/phorvex/endpoint-lease-keys" && m.ReadOnly && m.SubPath == "" {
@@ -291,9 +350,50 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 				return false
 			}
 		}
-		return true
 	}
-	return false
+	return engineSeen && proxySeen
+}
+
+func engineSpecMatches(c corev1.Container, image string) bool {
+	if c.Image != image || len(c.Command) != 0 {
+		return false
+	}
+	host, port := 0, 0
+	for i := 0; i < len(c.Args); i++ {
+		switch c.Args[i] {
+		case "--host":
+			if i+1 >= len(c.Args) || c.Args[i+1] != "127.0.0.1" {
+				return false
+			}
+			host++
+			i++
+		case "--port":
+			if i+1 >= len(c.Args) || c.Args[i+1] != "8001" {
+				return false
+			}
+			port++
+			i++
+		default:
+			if strings.HasPrefix(c.Args[i], "--host=") || strings.HasPrefix(c.Args[i], "--port=") {
+				return false
+			}
+		}
+	}
+	if host != 1 || port != 1 {
+		return false
+	}
+	keyCount := 0
+	for _, e := range c.Env {
+		if e.Name != "VLLM_API_KEY" {
+			continue
+		}
+		keyCount++
+		if e.Value != "" || e.ValueFrom == nil || e.ValueFrom.SecretKeyRef == nil || e.ValueFrom.SecretKeyRef.Name != "vllm-control" ||
+			e.ValueFrom.SecretKeyRef.Key != "api-key" || e.ValueFrom.SecretKeyRef.Optional != nil && *e.ValueFrom.SecretKeyRef.Optional {
+			return false
+		}
+	}
+	return keyCount == 1
 }
 
 func validApprovedImage(image string) bool {

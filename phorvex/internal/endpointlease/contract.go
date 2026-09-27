@@ -30,6 +30,7 @@ const (
 	SourceSHAAnnotation       = "phorvex.ai/endpoint-lease-source-sha256"
 	SourceConfigMapAnnotation = "phorvex.ai/endpoint-lease-source-configmap"
 	PolicyUIDAnnotation       = "phorvex.ai/endpoint-lease-policy-configmap-uid"
+	EventCreatorAnnotation    = "phorvex.ai/endpoint-lease-event-creator"
 	ProxyContainerName        = "guardrail"
 	StatusPath                = "/v1/endpoint-lease/state"
 	MaxStateBytes             = 16 << 10
@@ -109,7 +110,7 @@ func ParseState(raw string) (State, error) {
 func validateState(s State) error {
 	if s.Version != 1 || s.Revision > MaxRevision || !ValidUID(s.ServiceUID) || !ValidUID(s.SecretUID) ||
 		!ValidSHA(s.ProxySourceSHA256) || !ValidSHA(s.SeedSHA256) || len(s.AllowedClientHMACs) == 0 ||
-		len(s.AllowedClientHMACs) > 256 || len(s.RevokedClientHMACs) > 256 ||
+		len(s.AllowedClientHMACs)+len(s.RevokedClientHMACs) != 2 || s.RevokedClientHMACs == nil ||
 		(s.Revision == 0 && s.LastOperationID != "") || (s.Revision > 0 && !ValidOperationID(s.LastOperationID)) {
 		return errors.New("endpoint lease state identity or revision invalid")
 	}
@@ -241,7 +242,7 @@ func ParseStatus(raw string) (Status, error) {
 	}
 	if s.Version != 1 || !ValidUID(s.PodUID) || !ValidUID(s.ServiceUID) ||
 		!ValidSHA(s.ProxySourceSHA256) || !ValidUID(s.PolicyConfigMapUID) || !ValidUID(s.SecretUID) ||
-		!ValidSHA(s.SeedSHA256) || s.Revision > MaxRevision || !ValidSHA(s.StateSHA256) ||
+		!ValidSHA(s.SeedSHA256) || s.Revision > MaxRevision || s.OldRevisionInFlight > MaxRevision || !ValidSHA(s.StateSHA256) ||
 		!ValidSHA(s.RevokedClientHMAC) || !ValidSHA(s.RetainedClientHMAC) || s.RevokedClientHMAC == s.RetainedClientHMAC ||
 		(s.Revision == 0 && s.LastOperationID != "") || (s.Revision > 0 && !ValidOperationID(s.LastOperationID)) {
 		return Status{}, errors.New("endpoint lease proxy status invalid")

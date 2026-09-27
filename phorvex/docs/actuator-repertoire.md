@@ -60,6 +60,7 @@ route-key with the target Ready and at least two Ready backends.
 | `voice-refund-pair-deny` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-refund-pair-deny" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `voice-output-policy-activate` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-output-policy-activate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `voice-mcp-tool-pin` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-mcp-tool-pin" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `endpoint-lease-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "endpoint-lease-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -88,6 +89,7 @@ route-key with the target Ready and at least two Ready backends.
 | `voice-refund-pair-deny` | native | yes | — | exact live Voice Deployment, owned refund ConfigMap, private readback Secret and operation journal | support does not verify the observed refund pair, CAS append or per-Pod application effect; dispatch checks these |
 | `voice-output-policy-activate` | native | yes | — | exact Voice Deployment, owned output rule, authenticated all-Pod readback and fixed protected journal | support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression |
 | `voice-mcp-tool-pin` | native | yes | — | reviewed MCP image, exact Voice and MCP sources, owned descriptor ConfigMap, private readback and protected journal | support does not verify the observed model steering, CAS append or later tool behavior; dispatch checks installed sources and per-Pod projection |
+| `endpoint-lease-revoke` | native | yes | — | reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal | support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior |
 
 ## hybrid
 
@@ -116,3 +118,4 @@ route-key with the target Ready and at least two Ready backends.
 | `voice-refund-pair-deny` | native | yes | — | exact live Voice Deployment, owned refund ConfigMap, private readback Secret and operation journal | support does not verify the observed refund pair, CAS append or per-Pod application effect; dispatch checks these |
 | `voice-output-policy-activate` | native | yes | — | exact Voice Deployment, owned output rule, authenticated all-Pod readback and fixed protected journal | support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression |
 | `voice-mcp-tool-pin` | native | yes | — | reviewed MCP image, exact Voice and MCP sources, owned descriptor ConfigMap, private readback and protected journal | support does not verify the observed model steering, CAS append or later tool behavior; dispatch checks installed sources and per-Pod projection |
+| `endpoint-lease-revoke` | native | yes | — | reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal | support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior |

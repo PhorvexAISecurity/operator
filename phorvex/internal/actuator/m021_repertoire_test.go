@@ -184,6 +184,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 				}
 				continue
 			}
+			if e.Action == model.ActionEndpointLeaseRevoke && e.Accepted {
+				if ok || !strings.Contains(why, "endpoint-lease-revoke:") || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reviewed lease source, image, journal or target authority must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
 			// mig-rebind on a native route has a runtime prerequisite the static table
 			// records separately; everywhere else acceptance and support must agree.
 			if e.Prerequisite != "" && !ok {

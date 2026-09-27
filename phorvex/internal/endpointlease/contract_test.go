@@ -49,6 +49,8 @@ func TestCanonicalStateAndOneRevoke(t *testing.T) {
 func TestStateRejectsAliasDuplicateReorderAndOverlap(t *testing.T) {
 	raw, _ := EncodeState(fixtureState())
 	bad := []string{
+		strings.Replace(raw, `"allowedClientHMACs":["`+strings.Repeat("a", 64)+`","`+strings.Repeat("b", 64)+`"]`, `"allowedClientHMACs":["`+strings.Repeat("a", 64)+`","`+strings.Repeat("b", 64)+`","`+strings.Repeat("c", 64)+`"]`, 1),
+		strings.Replace(raw, `"revokedClientHMACs":[]`, `"revokedClientHMACs":null`, 1),
 		strings.Replace(raw, `"version":1`, `"version":1,"Version":1`, 1),
 		strings.Replace(raw, `"version":1`, `"version":1,"version":1`, 1),
 		strings.Replace(raw, `"revision":0`, `"revision":0.0`, 1),
@@ -88,5 +90,11 @@ func TestSourceAndStatusFixture(t *testing.T) {
 	raw, _ = json.Marshal(values)
 	if _, err := ParseStatus(string(raw)); err == nil {
 		t.Fatal("case alias in status accepted")
+	}
+	delete(values, "StateSHA256")
+	values["oldRevisionInFlight"] = float64(MaxRevision + 1)
+	raw, _ = json.Marshal(values)
+	if _, err := ParseStatus(string(raw)); err == nil {
+		t.Fatal("status in-flight count above canonical integer bound accepted")
 	}
 }
