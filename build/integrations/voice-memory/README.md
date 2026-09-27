@@ -118,3 +118,35 @@ mutation credential. The bot starts with `python3 -B /app/bot.py`, and
 Run source tests with a Python 3.11 environment containing the installed
 Voice probe's `websockets.asyncio.client` dependency:
 `python3 -m unittest discover -s build/integrations/voice-memory -p 'test_*.py'`.
+
+For the separate Voice output Live console activation, render the exact
+reviewed profile locally after the joint four-file source is frozen. Supply
+the intended console's actual `-audit-source-url` and
+`-audit-source-server-dns` values; the profile binds their concatenation,
+which the console checks against its running audit transport identity. For
+example, from this repository root:
+
+```
+python3 build/integrations/voice-memory/render_output_profile.py \
+  --audit-source-url 'https://phorvex-phorvex-audit-source.phorvex-system.svc:8445' \
+  --audit-source-server-dns 'phorvex-phorvex-audit-source.phorvex-system.svc' \
+  --output-dir /path/to/private/voice-output-profile
+```
+
+The renderer recomputes the output source digest from the exact mounted
+`bot.py`, `voice_memory_policy.py`, and `voice_output_policy.py` bytes and
+requires it to match the joint activation renderer. It hashes the embedded
+console probe and checks both fixed audio clips. It writes canonical
+`profile.json`, an immutable `phorvex-system` ConfigMap containing that exact
+profile, and an additive `console-values.yaml` fragment with the ConfigMap
+name and profile SHA-256. Review the generated values against the installed
+audit source and chart, provision the profile ConfigMap, then enable
+`phorvex.console.voiceOutputLive` through normal chart delivery. Native
+`phorvex.voiceOutput` and the application source/rule/journal/token bundle
+must be installed and verified separately. The console route remains disabled
+by default; producing these files does not change a workload or prove a
+model disclosure, brain selection, or defended result.
+
+Run the local renderer checks from `build/integrations/voice-memory` with
+`python3 -m unittest -q test_render_output_profile.py`. The test refuses
+source/clip drift and a mismatched audit URL.
