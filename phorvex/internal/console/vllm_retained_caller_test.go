@@ -27,7 +27,7 @@ func TestRetainedCallerBRemainsUsableAfterDurableARevocation(t *testing.T) {
 		t.Fatal("unexplained B-only revision zero admitted")
 	}
 	after := endpointLeaseState{Revision: 1, AllowedClientHMACs: []string{b}, RevokedClientHMACs: []string{a},
-		LastOperationID: strings.Repeat("d", 64)}
+		LastOperationID: strings.Repeat("d", 32)}
 	terminal := endpointLeaseJournalReceipt{Phase: "terminal-full", NewRevision: 1,
 		NewStateSHA256: endpointLeaseSHA(endpointLeaseStateBytes(after)), OperationID: after.LastOperationID,
 		PolicyUID: p.PolicyUID, PolicyConfigMapUID: p.PolicyConfigMapUID, SecretUID: p.TenantSecretUID,
