@@ -66,6 +66,8 @@ class CandidateTest(unittest.TestCase):
         labels = candidate["spec"]["template"]["metadata"]["labels"]
         self.assertEqual(labels["phorvex.ai/serving"], "true")
         self.assertEqual(service["spec"]["selector"], {"phorvex.ai/role": "leader", "phorvex.ai/serving": "true"})
+        self.assertEqual(json.loads(outputs["publication-join.json"])["originalServiceSelector"], {"phorvex.ai/role": "leader"})
+        self.assertEqual(svc["spec"]["selector"], {"phorvex.ai/role": "leader"})
         self.assertEqual(spec["containers"][0]["image"], publication["imageByDigest"])
         self.assertEqual(spec["containers"][0]["args"][-4:], ["--revision", "b25037543e9394b818fdfca67ab2a00ecc7dd641", "--tokenizer-revision", "b25037543e9394b818fdfca67ab2a00ecc7dd641"])
         self.assertEqual(spec["initContainers"][0]["command"], ["python", "/src/drain_v11_init.py"])

@@ -106,7 +106,7 @@ def render(deployment: dict, configmap: dict, policy: dict, service: dict,
             or not any(p.get("port") == 8000 and p.get("targetPort") == 8000
                        for p in svc["spec"].get("ports", []))):
         raise ValueError("existing vLLM Service identity, selector or serving route differs")
-    original_selector = svc["spec"].get("selector")
+    original_selector = copy.deepcopy(svc["spec"].get("selector"))
     original_labels = deployment["spec"]["template"]["metadata"].get("labels", {})
     if (not isinstance(original_selector, dict) or not original_selector
             or any(original_labels.get(key) != value for key, value in original_selector.items())
