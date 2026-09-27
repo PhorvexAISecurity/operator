@@ -414,4 +414,22 @@ func TestLiteLLMPendingJournalFencesBothBoundPodsOnly(t *testing.T) {
 	if e == nil || !pending {
 		t.Fatalf("malformed protected journal not refused: %v %v", pending, e)
 	}
+	if e := f.c.Delete(ctx, journal); e != nil {
+		t.Fatal(e)
+	}
+	pending, e = PendingLiteLLMClientOperation(ctx, f.c, "phorvex-system", "litellm", "pod-a")
+	if e == nil || !pending {
+		t.Fatalf("missing journal with installed source not refused: %v %v", pending, e)
+	}
+	source := &corev1.ConfigMap{}
+	if e := f.c.Get(ctx, client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.SourceConfigMapName}, source); e != nil {
+		t.Fatal(e)
+	}
+	if e := f.c.Delete(ctx, source); e != nil {
+		t.Fatal(e)
+	}
+	pending, e = PendingLiteLLMClientOperation(ctx, f.c, "phorvex-system", "litellm", "pod-a")
+	if e != nil || pending {
+		t.Fatalf("uninstalled profile fenced unrelated LiteLLM target: %v %v", pending, e)
+	}
 }

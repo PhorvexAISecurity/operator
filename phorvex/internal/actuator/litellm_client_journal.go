@@ -31,7 +31,18 @@ func PendingLiteLLMClientOperation(ctx context.Context, reader client.Reader, op
 	cm := &corev1.ConfigMap{}
 	e := reader.Get(ctx, client.ObjectKey{Namespace: operatorNamespace, Name: litellmclient.JournalName}, cm)
 	if apierrors.IsNotFound(e) {
-		return false, nil // Profile has not been installed.
+		// An absent journal is normal only before the source fixture exists.
+		// Once the gateway source is installed, absence cannot prove that no
+		// prepared operation was lost with the protected journal.
+		source := &corev1.ConfigMap{}
+		sourceErr := reader.Get(ctx, client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.SourceConfigMapName}, source)
+		if apierrors.IsNotFound(sourceErr) {
+			return false, nil
+		}
+		if sourceErr != nil {
+			return true, sourceErr
+		}
+		return true, errors.New("owned-client protected journal absent with installed gateway source")
 	}
 	if e != nil {
 		return true, e
