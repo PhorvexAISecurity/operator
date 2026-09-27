@@ -16,12 +16,17 @@ inside the Pod. All other callers retain the upstream auth behavior.
 
 1. Provide attacker/control token SHA-256 values, the exact reviewed
    digest-pinned gateway image, and one installed model alias. It emits an
-   immutable one-file source ConfigMap, an immutable clients ConfigMap, and
-   an inactive revision-zero policy ConfigMap. No client token or master key
-   is written to these objects.
+   immutable one-file source ConfigMap, an immutable clients ConfigMap, an
+   inactive revision-zero policy ConfigMap, and a dedicated PhorvexPolicy
+   proposal. The policy selects only Pods bearing the rollout's
+   `phorvex.ai/litellm-live=true` label, is event-driven/reactive-only, and
+   leaves rotate and quarantine enabled alongside client revoke. The reader
+   gives defense credit only if the brain actually chooses client revoke.
+   No client token or master key is written to these objects.
 2. After the policy ConfigMap exists, supply its UID and read-only originals
    for the current Deployment and Service. The renderer emits JSON patches
-   for those **existing** objects. The patches require the owner to create a
+   for those **existing** objects and label the reviewed Pods for the dedicated
+   policy. The patches require the owner to create a
    `phorvex-litellm-master-key` Secret (`master-key`) and
    `phorvex-litellm-status-token` Secret (`token`) first. A literal existing
    master-key env value is replaced by a Secret reference; it is never copied

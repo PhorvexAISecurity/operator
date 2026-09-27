@@ -12,7 +12,8 @@ spec.loader.exec_module(render_module)
 
 def originals():
     deployment = {"kind": "Deployment", "metadata": {"name": "litellm", "namespace": "litellm"},
-                  "spec": {"template": {"metadata": {"annotations": {"existing": "true"}},
+                  "spec": {"template": {"metadata": {"annotations": {"existing": "true"},
+                                                   "labels": {"app": "litellm"}},
                                         "spec": {"containers": [{"name": "litellm", "env": [
                                             {"name": "LITELLM_MASTER_KEY", "value": "sk-private-source-only"}]}],
                                                  "volumes": [{"name": "cfg"}]}}}}
@@ -32,12 +33,18 @@ class RenderTests(unittest.TestCase):
     def test_two_phase_render_preserves_secret_and_policy_projection(self):
         phase1, source_sha = render_module.render(self.attacker, self.control, self.image,
                                                    "gpt-4o-mini")
-        self.assertEqual(len(phase1), 3)
+        self.assertEqual(len(phase1), 4)
         self.assertEqual(source_sha, hashlib.sha256(Path(render_module.GATEWAY_SOURCE).read_bytes()).hexdigest())
+        policy = phase1["phorvex-policy.json"]
+        self.assertEqual(policy["spec"]["selector"]["matchLabels"],
+                         {"phorvex.ai/litellm-live": "true"})
+        self.assertEqual(policy["spec"]["actions"]["enabled"],
+                         ["rotate", "quarantine", "litellm-client-revoke"])
+        self.assertTrue(policy["spec"]["triggers"]["reactiveOnly"])
         d, s = originals()
         objects, _ = render_module.render(self.attacker, self.control, self.image,
                                           "gpt-4o-mini", d, s, "policy-uid")
-        self.assertEqual(len(objects), 5)
+        self.assertEqual(len(objects), 6)
         self.assertEqual(objects["client-policy-configmap.json"]["data"]["state.json"],
                          '{"active":false,"clientSHA256":"' + self.attacker +
                          '","operationId":"","revision":0,"version":1}')

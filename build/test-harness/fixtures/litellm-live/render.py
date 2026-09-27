@@ -17,6 +17,8 @@ NAMESPACE = "litellm"
 SOURCE_NAME = "phorvex-litellm-admission-gateway"
 CLIENTS_NAME = "phorvex-litellm-live-clients"
 POLICY_NAME = "phorvex-litellm-client-policy"
+PHORVEX_POLICY_NAME = "litellm-live-client"
+POLICY_LABEL = "phorvex.ai/litellm-live"
 MASTER_SECRET = "phorvex-litellm-master-key"
 STATUS_SECRET = "phorvex-litellm-status-token"
 GATEWAY_SOURCE = Path(__file__).with_name("gateway.py")
@@ -50,6 +52,23 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
         "gateway-source-configmap.json": manifest(SOURCE_NAME, {"gateway.py": source}, True),
         "owned-clients-configmap.json": manifest(CLIENTS_NAME, {"clients.json": clients}, True),
         "client-policy-configmap.json": manifest(POLICY_NAME, {"state.json": state}),
+        "phorvex-policy.json": {
+            "apiVersion": "phorvex.ai/v1alpha1", "kind": "PhorvexPolicy",
+            "metadata": {"name": PHORVEX_POLICY_NAME, "namespace": NAMESPACE},
+            "spec": {
+                "tenant": NAMESPACE,
+                "selector": {"matchLabels": {POLICY_LABEL: "true"}},
+                "objective": {"lambda": "0.4", "costWeights": {"normSparsity": "0.4", "flowDisruption": "0.6"}},
+                "budget": {"maxMovesPerTick": 1, "tickInterval": "10s",
+                           "antiOverRotationWindow": "90s", "proactiveFloor": "15m"},
+                "slo": {"minAvailableReplicas": 1},
+                "assetValue": {"fromLabels": {"app": {"litellm": "0.4"}},
+                               "weightSecrets": "0.8", "blastRadiusFromGraph": True},
+                "triggers": {"eventDriven": True, "reactiveOnly": True},
+                "actions": {"enabled": ["rotate", "quarantine", "litellm-client-revoke"]},
+                "mode": "active",
+            },
+        },
     }
     if deployment is None and service is None and policy_uid is None:
         return objects, source_sha
@@ -92,6 +111,11 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
         "phorvex.ai/litellm-owned-client-sha256": attacker_sha,
     }
     patch = list(annotations_patch)
+    labels = template.get("metadata", {}).get("labels")
+    if not isinstance(labels, dict) or labels.get("app") != "litellm" or POLICY_LABEL in labels:
+        raise ValueError("installed LiteLLM Pod labels differ")
+    patch.append({"op": "add", "path": "/spec/template/metadata/labels/" + POLICY_LABEL.replace("/", "~1"),
+                  "value": "true"})
     for key, value in annotations.items():
         patch.append({"op": "add", "path": "/spec/template/metadata/annotations/" + key.replace("/", "~1"),
                       "value": value})
