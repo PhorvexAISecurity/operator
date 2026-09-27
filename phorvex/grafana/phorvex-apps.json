@@ -553,7 +553,7 @@
    "fieldConfig": {
     "defaults": {
      "decimals": 4,
-     "noValue": "No positive candidate coverage",
+     "noValue": "No qualifying coverage value reported",
      "thresholds": {
       "mode": "absolute",
       "steps": [
@@ -1538,7 +1538,7 @@
    "id": 12,
    "type": "timeseries",
    "title": "Blast radius \u2014 context: how much is reachable from here",
-   "description": "Decayed reachability out to 3 hops, normalised against the worst pod in the cluster. High blast radius does not mean an attack \u2014 it means an attack HERE would spread. It is the severity multiplier on risk, not a detection.",
+   "description": "Decayed reachability out to 3 hops, normalised against the worst pod in the cluster. High blast radius is potential impact context, not evidence that an attack is present.",
    "datasource": {
     "type": "prometheus",
     "uid": "${datasource}"
@@ -1617,7 +1617,7 @@
    "id": 13,
    "type": "timeseries",
    "title": "Net benefit \u2014 would acting be worth its cost",
-   "description": "risk - lambda*cost. Above zero the engine considers a defensive move economically justified; at or below zero it deliberately holds still. A positive value here alongside no actuation is worth investigating.",
+   "description": "Candidate coverage value minus the current cost coefficient times estimated cost. Positive value is economic context, not proof that an action was selected or actuated.",
    "datasource": {
     "type": "prometheus",
     "uid": "${datasource}"
@@ -1978,7 +1978,7 @@
    "id": 18,
    "type": "timeseries",
    "title": "App uptime (oldest running pod)",
-   "description": "Decayed reachability out to 3 hops, normalised against the worst pod in the cluster. High blast radius is potential impact context, not evidence that an attack is present.",
+   "description": "Age of the longest-running pod per app. A sawtooth here is rotation or crash-looping; the Restarts column in the table above tells you which.",
    "datasource": {
     "type": "prometheus",
     "uid": "${datasource}"
@@ -2057,7 +2057,7 @@
    "id": 19,
    "type": "timeseries",
    "title": "Container restarts (24h)",
-   "description": "Candidate coverage value minus the current cost coefficient times estimated cost. Positive value is economic context, not proof that an action was selected or actuated.",
+   "description": "Restarts are the cheapest early warning of an unhealthy app.",
    "datasource": {
     "type": "prometheus",
     "uid": "${datasource}"
