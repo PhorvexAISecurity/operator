@@ -27,6 +27,8 @@ class ToolReceiptTest(unittest.TestCase):
             self.assertTrue(writer.record_refund_callback(call, caller, 0, "crm-returned", "9142", 100,
                                                           {"status": "issued", "refund_id": "RF-aabbccdd",
                                                            "order_id": "9142"}))
+            self.assertTrue(writer.record_refund_callback(call, caller, 1, "denied", "9142", 100,
+                                                          denial_reason="refund-policy-denied"))
             self.assertTrue(writer.record_agency_read(call, caller, "list_orders", 0,
                                                       "started", caller))
             self.assertTrue(writer.record_agency_read(call, caller, "list_orders", 0,
@@ -36,9 +38,10 @@ class ToolReceiptTest(unittest.TestCase):
             caller_hash = hashlib.sha256(caller.encode()).hexdigest()
             refunds = read_receipts(state, call_hash, caller_hash, pod, source)
             reads = read_read_receipts(state, call_hash, caller_hash, pod, source)
-            self.assertEqual([row["stage"] for row in refunds], ["started", "crm-returned"])
+            self.assertEqual([row["stage"] for row in refunds], ["started", "crm-returned", "denied"])
             self.assertEqual([row["stage"] for row in reads], ["started", "result-delivered"])
-            self.assertTrue(refunds[-1]["crmIssued"])
+            self.assertTrue(refunds[1]["crmIssued"])
+            self.assertEqual(refunds[-1]["denialReason"], "refund-policy-denied")
             for path in state.iterdir():
                 raw = path.read_text()
                 for secret in (call, caller, "9142", "RF-aabbccdd", "VA-owned-A"):

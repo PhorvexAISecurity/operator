@@ -86,6 +86,8 @@ class VoiceRefundPolicyTest(unittest.TestCase):
             parse_refund_rule(base, "f" * 64)
         duplicate = entry("+15551230001", "9142")
         with self.assertRaises(PolicyError):
+            parse_refund_rule(canonical_bytes(rule(2, [duplicate], OP)), SOURCE_SHA)
+        with self.assertRaises(PolicyError):
             parse_refund_rule(canonical_bytes(rule(1, [duplicate, duplicate], OP)), SOURCE_SHA)
         too_many = [entry(f"+1555{i:07d}", "9142") for i in range(257)]
         with self.assertRaises(PolicyError):

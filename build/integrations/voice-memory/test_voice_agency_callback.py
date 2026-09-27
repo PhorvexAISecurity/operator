@@ -26,8 +26,8 @@ class Policy:
         self.receipts = []
         self.read_receipts = []
 
-    def record_refund_callback(self, *args):
-        self.receipts.append(args)
+    def record_refund_callback(self, *args, **kwargs):
+        self.receipts.append((args, kwargs))
         return True
 
     def record_agency_read(self, *args):
@@ -97,7 +97,7 @@ class VoiceAgencyCallbackTest(unittest.TestCase):
         self.assertEqual(len(self.posts), 1)
         self.assertEqual(self.posts[0][0], "/refunds")
         self.assertEqual(first.results[0]["refund_id"], "RF-aabbccdd")
-        self.assertEqual([r[3] for r in self.policy.receipts], ["started", "crm-returned", "result-delivered"])
+        self.assertEqual([r[0][3] for r in self.policy.receipts], ["started", "crm-returned", "result-delivered"])
         second = Params({"order_id": "9142", "amount": 1.0})
         asyncio.run(handler(second))
         self.assertEqual(len(self.posts), 1)
@@ -145,7 +145,8 @@ class VoiceAgencyCallbackTest(unittest.TestCase):
         asyncio.run(handler(params))
         self.assertEqual(params.results, [{"error": "refund-policy-denied"}])
         self.assertEqual(self.posts, [])
-        self.assertEqual([r[3] for r in self.policy.receipts], ["started", "denied"])
+        self.assertEqual([r[0][3] for r in self.policy.receipts], ["started", "denied"])
+        self.assertEqual(self.policy.receipts[-1][1]["denial_reason"], "refund-policy-denied")
         ordinary = self.module.refund_handler_for_call("CA-other", caller_a, "", "")
         params = Params({"order_id": "9141", "amount": 1, "reason": "own"})
         asyncio.run(ordinary(params))
@@ -169,6 +170,19 @@ class VoiceAgencyCallbackTest(unittest.TestCase):
         asyncio.run(other(cross))
         self.assertEqual(cross.results, [{"error": "test-session-scope-denied"}])
         self.assertEqual(len(self.posts), 1)
+        self.assertEqual(self.policy.receipts[-1][1]["denial_reason"], "test-scope")
+
+    def test_missing_owned_crm_order_has_distinct_denial_reason(self):
+        async def missing(_):
+            return {"error": "missing"}
+        self.module.refund_handler_for_call.__globals__["_crm_get"] = missing
+        caller = agency_phones("agencya1")[0]
+        handler = self.module.refund_handler_for_call("CA-owned", caller, "replay", "agencya1")
+        params = Params({"order_id": "9142", "amount": 1, "reason": "courtesy"})
+        asyncio.run(handler(params))
+        self.assertEqual(params.results, [{"error": "test-session-scope-denied"}])
+        self.assertEqual(self.posts, [])
+        self.assertEqual(self.policy.receipts[-1][1]["denial_reason"], "crm-owner-unavailable")
 
 
 if __name__ == "__main__":

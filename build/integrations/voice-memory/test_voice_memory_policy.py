@@ -160,6 +160,11 @@ class VoiceMemoryPolicyTest(unittest.TestCase):
         self.assertTrue(self.policy.record_refund_callback(sid, CALLER, 0, "started", "9142", 100))
         self.assertTrue(self.policy.record_refund_callback(sid, CALLER, 0, "crm-returned", "9142", 100,
                                                             {"status": "issued", "refund_id": refund, "order_id": "9142"}))
+        self.assertTrue(self.policy.record_refund_callback(sid, CALLER, 1, "denied", "9142", 100,
+                                                            denial_reason="refund-policy-denied"))
+        self.assertFalse(self.policy.record_refund_callback(sid, CALLER, 2, "denied", "9142", 100))
+        self.assertFalse(self.policy.record_refund_callback(sid, CALLER, 2, "started", "9142", 100,
+                                                             denial_reason="test-scope"))
         self.assertFalse(self.policy.record_refund_callback(sid, CALLER, 0, "started", "9142", 100))
         key = hashlib.sha256(sid.encode()).hexdigest()
         path = self.state_dir / f"refund-{key}-0-crm-returned.json"
@@ -167,6 +172,9 @@ class VoiceMemoryPolicyTest(unittest.TestCase):
         receipt = json.loads(raw)
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertTrue(receipt["crmIssued"])
+        self.assertEqual(receipt["denialReason"], "")
+        self.assertEqual(json.loads((self.state_dir / f"refund-{key}-1-denied.json").read_text())["denialReason"],
+                         "refund-policy-denied")
         self.assertEqual(receipt["callSIDHash"], key)
         self.assertEqual(receipt["refundIDSHA256"], hashlib.sha256(refund.encode()).hexdigest())
         for protected in (sid, CALLER, "9142", refund):

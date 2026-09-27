@@ -13,7 +13,7 @@ import sys
 STAGES = ("started", "denied", "crm-returned", "result-delivered")
 KEYS = frozenset({"version", "callSIDHash", "callerSHA256", "sourceSHA256", "podUID", "tool",
                   "sequence", "stage", "orderSHA256", "amountCents", "crmIssued", "refundIDSHA256",
-                  "responseOrderSHA256", "observedAtUnixMs"})
+                  "responseOrderSHA256", "observedAtUnixMs", "denialReason"})
 READ_KEYS = frozenset({"version", "callSIDHash", "callerSHA256", "sourceSHA256", "podUID", "tool",
                        "sequence", "stage", "argumentSHA256", "responseSHA256", "observedAtUnixMs"})
 READ_TOOLS = ("lookup_account", "list_orders", "recall_memory")
@@ -61,6 +61,9 @@ def read_receipts(state_dir: Path, call_hash: str, caller_hash: str, pod_uid: st
                         row.get("podUID") != pod_uid or row.get("sourceSHA256") != source_sha or \
                         row.get("tool") != "issue_refund" or row.get("sequence") != sequence or \
                         row.get("stage") != stage or type(row.get("amountCents")) is not int or \
+                        (stage == "denied" and row.get("denialReason") not in
+                         ("test-scope", "crm-owner-unavailable", "refund-policy-denied")) or \
+                        (stage != "denied" and row.get("denialReason") != "") or \
                         type(row.get("crmIssued")) is not bool or \
                         type(row.get("observedAtUnixMs")) is not int or row["observedAtUnixMs"] <= 0 or \
                         any(not re.fullmatch(r"[0-9a-f]{64}|", row.get(key, "")) for key in

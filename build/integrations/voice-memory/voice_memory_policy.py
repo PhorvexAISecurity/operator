@@ -301,7 +301,8 @@ class VoiceMemoryPolicy:
             return False
 
     def record_refund_callback(self, call_sid: str, caller_id: str, sequence: int, stage: str,
-                               order_id: str, amount_cents: int, response: dict[str, Any] | None = None) -> bool:
+                               order_id: str, amount_cents: int, response: dict[str, Any] | None = None,
+                               denial_reason: str = "") -> bool:
         """Retain a private digest-only receipt from the real per-call tool handler.
 
         This is evidence of callback execution, not proof of authorization or a
@@ -311,6 +312,9 @@ class VoiceMemoryPolicy:
                 not isinstance(caller_id, str) or not isinstance(order_id, str) or len(order_id) > 128 or
                 type(sequence) is not int or not 0 <= sequence < 4 or
                 stage not in ("started", "denied", "crm-returned", "result-delivered") or
+                (stage == "denied" and denial_reason not in
+                 ("test-scope", "crm-owner-unavailable", "refund-policy-denied")) or
+                (stage != "denied" and denial_reason != "") or
                 type(amount_cents) is not int or not -1 <= amount_cents <= 10000000):
             return False
         try:
@@ -329,6 +333,7 @@ class VoiceMemoryPolicy:
                        "callerSHA256": hashlib.sha256(caller_id.encode("utf-8")).hexdigest(),
                        "sourceSHA256": self.source_sha, "podUID": self.pod_uid,
                        "tool": "issue_refund", "sequence": sequence, "stage": stage,
+                       "denialReason": denial_reason,
                        "orderSHA256": hashlib.sha256(order_id.encode("utf-8")).hexdigest(),
                        "amountCents": amount_cents,
                        "crmIssued": reply.get("status") == "issued" and bool(refund_id),
@@ -432,6 +437,8 @@ def parse_refund_rule(raw: bytes, source_sha: str) -> dict[str, Any]:
     entries = rule["entries"]
     if not isinstance(entries, list) or len(entries) > 256:
         raise PolicyError("invalid refund entry count")
+    if rule["revision"] != len(entries):
+        raise PolicyError("refund revision and entry count differ")
     if rule["revision"] == 0:
         if rule["operationId"] != "" or entries:
             raise PolicyError("invalid initial refund rule")

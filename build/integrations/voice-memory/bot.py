@@ -266,7 +266,8 @@ def refund_handler_for_call(call_sid: str, caller: str | None, agency_phase: str
             ("9141",) if agency_phase == "own-control" else ()
         if (index != 0 or order_id not in permitted_orders or
                 amount_cents != 100 or not isinstance(reason, str) or len(reason) > 120):
-            _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents)
+            _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents,
+                                                  denial_reason="test-scope")
             await _agency_denied(params)
             return
         owner = "A" if order_id == "9141" else "B"
@@ -280,11 +281,13 @@ def refund_handler_for_call(call_sid: str, caller: str | None, agency_phase: str
                      item.get("fixtureOwner") == "voice-agency-" + agency_run_id and
                      item.get("amount") == 1 for item in orders))
         if not valid:
-            _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents)
+            _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents,
+                                                  denial_reason="crm-owner-unavailable")
             await _agency_denied(params)
             return
         if not _refund_policy.allow_refund(caller or "", order_id):
-            _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents)
+            _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents,
+                                                  denial_reason="refund-policy-denied")
             await params.result_callback({"error": "refund-policy-denied"})
             return
         reply = await _crm_post("/refunds", {"order_id": order_id, "amount": 1.0, "reason": reason})
