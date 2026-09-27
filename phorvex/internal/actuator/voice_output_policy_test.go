@@ -34,10 +34,16 @@ func TestVoiceOutputNativeAppendAllPodReadbackAndProtectedHistory(t *testing.T) 
 	polUID := types.UID("33333333-3333-4333-8333-333333333333")
 	cmUID := types.UID("44444444-4444-4444-8444-444444444444")
 	podUID := types.UID("55555555-5555-4555-8555-555555555555")
-	source := strings.Repeat("a", 64)
+	immutable := true
+	sourceCM := &corev1.ConfigMap{Immutable: &immutable, Data: map[string]string{"bot.py": "bot source", "voice_memory_policy.py": "memory source", "voice_output_policy.py": "output source", "voice_mcp_policy.py": "mcp source"}}
+	source, bundle, sourceErr := voiceoutputpolicy.SourceHashes(sourceCM)
+	if sourceErr != nil {
+		t.Fatal(sourceErr)
+	}
 	creator := "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 	optional := false
 	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "bot", Namespace: "voice", UID: depUID}, Spec: appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "bot"}}}}
+	sourceCM.ObjectMeta = metav1.ObjectMeta{Name: "voice-memory-source-" + bundle[:12], Namespace: "voice", UID: types.UID("88888888-8888-4888-8888-888888888888"), ResourceVersion: "1", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "bot-rs", Namespace: "voice", UID: rsUID, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}}
 	volumes := []corev1.Volume{{Name: "policy", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: voiceoutputpolicy.ConfigMapName}, Optional: &optional}}}, {Name: "token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: voiceOutputSecretName}}}, {Name: "test-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: voiceOutputTestSecretName}}}, {Name: "state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}}
 	bot := corev1.Container{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_OUTPUT_POLICY_REQUIRED", Value: "true"}}, VolumeMounts: []corev1.VolumeMount{{Name: "policy", MountPath: "/etc/phorvex/voice-output-policy", ReadOnly: true}, {Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true}, {Name: "test-token", MountPath: "/etc/phorvex/voice-output-test-token", ReadOnly: true}, {Name: "state", MountPath: "/var/lib/phorvex-voice-memory"}}}
@@ -49,7 +55,15 @@ func TestVoiceOutputNativeAppendAllPodReadbackAndProtectedHistory(t *testing.T) 
 	if voiceOutputRequiredMounts(&corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{*withoutTestToken}, Volumes: volumes}}) {
 		t.Fatal("actuator accepted missing synthetic-session token mount")
 	}
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "bot-1", Namespace: "voice", UID: podUID, Labels: map[string]string{"app": "bot"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}, Annotations: map[string]string{"phorvex.ai/voice-output-policy-configmap": voiceoutputpolicy.ConfigMapName, "phorvex.ai/voice-output-source-sha256": source, "phorvex.ai/voice-output-event-creator": creator}}, Spec: corev1.PodSpec{Containers: []corev1.Container{bot}, Volumes: volumes}, Status: corev1.PodStatus{PodIP: "127.0.0.1", Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
+	bot.Image = "voice@sha256:" + strings.Repeat("c", 64)
+	bot.Command = []string{"python3", "-B", "/app/bot.py"}
+	for _, name := range []string{"bot.py", "voice_memory_policy.py", "voice_output_policy.py", "voice_mcp_policy.py"} {
+		bot.VolumeMounts = append(bot.VolumeMounts, corev1.VolumeMount{Name: "source", MountPath: "/app/" + name, SubPath: name, ReadOnly: true})
+	}
+	volumes = append(volumes, corev1.Volume{Name: "source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: sourceCM.Name}}}})
+	dep.Spec.Template.Annotations = map[string]string{voiceoutputpolicy.SourceConfigMapAnnotation: sourceCM.Name, voiceoutputpolicy.SourceSHAAnnotation: source}
+	dep.Spec.Template.Spec = corev1.PodSpec{Containers: []corev1.Container{bot}, Volumes: volumes}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "bot-1", Namespace: "voice", UID: podUID, Labels: map[string]string{"app": "bot"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}, Annotations: map[string]string{"phorvex.ai/voice-output-policy-configmap": voiceoutputpolicy.ConfigMapName, "phorvex.ai/voice-output-source-sha256": source, voiceoutputpolicy.SourceConfigMapAnnotation: sourceCM.Name, "phorvex.ai/voice-output-event-creator": creator}}, Spec: corev1.PodSpec{Containers: []corev1.Container{bot}, Volumes: volumes}, Status: corev1.PodStatus{PodIP: "127.0.0.1", Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
 	peer := pod.DeepCopy()
 	peer.Name = "bot-2"
 	peer.UID = types.UID("77777777-7777-4777-8777-777777777777")
@@ -59,7 +73,7 @@ func TestVoiceOutputNativeAppendAllPodReadbackAndProtectedHistory(t *testing.T) 
 	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "voice-policy", Namespace: "voice", UID: polUID, Generation: 1}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "bot"}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionVoiceOutputPolicyActivate}}}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: voiceOutputSecretName, Namespace: "voice"}, Data: map[string][]byte{"token": []byte(strings.Repeat("s", 32))}}
 	journal := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: voiceOutputJournalName, Namespace: "operator", Labels: map[string]string{voiceOutputJournalLabel: "v1"}}, Data: map[string]string{"receipts.json": `{"receipts":[],"version":1}`}}
-	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(dep, rs, pod, peer, cm, pol, secret, journal, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "voice"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).Build()
+	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(dep, rs, pod, peer, cm, sourceCM, pol, secret, journal, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "voice"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).Build()
 	stateUID := string(podUID)
 	transport := voiceOutputRoundTrip(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet || req.URL.Path != voiceoutputpolicy.StatePath || req.Header.Get("Authorization") != "Bearer "+strings.Repeat("s", 32) {

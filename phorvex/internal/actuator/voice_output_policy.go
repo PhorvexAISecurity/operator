@@ -39,6 +39,7 @@ const (
 type voiceOutputScope struct {
 	pod        *corev1.Pod
 	deployment *appsv1.Deployment
+	source     voiceoutputpolicy.SourceEvidence
 	policy     *v1alpha1.PhorvexPolicy
 	cm         *corev1.ConfigMap
 	rule       voiceoutputpolicy.Rule
@@ -132,6 +133,10 @@ func voiceOutputScopeAt(ctx context.Context, reader client.Reader, target Target
 	if e != nil {
 		return s, e
 	}
+	source, e := voiceoutputpolicy.VerifySource(ctx, reader, pod, dep)
+	if e != nil {
+		return s, e
+	}
 	pol, e := receiptAuthority(ctx, reader, operationReceipt{PolicyNamespace: target.Namespace, PolicyName: target.PolicyName, PolicyUID: target.PolicyUID, TargetName: target.Pod, TargetUID: target.UID, TargetLabels: pod.Labels}, model.ActionVoiceOutputPolicyActivate)
 	if e != nil {
 		return s, e
@@ -148,7 +153,7 @@ func voiceOutputScopeAt(ctx context.Context, reader client.Reader, target Target
 		return s, errors.New("Voice output ConfigMap owner or data invalid")
 	}
 	rule, e := voiceoutputpolicy.Parse(cm.Data[voiceoutputpolicy.RuleKey])
-	if e != nil || rule.ConfigMapUID != string(cm.UID) || rule.DeploymentUID != string(dep.UID) || rule.PolicyUID != string(pol.UID) || rule.SourceSHA256 != pod.Annotations["phorvex.ai/voice-output-source-sha256"] {
+	if e != nil || rule.ConfigMapUID != string(cm.UID) || rule.DeploymentUID != string(dep.UID) || rule.PolicyUID != string(pol.UID) || rule.SourceSHA256 != source.SourceSHA256 {
 		return s, errors.New("Voice output current rule identity invalid")
 	}
 	secret := &corev1.Secret{}
@@ -193,6 +198,10 @@ func voiceOutputScopeAt(ctx context.Context, reader client.Reader, target Target
 		if !voiceOutputReady(&candidate) || !depSel.Matches(labels.Set(candidate.Labels)) || !sel.Matches(labels.Set(candidate.Labels)) || candidate.Annotations["phorvex.ai/voice-output-policy-configmap"] != voiceoutputpolicy.ConfigMapName || candidate.Annotations["phorvex.ai/voice-output-source-sha256"] != rule.SourceSHA256 || candidate.Annotations["phorvex.ai/voice-output-event-creator"] != pod.Annotations["phorvex.ai/voice-output-event-creator"] {
 			return s, errors.New("Voice output serving Pod scope incomplete")
 		}
+		peerSource, se := voiceoutputpolicy.VerifySource(ctx, reader, &candidate, dep)
+		if se != nil || peerSource.ConfigMapUID != source.ConfigMapUID || peerSource.SourceSHA256 != source.SourceSHA256 {
+			return s, errors.New("Voice output serving Pod source bundle changed")
+		}
 		if candidate.UID == pod.UID {
 			found = true
 		}
@@ -201,7 +210,7 @@ func voiceOutputScopeAt(ctx context.Context, reader client.Reader, target Target
 	if !found || len(s.pods) == 0 {
 		return s, errors.New("Voice output target absent from serving set")
 	}
-	s.pod, s.deployment, s.policy, s.cm, s.rule, s.token = pod, dep, pol, cm, rule, append([]byte(nil), token...)
+	s.pod, s.deployment, s.source, s.policy, s.cm, s.rule, s.token = pod, dep, source, pol, cm, rule, append([]byte(nil), token...)
 	return s, nil
 }
 
