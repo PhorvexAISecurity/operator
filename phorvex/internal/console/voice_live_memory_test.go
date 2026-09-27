@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/model"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -107,9 +109,12 @@ func TestVoiceMemoryEventRequiresAdmissionStampedCreator(t *testing.T) {
 			t.Fatal(err)
 		}
 		meta := manifest["metadata"].(map[string]any)
+		if _, hasNamespace := meta["namespace"]; hasNamespace {
+			t.Fatal("cluster-scoped SecurityEvent manifest must omit namespace")
+		}
 		spec := manifest["spec"].(map[string]any)
 		return string(mustJSON(t, map[string]any{"metadata": map[string]any{
-			"name": meta["name"], "namespace": "voice", "uid": "event-uid",
+			"name": meta["name"], "uid": "event-uid",
 			"creationTimestamp": time.Now().UTC().Format(time.RFC3339Nano),
 			"annotations": map[string]any{"phorvex.ai/creator-identity": creator,
 				"phorvex.ai/console-target-pod-uid":      "pod-uid",
@@ -130,6 +135,22 @@ func TestVoiceMemoryEventRequiresAdmissionStampedCreator(t *testing.T) {
 	creator = "system:serviceaccount:voice:unreviewed"
 	if _, err := s.createVoiceMemoryEvent(t.TempDir(), "voice-memory-case", pod, snap, "+15551230001", voiceMemoryDigest(voiceMemoryAttackNote), time.Now().Add(-time.Second)); err == nil {
 		t.Fatal("different authenticated creator accepted")
+	}
+}
+
+func TestVoiceMemoryEventInventoryUsesClusterScope(t *testing.T) {
+	s := NewServer(Config{StateDir: t.TempDir(), Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
+		if bin != "kubectl" || strings.Join(args, " ") != "get securityevents -o json" {
+			t.Fatalf("cluster-scoped event inventory expected, got %s %q", bin, args)
+		}
+		return string(mustJSON(t, map[string]any{"items": []any{map[string]any{
+			"metadata": map[string]any{"creationTimestamp": time.Now().UTC().Format(time.RFC3339Nano)},
+			"spec":     map[string]any{"targets": []string{"voice/voice-bot-a"}, "rule": map[string]any{"type": model.AttackVectorVoiceMemory}},
+		}}})), nil
+	}})
+	recent, err := s.voiceMemoryRecentEvent("voice-bot-a")
+	if err != nil || !recent {
+		t.Fatalf("recent cluster-scoped Voice event not found: recent=%t err=%v", recent, err)
 	}
 }
 

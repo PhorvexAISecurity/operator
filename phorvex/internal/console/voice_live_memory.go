@@ -546,7 +546,7 @@ func voiceMemorySavePrivate(dir, name string, value any) error {
 }
 
 func (s *Server) voiceMemoryRecentEvent(podName string) (bool, error) {
-	text, err := s.cfg.execText(8*time.Second, "kubectl", "-n", "voice", "get", "securityevents", "-o", "json")
+	text, err := s.cfg.execText(8*time.Second, "kubectl", "get", "securityevents", "-o", "json")
 	if err != nil || len(text) > 1<<20 {
 		return false, errors.New("Voice event inventory unavailable")
 	}
@@ -651,7 +651,7 @@ func (s *Server) createVoiceMemoryEvent(privateDir, caseID string, pod corev1.Po
 		return nil, err
 	}
 	object := map[string]any{"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
-		"metadata": map[string]any{"name": name, "namespace": "voice",
+		"metadata": map[string]any{"name": name,
 			"labels": map[string]string{"phorvex.ai/redteam": "true", "phorvex.ai/attack-correlation": id},
 			"annotations": map[string]string{model.ConsoleTargetPodUIDAnnotation: string(pod.UID),
 				"phorvex.ai/voice-memory-observation-v1": string(observation)}},
@@ -696,7 +696,7 @@ func (s *Server) createVoiceMemoryEvent(privateDir, caseID string, pod corev1.Po
 		return candidate, errors.New("Voice event create reply could not be retained; reconcile exact candidate")
 	}
 	var created vllmSecurityEvent
-	if json.Unmarshal([]byte(out), &created) != nil || created.Metadata.Name != name || created.Metadata.Namespace != "voice" || created.Metadata.UID == "" || created.Metadata.CreationTimestamp == "" ||
+	if json.Unmarshal([]byte(out), &created) != nil || created.Metadata.Name != name || created.Metadata.Namespace != "" || created.Metadata.UID == "" || created.Metadata.CreationTimestamp == "" ||
 		created.Metadata.Annotations["phorvex.ai/creator-identity"] != snap.EventCreator ||
 		created.Metadata.Annotations[model.ConsoleTargetPodUIDAnnotation] != string(pod.UID) ||
 		created.Metadata.Annotations["phorvex.ai/voice-memory-observation-v1"] != string(observation) ||
