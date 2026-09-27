@@ -1,8 +1,12 @@
 from __future__ import annotations
+import asyncio
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
+import socket
 import tempfile
 import unittest
+import httpx
 import drain_v11 as drain
 
 class FakeEngine:
@@ -43,6 +47,110 @@ class DrainLedgerTest(unittest.IsolatedAsyncioTestCase):
         async def terminate(): events.append("proxy-terminate"); return {"cancelled":3,"remaining":0}
         c=drain.Coordinator(self.ledger(),engine,pod_uid=self.pod_uid,proxy_source="proxy-source",model_digest="model-digest",snapshot_proxy=snapshot,terminate_proxy=terminate)
         await c.initialize(); return c,engine
+    def startup_coordinator(self, engine, *, timeout=0.3, retry=0.005):
+        async def snapshot(): return {"active": 0}
+        async def terminate(): return {"cancelled": 0, "remaining": 0}
+        return drain.Coordinator(self.ledger(), engine, pod_uid=self.pod_uid,
+            proxy_source="proxy-source", model_digest="model-digest",
+            snapshot_proxy=snapshot, terminate_proxy=terminate,
+            engine_startup_timeout=timeout, engine_startup_retry=retry)
+
+    async def test_startup_waits_for_real_refused_connection_then_valid_capability(self):
+        engine = FakeEngine()
+        with socket.socket() as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
+        client = drain.EngineHTTPClient(f"http://127.0.0.1:{port}", "test-token", "engine-source")
+        coordinator = self.startup_coordinator(client, timeout=1.0)
+        before = (self.root / "ledger.json").read_bytes()
+        requests = []
+        async def handle(reader, writer):
+            request = await reader.readuntil(b"\r\n\r\n")
+            requests.append(request)
+            body = json.dumps(engine.response("cap", "capability")).encode()
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                         + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+        pending = asyncio.create_task(coordinator.initialize())
+        await asyncio.sleep(0.05)
+        self.assertFalse(pending.done())
+        self.assertEqual((self.root / "ledger.json").read_bytes(), before)
+        server = await asyncio.start_server(handle, "127.0.0.1", port)
+        try:
+            await pending
+        finally:
+            server.close()
+            await server.wait_closed()
+        self.assertTrue(coordinator.admission_open)
+        self.assertEqual(len(requests), 1)
+        self.assertIn(b"GET /phorvex/drain/capability HTTP/1.1", requests[0])
+        self.assertIn(b"Authorization: Bearer test-token", requests[0])
+
+    async def test_startup_connection_timeout_keeps_prior_ledger_unchanged(self):
+        class Refused:
+            def __init__(self, error): self.error = error
+            async def capability(self):
+                raise self.error
+        first, _ = await self.coordinator()
+        await first.create(await self.payload(first))
+        before = (self.root / "ledger.json").read_bytes()
+        for error in (httpx.ConnectError("connection refused"),
+                      httpx.ConnectTimeout("engine still starting")):
+            with self.subTest(error=type(error).__name__):
+                coordinator = self.startup_coordinator(Refused(error), timeout=0.025,
+                                                       retry=0.001)
+                with self.assertRaisesRegex(drain.DrainError, "engine_startup_timeout"):
+                    await coordinator.initialize()
+                self.assertFalse(coordinator.admission_open)
+                self.assertEqual((self.root / "ledger.json").read_bytes(), before)
+
+    async def test_startup_refusal_and_invalid_capability_fail_without_retry(self):
+        class Refused:
+            def __init__(self, error): self.error=error; self.calls=0
+            async def capability(self):
+                self.calls += 1
+                if isinstance(self.error, Exception): raise self.error
+                return self.error
+        bad = FakeEngine().response("cap", "capability")
+        bad["engine_boot_id"] = "invalid-engine-boot-id"
+        for value in (drain.DrainError(502, "engine_control_refused"), bad):
+            with self.subTest(value=value):
+                engine = Refused(value)
+                coordinator = self.startup_coordinator(engine)
+                before = (self.root / "ledger.json").read_bytes()
+                with self.assertRaises(drain.DrainError):
+                    await coordinator.initialize()
+                self.assertEqual(engine.calls, 1)
+                self.assertEqual((self.root / "ledger.json").read_bytes(), before)
+
+    async def test_startup_real_http_auth_and_invalid_capability_fail_immediately(self):
+        valid = FakeEngine().response("cap", "capability")
+        wrong = dict(valid, engine_boot_id="invalid-engine-boot-id")
+        for status, body, code in ((401, b'{"error":"unauthorized"}', "engine_control_refused"),
+                                   (200, json.dumps(wrong).encode(), "unsupported_engine")):
+            with self.subTest(status=status):
+                requests = []
+                async def handle(reader, writer):
+                    requests.append(await reader.readuntil(b"\r\n\r\n"))
+                    writer.write(f"HTTP/1.1 {status} test\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode() + body)
+                    await writer.drain()
+                    writer.close()
+                    await writer.wait_closed()
+                server = await asyncio.start_server(handle, "127.0.0.1", 0)
+                port = server.sockets[0].getsockname()[1]
+                engine = drain.EngineHTTPClient(f"http://127.0.0.1:{port}", "test-token", "engine-source")
+                coordinator = self.startup_coordinator(engine)
+                before = (self.root / "ledger.json").read_bytes()
+                try:
+                    with self.assertRaisesRegex(drain.DrainError, code):
+                        await coordinator.initialize()
+                finally:
+                    server.close()
+                    await server.wait_closed()
+                self.assertEqual(len(requests), 1)
+                self.assertEqual((self.root / "ledger.json").read_bytes(), before)
     async def payload(self,c,generation="1",operation_id="1"*32,**extra):
         cap=await c.capability(); value={"schema":drain.SCHEMA,"operation_id":operation_id,"operation_generation":generation,"attempt":1,
           "owner":{"tenant":"t","namespace_uid":"n","policy_uid":"p","pod_uid":self.pod_uid,"service_uid":"s"},

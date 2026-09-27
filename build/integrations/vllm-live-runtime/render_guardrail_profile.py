@@ -22,16 +22,24 @@ HERE = Path(__file__).resolve().parent
 PROXY = HERE.parents[1] / "test-harness/guardrail/guardrail_proxy.py"
 DUAL = HERE / "dual_server.py"
 LEASE = HERE / "endpoint_lease.py"
-# The owner's reviewed four-key drain candidate is staged on a separate
-# branch. Keep its exact source hashes here until the branches are integrated;
-# when source files exist locally, compare their full bytes too.
+# The installed PR365 four-file closure remains an exact historical pin.
+# Future startup-repaired four-file and five-file closures have distinct,
+# separately reviewed bytes; a mixed bundle is never accepted.
 DRAIN_SOURCE_SHA256 = {
     "drain_v11.py": "c117bfe2928a6b43146fce7aed9fa3df9b1c746d74c9855d3eafb7ba5f6de857",
     "drain_v11_init.py": "4e1a7a00550e8ce980b95114305027729dd5e3dddfdcbb2bca3026cb16b5dd5d",
 }
+STARTUP_REPAIRED_DRAIN_SOURCE_SHA256 = {
+    "drain_v11.py": "73555b7b8226f66c3d2823ba94edbb41bcda8a40f52f61c7869d054f570841f0",
+    "drain_v11_init.py": DRAIN_SOURCE_SHA256["drain_v11_init.py"],
+}
 LEGACY_SOURCE_SHA256 = {
     "guardrail_proxy.py": "7659d44ef8e637fd74db754e393f65c3e58289cc3be347c716e10e83127076f2",
     "dual_server.py": "c89135124108e7f613f029a0b4bde5c9a6201f73b1b0f0041d2d4379140d2dfd",
+}
+STARTUP_REPAIRED_LEGACY_SOURCE_SHA256 = {
+    "guardrail_proxy.py": LEGACY_SOURCE_SHA256["guardrail_proxy.py"],
+    "dual_server.py": "11bbb4f0efb422dec87656cfd7aacb276462f051974fc0c32c1ab8ccd5b7931d",
 }
 LEASE_SOURCE_FILES = ("guardrail_proxy.py", "dual_server.py", "endpoint_lease.py",
                       "drain_v11.py", "drain_v11_init.py")
@@ -388,8 +396,15 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
             "complete reviewed four- or five-file source keys differ")
     files = {key: source["data"][key].encode() for key in keys}
     require(all(0 < len(raw) <= 1 << 20 for raw in files.values()), "source file size differs")
+    historical_four = (legacy and all(digest(files[key]) == expected for key, expected in
+                                 (LEGACY_SOURCE_SHA256 | DRAIN_SOURCE_SHA256).items()))
+    repaired_four = (legacy and all(digest(files[key]) == expected for key, expected in
+                               (STARTUP_REPAIRED_LEGACY_SOURCE_SHA256 |
+                                STARTUP_REPAIRED_DRAIN_SOURCE_SHA256).items()))
     lease_data = None
     if legacy:
+        require(historical_four or repaired_four,
+                "legacy source is neither installed PR365 nor reviewed startup repair")
         require(set(objects) == set(ROLES) and retained_lease_profile_bytes is None and
                 guard.get("command") == LEGACY_COMMAND and
                 not guard.get("args") and source.get("immutable") is not True,
@@ -401,8 +416,9 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
                         for v in pod["spec"].get("volumes", [])),
                 "legacy source carries lease-only authority")
         mount(guard, pod["spec"].get("volumes", []), "/src", "configMap", "guardrail-proxy")
-        for key, expected in LEGACY_SOURCE_SHA256.items():
-            require(digest(files[key]) == expected, key + " legacy source bytes differ")
+        if repaired_four:
+            require(files["dual_server.py"] == read_regular_bounded(DUAL, 1 << 20),
+                    "startup-repaired dual listener differs from reviewed source")
     else:
         require(set(objects) == set(ROLES) | {LEASE_ROLE} and retained_lease_profile_bytes is not None and
                 guard.get("command") == ["python3", "-B", "/src/dual_server.py"] and
@@ -439,12 +455,13 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
         lease_data = retained_lease_profile(retained_lease_profile_bytes, sm["uid"], cm["uid"], composite,
                                             policy_m["uid"], policy_m["generation"], policy_uid,
                                             state, guard, vllm)
-    for key, expected in DRAIN_SOURCE_SHA256.items():
+    drain_pins = DRAIN_SOURCE_SHA256 if historical_four else STARTUP_REPAIRED_DRAIN_SOURCE_SHA256
+    for key, expected in drain_pins.items():
         encoded = files[key]
         require(len(encoded) <= 1 << 20 and digest(encoded) == expected,
                 key + " installed bytes differ from reviewed drain source")
         checked_in = PROXY.parent / key
-        if checked_in.exists():
+        if not historical_four and checked_in.exists():
             require(read_regular_bounded(checked_in, 1 << 20) == encoded,
                     key + " installed bytes differ from integrated source")
     annotations = pm.get("annotations", {})

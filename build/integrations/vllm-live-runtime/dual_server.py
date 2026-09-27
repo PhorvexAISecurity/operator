@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
 import time
 
 
@@ -251,21 +252,48 @@ async def serve():
             source_actual_sha256=actual_source,
             secret_dir=Path(os.environ.get("PHORVEX_ENDPOINT_LEASE_SECRET_DIR", ""))))
     app = ServingBoundary(create_app(runtime=runtime, upstream_api_key=upstream,
-                                     admin_api_key=admin), upstream, admin, lease)
+                                     admin_api_key=admin, load_models=False), upstream, admin, lease)
+    # Classifier loading is independent of the engine capability handshake.
+    # Start both cold paths together; the public listener still waits for the
+    # validated drain capability in FastAPI lifespan before it can bind.
+    threading.Thread(target=runtime.load_all, daemon=True).start()
     public = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=PUBLIC_PORT,
                                            lifespan="on", proxy_headers=False, log_level="info"))
     private = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=ADMIN_PORT,
                                             lifespan="off", proxy_headers=False,
                                             ssl_certfile=str(cert), ssl_keyfile=str(key), log_level="info"))
-    tasks = [asyncio.create_task(public.serve()), asyncio.create_task(private.serve())]
+    await serve_pair(public, private)
+
+
+async def serve_pair(public, private, *, shutdown_timeout=10.0):
+    """Bind private control only after public lifespan proves engine capability."""
+    public_task = asyncio.create_task(public.serve())
+    tasks = [public_task]
     try:
+        while not public.started:
+            if public_task.done():
+                public_task.result()
+                raise RuntimeError("public listener stopped before startup")
+            await asyncio.sleep(0.05)
+        if public_task.done():
+            public_task.result()
+            raise RuntimeError("public listener stopped before private startup")
+        tasks.append(asyncio.create_task(private.serve()))
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()
         raise RuntimeError("one serving listener stopped")
     finally:
         public.should_exit = private.should_exit = True
-        await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=shutdown_timeout)
+        except TimeoutError:
+            public.force_exit = private.force_exit = True
+            for task in tasks:
+                task.cancel()
+            _, pending = await asyncio.wait(tasks, timeout=1.0)
+            if pending:
+                raise RuntimeError("listener shutdown timed out")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,8 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 DECIMAL = re.compile(r"^(0|[1-9][0-9]*)$")
 TERMINAL = {"QUIESCENT", "CANCELLED", "FAILED", "STALE", "OPENED"}
 CANCEL_GRACE_SECONDS = 30
+ENGINE_STARTUP_TIMEOUT_SECONDS = 600.0
+ENGINE_STARTUP_RETRY_SECONDS = 1.0
 
 
 class DrainError(Exception):
@@ -336,7 +338,9 @@ class Coordinator:
     def __init__(self, ledger: Ledger, engine: EngineHTTPClient, *, pod_uid: str,
                  proxy_source: str, model_digest: str,
                  snapshot_proxy: Callable[[], Awaitable[dict]],
-                 terminate_proxy: Callable[[], Awaitable[dict]]):
+                 terminate_proxy: Callable[[], Awaitable[dict]],
+                 engine_startup_timeout: float = ENGINE_STARTUP_TIMEOUT_SECONDS,
+                 engine_startup_retry: float = ENGINE_STARTUP_RETRY_SECONDS):
         self.ledger = ledger
         self.engine = engine
         self.pod_uid = pod_uid
@@ -347,18 +351,22 @@ class Coordinator:
         self.proxy_boot_id = os.urandom(16).hex()
         self.admission_open = False
         self._lock = asyncio.Lock()
-        current = self.ledger.data["current"]
-        if current is not None and current.get("state") != "OPENED":
-            current["state"] = "STALE"
-            current["revision"] = str(u64(current["revision"], "revision") + 1)
-            current["last_transition"] = now_text()
-            self.ledger.data["admission"] = "CLOSED"
-            self.ledger.write()
+        if engine_startup_timeout <= 0 or engine_startup_retry <= 0:
+            raise ValueError("engine startup bounds must be positive")
+        self.engine_startup_timeout = engine_startup_timeout
+        self.engine_startup_retry = engine_startup_retry
 
     async def initialize(self):
         async with self._lock:
-            capability = await self._engine_capability()
+            capability = await self._wait_for_engine_capability()
             current = self.ledger.data["current"]
+            if current is not None and current.get("state") != "OPENED":
+                # A failed startup probe must not rewrite a prior operation.
+                # Once the engine is genuinely reachable, the previous proxy
+                # incarnation can be marked stale as on an ordinary restart.
+                current["state"] = "STALE"
+                current["revision"] = str(u64(current["revision"], "revision") + 1)
+                current["last_transition"] = now_text()
             if current is None and capability["admission"] == "OPEN":
                 self.admission_open = True
                 self.ledger.data["admission"] = "OPEN"
@@ -367,6 +375,26 @@ class Coordinator:
                 self.admission_open = False
                 self.ledger.data["admission"] = "CLOSED"
                 self.ledger.write()
+
+    async def _wait_for_engine_capability(self):
+        # This is a startup-only, read-only retry. In particular, an HTTP
+        # refusal or an invalid capability is never treated as warmup.
+        import httpx
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.engine_startup_timeout
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise DrainError(503, "engine_startup_timeout")
+            try:
+                return await asyncio.wait_for(self._engine_capability(), remaining)
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise DrainError(503, "engine_startup_timeout") from None
+                await asyncio.sleep(min(self.engine_startup_retry, remaining))
+            except TimeoutError as exc:
+                raise DrainError(503, "engine_startup_timeout") from exc
 
     async def _engine_capability(self):
         value = await self.engine.capability()

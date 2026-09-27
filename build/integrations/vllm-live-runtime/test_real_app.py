@@ -1,6 +1,6 @@
 """Real FastAPI route/lifespan and loopback proxy checks for the dual listener."""
 import asyncio
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
 import os
@@ -14,6 +14,7 @@ import unittest
 from unittest import mock
 
 import httpx
+from fastapi import FastAPI
 
 
 HERE = Path(__file__).resolve().parent
@@ -113,7 +114,9 @@ class RealAppTest(unittest.TestCase):
                             "-keyout", str(key), "-out", str(cert), "-days", "1",
                             "-subj", "/CN=localhost"], check=True, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, timeout=10)
+            loaded = []
             def fake_load(runtime):
+                loaded.append(True)
                 for variant in ("pgv1", "pgv2"):
                     runtime.install_classifier(variant, lambda _: [{"label": "LABEL_0", "score": 0.99}])
             env={"VLLM_API_KEY": "u" * 32, "PHORVEX_GUARDRAIL_ADMIN_KEY": "a" * 32,
@@ -147,6 +150,95 @@ class RealAppTest(unittest.TestCase):
                  mock.patch.object(dual,"ADMIN_PORT",admin_port), \
                  mock.patch.object(guardrail_proxy.GuardrailRuntime,"load_all",fake_load):
                 asyncio.run(asyncio.wait_for(exercise(),timeout=15))
+            self.assertEqual(len(loaded), 1)
+
+
+class ListenerStartupTest(unittest.IsolatedAsyncioTestCase):
+    async def test_classifier_load_starts_once_even_if_public_lifespan_fails(self):
+        @asynccontextmanager
+        async def fail_startup(_app):
+            raise ValueError("engine capability unavailable")
+            yield
+        app = FastAPI(lifespan=fail_startup)
+        loads = []
+        with tempfile.TemporaryDirectory() as private:
+            cert, key = Path(private) / "cert.pem", Path(private) / "key.pem"
+            cert.write_text("unused until public lifespan succeeds")
+            key.write_text("unused until public lifespan succeeds")
+            env = {"VLLM_API_KEY": "u" * 32, "PHORVEX_GUARDRAIL_ADMIN_KEY": "a" * 32,
+                   "PHORVEX_ADMIN_TLS_CERT_FILE": str(cert),
+                   "PHORVEX_ADMIN_TLS_KEY_FILE": str(key)}
+            with mock.patch.dict(os.environ, env), \
+                 mock.patch.object(guardrail_proxy, "create_app", return_value=app), \
+                 mock.patch.object(guardrail_proxy.GuardrailRuntime, "load_all",
+                                   lambda _runtime: loads.append(True)):
+                with self.assertRaisesRegex(RuntimeError, "public listener stopped before startup"):
+                    await asyncio.wait_for(dual.serve(), 2)
+        self.assertEqual(loads, [True])
+
+    async def test_private_listener_waits_for_public_lifespan(self):
+        class Public:
+            started = False
+            should_exit = False
+            async def serve(self):
+                await asyncio.sleep(0.03)
+                self.started = True
+                while not self.should_exit:
+                    await asyncio.sleep(0.005)
+        class Private:
+            should_exit = False
+            calls = 0
+            async def serve(self):
+                self.assert_public_started()
+                self.calls += 1
+                return
+        public, private = Public(), Private()
+        private.assert_public_started = lambda: self.assertTrue(public.started)
+        await asyncio.sleep(0)
+        with self.assertRaisesRegex(RuntimeError, "one serving listener stopped"):
+            await dual.serve_pair(public, private, shutdown_timeout=0.2)
+        self.assertTrue(public.started)
+        self.assertEqual(private.calls, 1)
+
+    async def test_failed_public_startup_never_binds_private_listener(self):
+        class Public:
+            started = False
+            should_exit = False
+            async def serve(self):
+                raise ValueError("engine startup refused")
+        class Private:
+            should_exit = False
+            calls = 0
+            async def serve(self):
+                self.calls += 1
+        private = Private()
+        with self.assertRaisesRegex(ValueError, "engine startup refused"):
+            await dual.serve_pair(Public(), private, shutdown_timeout=0.2)
+        self.assertEqual(private.calls, 0)
+
+    async def test_stuck_sibling_is_cancelled_after_bounded_shutdown(self):
+        class Public:
+            started = True
+            should_exit = False
+            force_exit = False
+            cancelled = False
+            async def serve(self):
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                except asyncio.CancelledError:
+                    self.cancelled = True
+                    raise
+        class Private:
+            should_exit = False
+            force_exit = False
+            async def serve(self):
+                return
+        public, private = Public(), Private()
+        with self.assertRaisesRegex(RuntimeError, "one serving listener stopped"):
+            await dual.serve_pair(public, private, shutdown_timeout=0.02)
+        self.assertTrue(public.cancelled)
+        self.assertTrue(public.force_exit)
 
 
 if __name__ == "__main__":

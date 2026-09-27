@@ -222,6 +222,47 @@ class RenderGuardrailProfileTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
 
+    def test_historical_and_startup_repaired_source_closures_do_not_mix(self):
+        context = "arn:aws:eks:us-east-2:123456789012:cluster/test"
+        objects = fixture()
+        current_proxy = renderer.digest(renderer.PROXY.read_bytes())
+        current_dual = objects["source"]["data"]["dual_server.py"]
+        current_drain = objects["source"]["data"]["drain_v11.py"]
+        old_dual = current_dual + "\n# synthetic historical listener"
+        old_drain = current_drain + "\n# synthetic historical drain"
+        repaired = renderer.STARTUP_REPAIRED_LEGACY_SOURCE_SHA256
+        historical = renderer.LEGACY_SOURCE_SHA256
+        historical_drain = renderer.DRAIN_SOURCE_SHA256
+        try:
+            # Synthetic bytes test the closure join without requiring git
+            # history in a shallow checkout. Production pins remain literal.
+            renderer.LEGACY_SOURCE_SHA256 = {
+                "guardrail_proxy.py": current_proxy,
+                "dual_server.py": renderer.digest(old_dual.encode()),
+            }
+            renderer.DRAIN_SOURCE_SHA256 = {
+                "drain_v11.py": renderer.digest(old_drain.encode()),
+                "drain_v11_init.py": self.reviewed_drain_hashes["drain_v11_init.py"],
+            }
+            renderer.STARTUP_REPAIRED_LEGACY_SOURCE_SHA256 = {
+                "guardrail_proxy.py": current_proxy,
+                "dual_server.py": renderer.digest(renderer.DUAL.read_bytes()),
+            }
+            renderer.render(objects, context)
+            objects["source"]["data"]["dual_server.py"] = old_dual
+            with self.assertRaises(ValueError):
+                renderer.render(objects, context)
+            objects["source"]["data"]["dual_server.py"] = current_dual
+            objects["source"]["data"]["drain_v11.py"] = old_drain
+            with self.assertRaises(ValueError):
+                renderer.render(objects, context)
+            objects["source"]["data"]["dual_server.py"] = old_dual
+            renderer.render(objects, context)
+        finally:
+            renderer.STARTUP_REPAIRED_LEGACY_SOURCE_SHA256 = repaired
+            renderer.LEGACY_SOURCE_SHA256 = historical
+            renderer.DRAIN_SOURCE_SHA256 = historical_drain
+
     def test_exact_five_file_lease_closure_requires_retained_b_authority(self):
         objects, retained = lease_fixture()
         raw, _, _ = renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained)
