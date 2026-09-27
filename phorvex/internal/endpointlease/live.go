@@ -265,7 +265,7 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 			sourceVolume = v.Name
 		}
 		if v.Secret != nil && v.Secret.SecretName == SecretName {
-			if v.Secret.Optional != nil && *v.Secret.Optional || len(v.Secret.Items) != 0 || secretVolume != "" {
+			if v.Secret.Optional != nil && *v.Secret.Optional || !secretItemsExact(v.Secret.Items) || secretVolume != "" {
 				return false
 			}
 			secretVolume = v.Name
@@ -352,6 +352,26 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 		}
 	}
 	return engineSeen && proxySeen
+}
+
+// secretItemsExact accepts the whole Secret, or an explicit projection of exactly
+// the proxy's three keys onto their own names. Either yields the same mounted
+// files; a rename, omission, extra key, or per-file mode is not the reviewed shape.
+func secretItemsExact(items []corev1.KeyToPath) bool {
+	if len(items) == 0 {
+		return true
+	}
+	want := map[string]bool{"client-a": true, "client-b": true, "seed": true}
+	if len(items) != len(want) {
+		return false
+	}
+	for _, item := range items {
+		if !want[item.Key] || item.Path != item.Key || item.Mode != nil {
+			return false
+		}
+		delete(want, item.Key)
+	}
+	return len(want) == 0
 }
 
 func engineSpecMatches(c corev1.Container, image string) bool {
