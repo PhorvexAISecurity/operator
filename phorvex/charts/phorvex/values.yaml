@@ -434,6 +434,12 @@ phorvex:
       configMapName: ""
       profileSHA256: ""
       deploymentUID: ""
+    # Reviewed real Voice synthetic output marker trial. Off until the
+    # output-policy ConfigMap, protected journal and exact profile are pinned.
+    voiceOutputLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

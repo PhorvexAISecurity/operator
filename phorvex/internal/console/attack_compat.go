@@ -68,6 +68,8 @@ var liveAttackCatalogue = []LiveAttack{
 		"voice-memory", "Plants one run-owned stored note, opens real direct Voice WebSocket sessions, and checks exact memory context and benign-note replay after the brain's selected action."},
 	{voiceAgencyScenario, "Voice cross-account refund request", voiceAgencyRoute, "AML.T0054 / T1539", voiceAgencyAction,
 		"voice-agency", "Measures one model-triggered refund of a run-owned other order, then a labeled test signal, normal brain choice, blocked exact-pair replay and own-order/status controls."},
+	{voiceOutputScenario, "Voice synthetic internal marker disclosure", voiceOutputRoute, "AML.T0051 / T1539", voiceOutputAction,
+		"voice-output", "Measures an actual real-Voice model output containing one noncredential run marker, then an explicitly injected signal, normal brain choice, complete-response containment, blocked repeat and benign speech."},
 	{"ai2-unbounded-consumption", "LiteLLM abusive client containment", "/api/litellm/live/fire", "OWASP LLM10", "litellm-client-revoke",
 		"litellm-live", "Measures bounded accepted requests, injects a labeled test event, then checks whether the brain revokes that client while legitimate requests continue. It does not measure unlimited spending."},
 	{"ai2-query-extraction", "LiteLLM repeated-query client containment", "/api/litellm/live/fire", "AML.T0024", "litellm-client-revoke",
@@ -85,6 +87,7 @@ type appStack struct {
 	Armed           bool   `json:"armed"`           // the console may fire a live attack here right now
 	VoiceMemoryHook bool   `json:"voiceMemoryHook"` // declared source and owner-bound rule are installed
 	VoiceAgencyLive bool   `json:"voiceAgencyLive"` // reviewed profile and matching Voice source are installed
+	VoiceOutputLive bool   `json:"voiceOutputLive"` // reviewed output profile and matching Voice source are installed
 	LiteLLMLive     bool   `json:"litellmLive"`     // reviewed configuration is present; Fire verifies runtime
 }
 
@@ -123,6 +126,11 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-refund-policy-configmap"] == voiceAgencyConfigMapName {
 					st.VoiceAgencyLive = true
 				}
+				if p, e := loadVoiceOutputProfile(s.cfg); e == nil &&
+					deps.Items[i].Spec.Template.Annotations[voiceOutputSourceAnnotation] == p.SourceSHA256 &&
+					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-output-policy-configmap"] == "voice-output-policy" {
+					st.VoiceOutputLive = true
+				}
 			}
 			for _, img := range containerImages(deps.Items[i].Spec.Template.Spec.Containers) {
 				if served, vllm := servedModelImage(img); served {
@@ -158,6 +166,10 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 	if st.VoiceAgencyLive {
 		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, voiceAgencyConfigMapName, metav1.GetOptions{})
 		st.VoiceAgencyLive = err == nil
+	}
+	if st.VoiceOutputLive {
+		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-output-policy", metav1.GetOptions{})
+		st.VoiceOutputLive = err == nil
 	}
 	return st, nil
 }
@@ -206,6 +218,9 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.VoiceAgencyLive {
 		out = append(out, voiceAgencyAction)
 	}
+	if st.VoiceOutputLive {
+		out = append(out, voiceOutputAction)
+	}
 	if st.LiteLLMLive {
 		out = append(out, "litellm-client-revoke")
 	}
@@ -218,6 +233,14 @@ func compatibleLive(st appStack) []compatEntry {
 	for _, a := range liveAttackCatalogue {
 		e := compatEntry{LiveAttack: a}
 		switch a.StackLabel {
+		case "voice-output":
+			e.Compatible = st.Namespace == "voice" && st.Workload
+			e.Armed = e.Compatible && st.Armed && st.VoiceOutputLive
+			if e.Armed {
+				e.Reason = "Reviewed Voice output profile and source are present; Fire verifies current owner, Pods, protected journal and rule"
+			} else {
+				e.Reason = "Voice output profile, source, owned rule or governance is unavailable"
+			}
 		case "voice-agency":
 			e.Compatible = st.Namespace == "voice" && st.Workload
 			e.Armed = e.Compatible && st.Armed && st.VoiceAgencyLive
@@ -324,6 +347,12 @@ func catalogueCompatProjection(it CatalogItem, compatible bool, reason string) m
 // scenario is meaningful only on a served model; a GPU-capability scenario needs a GPU node pool;
 // a structural/k8s scenario runs wherever there is a pod to gain a foothold in.
 func scenarioFitsStack(it CatalogItem, st appStack) (bool, string) {
+	if it.Name == voiceOutputScenario && st.Namespace == "voice" {
+		if st.VoiceOutputLive {
+			return true, "reviewed Voice output source and rule are declared; Live Fire verifies current ownership and all serving Pods"
+		}
+		return false, "Voice output profile, source or owned rule rollout is unavailable"
+	}
 	if it.Name == voiceAgencyScenario && st.Namespace == "voice" {
 		if st.VoiceAgencyLive {
 			return true, "reviewed Voice agency source and rule are declared; Live Fire verifies current ownership and all serving Pods"

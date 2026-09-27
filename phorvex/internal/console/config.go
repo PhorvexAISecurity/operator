@@ -66,6 +66,11 @@ type Config struct {
 	VoiceAgencyLiveEnabled       bool
 	VoiceAgencyLiveProfileSHA256 string
 	VoiceAgencyLiveProfilePath   string
+	// VoiceOutputLive binds a synthetic noncredential marker trial to reviewed
+	// source, policy and exact real Voice serving Pods.
+	VoiceOutputLiveEnabled       bool
+	VoiceOutputLiveProfileSHA256 string
+	VoiceOutputLiveProfilePath   string
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
 	LiteLLMLiveEnabled       bool
