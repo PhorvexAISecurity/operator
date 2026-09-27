@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -113,6 +114,13 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Action) == "" {
 		writeJSON(w, 400, map[string]string{"error": "a valid action is required"})
+		return
+	}
+	// The built-in transfer can only invalidate locally. Until a reviewed
+	// disaggregated connector is wired, do not launch a producer or create a
+	// signal that could steer the brain toward a nonexistent remote effect.
+	if body.Action == "kv-migrate-invalidate" {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": actuator.ReasonKVMigrationConnectorUnavailable, "verdict": "unavailable"})
 		return
 	}
 	if body.Action == "guardrail-output-v2" {

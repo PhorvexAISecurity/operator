@@ -49,8 +49,12 @@ type NativeActuator struct {
 	EndpointLeaseApprovedEngineImage  string            // reviewed immutable loopback engine image
 	EndpointLeaseStatusTransport      http.RoundTripper // fixed Pod-IP TLS status seam for tests
 	EndpointLeaseStatusToken          string            // test-only; production uses serving security
-	migProfiles                       *MIGProfiles
-	servingSecurity                   *ServingSecurityConfig
+	// KVXfer is deliberately nil in production until an independently reviewed
+	// disaggregated KV connector is installed. The built-in HTTP transfer only
+	// implements local invalidation, so it cannot authorize migration.
+	KVXfer          kvTransferController
+	migProfiles     *MIGProfiles
+	servingSecurity *ServingSecurityConfig
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -94,6 +98,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	// are rejected here rather than accepted and then refused at the dispatch boundary.
 	if ok, detail := nativeAccepts(a); !ok {
 		return false, unsupportedWhy(BackendNative, a, detail)
+	}
+	if a == model.ActionKVMigrateInvalidate && !kvMigrationConnectorReady(n.KVXfer) {
+		return false, ReasonKVMigrationConnectorUnavailable
 	}
 	if a == model.ActionModelShardReplace && t.Labels[labelParallelGroup] != "" {
 		return false, ReasonParallelGroupUnavailable
@@ -306,7 +313,10 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
+	if req.Action == model.ActionKVMigrateInvalidate && !kvMigrationConnectorReady(n.KVXfer) {
+		return Result{Actuator: "native", Handler: string(req.Action), NoEffect: NoEffectRefused, MutationKind: "none", Note: ReasonKVMigrationConnectorUnavailable}, RefusedWithoutEffect(fmt.Errorf("%s", ReasonKVMigrationConnectorUnavailable))
+	}
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, KVXfer: n.KVXfer, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future

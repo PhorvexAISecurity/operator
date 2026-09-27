@@ -367,6 +367,20 @@ type kvTransferController interface {
 	MigrateRemote(ctx context.Context, ep servingEndpoint, peers []string) ([]kvPeerOutcome, error)
 }
 
+// A connector must explicitly attest to reviewed remote support before the
+// native actuator offers migration. The built-in httpKVTransfer intentionally
+// lacks this interface: its MigrateRemote method returns not-implemented.
+type kvRemoteMigrationCapability interface {
+	RemoteMigrationReady() bool
+}
+
+const ReasonKVMigrationConnectorUnavailable = "transport-unwired: disaggregated KV remote connector is not installed"
+
+func kvMigrationConnectorReady(k kvTransferController) bool {
+	capability, ok := k.(kvRemoteMigrationCapability)
+	return ok && capability.RemoteMigrationReady()
+}
+
 type kvPeerDisposition string
 
 const (

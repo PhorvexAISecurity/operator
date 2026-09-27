@@ -251,7 +251,7 @@ func TestRemainingVLLMHandlersRejectHTTPFailureBeforeSignal(t *testing.T) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
-	for _, action := range []string{"poison", "kvcache", "request-drain", "kv-migrate-invalidate", "warm-swap", "model-shard-replace"} {
+	for _, action := range []string{"poison", "kvcache", "request-drain", "warm-swap", "model-shard-replace"} {
 		t.Run(action, func(t *testing.T) {
 			fixture := &remainingHandlerFixture{t: t, serverURL: server.URL, events: map[string]string{}}
 			cfg := Config{StateDir: t.TempDir(), Exec: fixture.exec}
@@ -502,7 +502,7 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
 		}
 	}))
 	defer server.Close()
-	for _, action := range []string{"poison", "kvcache", "request-drain", "kv-migrate-invalidate", "warm-swap", "model-shard-replace"} {
+	for _, action := range []string{"poison", "kvcache", "request-drain", "warm-swap", "model-shard-replace"} {
 		t.Run(action, func(t *testing.T) {
 			resetM168AttackMemory()
 			fixture := &remainingHandlerFixture{t: t, serverURL: server.URL, events: map[string]string{}}
