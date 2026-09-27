@@ -58,7 +58,12 @@ and adds `phorvex.ai/serving=true`. Other mismatches still refuse.
 3. Run `render.py` with those originals, the published JSON receipt and its
    hash, and the two snapshot values above. Supply **names only** for the
    workload Secret `vllm-control`, operator Secret `vllm-serving-admin`, and
-   TLS name `vllm-admin.vllm.svc`. Example arguments:
+   TLS name `vllm-admin.vllm.svc`. For this legacy four-file rollout, execute
+   from the reviewed PR365 source checkout
+   `440da58d6e965d7f885cd35e44faa510d383cfc8`. Current main has newer
+   lease-capable proxy/dual bytes; its renderer deliberately refuses them
+   rather than emitting a four-file candidate rejected by the guardrail
+   profile. Example arguments:
 
    ```sh
    python3 build/integrations/vllm-live-drain-runtime/render.py \

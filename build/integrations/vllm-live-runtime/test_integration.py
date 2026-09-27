@@ -98,7 +98,9 @@ class RendererTest(unittest.TestCase):
     def test_candidate_preserves_settings_and_binds_private_control(self):
         dep, cm, pol = self.fixture()
         original = copy.deepcopy(dep)
-        with mock.patch.object(renderer, "ORIGINAL_PROXY_SHA256", hashlib.sha256(b"old").hexdigest()):
+        with mock.patch.multiple(renderer, ORIGINAL_PROXY_SHA256=hashlib.sha256(b"old").hexdigest(),
+                                 LEGACY_PROXY_SHA256=renderer.sha(renderer.PROXY.read_bytes()),
+                                 LEGACY_DUAL_SHA256=renderer.sha(renderer.DUAL.read_bytes())):
             output = renderer.render(dep, cm, pol, renderer.PUBLISHED_IMAGE,
                                      "vllm-control", "vllm-serving-admin", "vllm-admin.vllm.svc")
         import json
@@ -120,7 +122,9 @@ class RendererTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             renderer.render(dep, cm, pol, image, "vllm-control", "vllm-serving-admin", "vllm-admin.vllm.svc")
         dep["spec"]["template"]["spec"]["containers"][0]["args"].remove("--enable-lora")
-        with mock.patch.object(renderer, "ORIGINAL_PROXY_SHA256", hashlib.sha256(b"old").hexdigest()), self.assertRaises(ValueError):
+        with mock.patch.multiple(renderer, ORIGINAL_PROXY_SHA256=hashlib.sha256(b"old").hexdigest(),
+                                 LEGACY_PROXY_SHA256=renderer.sha(renderer.PROXY.read_bytes()),
+                                 LEGACY_DUAL_SHA256=renderer.sha(renderer.DUAL.read_bytes())), self.assertRaises(ValueError):
             renderer.render(dep, cm, pol, image, "vllm-control", "vllm-serving-admin", "vllm-admin.vllm.svc")
 
 
