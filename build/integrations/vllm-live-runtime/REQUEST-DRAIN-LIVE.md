@@ -26,7 +26,7 @@ The new console arm still uses `/api/vllm/attack` with `{"action":"request-drain
 Focused source checks:
 
 ```sh
-go test ./phorvex/internal/console ./phorvex/internal/actuator ./phorvex/internal/audit ./phorvex/internal/runner
+(cd phorvex && go test ./internal/console ./internal/actuator ./internal/audit ./internal/runner)
 python3 -m unittest tools.test_drain_live_chart
 python3 -m unittest discover -s build/integrations/vllm-live-runtime -p test_render_drain_profile.py
 node --test dashboard-web/tests/live-attack-dispatch.test.cjs

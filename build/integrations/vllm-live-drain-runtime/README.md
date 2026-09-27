@@ -105,15 +105,19 @@ undocumented private file.
 
 ## Result limits
 
-The current Live console `request-drain` path creates one synthetic
+The default legacy Live console `request-drain` path creates one synthetic
 `DenialOfWallet` SecurityEvent and explicitly records **response-only**. It
 launches no bounded in-flight request producer and has no original admission,
 abort/quiescence, reopen, or benign-continuity reader. A working drain backend
 therefore removes a real actuator prerequisite but cannot by itself turn that
-Live row into a behavioral `DEFENDED` or `LANDED` outcome. The next console
-repair must retain a bounded original inference request and independently
-read the v11 operation receipt plus the same-request outcome. Do not claim a
-full defense from a Service selector, capability response or SecurityEvent.
+Live row into a behavioral `DEFENDED` or `LANDED` outcome. The opt-in replacement
+documented in [REQUEST-DRAIN-LIVE.md](../vllm-live-runtime/REQUEST-DRAIN-LIVE.md)
+retains a bounded original inference request and independently reads the v11
+operation receipt and that request's outcome. It requires separate reviewed
+console profile activation after this runtime is installed. Its positive result
+proves request-drain mechanics and continuity, not wallet-exhaustion prevention.
+Do not claim a full defense from a Service selector, capability response or
+SecurityEvent.
 
 Local controls:
 
