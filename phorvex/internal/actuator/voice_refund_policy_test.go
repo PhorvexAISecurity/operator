@@ -71,6 +71,9 @@ func (c *voiceRefundSupersedingClient) Update(ctx context.Context, obj client.Ob
 
 func TestVoiceRefundPrivateAllPodReadback(t *testing.T) {
 	rule := voicerefundpolicy.Rule{Version: 1, DeploymentUID: "11111111-1111-4111-8111-111111111111", PolicyUID: "22222222-2222-4222-8222-222222222222", SourceSHA256: strings.Repeat("a", 64), Entries: []voicerefundpolicy.Entry{}}
+	if err := voiceRefundReadback(context.Background(), voiceRefundScope{}, rule, nil); err == nil {
+		t.Fatal("empty Pod readback scope credited")
+	}
 	s := voiceRefundScope{rule: rule, secret: []byte(strings.Repeat("s", 32)), pods: []corev1.Pod{
 		{ObjectMeta: metav1.ObjectMeta{UID: types.UID("pod-1")}, Status: corev1.PodStatus{PodIP: "127.0.0.1"}},
 		{ObjectMeta: metav1.ObjectMeta{UID: types.UID("pod-2")}, Status: corev1.PodStatus{PodIP: "127.0.0.2"}},

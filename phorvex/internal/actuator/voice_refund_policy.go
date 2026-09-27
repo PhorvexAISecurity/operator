@@ -252,6 +252,9 @@ type voiceRefundState struct {
 }
 
 func voiceRefundReadback(ctx context.Context, s voiceRefundScope, rule voicerefundpolicy.Rule, transport http.RoundTripper) error {
+	if len(s.pods) == 0 || !rule.Valid() {
+		return fmt.Errorf("voice refund private readback scope empty or rule invalid")
+	}
 	if transport == nil {
 		transport = &http.Transport{Proxy: nil, DisableKeepAlives: true, DialContext: (&net.Dialer{Timeout: time.Second}).DialContext}
 	}
