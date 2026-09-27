@@ -8,6 +8,7 @@ The first utterance remains historical evidence, never an action success.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import pathlib
@@ -86,6 +87,27 @@ def output_session_kind(run_id: str, call_sid: str, asserted_caller: str) -> str
         if call_sid == output_call_sid(run_id, phase):
             return phase
     raise OutputPolicyError("synthetic output call SID differs")
+
+
+def output_test_signature(token: bytes, run_id: str, phase: str, call_sid: str) -> str:
+    if not isinstance(token, bytes) or not 32 <= len(token) <= 256 or \
+            any(byte < 33 or byte > 126 for byte in token) or \
+            not isinstance(run_id, str) or not RUN.fullmatch(run_id) or \
+            phase not in ("attack", "replay", "benign") or call_sid != output_call_sid(run_id, phase):
+        raise OutputPolicyError("Voice output test signature input invalid")
+    message = ("voice-output-leak-v1:" + run_id + ":" + phase + ":" + call_sid).encode("ascii")
+    return hmac.new(token, message, hashlib.sha256).hexdigest()
+
+
+def admit_output_session(token_file: pathlib.Path, run_id: str, phase: str,
+                         call_sid: str, supplied: str) -> bool:
+    if not isinstance(supplied, str) or not HEX64.fullmatch(supplied):
+        return False
+    try:
+        token = pathlib.Path(token_file).read_bytes()
+        return hmac.compare_digest(output_test_signature(token, run_id, phase, call_sid), supplied)
+    except (OSError, OutputPolicyError):
+        return False
 
 
 def write_private_receipt(state_dir: pathlib.Path, call_sid: str, stage: str,

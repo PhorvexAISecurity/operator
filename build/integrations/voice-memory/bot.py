@@ -53,7 +53,7 @@ from pymongo import MongoClient
 from voice_memory_policy import (VoiceMemoryPolicy, VoiceRefundPolicy, agency_phones, agency_session_kind,
                                  authorization_status, source_sha256)
 from voice_output_policy import (MARKER, UNAVAILABLE_ANSWER, UtteranceGate, VoiceOutputPolicy,
-                                 marker_for_run, output_session_kind, output_source_sha256,
+                                 admit_output_session, marker_for_run, output_session_kind, output_source_sha256,
                                  write_private_receipt)
 
 # ── config from env (all secrets come from the K8s Secret `voice-secrets`) ──────
@@ -118,6 +118,7 @@ _output_policy = VoiceOutputPolicy(
     pathlib.Path(os.environ.get("VOICE_OUTPUT_POLICY_DIR", "/etc/phorvex/voice-output-policy")),
     pathlib.Path(os.environ.get("VOICE_MEMORY_STATE_DIR", "/var/lib/phorvex-voice-memory")),
     _output_source, os.environ.get("POD_UID", ""), required=_output_policy_mode == "true")
+_output_test_token_path = pathlib.Path("/etc/phorvex/voice-output-test-token/token")
 
 
 # Mini-CRM backend (Tier-1 agentic tools call this). The refund/reset/appointment
@@ -591,7 +592,7 @@ class VoiceOutputAudioTap(FrameProcessor):
 
 # ── the pipeline, built per call ───────────────────────────────────────────────
 async def run_bot(websocket: WebSocket, stream_sid: str, call_sid: str, caller: str = None,
-                  agency_run_id: str = "", output_run_id: str = ""):
+                  agency_run_id: str = "", output_run_id: str = "", output_signature: str = ""):
     if agency_run_id and output_run_id:
         raise ValueError("one synthetic Voice session mode required")
     if agency_run_id and VOICE_AGENCY_TEST_ENABLED != "true":
@@ -604,6 +605,9 @@ async def run_bot(websocket: WebSocket, stream_sid: str, call_sid: str, caller: 
     output_phase = output_session_kind(output_run_id, call_sid, caller) if VOICE_OUTPUT_TEST_ENABLED == "true" else ""
     if output_run_id and not output_phase:
         raise ValueError("Voice output test session identity does not match")
+    if output_run_id and not admit_output_session(_output_test_token_path, output_run_id, output_phase,
+                                                   call_sid, output_signature):
+        raise ValueError("Voice output test session signature differs")
     agency_allowed_phones = agency_phones(agency_run_id) if agency_phase else ()
     serializer = TwilioFrameSerializer(
         stream_sid=stream_sid,
@@ -830,7 +834,7 @@ async def ws(websocket: WebSocket):
     await websocket.accept()
     # Twilio sends a "connected" then a "start" message carrying the stream/call SIDs.
     # We read the first two frames to pull them out before starting the pipeline.
-    stream_sid, call_sid, caller, agency_run_id, output_run_id = None, None, None, "", ""
+    stream_sid, call_sid, caller, agency_run_id, output_run_id, output_signature = None, None, None, "", "", ""
     for _ in range(2):
         msg = json.loads(await websocket.receive_text())
         if msg.get("event") == "start":
@@ -840,7 +844,8 @@ async def ws(websocket: WebSocket):
             caller = custom.get("caller")
             agency_run_id = custom.get("agencyRunId", "") if isinstance(custom, dict) else ""
             output_run_id = custom.get("outputRunId", "") if isinstance(custom, dict) else ""
-    await run_bot(websocket, stream_sid, call_sid, caller, agency_run_id, output_run_id)
+            output_signature = custom.get("outputSignature", "") if isinstance(custom, dict) else ""
+    await run_bot(websocket, stream_sid, call_sid, caller, agency_run_id, output_run_id, output_signature)
 
 
 if __name__ == "__main__":

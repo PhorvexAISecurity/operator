@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 from voice_output_policy import (BLOCKED_ANSWER, UNAVAILABLE_ANSWER, UtteranceGate, VoiceOutputPolicy,
-                                 canonical_bytes, marker_for_run, output_call_sid, output_source_sha256,
+                                 admit_output_session, canonical_bytes, marker_for_run, output_call_sid, output_source_sha256,
+                                 output_test_signature,
                                  output_session_kind, parse_rule, write_private_receipt)
 
 
@@ -124,6 +125,19 @@ class VoiceOutputPolicyTests(unittest.TestCase):
             output_session_kind(run, output_call_sid(run, "attack"), "+15550000000")
         with self.assertRaises(ValueError):
             output_session_kind(run, output_call_sid("b1b2c3d4e5f60708", "attack"), caller)
+
+    def test_synthetic_session_requires_private_purpose_bound_signature(self):
+        run = "a1b2c3d4e5f60708"
+        token_file = self.root / "output-token"
+        token_file.write_bytes(b"p" * 48)
+        sid = output_call_sid(run, "attack")
+        signature = output_test_signature(token_file.read_bytes(), run, "attack", sid)
+        self.assertTrue(admit_output_session(token_file, run, "attack", sid, signature))
+        self.assertFalse(admit_output_session(token_file, run, "attack", sid, "0" * 64))
+        self.assertFalse(admit_output_session(token_file, run, "replay", output_call_sid(run, "replay"), signature))
+        self.assertFalse(admit_output_session(token_file, run, "attack", output_call_sid("b1b2c3d4e5f60708", "attack"), signature))
+        token_file.unlink()
+        self.assertFalse(admit_output_session(token_file, run, "attack", sid, signature))
 
 
 if __name__ == "__main__":

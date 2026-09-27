@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voiceoutputpolicy"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,12 +130,17 @@ func (s *Server) waitVoiceOutputDecision(ctx context.Context, record *attackReco
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	var observed voiceMemoryDecision
+	noopReason := ""
 	for {
 		rows, e := s.readDecisionWindow(ctx, "")
 		if e == nil {
 			for _, row := range rows {
-				candidate, ok := voiceMemorySelectedDecision(row, record, voiceMemorySnapshot{PolicyUID: before.PolicyUID}, eventUID)
+				candidate, reason, ok := voiceOutputMatchedDecision(row, record, before, eventUID)
 				if !ok {
+					continue
+				}
+				if candidate.Action == string(model.ActionNoop) {
+					noopReason = reason
 					continue
 				}
 				if !observed.Selected {
@@ -149,10 +157,54 @@ func (s *Server) waitVoiceOutputDecision(ctx context.Context, record *attackReco
 		case <-ctx.Done():
 			return observed, ctx.Err()
 		case <-timer.C:
-			return observed, errors.New("Voice output exact brain decision absent")
+			if noopReason != "" {
+				return observed, fmt.Errorf("Voice output exact brain NOOP observed: %s", noopReason)
+			}
+			return observed, errors.New("Voice output exact brain decision absent or untrusted")
 		case <-ticker.C:
 		}
 	}
+}
+
+// NOOP is a genuine event-bound brain decision, not an absent audit row. It is
+// diagnostic only; the Live case continues waiting for an actual selected
+// action and never credits NOOP as a protected effect.
+func voiceOutputMatchedDecision(row audit.Record, record *attackRecord, snap voiceOutputSnapshot, eventUID string) (voiceMemoryDecision, string, bool) {
+	trace := row.DecisionTrace
+	if row.Kind != "phorvex.decision" || row.Namespace != "voice" || row.Pod != record.Pod ||
+		row.Time.Before(record.started) || trace == nil || trace.Validate() != nil || trace.DecisionID == "" || trace.TickID == "" ||
+		trace.AssetNamespace != "voice" || trace.AssetName != record.Pod || trace.AssetUID != record.TargetUID ||
+		trace.PolicyNamespace != "voice" || trace.PolicyName != voiceAgencyPolicyName || trace.PolicyUID != snap.PolicyUID ||
+		trace.SelectedAction != row.Action {
+		return voiceMemoryDecision{}, "", false
+	}
+	matched, trusted := false, 0
+	for _, event := range row.Events {
+		if event.TrustVerdict != "trusted" || event.Weight <= 0 {
+			continue
+		}
+		trusted++
+		matched = matched || event.EventUID == eventUID && event.TargetPodUID == record.TargetUID
+	}
+	if !matched || trusted != 1 {
+		return voiceMemoryDecision{}, "", false
+	}
+	candidate := voiceMemoryDecision{Action: row.Action, DecisionID: trace.DecisionID, TickID: trace.TickID,
+		SelectedAt: row.Time, Selected: row.Selected,
+		Actuated: row.Actuated && row.DispatchOutcome == model.DispatchEmitted && trace.DispatchOutcome == model.DispatchEmitted}
+	if row.Action == string(model.ActionNoop) && !row.Selected {
+		parts := []string{"tick=" + trace.TickID, "decision=" + trace.DecisionID, "reason=" + trace.NoopReason}
+		for _, status := range trace.ActionStatus {
+			if status.Action == voiceOutputAction {
+				parts = append(parts, "output-candidate="+status.Status, "exclusion="+status.ExclusionKind, "detail="+status.Reason)
+			}
+		}
+		return candidate, strings.Join(parts, " "), true
+	}
+	if !row.Selected {
+		return voiceMemoryDecision{}, "", false
+	}
+	return candidate, "", true
 }
 
 func (s *Server) waitVoiceOutputEffect(ctx context.Context, p voiceOutputProfile, before voiceOutputSnapshot,

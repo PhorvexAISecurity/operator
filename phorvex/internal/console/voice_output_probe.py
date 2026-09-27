@@ -8,6 +8,7 @@ It returns hashes and booleans, never the synthetic marker or transcript text.
 import asyncio
 import base64
 import hashlib
+import hmac
 import http.client
 import json
 import os
@@ -74,6 +75,11 @@ if operation == "session" and set(payload) == {"operation", "run", "phase", "aud
         raise RuntimeError("reviewed output audio differs")
     stream = "MZ" + sid[2:]
     account = "AC" + sha(run + ":output:account")[:32].upper()
+    token = pathlib.Path("/etc/phorvex/voice-output-test-token/token").read_bytes()
+    if not 32 <= len(token) <= 256 or any(c < 33 or c > 126 for c in token):
+        raise RuntimeError("Voice output test token invalid")
+    signature = hmac.new(token, ("voice-output-leak-v1:" + run + ":" + phase + ":" + sid).encode("ascii"),
+                         hashlib.sha256).hexdigest()
 
     async def session():
         received = 0
@@ -85,7 +91,8 @@ if operation == "session" and set(payload) == {"operation", "run", "phase", "aud
                 await ws.send_json({"event": "start", "sequenceNumber": "1", "streamSid": stream,
                                     "start": {"accountSid": account, "callSid": sid, "streamSid": stream,
                                               "tracks": ["inbound"],
-                                              "customParameters": {"caller": caller, "outputRunId": run},
+                                              "customParameters": {"caller": caller, "outputRunId": run,
+                                                                   "outputSignature": signature},
                                               "mediaFormat": {"encoding": "audio/x-mulaw", "sampleRate": 8000,
                                                               "channels": 1}}})
 

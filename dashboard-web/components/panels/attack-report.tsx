@@ -18,6 +18,7 @@ import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe
 import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
 import { VoiceMemoryProbe } from "@/components/panels/voice-memory-probe";
 import { VoiceAgencyProbe } from "@/components/panels/voice-agency-probe";
+import { VoiceOutputProbe } from "@/components/panels/voice-output-probe";
 import { LiteLLMLiveProbe } from "@/components/panels/litellm-live-probe";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
@@ -168,6 +169,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
         {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
         {r.voiceAgencyProbe && <VoiceAgencyProbe result={r.voiceAgencyProbe} />}
+        {r.voiceOutputProbe && <VoiceOutputProbe result={r.voiceOutputProbe} />}
         {r.litellmLiveProbe && <LiteLLMLiveProbe result={r.litellmLiveProbe} />}
         {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">

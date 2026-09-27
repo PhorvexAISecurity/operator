@@ -71,8 +71,8 @@ func voiceOutputMounts(p *corev1.Pod) bool {
 			state = mount.Name
 		}
 	}
-	policy, token := paths["/etc/phorvex/voice-output-policy"], paths["/etc/phorvex/voice-memory-state-token"]
-	if policy == "" || token == "" || state == "" {
+	policy, token, testToken := paths["/etc/phorvex/voice-output-policy"], paths["/etc/phorvex/voice-memory-state-token"], paths["/etc/phorvex/voice-output-test-token"]
+	if policy == "" || token == "" || testToken == "" || state == "" {
 		return false
 	}
 	found := 0
@@ -84,11 +84,14 @@ func voiceOutputMounts(p *corev1.Pod) bool {
 		if volume.Name == token && volume.Secret != nil && volume.Secret.SecretName == "voice-memory-state-token" {
 			found++
 		}
+		if volume.Name == testToken && volume.Secret != nil && volume.Secret.SecretName == "voice-output-test-token" {
+			found++
+		}
 		if volume.Name == state && volume.EmptyDir != nil {
 			found++
 		}
 	}
-	return found == 3
+	return found == 4
 }
 
 func voiceOutputServingPod(p *corev1.Pod, source string) bool {
