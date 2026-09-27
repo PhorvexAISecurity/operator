@@ -201,7 +201,11 @@ func accepted(backend actuator.Backend, action model.Action) bool {
 func addActionRequirements(out map[string]Requirement, cfg Config, namespace string, action model.Action) {
 	route := actuator.RouteFor(cfg.Backend, action)
 	for _, verb := range actuator.RequiredVerbsForBackend(cfg.Backend, action) {
-		add(out, Requirement{Namespace: namespace, Verb: verb, Reason: string(action) + " actuation"})
+		verbNamespace := namespace
+		if verb.OperatorScoped {
+			verbNamespace = cfg.OperatorNamespace
+		}
+		add(out, Requirement{Namespace: verbNamespace, Verb: verb, Reason: string(action) + " actuation"})
 	}
 	// The capacity guard wraps every quarantine backend. Its inventory is therefore
 	// required for native, Phoenix and the Phoenix route selected by hybrid.

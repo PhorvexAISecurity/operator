@@ -2104,6 +2104,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	}
 	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), absent, m.Authz, m.Actuator).
 		WithCodeExec(m.CodeExec, snap.NamespaceLabels).
+		WithOperatorNamespace(m.OperatorNamespace).
 		WithPolicyIdentity(pol.PolicyName, pol.PolicyUID)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {

@@ -37,12 +37,14 @@ const DefaultTTL = 5 * time.Minute
 // It is the SINGLE source of truth for the SSAR verb-set — handlers declare their verbs
 // via RequiredVerbs(), and this gate reviews exactly those.
 type Verb struct {
-	Group         string // API group ("" for core)
-	Resource      string // e.g. "pods", "networkpolicies"
-	Subresource   string // e.g. "ephemeralcontainers"; never folded into Resource
-	Name          string // optional resourceName for an exact named authorization check
-	Verb          string // e.g. "delete", "create", "patch"
-	ClusterScoped bool   // use an empty namespace in authorization attributes
+	Group          string // API group ("" for core)
+	Resource       string // e.g. "pods", "networkpolicies"
+	Subresource    string // e.g. "ephemeralcontainers"; never folded into Resource
+	Name           string // optional resourceName for an exact named authorization check
+	Verb           string // e.g. "delete", "create", "patch"
+	ClusterScoped  bool   // use an empty namespace in authorization attributes
+	OperatorScoped bool   // use Namespace instead of the target namespace
+	Namespace      string // resolved operator namespace for OperatorScoped verbs
 }
 
 func (v Verb) String() string {
@@ -53,7 +55,11 @@ func (v Verb) String() string {
 	if v.Name != "" {
 		resource += "[" + v.Name + "]"
 	}
-	return v.Group + "/" + resource + ":" + v.Verb
+	key := v.Group + "/" + resource + ":" + v.Verb
+	if v.OperatorScoped {
+		key += "@operator:" + v.Namespace
+	}
+	return key
 }
 
 // SSARClient is the minimal SelfSubjectAccessReview surface the Checker needs. The real
@@ -159,6 +165,9 @@ func (c *Checker) Observed(ns string, verbs []Verb) (allowed, unknown bool, why 
 }
 
 func (c *Checker) observedOne(ns string, v Verb) (allowed, unknown bool, why string) {
+	if v.OperatorScoped && v.Namespace == "" {
+		return false, true, "authorization-unobserved: operator namespace is unavailable for " + v.String()
+	}
 	ns = v.namespace(ns)
 	e, held, fresh := c.lookup(ns, v)
 	if !fresh {
@@ -187,6 +196,9 @@ func (c *Checker) lookup(ns string, v Verb) (e entry, held, fresh bool) {
 }
 
 func (c *Checker) allowedOne(ctx context.Context, ns string, v Verb) (allowed, unknown bool, why string) {
+	if v.OperatorScoped && v.Namespace == "" {
+		return false, true, "authorization-unavailable: operator namespace is unavailable for " + v.String()
+	}
 	ns = v.namespace(ns)
 	key := ns + "|" + v.String()
 	if e, _, fresh := c.lookup(ns, v); fresh {
@@ -226,6 +238,9 @@ func (c *Checker) allowedOne(ctx context.Context, ns string, v Verb) (allowed, u
 func (v Verb) namespace(candidate string) string {
 	if v.ClusterScoped {
 		return ""
+	}
+	if v.OperatorScoped {
+		return v.Namespace
 	}
 	return candidate
 }

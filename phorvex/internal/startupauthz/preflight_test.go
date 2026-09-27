@@ -351,3 +351,54 @@ func TestRouteCutoverStartupAuthorizationMatchesExactLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestEndpointLeaseJournalStartupAuthorizationUsesOperatorNamespace(t *testing.T) {
+	for _, backend := range []actuator.Backend{actuator.BackendNative, actuator.BackendHybrid} {
+		t.Run(string(backend), func(t *testing.T) {
+			reader := policyReader(t, policy("vllm", "lease", v1alpha1.ModeActive, v1alpha1.ActionEndpointLeaseRevoke))
+			for _, tc := range []struct {
+				name      string
+				deny      func(authorizationv1.ResourceAttributes) bool
+				wantError bool
+			}{
+				{name: "operator allow tenant journal denied", deny: func(a authorizationv1.ResourceAttributes) bool {
+					return a.Namespace == "vllm" && a.Name == "phorvex-endpoint-lease-journal"
+				}},
+				{name: "operator journal get denied", deny: func(a authorizationv1.ResourceAttributes) bool {
+					return a.Namespace == "control-plane" && a.Name == "phorvex-endpoint-lease-journal" && a.Verb == "get"
+				}, wantError: true},
+				{name: "operator journal update denied", deny: func(a authorizationv1.ResourceAttributes) bool {
+					return a.Namespace == "control-plane" && a.Name == "phorvex-endpoint-lease-journal" && a.Verb == "update"
+				}, wantError: true},
+				{name: "tenant policy update denied", deny: func(a authorizationv1.ResourceAttributes) bool {
+					return a.Namespace == "vllm" && a.Name == "phorvex-endpoint-lease-policy" && a.Verb == "update"
+				}, wantError: true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					reviews := &recordingSSAR{deny: tc.deny}
+					_, err := Check(t.Context(), reader, reviews, Config{Backend: backend, OperatorNamespace: "control-plane"})
+					if (err != nil) != tc.wantError {
+						t.Fatalf("startup result err=%v wantError=%t", err, tc.wantError)
+					}
+					if tc.wantError && !strings.Contains(err.Error(), "denied") {
+						t.Fatalf("unexpected startup error: %v", err)
+					}
+					var journalGet, journalUpdate bool
+					for _, a := range reviews.attributes {
+						if a.Name != "phorvex-endpoint-lease-journal" {
+							continue
+						}
+						if a.Namespace != "control-plane" {
+							t.Fatalf("journal reviewed in %q", a.Namespace)
+						}
+						journalGet = journalGet || a.Verb == "get"
+						journalUpdate = journalUpdate || a.Verb == "update"
+					}
+					if !tc.wantError && (!journalGet || !journalUpdate) {
+						t.Fatalf("journal get=%t update=%t", journalGet, journalUpdate)
+					}
+				})
+			}
+		})
+	}
+}
