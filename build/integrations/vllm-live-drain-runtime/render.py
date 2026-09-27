@@ -143,8 +143,12 @@ def current_route_key(deployment: dict, configmap: dict, service: dict,
                 or owners[0].get("uid") != service["metadata"]["uid"]):
             raise ValueError("current EndpointSlice Service owner differs")
         slice_ids.append({"uid": meta["uid"], "resourceVersion": meta["resourceVersion"]})
-        ready.extend(row.get("targetRef", {}) for row in item.get("endpoints", [])
-                     if row.get("conditions", {}).get("ready") is True)
+        for row in item.get("endpoints", []):
+            conditions = row.get("conditions", {})
+            if conditions.get("ready") is True:
+                if conditions.get("terminating") is True or conditions.get("serving") is False:
+                    raise ValueError("Ready Service endpoint is terminating or not serving")
+                ready.append(row.get("targetRef", {}))
     if (len(ready) != 1 or ready[0].get("kind") != "Pod"
             or ready[0].get("namespace") != "vllm"
             or ready[0].get("name") != pod["metadata"].get("name")

@@ -142,6 +142,8 @@ class CandidateTest(unittest.TestCase):
             lambda r: r[2]["items"][0]["endpoints"][0]["targetRef"].update(uid="stale-pod"),
             lambda r: r[2]["items"][0]["metadata"]["ownerReferences"][0].update(uid="foreign-service"),
             lambda r: r[0]["metadata"]["labels"].update(**{"phorvex.ai/route-key": "different"}),
+            lambda r: r[2]["items"][0]["endpoints"][0]["conditions"].update(terminating=True),
+            lambda r: r[2]["items"][0]["endpoints"][0]["conditions"].update(serving=False),
         )
         for mutate in mutations:
             bad = copy.deepcopy(route)
