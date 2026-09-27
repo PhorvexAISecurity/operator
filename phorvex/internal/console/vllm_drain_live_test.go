@@ -275,8 +275,8 @@ func TestDrainLiveVerdictCreditsOnlyCompleteOwnedChain(t *testing.T) {
 		r := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
 		mutate(r)
 		applyDrainLiveVerdict(r)
-		if r.Outcome != "" || r.Actuated || r.TimeToDefendSec != 0 {
-			t.Fatalf("%s earned credit: %+v", name, r)
+		if r.Outcome != "" || r.Actuated || r.TimeToDefendSec != 0 || r.OutcomeClass != "drain-decision-evidence-inconsistent" {
+			t.Fatalf("%s earned credit or kept the proved class: %+v", name, r)
 		}
 	}
 }

@@ -991,11 +991,15 @@ func applyDrainLiveVerdict(r *attackRecord) {
 	if r.DrainLiveProbe.Status != "OWNED_ABORT_AND_CONTINUITY_OBSERVED" || d == nil || stimulus == nil ||
 		!d.Selected || d.Correlation != "exact-event-uid" || d.EventUID == "" || d.EventUID != stimulus.EventUID ||
 		d.Action != "request-drain" || d.DrainOperation == nil {
+		if r.DrainLiveProbe.Status == "OWNED_ABORT_AND_CONTINUITY_OBSERVED" {
+			r.OutcomeClass = "drain-decision-evidence-inconsistent"
+		}
 		return
 	}
 	created, createdErr := time.Parse(time.RFC3339Nano, stimulus.EventCreatedAt)
 	decided, decidedErr := time.Parse(time.RFC3339Nano, d.Time)
 	if createdErr != nil || decidedErr != nil || decided.Before(created) {
+		r.OutcomeClass = "drain-decision-evidence-inconsistent"
 		return
 	}
 	r.Outcome, r.DefendedPod, r.Containment = "DEFENDED", r.Pod, "owned-inflight-request-aborted-service-reopened"
