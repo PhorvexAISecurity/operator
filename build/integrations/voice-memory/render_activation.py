@@ -18,7 +18,7 @@ import stat
 from voice_memory_policy import canonical_bytes, source_sha256
 
 
-SOURCE_SHA = "1113ef85f192bac9b1ccab46edfb6dfe26d7786030bb2de24a85a8a55909359f"
+SOURCE_SHA = "585fd2dce545cfdd163635c2e2929b193e2395329a5073b9ae14a8f033c08a9c"
 SOURCE_CONFIGMAP = "voice-memory-source-" + SOURCE_SHA[:12]
 POLICY_CONFIGMAP = "voice-memory-policy"
 REFUND_CONFIGMAP = "voice-refund-policy"

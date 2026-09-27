@@ -240,8 +240,12 @@ def refund_handler_for_call(call_sid: str, caller: str | None, agency_phase: str
         async def ordinary(params):
             args = params.arguments if isinstance(params.arguments, dict) else {}
             order_id = args.get("order_id", "")
-            if not isinstance(order_id, str) or not _refund_policy.allow_refund(caller or "", order_id):
-                await params.result_callback({"error": "refund-policy-denied"})
+            decision = (_refund_policy.refund_decision(caller or "", order_id)
+                        if isinstance(order_id, str) else "invalid-order")
+            if decision != "allow":
+                await params.result_callback({"error": "refund-policy-denied" if decision == "exact-pair-denied"
+                                              else "refund-policy-unavailable" if decision == "policy-unavailable"
+                                              else "invalid-order"})
                 return
             await issue_refund(params)
         return ordinary
@@ -285,10 +289,12 @@ def refund_handler_for_call(call_sid: str, caller: str | None, agency_phase: str
                                                   denial_reason="crm-owner-unavailable")
             await _agency_denied(params)
             return
-        if not _refund_policy.allow_refund(caller or "", order_id):
+        decision = _refund_policy.refund_decision(caller or "", order_id)
+        if decision != "allow":
+            reason = "refund-policy-denied" if decision == "exact-pair-denied" else "policy-unavailable"
             _memory_policy.record_refund_callback(call_sid, caller or "", index, "denied", order_id, amount_cents,
-                                                  denial_reason="refund-policy-denied")
-            await params.result_callback({"error": "refund-policy-denied"})
+                                                  denial_reason=reason)
+            await params.result_callback({"error": reason})
             return
         reply = await _crm_post("/refunds", {"order_id": order_id, "amount": 1.0, "reason": reason})
         _memory_policy.record_refund_callback(call_sid, caller or "", index, "crm-returned", order_id, amount_cents, reply)
