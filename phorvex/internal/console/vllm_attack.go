@@ -25,6 +25,19 @@ import (
 
 const vllmAttackNS = "vllm"
 
+// This fixed public paragraph was accepted by the guarded endpoint at 118 input
+// tokens with one output token. It is a bounded cache precursor, not a cache-hit
+// or occupancy measurement. The former confidential/instruction-like prompt was
+// blocked before it could exercise the serving cache path.
+const kvCachePublicPrefix = "Clouds consist of tiny water droplets and ice crystals suspended in the atmosphere. " +
+	"Warm air rises from the ground and cools as it reaches higher elevations. " +
+	"Water vapor then gathers around small particles in the air. " +
+	"The resulting clouds vary in shape and height with local weather conditions. " +
+	"Some clouds look like thin sheets, while others form tall towers. " +
+	"Sunlight passes through their edges and reflects from the droplets. " +
+	"Winds carry these formations across fields, forests, mountains, and oceans. " +
+	"The water cycle connects rainfall, rivers, lakes, evaporation, and the changing patterns visible in the sky."
+
 // Scenarios NEVER rewrite vllm-defense. They used to merge-patch actions.enabled down to
 // [rotate, <the one expected actuator>] (+ reactiveOnly) before firing, and "reset" shrank it
 // to a two-action hygiene baseline — which made every demo's outcome a property of the patch,
@@ -217,7 +230,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"attackId": attackID,
 			"message":  "An unapproved adapter load and exact detector stimulus were confirmed on " + pod + ". The console will report an exact adapter completion effect if observed; model behavior mitigation is not established."})
 	case "kvcache":
-		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": "SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal", "max_tokens": 1}
+		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": kvCachePublicPrefix, "max_tokens": 1}
 		attempted, producerErr := runBoundedProducer(func() error { return runVLLMCompletion(execIn, false, payload) })
 		if producerErr != nil {
 			setupFailure(body.Action, "producer", nil, attempted, producerErr)

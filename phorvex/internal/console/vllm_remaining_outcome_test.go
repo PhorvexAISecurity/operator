@@ -234,6 +234,95 @@ func TestRemainingVLLMHandlersRejectHTTPFailureBeforeSignal(t *testing.T) {
 	}
 }
 
+func TestKVCacheHandlerPublicPrecursorReachesEventOnlyAfterValidGuardedCompletion(t *testing.T) {
+	const formerPrompt = "SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal"
+	if len(kvCachePublicPrefix) < 500 || len(kvCachePublicPrefix) > 1024 {
+		t.Fatalf("public cache precursor lost its bounded paragraph: %d bytes", len(kvCachePublicPrefix))
+	}
+	for _, tc := range []struct {
+		name       string
+		newReply   string
+		wantStatus int
+		wantEvents int
+	}{
+		{name: "public precursor accepted", newReply: "valid", wantStatus: http.StatusOK, wantEvents: 1},
+		{name: "public precursor still blocked", newReply: "blocked", wantStatus: http.StatusBadGateway},
+		{name: "malformed completion", newReply: "malformed", wantStatus: http.StatusBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetM168AttackMemory()
+			var mu sync.Mutex
+			var prompts []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/v1/completions" {
+					http.NotFound(w, r)
+					return
+				}
+				var request struct {
+					Model     string `json:"model"`
+					Prompt    string `json:"prompt"`
+					MaxTokens int    `json:"max_tokens"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil ||
+					request.Model != "Qwen/Qwen2.5-7B-Instruct-AWQ" || request.MaxTokens != 1 {
+					http.Error(w, "invalid bounded completion", http.StatusBadRequest)
+					return
+				}
+				mu.Lock()
+				prompts = append(prompts, request.Prompt)
+				mu.Unlock()
+				if request.Prompt == formerPrompt || tc.newReply == "blocked" {
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(`{"error":{"type":"guardrail_blocked"}}`))
+					return
+				}
+				if request.Prompt != kvCachePublicPrefix {
+					http.Error(w, "unexpected precursor", http.StatusBadRequest)
+					return
+				}
+				if tc.newReply == "malformed" {
+					_, _ = w.Write([]byte(`{"id":"cmpl-1","choices":[]}`))
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "choices": []map[string]any{{"index": 0, "text": " Fle"}}})
+			}))
+			defer server.Close()
+
+			oldPayload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": formerPrompt, "max_tokens": 1}
+			if err := runVLLMCompletion(actualVLLMExec(t, server.URL), false, oldPayload); err == nil || !strings.Contains(err.Error(), "guardrail") {
+				t.Fatalf("former unrelated prompt was not refused: %v", err)
+			}
+			fixture := &remainingHandlerFixture{t: t, serverURL: server.URL, events: map[string]string{}}
+			cfg := Config{StateDir: t.TempDir(), Exec: fixture.exec, AttackWatchDuration: 5 * time.Millisecond, AttackWatchInterval: time.Millisecond}
+			s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+			response := httptest.NewRecorder()
+			s.vllmAttack(response, httptest.NewRequest(http.MethodPost, "/api/vllm/attack", strings.NewReader(`{"action":"kvcache"}`)))
+			fixture.mu.Lock()
+			creates := fixture.creates
+			events := make([]string, 0, len(fixture.events))
+			for _, raw := range fixture.events {
+				events = append(events, raw)
+			}
+			fixture.mu.Unlock()
+			mu.Lock()
+			gotPrompts := append([]string(nil), prompts...)
+			mu.Unlock()
+			if response.Code != tc.wantStatus || creates != tc.wantEvents || len(gotPrompts) != 2 ||
+				gotPrompts[0] != formerPrompt || gotPrompts[1] != kvCachePublicPrefix {
+				t.Fatalf("guarded producer/event boundary: status=%d events=%d prompts=%q body=%s", response.Code, creates, gotPrompts, response.Body.String())
+			}
+			if tc.wantEvents == 1 {
+				if len(events) != 1 || !strings.Contains(events[0], `"type":"phorvex.attack.kv"`) ||
+					!strings.Contains(events[0], `"vllm/vllm-0"`) || !strings.Contains(response.Body.String(), `"attackId"`) {
+					t.Fatalf("accepted completion did not produce exact event/record: events=%q body=%s", events, response.Body.String())
+				}
+			} else if len(events) != 0 {
+				t.Fatalf("failed completion created event: %q", events)
+			}
+		})
+	}
+}
+
 func TestRemainingVLLMHandlerRefusesTargetReplacementAcrossProducer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "choices": []map[string]any{{"index": 0}}})
