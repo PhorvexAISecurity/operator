@@ -193,8 +193,11 @@ func (w *availabilityWorker) kube(label string, args ...string) (map[string]any,
 	w.t.KubeReadsAttempted++
 	c, stop := context.WithTimeout(w.ctx, min(left, 30*time.Second))
 	defer stop()
-	argv := append([]string{"--context=" + w.p.Context}, args...)
-	cmd := exec.CommandContext(c, "kubectl", argv...)
+	// The console runs inside the pinned cluster with its mounted service
+	// account. The profile's external EKS context is retained as provenance;
+	// kubectl inside this Pod has no kubeconfig entry by that name. Snapshot
+	// admission below still binds the kube-system Namespace UID to the profile.
+	cmd := exec.CommandContext(c, "kubectl", args...)
 	stdout, stderr := availabilityCappedWriter{max: 1 << 20}, availabilityCappedWriter{max: 12 << 10}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -293,7 +296,7 @@ func (w *availabilityWorker) execGuardrail(label, code string, stdin []byte, bou
 	}
 	c, stop := context.WithTimeout(w.ctx, min(left, timeout))
 	defer stop()
-	cmd := exec.CommandContext(c, "kubectl", "--context="+w.p.Context, "-n", "vllm", "exec", "-i", w.p.Fixture.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", code)
+	cmd := exec.CommandContext(c, "kubectl", "-n", "vllm", "exec", "-i", w.p.Fixture.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", code)
 	cmd.Stdin = bytes.NewReader(stdin)
 	stdout, stderr := availabilityCappedWriter{max: bound}, availabilityCappedWriter{max: 12 << 10}
 	cmd.Stdout = &stdout
@@ -613,6 +616,9 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	cluster, e := read("cluster", "get", "namespace", "kube-system", "-o", "json")
 	if e != nil {
 		return out, e
+	}
+	if availabilityUID(cluster) != f.ClusterUID {
+		return out, errors.New("in-cluster identity differs from reviewed cluster UID")
 	}
 	manager, e := read("manager", "-n", "phorvex-system", "get", "pod", f.ManagerPodName, "-o", "json")
 	if e != nil {

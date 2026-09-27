@@ -190,14 +190,17 @@ func TestDrainTerminalAuditJoinsExactOwnedOperation(t *testing.T) {
 func TestDrainEventIntentPrecedesAmbiguousCreate(t *testing.T) {
 	called := 0
 	var intent []byte
-	s := NewServer(Config{Exec: func(_ time.Duration, _ string, _ ...string) (string, error) {
+	s := NewServer(Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
 		called++
+		if bin != "kubectl" || strings.Contains(strings.Join(args, " "), "--context") {
+			t.Errorf("in-Pod create used external context: %s %v", bin, args)
+		}
 		if len(intent) == 0 {
 			t.Error("create dispatched before durable manifest")
 		}
 		return "", errors.New("lost create reply")
 	}})
-	_, err := s.createCorrelatedVLLMEventWithAdapterContext("dev-test", "vllm-0", "pod-uid", "DenialOfWallet", "fixed synthetic signal", "0.9", "", func(raw []byte) error { intent = append([]byte(nil), raw...); return nil })
+	_, err := s.createCorrelatedVLLMEventWithAdapterContext("arn:aws:eks:us-east-2:123456789012:cluster/reviewed", "vllm-0", "pod-uid", "DenialOfWallet", "fixed synthetic signal", "0.9", "", func(raw []byte) error { intent = append([]byte(nil), raw...); return nil })
 	if err == nil || called != 1 || !bytes.Contains(intent, []byte("name: redteam-vllm-denialofwallet-")) {
 		t.Fatalf("ambiguous create lost exact intent: calls=%d err=%v", called, err)
 	}
