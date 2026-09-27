@@ -3012,7 +3012,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			return actuated, &preparation, attempted
 		}
 		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMCPToolPin ||
-			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
+			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionEndpointLeaseRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
 			reason := "sensitive-output-selection-id-unavailable"
@@ -3028,6 +3028,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "adapter-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
 				reason = "litellm-client-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionEndpointLeaseRevoke {
+				reason = "endpoint-lease-selection-id-unavailable"
 			}
 			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
@@ -3128,6 +3130,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			VoiceMCPObservation:      v.Pod.VoiceMCPObservation,
 			VoiceOutputObservation:   v.Pod.VoiceOutputObservation,
 			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
+			EndpointLeaseObservation: v.Pod.EndpointLeaseObservation,
 			PolicyName:               pol.PolicyName,
 			PolicyUID:                pol.PolicyUID,
 			PolicyGeneration:         pol.PolicyGeneration,
@@ -3152,7 +3155,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionVoiceRefundPairDeny ||
 			decisions[i].Action == model.ActionVoiceOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMCPToolPin ||
-			decisions[i].Action == model.ActionLiteLLMClientRevoke {
+			decisions[i].Action == model.ActionLiteLLMClientRevoke ||
+			decisions[i].Action == model.ActionEndpointLeaseRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}

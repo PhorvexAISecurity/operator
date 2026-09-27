@@ -217,6 +217,12 @@ phorvex:
   voiceMCP:
     enabled: false
     approvedImage: ""
+  # Default-off endpoint lease revocation requires an independently reviewed
+  # combined proxy source digest; never derive this authority from an event.
+  endpointLease:
+    enabled: false
+    approvedSourceSHA256: ""
+    approvedProxyImage: ""
   voiceOutput:
     enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update

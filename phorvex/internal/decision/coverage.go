@@ -1357,7 +1357,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	}
 	trace := &model.DecisionTraceV2{
 		SchemaVersion:             model.DecisionTraceSchemaV7,
-		ActionVocabularyVersion:   model.DecisionActionVocabularyLive21,
+		ActionVocabularyVersion:   model.DecisionActionVocabularyLive22,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),

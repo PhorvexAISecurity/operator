@@ -40,6 +40,7 @@ func TestActionFlowFamiliesUseSeparateShapes(t *testing.T) {
 		{name: "serving-state", actions: []model.Action{
 			model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate,
 			model.ActionVoiceMCPToolPin,
+			model.ActionEndpointLeaseRevoke,
 		}, want: estimatedServingStateBase},
 		{name: "lightweight", actions: []model.Action{
 			model.ActionIdentityRotate, model.ActionRouteRotate,

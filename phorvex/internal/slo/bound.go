@@ -134,6 +134,8 @@ var classifications = map[model.Action]Bound{
 		"voice output policy activation and projection readback have no calibrated safe-return deadline"),
 	model.ActionLiteLLMClientRevoke: unknown(model.ActionLiteLLMClientRevoke, -1,
 		"owned client-channel denial and gateway readback have no calibrated safe-return deadline"),
+	model.ActionEndpointLeaseRevoke: unknown(model.ActionEndpointLeaseRevoke, -1,
+		"endpoint lease revocation and proxy readback have no calibrated safe-return deadline"),
 }
 
 func init() {

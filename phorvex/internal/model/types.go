@@ -88,6 +88,9 @@ const (
 	// ActionEndpointRotate re-keys the served-model route/endpoint. Hardware validation:
 	// PHORVEXSEC-87.
 	ActionEndpointRotate Action = "endpoint-rotate"
+	// ActionEndpointLeaseRevoke denies one observed caller lease at a source-bound
+	// public inference gateway. It does not hide or change the stable endpoint path.
+	ActionEndpointLeaseRevoke Action = "endpoint-lease-revoke"
 	// ActionModelShardReplace warm-replaces a model shard on a target id/version.
 	// ColdLoadSec/ModelRarity hardware validation is tracked by PHORVEXSEC-87.
 	ActionModelShardReplace Action = "model-shard-replace"
@@ -152,6 +155,7 @@ var MutatingActions = []Action{
 	ActionVoiceRefundPairDeny,
 	ActionVoiceOutputPolicyActivate,
 	ActionVoiceMCPToolPin,
+	ActionEndpointLeaseRevoke,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -526,6 +530,7 @@ type Pod struct {
 	VoiceMCPEventCreator      string
 	VoiceMCPObservation       *VoiceMCPObservation
 	LiteLLMClientObservation  *LiteLLMClientObservation
+	EndpointLeaseObservation  *EndpointLeaseObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -646,6 +651,23 @@ func (p Pod) HasBoundLiteLLMClientObservation() bool {
 		o.ClientsConfigMapUID != "" && o.SeedSHA256 != "" && o.GatewaySourceSHA256 != ""
 }
 
+// HasBoundEndpointLeaseObservation requires a fresh, source-bound synthetic
+// credential observation. The stable endpoint path alone grants no cover.
+func (p Pod) HasBoundEndpointLeaseObservation() bool {
+	o := p.EndpointLeaseObservation
+	return o != nil && p.Namespace == "vllm" && p.UID != "" && o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.ScenarioID == "ai2-endpoint-security" && o.EvidenceSource == "TEST_INJECTED" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.ServiceUID != "" && o.PolicyConfigMapUID != "" && o.ProxySourceSHA256 != "" &&
+		o.SecretUID != "" && o.SeedSHA256 != "" &&
+		o.RevokedClientHMAC != "" && o.RetainedClientHMAC != "" &&
+		o.RevokedClientHMAC != o.RetainedClientHMAC &&
+		o.AcceptedStatus == 200 && o.AcceptedResponseSHA256 != "" &&
+		o.RetainedBaselineStatus == 200 && o.RetainedBaselineResponseSHA256 != "" &&
+		!o.ObservedAt.IsZero()
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -667,6 +689,7 @@ const (
 	AttackVectorVoiceOutput        = "phorvex.attack.voice-output-leak"
 	AttackVectorVoiceMCP           = "phorvex.attack.voice-mcp-descriptor"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
+	AttackVectorEndpointLeaseReuse = "phorvex.attack.endpoint-lease-reuse"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -682,6 +705,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorInflight
 	case "adapter-rotate":
 		return AttackVectorAdapter
+	case "endpoint-lease-revoke":
+		return AttackVectorEndpointLeaseReuse
 	}
 	return ""
 }
@@ -742,6 +767,7 @@ type SecurityEventInfo struct {
 	VoiceOutputRaw                    string // synthetic hidden-context marker hash assertion; never marker bytes
 	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
+	EndpointLeaseRaw                  string // untrusted event annotation; requires current proxy/lease authority
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -918,6 +944,33 @@ type LiteLLMClientObservation struct {
 	PolicyUID           string    `json:"policyUID"`
 	PolicyGeneration    int64     `json:"policyGeneration"`
 	ObservedAt          time.Time `json:"observedAt"`
+}
+
+// EndpointLeaseObservation contains only digests and public resource identities.
+// The caller credential bytes and signing seed never enter model or audit rows.
+type EndpointLeaseObservation struct {
+	EventName                      string    `json:"eventName"`
+	EventUID                       string    `json:"eventUID"`
+	CreatorIdentity                string    `json:"creatorIdentity"`
+	ScenarioID                     string    `json:"scenarioId"`
+	EvidenceSource                 string    `json:"evidenceSource"`
+	PolicyName                     string    `json:"policyName"`
+	PolicyUID                      string    `json:"policyUID"`
+	PolicyGeneration               int64     `json:"policyGeneration"`
+	TargetPodUID                   string    `json:"targetPodUID"`
+	ServiceUID                     string    `json:"serviceUID"`
+	PolicyConfigMapUID             string    `json:"policyConfigMapUID"`
+	ProxySourceSHA256              string    `json:"proxySourceSHA256"`
+	SecretUID                      string    `json:"secretUID"`
+	SeedSHA256                     string    `json:"seedSHA256"`
+	PriorRevision                  uint64    `json:"priorRevision"`
+	RevokedClientHMAC              string    `json:"revokedClientHMAC"`
+	RetainedClientHMAC             string    `json:"retainedClientHMAC"`
+	AcceptedStatus                 int       `json:"acceptedStatus"`
+	AcceptedResponseSHA256         string    `json:"acceptedResponseSHA256"`
+	RetainedBaselineStatus         int       `json:"retainedBaselineStatus"`
+	RetainedBaselineResponseSHA256 string    `json:"retainedBaselineResponseSHA256"`
+	ObservedAt                     time.Time `json:"observedAt"`
 }
 
 // VectorSteeringAttribution describes the one factor applied to one recon fact.

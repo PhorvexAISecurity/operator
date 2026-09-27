@@ -119,6 +119,7 @@ spec:
                       - voice-output-policy-activate
                       - voice-mcp-tool-pin
                       - litellm-client-revoke
+                      - endpoint-lease-revoke
                       - kv-migrate-invalidate
                       - disable
                       type: string

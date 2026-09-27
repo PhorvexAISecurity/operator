@@ -77,6 +77,7 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionVoiceMCPToolPin:               true,
 	model.ActionVoiceOutputPolicyActivate:     true,
 	model.ActionLiteLLMClientRevoke:           true,
+	model.ActionEndpointLeaseRevoke:           true,
 }
 
 // Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
@@ -298,6 +299,12 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "litellm-client-revoke: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionEndpointLeaseRevoke {
+		o := v.Pod.EndpointLeaseObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "endpoint-lease-revoke: event policy identity differs from current policy"}
+		}
+	}
 	if ok, why := w.Capable(v, action); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
 	}
@@ -397,6 +404,8 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasBoundVoiceOutputObservation()
 	case model.ActionLiteLLMClientRevoke:
 		return pod.HasBoundLiteLLMClientObservation()
+	case model.ActionEndpointLeaseRevoke:
+		return pod.HasBoundEndpointLeaseObservation()
 	default:
 		return pod.HasServingDeclaration()
 	}
@@ -508,6 +517,11 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if !pod.HasBoundLiteLLMClientObservation() || pod.LiteLLMClientObservation.PolicyName != w.policyName ||
 			pod.LiteLLMClientObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/source-bound LiteLLM owned-client observation"
+		}
+	case model.ActionEndpointLeaseRevoke:
+		if !pod.HasBoundEndpointLeaseObservation() || pod.EndpointLeaseObservation.PolicyName != w.policyName ||
+			pod.EndpointLeaseObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/source-bound endpoint lease observation"
 		}
 	case model.ActionEndpointRotate:
 		if pod.RouteService == "" {

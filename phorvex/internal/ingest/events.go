@@ -132,6 +132,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			VoiceMCPRaw:                          se.Annotations["phorvex.ai/voice-mcp-observation-v1"],
 			VoiceOutputRaw:                       se.Annotations["phorvex.ai/voice-output-observation-v1"],
 			LiteLLMClientRaw:                     se.Annotations["phorvex.ai/litellm-client-observation-v1"],
+			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
 		// It used to be turned into a bare name that matched no key — silently dropped. It is
