@@ -57,6 +57,8 @@ type voiceMemoryProbeResult struct {
 	EventUID             string `json:"eventUID,omitempty"`
 	SelectedAction       string `json:"selectedAction,omitempty"`
 	SelectedDecisionID   string `json:"selectedDecisionID,omitempty"`
+	SelectedTickID       string `json:"selectedTickID,omitempty"`
+	RecoveryConfirmed    bool   `json:"recoveryConfirmed,omitempty"`
 	Actuated             bool   `json:"actuated"`
 	RuleSHA256           string `json:"ruleSHA256,omitempty"`
 	Revision             uint64 `json:"revision,omitempty"`
@@ -438,19 +440,22 @@ func (s *Server) runVoiceMemoryLive(record *attackRecord, id string) {
 
 	decision, err := s.waitVoiceMemoryDecision(ctx, record, snap, stimulus.EventUID)
 	if err == nil {
+		operationID := voiceMemoryOperationID(snap.PolicyUID, snap.DeploymentUID, stimulus.EventUID, decision.TickID, decision.DecisionID)
 		if saveErr := voiceMemorySavePrivate(privateDir, "decision-receipt.json", map[string]any{
 			"eventUID": stimulus.EventUID, "targetPodUID": record.TargetUID, "decisionID": decision.DecisionID,
-			"policyUID": snap.PolicyUID, "action": decision.Action,
-			"selected": decision.Selected, "actuated": decision.Actuated, "observedAt": time.Now().UTC().Format(time.RFC3339Nano)}); saveErr != nil {
+			"tickID": decision.TickID, "operationID": operationID, "policyUID": snap.PolicyUID, "action": decision.Action,
+			"selected": decision.Selected, "actuated": decision.Actuated, "recoveryConfirmed": decision.Recovered,
+			"observedAt": time.Now().UTC().Format(time.RFC3339Nano)}); saveErr != nil {
 			failure = errors.New("Voice decision receipt could not be retained")
 			return
 		}
-		probe.SelectedAction, probe.SelectedDecisionID, probe.Actuated = decision.Action, decision.DecisionID, decision.Actuated
+		probe.SelectedAction, probe.SelectedDecisionID, probe.SelectedTickID = decision.Action, decision.DecisionID, decision.TickID
+		probe.Actuated, probe.RecoveryConfirmed = decision.Actuated, decision.Recovered
 		record.Action, record.Actuated = decision.Action, decision.Actuated
 	}
 	// Other feasible choices remain truthful brain outcomes. A failed or absent
 	// memory action still gets the same fresh-session attack/benign replay.
-	post, err := s.voiceMemorySnapshot(ctx)
+	post, err := s.waitVoiceMemoryPostSnapshot(ctx, snap, decision, stimulus.EventUID, caller, probe.NoteSHA256)
 	if err != nil {
 		failure = errors.New("Voice post-decision rule/readback unavailable")
 		return
@@ -473,8 +478,7 @@ func (s *Server) runVoiceMemoryLive(record *attackRecord, id string) {
 		failure = errors.New("benign memory control was not preserved")
 		return
 	}
-	if decision.Action == string(model.ActionVoiceMemoryNoteRevoke) && decision.Selected && decision.Actuated &&
-		post.Rule.Revision > snap.Rule.Revision && voiceMemoryRuleHas(post.Rule, caller, probe.NoteSHA256) && !probe.RepeatPoisonObserved {
+	if voiceMemoryExactActuation(decision, snap, post, stimulus.EventUID, caller, probe.NoteSHA256) && !probe.RepeatPoisonObserved {
 		probe.Status = "DEFENDED"
 		record.Outcome, record.Containment = "DEFENDED", "exact-memory-note-revoked"
 	} else if probe.RepeatPoisonObserved {
@@ -564,6 +568,42 @@ func voiceMemoryRuleHas(rule voicememorypolicy.Rule, caller, digest string) bool
 	return false
 }
 
+func voiceMemoryExactActuation(decision voiceMemoryDecision, before, after voiceMemorySnapshot, eventUID, caller, digest string) bool {
+	if decision.Action != string(model.ActionVoiceMemoryNoteRevoke) || !decision.Selected || !decision.Actuated ||
+		decision.DecisionID == "" || decision.TickID == "" || after.DeploymentUID != before.DeploymentUID ||
+		after.PolicyUID != before.PolicyUID || after.PolicyGeneration != before.PolicyGeneration ||
+		after.ConfigMapUID != before.ConfigMapUID {
+		return false
+	}
+	opID := voiceMemoryOperationID(before.PolicyUID, before.DeploymentUID, eventUID, decision.TickID, decision.DecisionID)
+	want, err := voicememorypolicy.Append(before.Rule, voicememorypolicy.Entry{CallerID: caller, NoteSHA256: digest}, opID)
+	return err == nil && string(after.Rule.Bytes()) == string(want.Bytes())
+}
+
+func (s *Server) waitVoiceMemoryPostSnapshot(ctx context.Context, before voiceMemorySnapshot, decision voiceMemoryDecision,
+	eventUID, caller, digest string) (voiceMemorySnapshot, error) {
+	if decision.Action != string(model.ActionVoiceMemoryNoteRevoke) || !decision.Selected || !decision.Actuated {
+		return s.voiceMemorySnapshot(ctx)
+	}
+	deadline := time.NewTimer(30 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		after, err := s.voiceMemorySnapshot(ctx)
+		if err == nil && voiceMemoryExactActuation(decision, before, after, eventUID, caller, digest) {
+			return after, nil
+		}
+		select {
+		case <-ctx.Done():
+			return voiceMemorySnapshot{}, ctx.Err()
+		case <-deadline.C:
+			return voiceMemorySnapshot{}, errors.New("Voice exact rule and all-Pod readback not confirmed after action")
+		case <-ticker.C:
+		}
+	}
+}
+
 func voiceMemorySavePrivate(dir, name string, value any) error {
 	if dir == "" || name == "" || strings.Contains(name, "/") {
 		return errors.New("private receipt path invalid")
@@ -624,12 +664,13 @@ func (s *Server) voiceMemoryRecentEvent(podName string) (bool, error) {
 }
 
 type voiceMemoryDecision struct {
-	Action, DecisionID string
-	Selected, Actuated bool
+	Action, DecisionID, TickID    string
+	Selected, Actuated, Recovered bool
+	SelectedAt                    time.Time
 }
 
 func (s *Server) waitVoiceMemoryDecision(ctx context.Context, record *attackRecord, snap voiceMemorySnapshot, eventUID string) (voiceMemoryDecision, error) {
-	deadline := time.NewTimer(70 * time.Second)
+	deadline := time.NewTimer(90 * time.Second)
 	defer deadline.Stop()
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
@@ -651,10 +692,21 @@ func (s *Server) waitVoiceMemoryDecision(ctx context.Context, record *attackReco
 		}
 		for _, row := range rows {
 			if candidate, ok := voiceMemorySelectedDecision(row, record, snap, eventUID); ok {
-				observed = candidate
+				if !observed.Selected {
+					observed = candidate
+				} else if observed.DecisionID == candidate.DecisionID && observed.TickID == candidate.TickID && candidate.Actuated {
+					observed.Actuated = true
+				}
 				if observed.Actuated {
 					return observed, nil
 				}
+			}
+		}
+		if observed.Selected && observed.Action == string(model.ActionVoiceMemoryNoteRevoke) {
+			confirmed, err := s.voiceMemoryRecoveryConfirmed(ctx, record, snap, observed)
+			if err == nil && confirmed {
+				observed.Actuated, observed.Recovered = true, true
+				return observed, nil
 			}
 		}
 	}
@@ -664,7 +716,7 @@ func voiceMemorySelectedDecision(row audit.Record, record *attackRecord, snap vo
 	trace := row.DecisionTrace
 	if row.Kind != "phorvex.decision" || row.Namespace != "voice" || row.Pod != record.Pod ||
 		row.Time.Before(record.started) || !row.Selected || trace == nil || trace.Validate() != nil ||
-		trace.DecisionID == "" || trace.AssetNamespace != "voice" || trace.AssetName != record.Pod ||
+		trace.DecisionID == "" || trace.TickID == "" || trace.AssetNamespace != "voice" || trace.AssetName != record.Pod ||
 		trace.AssetUID != record.TargetUID || trace.PolicyNamespace != "voice" ||
 		trace.PolicyName != voiceMemoryPolicyName || trace.PolicyUID != snap.PolicyUID ||
 		trace.SelectedAction != row.Action {
@@ -681,7 +733,8 @@ func voiceMemorySelectedDecision(row audit.Record, record *attackRecord, snap vo
 	if !matched || trusted != 1 {
 		return voiceMemoryDecision{}, false
 	}
-	return voiceMemoryDecision{Action: row.Action, DecisionID: trace.DecisionID, Selected: true,
+	return voiceMemoryDecision{Action: row.Action, DecisionID: trace.DecisionID, TickID: trace.TickID,
+		SelectedAt: row.Time, Selected: true,
 		Actuated: row.Actuated && row.DispatchOutcome == model.DispatchEmitted && trace.DispatchOutcome == model.DispatchEmitted}, true
 }
 
