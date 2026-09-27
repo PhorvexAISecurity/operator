@@ -116,6 +116,12 @@ catalogueProfiles:
     enabled: false
     configMapName: ""
     profileBase64: ""
+  # Immutable, digest-named source for the reviewed vLLM caller-lease case.
+  # Supplying profile bytes does not enable the native action or console case.
+  endpointLease:
+    enabled: false
+    configMapName: ""
+    profileBase64: ""
   podBoundTokenCPU:
     enabled: false
     configMapName: ""
