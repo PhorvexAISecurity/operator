@@ -203,9 +203,9 @@ func aiViewForAction(action model.Action) *model.WorkloadView {
 		v.Pod.VoiceMCPEventCreator = "console-creator"
 		v.Pod.VoiceMCPObservation = &model.VoiceMCPObservation{EventName: "observed", EventUID: "event-uid", CreatorIdentity: "console-creator",
 			ScenarioID: "ai2-mcp-tool-poisoning", RunSHA256: "run-sha", TargetPodUID: v.Pod.UID, DeploymentUID: "deployment-uid",
-			ConfigMapUID: "cm-uid", SourceSHA256: "source-sha", ToolName: "store_directory", GoodDescriptorSHA256: "good-sha",
+			ConfigMapUID: "cm-uid", SourceConfigMapUID: "source-cm-uid", SourceSHA256: "source-sha", ToolName: "store_directory", GoodDescriptorSHA256: "good-sha",
 			ObservedDescriptorSHA256: "observed-sha", PolicyName: "voice-policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
-			MCPServiceUID: "service-uid", MCPPodUID: "mcp-pod-uid", MCPDeploymentUID: "mcp-deployment-uid", MCPConfigMapUID: "mcp-cm-uid", MCPSourceSHA256: "mcp-source-sha"}
+			MCPServiceName: "mcp-server", MCPServiceUID: "service-uid", MCPPodName: "mcp-pod", MCPPodUID: "mcp-pod-uid", MCPDeploymentUID: "mcp-deployment-uid", MCPConfigMapUID: "mcp-cm-uid", MCPSourceSHA256: "mcp-source-sha"}
 		return v
 	}
 	v.Pod.VoiceOutputConfigMap = "voice-output-policy"

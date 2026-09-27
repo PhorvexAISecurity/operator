@@ -625,12 +625,12 @@ func (p Pod) HasBoundVoiceMCPObservation() bool {
 	o := p.VoiceMCPObservation
 	return o != nil && p.Namespace == "voice" && p.UID != "" && p.VoiceMCPConfigMap == "voice-mcp-tool-policy" &&
 		o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceMCPDeploymentUID &&
-		o.SourceSHA256 == p.VoiceMCPSourceSHA256 && o.ConfigMapUID != "" &&
+		o.SourceSHA256 == p.VoiceMCPSourceSHA256 && o.ConfigMapUID != "" && o.SourceConfigMapUID != "" &&
 		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
 		o.CreatorIdentity == p.VoiceMCPEventCreator && o.ScenarioID == "ai2-mcp-tool-poisoning" && o.RunSHA256 != "" &&
 		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 && o.ToolName == "store_directory" &&
 		o.GoodDescriptorSHA256 != "" && o.ObservedDescriptorSHA256 != "" &&
-		o.MCPServiceUID != "" && o.MCPPodUID != "" && o.MCPDeploymentUID != "" &&
+		o.MCPServiceName == "mcp-server" && o.MCPServiceUID != "" && o.MCPPodName != "" && o.MCPPodUID != "" && o.MCPDeploymentUID != "" &&
 		o.MCPConfigMapUID != "" && o.MCPSourceSHA256 != ""
 }
 
