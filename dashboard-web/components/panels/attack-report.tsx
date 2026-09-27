@@ -18,6 +18,7 @@ import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe
 import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
 import { VoiceMemoryProbe } from "@/components/panels/voice-memory-probe";
 import { LiteLLMLiveProbe } from "@/components/panels/litellm-live-probe";
+import { LiteLLMOutputProbe } from "@/components/panels/litellm-output-probe";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
 // observations. Signal-only rows never contribute behavioral outcomes or economics.
@@ -167,6 +168,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
         {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
         {r.litellmLiveProbe && <LiteLLMLiveProbe result={r.litellmLiveProbe} />}
+        {r.litellmOutputProbe && <LiteLLMOutputProbe result={r.litellmOutputProbe} />}
         {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Mechanism evidence</div>

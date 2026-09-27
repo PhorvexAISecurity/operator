@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -14,6 +15,51 @@ spec.loader.exec_module(module)
 
 
 class OutputRenderTests(unittest.TestCase):
+    def test_installed_first_batch_migrates_immutable_source_without_resetting_client_state(self):
+        deployment, service, policy = originals()
+        deployment["metadata"]["uid"] = "reviewed-deployment-uid"
+        service["spec"]["ports"][0]["targetPort"] = 4001
+        policy["spec"]["actions"]["enabled"].append("litellm-client-revoke")
+        template = deployment["spec"]["template"]
+        template["metadata"].setdefault("labels", {})["r6th.io/rotation-target"] = "true"
+        template["metadata"]["annotations"] = {
+            "phorvex.ai/litellm-gateway-source-sha256": module.LEGACY_SOURCE_SHA,
+            "phorvex.ai/litellm-live-service-uid": service["metadata"]["uid"],
+            "phorvex.ai/litellm-client-policy-configmap-uid": "client-policy-uid"}
+        template["spec"]["volumes"] = [{"name": "litellm-live-gateway-source",
+                                          "configMap": {"name": "phorvex-litellm-admission-gateway"}}]
+        image = "docker.io/library/python@sha256:" + "b" * 64
+        template["spec"]["containers"].append({"name": "litellm-admission-gateway", "image": image,
+            "command": ["python3", "-B", "/opt/phorvex/gateway.py"],
+            "env": [{"name": "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256",
+                     "value": module.LEGACY_SOURCE_SHA},
+                    {"name": "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID", "value": "client-policy-uid"},
+                    {"name": "PHORVEX_LITELLM_TRIAL_SEED_FILE", "value": "/etc/phorvex-litellm-seed/seed"}],
+            "volumeMounts": [{"name": "litellm-live-gateway-source",
+                              "mountPath": "/opt/phorvex", "readOnly": True}]})
+        live = {"version": 2, "sourceSHA256": module.LEGACY_SOURCE_SHA,
+                "gatewayImage": image, "clientsSHA256": "c" * 64,
+                "seedSHA256": "a" * 64, "policyName": "litellm-defense",
+                "modelAlias": "gpt-4o-mini", "eventCreator": "console-identity",
+                "auditSourceIdentity": "audit-identity", "maxRunSeconds": 900}
+        objects, source_sha = module.output_phase_two(deployment, service, policy,
+            "client-policy-uid", "output-policy-uid", "document-uid", "prompt-uid",
+            "a" * 64, image, live_profile=live)
+        self.assertEqual(objects["gateway-output-source-configmap.json"]["metadata"]["name"],
+                         "phorvex-litellm-admission-gateway-" + source_sha[:12])
+        self.assertNotIn("client-policy-configmap.json", objects)
+        self.assertNotIn("protected-journal-configmap.json", objects)
+        patch = objects["deployment-json-patch.json"]
+        self.assertIn({"op": "replace", "path": "/spec/template/spec/volumes/0/configMap/name",
+                       "value": "phorvex-litellm-admission-gateway-" + source_sha[:12]}, patch)
+        migrated = objects["console-live-profile-configmap.json"]["data"]["profile.json"]
+        self.assertEqual(json.loads(migrated)["sourceSHA256"], source_sha)
+        template["metadata"]["annotations"]["phorvex.ai/litellm-gateway-source-sha256"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "annotation authority"):
+            module.output_phase_two(deployment, service, policy,
+                "client-policy-uid", "output-policy-uid", "document-uid", "prompt-uid",
+                "a" * 64, image, live_profile=live)
+
     def test_private_phase_one_owner_and_phase_two_exact_patches(self):
         deployment, service, policy = originals()
         deployment["metadata"]["uid"] = "reviewed-deployment-uid"
@@ -22,6 +68,15 @@ class OutputRenderTests(unittest.TestCase):
         first = module.output_phase_one(deployment, document, prompt)
         self.assertEqual(first["output-policy-configmap.json"]["data"]["policy.json"],
                          '{"entries":[],"revision":0,"version":2}')
+        self.assertEqual(first["protected-output-journal-configmap.json"]["data"]["receipts.json"],
+                         '{"receipts":[],"version":2}')
+        slots = [first[f"litellm-output-rule-{index:02d}.json"] for index in range(32)]
+        self.assertEqual(len(slots), 32)
+        self.assertEqual([slot["metadata"]["name"] for slot in slots],
+                         [f"litellm-output-rule-{index:02d}" for index in range(32)])
+        self.assertTrue(all(slot["data"] == {"rule.json": ""} and
+                            slot["metadata"]["ownerReferences"][0]["uid"] ==
+                            "reviewed-deployment-uid" and not slot.get("immutable") for slot in slots))
         for name in ("output-document-secret.json", "output-prompt-secret.json"):
             obj = first[name]
             self.assertTrue(obj["immutable"])

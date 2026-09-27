@@ -78,6 +78,7 @@ type attackRecord struct {
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
+	LiteLLMOutputProbe   *liteLLMOutputProbeResult   `json:"litellmOutputProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	LoRACleanupStatus    string                      `json:"loraCleanupStatus,omitempty"`
 	LoRACleanupError     string                      `json:"loraCleanupError,omitempty"`

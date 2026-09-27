@@ -420,10 +420,19 @@ phorvex:
     litellmLive:
       enabled: false
       configMapName: ""
+      sourceConfigMapName: phorvex-litellm-admission-gateway
       profileSHA256: ""
       seedSecret: ""
       statusSecret: ""
       journalName: phorvex-litellm-revoke-journal
+    # Separate real-provider server-owned context output objectives. Disabled
+    # until both source Secrets, output policy, profile and native action exist.
+    litellmOutput:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      documentSeedSecret: phorvex-litellm-output-document
+      promptSeedSecret: phorvex-litellm-output-prompt
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

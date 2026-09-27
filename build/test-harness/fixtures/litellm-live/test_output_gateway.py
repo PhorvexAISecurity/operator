@@ -21,6 +21,7 @@ class Model(BaseHTTPRequestHandler):
     requests = []
     extra_secret = False
     last_response = b""
+    fail = False
 
     def log_message(self, *_):
         pass
@@ -34,6 +35,13 @@ class Model(BaseHTTPRequestHandler):
         system = request["messages"][0]["content"]
         match = re.search(r"PHX-(?:DOC|PROMPT)-[0-9a-f]{64}", system)
         protected = match.group() if match else ""
+        if type(self).fail:
+            body = json.dumps({"error": {"message": "upstream failed " + protected}}).encode()
+            self.send_response(503)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         public = "Case CAT-042 is delivered" if protected.startswith("PHX-DOC-") else "Two plus two is four"
         reply = {"object": "chat.completion", "id": "cmpl-from-model",
                  "model": "gpt-4o-mini", "choices": [{"message": {
@@ -69,6 +77,7 @@ class OutputGatewayTests(unittest.TestCase):
                         "p": {"seed": b"private-prompt-seed-32-bytes-0000001", "uid": "prompt-uid"}}
         Model.requests = []
         Model.extra_secret = False
+        Model.fail = False
         self.model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
         threading.Thread(target=self.model.serve_forever, daemon=True).start()
         self.addCleanup(self.model.server_close)
@@ -168,6 +177,18 @@ class OutputGatewayTests(unittest.TestCase):
         self.assertNotIn(self.g.output_value(gateway.OUTPUT_OBJECTIVES["d"], nonce,
                                               self.sources["d"]["seed"]).encode(), raw)
         self.assertEqual(self.g.output_status(gateway.OUTPUT_OBJECTIVES["d"], nonce)
+                         ["counters"]["redactions"], 0)
+
+    def test_active_policy_never_relays_upstream_error_content(self):
+        nonce = "e" * 32
+        self.set_output([self.entry("p", nonce, "selected")])
+        Model.fail = True
+        status, raw, _ = self.call("p", nonce)
+        self.assertEqual(status, 502)
+        protected = self.g.output_value(gateway.OUTPUT_OBJECTIVES["p"], nonce,
+                                        self.sources["p"]["seed"])
+        self.assertNotIn(protected.encode(), raw)
+        self.assertEqual(self.g.output_status(gateway.OUTPUT_OBJECTIVES["p"], nonce)
                          ["counters"]["redactions"], 0)
 
 
