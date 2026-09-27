@@ -3011,10 +3011,14 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if decisions[i].Action == model.ActionSensitiveOutputPolicyActivate &&
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "") {
 			recordExistentialEffect(&decisions[i], false)
-			stampDispatch(model.DispatchNotAttempted, "sensitive-output-selection-id-unavailable")
+			reason := "sensitive-output-selection-id-unavailable"
+			if decisions[i].Action == model.ActionVoiceMemoryNoteRevoke {
+				reason = "voice-memory-selection-id-unavailable"
+			}
+			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
 		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
@@ -3091,6 +3095,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		request := actuator.Request{
 			AdapterObservation:      v.Pod.AdapterObservation,
 			OutputPolicyObservation: v.Pod.OutputPolicyObservation,
+			VoiceMemoryObservation:  v.Pod.VoiceMemoryObservation,
 			PolicyName:              pol.PolicyName,
 			PolicyUID:               pol.PolicyUID,
 			PolicyGeneration:        pol.PolicyGeneration,
@@ -3110,7 +3115,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			},
 		}
 		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate ||
-			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate {
+			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
+			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}

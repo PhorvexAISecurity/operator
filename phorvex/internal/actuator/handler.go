@@ -62,6 +62,7 @@ type EnactCtx struct {
 	ServingTarget                *corev1.Pod
 	ServingRequest               Request
 	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
+	VoiceMemoryTransport         http.RoundTripper // private fixed-Pod-IP readback seam
 	OutputPolicyReadbackTimeout  time.Duration
 	OutputPolicyReadbackInterval time.Duration
 	// Request-drain observation bounds default to production constants. Tests that
