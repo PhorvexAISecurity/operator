@@ -43,6 +43,7 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/endpointlease"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -203,6 +204,10 @@ type Manager struct {
 	// Production wires it independently of the chosen actuator backend so a
 	// pending output operation fences any later same-Pod move.
 	OperatorNamespace string
+	// EndpointLeaseAuthorityEnabled means the reviewed source, proxy image and
+	// engine image pins were configured at startup. A missing journal reader or
+	// namespace then fences every selected move on the same vLLM Pod.
+	EndpointLeaseAuthorityEnabled bool
 	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
 	// leaves representation history honestly unavailable.
 	LossHistory losshistory.Ledger
@@ -3032,6 +3037,12 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "endpoint-lease-selection-id-unavailable"
 			}
 			stampDispatch(model.DispatchNotAttempted, reason)
+			continue
+		}
+		if m.EndpointLeaseAuthorityEnabled && decisions[i].Namespace == endpointlease.Namespace &&
+			(m.OperatorNamespace == "" || m.BoundaryReader == nil || v.Pod.UID == "") {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-journal-authority-unavailable")
 			continue
 		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {

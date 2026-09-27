@@ -69,11 +69,18 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
     def test_live20_remains_historical_and_live21_appends_mcp(self):
         historical = self.trace(validator.LIVE20_ACTIONS, validator.ACTION_VOCABULARY_LIVE20)
         self.assertEqual(validator.v3_action_status(historical), [])
-        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE21)
-        self.assertEqual(validator.v3_action_status(current), [])
-        self.assertEqual(validator.check_ordering(current).status, validator.PASS)
+        live21 = self.trace(validator.LIVE21_ACTIONS, validator.ACTION_VOCABULARY_LIVE21)
+        self.assertEqual(validator.v3_action_status(live21), [])
+        self.assertEqual(validator.check_ordering(live21).status, validator.PASS)
         self.assertIn("want 20", "; ".join(validator.v3_action_status(
-            current | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE20})))
+            live21 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE20})))
+
+    def test_live22_appends_endpoint_lease_without_reinterpreting_live21(self):
+        live22 = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE22)
+        self.assertEqual(validator.v3_action_status(live22), [])
+        self.assertEqual(validator.check_ordering(live22).status, validator.PASS)
+        self.assertIn("want 21", "; ".join(validator.v3_action_status(
+            live22 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE21})))
 
     def test_new_marked_fifteen_and_unknown_marker_are_refused(self):
         incomplete = self.trace(validator.LEGACY_MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)

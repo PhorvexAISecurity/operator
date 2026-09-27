@@ -7,7 +7,7 @@ class ResourceCapacityV7Test(unittest.TestCase):
     def trace(self, version, status="infeasible", scored=False):
         rows = [
             {"action": action, "status": "not-enabled", "exclusionKind": "not-enabled", "scored": False}
-            for action in validator.MUTATING_ACTIONS
+            for action in validator.OUTPUT16_ACTIONS
         ]
         rows[0] = {
             "action": "rotate", "status": status, "exclusionKind": "resource-capacity", "scored": scored,

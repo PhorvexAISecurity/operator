@@ -119,6 +119,7 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionVoiceOutputPolicyActivate:     {plain: "ai-context-required:"},
 	model.ActionVoiceMCPToolPin:               {plain: "ai-context-required:"},
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
+	model.ActionEndpointLeaseRevoke:           {plain: "ai-context-required:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -192,6 +193,23 @@ func aiView() *model.WorkloadView {
 // for the Voice output action. Other actions retain the shared AI fixture.
 func aiViewForAction(action model.Action) *model.WorkloadView {
 	v := aiView()
+	if action == model.ActionEndpointLeaseRevoke {
+		v.Pod.Namespace = "vllm"
+		v.Pod.EndpointLeaseObservation = &model.EndpointLeaseObservation{
+			EventName: "lease-observed", EventUID: "11111111-1111-4111-8111-111111111111",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			ScenarioID:      "ai2-endpoint-security", EvidenceSource: "TEST_INJECTED",
+			PolicyName: "vllm-defense", PolicyUID: "22222222-2222-4222-8222-222222222222", PolicyGeneration: 1,
+			TargetPodUID: v.Pod.UID, ServiceUID: "33333333-3333-4333-8333-333333333333",
+			PolicyConfigMapUID: "44444444-4444-4444-8444-444444444444", ProxySourceSHA256: strings.Repeat("a", 64),
+			SecretUID: "55555555-5555-4555-8555-555555555555", SeedSHA256: strings.Repeat("b", 64),
+			RevokedClientHMAC: strings.Repeat("c", 64), RetainedClientHMAC: strings.Repeat("d", 64),
+			AcceptedStatus: 200, AcceptedResponseSHA256: strings.Repeat("e", 64),
+			RetainedBaselineStatus: 200, RetainedBaselineResponseSHA256: strings.Repeat("f", 64),
+			ObservedAt: time.Now().UTC(),
+		}
+		return v
+	}
 	if action != model.ActionVoiceOutputPolicyActivate && action != model.ActionVoiceMCPToolPin {
 		return v
 	}
@@ -321,7 +339,7 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionDebugger || a == model.ActionCustomInject {
 			family = "code-exec-guard:"
 		}
-		if a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin {
+		if a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke {
 			family = "ai-context-required:"
 		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)

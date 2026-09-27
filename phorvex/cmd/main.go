@@ -520,6 +520,7 @@ func main() {
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.OperatorNamespace = operatorNS
+	rmgr.EndpointLeaseAuthorityEnabled = endpointLeaseApprovedSource != ""
 	rmgr.LossHistoryReader = mgr.GetAPIReader()
 	if lossHistoryDir != "" {
 		lossStore, storeErr := losshistory.New(lossHistoryDir)
