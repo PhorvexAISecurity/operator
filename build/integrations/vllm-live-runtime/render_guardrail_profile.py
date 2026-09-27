@@ -60,6 +60,7 @@ UID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\
 DNS = re.compile(r"[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?\Z")
 IMAGE_ID = re.compile(r"[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}\Z")
 BARE_SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
+BARE_DOCKER_HUB_TAG = re.compile(r"[a-z0-9][a-z0-9._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
 MODEL = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 DOMAIN = "guardrail-variant-v1"
 PHORVEX_IMAGE_REPO = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex"
@@ -114,6 +115,9 @@ def container(pod: dict, name: str) -> tuple[dict, dict]:
     # while the spec holds an OCI index reference. The immutable imageID below
     # remains the authority captured in the profile.
     image_matches = status.get("image") == spec.get("image") or (
+        isinstance(spec.get("image"), str) and
+        bool(BARE_DOCKER_HUB_TAG.fullmatch(spec["image"])) and
+        status.get("image") == "docker.io/library/" + spec["image"]) or (
         bool(IMAGE_ID.fullmatch(spec.get("image", ""))) and
         bool(BARE_SHA.fullmatch(status.get("image", ""))))
     require(status.get("ready") is True and type(status.get("restartCount")) is int and

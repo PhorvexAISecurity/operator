@@ -222,6 +222,31 @@ class RenderGuardrailProfileTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
 
+    def test_exact_docker_hub_library_projection_from_current_cri(self):
+        pod = fixture()["pod"]
+        spec = next(row for row in pod["spec"]["containers"] if row["name"] == "guardrail")
+        status = next(row for row in pod["status"]["containerStatuses"] if row["name"] == "guardrail")
+        spec["image"] = "python:3.11-slim"
+        status.update(image="docker.io/library/python:3.11-slim",
+                      imageID="docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff",
+                      containerID="containerd://3293a4eb83094300ece30db88920ad428c390b789650f4a02714e8bb6ba8b596",
+                      restartCount=1)
+        selected_spec, selected_status = renderer.container(pod, "guardrail")
+        self.assertEqual((selected_spec["image"], selected_status["containerID"]),
+                         (spec["image"], status["containerID"]))
+        for altered in ("docker.io/library/python:3.12-slim",
+                        "docker.io/library/node:3.11-slim",
+                        "ghcr.io/library/python:3.11-slim",
+                        "docker.io/other/python:3.11-slim"):
+            with self.subTest(status_image=altered):
+                status["image"] = altered
+                with self.assertRaises(ValueError):
+                    renderer.container(pod, "guardrail")
+        status["image"] = "docker.io/library/python:3.11-slim"
+        status["containerID"] = ""
+        with self.assertRaises(ValueError):
+            renderer.container(pod, "guardrail")
+
     def test_historical_and_startup_repaired_source_closures_do_not_mix(self):
         context = "arn:aws:eks:us-east-2:123456789012:cluster/test"
         objects = fixture()
