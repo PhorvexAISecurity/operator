@@ -125,4 +125,5 @@ python3 -m unittest -v build/integrations/vllm-live-drain-runtime/test_integrati
 
 The last suite needs `httpx` and FastAPI in its Python environment. The renderer
 suite includes a dependency-free init-container import/ledger proof, source
-receipt drift negatives, current selector preservation, and no-Secret output.
+receipt drift negatives, current selector preservation, private drain route
+authorization, and no-Secret output.

@@ -1,4 +1,5 @@
 import copy
+import asyncio
 import importlib.util
 import json
 from pathlib import Path
@@ -98,6 +99,32 @@ class CandidateTest(unittest.TestCase):
         result = subprocess.run(["python3", "-S", "-c", script, str(renderer.GUARDRAIL)],
                                 capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr[:500])
+
+    def test_dual_listener_exposes_drain_only_with_admin_bearer(self):
+        spec = importlib.util.spec_from_file_location("reviewed_dual_server", renderer.BASE_RENDER_PATH.parent / "dual_server.py")
+        boundary = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(boundary)
+        seen = []
+        async def app(scope, receive, send):
+            seen.append((scope["path"], dict(scope["headers"]).get(b"authorization")))
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"{}"})
+        wrapped = boundary.ServingBoundary(app, "u" * 32, "a" * 32)
+        async def request(port, path, auth=None):
+            rows = []
+            async def receive(): return {"type": "http.request", "body": b"", "more_body": False}
+            async def send(value): rows.append(value)
+            headers = [] if auth is None else [(b"authorization", auth.encode())]
+            await wrapped({"type": "http", "method": "GET", "path": path,
+                           "server": ("127.0.0.1", port), "headers": headers}, receive, send)
+            return rows[0]["status"]
+        async def check():
+            self.assertEqual(await request(8000, "/v1/drain/capability"), 404)
+            self.assertEqual(await request(8443, "/v1/drain/capability"), 401)
+            self.assertEqual(await request(8443, "/v1/drain/capability", "Bearer " + "a" * 32), 200)
+            self.assertEqual(await request(8443, "/phorvex/drain/capability", "Bearer " + "a" * 32), 404)
+            self.assertEqual(seen, [("/v1/drain/capability", b"Bearer " + b"a" * 32)])
+        asyncio.run(check())
 
 
 if __name__ == "__main__":
