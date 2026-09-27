@@ -200,18 +200,30 @@ func TestValidateLiveSecretProjectionMustBeExactIdentity(t *testing.T) {
 		"duplicate":          {[]corev1.KeyToPath{identity[0], identity[0], identity[2]}, false},
 		"extra":              {append(append([]corev1.KeyToPath(nil), identity...), corev1.KeyToPath{Key: "api-key", Path: "api-key"}), false},
 		"per-file mode":      {[]corev1.KeyToPath{{Key: "client-a", Path: "client-a", Mode: &mode}, identity[1], identity[2]}, false},
+		"traversal":          {[]corev1.KeyToPath{identity[0], identity[1], {Key: "seed", Path: "../seed"}}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, source, image, engine := fixtureLive(t)
 			ctx := context.Background()
 			dep := &appsv1.Deployment{}
-			_ = c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: ServiceName}, dep)
-			dep.Spec.Template.Spec.Volumes[1].Secret.Items = tc.items
-			_ = c.Update(ctx, dep)
+			if err := c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: ServiceName}, dep); err != nil {
+				t.Fatal(err)
+			}
+			// Match the installed runtime shape: 0440 files and an explicit non-optional Secret.
+			installedMode, optional := int32(0440), false
+			secret := dep.Spec.Template.Spec.Volumes[1].Secret
+			secret.Items, secret.DefaultMode, secret.Optional = tc.items, &installedMode, &optional
+			if err := c.Update(ctx, dep); err != nil {
+				t.Fatal(err)
+			}
 			pod := &corev1.Pod{}
-			_ = c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: "vllm-pod"}, pod)
-			pod.Spec.Volumes[1].Secret.Items = tc.items
-			_ = c.Update(ctx, pod)
+			if err := c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: "vllm-pod"}, pod); err != nil {
+				t.Fatal(err)
+			}
+			pod.Spec.Volumes[1].Secret.Items, pod.Spec.Volumes[1].Secret.DefaultMode, pod.Spec.Volumes[1].Secret.Optional = tc.items, &installedMode, &optional
+			if err := c.Update(ctx, pod); err != nil {
+				t.Fatal(err)
+			}
 			_, err := ValidateLive(ctx, c, testPodUID, source, image, engine)
 			if tc.accept != (err == nil) {
 				t.Fatalf("accept=%v err=%v", tc.accept, err)
