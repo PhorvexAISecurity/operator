@@ -100,7 +100,8 @@ func voiceOutputRequiredMode(pod *corev1.Pod) bool {
 			}
 		}
 		policyVol, tokenVol := paths["/etc/phorvex/voice-output-policy"], paths["/etc/phorvex/voice-memory-state-token"]
-		if policyVol == "" || tokenVol == "" {
+		testTokenVol := paths["/etc/phorvex/voice-output-test-token"]
+		if policyVol == "" || tokenVol == "" || testTokenVol == "" {
 			return false
 		}
 		watermark := ""
@@ -120,11 +121,14 @@ func voiceOutputRequiredMode(pod *corev1.Pod) bool {
 			if v.Name == tokenVol && v.Secret != nil && v.Secret.SecretName == "voice-memory-state-token" {
 				valid++
 			}
+			if v.Name == testTokenVol && v.Secret != nil && v.Secret.SecretName == "voice-output-test-token" {
+				valid++
+			}
 			if v.Name == watermark && v.EmptyDir != nil {
 				valid++
 			}
 		}
-		return valid == 3
+		return valid == 4
 	}
 	return false
 }
