@@ -60,7 +60,9 @@ export function catalogueSignalState(result: AttackResult): {
 }
 
 export function showSecurityOutcomeSections(result: AttackResult): boolean {
-  return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" && result.evidenceKind !== "voice-agency-live" && result.evidenceKind !== "litellm-live-client-policy";
+  return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" &&
+    result.evidenceKind !== "voice-agency-live" && result.evidenceKind !== "litellm-live-client-policy" &&
+    result.evidenceKind !== "litellm-real-provider-output";
 }
 
 export function hasAvailabilityCostEvidence(result: AttackResult): boolean {
@@ -76,12 +78,15 @@ function attackCSVCells(r: AttackResult): (string | number | undefined)[] {
   if (isCatalogueSignalResult(r)) {
     return [...identity, "CATALOGUE SIGNAL · UNSCORED", "", ...Array(11).fill(""), r.observationError || r.stimulusEvidence?.limitation || "behavioral outcome not measured"];
   }
-  if (r.evidenceKind === "voice-memory-live" || r.evidenceKind === "voice-agency-live" || r.evidenceKind === "litellm-live-client-policy") {
+  if (r.evidenceKind === "voice-memory-live" || r.evidenceKind === "voice-agency-live" ||
+      r.evidenceKind === "litellm-live-client-policy" || r.evidenceKind === "litellm-real-provider-output") {
     const scope = r.evidenceKind === "voice-memory-live"
       ? "Exact caller/note context containment; model obedience and generic dwell, availability and cost were not measured."
       : r.evidenceKind === "voice-agency-live"
       ? "One owned cross-account refund and exact asserted-caller/other-order pair replay; caller authentication, other pairs, generic dwell, availability and cost were not measured."
-      : "Owned client containment; generic dwell, availability, cost and model replication were not measured.";
+      : r.evidenceKind === "litellm-live-client-policy"
+      ? "Owned client containment; generic dwell, availability, cost and model replication were not measured."
+      : "Exact synthetic output span on the owned LiteLLM Service route; original disclosure remains loss; generic DLP, dwell, availability and cost were not measured.";
     return [...identity, r.outcome || r.status, r.actuated ? attackCSVActuator(r) : "", r.containment || "", ...Array(10).fill(""), scope];
   }
   if (!hasAvailabilityCostEvidence(r)) {

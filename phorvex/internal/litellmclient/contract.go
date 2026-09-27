@@ -17,7 +17,7 @@ import (
 const (
 	Namespace              = "litellm"
 	ServiceName            = "litellm"
-	SourceConfigMapName    = "phorvex-litellm-admission-gateway"
+	SourceConfigMapName    = "phorvex-litellm-admission-gateway-4bf046ce690c"
 	ClientsConfigMapName   = "phorvex-litellm-live-clients"
 	PolicyConfigMapName    = "phorvex-litellm-client-policy"
 	TrialSeedSecretName    = "phorvex-litellm-trial-seed"
@@ -36,7 +36,7 @@ const (
 	SeedSHAAnnotation      = "phorvex.ai/litellm-trial-seed-sha256"
 	ObservationAnnotation  = "phorvex.ai/litellm-client-observation-v1"
 	RuleType               = "phorvex.attack.litellm-client-abuse"
-	ApprovedSourceSHA256   = "59a0521cf3a7621dc6e8db6f0a2f5e0c66a6cad8228253638c039edf110f0450"
+	ApprovedSourceSHA256   = "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1"
 	ApprovedGatewayImage   = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
 )
 

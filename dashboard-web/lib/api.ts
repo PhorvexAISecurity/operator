@@ -283,6 +283,8 @@ export const api = {
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/agency/live/fire", { scenario }, lens),
   litellmLiveFire: (scenario: "ai2-unbounded-consumption" | "ai2-query-extraction", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/live/fire", { scenario }, lens),
+  litellmOutputFire: (scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/output/fire", { scenario }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens, includeObservations = false) => get<{ attacks: AttackResult[] }>(`/api/attack-results${includeObservations ? "?includeObservations=true" : ""}`, lens),
   attackResultsPage: (lens: Lens, limit: number, filters: { q?: string; id?: string; includeObservations?: string } = {}, cursor?: string, signal?: AbortSignal) =>
@@ -498,6 +500,7 @@ export interface AttackResult {
   voiceMemoryProbe?: VoiceMemoryProbeResult;
   voiceAgencyProbe?: VoiceAgencyProbeResult;
   litellmLiveProbe?: LiteLLMLiveProbeResult;
+  litellmOutputProbe?: LiteLLMOutputProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
   decisionTraceEvidence?: AttackDecisionEvidence[];
   temporalDecisionEvidence?: AttackDecisionEvidence;
@@ -518,6 +521,16 @@ export interface LiteLLMLiveProbeResult {
   eventUID?: string; selectedAction?: string; selectionDecisionID?: string; dispatchPath?: string;
   terminalJournal: boolean; bothGatewaysActive: boolean;
   replayBlockedBeforeUpstream: boolean; benignContinuity: boolean; issues: string[];
+}
+export interface LiteLLMOutputProbeResult {
+  status: string; accepted: boolean; scenario: string; signalMode: string;
+  initialDisclosure: boolean; originalCompletionId?: string;
+  eventUID?: string; selectedAction?: string; selectionDecisionId?: string;
+  terminalJournal: boolean; bothGatewaysActive: boolean;
+  replayRedacted: boolean; benignContinuity: boolean;
+  ruleSlotStatus: string; ruleSlotName?: string;
+  reservedRuleSlots: string[]; remainingRuleSlots: number;
+  defenseScope: string; issues: string[];
 }
 export interface VoiceMemoryProbeResult {
   schema: "voice-memory-live-v1";
