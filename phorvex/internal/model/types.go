@@ -574,7 +574,7 @@ func (p Pod) HasBoundLiteLLMClientObservation() bool {
 		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
 		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
 		o.ClientSHA256 != "" && o.ConfigMapUID != "" && o.ServiceUID != "" &&
-		o.GatewaySourceSHA256 != ""
+		o.ClientsConfigMapUID != "" && o.SeedSHA256 != "" && o.GatewaySourceSHA256 != ""
 }
 
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
@@ -761,6 +761,8 @@ type LiteLLMClientObservation struct {
 	PeerPodUID          string    `json:"peerPodUID"`
 	ClientSHA256        string    `json:"clientSHA256"`
 	ConfigMapUID        string    `json:"configMapUID"`
+	ClientsConfigMapUID string    `json:"clientsConfigMapUID"`
+	SeedSHA256          string    `json:"seedSHA256"`
 	ServiceUID          string    `json:"serviceUID"`
 	GatewaySourceSHA256 string    `json:"gatewaySourceSHA256"`
 	PolicyName          string    `json:"policyName"`

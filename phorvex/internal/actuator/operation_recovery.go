@@ -43,13 +43,18 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 	if err != nil {
 		return nil, err
 	}
+	litellmEvents, err := recoverLiteLLMClientOperations(ctx, ec, allow)
+	if err != nil {
+		return nil, err
+	}
 	entries, err := journalList(ctx, ec)
 	if err != nil {
 		return nil, err
 	}
-	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(voiceEvents)+len(entries)), guardEvents...)
+	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(voiceEvents)+len(litellmEvents)+len(entries)), guardEvents...)
 	events = append(events, outputEvents...)
 	events = append(events, voiceEvents...)
+	events = append(events, litellmEvents...)
 	for i := range entries {
 		entry := &entries[i]
 		r := entry.Receipt

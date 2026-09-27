@@ -49,8 +49,10 @@ func bindLiteLLMClientObservation(ctx context.Context, reader client.Reader, p *
 		return
 	}
 	live, e := litellmclient.ValidateLive(ctx, reader, payload.TargetPodUID, payload.PeerPodUID)
-	if e != nil || live.State.Active || live.PolicyUID != payload.ConfigMapUID ||
-		live.ServiceUID != payload.ServiceUID || live.ClientSHA256 != payload.ClientSHA256 {
+	_, alreadyDenied := live.State.Entry(payload.ClientSHA256)
+	if e != nil || alreadyDenied || len(live.State.Entries) >= 256 ||
+		live.PolicyUID != payload.ConfigMapUID || live.ClientsUID != payload.ClientsConfigMapUID ||
+		live.ServiceUID != payload.ServiceUID || live.SeedSHA256 != payload.SeedSHA256 {
 		return
 	}
 	policy := &v1alpha1.PhorvexPolicy{}
@@ -71,6 +73,7 @@ func bindLiteLLMClientObservation(ctx context.Context, reader client.Reader, p *
 		EventName: chosen.Name, EventUID: chosen.UID, CreatorIdentity: chosen.CreatorIdentity,
 		TargetPodUID: payload.TargetPodUID, PeerPodUID: payload.PeerPodUID,
 		ClientSHA256: payload.ClientSHA256, ConfigMapUID: payload.ConfigMapUID,
+		ClientsConfigMapUID: payload.ClientsConfigMapUID, SeedSHA256: payload.SeedSHA256,
 		ServiceUID: payload.ServiceUID, GatewaySourceSHA256: live.SourceSHA256,
 		PolicyName: payload.PolicyName, PolicyUID: payload.PolicyUID, PolicyGeneration: payload.PolicyGeneration,
 		ObservedAt: payload.ObservedAt,

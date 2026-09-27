@@ -129,6 +129,8 @@ type liteLLMLiveProbeResult struct {
 	BothGatewaysActive          bool     `json:"bothGatewaysActive"`
 	ReplayBlockedBeforeUpstream bool     `json:"replayBlockedBeforeUpstream"`
 	BenignContinuity            bool     `json:"benignContinuity"`
+	BackendBypassRejected       bool     `json:"backendBypassRejected"`
+	DefenseScope                string   `json:"defenseScope"`
 	Issues                      []string `json:"issues"`
 }
 
@@ -160,7 +162,7 @@ func parseLiteLiveProfile(raw []byte) (liteLLMLiveProfile, error) {
 	if len(raw) == 0 || len(raw) > 16<<10 || dec.Decode(&p) != nil || dec.Decode(new(any)) != io.EOF ||
 		p.Version != 2 || !staticSHA256.MatchString(p.SourceSHA256) || !mongoPinnedImage.MatchString(p.GatewayImage) ||
 		!staticSHA256.MatchString(p.ClientsSHA256) || !staticSHA256.MatchString(p.SeedSHA256) ||
-		p.PolicyName != "litellm-live-client" || p.ModelAlias != "gpt-4o-mini" ||
+		p.PolicyName != "litellm-defense" || p.ModelAlias != "gpt-4o-mini" ||
 		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
 		p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 {
 		return p, errors.New("reviewed LiteLLM Live profile invalid")
@@ -212,7 +214,8 @@ func (s *Server) liteLLMLiveFire(w http.ResponseWriter, r *http.Request) {
 	}
 	started := s.cfg.now().UTC()
 	id := "atk-" + strconv.FormatInt(started.UnixNano(), 36) + strconv.FormatUint(liteLiveSequence.Add(1), 36)
-	probe := &liteLLMLiveProbeResult{Status: "UNKNOWN", Scenario: input.Scenario, SignalMode: "NONE", Issues: []string{}}
+	probe := &liteLLMLiveProbeResult{Status: "UNKNOWN", Scenario: input.Scenario, SignalMode: "NONE",
+		DefenseScope: "owned trial credential on the LiteLLM Service route", Issues: []string{}}
 	record := &attackRecord{ID: id, FiredAt: started.Format(time.RFC3339Nano), Service: "litellm", Namespace: "litellm",
 		Attack: input.Scenario, AttackID: input.Scenario, MITRE: "query-channel", Expected: "litellm-client-revoke",
 		EvidenceKind: "litellm-live-client-policy", OutcomeClass: "litellm-live-UNKNOWN", Status: "running", LiteLLMLiveProbe: probe,
@@ -221,7 +224,7 @@ func (s *Server) liteLLMLiveFire(w http.ResponseWriter, r *http.Request) {
 	publishAttack(record)
 	go s.runLiteLive(record, p, raw)
 	writeJSON(w, 200, map[string]any{"ok": true, "attackId": id, "scenario": input.Scenario, "status": "running",
-		"message": "Real LiteLLM Service calls are measuring. A test signal is injected only after independently accepted original work and benign control. Final defense requires selected native policy activation, both gateway readbacks, stopped replay, and benign continuity."})
+		"message": "Real LiteLLM Service calls are measuring. A test signal is injected only after independently accepted original work and benign control. Final defense is scoped to the owned trial credential on the Service route and requires selected native policy activation, both gateway readbacks, stopped replay, and benign continuity."})
 }
 
 func (s *Server) runLiteLive(r *attackRecord, p liteLLMLiveProfile, raw []byte) {
@@ -252,10 +255,10 @@ func (s *Server) runLiteLive(r *attackRecord, p liteLLMLiveProfile, raw []byte) 
 	finish(err)
 }
 
-// A defended result is published only after its terminal receipt and durable
-// attack record succeed. On a failed record write, replace the private
-// candidate receipt with an inconclusive one when the receipt path remains
-// available; neither public field ever retains defense credit.
+// The private receipt records evidence only; its accepted flag is always false.
+// Defense credit is carried only by the durable attack record after this
+// receipt succeeds. A failed record write therefore leaves no private success
+// claim to roll back or accidentally preserve.
 func liteFinalizeProbe(r *attackRecord, probe *liteLLMLiveProbeResult, bound liteLiveSnapshot,
 	runErr error, writeTerminal func([]byte) error, persist func(*attackRecord) error,
 	publish func(*attackRecord)) {
@@ -270,7 +273,10 @@ func liteFinalizeProbe(r *attackRecord, probe *liteLLMLiveProbeResult, bound lit
 	}
 	probe.Accepted = probe.Status == "STOPPED_WITH_BENIGN_CONTINUITY"
 	write := func() error {
-		raw, err := json.Marshal(probe)
+		candidate := *probe
+		candidate.Accepted = false
+		raw, err := json.Marshal(map[string]any{"kind": "litellm-live-evidence-v1",
+			"probe": candidate, "verdictRequiresAttackRecord": true})
 		if err != nil {
 			return err
 		}
@@ -304,7 +310,6 @@ func liteFinalizeProbe(r *attackRecord, probe *liteLLMLiveProbeResult, bound lit
 		probe.Issues = append(probe.Issues, "LiteLLM Live outcome persistence unavailable")
 		r.PersistenceError = "LiteLLM Live outcome persistence unavailable"
 		apply()
-		_ = write()
 	}
 	publish(r)
 }
@@ -416,7 +421,7 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	policySpec := availabilityMap(policy["spec"])
 	selector := availabilityMap(availabilityMap(policySpec["selector"])["matchLabels"])
 	triggers := availabilityMap(policySpec["triggers"])
-	if liteStr(selector, "phorvex.ai/litellm-live") != "true" || len(selector) != 1 ||
+	if liteStr(selector, "r6th.io/rotation-target") != "true" || len(selector) != 1 ||
 		liteStr(policySpec, "mode") != "active" || triggers["reactiveOnly"] != true || triggers["eventDriven"] != true {
 		return out, errors.New("LiteLLM dedicated policy scope differs")
 	}
@@ -480,17 +485,8 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		return out, errors.New("LiteLLM Service gateway route differs")
 	}
 	items, _ := slices["items"].([]any)
-	if len(items) != 1 {
-		return out, errors.New("LiteLLM EndpointSlice cardinality differs")
-	}
-	slicePorts, _ := availabilityMap(items[0])["ports"].([]any)
-	if len(slicePorts) != 1 || liteInt(availabilityMap(slicePorts[0]), "port") != 4001 ||
-		liteStr(availabilityMap(slicePorts[0]), "protocol") != "TCP" {
-		return out, errors.New("LiteLLM EndpointSlice port differs")
-	}
-	endpoints, _ := availabilityMap(items[0])["endpoints"].([]any)
-	if len(endpoints) != 2 {
-		return out, errors.New("LiteLLM EndpointSlice ready target count differs")
+	if len(items) == 0 || len(items) > 8 {
+		return out, errors.New("LiteLLM EndpointSlice inventory differs")
 	}
 	podItems, _ := pods["items"].([]any)
 	if len(podItems) != 2 {
@@ -501,7 +497,7 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		found := availabilityMap(raw)
 		pin := liteLivePod{Name: liteStr(liteMeta(found), "name"), UID: availabilityUID(found)}
 		if pin.Name == "" || pin.UID == "" || liteStr(availabilityMap(found["status"]), "phase") != "Running" ||
-			liteStr(availabilityMap(liteMeta(found)["labels"]), "phorvex.ai/litellm-live") != "true" {
+			liteStr(availabilityMap(liteMeta(found)["labels"]), "r6th.io/rotation-target") != "true" {
 			return out, errors.New("LiteLLM Pod incarnation differs")
 		}
 		cs, _ := availabilityMap(found["status"])["containerStatuses"].([]any)
@@ -549,19 +545,6 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		if ip == "" {
 			return out, errors.New("LiteLLM Pod IP missing")
 		}
-		matching := 0
-		for _, epRaw := range endpoints {
-			ep := availabilityMap(epRaw)
-			ref := availabilityMap(ep["targetRef"])
-			cond := availabilityMap(ep["conditions"])
-			addr, _ := ep["addresses"].([]any)
-			if liteStr(ref, "uid") == pin.UID && liteStr(ref, "name") == pin.Name && cond["ready"] == true && len(addr) == 1 && addr[0] == ip {
-				matching++
-			}
-		}
-		if matching != 1 {
-			return out, errors.New("LiteLLM Service target binding differs")
-		}
 		out.PodIPs[pin.UID] = ip
 		out.Pods = append(out.Pods, pin)
 	}
@@ -569,7 +552,46 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	if out.Pods[0].UID == out.Pods[1].UID || out.Pods[0].Name == out.Pods[1].Name {
 		return out, errors.New("LiteLLM Pod identities ambiguous")
 	}
+	if err := liteReadyEndpointBindings(items, out.Pods, out.PodIPs); err != nil {
+		return out, err
+	}
 	return out, nil
+}
+
+func liteReadyEndpointBindings(items []any, pods []liteLivePod, ips map[string]string) error {
+	wanted := make(map[string]liteLivePod, len(pods))
+	for _, pod := range pods {
+		wanted[pod.UID] = pod
+	}
+	seen := map[string]bool{}
+	for _, raw := range items {
+		slice := availabilityMap(raw)
+		ports, _ := slice["ports"].([]any)
+		if len(ports) != 1 || liteInt(availabilityMap(ports[0]), "port") != 4001 ||
+			liteStr(availabilityMap(ports[0]), "protocol") != "TCP" {
+			return errors.New("LiteLLM EndpointSlice port differs")
+		}
+		endpoints, _ := slice["endpoints"].([]any)
+		for _, item := range endpoints {
+			ep := availabilityMap(item)
+			if availabilityMap(ep["conditions"])["ready"] != true {
+				continue
+			}
+			ref := availabilityMap(ep["targetRef"])
+			uid := liteStr(ref, "uid")
+			pod, ok := wanted[uid]
+			addresses, _ := ep["addresses"].([]any)
+			if !ok || seen[uid] || liteStr(ref, "kind") != "Pod" ||
+				liteStr(ref, "name") != pod.Name || len(addresses) != 1 || addresses[0] != ips[uid] {
+				return errors.New("LiteLLM Service ready target binding differs")
+			}
+			seen[uid] = true
+		}
+	}
+	if len(seen) != len(wanted) {
+		return errors.New("LiteLLM Service ready target count differs")
+	}
+	return nil
 }
 
 func liteSameSource(a, b liteLiveSnapshot) bool {
@@ -754,6 +776,48 @@ func (w *liteLiveWorker) statuses(snapshot liteLiveSnapshot, label, clientSHA, r
 	return out, nil
 }
 
+// The owned token is a gateway credential, not a LiteLLM backend master key.
+// Check the exact backend PodIPs directly so the defended result never implies
+// that the gateway policy also protects a leaked master key or raw PodIP route.
+func (w *liteLiveWorker) backendBypassControl(snapshot liteLiveSnapshot, label string) error {
+	for i, pod := range snapshot.Pods {
+		ctx, stop := context.WithTimeout(w.ctx, 8*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			"http://"+snapshot.PodIPs[pod.UID]+":4000/v1/models", nil)
+		if err != nil {
+			stop()
+			return errors.New("LiteLLM exact backend control URL unavailable")
+		}
+		req.Header.Set("Authorization", "Bearer "+w.attackerToken)
+		response, err := liteHTTPClient(8 * time.Second).Do(req)
+		if err != nil {
+			stop()
+			return errors.New("LiteLLM direct backend owned-token control unavailable")
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 8193))
+		_ = response.Body.Close()
+		stop()
+		if readErr != nil || len(body) > 8192 ||
+			!liteBackendAuthRejected(response.StatusCode, body) {
+			return errors.New("LiteLLM owned token unexpectedly reached backend authorization")
+		}
+		if err = w.saveJSON(fmt.Sprintf("%s-backend-%d.json", label, i), map[string]any{
+			"podUID": pod.UID, "status": response.StatusCode, "bodySHA256": liteSHA(body),
+			"classification": "BACKEND_AUTH_REJECTED"}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func liteBackendAuthRejected(status int, body []byte) bool {
+	if status == http.StatusUnauthorized {
+		return true
+	}
+	return status == http.StatusBadRequest &&
+		strings.Contains(strings.ToLower(string(body)), "no connected db")
+}
+
 func liteCounterSum(states map[string]liteLiveStatus, field string) int64 {
 	var n int64
 	for _, s := range states {
@@ -811,24 +875,49 @@ func (w *liteLiveWorker) journalBefore(snapshot liteLiveSnapshot) error {
 		return err
 	}
 	receipts, err := liteJournalRows(row)
-	if err != nil || len(receipts) != int(snapshot.Revision) || len(snapshot.Entries) != len(receipts) {
-		return errors.New("LiteLLM prior protected journal and policy revision differ")
+	if err != nil {
+		return err
+	}
+	w.priorReceipts, err = litePriorJournal(snapshot, receipts)
+	return err
+}
+
+func litePriorJournal(snapshot liteLiveSnapshot, receipts []map[string]any) (map[string]string, error) {
+	if len(receipts) < int(snapshot.Revision) || len(receipts) >= 256 ||
+		len(snapshot.Entries) != int(snapshot.Revision) {
+		return nil, errors.New("LiteLLM prior protected journal and policy revision differ")
 	}
 	entries := make(map[string]liteLiveEntry, len(snapshot.Entries))
 	for _, entry := range snapshot.Entries {
 		entries[entry.ClientSHA256] = entry
 	}
-	w.priorReceipts = map[string]string{}
+	prior := map[string]string{}
+	terminal := 0
 	for _, receipt := range receipts {
-		entry, exists := entries[liteStr(receipt, "clientSHA256")]
-		if !exists || !entry.Active || entry.OperationID != liteStr(receipt, "operationId") ||
-			liteStr(receipt, "phase") != "terminal-full" {
-			return errors.New("LiteLLM prior protected operation and deny entry differ")
+		clientSHA := liteStr(receipt, "clientSHA256")
+		entry, exists := entries[clientSHA]
+		switch liteStr(receipt, "phase") {
+		case "terminal-full":
+			if !exists || !entry.Active || entry.OperationID != liteStr(receipt, "operationId") ||
+				liteStr(receipt, "abortReason") != "" {
+				return nil, errors.New("LiteLLM prior terminal and deny entry differ")
+			}
+			terminal++
+		case "aborted":
+			reason := liteStr(receipt, "abortReason")
+			if exists || (reason != "pre-cas-authority-changed" && reason != "definitive-policy-conflict") {
+				return nil, errors.New("LiteLLM prior aborted operation has a deny entry or invalid reason")
+			}
+		default:
+			return nil, errors.New("LiteLLM prior protected operation unresolved")
 		}
 		b, _ := json.Marshal(receipt)
-		w.priorReceipts[liteStr(receipt, "clientSHA256")] = liteSHA(b)
+		prior[clientSHA] = liteSHA(b)
 	}
-	return nil
+	if terminal != int(snapshot.Revision) {
+		return nil, errors.New("LiteLLM protected journal terminals do not match active policy entries")
+	}
+	return prior, nil
 }
 
 func (w *liteLiveWorker) execute(probe *liteLLMLiveProbeResult) (err error) {
@@ -859,6 +948,9 @@ func (w *liteLiveWorker) execute(probe *liteLLMLiveProbeResult) (err error) {
 	}
 	preControl, err := w.statuses(before, "before-control", w.controlSHA, "")
 	if err != nil {
+		return err
+	}
+	if err = w.backendBypassControl(before, "before"); err != nil {
 		return err
 	}
 	count := 2
@@ -1001,6 +1093,10 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 		liteCounterSum(finalControl, "completed") != liteCounterSum(baselineControl, "completed")+1 {
 		return errors.New("LiteLLM attacker replay or benign upstream counters differ")
 	}
+	if err = w.backendBypassControl(final, "after"); err != nil {
+		return err
+	}
+	probe.BackendBypassRejected = true
 	probe.ReplayBlockedBeforeUpstream = true
 	probe.BenignContinuity = true
 	terminal, err := audit.auditClose(auditStart, created)
@@ -1111,7 +1207,7 @@ func (w *liteLiveWorker) pollJournal(event *availabilityEvent) (map[string]any, 
 		row, err := w.kube(fmt.Sprintf("journal-%02d", i), "-n", "phorvex-system", "get", "configmap", name, "-o", "json")
 		if err == nil {
 			receipts, parseErr := liteJournalRows(row)
-			if parseErr != nil || len(receipts) < int(w.bound.Revision) || len(receipts) > int(w.bound.Revision)+1 {
+			if parseErr != nil || len(receipts) < len(w.priorReceipts) || len(receipts) > len(w.priorReceipts)+1 {
 				return nil, errors.New("LiteLLM protected journal array differs")
 			}
 			preserved := 0
@@ -1128,23 +1224,27 @@ func (w *liteLiveWorker) pollJournal(event *availabilityEvent) (map[string]any, 
 			if preserved != len(w.priorReceipts) {
 				return nil, errors.New("LiteLLM prior protected receipts missing")
 			}
-			if len(receipts) == int(w.bound.Revision) {
+			if len(receipts) == len(w.priorReceipts) {
 				goto nextPoll
 			}
 			matched := 0
 			for _, receipt := range receipts {
 				clientSHA := liteStr(receipt, "clientSHA256")
 				if clientSHA != w.attackerSHA {
-					if _, ok := w.priorReceipts[clientSHA]; !ok || liteStr(receipt, "phase") != "terminal-full" {
-						return nil, errors.New("LiteLLM prior protected receipt not terminal")
+					if _, ok := w.priorReceipts[clientSHA]; !ok {
+						return nil, errors.New("LiteLLM prior protected receipt missing")
 					}
 					continue
 				}
 				matched++
+				if liteStr(receipt, "phase") == "aborted" {
+					return nil, errors.New("LiteLLM protected operation proved no-write; no defense credit")
+				}
 				if liteStr(receipt, "phase") != "terminal-full" {
 					continue
 				}
-				if liteInt(receipt, "version") != 2 || liteStr(receipt, "eventName") != event.Name ||
+				if liteInt(receipt, "version") != 2 || liteStr(receipt, "abortReason") != "" ||
+					liteStr(receipt, "eventName") != event.Name ||
 					liteStr(receipt, "eventUID") != event.UID || liteStr(receipt, "targetUID") != event.TargetPodUID ||
 					liteStr(receipt, "peerUID") != w.bound.Pods[1].UID || liteStr(receipt, "policyName") != w.p.PolicyName ||
 					liteStr(receipt, "policyUID") != w.bound.PolicyUID || liteInt(receipt, "policyGeneration") != w.bound.PolicyGeneration ||

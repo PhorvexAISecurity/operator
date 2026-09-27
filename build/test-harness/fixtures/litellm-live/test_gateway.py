@@ -222,6 +222,19 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.post(self.attacker)[0], 503)
         self.assertEqual(Upstream.calls, 1)
 
+    def test_full_registry_capacity_and_over_capacity_refusal(self):
+        entries = [{"active": True, "clientSHA256": f"{i:064x}",
+                    "operationId": "d" * 128} for i in range(256)]
+        self.set_policy(entries)
+        self.assertLessEqual(self.policy.stat().st_size, 65536)
+        self.assertGreater(self.policy.stat().st_size, 32768)
+        self.assertEqual(self.g.policy()["revision"], 256)
+        self.assertTrue(self.g.status(entries[255]["clientSHA256"])["ready"])
+        entries.append({"active": True, "clientSHA256": f"{256:064x}",
+                        "operationId": "d" * 128})
+        self.set_policy(entries)
+        self.assertFalse(self.g.status(entries[255]["clientSHA256"])["ready"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,8 +18,8 @@ NAMESPACE = "litellm"
 SOURCE_NAME = "phorvex-litellm-admission-gateway"
 CLIENTS_NAME = "phorvex-litellm-live-clients"
 POLICY_NAME = "phorvex-litellm-client-policy"
-PHORVEX_POLICY_NAME = "litellm-live-client"
-POLICY_LABEL = "phorvex.ai/litellm-live"
+PHORVEX_POLICY_NAME = "litellm-defense"
+POLICY_LABEL = "r6th.io/rotation-target"
 MASTER_SECRET = "phorvex-litellm-master-key"
 STATUS_SECRET = "phorvex-litellm-status-token"
 TRIAL_SEED_SECRET = "phorvex-litellm-trial-seed"
@@ -39,7 +39,7 @@ def manifest(name, data, immutable=False):
 
 
 def render(seed_sha, gateway_image, model_alias,
-           deployment=None, service=None, policy_uid=None):
+           deployment=None, service=None, policy=None, policy_cm_uid=None):
     if (not HEX.fullmatch(seed_sha) or not IMAGE.fullmatch(gateway_image) or
             model_alias != "gpt-4o-mini"):
         raise ValueError("owned LiteLLM render authority invalid")
@@ -57,27 +57,10 @@ def render(seed_sha, gateway_image, model_alias,
                          "labels": {"phorvex.ai/litellm-client-revoke-journal": "v2"}},
             "data": {"receipts.json": canonical({"version": 2, "receipts": []})},
         },
-        "phorvex-policy.json": {
-            "apiVersion": "phorvex.ai/v1alpha1", "kind": "PhorvexPolicy",
-            "metadata": {"name": PHORVEX_POLICY_NAME, "namespace": NAMESPACE},
-            "spec": {
-                "tenant": NAMESPACE,
-                "selector": {"matchLabels": {POLICY_LABEL: "true"}},
-                "objective": {"lambda": "0.4", "costWeights": {"normSparsity": "0.4", "flowDisruption": "0.6"}},
-                "budget": {"maxMovesPerTick": 1, "tickInterval": "10s",
-                           "antiOverRotationWindow": "90s", "proactiveFloor": "15m"},
-                "slo": {"minAvailableReplicas": 1},
-                "assetValue": {"fromLabels": {"app": {"litellm": "0.4"}},
-                               "weightSecrets": "0.8", "blastRadiusFromGraph": True},
-                "triggers": {"eventDriven": True, "reactiveOnly": True},
-                "actions": {"enabled": ["rotate", "quarantine", "litellm-client-revoke"]},
-                "mode": "active",
-            },
-        },
     }
-    if deployment is None and service is None and policy_uid is None:
+    if deployment is None and service is None and policy is None and policy_cm_uid is None:
         return objects, source_sha
-    if deployment is None or service is None or not policy_uid:
+    if deployment is None or service is None or policy is None or not policy_cm_uid:
         raise ValueError("phase-two authority incomplete")
     if (deployment.get("kind") != "Deployment" or
             deployment.get("metadata", {}).get("namespace") != NAMESPACE or
@@ -91,6 +74,31 @@ def render(seed_sha, gateway_image, model_alias,
             service["spec"]["ports"][0].get("targetPort") != 4000 or
             service["spec"].get("selector") != {"app": "litellm"}):
         raise ValueError("installed LiteLLM service/deployment differs")
+    policy_meta = policy.get("metadata", {})
+    policy_spec = policy.get("spec", {})
+    old_actions = policy_spec.get("actions", {}).get("enabled")
+    if (policy.get("kind") != "PhorvexPolicy" or
+            policy_meta.get("namespace") != NAMESPACE or
+            policy_meta.get("name") != PHORVEX_POLICY_NAME or
+            not policy_meta.get("uid") or
+            type(policy_meta.get("generation")) is not int or policy_meta["generation"] < 1 or
+            policy_spec.get("tenant") != NAMESPACE or
+            policy_spec.get("selector") != {"matchLabels": {POLICY_LABEL: "true"}} or
+            policy_spec.get("mode") != "active" or
+            policy_spec.get("triggers", {}).get("eventDriven") is not True or
+            policy_spec.get("triggers", {}).get("reactiveOnly") is not True or
+            not isinstance(old_actions, list) or len(old_actions) < 2 or
+            any(not isinstance(action, str) or not action for action in old_actions) or
+            len(set(old_actions)) != len(old_actions) or
+            "litellm-client-revoke" in old_actions):
+        raise ValueError("installed LiteLLM owner policy differs")
+    objects["existing-policy-json-patch.json"] = [
+        {"op": "test", "path": "/metadata/uid", "value": policy_meta["uid"]},
+        {"op": "test", "path": "/metadata/generation", "value": policy_meta["generation"]},
+        {"op": "test", "path": "/spec/selector", "value": policy_spec["selector"]},
+        {"op": "test", "path": "/spec/actions/enabled", "value": old_actions},
+        {"op": "add", "path": "/spec/actions/enabled/-", "value": "litellm-client-revoke"},
+    ]
     template = deployment["spec"]["template"]
     podspec = template["spec"]
     containers = podspec.get("containers", [])
@@ -111,16 +119,14 @@ def render(seed_sha, gateway_image, model_alias,
     annotations = {
         "phorvex.ai/litellm-gateway-source-sha256": source_sha,
         "phorvex.ai/litellm-gateway-image": gateway_image,
-        "phorvex.ai/litellm-client-policy-configmap-uid": policy_uid,
+        "phorvex.ai/litellm-client-policy-configmap-uid": policy_cm_uid,
         "phorvex.ai/litellm-live-service-uid": service["metadata"]["uid"],
         "phorvex.ai/litellm-trial-seed-sha256": seed_sha,
     }
     patch = list(annotations_patch)
     labels = template.get("metadata", {}).get("labels")
-    if not isinstance(labels, dict) or labels.get("app") != "litellm" or POLICY_LABEL in labels:
+    if not isinstance(labels, dict) or labels.get("app") != "litellm" or labels.get(POLICY_LABEL) != "true":
         raise ValueError("installed LiteLLM Pod labels differ")
-    patch.append({"op": "add", "path": "/spec/template/metadata/labels/" + POLICY_LABEL.replace("/", "~1"),
-                  "value": "true"})
     for key, value in annotations.items():
         patch.append({"op": "add", "path": "/spec/template/metadata/annotations/" + key.replace("/", "~1"),
                       "value": value})
@@ -160,7 +166,7 @@ def render(seed_sha, gateway_image, model_alias,
             {"name": "PHORVEX_LITELLM_POLICY_FILE", "value": "/etc/phorvex-litellm-policy/state.json"},
             {"name": "PHORVEX_LITELLM_STATUS_TOKEN_FILE", "value": "/etc/phorvex-litellm-status/token"},
             {"name": "PHORVEX_LITELLM_TRIAL_SEED_FILE", "value": "/etc/phorvex-litellm-seed/seed"},
-            {"name": "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID", "value": policy_uid},
+            {"name": "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID", "value": policy_cm_uid},
             {"name": "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256", "value": source_sha},
         ],
         "volumeMounts": [
@@ -188,13 +194,15 @@ def main():
     parser.add_argument("--model-alias", default="gpt-4o-mini")
     parser.add_argument("--deployment-original", type=Path)
     parser.add_argument("--service-original", type=Path)
+    parser.add_argument("--policy-original", type=Path)
     parser.add_argument("--policy-cm-uid")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     deployment = json.loads(args.deployment_original.read_text()) if args.deployment_original else None
     service = json.loads(args.service_original.read_text()) if args.service_original else None
+    policy = json.loads(args.policy_original.read_text()) if args.policy_original else None
     objects, source_sha = render(args.seed_sha256, args.gateway_image, args.model_alias,
-                                 deployment, service, args.policy_cm_uid)
+                                 deployment, service, policy, args.policy_cm_uid)
     args.output.mkdir(parents=True, exist_ok=False)
     for name, value in objects.items():
         (args.output / name).write_text(json.dumps(value, separators=(",", ":"), sort_keys=True) + "\n")

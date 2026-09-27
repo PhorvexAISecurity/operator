@@ -16,7 +16,7 @@ import (
 type Pod struct{ Name, UID, IP, GatewayImageID string }
 type Live struct {
 	ServiceUID, SourceSHA256, SourceUID, ClientsUID, PolicyUID, PolicyRV string
-	ClientSHA256                                                         string
+	SeedSHA256                                                           string
 	State                                                                State
 	Pods                                                                 []Pod
 }
@@ -81,9 +81,6 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 	if e != nil {
 		return Live{}, e
 	}
-	if state.ClientSHA256 != inventory.AttackerSHA256 {
-		return Live{}, errors.New("owned-client policy targets a different credential")
-	}
 	var pods corev1.PodList
 	if e := r.List(ctx, &pods, client.InNamespace(Namespace), client.MatchingLabels{"app": "litellm"}); e != nil {
 		return Live{}, e
@@ -93,13 +90,13 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 	}
 	result := Live{ServiceUID: string(svc.UID), SourceSHA256: sourceSHA, SourceUID: string(source.UID),
 		ClientsUID: string(clients.UID), PolicyUID: string(policy.UID), PolicyRV: policy.ResourceVersion,
-		ClientSHA256: inventory.AttackerSHA256, State: state}
+		SeedSHA256: inventory.SeedSHA256, State: state}
 	seen := map[string]bool{}
 	for i := range pods.Items {
 		p := &pods.Items[i]
 		if p.DeletionTimestamp != nil || p.UID == "" || p.Status.PodIP == "" || seen[string(p.UID)] ||
 			p.Annotations[SourceSHAAnnotation] != sourceSHA || p.Annotations[PolicyUIDAnnotation] != string(policy.UID) ||
-			p.Annotations[ServiceUIDAnnotation] != string(svc.UID) || p.Annotations[ClientSHAAnnotation] != inventory.AttackerSHA256 {
+			p.Annotations[ServiceUIDAnnotation] != string(svc.UID) || p.Annotations[SeedSHAAnnotation] != inventory.SeedSHA256 {
 			return Live{}, errors.New("owned-client Pod lifetime/source/policy declaration differs")
 		}
 		seen[string(p.UID)] = true
@@ -118,7 +115,7 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 				continue
 			}
 			gatewayImage = container.Image
-			if len(container.Command) != 3 || container.Command[0] != "python" || container.Command[1] != "-B" ||
+			if len(container.Command) != 3 || container.Command[0] != "python3" || container.Command[1] != "-B" ||
 				container.Command[2] != "/opt/phorvex/gateway.py" {
 				break
 			}
@@ -127,6 +124,7 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 				env[entry.Name] = entry
 			}
 			if env["PHORVEX_LITELLM_CLIENTS_FILE"].Value != "/etc/phorvex-litellm/clients.json" ||
+				env["PHORVEX_LITELLM_TRIAL_SEED_FILE"].Value != "/etc/phorvex-litellm-seed/seed" ||
 				env["PHORVEX_LITELLM_POLICY_FILE"].Value != "/etc/phorvex-litellm-policy/state.json" ||
 				env["PHORVEX_LITELLM_STATUS_TOKEN_FILE"].Value != "/etc/phorvex-litellm-status/token" ||
 				env["PHORVEX_LITELLM_POLICY_CONFIGMAP_UID"].Value != string(policy.UID) ||
@@ -140,6 +138,7 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 				"litellm-live-clients":        "/etc/phorvex-litellm",
 				"litellm-live-policy":         "/etc/phorvex-litellm-policy",
 				"litellm-live-status":         "/etc/phorvex-litellm-status",
+				"litellm-live-trial-seed":     "/etc/phorvex-litellm-seed",
 			}
 			for _, mount := range container.VolumeMounts {
 				if mount.ReadOnly && needed[mount.Name] == mount.MountPath {
@@ -155,7 +154,9 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 				volumes["litellm-live-clients"].ConfigMap.Name == ClientsConfigMapName &&
 				volumes["litellm-live-policy"].ConfigMap != nil &&
 				volumes["litellm-live-policy"].ConfigMap.Name == PolicyConfigMapName &&
-				volumes["litellm-live-status"].Secret != nil
+				volumes["litellm-live-status"].Secret != nil &&
+				volumes["litellm-live-trial-seed"].Secret != nil &&
+				volumes["litellm-live-trial-seed"].Secret.SecretName == TrialSeedSecretName
 		}
 		if !gateway || mainImage == "" || gatewayImage != approvedGatewayImage ||
 			p.Annotations[GatewayImageAnnotation] != approvedGatewayImage {
