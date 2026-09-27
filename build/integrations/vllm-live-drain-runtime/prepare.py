@@ -63,7 +63,7 @@ def selector_from(deployment: dict) -> str:
     return ",".join(k + "=" + labels[k] for k in sorted(labels))
 
 
-def select_current(deployment: dict, service: dict, pods: dict, rs: dict, slices: dict) -> dict:
+def select_current(deployment: dict, configmap: dict, service: dict, pods: dict, rs: dict, slices: dict) -> dict:
     items = pods.get("items") if isinstance(pods, dict) and pods.get("kind") in ("PodList", "List") else None
     if not isinstance(items, list) or len(items) != 1:
         raise ValueError("one current selected Pod required")
@@ -78,6 +78,22 @@ def select_current(deployment: dict, service: dict, pods: dict, rs: dict, slices
             not any(row.get("type") == "Ready" and row.get("status") == "True"
                     for row in pod.get("status", {}).get("conditions", []))):
         raise ValueError("current owned Pod is not Ready")
+    pod_spec = pod.get("spec", {})
+    template_spec = deployment.get("spec", {}).get("template", {}).get("spec", {})
+    def images(spec: dict) -> dict:
+        rows = spec.get("containers", [])
+        if (not isinstance(rows, list) or len(rows) != 2 or
+                {row.get("name") for row in rows} != {"vllm", "guardrail"} or
+                any(not isinstance(row.get("image"), str) or not row["image"] for row in rows)):
+            raise ValueError("current vLLM/guardrail container identity unavailable")
+        return {row["name"]: row["image"] for row in rows}
+    if images(pod_spec) != images(template_spec):
+        raise ValueError("current Pod image differs from Deployment template")
+    for spec in (pod_spec, template_spec):
+        sources = [row.get("configMap", {}).get("name") for row in spec.get("volumes", [])
+                   if row.get("name") == "guardrail-src"]
+        if sources != [configmap["metadata"]["name"]]:
+            raise ValueError("current Pod/source volume differs from Deployment")
     selector = service.get("spec", {}).get("selector", {})
     if not isinstance(selector, dict) or not selector or any(pod_meta.get("labels", {}).get(k) != v for k, v in selector.items()):
         raise ValueError("current Service does not select owned Pod")
@@ -189,7 +205,7 @@ def prepare(context: str, out: Path, publication_path: Path, kubectl: str = "kub
         raise ValueError("current Pod ReplicaSet owner absent")
     rs = capture("current-replicaset", "vllm", "replicaset", rs_refs[0]["name"])
     slices = capture("current-endpointslices", "vllm", "endpointslices", selector="kubernetes.io/service-name=vllm")
-    current = select_current(deployment, service, {"kind": "PodList", "items": [pod]}, rs, slices)
+    current = select_current(deployment, cm, service, {"kind": "PodList", "items": [pod]}, rs, slices)
     template_labels = deployment.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
     service_selector = service.get("spec", {}).get("selector", {})
     if not isinstance(template_labels, dict) or not isinstance(service_selector, dict) or not service_selector:

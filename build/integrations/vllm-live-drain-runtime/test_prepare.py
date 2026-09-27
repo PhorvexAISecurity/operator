@@ -63,7 +63,10 @@ print(json.dumps(obj,separators=(',',':')))
                                                        "uid": uid, "resourceVersion": "7"}}
         dep = meta("Deployment", "vllm", "deployment-uid")
         dep["spec"] = {"selector": {"matchLabels": {"app": "vllm"}},
-                       "template": {"metadata": {"labels": {"app": "vllm", "phorvex.ai/role": "leader"}}}}
+                       "template": {"metadata": {"labels": {"app": "vllm", "phorvex.ai/role": "leader"}},
+                                    "spec": {"containers": [{"name": "vllm", "image": "reset-image"},
+                                                            {"name": "guardrail", "image": "python:3.11-slim"}],
+                                             "volumes": [{"name": "guardrail-src", "configMap": {"name": "guardrail-proxy"}}]}}}
         cm = meta("ConfigMap", "guardrail-proxy", "source-uid")
         policy = meta("PhorvexPolicy", "vllm-defense", "policy-uid")
         service = meta("Service", "vllm", "service-uid")
@@ -71,6 +74,7 @@ print(json.dumps(obj,separators=(',',':')))
         pod = meta("Pod", "vllm-1", "pod-uid")
         pod["metadata"]["labels"] = {"app": "vllm", "phorvex.ai/role": "leader"}
         pod["metadata"]["ownerReferences"] = [{"controller": True, "kind": "ReplicaSet", "name": "vllm-rs", "uid": "rs-uid"}]
+        pod["spec"] = copy.deepcopy(dep["spec"]["template"]["spec"])
         pod["status"] = {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}]}
         rs = meta("ReplicaSet", "vllm-rs", "rs-uid")
         rs["metadata"]["ownerReferences"] = [{"controller": True, "kind": "Deployment", "name": "vllm", "uid": "deployment-uid"}]
@@ -112,7 +116,8 @@ print(json.dumps(obj,separators=(',',':')))
         dep = self.objects["deployment vllm"]
         dep["spec"]["template"]["spec"] = {"containers": [
             {"name": "vllm", "image": "reset-image", "args": ["--model", "Qwen/Qwen2.5-7B-Instruct-AWQ"]},
-            {"name": "guardrail", "image": "python:3.11-slim", "env": []}], "volumes": []}
+            {"name": "guardrail", "image": "python:3.11-slim", "env": []}],
+            "volumes": [{"name": "guardrail-src", "configMap": {"name": "guardrail-proxy"}}]}
         cm = self.objects["configmap guardrail-proxy"]
         cm["data"] = {"guardrail_proxy.py": "public proxy", "dual_server.py": "private control"}
         self.objects["service vllm"]["spec"]["ports"] = [{"port": 8000, "targetPort": 8000}]
@@ -179,6 +184,8 @@ print(json.dumps(obj,separators=(',',':')))
         for mutate in (
             lambda objects: objects["replicaset vllm-rs"]["metadata"]["ownerReferences"][0].update(uid="foreign-deployment"),
             lambda objects: objects["endpointslices -l kubernetes.io/service-name=vllm"]["items"][0]["endpoints"][0]["targetRef"].update(uid="foreign-pod"),
+            lambda objects: objects["pod vllm-1"]["spec"]["containers"][0].update(image="older-vllm-image"),
+            lambda objects: objects["pod vllm-1"]["spec"]["volumes"][0]["configMap"].update(name="foreign-source"),
         ):
             objects = self.fixture()
             mutate(objects)

@@ -42,7 +42,9 @@ the Deployment template uses the renderer's default route path. Only a
 reviewed additional Pod-only `phorvex.ai/route-key` selector supplies the
 current Pod/ReplicaSet/EndpointSlice route originals to the renderer; any
 other selector mismatch refuses the candidate. A Ready EndpointSlice target
-marked terminating or non-serving also refuses. The private manifest records each original's exact
+marked terminating or non-serving also refuses. Both route paths require the
+current Pod's `vllm` and `guardrail` images and `guardrail-src` ConfigMap
+volume to match the Deployment/source originals. The private manifest records each original's exact
 bytes, hash, UID and resourceVersion. A failing read or ambiguous route emits
 no candidate directory.
 
