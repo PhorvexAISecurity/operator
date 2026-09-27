@@ -97,7 +97,7 @@ class Gateway:
 
     def policy(self):
         raw = self.policy_file.read_bytes()
-        if len(raw) > 32768:
+        if len(raw) > 65536:
             raise ValueError("policy exceeds bound")
         state = strict_json(raw)
         if raw != json.dumps(state, separators=(",", ":"), sort_keys=True).encode():

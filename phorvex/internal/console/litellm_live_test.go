@@ -14,7 +14,7 @@ func TestLiteLiveReviewedProfileRejectsMutableSourceAndRuntimeUIDs(t *testing.T)
 	image := "example.invalid/litellm@sha256:" + hash
 	profile := liteLLMLiveProfile{
 		Version: 2, SourceSHA256: hash, GatewayImage: image, ClientsSHA256: hash,
-		SeedSHA256: strings.Repeat("b", 64), PolicyName: "litellm-live-client",
+		SeedSHA256: strings.Repeat("b", 64), PolicyName: "litellm-defense",
 		ModelAlias:          "gpt-4o-mini",
 		EventCreator:        "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
 		AuditSourceIdentity: "reviewed-audit", MaxRunSeconds: 900,
@@ -79,6 +79,26 @@ func TestLiteLiveJournalNameIsScopedFixedRead(t *testing.T) {
 }
 
 func TestLiteLiveDefendedVerdictRequiresDurableTerminalAndRecord(t *testing.T) {
+	{
+		probe := &liteLLMLiveProbeResult{Status: "STOPPED_WITH_BENIGN_CONTINUITY"}
+		record := &attackRecord{LiteLLMLiveProbe: probe}
+		var evidence []byte
+		liteFinalizeProbe(record, probe, liteLiveSnapshot{}, nil,
+			func(raw []byte) error { evidence = append([]byte(nil), raw...); return nil },
+			func(r *attackRecord) error {
+				if r.Outcome != "DEFENDED" || !r.Actuated {
+					t.Fatal("proved defense was not persisted")
+				}
+				return nil
+			}, func(*attackRecord) {})
+		var saved struct {
+			Probe liteLLMLiveProbeResult `json:"probe"`
+		}
+		if err := json.Unmarshal(evidence, &saved); err != nil || saved.Probe.Accepted ||
+			!record.LiteLLMLiveProbe.Accepted || record.Outcome != "DEFENDED" {
+			t.Fatal("evidence-only receipt or final durable result differs")
+		}
+	}
 	for _, tc := range []struct {
 		name         string
 		terminalFail bool
@@ -91,10 +111,11 @@ func TestLiteLiveDefendedVerdictRequiresDurableTerminalAndRecord(t *testing.T) {
 			probe := &liteLLMLiveProbeResult{Status: "STOPPED_WITH_BENIGN_CONTINUITY"}
 			record := &attackRecord{LiteLLMLiveProbe: probe}
 			var terminal []byte
-			published, persisted := 0, 0
+			published, persisted, terminalWrites := 0, 0, 0
 			liteFinalizeProbe(record, probe, liteLiveSnapshot{Pods: []liteLivePod{{Name: "a"}, {Name: "b"}}}, nil,
 				func(raw []byte) error {
-					if tc.terminalFail {
+					terminalWrites++
+					if tc.terminalFail || terminalWrites > 1 {
 						return errors.New("injected terminal failure")
 					}
 					terminal = append([]byte(nil), raw...)
@@ -116,12 +137,17 @@ func TestLiteLiveDefendedVerdictRequiresDurableTerminalAndRecord(t *testing.T) {
 						t.Fatal("unproven defense published")
 					}
 				})
-			if published != 1 || persisted != 1 || record.Status != "partial" {
+			if published != 1 || persisted != 1 || terminalWrites != 1 || record.Status != "partial" {
 				t.Fatal("failed finalization not published as partial")
 			}
 			if tc.recordFail {
-				var saved liteLLMLiveProbeResult
-				if err := json.Unmarshal(terminal, &saved); err != nil || saved.Accepted {
+				var saved struct {
+					Kind                        string                 `json:"kind"`
+					Probe                       liteLLMLiveProbeResult `json:"probe"`
+					VerdictRequiresAttackRecord bool                   `json:"verdictRequiresAttackRecord"`
+				}
+				if err := json.Unmarshal(terminal, &saved); err != nil || saved.Probe.Accepted ||
+					saved.Kind != "litellm-live-evidence-v1" || !saved.VerdictRequiresAttackRecord {
 					t.Fatal("private terminal retained false success after record failure")
 				}
 			}
@@ -140,5 +166,53 @@ func TestLiteLiveSecondFirePreservesFirstRevocation(t *testing.T) {
 	after.Entries[0].OperationID = "rewritten-decision"
 	if litePriorEntriesPreserved(before, after) {
 		t.Fatal("second Fire silently rewrote first revocation")
+	}
+}
+
+func TestLiteLiveReadyEndpointsAcrossSlices(t *testing.T) {
+	pods := []liteLivePod{{Name: "first", UID: "uid-a"}, {Name: "second", UID: "uid-b"}}
+	ips := map[string]string{"uid-a": "10.0.0.1", "uid-b": "10.0.0.2"}
+	endpoint := func(uid, name, ip string) map[string]any {
+		return map[string]any{"targetRef": map[string]any{"kind": "Pod", "name": name, "uid": uid},
+			"conditions": map[string]any{"ready": true}, "addresses": []any{ip}}
+	}
+	slice := func(ep map[string]any) map[string]any {
+		return map[string]any{"ports": []any{map[string]any{"port": float64(4001), "protocol": "TCP"}},
+			"endpoints": []any{ep}}
+	}
+	items := []any{slice(endpoint("uid-a", "first", "10.0.0.1")), slice(endpoint("uid-b", "second", "10.0.0.2"))}
+	if err := liteReadyEndpointBindings(items, pods, ips); err != nil {
+		t.Fatalf("valid two-slice target inventory rejected: %v", err)
+	}
+	items = append(items, slice(endpoint("foreign", "other", "10.0.0.3")))
+	if err := liteReadyEndpointBindings(items, pods, ips); err == nil {
+		t.Fatal("foreign Ready endpoint accepted")
+	}
+	items = []any{slice(endpoint("uid-a", "first", "10.0.0.1")), slice(endpoint("uid-a", "first", "10.0.0.1"))}
+	if err := liteReadyEndpointBindings(items, pods, ips); err == nil {
+		t.Fatal("duplicate Ready target accepted")
+	}
+}
+
+func TestLiteLivePriorJournalMatchesActiveEntriesAndAborts(t *testing.T) {
+	active := strings.Repeat("a", 64)
+	aborted := strings.Repeat("b", 64)
+	snapshot := liteLiveSnapshot{Revision: 1, Entries: []liteLiveEntry{
+		{Active: true, ClientSHA256: active, OperationID: "selected-op"}}}
+	terminal := map[string]any{"phase": "terminal-full", "clientSHA256": active,
+		"operationId": "selected-op", "abortReason": ""}
+	noWrite := map[string]any{"phase": "aborted", "clientSHA256": aborted,
+		"operationId": "other-op", "abortReason": "definitive-policy-conflict"}
+	if prior, err := litePriorJournal(snapshot, []map[string]any{terminal, noWrite}); err != nil || len(prior) != 2 {
+		t.Fatalf("retained proved-no-write attempt rejected: %v", err)
+	}
+	bad := liteLiveSnapshot{Revision: 2, Entries: []liteLiveEntry{snapshot.Entries[0],
+		{Active: true, ClientSHA256: aborted, OperationID: "other-op"}}}
+	if _, err := litePriorJournal(bad, []map[string]any{terminal, noWrite}); err == nil {
+		t.Fatal("aborted hash became active")
+	}
+	if _, err := litePriorJournal(snapshot, []map[string]any{terminal,
+		{"phase": "prepared", "clientSHA256": aborted, "operationId": "other-op", "abortReason": ""}}); err == nil {
+		t.Fatal("unresolved prepared attempt accepted as prior history")
 	}
 }

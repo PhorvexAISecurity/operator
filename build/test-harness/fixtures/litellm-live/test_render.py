@@ -13,7 +13,7 @@ spec.loader.exec_module(render_module)
 def originals():
     deployment = {"kind": "Deployment", "metadata": {"name": "litellm", "namespace": "litellm"},
                   "spec": {"template": {"metadata": {"annotations": {"existing": "true"},
-                                                   "labels": {"app": "litellm"}},
+                                                   "labels": {"app": "litellm", "r6th.io/rotation-target": "true"}},
                                         "spec": {"containers": [{"name": "litellm", "env": [
                                             {"name": "LITELLM_MASTER_KEY", "value": "sk-private-source-only"}]}],
                                                  "volumes": [{"name": "cfg"}]}}}}
@@ -21,7 +21,13 @@ def originals():
                                                "uid": "service-uid"},
                "spec": {"selector": {"app": "litellm"},
                         "ports": [{"port": 4000, "targetPort": 4000}]}}
-    return deployment, service
+    policy = {"kind": "PhorvexPolicy", "metadata": {"name": "litellm-defense",
+              "namespace": "litellm", "uid": "select-uid", "generation": 30},
+              "spec": {"tenant": "litellm", "mode": "active",
+                       "selector": {"matchLabels": {"r6th.io/rotation-target": "true"}},
+                       "triggers": {"eventDriven": True, "reactiveOnly": True},
+                       "actions": {"enabled": ["rotate", "route-rotate"]}}}
+    return deployment, service, policy
 
 
 class RenderTests(unittest.TestCase):
@@ -31,20 +37,15 @@ class RenderTests(unittest.TestCase):
 
     def test_two_phase_render_preserves_secret_and_policy_projection(self):
         phase1, source_sha = render_module.render(self.seed_sha, self.image, "gpt-4o-mini")
-        self.assertEqual(len(phase1), 5)
+        self.assertEqual(len(phase1), 4)
         self.assertEqual(source_sha, hashlib.sha256(Path(render_module.GATEWAY_SOURCE).read_bytes()).hexdigest())
-        policy = phase1["phorvex-policy.json"]
-        self.assertEqual(policy["spec"]["selector"]["matchLabels"],
-                         {"phorvex.ai/litellm-live": "true"})
-        self.assertEqual(policy["spec"]["actions"]["enabled"],
-                         ["rotate", "quarantine", "litellm-client-revoke"])
-        self.assertTrue(policy["spec"]["triggers"]["reactiveOnly"])
+        self.assertNotIn("phorvex-policy.json", phase1)
         journal = phase1["protected-journal-configmap.json"]
         self.assertEqual(journal["metadata"]["namespace"], "phorvex-system")
         self.assertEqual(journal["data"]["receipts.json"], '{"receipts":[],"version":2}')
-        d, s = originals()
+        d, s, p = originals()
         objects, _ = render_module.render(self.seed_sha, self.image,
-                                          "gpt-4o-mini", d, s, "policy-uid")
+                                          "gpt-4o-mini", d, s, p, "policy-uid")
         self.assertEqual(len(objects), 7)
         self.assertEqual(objects["client-policy-configmap.json"]["data"]["state.json"],
                          '{"entries":[],"revision":0,"version":2}')
@@ -61,14 +62,23 @@ class RenderTests(unittest.TestCase):
         self.assertIn("/etc/phorvex-litellm-policy", [v["mountPath"] for v in sidecar["volumeMounts"]])
         self.assertIn("/etc/phorvex-litellm-seed", [v["mountPath"] for v in sidecar["volumeMounts"]])
         self.assertEqual(objects["service-json-patch.json"][-1]["value"], 4001)
+        policy_patch = objects["existing-policy-json-patch.json"]
+        self.assertEqual(policy_patch[-1], {"op": "add", "path": "/spec/actions/enabled/-",
+                                            "value": "litellm-client-revoke"})
+        self.assertEqual(policy_patch[-2]["value"], ["rotate", "route-rotate"])
+        self.assertNotIn("/spec/tenant", [op["path"] for op in policy_patch])
 
     def test_refuses_incomplete_or_changed_route(self):
-        d, s = originals()
+        d, s, p = originals()
         with self.assertRaisesRegex(ValueError, "phase-two"):
-            render_module.render(self.seed_sha, self.image, "gpt-4o-mini", d, None, "policy-uid")
+            render_module.render(self.seed_sha, self.image, "gpt-4o-mini", d, None, p, "policy-uid")
         s["spec"]["ports"][0]["targetPort"] = 4001
         with self.assertRaisesRegex(ValueError, "differs"):
-            render_module.render(self.seed_sha, self.image, "gpt-4o-mini", d, s, "policy-uid")
+            render_module.render(self.seed_sha, self.image, "gpt-4o-mini", d, s, p, "policy-uid")
+        s["spec"]["ports"][0]["targetPort"] = 4000
+        p["metadata"]["name"] = "parallel-policy"
+        with self.assertRaisesRegex(ValueError, "owner policy"):
+            render_module.render(self.seed_sha, self.image, "gpt-4o-mini", d, s, p, "policy-uid")
         with self.assertRaisesRegex(ValueError, "authority"):
             render_module.render("not-a-sha", self.image, "gpt-4o-mini")
 
