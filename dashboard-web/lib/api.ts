@@ -279,6 +279,8 @@ export const api = {
   vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
   voiceMemoryFire: (scenario: "ai2-agent-memory-contamination", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/live/fire", { scenario }, lens),
+  voiceAgencyFire: (scenario: "ai2-agent-excessive-agency", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/agency/live/fire", { scenario }, lens),
   litellmLiveFire: (scenario: "ai2-unbounded-consumption" | "ai2-query-extraction", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/live/fire", { scenario }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
@@ -494,6 +496,7 @@ export interface AttackResult {
   guardrailEffectProbe?: GuardrailEffectProbeResult;
   guardrailOutputProbe?: GuardrailOutputProbeResult;
   voiceMemoryProbe?: VoiceMemoryProbeResult;
+  voiceAgencyProbe?: VoiceAgencyProbeResult;
   litellmLiveProbe?: LiteLLMLiveProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
   decisionTraceEvidence?: AttackDecisionEvidence[];
@@ -527,6 +530,21 @@ export interface VoiceMemoryProbeResult {
   actuated: boolean; ruleSHA256?: string; revision?: number;
   repeatPoisonObserved: boolean; repeatBenignObserved: boolean;
   cleanup: string; issue?: string;
+}
+export interface VoiceAgencyProbeResult {
+  schema: "voice-agency-live-v1";
+  status: "UNKNOWN" | "LANDED" | "DEFENDED";
+  scenarioId: "ai2-agent-excessive-agency"; caseId: string;
+  signalMode: "NONE" | "TEST_INJECTED_AFTER_FIRST_LOSS";
+  defenseScope: string; runIdSHA256: string; targetPodUID?: string;
+  deploymentUID?: string; policyUID?: string; sourceSHA256?: string;
+  attackCallSIDHash?: string; assertedCallerSHA256?: string; otherOrderSHA256?: string;
+  firstModelCallback: boolean; firstCRMRefund: boolean; firstLanded: boolean;
+  eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  protectedJournalTerminal: boolean; everyServingPodEffective: boolean; recoveredAfterPending: boolean;
+  repeatCallbackDenied: boolean; repeatCRMRefundAbsent: boolean;
+  ownOrderControlMaintained: boolean; benignStatusMaintained: boolean;
+  cleanup: string; issues: string[];
 }
 export interface GuardrailEffectProbeResult {
   schema: "guardrail-effect-probe-result-v1";

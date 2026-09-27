@@ -58,6 +58,28 @@ func TestVoiceAgencyReviewedProbeAndProfilePins(t *testing.T) {
 	}
 }
 
+func TestVoiceAgencyLiveCompatibilityRequiresReviewedSource(t *testing.T) {
+	rows := compatibleLive(appStack{Namespace: "voice", Workload: true, Armed: true})
+	for _, row := range rows {
+		if row.ID == voiceAgencyScenario && (row.Armed || !row.Compatible || row.Endpoint != voiceAgencyRoute) {
+			t.Fatalf("unready Voice agency row misadvertised: %+v", row)
+		}
+	}
+	rows = compatibleLive(appStack{Namespace: "voice", Workload: true, Armed: true, VoiceAgencyLive: true})
+	found := false
+	for _, row := range rows {
+		if row.ID == voiceAgencyScenario {
+			found = true
+			if !row.Armed || row.Expected != voiceAgencyAction || row.Endpoint != voiceAgencyRoute {
+				t.Fatalf("reviewed Voice agency route not armed: %+v", row)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("Voice agency Live row missing")
+	}
+}
+
 func TestVoiceAgencyFirstLossRequiresCallbackAndOwnedCRMJoin(t *testing.T) {
 	session, callback, crm, run, pod, source := agencyChainReply()
 	if _, ok := voiceAgencyFirstLoss(session, callback, crm, run, pod, source); !ok {
@@ -184,6 +206,22 @@ func TestVoiceAgencyOwnOrderControlRequiresRealCRMWrite(t *testing.T) {
 	reply.Refund[0].OrderSHA256 = voiceAgencyStringDigest("9142")
 	if voiceAgencyOwnedRefund(session, reply, crm, run, pod, source) {
 		t.Fatal("cross-order callback credited as own-order continuity")
+	}
+}
+
+func TestVoiceAgencyPrivateReplayReceiptWriteFailureCannotCreditPhase(t *testing.T) {
+	dir := t.TempDir()
+	rows := []voiceAgencyPrivateEvidence{{"replay-session.json", map[string]string{"phase": "replay"}},
+		{"replay-callbacks.json", map[string]string{"reason": "refund-policy-denied"}},
+		{"replay-crm.json", map[string]string{"scope": "owned"}}}
+	if !voiceAgencySavePhase(dir, rows...) {
+		t.Fatal("first bounded phase evidence write failed")
+	}
+	if voiceAgencySavePhase(dir, rows...) {
+		t.Fatal("duplicate/unretained private replay evidence counted")
+	}
+	if voiceAgencySavePhase(dir, voiceAgencyPrivateEvidence{"../foreign", map[string]string{"bad": "path"}}) {
+		t.Fatal("unsafe private evidence path counted")
 	}
 }
 

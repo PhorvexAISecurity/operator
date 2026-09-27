@@ -1,6 +1,6 @@
 import { api, AttackResult, CompatEntry, Lens, VllmAttackAction } from "@/lib/api";
 
-type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } |
+type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } | { kind: "voice-agency" } |
   { kind: "litellm"; scenario: "ai2-unbounded-consumption" | "ai2-query-extraction" } |
   { kind: "foothold"; namespace: string; action: "foothold" | "clear" };
 
@@ -18,6 +18,8 @@ export function liveAttackRoute(entry: Pick<CompatEntry, "id" | "endpoint">, nam
     return { kind: "vllm", action: entry.id as VllmAttackAction };
   if (entry.endpoint === "/api/voice/live/fire" && namespace === "voice" && entry.id === "ai2-agent-memory-contamination")
     return { kind: "voice" };
+  if (entry.endpoint === "/api/voice/agency/live/fire" && namespace === "voice" && entry.id === "ai2-agent-excessive-agency")
+    return { kind: "voice-agency" };
   if (entry.endpoint === "/api/litellm/live/fire" && namespace === "litellm" &&
       (entry.id === "ai2-unbounded-consumption" || entry.id === "ai2-query-extraction"))
     return { kind: "litellm", scenario: entry.id };
@@ -28,6 +30,7 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
   switch (route.kind) {
     case "vllm": return api.vllmAttack(route.action, lens);
     case "voice": return api.voiceMemoryFire("ai2-agent-memory-contamination", lens);
+    case "voice-agency": return api.voiceAgencyFire("ai2-agent-excessive-agency", lens);
     case "litellm": return api.litellmLiveFire(route.scenario, lens);
     case "foothold": return api.workloadAttack(route.namespace, route.action, lens);
   }
@@ -35,7 +38,7 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
 
 // Voice and LiteLLM have 900-second server observation windows; leave a bounded margin for publication.
 export function liveAttackPollBudgetMs(route: LiveRoute): number {
-  return route.kind === "voice" || route.kind === "litellm" ? 960_000 : 150_000;
+  return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "litellm" ? 960_000 : 150_000;
 }
 
 export function liveAttackVerdict(result: AttackResult) {

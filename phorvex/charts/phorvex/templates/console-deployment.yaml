@@ -167,6 +167,23 @@
 {{- end }}
 {{- if ne .Values.phorvex.console.litellmLive.journalName "phorvex-litellm-revoke-journal" }}{{- fail "console.litellmLive.journalName invalid" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
+{{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.voiceAgencyLive requires phorvex-system release namespace" }}{{- end }}
+{{- if not .Values.phorvex.voiceRefund.enabled }}{{- fail "console.voiceAgencyLive requires voiceRefund.enabled" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceAgencyLive requires the profile-bound console service account" }}{{- end }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
+{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}
+{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.voiceAgencyLive requires exact console creator in trustedDetectors" }}{{- end }}
+{{- $name := required "console.voiceAgencyLive.configMapName required" .Values.phorvex.console.voiceAgencyLive.configMapName }}
+{{- if or (gt (len $name) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name)) }}{{- fail "console.voiceAgencyLive.configMapName invalid" }}{{- end }}
+{{- $sha := required "console.voiceAgencyLive.profileSHA256 required" .Values.phorvex.console.voiceAgencyLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.voiceAgencyLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- $uid := required "console.voiceAgencyLive.deploymentUID required" .Values.phorvex.console.voiceAgencyLive.deploymentUID }}
+{{- if not (regexMatch "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" $uid) }}{{- fail "console.voiceAgencyLive.deploymentUID must be lowercase UUID" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -299,6 +316,12 @@ spec:
         {{- if .Values.phorvex.console.litellmLive.enabled }}
         - name: PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.litellmLive.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.voiceAgencyLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
+        - name: PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.voiceAgencyLive.profileSHA256 | quote }}
         {{- end }}
         {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
@@ -674,6 +697,12 @@ spec:
           mountPath: /etc/phorvex-litellm-status
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
+        - name: voice-agency-reviewed-profile
+          mountPath: /etc/phorvex-voice-agency/profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -836,6 +865,15 @@ spec:
           items:
           - key: token
             path: token
+      {{- end }}
+      {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
+      - name: voice-agency-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.voiceAgencyLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

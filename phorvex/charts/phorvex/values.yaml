@@ -427,6 +427,13 @@ phorvex:
       seedSecret: ""
       statusSecret: ""
       journalName: phorvex-litellm-revoke-journal
+    # Reviewed direct Voice/CRM agency trial. A Deployment UID pin limits
+    # read-only journal access to that one Voice rollout and revisions 1..256.
+    voiceAgencyLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      deploymentUID: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:
