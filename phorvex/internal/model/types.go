@@ -112,6 +112,9 @@ const (
 	// ActionVoiceOutputPolicyActivate blocks one observed synthetic hidden-context
 	// marker before Voice speech and assistant transcript persistence.
 	ActionVoiceOutputPolicyActivate Action = "voice-output-policy-activate"
+	// ActionVoiceMCPToolPin binds an observed Voice MCP tool response to an
+	// exact reviewed tool authority after the normal selector chooses it.
+	ActionVoiceMCPToolPin Action = "voice-mcp-tool-pin"
 	// ActionLiteLLMClientRevoke denies one observed, owned client credential at
 	// the installed LiteLLM admission gateway. It does not revoke the master key.
 	ActionLiteLLMClientRevoke Action = "litellm-client-revoke"
@@ -148,6 +151,7 @@ var MutatingActions = []Action{
 	ActionLiteLLMClientRevoke,
 	ActionVoiceRefundPairDeny,
 	ActionVoiceOutputPolicyActivate,
+	ActionVoiceMCPToolPin,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map

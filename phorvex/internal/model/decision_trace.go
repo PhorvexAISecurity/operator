@@ -48,6 +48,8 @@ const (
 	// DecisionActionVocabularyLive19 appends exact Voice refund-pair denial.
 	DecisionActionVocabularyLive19 = "v5-live19"
 	DecisionActionVocabularyLive20 = "v6-live20"
+	// Live21 appends the Voice MCP tool pin without changing historical rows.
+	DecisionActionVocabularyLive21 = "v7-live21"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -95,6 +97,8 @@ func DecisionTraceActions(version string) ([]Action, error) {
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny), nil
 	case DecisionActionVocabularyLive20:
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate), nil
+	case DecisionActionVocabularyLive21:
+		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}
