@@ -120,7 +120,8 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 		return s, err
 	}
 	expectedAbsent := availabilityJournalShouldBeAbsent(e.p, name)
-	journalRaw, journalUID, journalRV, journalAbsent, journalErr := availabilityJournalReceipt(journal, e.p.Context, e.p.Fixture.GuardrailJournalName, expectedAbsent)
+	journalRaw, journalUID, journalRV, journalAbsent, journalErr := availabilityJournalReceipt(journal, e.p.Context, e.p.Fixture.GuardrailJournalName,
+		expectedAbsent || (e.p.Fixture.JournalInitiallyAbsent && availabilityIsJournalAbsence(journal, e.p.Context, e.p.Fixture.GuardrailJournalName)))
 	if journalErr != nil {
 		return s, journalErr
 	}

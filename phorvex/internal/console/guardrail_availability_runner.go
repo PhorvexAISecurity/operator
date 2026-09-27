@@ -255,8 +255,9 @@ func availabilityJournalShouldBeAbsent(f guardrailAvailabilityProfile, label str
 
 // A zero-byte successful exact-name GET is retained as a typed private original.
 // A ConfigMap at that name, including one created between two reads, cannot
-// satisfy the expected-absence branch. After dispatch the fresh object must
-// have its own UID, resource version, and parsed native receipt.
+// satisfy the expected-absence branch. Continued absence after dispatch is
+// readable as no-effect evidence; selected-effect credit separately requires
+// a fresh UID, resource version, and parsed native receipt.
 func availabilityJournalReceipt(journal map[string]any, context, name string, expectedAbsent bool) (json.RawMessage, string, string, bool, error) {
 	if expectedAbsent {
 		if !availabilityIsJournalAbsence(journal, context, name) {
@@ -616,7 +617,7 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if e != nil {
 		return out, e
 	}
-	journal, e := w.journal(label+"-journal", availabilityJournalShouldBeAbsent(w.p, label))
+	journal, e := w.journal(label+"-journal", f.JournalInitiallyAbsent)
 	if e != nil {
 		return out, e
 	}
@@ -672,7 +673,9 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if e != nil {
 		return out, e
 	}
-	out.Receipt, out.JournalUID, out.JournalResourceVersion, out.JournalAbsent, e = availabilityJournalReceipt(journal, w.p.Context, f.GuardrailJournalName, availabilityJournalShouldBeAbsent(w.p, label))
+	requireAbsent := availabilityJournalShouldBeAbsent(w.p, label)
+	out.Receipt, out.JournalUID, out.JournalResourceVersion, out.JournalAbsent, e = availabilityJournalReceipt(journal, w.p.Context, f.GuardrailJournalName,
+		requireAbsent || (f.JournalInitiallyAbsent && availabilityIsJournalAbsence(journal, w.p.Context, f.GuardrailJournalName)))
 	if e != nil {
 		return out, e
 	}
@@ -857,7 +860,7 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	if e != nil {
 		return out, e
 	}
-	journal, e := w.journal(label+"-journal", availabilityJournalShouldBeAbsent(w.p, label))
+	journal, e := w.journal(label+"-journal", w.p.Fixture.JournalInitiallyAbsent)
 	if e != nil {
 		return out, e
 	}
@@ -898,7 +901,9 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	if e != nil {
 		return out, e
 	}
-	receipt, journalUID, journalRV, absent, e := availabilityJournalReceipt(journal, w.p.Context, w.p.Fixture.GuardrailJournalName, availabilityJournalShouldBeAbsent(w.p, label))
+	requireAbsent := availabilityJournalShouldBeAbsent(w.p, label)
+	receipt, journalUID, journalRV, absent, e := availabilityJournalReceipt(journal, w.p.Context, w.p.Fixture.GuardrailJournalName,
+		requireAbsent || (w.p.Fixture.JournalInitiallyAbsent && availabilityIsJournalAbsence(journal, w.p.Context, w.p.Fixture.GuardrailJournalName)))
 	if e != nil {
 		return out, e
 	}

@@ -512,6 +512,29 @@ func TestGuardrailEffectOriginalReaderReplaysAbsenceAndDualSource(t *testing.T) 
 	if _, err := e.snapshot(label); err != nil {
 		t.Fatalf("exact original absence and mounted source refused: %v", err)
 	}
+	// No selected action is a valid observation. Continued exact-name absence
+	// after the event stays uncredited as an actuator effect, but remains
+	// readable for the brain/no-selection verdict.
+	const afterLabel = "after-canary-pre"
+	for _, suffix := range []string{"-snapshot.json", "-runtime.json"} {
+		e.files[afterLabel+suffix] = append([]byte(nil), e.files[label+suffix]...)
+	}
+	for _, suffix := range []string{"-target.json", "-source.json", "-journal.json"} {
+		var original []byte
+		for file, raw := range e.files {
+			if strings.HasSuffix(file, label+suffix) {
+				original = raw
+				break
+			}
+		}
+		if original == nil {
+			t.Fatal("original Kubernetes receipt missing")
+		}
+		e.files["kube-004-"+afterLabel+suffix] = append([]byte(nil), original...)
+	}
+	if _, err := e.snapshot(afterLabel); err != nil {
+		t.Fatalf("stable post-event absence should remain readable: %v", err)
+	}
 	for _, tc := range []struct {
 		name string
 		file string
