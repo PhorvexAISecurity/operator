@@ -86,6 +86,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if a == model.ActionSensitiveOutputPolicyActivate {
 		return outputPolicyCapability(ctx, n.Reader, n.JournalNamespace, t)
 	}
+	if a == model.ActionLiteLLMClientRevoke {
+		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
+	}
 	// Transport is checked before its dependent allocation evidence.
 	if a == model.ActionMIGRebind && !NodeExecWired() {
 		return false, ReasonTransportUnwired

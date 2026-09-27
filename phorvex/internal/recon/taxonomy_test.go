@@ -173,6 +173,11 @@ func TestNoDeadFactKinds(t *testing.T) {
 				PolicyName: "guardrail-output-fixture", PolicyUID: "policy-uid", PolicyGeneration: 1,
 				RuleSHA256: "rule-hash", ProxySourceSHA256: "proxy-hash", SupportSourceSHA256: "support-hash",
 				ProxyImageID: "proxy-image", SupportImageID: "support-image"}}},
+		{Pod: model.Pod{Namespace: "litellm", Name: "owned-client", UID: "owned-uid",
+			LiteLLMClientObservation: &model.LiteLLMClientObservation{EventName: "event", EventUID: "event-uid",
+				CreatorIdentity: "console", TargetPodUID: "owned-uid", PeerPodUID: "peer-uid",
+				ClientSHA256: "client-hash", ConfigMapUID: "cm-uid", ServiceUID: "service-uid",
+				GatewaySourceSHA256: "source-hash", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

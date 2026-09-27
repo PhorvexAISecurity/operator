@@ -464,6 +464,7 @@ const (
 	ActionRequestDrain                  ActionType = "request-drain"
 	ActionGuardrailRotate               ActionType = "guardrail-rotate"
 	ActionSensitiveOutputPolicyActivate ActionType = "sensitive-output-policy-activate"
+	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
 	ActionDisable                       ActionType = "disable"
 )

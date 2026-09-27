@@ -67,8 +67,10 @@ LEGACY_MUTATING_ACTIONS = [
     "warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace",
     "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate",
 ]
-MUTATING_ACTIONS = LEGACY_MUTATING_ACTIONS + ["sensitive-output-policy-activate"]
+OUTPUT16_ACTIONS = LEGACY_MUTATING_ACTIONS + ["sensitive-output-policy-activate"]
+MUTATING_ACTIONS = OUTPUT16_ACTIONS + ["litellm-client-revoke"]
 ACTION_VOCABULARY_OUTPUT16 = "v2-output16"
+ACTION_VOCABULARY_LITELLM17 = "v3-litellm17"
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
 
 
@@ -81,6 +83,8 @@ def trace_action_vocabulary(tr: dict) -> tuple[list[str] | None, str | None]:
     if tr.get("schemaVersion") == TRACE_V2:
         return None, "decisionTrace.actionVocabularyVersion is not defined for v2 traces"
     if version == ACTION_VOCABULARY_OUTPUT16:
+        return OUTPUT16_ACTIONS, None
+    if version == ACTION_VOCABULARY_LITELLM17:
         return MUTATING_ACTIONS, None
     return None, f"decisionTrace.actionVocabularyVersion={version!r} is unknown"
 

@@ -3089,28 +3089,30 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
-			AdapterObservation:      v.Pod.AdapterObservation,
-			OutputPolicyObservation: v.Pod.OutputPolicyObservation,
-			PolicyName:              pol.PolicyName,
-			PolicyUID:               pol.PolicyUID,
-			PolicyGeneration:        pol.PolicyGeneration,
-			MaxGracePeriodSeconds:   pol.MaxGracePeriodSeconds,
-			Tenant:                  pol.Tenant,
-			Namespace:               decisions[i].Namespace,
-			Pod:                     decisions[i].Pod,
-			Action:                  decisions[i].Action,
-			Reason:                  decisions[i].Reason,
-			Score:                   score,
-			CoverageValue:           coverageValue,
-			TargetUID:               v.Pod.UID,
-			TickID:                  pol.TickID,
+			AdapterObservation:       v.Pod.AdapterObservation,
+			OutputPolicyObservation:  v.Pod.OutputPolicyObservation,
+			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
+			PolicyName:               pol.PolicyName,
+			PolicyUID:                pol.PolicyUID,
+			PolicyGeneration:         pol.PolicyGeneration,
+			MaxGracePeriodSeconds:    pol.MaxGracePeriodSeconds,
+			Tenant:                   pol.Tenant,
+			Namespace:                decisions[i].Namespace,
+			Pod:                      decisions[i].Pod,
+			Action:                   decisions[i].Action,
+			Reason:                   decisions[i].Reason,
+			Score:                    score,
+			CoverageValue:            coverageValue,
+			TargetUID:                v.Pod.UID,
+			TickID:                   pol.TickID,
 			ServingObservation: &actuator.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
 			},
 		}
 		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate ||
-			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate {
+			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
+			decisions[i].Action == model.ActionLiteLLMClientRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}

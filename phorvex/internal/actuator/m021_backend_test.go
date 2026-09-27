@@ -273,6 +273,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || why != "output-policy-authority-unavailable" {
 				t.Fatalf("output policy requires a target and policy authority: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionLiteLLMClientRevoke:
+			if ok || !registered || !strings.Contains(why, "litellm-client-revoke:") {
+				t.Fatalf("owned-client gateway requires exact live authority: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		default:
 			if ok != registered {
 				t.Fatalf("native %s: support=%v but handler registered=%v (%s)", a, ok, registered, why)

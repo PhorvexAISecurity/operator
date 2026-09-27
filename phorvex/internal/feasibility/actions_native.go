@@ -20,7 +20,7 @@ func isAIMove(a model.Action) bool {
 	case model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
 		model.ActionKVReset, model.ActionEndpointRotate,
 		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
-		model.ActionSensitiveOutputPolicyActivate:
+		model.ActionSensitiveOutputPolicyActivate, model.ActionLiteLLMClientRevoke:
 		return true
 	}
 	return false
@@ -45,6 +45,8 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 		available = view.Pod.HasBoundAdapterObservation()
 	case model.ActionSensitiveOutputPolicyActivate:
 		available = view.Pod.HasBoundSensitiveOutputObservation()
+	case model.ActionLiteLLMClientRevoke:
+		available = view.Pod.HasBoundLiteLLMClientObservation()
 	default:
 		available = view.Pod.HasServingDeclaration()
 	}

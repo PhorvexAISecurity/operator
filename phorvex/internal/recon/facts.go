@@ -105,6 +105,10 @@ const (
 	// until its preinstalled exact-field policy is activated. First loss is
 	// irreversible; this fact describes only the repeat path.
 	FactSensitiveOutputExposure = "sensitiveOutputExposure"
+	// FactLiteLLMOwnedClientChannel is the repeat-use capability of one
+	// synthetic client credential at the installed admission gateway. It does
+	// not represent copied master-key knowledge or prior completions.
+	FactLiteLLMOwnedClientChannel = "litellmOwnedClientChannel"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement

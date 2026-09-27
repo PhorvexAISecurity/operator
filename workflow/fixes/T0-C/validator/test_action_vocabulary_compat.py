@@ -39,9 +39,18 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
         self.assertIn("unknown", "; ".join(validator.v3_action_status(null)))
 
     def test_new_marked_sixteen_is_accepted(self):
-        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
+        current = self.trace(validator.OUTPUT16_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
         self.assertEqual(validator.v3_action_status(current), [])
         self.assertEqual(validator.check_ordering(current).status, validator.PASS)
+        expanded = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
+        self.assertIn("want 16", "; ".join(validator.v3_action_status(expanded)))
+
+    def test_marked_seventeen_is_accepted_without_reinterpreting_sixteen(self):
+        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LITELLM17)
+        self.assertEqual(validator.v3_action_status(current), [])
+        self.assertEqual(validator.check_ordering(current).status, validator.PASS)
+        prior = self.trace(validator.OUTPUT16_ACTIONS, validator.ACTION_VOCABULARY_LITELLM17)
+        self.assertIn("want 17", "; ".join(validator.v3_action_status(prior)))
 
     def test_new_marked_fifteen_and_unknown_marker_are_refused(self):
         incomplete = self.trace(validator.LEGACY_MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
