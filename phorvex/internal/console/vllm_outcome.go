@@ -408,6 +408,13 @@ type vllmPodState struct {
 		ResourceVersion string             `json:"resourceVersion"`
 		Labels          *map[string]string `json:"labels"`
 		Annotations     *map[string]string `json:"annotations"`
+		OwnerReferences []struct {
+			APIVersion string `json:"apiVersion"`
+			Kind       string `json:"kind"`
+			Name       string `json:"name"`
+			UID        string `json:"uid"`
+			Controller *bool  `json:"controller"`
+		} `json:"ownerReferences"`
 	} `json:"metadata"`
 	Spec struct {
 		Containers []struct {

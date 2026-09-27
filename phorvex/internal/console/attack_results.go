@@ -270,6 +270,36 @@ func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
 	return s.snapshotBaselineForOwner(ns, pod, s.firstDeploy(ns), "", s.podAnno(ns, pod, "metadata.uid"))
 }
 
+// A vLLM observation is bound to the selected Pod's controller. Other
+// Deployments in the namespace cannot supply its availability baseline.
+func (s *Server) snapshotVLLMBaseline(pod vllmPodState) defenseBaseline {
+	kind, name, uid := s.vllmPodWorkloadOwner(pod)
+	return s.snapshotBaselineForOwnerKind(vllmAttackNS, pod.Metadata.Name, kind, name, uid, pod.Metadata.UID)
+}
+
+func (s *Server) vllmPodWorkloadOwner(pod vllmPodState) (string, string, string) {
+	if len(pod.Metadata.OwnerReferences) != 1 {
+		return "", "", ""
+	}
+	owner := pod.Metadata.OwnerReferences[0]
+	if owner.APIVersion != "apps/v1" || owner.Kind != "ReplicaSet" || owner.Name == "" || owner.UID == "" || owner.Controller == nil || !*owner.Controller {
+		return "", "", ""
+	}
+	var rs appsv1.ReplicaSet
+	if err := s.scenarioObject(vllmAttackNS, "replicaset", owner.Name, &rs); err != nil || rs.Namespace != vllmAttackNS || rs.Name != owner.Name || string(rs.UID) != owner.UID || rs.ResourceVersion == "" || rs.DeletionTimestamp != nil || len(rs.OwnerReferences) != 1 {
+		return "", "", ""
+	}
+	depRef := rs.OwnerReferences[0]
+	if depRef.APIVersion != "apps/v1" || depRef.Kind != "Deployment" || depRef.Name == "" || depRef.UID == "" || depRef.Controller == nil || !*depRef.Controller {
+		return "", "", ""
+	}
+	var dep appsv1.Deployment
+	if err := s.scenarioObject(vllmAttackNS, "deployment", depRef.Name, &dep); err != nil || dep.Namespace != vllmAttackNS || dep.Name != depRef.Name || dep.UID != depRef.UID || dep.ResourceVersion == "" || dep.DeletionTimestamp != nil {
+		return "", "", ""
+	}
+	return "Deployment", dep.Name, string(dep.UID)
+}
+
 // Exact catalogue targets use the selected Deployment. A namespace-first
 // Deployment would silently report an unrelated business workload's uptime.
 func (s *Server) snapshotBaselineForOwner(ns, pod, deploy, ownerUID, podUID string) defenseBaseline {
@@ -589,7 +619,7 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 		s.recordStateError(err)
 	}
 	deploy := base.deploy
-	if deploy == "" && base.ownerUID == "" {
+	if deploy == "" && base.ownerUID == "" && evidenceKind != "vllm-in-place-effect" && evidenceKind != "vllm-unsupported-stimulus" {
 		deploy = s.firstDeploy(ns)
 	}
 	r := &attackRecord{
@@ -623,7 +653,9 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 	}
 	// capture value-at-risk NOW (the attacked pod's node still exists; it may be rotated away before
 	// the watcher finishes) so the cost is grounded in the real node price, not the cluster fallback.
-	r.Cost.ValueAtRisk = s.nodeAnnualCost("", ns, pod)
+	if evidenceKind != "vllm-in-place-effect" && evidenceKind != "vllm-unsupported-stimulus" {
+		r.Cost.ValueAtRisk = s.nodeAnnualCost("", ns, pod)
+	}
 	r = cloneAttackRecord(r) // detach the handler's baseline maps before the watcher owns them
 	publishAttack(r)
 	interval := s.cfg.AttackWatchInterval

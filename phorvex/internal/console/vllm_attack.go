@@ -153,7 +153,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	// Snapshot the baseline before any producer or detector stimulus. The exact UID comes from
 	// the strict Pod JSON read above; the legacy convenience probes supply only optional context.
-	base := s.snapshotBaseline(vllmAttackNS, pod)
+	base := s.snapshotVLLMBaseline(target)
 	base.uid = targetUID
 	base.epoch = stringMapValue(target.Metadata.Annotations, "phorvex.ai/adapter-epoch")
 	base.kvEpoch = stringMapValue(target.Metadata.Annotations, "phorvex.ai/kv-reset-epoch")

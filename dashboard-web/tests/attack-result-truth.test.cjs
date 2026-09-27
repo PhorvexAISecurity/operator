@@ -42,6 +42,14 @@ test("catalogue signal remains unscored despite a contradictory legacy outcome",
   assert.equal(attackCSVActuator({ ...row, phorvexAction: "rotate", responseAction: "rotate", decisionEvidence: { correlation: "exact-event-uid", selected: true, action: "rotate" } }), "");
 });
 
+test("vLLM effect and unsupported observations export no invented availability or cost", () => {
+  for (const evidenceKind of ["vllm-in-place-effect", "vllm-unsupported-stimulus"]) {
+    const row = attackCSVRow({ ...base, evidenceKind, producerRoute: "/api/vllm/attack", resultSchemaVersion: "vllm-effect-v1", uptimeBefore: 0, uptimeDip: 0, uptimeAfter: 0,
+      cost: { without: 0, r6: 0, with: 0, savings: 0 } });
+    assert.deepEqual(row.slice(10, 17), Array(7).fill(""));
+  }
+});
+
 test("synthetic detector signal v2 remains unscored despite contradictory outcome labels", () => {
   const row = {
     ...base,
