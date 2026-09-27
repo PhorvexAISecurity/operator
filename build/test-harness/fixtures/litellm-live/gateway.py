@@ -526,6 +526,10 @@ class PublicHandler(BaseHTTPRequestHandler):
             if len(body) > response_bound:
                 self.respond(502, b'{"error":{"code":"upstream_bound"}}')
                 return
+            if output is not None and output[3] and upstream.status != 200:
+                # Never relay an active objective's unexamined error body.
+                self.respond(502, b'{"error":{"code":"output_upstream_error"}}')
+                return
             if request is not None and upstream.status == 200:
                 try:
                     result = strict_json(body)
@@ -567,6 +571,9 @@ class PublicHandler(BaseHTTPRequestHandler):
                     self.respond(502, b'{"error":{"code":"output_policy_transform_failed"}}')
                     return
             content_type = upstream.getheader("Content-Type", "application/json")
+            if output is not None and output[3] and output[2] in content_type:
+                self.respond(502, b'{"error":{"code":"output_header_invalid"}}')
+                return
             self.respond(upstream.status, body, content_type)
         except (OSError, TimeoutError, http.client.HTTPException):
             self.respond(502, b'{"error":{"code":"upstream_unavailable"}}')
