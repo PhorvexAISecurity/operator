@@ -3011,10 +3011,19 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if decisions[i].Action == model.ActionSensitiveOutputPolicyActivate &&
-			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "") {
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
+			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
+			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
-			stampDispatch(model.DispatchNotAttempted, "sensitive-output-selection-id-unavailable")
+			reason := "sensitive-output-selection-id-unavailable"
+			if decisions[i].Action == model.ActionVoiceMemoryNoteRevoke {
+				reason = "voice-memory-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionAdapterRotate {
+				reason = "adapter-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
+				reason = "litellm-client-selection-id-unavailable"
+			}
+			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
 		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
@@ -3101,6 +3110,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		request := actuator.Request{
 			AdapterObservation:       v.Pod.AdapterObservation,
 			OutputPolicyObservation:  v.Pod.OutputPolicyObservation,
+			VoiceMemoryObservation:   v.Pod.VoiceMemoryObservation,
 			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
 			PolicyName:               pol.PolicyName,
 			PolicyUID:                pol.PolicyUID,
@@ -3120,8 +3130,9 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
 			},
 		}
-		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate ||
+		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate || decisions[i].Action == model.ActionAdapterRotate ||
 			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
+			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID

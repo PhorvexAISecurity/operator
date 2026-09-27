@@ -37,9 +37,14 @@ const (
 	// containing sensitive-output-policy-activate. An absent marker retains the
 	// frozen 15-action historical vocabulary, regardless of future actions.
 	DecisionActionVocabularyOutput16 = "v2-output16"
+	// DecisionActionVocabularyVoice17 adds the Voice note quarantine while
+	// retaining both historical vocabularies for exact trace replay.
+	DecisionActionVocabularyVoice17 = "v3-voice17"
 	// DecisionActionVocabularyLiteLLM17 appends the owned client-channel action
 	// without reinterpreting historical 15- or 16-action traces.
 	DecisionActionVocabularyLiteLLM17 = "v3-litellm17"
+	// DecisionActionVocabularyLive18 identifies the combined Voice and LiteLLM order.
+	DecisionActionVocabularyLive18 = "v4-live18"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -77,8 +82,12 @@ func DecisionTraceActions(version string) ([]Action, error) {
 		return actions, nil
 	case DecisionActionVocabularyOutput16:
 		return append(actions, ActionSensitiveOutputPolicyActivate), nil
+	case DecisionActionVocabularyVoice17:
+		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke), nil
 	case DecisionActionVocabularyLiteLLM17:
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionLiteLLMClientRevoke), nil
+	case DecisionActionVocabularyLive18:
+		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

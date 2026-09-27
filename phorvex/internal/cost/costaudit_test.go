@@ -90,6 +90,7 @@ func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
 		model.ActionModelShardReplace:             4.00,
 		model.ActionAdapterRotate:                 0.25,
 		model.ActionSensitiveOutputPolicyActivate: 0.25,
+		model.ActionVoiceMemoryNoteRevoke:         0.25,
 		model.ActionLiteLLMClientRevoke:           0.25,
 		model.ActionRequestDrain:                  0.10,
 		model.ActionGuardrailRotate:               0.20,

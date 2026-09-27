@@ -63,7 +63,7 @@ func capFleet() ([]*model.WorkloadView, Witness) {
 func TestCapable_AllPredicatesGreen(t *testing.T) {
 	views, wit := capFleet()
 	for action := range AICapabilityActions {
-		if action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionLiteLLMClientRevoke {
+		if action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionLiteLLMClientRevoke {
 			continue // unlike generic AI actions, this requires an exact trusted event
 		}
 		if ok, why := wit.Capable(views[0], action); !ok {

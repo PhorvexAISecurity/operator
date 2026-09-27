@@ -354,6 +354,25 @@ func TestM071NewerTrustedEventCanStartOneNewOperation(t *testing.T) {
 	}
 }
 
+func TestM071SameEventCompetingSelectionCannotClaimProtectedReceipt(t *testing.T) {
+	serving := &m71Serving{loaded: true, unloadStatus: http.StatusAccepted, disappearAfter: 1}
+	_, req, ec, done := m71HTTPFixture(t, serving)
+	defer done()
+	req.TickID, req.OperationID = "selected-tick", "selected-decision"
+	first, err := (adapterRotateHandler{}).Enact(context.Background(), ec, req)
+	if err != nil || !first.Emitted {
+		t.Fatalf("selected operation failed: result=%+v err=%v", first, err)
+	}
+	competing := req
+	competing.TickID, competing.OperationID = "competing-tick", "competing-decision"
+	if result, err := (adapterRotateHandler{}).Enact(context.Background(), ec, competing); err == nil || result.Emitted {
+		t.Fatalf("competing selection claimed existing operation: result=%+v err=%v", result, err)
+	}
+	if unloads, _ := serving.counts(); unloads != 1 {
+		t.Fatalf("competing selection repeated serving mutation: unloads=%d", unloads)
+	}
+}
+
 func TestM071UnloadDispatchingRestartObservesBeforeRetry(t *testing.T) {
 	serving := &m71Serving{loaded: false, loadStatus: http.StatusOK}
 	c, req, ec, done := m71HTTPFixture(t, serving)

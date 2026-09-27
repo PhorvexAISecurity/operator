@@ -9,7 +9,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestM178KVInvalidateRequiresExplicitTrueAcknowledgement(t *testing.T) {
@@ -60,6 +62,51 @@ func TestM178KVInvalidateRequiresExplicitTrueAcknowledgement(t *testing.T) {
 			}
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("error=%v, want errors.Is(_, %v)", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestM178LocalInvalidateUsesResetDeadlineAndKeepsTimeoutUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		resetTimeout time.Duration
+		wantUnknown  bool
+	}{
+		{name: "delayed acknowledgement", resetTimeout: 200 * time.Millisecond},
+		{name: "accepted request timeout", resetTimeout: 25 * time.Millisecond, wantUnknown: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.Method != http.MethodPost || r.URL.Path != defaultKVInvPath {
+					t.Errorf("unexpected local invalidation request %s %s", r.Method, r.URL.Path)
+				}
+				time.Sleep(90 * time.Millisecond)
+				_, _ = w.Write([]byte(`{"success":true}`))
+			}))
+			defer server.Close()
+			host, portText, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			port, err := strconv.Atoi(portText)
+			if err != nil {
+				t.Fatal(err)
+			}
+			baseClient := &http.Client{Timeout: 25 * time.Millisecond}
+			v := &httpVLLM{hc: baseClient, resetTimeout: tc.resetTimeout}
+			err = (httpKVTransfer{v: v}).InvalidateLocal(context.Background(), servingEndpoint{podIP: host, port: port, kvInvPath: defaultKVInvPath})
+			if requests.Load() != 1 || baseClient.Timeout != 25*time.Millisecond {
+				t.Fatalf("local invalidation did not preserve one isolated request: requests=%d baseTimeout=%s err=%v", requests.Load(), baseClient.Timeout, err)
+			}
+			if tc.wantUnknown {
+				if err == nil || !errors.Is(err, errServingOutcomeUnknown) || errors.Is(err, errStackUnreachable) {
+					t.Fatalf("timed-out local reset was not unknown: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("delayed local reset acknowledgement rejected: %v", err)
 			}
 		})
 	}

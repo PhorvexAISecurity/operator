@@ -114,6 +114,7 @@ spec:
                       - request-drain
                       - guardrail-rotate
                       - sensitive-output-policy-activate
+                      - voice-memory-note-revoke
                       - litellm-client-revoke
                       - kv-migrate-invalidate
                       - disable

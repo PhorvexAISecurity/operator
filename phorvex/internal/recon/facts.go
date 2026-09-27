@@ -105,6 +105,9 @@ const (
 	// until its preinstalled exact-field policy is activated. First loss is
 	// irreversible; this fact describes only the repeat path.
 	FactSensitiveOutputExposure = "sensitiveOutputExposure"
+	// FactVoiceMemoryContamination is repeat exposure of one exact caller's
+	// observed harmful memory note. Quarantine cannot undo first contamination.
+	FactVoiceMemoryContamination = "voiceMemoryContamination"
 	// FactLiteLLMOwnedClientChannel is the repeat-use capability of one
 	// synthetic client credential at the installed admission gateway. It does
 	// not represent copied master-key knowledge or prior completions.
