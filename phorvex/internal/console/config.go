@@ -60,6 +60,11 @@ type Config struct {
 	DrainLiveEnabled       bool
 	DrainLiveProfileSHA256 string
 	DrainLiveProfilePath   string
+	// EndpointLease is a separate, default-off real public-Service caller
+	// revocation objective. It never changes endpoint-rotate's route-only scope.
+	EndpointLeaseEnabled       bool
+	EndpointLeaseProfileSHA256 string
+	EndpointLeaseProfilePath   string
 	// Version 2 of the same guardrail catalogue parent. This opt-in profile
 	// binds the synthetic support app, proxy, rule, and real model source.
 	GuardrailOutputEnabled       bool

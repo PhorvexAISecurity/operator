@@ -394,7 +394,7 @@ export interface WorkloadNS { namespace: string; system: boolean; podCount: numb
 // The live-attack action set the /api/vllm/attack endpoint accepts (vllm_attack.go). `reset` is
 // the cleanup action, not an attack — it clears the last one.
 export type VllmAttackAction =
-  | "poison" | "kvcache" | "endpoint-rotate" | "guardrail-rotate" | "guardrail-output-v2" | "request-drain"
+  | "poison" | "kvcache" | "endpoint-rotate" | "endpoint-lease-revoke" | "guardrail-rotate" | "guardrail-output-v2" | "request-drain"
   | "kv-migrate-invalidate" | "warm-swap" | "model-shard-replace" | "reset";
 
 // --- per-app attack compatibility (GET /api/workload/attacks) ---
@@ -501,6 +501,7 @@ export interface AttackResult {
   effectEvidence?: { kind: string; observed: boolean; observedAt?: string; targetUid: string; before?: string; after?: string; serviceUid?: string; correlation: string; limitation: string; seconds: number };
   guardrailEffectProbe?: GuardrailEffectProbeResult;
   guardrailOutputProbe?: GuardrailOutputProbeResult;
+  endpointLeaseProbe?: EndpointLeaseProbeResult;
   voiceMemoryProbe?: VoiceMemoryProbeResult;
   voiceAgencyProbe?: VoiceAgencyProbeResult;
   voiceOutputProbe?: VoiceOutputProbeResult;
@@ -606,6 +607,22 @@ export interface GuardrailEffectProbeResult {
   guardedChatsAttempted: number; consoleLaunchPOSTs: number; securityEventsAttempted: number;
   eventUID?: string; decisionID?: string; operationID?: string;
   priorVariant?: string; nextVariant?: string; cleanupVerified: boolean;
+}
+export interface EndpointLeaseProbeResult {
+  schema: "vllm-endpoint-lease-live-v1";
+  status: "UNKNOWN" | "LANDED" | "DEFENDED" | "EXISTING_PROTECTION_OR_DIFFERENT_ROSTER";
+  scenarioId: "ai2-endpoint-security";
+  signalMode: string; defenseScope: string;
+  targetPodUID?: string; serviceUID?: string; policyUID?: string; proxySourceSHA256?: string;
+  firstAccepted: boolean; initialAStatus?: number; initialBStatus?: number;
+  initialAResponseSHA256?: string; initialBResponseSHA256?: string;
+  eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  noopReason?: string; actionExclusion?: string;
+  protectedJournalTerminal: boolean; everyServingPodEffective: boolean;
+  terminalAfterDispatchError: boolean;
+  postAStatus?: number; postBStatus?: number;
+  postAExactDenial: boolean; postBValidCompletion: boolean;
+  issues: string[];
 }
 export interface GuardrailOutputProbeResult {
   schema: "guardrail-output-probe-result-v2";

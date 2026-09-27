@@ -77,6 +77,7 @@ type attackRecord struct {
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	DrainLiveProbe       *drainLiveProbeResult       `json:"drainLiveProbe,omitempty"`
+	EndpointLeaseProbe   *endpointLeaseProbeResult   `json:"endpointLeaseProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
 	VoiceOutputProbe     *voiceOutputProbeResult     `json:"voiceOutputProbe,omitempty"`

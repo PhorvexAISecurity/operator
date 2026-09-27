@@ -16,6 +16,7 @@ import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-resu
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
 import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
+import { EndpointLeaseProbe } from "@/components/panels/endpoint-lease-probe";
 import { VoiceMemoryProbe } from "@/components/panels/voice-memory-probe";
 import { VoiceAgencyProbe } from "@/components/panels/voice-agency-probe";
 import { VoiceOutputProbe } from "@/components/panels/voice-output-probe";
@@ -170,6 +171,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {signal && <CatalogueSignalResult result={r} />}
         {r.guardrailEffectProbe && <GuardrailEffectProbe result={r.guardrailEffectProbe} />}
         {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
+        {r.endpointLeaseProbe && <EndpointLeaseProbe result={r.endpointLeaseProbe} />}
         {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
         {r.voiceAgencyProbe && <VoiceAgencyProbe result={r.voiceAgencyProbe} />}
         {r.voiceOutputProbe && <VoiceOutputProbe result={r.voiceOutputProbe} />}

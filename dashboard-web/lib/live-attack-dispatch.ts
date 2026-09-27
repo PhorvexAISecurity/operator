@@ -6,7 +6,7 @@ type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } 
   { kind: "foothold"; namespace: string; action: "foothold" | "clear" };
 
 const vllmActions = new Set<string>([
-  "poison", "kvcache", "endpoint-rotate", "guardrail-rotate", "guardrail-output-v2",
+  "poison", "kvcache", "endpoint-rotate", "endpoint-lease-revoke", "guardrail-rotate", "guardrail-output-v2",
   "request-drain", "kv-migrate-invalidate", "warm-swap", "model-shard-replace",
 ]);
 
@@ -50,6 +50,7 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
 // Voice and LiteLLM have 900-second server observation windows; leave a bounded margin for publication.
 export function liveAttackPollBudgetMs(route: LiveRoute): number {
   if (route.kind === "vllm" && route.action === "request-drain") return 270_000;
+  if (route.kind === "vllm" && route.action === "endpoint-lease-revoke") return 960_000;
   return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "voice-output" || route.kind === "voice-mcp" || route.kind === "litellm" || route.kind === "litellm-output" ? 960_000 : 150_000;
 }
 
