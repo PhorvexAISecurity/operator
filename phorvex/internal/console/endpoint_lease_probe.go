@@ -37,7 +37,8 @@ try:
  response=http.client.HTTPResponse(sock);response.begin();body=response.read(8193)
  if response.status!=200 or len(body)>8192 or response.getheader('Content-Type','').split(';')[0]!='application/json':raise RuntimeError('status')
  value=json.loads(body)
- print(json.dumps(value,sort_keys=True,separators=(',',':')))
+ # The console requires the exact canonical bytes; print() would add a newline.
+ sys.stdout.write(json.dumps(value,sort_keys=True,separators=(',',':')))
 finally:sock.close()
 `
 
