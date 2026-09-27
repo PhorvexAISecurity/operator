@@ -417,10 +417,9 @@ phorvex:
       enabled: false
       configMapName: ""
       profileSHA256: ""
-      attackerSecret: ""
-      controlSecret: ""
+      seedSecret: ""
       statusSecret: ""
-      journalName: ""
+      journalName: phorvex-litellm-revoke-journal
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

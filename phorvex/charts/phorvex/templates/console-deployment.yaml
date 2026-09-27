@@ -161,11 +161,11 @@
 {{- if not $trusted }}{{- fail "console.litellmLive requires the exact console creator in trustedDetectors" }}{{- end }}
 {{- $sha := required "console.litellmLive.profileSHA256 required" .Values.phorvex.console.litellmLive.profileSHA256 }}
 {{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.litellmLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
-{{- range list "configMapName" "attackerSecret" "controlSecret" "statusSecret" }}
+{{- range list "configMapName" "seedSecret" "statusSecret" }}
 {{- $name := required (printf "console.litellmLive.%s required" .) (index $.Values.phorvex.console.litellmLive .) }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail (printf "console.litellmLive.%s invalid" .) }}{{- end }}
 {{- end }}
-{{- if not (regexMatch "^phorvex-litellm-revoke-[0-9a-f]{24}$" (required "console.litellmLive.journalName required" .Values.phorvex.console.litellmLive.journalName)) }}{{- fail "console.litellmLive.journalName invalid" }}{{- end }}
+{{- if ne .Values.phorvex.console.litellmLive.journalName "phorvex-litellm-revoke-journal" }}{{- fail "console.litellmLive.journalName invalid" }}{{- end }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -825,15 +825,10 @@ spec:
               - key: profile.json
                 path: profile.json
           - secret:
-              name: {{ .Values.phorvex.console.litellmLive.attackerSecret | quote }}
+              name: {{ .Values.phorvex.console.litellmLive.seedSecret | quote }}
               items:
-              - key: token
-                path: attacker-token
-          - secret:
-              name: {{ .Values.phorvex.console.litellmLive.controlSecret | quote }}
-              items:
-              - key: token
-                path: control-token
+              - key: seed
+                path: seed
       - name: litellm-live-status-token
         secret:
           secretName: {{ .Values.phorvex.console.litellmLive.statusSecret | quote }}

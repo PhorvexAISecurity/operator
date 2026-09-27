@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import http.client
 import importlib.util
 import json
@@ -28,6 +29,14 @@ class Upstream(BaseHTTPRequestHandler):
         if self.headers.get("Authorization") != "Bearer " + self.master:
             self.reply(401, {"error": {"code": "invalid_api_key"}})
             return
+        if self.path == "/v1/test/large":
+            body = b"x" * (9 * 1024 * 1024)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         self.reply(200, {"object": "chat.completion", "id": "cmpl-real-upstream",
                          "choices": [{"message": {"role": "assistant", "content": "OK"}}],
                          "usage": {"total_tokens": 7}})
@@ -46,23 +55,25 @@ class GatewayTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.attacker = "sk-test-owned-attacker-1234567890"
-        self.control = "sk-test-owned-control-1234567890"
+        self.seed = b"review-owned-trial-seed-32-bytes-minimum-0001"
+        self.seed_file = self.root / "seed"
+        self.seed_file.write_bytes(self.seed)
+        self.attacker = self.token("a", "a" * 32)
+        self.control = self.token("c", "a" * 32)
         self.attacker_sha = hashlib.sha256(self.attacker.encode()).hexdigest()
         self.control_sha = hashlib.sha256(self.control.encode()).hexdigest()
         self.clients = self.root / "clients.json"
         self.policy = self.root / "state.json"
-        self.clients.write_text(json.dumps({"version": 1, "attackerSHA256": self.attacker_sha,
-                                            "controlSHA256": self.control_sha,
+        self.clients.write_text(json.dumps({"version": 2, "seedSHA256": hashlib.sha256(self.seed).hexdigest(),
                                             "modelAlias": "gpt-4o-mini"}))
-        self.set_policy(False, 0, "")
+        self.set_policy([])
         Upstream.calls = 0
         self.upstream = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
         self.upstream_thread = threading.Thread(target=self.upstream.serve_forever, daemon=True)
         self.upstream_thread.start()
         self.addCleanup(self.upstream.server_close)
         self.addCleanup(self.upstream.shutdown)
-        self.g = gateway.Gateway(self.clients, self.policy, Upstream.master, "pod-uid",
+        self.g = gateway.Gateway(self.clients, self.policy, self.seed_file, Upstream.master, "pod-uid",
                                  "cm-uid", hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
                                  "this-is-a-private-status-token-1234567890",
                                  upstream_port=self.upstream.server_address[1])
@@ -79,12 +90,22 @@ class GatewayTests(unittest.TestCase):
         self.addCleanup(self.status_server.server_close)
         self.addCleanup(self.status_server.shutdown)
 
-    def set_policy(self, active, revision, operation):
+    def token(self, role, nonce):
+        mac = hmac.new(self.seed, f"phorvex-litellm-live-v2:{nonce}:{role}".encode(),
+                       hashlib.sha256).hexdigest()
+        return f"sk-phx2-{role}-{nonce}-{mac}"
+
+    def set_policy(self, entries):
         temp = self.root / "next-state.json"
-        temp.write_text(json.dumps({"version": 1, "active": active, "revision": revision,
-                                    "operationId": operation, "clientSHA256": self.attacker_sha},
+        temp.write_text(json.dumps({"version": 2, "revision": len(entries), "entries": entries},
                                    separators=(",", ":"), sort_keys=True))
         temp.replace(self.policy)
+
+    def revoke(self, token, operation):
+        current = json.loads(self.policy.read_text())["entries"]
+        current.append({"active": True, "clientSHA256": hashlib.sha256(token.encode()).hexdigest(),
+                        "operationId": operation})
+        self.set_policy(sorted(current, key=lambda item: item["clientSHA256"]))
 
     def post(self, bearer, model="gpt-4o-mini"):
         conn = http.client.HTTPConnection("127.0.0.1", self.public.server_address[1], timeout=5)
@@ -102,50 +123,61 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.post(self.attacker)[0], 200)
         self.assertEqual(self.post(self.control)[0], 200)
         self.assertEqual(Upstream.calls, 2)
-        before = self.g.status()
-        self.assertEqual(before["counters"]["attacker"]["usageTokens"], 7)
-        self.set_policy(True, 1, "selected-decision-operation")
+        before = self.g.status(self.attacker_sha)
+        self.assertEqual(before["counters"]["usageTokens"], 7)
+        self.assertEqual(before["role"], "attacker")
+        self.revoke(self.attacker, "selected-decision-operation")
         status, reply = self.post(self.attacker)
         self.assertEqual((status, reply["error"]["code"]), (429, "PHORVEX_CLIENT_REVOKED"))
         self.assertEqual(Upstream.calls, 2)  # No downstream work on replay.
         self.assertEqual(self.post(self.control)[0], 200)
         self.assertEqual(Upstream.calls, 3)
-        after = self.g.status()
+        after = self.g.status(self.attacker_sha)
         self.assertTrue(after["ready"])
         self.assertEqual((after["active"], after["revision"], after["operationId"]),
                          (True, 1, "selected-decision-operation"))
-        self.assertEqual(after["counters"]["attacker"]["deniedRequests"], 1)
-        self.assertEqual(after["counters"]["control"]["upstreamCompletions"], 2)
+        self.assertEqual(after["counters"]["deniedRequests"], 1)
+        self.assertEqual(self.g.status(self.control_sha)["counters"]["upstreamCompletions"], 2)
 
     def test_invalid_bearer_stays_upstream_negative_not_defense(self):
         status, reply = self.post("sk-invalid-generated-1234567890")
         self.assertEqual(status, 401)
         self.assertEqual(reply["error"]["code"], "invalid_api_key")
         self.assertEqual(Upstream.calls, 1)
-        self.assertEqual(self.g.status()["counters"]["attacker"]["deniedRequests"], 0)
+        self.assertEqual(self.g.status(self.attacker_sha)["counters"]["deniedRequests"], 0)
 
     def test_existing_authorized_master_client_passes_through_real_upstream(self):
         status, reply = self.post(Upstream.master)
         self.assertEqual(status, 200)
         self.assertEqual(reply["id"], "cmpl-real-upstream")
         self.assertEqual(Upstream.calls, 1)
-        self.assertEqual(self.g.status()["counters"]["attacker"]["forwardedRequests"], 0)
+        self.assertEqual(self.g.status(self.attacker_sha)["counters"]["forwardedRequests"], 0)
+
+    def test_existing_authorized_large_stream_is_complete(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.public.server_address[1], timeout=10)
+        try:
+            conn.request("POST", "/v1/test/large", b"{}",
+                         {"Authorization": "Bearer " + Upstream.master})
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(len(response.read()), 9 * 1024 * 1024)
+        finally:
+            conn.close()
 
     def test_malformed_policy_fails_closed_without_forwarding(self):
         self.policy.write_text('{"version":1,"active":false,"active":true}')
-        self.assertFalse(self.g.status()["ready"])
+        self.assertFalse(self.g.status(self.attacker_sha)["ready"])
         self.assertEqual(self.post(self.attacker)[0], 503)
         self.assertEqual(Upstream.calls, 0)
 
     def test_source_and_client_authority_required(self):
         with self.assertRaisesRegex(ValueError, "source digest"):
-            gateway.Gateway(self.clients, self.policy, Upstream.master, "pod", "cm", "0" * 64,
+            gateway.Gateway(self.clients, self.policy, self.seed_file, Upstream.master, "pod", "cm", "0" * 64,
                             "this-is-a-private-status-token-1234567890")
-        self.clients.write_text(json.dumps({"version": 1, "attackerSHA256": self.attacker_sha,
-                                            "controlSHA256": self.attacker_sha,
+        self.clients.write_text(json.dumps({"version": 2, "seedSHA256": "0" * 64,
                                             "modelAlias": "gpt-4o-mini"}))
         with self.assertRaisesRegex(ValueError, "owned-client authority"):
-            gateway.Gateway(self.clients, self.policy, Upstream.master, "pod", "cm",
+            gateway.Gateway(self.clients, self.policy, self.seed_file, Upstream.master, "pod", "cm",
                             hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
                             "this-is-a-private-status-token-1234567890")
 
@@ -154,7 +186,7 @@ class GatewayTests(unittest.TestCase):
                                  ("this-is-a-private-status-token-1234567890", 200)):
             conn = http.client.HTTPConnection("127.0.0.1", self.status_server.server_address[1], timeout=5)
             try:
-                conn.request("GET", "/v1/admission/state",
+                conn.request("GET", "/v1/admission/state?clientSHA256=" + self.attacker_sha,
                              headers={"Authorization": "Bearer " + bearer})
                 response = conn.getresponse()
                 self.assertEqual(response.status, expected)
@@ -165,6 +197,30 @@ class GatewayTests(unittest.TestCase):
                                      ("pod-uid", "cm-uid", True))
             finally:
                 conn.close()
+
+    def test_second_run_fresh_credential_preserves_first_revoke(self):
+        self.assertEqual(self.post(self.attacker)[0], 200)
+        self.revoke(self.attacker, "decision-a")
+        self.assertEqual(self.post(self.attacker)[0], 429)
+        second = self.token("a", "b" * 32)
+        second_sha = hashlib.sha256(second.encode()).hexdigest()
+        self.assertEqual(self.post(second)[0], 200)
+        self.assertEqual(self.g.status(second_sha)["role"], "attacker")
+        self.revoke(second, "decision-b")
+        self.assertEqual(self.post(second)[0], 429)
+        self.assertEqual(self.post(self.attacker)[0], 429)
+        self.assertEqual(self.post(self.control)[0], 200)
+        self.assertEqual(self.g.status(self.attacker_sha)["operationId"], "decision-a")
+        self.assertEqual(self.g.status(second_sha)["operationId"], "decision-b")
+
+    def test_projected_policy_rollback_never_reauthorizes_old_client(self):
+        self.assertEqual(self.post(self.attacker)[0], 200)
+        self.revoke(self.attacker, "decision-a")
+        self.assertTrue(self.g.status(self.attacker_sha)["active"])
+        self.set_policy([])
+        self.assertFalse(self.g.status(self.attacker_sha)["ready"])
+        self.assertEqual(self.post(self.attacker)[0], 503)
+        self.assertEqual(Upstream.calls, 1)
 
 
 if __name__ == "__main__":

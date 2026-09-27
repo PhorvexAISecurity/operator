@@ -1,6 +1,7 @@
 """Render reviewable two-phase GitOps inputs for the real LiteLLM Service.
 
-Phase one installs the three ConfigMaps. After reading the actual policy CM UID,
+Phase one installs the source, clients, policy, and protected journal ConfigMaps.
+After reading the actual policy CM UID,
 phase two emits JSON patches for the *existing* Deployment and Service. The
 existing master key is never copied into generated output: the owner must
 provision a Secret and replace the old literal env binding during rollout.
@@ -21,6 +22,7 @@ PHORVEX_POLICY_NAME = "litellm-live-client"
 POLICY_LABEL = "phorvex.ai/litellm-live"
 MASTER_SECRET = "phorvex-litellm-master-key"
 STATUS_SECRET = "phorvex-litellm-status-token"
+TRIAL_SEED_SECRET = "phorvex-litellm-trial-seed"
 GATEWAY_SOURCE = Path(__file__).with_name("gateway.py")
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 IMAGE = re.compile(r"[^\s]+@sha256:[0-9a-f]{64}\Z")
@@ -36,22 +38,25 @@ def manifest(name, data, immutable=False):
             "data": data, "immutable": immutable}
 
 
-def render(attacker_sha, control_sha, gateway_image, model_alias,
+def render(seed_sha, gateway_image, model_alias,
            deployment=None, service=None, policy_uid=None):
-    if (not HEX.fullmatch(attacker_sha) or not HEX.fullmatch(control_sha) or
-            attacker_sha == control_sha or not IMAGE.fullmatch(gateway_image) or
-            model_alias not in ("gpt-3.5-turbo", "gpt-4o-mini")):
+    if (not HEX.fullmatch(seed_sha) or not IMAGE.fullmatch(gateway_image) or
+            model_alias != "gpt-4o-mini"):
         raise ValueError("owned LiteLLM render authority invalid")
     source = GATEWAY_SOURCE.read_text()
     source_sha = hashlib.sha256(source.encode()).hexdigest()
-    clients = canonical({"version": 1, "attackerSHA256": attacker_sha,
-                         "controlSHA256": control_sha, "modelAlias": model_alias})
-    state = canonical({"version": 1, "active": False, "revision": 0,
-                       "operationId": "", "clientSHA256": attacker_sha})
+    clients = canonical({"version": 2, "seedSHA256": seed_sha, "modelAlias": model_alias})
+    state = canonical({"version": 2, "revision": 0, "entries": []})
     objects = {
         "gateway-source-configmap.json": manifest(SOURCE_NAME, {"gateway.py": source}, True),
         "owned-clients-configmap.json": manifest(CLIENTS_NAME, {"clients.json": clients}, True),
         "client-policy-configmap.json": manifest(POLICY_NAME, {"state.json": state}),
+        "protected-journal-configmap.json": {
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": {"name": "phorvex-litellm-revoke-journal", "namespace": "phorvex-system",
+                         "labels": {"phorvex.ai/litellm-client-revoke-journal": "v2"}},
+            "data": {"receipts.json": canonical({"version": 2, "receipts": []})},
+        },
         "phorvex-policy.json": {
             "apiVersion": "phorvex.ai/v1alpha1", "kind": "PhorvexPolicy",
             "metadata": {"name": PHORVEX_POLICY_NAME, "namespace": NAMESPACE},
@@ -91,7 +96,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
     containers = podspec.get("containers", [])
     if (len(containers) != 1 or containers[0].get("name") != "litellm" or
             any(v.get("name") in ("litellm-live-gateway-source", "litellm-live-clients",
-                                  "litellm-live-policy", "litellm-live-status")
+                                  "litellm-live-policy", "litellm-live-status", "litellm-live-trial-seed")
                 for v in podspec.get("volumes", [])) or
             any(v.get("name") == "litellm-admission-gateway" for v in containers)):
         raise ValueError("LiteLLM deployment already modified or differs")
@@ -108,7 +113,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
         "phorvex.ai/litellm-gateway-image": gateway_image,
         "phorvex.ai/litellm-client-policy-configmap-uid": policy_uid,
         "phorvex.ai/litellm-live-service-uid": service["metadata"]["uid"],
-        "phorvex.ai/litellm-owned-client-sha256": attacker_sha,
+        "phorvex.ai/litellm-trial-seed-sha256": seed_sha,
     }
     patch = list(annotations_patch)
     labels = template.get("metadata", {}).get("labels")
@@ -129,6 +134,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
         # A directory mount, not subPath: Kubelet must project actor updates.
         {"name": "litellm-live-policy", "configMap": {"name": POLICY_NAME}},
         {"name": "litellm-live-status", "secret": {"secretName": STATUS_SECRET, "defaultMode": 288}},
+        {"name": "litellm-live-trial-seed", "secret": {"secretName": TRIAL_SEED_SECRET, "defaultMode": 288}},
     ]
     if "volumes" not in podspec:
         patch.append({"op": "add", "path": "/spec/template/spec/volumes", "value": volumes})
@@ -140,7 +146,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
                             {"name": MASTER_SECRET, "key": "master-key"}}}})
     sidecar = {
         "name": "litellm-admission-gateway", "image": gateway_image,
-        "command": ["python", "-B", "/opt/phorvex/gateway.py"],
+        "command": ["python3", "-B", "/opt/phorvex/gateway.py"],
         "ports": [{"name": "admission", "containerPort": 4001, "protocol": "TCP"},
                   {"name": "admission-status", "containerPort": 4002, "protocol": "TCP"}],
         "securityContext": {"allowPrivilegeEscalation": False, "runAsNonRoot": True,
@@ -153,6 +159,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
             {"name": "PHORVEX_LITELLM_CLIENTS_FILE", "value": "/etc/phorvex-litellm/clients.json"},
             {"name": "PHORVEX_LITELLM_POLICY_FILE", "value": "/etc/phorvex-litellm-policy/state.json"},
             {"name": "PHORVEX_LITELLM_STATUS_TOKEN_FILE", "value": "/etc/phorvex-litellm-status/token"},
+            {"name": "PHORVEX_LITELLM_TRIAL_SEED_FILE", "value": "/etc/phorvex-litellm-seed/seed"},
             {"name": "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID", "value": policy_uid},
             {"name": "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256", "value": source_sha},
         ],
@@ -161,6 +168,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
             {"name": "litellm-live-clients", "mountPath": "/etc/phorvex-litellm", "readOnly": True},
             {"name": "litellm-live-policy", "mountPath": "/etc/phorvex-litellm-policy", "readOnly": True},
             {"name": "litellm-live-status", "mountPath": "/etc/phorvex-litellm-status", "readOnly": True},
+            {"name": "litellm-live-trial-seed", "mountPath": "/etc/phorvex-litellm-seed", "readOnly": True},
         ],
         "readinessProbe": {"tcpSocket": {"port": 4001}, "periodSeconds": 5},
     }
@@ -175,8 +183,7 @@ def render(attacker_sha, control_sha, gateway_image, model_alias,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--attacker-sha256", required=True)
-    parser.add_argument("--control-sha256", required=True)
+    parser.add_argument("--seed-sha256", required=True)
     parser.add_argument("--gateway-image", required=True)
     parser.add_argument("--model-alias", default="gpt-4o-mini")
     parser.add_argument("--deployment-original", type=Path)
@@ -186,8 +193,7 @@ def main():
     args = parser.parse_args()
     deployment = json.loads(args.deployment_original.read_text()) if args.deployment_original else None
     service = json.loads(args.service_original.read_text()) if args.service_original else None
-    objects, source_sha = render(args.attacker_sha256, args.control_sha256,
-                                 args.gateway_image, args.model_alias,
+    objects, source_sha = render(args.seed_sha256, args.gateway_image, args.model_alias,
                                  deployment, service, args.policy_cm_uid)
     args.output.mkdir(parents=True, exist_ok=False)
     for name, value in objects.items():

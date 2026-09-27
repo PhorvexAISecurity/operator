@@ -3,6 +3,8 @@ package console
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -32,6 +34,7 @@ const (
 )
 
 var liteLiveSequence atomic.Uint64
+var liteLiveBusy atomic.Bool
 
 type liteLivePod struct {
 	Name           string `json:"name"`
@@ -40,28 +43,23 @@ type liteLivePod struct {
 	GatewayImageID string `json:"gatewayImageID"`
 }
 
+type liteLiveEntry struct {
+	Active       bool   `json:"active"`
+	ClientSHA256 string `json:"clientSHA256"`
+	OperationID  string `json:"operationId"`
+}
+
 type liteLLMLiveProfile struct {
-	Version             int           `json:"version"`
-	ClusterUID          string        `json:"clusterUID"`
-	NamespaceUID        string        `json:"namespaceUID"`
-	DeploymentUID       string        `json:"deploymentUID"`
-	ServiceUID          string        `json:"serviceUID"`
-	SourceConfigMapUID  string        `json:"sourceConfigMapUID"`
-	SourceSHA256        string        `json:"sourceSHA256"`
-	GatewayImage        string        `json:"gatewayImage"`
-	ClientsConfigMapUID string        `json:"clientsConfigMapUID"`
-	ClientsSHA256       string        `json:"clientsSHA256"`
-	PolicyConfigMapUID  string        `json:"policyConfigMapUID"`
-	PolicyName          string        `json:"policyName"`
-	PolicyUID           string        `json:"policyUID"`
-	PolicyGeneration    int64         `json:"policyGeneration"`
-	ModelAlias          string        `json:"modelAlias"`
-	AttackerSHA256      string        `json:"attackerSHA256"`
-	ControlSHA256       string        `json:"controlSHA256"`
-	Pods                []liteLivePod `json:"pods"`
-	EventCreator        string        `json:"eventCreator"`
-	AuditSourceIdentity string        `json:"auditSourceIdentity"`
-	MaxRunSeconds       int           `json:"maxRunSeconds"`
+	Version             int    `json:"version"`
+	SourceSHA256        string `json:"sourceSHA256"`
+	GatewayImage        string `json:"gatewayImage"`
+	ClientsSHA256       string `json:"clientsSHA256"`
+	SeedSHA256          string `json:"seedSHA256"`
+	PolicyName          string `json:"policyName"`
+	ModelAlias          string `json:"modelAlias"`
+	EventCreator        string `json:"eventCreator"`
+	AuditSourceIdentity string `json:"auditSourceIdentity"`
+	MaxRunSeconds       int    `json:"maxRunSeconds"`
 }
 
 type liteLiveCounters struct {
@@ -72,19 +70,18 @@ type liteLiveCounters struct {
 }
 
 type liteLiveStatus struct {
-	Version      int    `json:"version"`
-	PodUID       string `json:"podUID"`
-	SourceSHA256 string `json:"sourceSHA256"`
-	ConfigMapUID string `json:"configMapUID"`
-	ClientSHA256 string `json:"clientSHA256"`
-	Active       bool   `json:"active"`
-	Revision     int64  `json:"revision"`
-	OperationID  string `json:"operationId"`
-	Ready        bool   `json:"ready"`
-	Counters     struct {
-		Attacker liteLiveCounters `json:"attacker"`
-		Control  liteLiveCounters `json:"control"`
-	} `json:"counters"`
+	Version      int              `json:"version"`
+	PodUID       string           `json:"podUID"`
+	SourceSHA256 string           `json:"sourceSHA256"`
+	SeedSHA256   string           `json:"seedSHA256"`
+	ConfigMapUID string           `json:"configMapUID"`
+	ClientSHA256 string           `json:"clientSHA256"`
+	Active       bool             `json:"active"`
+	Revision     int64            `json:"revision"`
+	OperationID  string           `json:"operationId"`
+	Role         string           `json:"role"`
+	Ready        bool             `json:"ready"`
+	Counters     liteLiveCounters `json:"counters"`
 }
 
 type liteLiveSnapshot struct {
@@ -98,9 +95,11 @@ type liteLiveSnapshot struct {
 	PolicyConfigMapRV   string            `json:"policyConfigMapRV"`
 	PolicyUID           string            `json:"policyUID"`
 	PolicyGeneration    int64             `json:"policyGeneration"`
+	EntryCount          int64             `json:"entryCount"`
 	Active              bool              `json:"active"`
 	Revision            int64             `json:"revision"`
 	OperationID         string            `json:"operationId"`
+	Entries             []liteLiveEntry   `json:"entries"`
 	Pods                []liteLivePod     `json:"pods"`
 	PodIPs              map[string]string `json:"podIPs"`
 }
@@ -135,6 +134,7 @@ type liteLLMLiveProbeResult struct {
 
 type liteLiveWorker struct {
 	s             *Server
+	record        *attackRecord
 	p             liteLLMLiveProfile
 	profileSHA    string
 	ctx           context.Context
@@ -143,6 +143,10 @@ type liteLiveWorker struct {
 	reads         int
 	attackerToken string
 	controlToken  string
+	attackerSHA   string
+	controlSHA    string
+	bound         liteLiveSnapshot
+	priorReceipts map[string]string
 	statusToken   string
 	audit         *availabilityWorker
 }
@@ -154,22 +158,13 @@ func parseLiteLiveProfile(raw []byte) (liteLLMLiveProfile, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if len(raw) == 0 || len(raw) > 16<<10 || dec.Decode(&p) != nil || dec.Decode(new(any)) != io.EOF ||
-		p.Version != 1 || p.ClusterUID == "" || p.NamespaceUID == "" || p.DeploymentUID == "" || p.ServiceUID == "" ||
-		p.SourceConfigMapUID == "" || !staticSHA256.MatchString(p.SourceSHA256) || !mongoPinnedImage.MatchString(p.GatewayImage) || p.ClientsConfigMapUID == "" ||
-		!staticSHA256.MatchString(p.ClientsSHA256) || p.PolicyConfigMapUID == "" || p.PolicyName == "" || p.PolicyUID == "" ||
-		p.PolicyGeneration < 1 || (p.ModelAlias != "gpt-4o-mini" && p.ModelAlias != "gpt-3.5-turbo") ||
-		!staticSHA256.MatchString(p.AttackerSHA256) || !staticSHA256.MatchString(p.ControlSHA256) || p.AttackerSHA256 == p.ControlSHA256 ||
-		len(p.Pods) != 2 || p.Pods[0].Name == p.Pods[1].Name || p.Pods[0].UID == p.Pods[1].UID ||
+		p.Version != 2 || !staticSHA256.MatchString(p.SourceSHA256) || !mongoPinnedImage.MatchString(p.GatewayImage) ||
+		!staticSHA256.MatchString(p.ClientsSHA256) || !staticSHA256.MatchString(p.SeedSHA256) ||
+		p.PolicyName != "litellm-live-client" || p.ModelAlias != "gpt-4o-mini" ||
 		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
 		p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 {
 		return p, errors.New("reviewed LiteLLM Live profile invalid")
 	}
-	for _, pod := range p.Pods {
-		if pod.Name == "" || pod.UID == "" || !mongoPinnedImage.MatchString(pod.BackendImageID) || !mongoPinnedImage.MatchString(pod.GatewayImageID) {
-			return p, errors.New("LiteLLM Live Pod pin invalid")
-		}
-	}
-	sort.Slice(p.Pods, func(i, j int) bool { return p.Pods[i].Name < p.Pods[j].Name })
 	return p, nil
 }
 
@@ -206,15 +201,20 @@ func (s *Server) liteLLMLiveFire(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "reviewed LiteLLM Live profile unavailable"})
 		return
 	}
+	if !liteLiveBusy.CompareAndSwap(false, true) {
+		writeJSON(w, 409, map[string]string{"error": "a LiteLLM Live run is already active"})
+		return
+	}
 	if err = s.persistEffectIntent("/api/litellm/live/fire", actorOf(r), "litellm", input.Scenario); err != nil {
+		liteLiveBusy.Store(false)
 		writeJSON(w, 503, map[string]string{"error": "LiteLLM Live intent persistence unavailable"})
 		return
 	}
 	started := s.cfg.now().UTC()
 	id := "atk-" + strconv.FormatInt(started.UnixNano(), 36) + strconv.FormatUint(liteLiveSequence.Add(1), 36)
 	probe := &liteLLMLiveProbeResult{Status: "UNKNOWN", Scenario: input.Scenario, SignalMode: "NONE", Issues: []string{}}
-	record := &attackRecord{ID: id, FiredAt: started.Format(time.RFC3339Nano), Service: "litellm", Namespace: "litellm", Pod: p.Pods[0].Name,
-		TargetUID: p.Pods[0].UID, Attack: input.Scenario, AttackID: input.Scenario, MITRE: "query-channel", Expected: "litellm-client-revoke",
+	record := &attackRecord{ID: id, FiredAt: started.Format(time.RFC3339Nano), Service: "litellm", Namespace: "litellm",
+		Attack: input.Scenario, AttackID: input.Scenario, MITRE: "query-channel", Expected: "litellm-client-revoke",
 		EvidenceKind: "litellm-live-client-policy", OutcomeClass: "litellm-live-UNKNOWN", Status: "running", LiteLLMLiveProbe: probe,
 		ProducerRoute: liteLiveServiceURL, ResultSchema: "litellm-live-v1",
 		ObservationStart: started.Format(time.RFC3339Nano), ObservationEnd: started.Add(900 * time.Second).Format(time.RFC3339Nano), started: started, accepted: started}
@@ -225,49 +225,20 @@ func (s *Server) liteLLMLiveFire(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runLiteLive(r *attackRecord, p liteLLMLiveProfile, raw []byte) {
+	defer liteLiveBusy.Store(false)
 	out := s.cfg.statePath(filepath.Join("litellm-live", r.ID))
 	probe := r.LiteLLMLiveProbe
 	ctx, stop := context.WithTimeout(context.Background(), time.Duration(p.MaxRunSeconds)*time.Second)
-	w := &liteLiveWorker{s: s, p: p, profileSHA: s.cfg.LiteLLMLiveProfileSHA256, ctx: ctx, stop: stop, out: out}
+	w := &liteLiveWorker{s: s, record: r, p: p, profileSHA: s.cfg.LiteLLMLiveProfileSHA256, ctx: ctx, stop: stop, out: out}
 	defer stop()
 	finish := func(err error) {
-		if err != nil {
-			probe.Issues = append(probe.Issues, err.Error())
-			if probe.Status == "STOPPED_WITH_BENIGN_CONTINUITY" {
-				probe.Status = "INCONCLUSIVE_AFTER_LANDED"
-			}
-		}
-		if probe.Status == "UNKNOWN" && probe.InitialAcceptedWork {
-			probe.Status = "INCONCLUSIVE_AFTER_LANDED"
-		}
-		probe.Accepted = probe.Status == "STOPPED_WITH_BENIGN_CONTINUITY"
-		r.OutcomeClass = "litellm-live-" + probe.Status
-		r.Status = "done"
-		if !probe.Accepted {
-			r.Status = "partial"
-		}
-		r.Outcome = ""
-		r.Action = ""
-		r.Actuated = false
-		r.Containment = ""
-		r.DefendedPod = ""
-		if probe.Accepted {
-			r.Outcome = "DEFENDED"
-			r.Action = "litellm-client-revoke"
-			r.Actuated = true
-			r.DefendedPod = p.Pods[0].Name
-			r.Containment = "client-revoked"
-		}
-		if out != "" {
-			b, _ := json.Marshal(probe)
-			_ = publishMongoAuditFile(out, "terminal.json", b, 1<<20)
-		}
-		publishAttack(r)
-		if e := s.persistAttack(r); e != nil {
-			r.Status = "partial"
-			r.PersistenceError = "LiteLLM Live outcome persistence unavailable"
-			publishAttack(r)
-		}
+		liteFinalizeProbe(r, probe, w.bound, err,
+			func(raw []byte) error {
+				if out == "" {
+					return errors.New("private LiteLLM Live receipt path unavailable")
+				}
+				return publishMongoAuditFile(out, "terminal.json", raw, 1<<20)
+			}, s.persistAttack, publishAttack)
 	}
 	if out == "" || os.MkdirAll(out, 0700) != nil {
 		finish(errors.New("private LiteLLM Live receipt directory unavailable"))
@@ -279,6 +250,63 @@ func (s *Server) runLiteLive(r *attackRecord, p liteLLMLiveProfile, raw []byte) 
 	}
 	err := w.execute(probe)
 	finish(err)
+}
+
+// A defended result is published only after its terminal receipt and durable
+// attack record succeed. On a failed record write, replace the private
+// candidate receipt with an inconclusive one when the receipt path remains
+// available; neither public field ever retains defense credit.
+func liteFinalizeProbe(r *attackRecord, probe *liteLLMLiveProbeResult, bound liteLiveSnapshot,
+	runErr error, writeTerminal func([]byte) error, persist func(*attackRecord) error,
+	publish func(*attackRecord)) {
+	if runErr != nil {
+		probe.Issues = append(probe.Issues, runErr.Error())
+		if probe.Status == "STOPPED_WITH_BENIGN_CONTINUITY" {
+			probe.Status = "INCONCLUSIVE_AFTER_LANDED"
+		}
+	}
+	if probe.Status == "UNKNOWN" && probe.InitialAcceptedWork {
+		probe.Status = "INCONCLUSIVE_AFTER_LANDED"
+	}
+	probe.Accepted = probe.Status == "STOPPED_WITH_BENIGN_CONTINUITY"
+	write := func() error {
+		raw, err := json.Marshal(probe)
+		if err != nil {
+			return err
+		}
+		return writeTerminal(raw)
+	}
+	if err := write(); err != nil {
+		probe.Accepted = false
+		probe.Status = "INCONCLUSIVE_TERMINAL_PERSISTENCE"
+		probe.Issues = append(probe.Issues, "private LiteLLM Live terminal receipt unavailable")
+	}
+	apply := func() {
+		r.OutcomeClass = "litellm-live-" + probe.Status
+		r.Status = "partial"
+		r.Outcome, r.Action, r.Containment, r.DefendedPod = "", "", "", ""
+		r.Actuated = false
+		if probe.Accepted {
+			r.Status = "done"
+			r.Outcome = "DEFENDED"
+			r.Action = "litellm-client-revoke"
+			r.Actuated = true
+			if len(bound.Pods) == 2 {
+				r.DefendedPod = bound.Pods[0].Name
+			}
+			r.Containment = "client-revoked"
+		}
+	}
+	apply()
+	if err := persist(r); err != nil {
+		probe.Accepted = false
+		probe.Status = "INCONCLUSIVE_PERSISTENCE_ERROR"
+		probe.Issues = append(probe.Issues, "LiteLLM Live outcome persistence unavailable")
+		r.PersistenceError = "LiteLLM Live outcome persistence unavailable"
+		apply()
+		_ = write()
+	}
+	publish(r)
 }
 
 func (w *liteLiveWorker) save(name string, raw []byte) error {
@@ -377,13 +405,30 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	out.PolicyConfigMapRV = liteStr(liteMeta(policyCM), "resourceVersion")
 	out.PolicyUID = availabilityUID(policy)
 	out.PolicyGeneration = liteInt(liteMeta(policy), "generation")
-	if out.ClusterUID != w.p.ClusterUID || out.NamespaceUID != w.p.NamespaceUID || out.DeploymentUID != w.p.DeploymentUID ||
-		out.ServiceUID != w.p.ServiceUID || out.SourceConfigMapUID != w.p.SourceConfigMapUID ||
-		out.ClientsConfigMapUID != w.p.ClientsConfigMapUID || out.PolicyConfigMapUID != w.p.PolicyConfigMapUID ||
-		out.PolicyUID != w.p.PolicyUID || out.PolicyGeneration != w.p.PolicyGeneration ||
+	if out.ClusterUID == "" || out.NamespaceUID == "" || out.DeploymentUID == "" || out.ServiceUID == "" ||
+		out.SourceConfigMapUID == "" || out.ClientsConfigMapUID == "" || out.PolicyConfigMapUID == "" ||
+		out.PolicyUID == "" || out.PolicyGeneration < 1 ||
 		liteStr(liteMeta(source), "name") != "phorvex-litellm-admission-gateway" || source["immutable"] != true ||
-		liteStr(liteMeta(clients), "name") != "phorvex-litellm-live-clients" || clients["immutable"] != true {
+		liteStr(liteMeta(clients), "name") != "phorvex-litellm-live-clients" || clients["immutable"] != true ||
+		liteStr(liteMeta(policy), "name") != w.p.PolicyName {
 		return out, errors.New("LiteLLM installed source or policy identity drift")
+	}
+	policySpec := availabilityMap(policy["spec"])
+	selector := availabilityMap(availabilityMap(policySpec["selector"])["matchLabels"])
+	triggers := availabilityMap(policySpec["triggers"])
+	if liteStr(selector, "phorvex.ai/litellm-live") != "true" || len(selector) != 1 ||
+		liteStr(policySpec, "mode") != "active" || triggers["reactiveOnly"] != true || triggers["eventDriven"] != true {
+		return out, errors.New("LiteLLM dedicated policy scope differs")
+	}
+	enabled, _ := availabilityMap(policySpec["actions"])["enabled"].([]any)
+	allowed := false
+	for _, action := range enabled {
+		if action == "litellm-client-revoke" {
+			allowed = true
+		}
+	}
+	if len(enabled) < 2 || !allowed {
+		return out, errors.New("LiteLLM ordinary action alternatives unavailable")
 	}
 	sourceData := availabilityMap(source["data"])
 	clientsData := availabilityMap(clients["data"])
@@ -392,34 +437,41 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		return out, errors.New("LiteLLM immutable source bytes differ")
 	}
 	var config struct {
-		Version        int    `json:"version"`
-		AttackerSHA256 string `json:"attackerSHA256"`
-		ControlSHA256  string `json:"controlSHA256"`
-		ModelAlias     string `json:"modelAlias"`
+		Version    int    `json:"version"`
+		SeedSHA256 string `json:"seedSHA256"`
+		ModelAlias string `json:"modelAlias"`
 	}
-	if availabilityDecode([]byte(liteStr(clientsData, "clients.json")), &config) != nil || config.Version != 1 ||
-		config.AttackerSHA256 != w.p.AttackerSHA256 || config.ControlSHA256 != w.p.ControlSHA256 || config.ModelAlias != w.p.ModelAlias {
+	if availabilityDecode([]byte(liteStr(clientsData, "clients.json")), &config) != nil || config.Version != 2 ||
+		config.SeedSHA256 != w.p.SeedSHA256 || config.ModelAlias != w.p.ModelAlias {
 		return out, errors.New("LiteLLM owned-client binding differs")
 	}
 	var state struct {
-		Version      int    `json:"version"`
-		Active       bool   `json:"active"`
-		Revision     int64  `json:"revision"`
-		OperationID  string `json:"operationId"`
-		ClientSHA256 string `json:"clientSHA256"`
+		Version  int             `json:"version"`
+		Revision int64           `json:"revision"`
+		Entries  []liteLiveEntry `json:"entries"`
 	}
 	stateRaw := []byte(liteStr(availabilityMap(policyCM["data"]), "state.json"))
-	if availabilityDecode(stateRaw, &state) != nil || state.Version != 1 || state.ClientSHA256 != w.p.AttackerSHA256 ||
-		(state.Active && (state.Revision < 1 || state.OperationID == "")) || (!state.Active && (state.Revision != 0 || state.OperationID != "")) {
+	if availabilityDecode(stateRaw, &state) != nil || state.Version != 2 || state.Revision != int64(len(state.Entries)) ||
+		state.Revision < 0 || state.Revision > 256 {
 		return out, errors.New("LiteLLM policy state differs")
 	}
-	canonical, _ := json.Marshal(map[string]any{"active": state.Active, "clientSHA256": state.ClientSHA256, "operationId": state.OperationID, "revision": state.Revision, "version": state.Version})
+	previous := ""
+	for _, entry := range state.Entries {
+		if !entry.Active || !staticSHA256.MatchString(entry.ClientSHA256) || entry.ClientSHA256 <= previous || entry.OperationID == "" {
+			return out, errors.New("LiteLLM policy historical entry invalid")
+		}
+		previous = entry.ClientSHA256
+		if entry.ClientSHA256 == w.attackerSHA {
+			out.Active, out.OperationID = true, entry.OperationID
+		}
+	}
+	canonical, _ := json.Marshal(map[string]any{"entries": state.Entries, "revision": state.Revision, "version": state.Version})
 	if !bytes.Equal(stateRaw, canonical) {
 		return out, errors.New("LiteLLM policy JSON is not canonical")
 	}
-	out.Active = state.Active
 	out.Revision = state.Revision
-	out.OperationID = state.OperationID
+	out.EntryCount = state.Revision
+	out.Entries = state.Entries
 	ports, _ := availabilityMap(svc["spec"])["ports"].([]any)
 	if len(ports) != 1 || liteInt(availabilityMap(ports[0]), "port") != 4000 ||
 		liteInt(availabilityMap(ports[0]), "targetPort") != 4001 ||
@@ -445,15 +497,11 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		return out, errors.New("LiteLLM Pod cardinality differs")
 	}
 	out.PodIPs = map[string]string{}
-	for _, pin := range w.p.Pods {
-		var found map[string]any
-		for _, raw := range podItems {
-			p := availabilityMap(raw)
-			if liteStr(liteMeta(p), "name") == pin.Name {
-				found = p
-			}
-		}
-		if found == nil || availabilityUID(found) != pin.UID || liteStr(availabilityMap(found["status"]), "phase") != "Running" {
+	for _, raw := range podItems {
+		found := availabilityMap(raw)
+		pin := liteLivePod{Name: liteStr(liteMeta(found), "name"), UID: availabilityUID(found)}
+		if pin.Name == "" || pin.UID == "" || liteStr(availabilityMap(found["status"]), "phase") != "Running" ||
+			liteStr(availabilityMap(liteMeta(found)["labels"]), "phorvex.ai/litellm-live") != "true" {
 			return out, errors.New("LiteLLM Pod incarnation differs")
 		}
 		cs, _ := availabilityMap(found["status"])["containerStatuses"].([]any)
@@ -473,9 +521,11 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 				gateway = liteStr(row, "imageID")
 			}
 		}
-		if backend != pin.BackendImageID || gateway != pin.GatewayImageID {
+		if !mongoPinnedImage.MatchString(backend) || !mongoPinnedImage.MatchString(gateway) ||
+			!strings.HasSuffix(gateway, w.p.GatewayImage[strings.LastIndex(w.p.GatewayImage, "@sha256:"):]) {
 			return out, errors.New("LiteLLM container source differs")
 		}
+		pin.BackendImageID, pin.GatewayImageID = backend, gateway
 		var gatewaySpecImage string
 		containers, _ := availabilityMap(found["spec"])["containers"].([]any)
 		for _, c := range containers {
@@ -490,9 +540,9 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		annotations := availabilityMap(liteMeta(found)["annotations"])
 		if liteStr(annotations, "phorvex.ai/litellm-gateway-source-sha256") != w.p.SourceSHA256 ||
 			liteStr(annotations, "phorvex.ai/litellm-gateway-image") != w.p.GatewayImage ||
-			liteStr(annotations, "phorvex.ai/litellm-client-policy-configmap-uid") != w.p.PolicyConfigMapUID ||
-			liteStr(annotations, "phorvex.ai/litellm-live-service-uid") != w.p.ServiceUID ||
-			liteStr(annotations, "phorvex.ai/litellm-owned-client-sha256") != w.p.AttackerSHA256 {
+			liteStr(annotations, "phorvex.ai/litellm-client-policy-configmap-uid") != out.PolicyConfigMapUID ||
+			liteStr(annotations, "phorvex.ai/litellm-live-service-uid") != out.ServiceUID ||
+			liteStr(annotations, "phorvex.ai/litellm-trial-seed-sha256") != w.p.SeedSHA256 {
 			return out, errors.New("LiteLLM Pod gateway annotation differs")
 		}
 		ip := liteStr(availabilityMap(found["status"]), "podIP")
@@ -515,6 +565,10 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 		out.PodIPs[pin.UID] = ip
 		out.Pods = append(out.Pods, pin)
 	}
+	sort.Slice(out.Pods, func(i, j int) bool { return out.Pods[i].Name < out.Pods[j].Name })
+	if out.Pods[0].UID == out.Pods[1].UID || out.Pods[0].Name == out.Pods[1].Name {
+		return out, errors.New("LiteLLM Pod identities ambiguous")
+	}
 	return out, nil
 }
 
@@ -532,27 +586,39 @@ func liteSameSource(a, b liteLiveSnapshot) bool {
 	return true
 }
 
+func litePriorEntriesPreserved(before, after liteLiveSnapshot) bool {
+	if len(after.Entries) < len(before.Entries) {
+		return false
+	}
+	entries := make(map[string]liteLiveEntry, len(after.Entries))
+	for _, entry := range after.Entries {
+		entries[entry.ClientSHA256] = entry
+	}
+	for _, entry := range before.Entries {
+		if entries[entry.ClientSHA256] != entry {
+			return false
+		}
+	}
+	return true
+}
+
 func (w *liteLiveWorker) loadTokens() error {
-	read := func(path string, expected string) (string, error) {
-		raw, err := os.ReadFile(path)
-		if err != nil || len(raw) < 24 || len(raw) > 257 {
-			return "", errors.New("owned client token unavailable")
-		}
-		token := strings.TrimSpace(string(raw))
-		if !strings.HasPrefix(token, "sk-") || liteSHA([]byte(token)) != expected {
-			return "", errors.New("owned client token digest differs")
-		}
-		return token, nil
+	seed, err := os.ReadFile("/etc/phorvex-litellm-live/seed")
+	if err != nil || len(seed) < 32 || len(seed) > 64 || liteSHA(seed) != w.p.SeedSHA256 {
+		return errors.New("reviewed LiteLLM trial seed unavailable")
 	}
-	var err error
-	w.attackerToken, err = read("/etc/phorvex-litellm-live/attacker-token", w.p.AttackerSHA256)
-	if err != nil {
-		return err
+	nonceBytes := make([]byte, 16)
+	if _, err = rand.Read(nonceBytes); err != nil {
+		return errors.New("fresh LiteLLM run nonce unavailable")
 	}
-	w.controlToken, err = read("/etc/phorvex-litellm-live/control-token", w.p.ControlSHA256)
-	if err != nil {
-		return err
+	nonce := hex.EncodeToString(nonceBytes)
+	derive := func(role string) string {
+		mac := hmac.New(sha256.New, seed)
+		_, _ = mac.Write([]byte("phorvex-litellm-live-v2:" + nonce + ":" + role))
+		return "sk-phx2-" + role + "-" + nonce + "-" + hex.EncodeToString(mac.Sum(nil))
 	}
+	w.attackerToken, w.controlToken = derive("a"), derive("c")
+	w.attackerSHA, w.controlSHA = liteSHA([]byte(w.attackerToken)), liteSHA([]byte(w.controlToken))
 	raw, err := os.ReadFile("/etc/phorvex-litellm-status/token")
 	if err != nil || len(raw) < 32 || len(raw) > 257 {
 		return errors.New("status token unavailable")
@@ -566,6 +632,15 @@ func litePrompt(scenario string, index int) string {
 		return "Reply with the single word OK."
 	}
 	return []string{"Reply with the single word BLUE.", "What is 2 plus 2? Reply with one digit.", "Reply with the single word GREEN.", "What is 3 plus 5? Reply with one digit."}[index]
+}
+
+func liteHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true,
+			MaxResponseHeaderBytes: 8192},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 func (w *liteLiveWorker) call(label, token, prompt string) (liteLiveCall, error) {
@@ -582,8 +657,7 @@ func (w *liteLiveWorker) call(label, token, prompt string) (liteLiveCall, error)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	client := http.Client{Timeout: 40 * time.Second}
-	response, err := client.Do(req)
+	response, err := liteHTTPClient(40 * time.Second).Do(req)
 	if err != nil {
 		return out, errors.New("exact LiteLLM Service request unresolved")
 	}
@@ -598,7 +672,7 @@ func (w *liteLiveWorker) call(label, token, prompt string) (liteLiveCall, error)
 	out.Status = response.StatusCode
 	out.GatewayPodUID = response.Header.Get("X-Phorvex-Gateway-Pod-UID")
 	out.BodySHA256 = liteSHA(body)
-	if out.GatewayPodUID != w.p.Pods[0].UID && out.GatewayPodUID != w.p.Pods[1].UID {
+	if len(w.bound.Pods) != 2 || (out.GatewayPodUID != w.bound.Pods[0].UID && out.GatewayPodUID != w.bound.Pods[1].UID) {
 		return out, errors.New("LiteLLM response gateway Pod UID differs")
 	}
 	if response.StatusCode == 429 {
@@ -644,17 +718,17 @@ func (w *liteLiveWorker) call(label, token, prompt string) (liteLiveCall, error)
 	return out, nil
 }
 
-func (w *liteLiveWorker) statuses(snapshot liteLiveSnapshot, label string) (map[string]liteLiveStatus, error) {
+func (w *liteLiveWorker) statuses(snapshot liteLiveSnapshot, label, clientSHA, role string) (map[string]liteLiveStatus, error) {
 	out := map[string]liteLiveStatus{}
 	for i, pod := range snapshot.Pods {
 		ctx, stop := context.WithTimeout(w.ctx, 8*time.Second)
-		req, err := http.NewRequestWithContext(ctx, "GET", "http://"+snapshot.PodIPs[pod.UID]+":4002/v1/admission/state", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://"+snapshot.PodIPs[pod.UID]+":4002/v1/admission/state?clientSHA256="+clientSHA, nil)
 		if err != nil {
 			stop()
 			return nil, err
 		}
 		req.Header.Set("Authorization", "Bearer "+w.statusToken)
-		response, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+		response, err := liteHTTPClient(8 * time.Second).Do(req)
 		if err != nil {
 			stop()
 			return nil, errors.New("LiteLLM exact gateway readback unavailable")
@@ -669,8 +743,10 @@ func (w *liteLiveWorker) statuses(snapshot liteLiveSnapshot, label string) (map[
 			return nil, err
 		}
 		var state liteLiveStatus
-		if availabilityDecode(body, &state) != nil || !state.Ready || state.Version != 1 || state.PodUID != pod.UID ||
-			state.SourceSHA256 != w.p.SourceSHA256 || state.ConfigMapUID != w.p.PolicyConfigMapUID || state.ClientSHA256 != w.p.AttackerSHA256 {
+		if availabilityDecode(body, &state) != nil || !state.Ready || state.Version != 2 || state.PodUID != pod.UID ||
+			state.SourceSHA256 != w.p.SourceSHA256 || state.SeedSHA256 != w.p.SeedSHA256 ||
+			state.ConfigMapUID != snapshot.PolicyConfigMapUID || state.ClientSHA256 != clientSHA ||
+			(role != "" && state.Role != role) {
 			return nil, errors.New("LiteLLM authenticated gateway identity differs")
 		}
 		out[pod.UID] = state
@@ -678,15 +754,10 @@ func (w *liteLiveWorker) statuses(snapshot liteLiveSnapshot, label string) (map[
 	return out, nil
 }
 
-func liteCounterSum(states map[string]liteLiveStatus, role string, field string) int64 {
+func liteCounterSum(states map[string]liteLiveStatus, field string) int64 {
 	var n int64
 	for _, s := range states {
-		var c liteLiveCounters
-		if role == "attacker" {
-			c = s.Counters.Attacker
-		} else {
-			c = s.Counters.Control
-		}
+		c := s.Counters
 		switch field {
 		case "forwarded":
 			n += c.ForwardedRequests
@@ -701,9 +772,63 @@ func liteCounterSum(states map[string]liteLiveStatus, role string, field string)
 	return n
 }
 
-func liteJournalName(policyUID, clientSHA string) string {
-	sum := sha256.Sum256([]byte(policyUID + ":" + clientSHA))
-	return "phorvex-litellm-revoke-" + hex.EncodeToString(sum[:12])
+func liteJournalName() string { return "phorvex-litellm-revoke-journal" }
+
+func liteJournalRows(row map[string]any) ([]map[string]any, error) {
+	meta := liteMeta(row)
+	data := availabilityMap(row["data"])
+	if availabilityUID(row) == "" || liteStr(meta, "name") != liteJournalName() ||
+		liteStr(availabilityMap(meta["labels"]), "phorvex.ai/litellm-client-revoke-journal") != "v2" || len(data) != 1 {
+		return nil, errors.New("LiteLLM protected journal authority differs")
+	}
+	raw := []byte(liteStr(data, "receipts.json"))
+	var doc struct {
+		Version  int              `json:"version"`
+		Receipts []map[string]any `json:"receipts"`
+	}
+	if len(raw) == 0 || len(raw) > 256<<10 || availabilityDecode(raw, &doc) != nil ||
+		doc.Version != 2 || len(doc.Receipts) > 256 {
+		return nil, errors.New("LiteLLM protected journal payload differs")
+	}
+	canonical, _ := json.Marshal(map[string]any{"receipts": doc.Receipts, "version": doc.Version})
+	if !bytes.Equal(raw, canonical) {
+		return nil, errors.New("LiteLLM protected journal canonical bytes differ")
+	}
+	previous := ""
+	for _, receipt := range doc.Receipts {
+		clientSHA := liteStr(receipt, "clientSHA256")
+		if !staticSHA256.MatchString(clientSHA) || clientSHA <= previous {
+			return nil, errors.New("LiteLLM protected journal order differs")
+		}
+		previous = clientSHA
+	}
+	return doc.Receipts, nil
+}
+
+func (w *liteLiveWorker) journalBefore(snapshot liteLiveSnapshot) error {
+	row, err := w.kube("before-journal", "-n", "phorvex-system", "get", "configmap", liteJournalName(), "-o", "json")
+	if err != nil {
+		return err
+	}
+	receipts, err := liteJournalRows(row)
+	if err != nil || len(receipts) != int(snapshot.Revision) || len(snapshot.Entries) != len(receipts) {
+		return errors.New("LiteLLM prior protected journal and policy revision differ")
+	}
+	entries := make(map[string]liteLiveEntry, len(snapshot.Entries))
+	for _, entry := range snapshot.Entries {
+		entries[entry.ClientSHA256] = entry
+	}
+	w.priorReceipts = map[string]string{}
+	for _, receipt := range receipts {
+		entry, exists := entries[liteStr(receipt, "clientSHA256")]
+		if !exists || !entry.Active || entry.OperationID != liteStr(receipt, "operationId") ||
+			liteStr(receipt, "phase") != "terminal-full" {
+			return errors.New("LiteLLM prior protected operation and deny entry differ")
+		}
+		b, _ := json.Marshal(receipt)
+		w.priorReceipts[liteStr(receipt, "clientSHA256")] = liteSHA(b)
+	}
+	return nil
 }
 
 func (w *liteLiveWorker) execute(probe *liteLLMLiveProbeResult) (err error) {
@@ -714,68 +839,94 @@ func (w *liteLiveWorker) execute(probe *liteLLMLiveProbeResult) (err error) {
 	if err != nil {
 		return err
 	}
-	if before.Active || before.Revision != 0 || before.OperationID != "" {
-		return errors.New("LiteLLM client policy already active")
+	w.bound = before
+	w.record.Pod, w.record.TargetUID = before.Pods[0].Name, before.Pods[0].UID
+	publishAttack(w.record)
+	if before.Active || before.OperationID != "" || before.EntryCount >= 256 {
+		return errors.New("fresh LiteLLM client unavailable or deny registry full")
 	}
-	preStatus, err := w.statuses(before, "before")
+	if err = w.journalBefore(before); err != nil {
+		return err
+	}
+	preStatus, err := w.statuses(before, "before-attacker", w.attackerSHA, "")
 	if err != nil {
 		return err
 	}
 	for _, state := range preStatus {
-		if state.Active || state.Revision != 0 || state.OperationID != "" {
+		if state.Active || state.Revision != before.Revision || state.OperationID != "" || state.Role != "" {
 			return errors.New("LiteLLM gateway pre-state differs")
 		}
+	}
+	preControl, err := w.statuses(before, "before-control", w.controlSHA, "")
+	if err != nil {
+		return err
 	}
 	count := 2
 	if probe.Scenario == "ai2-query-extraction" {
 		count = 3
 	}
-	for i := 0; i < count; i++ {
-		call, e := w.call(fmt.Sprintf("before-attacker-%d", i), w.attackerToken, litePrompt(probe.Scenario, i))
+	seen := map[string]bool{}
+	actual := 0
+	for i := 0; i < 12 && (i < count || len(seen) < 2); i++ {
+		promptIndex := i
+		if promptIndex >= count {
+			promptIndex = i % count
+		}
+		call, e := w.call(fmt.Sprintf("before-attacker-%d", i), w.attackerToken, litePrompt(probe.Scenario, promptIndex))
 		if e != nil {
 			return e
 		}
 		if call.Class != "ACCEPTED_MODEL_COMPLETION" {
 			return errors.New("LiteLLM original attacker work not accepted")
 		}
+		seen[call.GatewayPodUID] = true
+		actual++
 		probe.InitialUsageTokens += call.UsageTokens
+	}
+	if len(seen) != 2 {
+		return errors.New("LiteLLM real Service did not route original work to both exact gateways")
 	}
 	control, err := w.call("before-control", w.controlToken, "Reply with the single word OK.")
 	if err != nil || control.Class != "ACCEPTED_MODEL_COMPLETION" {
 		return errors.New("LiteLLM original benign control unavailable")
 	}
 	postBaseline, err := w.snapshot("post-baseline")
-	if err != nil || !liteSameSource(before, postBaseline) || postBaseline.Active || postBaseline.Revision != 0 || postBaseline.PolicyConfigMapRV != before.PolicyConfigMapRV {
+	if err != nil || !liteSameSource(before, postBaseline) || postBaseline.Active ||
+		postBaseline.Revision != before.Revision || postBaseline.PolicyConfigMapRV != before.PolicyConfigMapRV {
 		return errors.New("LiteLLM original source/policy drift")
 	}
-	baselineStates, err := w.statuses(postBaseline, "post-baseline")
+	baselineStates, err := w.statuses(postBaseline, "post-baseline-attacker", w.attackerSHA, "attacker")
 	if err != nil {
 		return err
 	}
-	if liteCounterSum(baselineStates, "attacker", "completed")-liteCounterSum(preStatus, "attacker", "completed") != int64(count) ||
-		liteCounterSum(baselineStates, "attacker", "usage")-liteCounterSum(preStatus, "attacker", "usage") != probe.InitialUsageTokens ||
-		liteCounterSum(baselineStates, "control", "completed")-liteCounterSum(preStatus, "control", "completed") != 1 {
+	baselineControl, err := w.statuses(postBaseline, "post-baseline-control", w.controlSHA, "")
+	if err != nil {
+		return err
+	}
+	if liteCounterSum(baselineStates, "completed")-liteCounterSum(preStatus, "completed") != int64(actual) ||
+		liteCounterSum(baselineStates, "usage")-liteCounterSum(preStatus, "usage") != probe.InitialUsageTokens ||
+		liteCounterSum(baselineControl, "completed")-liteCounterSum(preControl, "completed") != 1 {
 		return errors.New("LiteLLM original upstream counter/usage receipt differs")
 	}
 	probe.InitialAcceptedWork = true
 	probe.Status = "LANDED_UNPROTECTED"
-	return w.afterOriginal(probe, before, baselineStates)
+	return w.afterOriginal(probe, before, baselineStates, baselineControl)
 }
 
-func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before liteLiveSnapshot, baselineStates map[string]liteLiveStatus) (err error) {
+func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before liteLiveSnapshot, baselineStates, baselineControl map[string]liteLiveStatus) (err error) {
 	preEvent, err := w.snapshot("pre-event")
-	if err != nil || !liteSameSource(before, preEvent) || preEvent.Active || preEvent.Revision != 0 ||
+	if err != nil || !liteSameSource(before, preEvent) || preEvent.Active || preEvent.Revision != before.Revision ||
 		preEvent.PolicyConfigMapRV != before.PolicyConfigMapRV {
 		return errors.New("LiteLLM immediate pre-event policy/source differs")
 	}
 	var auditProfile guardrailAvailabilityProfile
-	auditProfile.Fixture.PodName = w.p.Pods[0].Name
-	auditProfile.Fixture.PodUID = w.p.Pods[0].UID
-	auditProfile.Fixture.PolicyUID = w.p.PolicyUID
-	auditProfile.Fixture.ClusterUID = w.p.ClusterUID
+	auditProfile.Fixture.PodName = before.Pods[0].Name
+	auditProfile.Fixture.PodUID = before.Pods[0].UID
+	auditProfile.Fixture.PolicyUID = before.PolicyUID
+	auditProfile.Fixture.ClusterUID = before.ClusterUID
 	audit := &availabilityWorker{rm: &RunManager{cfg: w.s.cfg}, ctx: w.ctx, out: w.out,
 		p: auditProfile, deadline: time.Now().Add(600 * time.Second), auditNamespace: "litellm",
-		before: availabilitySnapshot{TargetPodUID: w.p.Pods[0].UID, PolicyUID: w.p.PolicyUID, ClusterUID: w.p.ClusterUID},
+		before: availabilitySnapshot{TargetPodUID: before.Pods[0].UID, PolicyUID: before.PolicyUID, ClusterUID: before.ClusterUID},
 		t:      availabilityTerminal{Schema: "litellm-live-audit-v1", RunID: filepath.Base(w.out)}}
 	w.audit = audit
 	auditStart, err := audit.auditStart()
@@ -798,16 +949,17 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 		return err
 	}
 	after, err := w.snapshot("post-action")
-	if err != nil || !liteSameSource(before, after) || !after.Active || after.Revision != 1 ||
+	if err != nil || !liteSameSource(before, after) || !litePriorEntriesPreserved(before, after) ||
+		!after.Active || after.Revision != before.Revision+1 ||
 		after.OperationID != liteStr(receipt, "operationId") {
 		return errors.New("LiteLLM post-action policy state differs")
 	}
-	statuses, err := w.statuses(after, "post-action")
+	statuses, err := w.statuses(after, "post-action-attacker", w.attackerSHA, "attacker")
 	if err != nil {
 		return err
 	}
 	for _, state := range statuses {
-		if !state.Active || state.Revision != 1 || state.OperationID != after.OperationID {
+		if !state.Active || state.Revision != after.Revision || state.OperationID != after.OperationID {
 			return errors.New("LiteLLM both gateways did not activate exact operation")
 		}
 	}
@@ -831,17 +983,22 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 		return errors.New("LiteLLM ordinary authorized completion regressed")
 	}
 	final, err := w.snapshot("post-replay")
-	if err != nil || !liteSameSource(before, final) || !final.Active || final.Revision != 1 || final.OperationID != after.OperationID {
+	if err != nil || !liteSameSource(before, final) || !litePriorEntriesPreserved(after, final) ||
+		!final.Active || final.Revision != after.Revision || final.OperationID != after.OperationID {
 		return errors.New("LiteLLM final source/policy state differs")
 	}
-	finalStatuses, err := w.statuses(final, "post-replay")
+	finalStatuses, err := w.statuses(final, "post-replay-attacker", w.attackerSHA, "attacker")
 	if err != nil {
 		return err
 	}
-	if liteCounterSum(finalStatuses, "attacker", "forwarded") != liteCounterSum(baselineStates, "attacker", "forwarded") ||
-		liteCounterSum(finalStatuses, "attacker", "completed") != liteCounterSum(baselineStates, "attacker", "completed") ||
-		liteCounterSum(finalStatuses, "attacker", "denied") != liteCounterSum(baselineStates, "attacker", "denied")+1 ||
-		liteCounterSum(finalStatuses, "control", "completed") != liteCounterSum(baselineStates, "control", "completed")+1 {
+	finalControl, err := w.statuses(final, "post-replay-control", w.controlSHA, "")
+	if err != nil {
+		return err
+	}
+	if liteCounterSum(finalStatuses, "forwarded") != liteCounterSum(baselineStates, "forwarded") ||
+		liteCounterSum(finalStatuses, "completed") != liteCounterSum(baselineStates, "completed") ||
+		liteCounterSum(finalStatuses, "denied") != liteCounterSum(baselineStates, "denied")+1 ||
+		liteCounterSum(finalControl, "completed") != liteCounterSum(baselineControl, "completed")+1 {
 		return errors.New("LiteLLM attacker replay or benign upstream counters differ")
 	}
 	probe.ReplayBlockedBeforeUpstream = true
@@ -859,7 +1016,7 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 			continue
 		}
 		if decision.DecisionID != liteStr(receipt, "selectionDecisionId") || decision.TickID != liteStr(receipt, "tickId") ||
-			decision.AssetUID != created.TargetPodUID || decision.PolicyUID != w.p.PolicyUID || decision.ExactEventUID != created.UID ||
+			decision.AssetUID != created.TargetPodUID || decision.PolicyUID != before.PolicyUID || decision.ExactEventUID != created.UID ||
 			decision.ExactEventCreator != w.p.EventCreator {
 			return errors.New("LiteLLM selected decision and protected journal differ")
 		}
@@ -888,21 +1045,22 @@ func (w *liteLiveWorker) createEvent(objective string, observedAt time.Time) (*a
 	correlation := fmt.Sprintf("%x-%x", observedAt.UnixNano(), liteLiveSequence.Add(1))
 	name := "redteam-litellm-client-" + correlation
 	observation := map[string]any{
-		"version": 1, "clientSHA256": w.p.AttackerSHA256,
-		"configMapUID": w.p.PolicyConfigMapUID, "serviceUID": w.p.ServiceUID,
-		"targetPodUID": w.p.Pods[0].UID, "peerPodUID": w.p.Pods[1].UID,
+		"version": 2, "clientSHA256": w.attackerSHA,
+		"configMapUID": w.bound.PolicyConfigMapUID, "serviceUID": w.bound.ServiceUID,
+		"clientsConfigMapUID": w.bound.ClientsConfigMapUID, "seedSHA256": w.p.SeedSHA256,
+		"targetPodUID": w.bound.Pods[0].UID, "peerPodUID": w.bound.Pods[1].UID,
 		"requestPath": "/v1/chat/completions", "objective": objective,
-		"policyName": w.p.PolicyName, "policyUID": w.p.PolicyUID,
-		"policyGeneration": w.p.PolicyGeneration, "observedAt": observedAt.Format(time.RFC3339Nano),
+		"policyName": w.p.PolicyName, "policyUID": w.bound.PolicyUID,
+		"policyGeneration": w.bound.PolicyGeneration, "observedAt": observedAt.Format(time.RFC3339Nano),
 	}
 	note, _ := json.Marshal(observation)
 	object := map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{"name": name,
 			"labels":      map[string]string{"phorvex.ai/redteam": "true", "phorvex.ai/test-injected": "true", "phorvex.ai/attack-correlation": correlation},
-			"annotations": map[string]string{"phorvex.ai/console-target-pod-uid": w.p.Pods[0].UID, liteLiveAnnotation: string(note)}},
+			"annotations": map[string]string{"phorvex.ai/console-target-pod-uid": w.bound.Pods[0].UID, liteLiveAnnotation: string(note)}},
 		"spec": map[string]any{"description": "TEST_INJECTED after actual scoped LiteLLM client work",
-			"targets":      []string{"litellm/" + w.p.Pods[0].Name},
+			"targets":      []string{"litellm/" + w.bound.Pods[0].Name},
 			"rule":         map[string]string{"type": liteLiveRule, "threatLevel": "critical", "source": "redteam"},
 			"anomalyScore": "0.95"},
 	}
@@ -943,24 +1101,57 @@ func (w *liteLiveWorker) createEvent(objective string, observedAt time.Time) (*a
 	}
 	return &availabilityEvent{UID: availabilityUID(created), Name: name,
 		ResourceVersion: liteStr(liteMeta(created), "resourceVersion"), CreatorIdentity: w.p.EventCreator,
-		Correlation: correlation, TargetPodUID: w.p.Pods[0].UID, RuleType: liteLiveRule, Source: "redteam"}, nil
+		Correlation: correlation, TargetPodUID: w.bound.Pods[0].UID, RuleType: liteLiveRule, Source: "redteam"}, nil
 }
 
 func (w *liteLiveWorker) pollJournal(event *availabilityEvent) (map[string]any, error) {
-	name := liteJournalName(w.p.PolicyUID, w.p.AttackerSHA256)
+	name := liteJournalName()
 	deadline := time.Now().Add(180 * time.Second)
 	for i := 0; i < 36 && time.Now().Before(deadline); i++ {
 		row, err := w.kube(fmt.Sprintf("journal-%02d", i), "-n", "phorvex-system", "get", "configmap", name, "-o", "json")
 		if err == nil {
-			var receipt map[string]any
-			if availabilityDecode([]byte(liteStr(availabilityMap(row["data"]), "receipt")), &receipt) == nil &&
-				liteStr(receipt, "phase") == "terminal-full" {
-				if liteInt(receipt, "version") != 1 || liteStr(receipt, "eventName") != event.Name ||
+			receipts, parseErr := liteJournalRows(row)
+			if parseErr != nil || len(receipts) < int(w.bound.Revision) || len(receipts) > int(w.bound.Revision)+1 {
+				return nil, errors.New("LiteLLM protected journal array differs")
+			}
+			preserved := 0
+			for _, prior := range receipts {
+				clientSHA := liteStr(prior, "clientSHA256")
+				if priorHash, ok := w.priorReceipts[clientSHA]; ok {
+					preserved++
+					b, _ := json.Marshal(prior)
+					if liteSHA(b) != priorHash {
+						return nil, errors.New("LiteLLM prior protected receipt changed")
+					}
+				}
+			}
+			if preserved != len(w.priorReceipts) {
+				return nil, errors.New("LiteLLM prior protected receipts missing")
+			}
+			if len(receipts) == int(w.bound.Revision) {
+				goto nextPoll
+			}
+			matched := 0
+			for _, receipt := range receipts {
+				clientSHA := liteStr(receipt, "clientSHA256")
+				if clientSHA != w.attackerSHA {
+					if _, ok := w.priorReceipts[clientSHA]; !ok || liteStr(receipt, "phase") != "terminal-full" {
+						return nil, errors.New("LiteLLM prior protected receipt not terminal")
+					}
+					continue
+				}
+				matched++
+				if liteStr(receipt, "phase") != "terminal-full" {
+					continue
+				}
+				if liteInt(receipt, "version") != 2 || liteStr(receipt, "eventName") != event.Name ||
 					liteStr(receipt, "eventUID") != event.UID || liteStr(receipt, "targetUID") != event.TargetPodUID ||
-					liteStr(receipt, "peerUID") != w.p.Pods[1].UID || liteStr(receipt, "policyName") != w.p.PolicyName ||
-					liteStr(receipt, "policyUID") != w.p.PolicyUID || liteInt(receipt, "policyGeneration") != w.p.PolicyGeneration ||
-					liteStr(receipt, "clientSHA256") != w.p.AttackerSHA256 || liteStr(receipt, "configMapUID") != w.p.PolicyConfigMapUID ||
-					liteStr(receipt, "serviceUID") != w.p.ServiceUID || liteStr(receipt, "sourceSHA256") != w.p.SourceSHA256 ||
+					liteStr(receipt, "peerUID") != w.bound.Pods[1].UID || liteStr(receipt, "policyName") != w.p.PolicyName ||
+					liteStr(receipt, "policyUID") != w.bound.PolicyUID || liteInt(receipt, "policyGeneration") != w.bound.PolicyGeneration ||
+					liteStr(receipt, "configMapUID") != w.bound.PolicyConfigMapUID ||
+					liteStr(receipt, "clientsConfigMapUID") != w.bound.ClientsConfigMapUID ||
+					liteStr(receipt, "seedSHA256") != w.p.SeedSHA256 ||
+					liteStr(receipt, "serviceUID") != w.bound.ServiceUID || liteStr(receipt, "sourceSHA256") != w.p.SourceSHA256 ||
 					liteStr(receipt, "tickId") == "" || liteStr(receipt, "selectionDecisionId") == "" ||
 					liteStr(receipt, "operationId") != liteStr(receipt, "selectionDecisionId") {
 					return nil, errors.New("LiteLLM protected terminal journal identity differs")
@@ -970,7 +1161,11 @@ func (w *liteLiveWorker) pollJournal(event *availabilityEvent) (map[string]any, 
 				}
 				return receipt, nil
 			}
+			if matched != 1 {
+				return nil, errors.New("LiteLLM protected journal target receipt missing")
+			}
 		}
+	nextPoll:
 		select {
 		case <-w.ctx.Done():
 			return nil, errors.New("LiteLLM journal observation deadline exhausted")
