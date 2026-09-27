@@ -78,6 +78,7 @@ type liteOutputWorker struct {
 	postStates           map[string]liteOutputStatus
 	selectedPrompt       string
 	originalBody         []byte
+	originalObservedAt   time.Time
 	originalCompletionID string
 	targetPodUID         string
 	peerPodUID           string
@@ -1023,6 +1024,7 @@ func (w *liteOutputWorker) execute() (err error) {
 			w.selectedPrompt = prompt
 			w.request = liteOutputRequest(w.base.p.ModelAlias, prompt)
 			w.originalBody = call.Body
+			w.originalObservedAt = time.Now().UTC()
 			w.originalCompletionID = call.CompletionID
 			w.probe.OriginalCompletion = call.CompletionID
 			w.probe.InitialDisclosure = true
@@ -1060,6 +1062,10 @@ func (w *liteOutputWorker) execute() (err error) {
 			return errors.New("LiteLLM original leak already protected")
 		}
 	}
+	if w.originalObservedAt.IsZero() || time.Since(w.originalObservedAt) < 0 ||
+		time.Since(w.originalObservedAt) >= 45*time.Second {
+		return errors.New("LiteLLM original disclosure became stale before signaling")
+	}
 	if err = w.createRule(); err != nil {
 		return err
 	}
@@ -1067,7 +1073,10 @@ func (w *liteOutputWorker) execute() (err error) {
 	if err != nil {
 		return err
 	}
-	event, err := w.createEvent(time.Now().UTC())
+	if time.Since(w.originalObservedAt) >= 50*time.Second {
+		return errors.New("LiteLLM original disclosure became stale after rule assignment")
+	}
+	event, err := w.createEvent(w.originalObservedAt)
 	if err != nil {
 		return err
 	}

@@ -206,7 +206,8 @@ func TestLiteOutputProductionRuleAndInjectedEventContainOnlyDigests(t *testing.T
 	if !staticSHA256.MatchString(w.ruleSHA) || w.ruleCMName != "litellm-output-rule-00" || w.ruleCMUID != "slot-uid-00" {
 		t.Fatal("rule not created")
 	}
-	event, err := w.createEvent(time.Now().UTC())
+	observedAt := time.Now().UTC()
+	event, err := w.createEvent(observedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,6 +221,7 @@ func TestLiteOutputProductionRuleAndInjectedEventContainOnlyDigests(t *testing.T
 	}
 	if !strings.Contains(string(second), liteOutputAnnotation) ||
 		!strings.Contains(string(second), liteSHA(w.originalBody)) ||
+		!strings.Contains(string(second), observedAt.Format(time.RFC3339Nano)) ||
 		!strings.Contains(string(first), "contextSeedSHA256") {
 		t.Fatal("rule/event source digest absent")
 	}
