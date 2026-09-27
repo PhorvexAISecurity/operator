@@ -32,6 +32,7 @@ const (
 	voiceOutputJournalLabel          = "phorvex.ai/voice-output-journal"
 	voiceOutputObservationAnnotation = "phorvex.ai/voice-output-observation-v1"
 	voiceOutputSecretName            = "voice-memory-state-token"
+	voiceOutputTestSecretName        = "voice-output-test-token"
 	voiceOutputCreator               = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 )
 
@@ -93,7 +94,8 @@ func voiceOutputRequiredMounts(p *corev1.Pod) bool {
 		}
 	}
 	policyVol, tokenVol := mounts["/etc/phorvex/voice-output-policy"], mounts["/etc/phorvex/voice-memory-state-token"]
-	if policyVol == "" || tokenVol == "" || watermark == "" {
+	testTokenVol := mounts["/etc/phorvex/voice-output-test-token"]
+	if policyVol == "" || tokenVol == "" || testTokenVol == "" || watermark == "" {
 		return false
 	}
 	count := 0
@@ -104,11 +106,14 @@ func voiceOutputRequiredMounts(p *corev1.Pod) bool {
 		if v.Name == tokenVol && v.Secret != nil && v.Secret.SecretName == voiceOutputSecretName {
 			count++
 		}
+		if v.Name == testTokenVol && v.Secret != nil && v.Secret.SecretName == voiceOutputTestSecretName {
+			count++
+		}
 		if v.Name == watermark && v.EmptyDir != nil {
 			count++
 		}
 	}
-	return count == 3
+	return count == 4
 }
 
 func voiceOutputScopeAt(ctx context.Context, reader client.Reader, target Target) (voiceOutputScope, error) {

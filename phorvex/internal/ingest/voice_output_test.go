@@ -30,7 +30,7 @@ func TestVoiceOutputPayloadExactAndCurrentOwnerBinding(t *testing.T) {
 	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "voice-bot", Namespace: "voice", UID: depUID}}
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "voice-bot-rs", Namespace: "voice", UID: types.UID("55555555-5555-4555-8555-555555555555"), OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}}
 	optional := false
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "voice-bot-1", Namespace: "voice", UID: podUID, Annotations: map[string]string{"phorvex.ai/voice-output-policy-configmap": voiceoutputpolicy.ConfigMapName, "phorvex.ai/voice-output-source-sha256": source, "phorvex.ai/voice-output-event-creator": creator}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_OUTPUT_POLICY_REQUIRED", Value: "true"}}, VolumeMounts: []corev1.VolumeMount{{Name: "policy", MountPath: "/etc/phorvex/voice-output-policy", ReadOnly: true}, {Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true}, {Name: "state", MountPath: "/var/lib/phorvex-voice-memory"}}}}, Volumes: []corev1.Volume{{Name: "policy", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: voiceoutputpolicy.ConfigMapName}, Optional: &optional}}}, {Name: "token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "voice-memory-state-token"}}}, {Name: "state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}}}}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "voice-bot-1", Namespace: "voice", UID: podUID, Annotations: map[string]string{"phorvex.ai/voice-output-policy-configmap": voiceoutputpolicy.ConfigMapName, "phorvex.ai/voice-output-source-sha256": source, "phorvex.ai/voice-output-event-creator": creator}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_OUTPUT_POLICY_REQUIRED", Value: "true"}}, VolumeMounts: []corev1.VolumeMount{{Name: "policy", MountPath: "/etc/phorvex/voice-output-policy", ReadOnly: true}, {Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true}, {Name: "test-token", MountPath: "/etc/phorvex/voice-output-test-token", ReadOnly: true}, {Name: "state", MountPath: "/var/lib/phorvex-voice-memory"}}}}, Volumes: []corev1.Volume{{Name: "policy", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: voiceoutputpolicy.ConfigMapName}, Optional: &optional}}}, {Name: "token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "voice-memory-state-token"}}}, {Name: "test-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "voice-output-test-token"}}}, {Name: "state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}}}}
 	rule := voiceoutputpolicy.Rule{Version: 1, DeploymentUID: string(depUID), ConfigMapUID: string(cmUID), PolicyUID: polUID, SourceSHA256: source, Entries: []voiceoutputpolicy.Entry{}}
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: voiceoutputpolicy.ConfigMapName, Namespace: "voice", UID: cmUID, ResourceVersion: "1", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Data: map[string]string{voiceoutputpolicy.RuleKey: string(rule.Bytes())}}
 	scheme := runtime.NewScheme()
@@ -56,6 +56,14 @@ func TestVoiceOutputPayloadExactAndCurrentOwnerBinding(t *testing.T) {
 	bindVoiceOutputObservation(ctx, c, &view, []model.SecurityEventInfo{event})
 	if !view.HasBoundVoiceOutputObservation() {
 		t.Fatalf("exact observed rule did not bind: %+v", view.VoiceOutputObservation)
+	}
+	if !voiceOutputRequiredMode(pod) {
+		t.Fatal("exact synthetic-session token mount refused")
+	}
+	withoutTestToken := pod.DeepCopy()
+	withoutTestToken.Spec.Containers[0].VolumeMounts = append(withoutTestToken.Spec.Containers[0].VolumeMounts[:2], withoutTestToken.Spec.Containers[0].VolumeMounts[3])
+	if voiceOutputRequiredMode(withoutTestToken) {
+		t.Fatal("observation accepted without authenticated synthetic-session token mount")
 	}
 	bad := view
 	bad.VoiceOutputObservation = nil
