@@ -93,6 +93,9 @@ func TestGuardrailEffectDualListenerSourceJoinsConfigMapAndMount(t *testing.T) {
 	if got, err := availabilityBoundarySource(source, runtime, pin); err != nil || got != pin {
 		t.Fatalf("exact dual-listener source refused: %s %v", got, err)
 	}
+	if got, err := availabilityBoundarySource(source, runtime, ""); err != nil || got != "" {
+		t.Fatalf("historical one-file source contract became unreadable: %s %v", got, err)
+	}
 	for _, tc := range []struct {
 		name    string
 		source  map[string]any
