@@ -22,6 +22,12 @@ DNS = re.compile(r"[a-z0-9](?:[-a-z0-9]*[a-z0-9])?\Z")
 IMAGE = re.compile(r"[a-zA-Z0-9./:_-]+@sha256:[0-9a-f]{64}\Z")
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ORIGINAL_PROXY_SHA256 = "fba39e68dea763043125b29416b832418387a6780e8cce067cbe0121104d09ce"
+# The legacy four-file guardrail profile accepts these PR365 source bytes.
+# Later five-file lease work changed both checked-in modules; never emit a
+# hybrid four-file candidate by reading those newer bytes opportunistically.
+LEGACY_SOURCE_COMMIT = "440da58d6e965d7f885cd35e44faa510d383cfc8"
+LEGACY_PROXY_SHA256 = "7659d44ef8e637fd74db754e393f65c3e58289cc3be347c716e10e83127076f2"
+LEGACY_DUAL_SHA256 = "c89135124108e7f613f029a0b4bde5c9a6201f73b1b0f0041d2d4379140d2dfd"
 LIVE_BASE_IMAGE = "vllm/vllm-openai:v0.7.3"
 PUBLISHED_IMAGE = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:af3e5ce57d156c09533dde6bb7feab8f252ef3dbc3277b77c2baef4bd781897f"
 SECRET_KEYS = ("api-key", "admin-bearer", "tls.crt", "tls.key")
@@ -75,6 +81,8 @@ def render(deployment: dict, configmap: dict, policy: dict, image: str,
     dual = DUAL.read_bytes()
     if len(new_proxy) > 100_000 or len(dual) > 25_000:
         raise ValueError("source outside review bound")
+    if sha(new_proxy) != LEGACY_PROXY_SHA256 or sha(dual) != LEGACY_DUAL_SHA256:
+        raise ValueError("legacy four-file source differs from PR365; use reviewed checkout " + LEGACY_SOURCE_COMMIT)
     dep = copy.deepcopy(deployment)
     cm = copy.deepcopy(configmap)
     for obj in (dep, cm):

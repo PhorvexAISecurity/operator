@@ -19,6 +19,16 @@ silently accept another artifact. The model snapshot revision and `config.json`
 hash are the previously reviewed values in `prepare.py`; they still require
 post-install verification on the new Pod.
 
+This command's **legacy four-file** proxy inputs must come from the reviewed
+PR365 source checkout at commit
+`440da58d6e965d7f885cd35e44faa510d383cfc8`. Verify that checkout before
+running the command. The renderer requires proxy SHA-256 `7659d44e...` and
+dual-listener SHA-256 `c8913512...` in full (see its constants). Current main
+contains newer lease-capable proxy/dual bytes; executing this legacy command
+from current main fails before a candidate directory is created. It cannot
+silently assemble a hybrid four-file source. The five-file lease rollout has
+its own separate, reviewed renderer and source authority.
+
 Example, with the actual reviewed context and private artifact path supplied
 by the workload owner:
 
@@ -73,5 +83,12 @@ The fake-kubectl protocol and refusal tests run without a cluster:
 
 ```sh
 cd build/integrations/vllm-live-drain-runtime
-python3 -m unittest -q test_prepare.py
+python3 -m unittest -q test_prepare.py test_integration.py test_legacy4_join.py
 ```
+
+To execute the historical positive source join without Git history or network
+access in the test process, set `PHORVEX_LEGACY_SOURCE_ROOT` to an already
+reviewed local checkout of commit `440da58d6e965d7f885cd35e44faa510d383cfc8`
+and run `python3 -m unittest -q test_legacy4_join.py`. The test uses those
+checked-in bytes through the real prepare/render path and verifies that the
+resulting four-key ConfigMap passes the frozen guardrail profile source check.
