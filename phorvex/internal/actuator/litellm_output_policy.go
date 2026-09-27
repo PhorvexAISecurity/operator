@@ -674,7 +674,28 @@ func pendingLiteOutputOperations(ctx context.Context, reader client.Reader, jour
 	ec := EnactCtx{Reader: reader, JournalNamespace: journalNS}
 	_, doc, err := liteOutputReadJournalDocument(ctx, ec)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			policyCM := &corev1.ConfigMap{}
+			policyErr := reader.Get(ctx, client.ObjectKey{Namespace: outputpolicy.LiteNamespace, Name: outputpolicy.LitePolicyConfigMap}, policyCM)
+			if apierrors.IsNotFound(policyErr) {
+				return false, nil
+			}
+			if policyErr != nil {
+				return false, policyErr
+			}
+		}
 		return false, err
+	}
+	policyCM := &corev1.ConfigMap{}
+	if err := reader.Get(ctx, client.ObjectKey{Namespace: outputpolicy.LiteNamespace, Name: outputpolicy.LitePolicyConfigMap}, policyCM); err != nil {
+		return false, err
+	}
+	state, err := outputpolicy.ParseLiteState(policyCM.Data[outputpolicy.LitePolicyKey])
+	if err != nil {
+		return false, err
+	}
+	if !liteOutputJournalMatchesState(doc, state) {
+		return false, errors.New("LiteLLM output protected history differs from policy")
 	}
 	for _, r := range doc.Receipts {
 		// One installed LiteLLM Deployment: a pending append fences both current

@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -140,7 +141,9 @@ func TestLiteOutputFixedJournalPreservesHistoryAndFencesPrepared(t *testing.T) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: outputpolicy.LiteJournalName, Namespace: "phorvex-system",
 		UID: types.UID("protected-journal-uid"), ResourceVersion: "1", Labels: map[string]string{outputpolicy.LiteJournalLabel: "v2"}},
 		Data: map[string]string{outputpolicy.LiteJournalKey: string(bootstrap.bytes())}}
-	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(cm).Build()
+	policyCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: outputpolicy.LitePolicyConfigMap, Namespace: outputpolicy.LiteNamespace},
+		Data: map[string]string{outputpolicy.LitePolicyKey: r.Prior}}
+	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(cm, policyCM).Build()
 	ec := EnactCtx{Reader: c, Client: c, JournalNamespace: "phorvex-system"}
 	journal, err := liteOutputCreateJournal(context.Background(), ec, r)
 	if err != nil {
@@ -162,6 +165,13 @@ func TestLiteOutputFixedJournalPreservesHistoryAndFencesPrepared(t *testing.T) {
 	if err := liteOutputAdvanceJournal(context.Background(), ec, journal, r, after); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: outputpolicy.LiteNamespace, Name: outputpolicy.LitePolicyConfigMap}, policyCM); err != nil {
+		t.Fatal(err)
+	}
+	policyCM.Data[outputpolicy.LitePolicyKey] = after.Desired
+	if err := c.Update(context.Background(), policyCM); err != nil {
+		t.Fatal(err)
+	}
 	_, doc, err := liteOutputReadJournalDocument(context.Background(), ec)
 	if err != nil || len(doc.Receipts) != 1 || doc.Receipts[0].Phase != "terminal-full" || !liteOutputJournalMatchesState(doc, desired) {
 		t.Fatalf("terminal row/history inconsistent: %v", err)
@@ -181,6 +191,9 @@ func TestLiteOutputRecoveryOptInJournalBoundary(t *testing.T) {
 	ctx := context.Background()
 	c := fake.NewClientBuilder().WithScheme(p4bScheme()).Build()
 	ec := EnactCtx{Reader: c, Client: c, JournalNamespace: "phorvex-system"}
+	if pending, err := pendingLiteOutputOperations(ctx, c, ec.JournalNamespace, "current-lite-pod-uid"); err != nil || pending {
+		t.Fatalf("absent optional v2 fixture fenced existing LiteLLM action: pending=%t err=%v", pending, err)
+	}
 	if events, err := recoverLiteOutputOperations(ctx, ec, nil); err != nil || len(events) != 0 {
 		t.Fatalf("absent optional v2 fixture interrupted existing recovery: events=%d err=%v", len(events), err)
 	}
@@ -190,5 +203,8 @@ func TestLiteOutputRecoveryOptInJournalBoundary(t *testing.T) {
 	}
 	if _, err := recoverLiteOutputOperations(ctx, ec, nil); err == nil {
 		t.Fatal("installed v2 policy with missing protected journal accepted")
+	}
+	if _, err := pendingLiteOutputOperations(ctx, c, ec.JournalNamespace, "current-lite-pod-uid"); err == nil {
+		t.Fatal("installed v2 policy with missing protected journal did not fence dispatch")
 	}
 }
