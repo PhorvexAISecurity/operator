@@ -409,6 +409,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe := *r.DrainLiveProbe
 		c.DrainLiveProbe = &probe
 	}
+	if r.EndpointLeaseProbe != nil {
+		probe := *r.EndpointLeaseProbe
+		probe.Issues = append([]string(nil), r.EndpointLeaseProbe.Issues...)
+		c.EndpointLeaseProbe = &probe
+	}
 	if r.Claim != nil {
 		claim := *r.Claim
 		claim.DetectorSet = append([]string(nil), r.Claim.DetectorSet...)
@@ -456,10 +461,10 @@ func attackSnapshots(p *Principal) []*attackRecord {
 	return out
 }
 
-// Live views include reviewed Voice observations. Experiment-only signals
-// and unknown evidence kinds remain excluded, as do observations in default reports.
+// Live views include reviewed Voice observations. Endpoint lease observations
+// are opt-in; experiment-only signals and unknown evidence kinds stay excluded.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || rec.EvidenceKind == "voice-mcp-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
+	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || rec.EvidenceKind == "voice-mcp-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal" || rec.EvidenceKind == "vllm-endpoint-lease-live"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
