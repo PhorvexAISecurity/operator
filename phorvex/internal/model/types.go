@@ -107,6 +107,8 @@ const (
 	// ActionVoiceMemoryNoteRevoke appends one observed caller/note digest to the
 	// Voice application's deployment-bound memory quarantine.
 	ActionVoiceMemoryNoteRevoke Action = "voice-memory-note-revoke"
+	// ActionVoiceRefundPairDeny blocks one exact asserted-caller/order pair in the Voice app.
+	ActionVoiceRefundPairDeny Action = "voice-refund-pair-deny"
 	// ActionLiteLLMClientRevoke denies one observed, owned client credential at
 	// the installed LiteLLM admission gateway. It does not revoke the master key.
 	ActionLiteLLMClientRevoke Action = "litellm-client-revoke"
@@ -141,6 +143,7 @@ var MutatingActions = []Action{
 	ActionSensitiveOutputPolicyActivate,
 	ActionVoiceMemoryNoteRevoke,
 	ActionLiteLLMClientRevoke,
+	ActionVoiceRefundPairDeny,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -499,6 +502,11 @@ type Pod struct {
 	VoiceMemoryDeploymentUID  string
 	VoiceMemoryEventCreator   string
 	VoiceMemoryObservation    *VoiceMemoryObservation
+	VoiceRefundConfigMap      string
+	VoiceRefundSourceSHA256   string
+	VoiceRefundDeploymentUID  string
+	VoiceRefundEventCreator   string
+	VoiceRefundObservation    *VoiceRefundObservation
 	LiteLLMClientObservation  *LiteLLMClientObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
@@ -565,6 +573,16 @@ func (p Pod) HasBoundVoiceMemoryObservation() bool {
 		o.PolicyUID != "" && o.PolicyGeneration > 0 && o.CallerID != "" && o.NoteSHA256 != ""
 }
 
+func (p Pod) HasBoundVoiceRefundObservation() bool {
+	o := p.VoiceRefundObservation
+	return o != nil && p.UID != "" && p.VoiceRefundConfigMap == "voice-refund-policy" &&
+		o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceRefundDeploymentUID &&
+		o.SourceSHA256 == p.VoiceRefundSourceSHA256 && o.ConfigMapUID != "" &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.CreatorIdentity == p.VoiceRefundEventCreator && o.ScenarioID != "" && o.CaseID != "" &&
+		o.PolicyUID != "" && o.PolicyGeneration > 0 && o.AssertedCallerSHA256 != "" && o.OrderSHA256 != ""
+}
+
 // HasBoundLiteLLMClientObservation licenses only the installed, synthetic
 // gateway credential channel. A generic copied credential never satisfies it.
 func (p Pod) HasBoundLiteLLMClientObservation() bool {
@@ -594,6 +612,7 @@ const (
 	AttackVectorPodBoundAPIAuth    = "phorvex.attack.pod-bound-api-auth"
 	AttackVectorSensitiveOutput    = "phorvex.attack.sensitive-output"
 	AttackVectorVoiceMemory        = "phorvex.attack.voice-memory-note"
+	AttackVectorVoiceRefund        = "phorvex.attack.voice-refund-pair"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 )
 
@@ -665,6 +684,7 @@ type SecurityEventInfo struct {
 	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
+	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
@@ -744,6 +764,21 @@ type VoiceMemoryObservation struct {
 	RuleSHA256, SourceSHA256               string
 	CallerID                               string `json:"-"` // actuation-only; never serialize caller in decision evidence
 	NoteSHA256                             string
+	PolicyName, PolicyUID                  string
+	PolicyGeneration                       int64
+	SelectedRevision                       uint64
+	ObservedAt                             time.Time
+}
+
+// VoiceRefundObservation binds one observed model callback and owned CRM side effect
+// to the exact asserted caller/order pair. It makes no caller authentication claim.
+type VoiceRefundObservation struct {
+	EventName, EventUID, CreatorIdentity   string
+	ScenarioID, CaseID                     string
+	TargetPodUID, DeploymentUID            string
+	ConfigMapUID, ConfigMapResourceVersion string
+	RuleSHA256, SourceSHA256               string
+	AssertedCallerSHA256, OrderSHA256      string
 	PolicyName, PolicyUID                  string
 	PolicyGeneration                       int64
 	SelectedRevision                       uint64
@@ -1019,6 +1054,7 @@ type Decision struct {
 	AdapterObservation      *AdapterObservation         `json:"adapterObservation,omitempty"`
 	OutputPolicyObservation *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
 	VoiceMemoryObservation  *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
+	VoiceRefundObservation  *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
 	Existential             *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`

@@ -126,6 +126,10 @@ var classifications = map[model.Action]Bound{
 		"response-field policy activation and rollback have no calibrated safe-return deadline"),
 	model.ActionVoiceMemoryNoteRevoke: unknown(model.ActionVoiceMemoryNoteRevoke, -1,
 		"voice memory quarantine and projection readback have no calibrated safe-return deadline"),
+	model.ActionVoiceRefundPairDeny: unknown(model.ActionVoiceRefundPairDeny, -1,
+		"voice refund pair denial and projection readback have no calibrated safe-return deadline"),
+	model.ActionLiteLLMClientRevoke: unknown(model.ActionLiteLLMClientRevoke, -1,
+		"owned client-channel denial and gateway readback have no calibrated safe-return deadline"),
 }
 
 func init() {

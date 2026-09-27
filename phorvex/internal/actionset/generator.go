@@ -327,6 +327,16 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					continue
 				}
 			}
+			if action == model.ActionVoiceRefundPairDeny {
+				o := v.Pod.VoiceRefundObservation
+				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "voice-refund-policy: event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
 			if action == model.ActionLiteLLMClientRevoke {
 				o := v.Pod.LiteLLMClientObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||

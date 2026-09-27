@@ -66,6 +66,8 @@ var liveAttackCatalogue = []LiveAttack{
 		"any-workload", "A real SecurityEvent at the workload's pod; Phorvex rotates a stateless pod or quarantines a stateful one."},
 	{voiceMemoryScenario, "Cross-call Voice memory contamination", "/api/voice/live/fire", "AML.T0054 / T1565", "voice-memory-note-revoke",
 		"voice-memory", "Plants one run-owned stored note, opens real direct Voice WebSocket sessions, and checks exact memory context and benign-note replay after the brain's selected action."},
+	{voiceAgencyScenario, "Voice cross-account refund request", voiceAgencyRoute, "AML.T0054 / T1539", voiceAgencyAction,
+		"voice-agency", "Measures one model-triggered refund of a run-owned other order, then a labeled test signal, normal brain choice, blocked exact-pair replay and own-order/status controls."},
 	{"ai2-unbounded-consumption", "LiteLLM abusive client containment", "/api/litellm/live/fire", "OWASP LLM10", "litellm-client-revoke",
 		"litellm-live", "Measures bounded accepted requests, injects a labeled test event, then checks whether the brain revokes that client while legitimate requests continue. It does not measure unlimited spending."},
 	{"ai2-query-extraction", "LiteLLM repeated-query client containment", "/api/litellm/live/fire", "AML.T0024", "litellm-client-revoke",
@@ -82,6 +84,7 @@ type appStack struct {
 	Workload        bool   `json:"workload"`        // has any Deployment/StatefulSet at all
 	Armed           bool   `json:"armed"`           // the console may fire a live attack here right now
 	VoiceMemoryHook bool   `json:"voiceMemoryHook"` // declared source and owner-bound rule are installed
+	VoiceAgencyLive bool   `json:"voiceAgencyLive"` // reviewed profile and matching Voice source are installed
 	LiteLLMLive     bool   `json:"litellmLive"`     // reviewed configuration is present; Fire verifies runtime
 }
 
@@ -114,6 +117,13 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 				deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-memory-policy-configmap"] == "voice-memory-policy" {
 				st.VoiceMemoryHook = true
 			}
+			if ns == "voice" && deps.Items[i].Name == "voice-bot" {
+				if p, e := loadVoiceAgencyProfile(s.cfg); e == nil &&
+					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-refund-source-sha256"] == p.SourceSHA256 &&
+					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-refund-policy-configmap"] == voiceAgencyConfigMapName {
+					st.VoiceAgencyLive = true
+				}
+			}
 			for _, img := range containerImages(deps.Items[i].Spec.Template.Spec.Containers) {
 				if served, vllm := servedModelImage(img); served {
 					st.ServedModel = true
@@ -144,6 +154,10 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 	if st.VoiceMemoryHook {
 		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-memory-policy", metav1.GetOptions{})
 		st.VoiceMemoryHook = err == nil
+	}
+	if st.VoiceAgencyLive {
+		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, voiceAgencyConfigMapName, metav1.GetOptions{})
+		st.VoiceAgencyLive = err == nil
 	}
 	return st, nil
 }
@@ -189,6 +203,9 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.VoiceMemoryHook {
 		out = append(out, "voice-memory-note-revoke")
 	}
+	if st.VoiceAgencyLive {
+		out = append(out, voiceAgencyAction)
+	}
 	if st.LiteLLMLive {
 		out = append(out, "litellm-client-revoke")
 	}
@@ -201,6 +218,14 @@ func compatibleLive(st appStack) []compatEntry {
 	for _, a := range liveAttackCatalogue {
 		e := compatEntry{LiveAttack: a}
 		switch a.StackLabel {
+		case "voice-agency":
+			e.Compatible = st.Namespace == "voice" && st.Workload
+			e.Armed = e.Compatible && st.Armed && st.VoiceAgencyLive
+			if e.Armed {
+				e.Reason = "Reviewed Voice agency profile and source are present; Fire verifies owned CRM records, current Pods, policy and rule before the trial"
+			} else {
+				e.Reason = "Voice agency profile, source, owned rule or governance is unavailable"
+			}
 		case "litellm-live":
 			e.Compatible = st.Namespace == "litellm" && st.Workload
 			e.Armed = e.Compatible && st.Armed && st.LiteLLMLive
@@ -299,6 +324,12 @@ func catalogueCompatProjection(it CatalogItem, compatible bool, reason string) m
 // scenario is meaningful only on a served model; a GPU-capability scenario needs a GPU node pool;
 // a structural/k8s scenario runs wherever there is a pod to gain a foothold in.
 func scenarioFitsStack(it CatalogItem, st appStack) (bool, string) {
+	if it.Name == voiceAgencyScenario && st.Namespace == "voice" {
+		if st.VoiceAgencyLive {
+			return true, "reviewed Voice agency source and rule are declared; Live Fire verifies current ownership and all serving Pods"
+		}
+		return false, "Voice agency profile/source or owned rule rollout is unavailable"
+	}
 	if it.Name == voiceMemoryScenario && st.Namespace == "voice" {
 		if st.VoiceMemoryHook {
 			return true, "actual Voice memory source and rule are declared; Live Fire verifies runtime readiness"

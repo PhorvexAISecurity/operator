@@ -61,6 +61,11 @@ type Config struct {
 	GuardrailOutputEnabled       bool
 	GuardrailOutputProfileSHA256 string
 	GuardrailOutputProfilePath   string
+	// VoiceAgencyLive is a separate, reviewed real Voice/CRM trial. The fixed
+	// profile is mounted by the installation; a caller cannot supply targets.
+	VoiceAgencyLiveEnabled       bool
+	VoiceAgencyLiveProfileSHA256 string
+	VoiceAgencyLiveProfilePath   string
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
 	LiteLLMLiveEnabled       bool

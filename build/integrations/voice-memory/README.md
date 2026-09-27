@@ -2,15 +2,16 @@
 
 This package starts from the installed Voice `/app/bot.py` (original SHA-256
 `23b2e6e72912b11a545e06f54af4159789dc3a79f0aaed74cd2ec636cbb371cf`).
-The added hook affects the existing Mongo `caller_memory` recall and remember
-paths. It does not authenticate caller IDs or undo the first contaminated call.
+The added hooks affect the existing Mongo `caller_memory` recall/remember path
+and the `issue_refund` callback. They do not authenticate caller IDs or undo
+the first contaminated call.
 
 For the normal Voice Deployment rollout, install these two source files together
 at `/app/bot.py` and `/app/voice_memory_policy.py` from an immutable source image
 or immutable ConfigMap. The active process freezes
 `SHA256(bot.py bytes || NUL || voice_memory_policy.py bytes)` at import. Keep the
 existing `/ws` Service and model/provider configuration. The reviewed composite
-source SHA-256 is `c378d172483887270514f2ead600f7c4b8e1ad4928cdead9348ca11e46a90010`.
+source SHA-256 is `585fd2dce545cfdd163635c2e2929b193e2395329a5073b9ae14a8f033c08a9c`.
 The memory rule is an
 optional ConfigMap named `voice-memory-policy` in namespace `voice`; mount its
 directory read-only without `subPath` at `/etc/phorvex/voice-memory-policy`.
@@ -18,6 +19,15 @@ The single key `rule.json` is canonical compact sorted UTF-8 JSON and follows
 `phorvex/internal/voicememorypolicy/contract.go`. The operator appends up to 32
 exact caller/note-digest entries and increases revision. No HTTP rule mutation
 exists in the bot.
+
+The separate `voice-refund-policy` ConfigMap has the same canonical top-level
+rule keys and owner/source bindings. Its entries contain exact SHA-256 digests
+of the asserted caller and CRM order ID plus operation ID; up to 256 entries
+fit within 65,536 bytes. The bot checks the pair before its CRM refund POST.
+The denial applies to ordinary and test sessions; other caller/order pairs
+remain available. The projected directory is required in the reviewed rollout,
+and `VOICE_REFUND_POLICY_REQUIRED=true` makes a missing, corrupt, or replayed
+rule fail closed for refund writes and `/healthz`.
 
 Mount a Pod-local `emptyDir` at `/var/lib/phorvex-voice-memory`, owned by the bot
 UID and mode `0700`, so the fsynced revision ledger survives a container restart
@@ -39,6 +49,8 @@ entry count, and readiness. The route cannot reveal caller IDs or note digests.
 Missing/invalid token makes readback unavailable. The actuator should reach only
 the exact pinned serving Pod and independently join the echoed Deployment and
 PhorvexPolicy UIDs to live Kubernetes resources.
+The same token protects `GET /v1/voice-refund-policy/state`, which returns only
+source, owner, rule, revision, operation, entry count, and readiness.
 
 After the real `/ws` code loads a caller's notes into its initial system context,
 it writes a private digest-only receipt named
@@ -61,16 +73,17 @@ the renderer does not guess it. The event creator must be the actual
 admission-stamped console ServiceAccount identity. Its token input is a
 private, owned regular file containing 32–256 printable ASCII bytes without a
 newline. The output directory must not exist and is created mode `0700`; all
-four generated files are mode `0600`. The script never prints the token.
+five generated files are mode `0600`. The script never prints the token.
 
 The rendered source ConfigMap is immutable and contains exactly `bot.py` and
 `voice_memory_policy.py`; its name includes the reviewed source SHA prefix.
-The mutable `voice-memory-policy` ConfigMap has one canonical rev0 `rule.json`
-key and an exact Deployment controller owner reference. The token Secret has
-the same owner. Create these three objects first, then apply the generated
+The mutable `voice-memory-policy` and `voice-refund-policy` ConfigMaps each have
+one canonical rev0 `rule.json` key and an exact Deployment controller owner
+reference. The token Secret has the same owner. Create these four objects first,
+then apply the generated
 JSON patch to the same Deployment incarnation. The patch tests Deployment UID,
 resourceVersion, bot container name, and prior image before adding only the
-new source/rule/token/state mounts, the Downward API UID and required-policy
+new source/rule/token/state mounts, the Downward API UID and both required-policy
 environment, source/creator annotations, and the state-volume init container.
 Existing Voice environment, Service, model, CRM, media, and probe settings are
 preserved. If an object already exists or the patch preconditions fail, inspect
@@ -78,6 +91,13 @@ the live state and render again from fresh snapshots; do not overwrite a
 current policy rule or repeat an ambiguous mutation. Verify every new Pod's
 source annotation, `POD_UID`, `/healthz`, and authenticated rule state before
 arming Fire. No deployment or policy mutation is performed by the renderer.
+
+`--agency-test-enabled` adds stable `VOICE_AGENCY_TEST_ENABLED=true` to the
+reviewed rollout. Exact per-run `agencyRunId`, deterministic call SID, and
+run-derived synthetic caller A are carried in the direct WebSocket start frame.
+Only a run-owned CRM order can pass the test-session refund scope, and the bot
+stores private digest-only refund/read callback receipts. This test restriction
+does not authenticate the caller and is separate from the refund policy action.
 
 Run the source tests with
 `python3 -m unittest discover -s build/integrations/voice-memory -p 'test_*.py'`.

@@ -73,6 +73,7 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionKVMigrateInvalidate:           true,
 	model.ActionSensitiveOutputPolicyActivate: true,
 	model.ActionVoiceMemoryNoteRevoke:         true,
+	model.ActionVoiceRefundPairDeny:           true,
 	model.ActionLiteLLMClientRevoke:           true,
 }
 
@@ -271,6 +272,12 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "voice-memory-policy: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionVoiceRefundPairDeny {
+		o := v.Pod.VoiceRefundObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "voice-refund-policy: event policy identity differs from current policy"}
+		}
+	}
 	if action == model.ActionLiteLLMClientRevoke {
 		o := v.Pod.LiteLLMClientObservation
 		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
@@ -368,6 +375,8 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasBoundSensitiveOutputObservation()
 	case model.ActionVoiceMemoryNoteRevoke:
 		return pod.HasBoundVoiceMemoryObservation()
+	case model.ActionVoiceRefundPairDeny:
+		return pod.HasBoundVoiceRefundObservation()
 	case model.ActionLiteLLMClientRevoke:
 		return pod.HasBoundLiteLLMClientObservation()
 	default:
@@ -461,6 +470,11 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if !pod.HasBoundVoiceMemoryObservation() || pod.VoiceMemoryObservation.PolicyName != w.policyName ||
 			pod.VoiceMemoryObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/source-bound voice-memory observation"
+		}
+	case model.ActionVoiceRefundPairDeny:
+		if !pod.HasBoundVoiceRefundObservation() || pod.VoiceRefundObservation.PolicyName != w.policyName ||
+			pod.VoiceRefundObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/source-bound voice-refund observation"
 		}
 	case model.ActionLiteLLMClientRevoke:
 		if !pod.HasBoundLiteLLMClientObservation() || pod.LiteLLMClientObservation.PolicyName != w.policyName ||

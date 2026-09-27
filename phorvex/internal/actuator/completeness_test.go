@@ -115,6 +115,7 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionKVMigrateInvalidate:           {plain: "ai-context-required:"},
 	model.ActionSensitiveOutputPolicyActivate: {plain: "ai-context-required:"},
 	model.ActionVoiceMemoryNoteRevoke:         {plain: "ai-context-required:"},
+	model.ActionVoiceRefundPairDeny:           {plain: "ai-context-required:"},
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 }
 
@@ -167,6 +168,14 @@ func aiView() *model.WorkloadView {
 		ScenarioID: "voice-live", CaseID: "owned-memory",
 		TargetPodUID: v.Pod.UID, DeploymentUID: v.Pod.VoiceMemoryDeploymentUID, ConfigMapUID: "voice-cm-uid", SourceSHA256: v.Pod.VoiceMemorySourceSHA256,
 		CallerID: "+15551234567", NoteSHA256: "note-sha", PolicyUID: "policy-uid", PolicyGeneration: 1}
+	v.Pod.VoiceRefundConfigMap = "voice-refund-policy"
+	v.Pod.VoiceRefundSourceSHA256 = "source-sha"
+	v.Pod.VoiceRefundDeploymentUID = "deployment-uid"
+	v.Pod.VoiceRefundEventCreator = "system:serviceaccount:ns:detector"
+	v.Pod.VoiceRefundObservation = &model.VoiceRefundObservation{EventName: "refund-detected", EventUID: "refund-event-uid", CreatorIdentity: v.Pod.VoiceRefundEventCreator,
+		ScenarioID: "voice-agency", CaseID: "owned-refund", TargetPodUID: v.Pod.UID, DeploymentUID: v.Pod.VoiceRefundDeploymentUID,
+		ConfigMapUID: "refund-cm-uid", SourceSHA256: v.Pod.VoiceRefundSourceSHA256,
+		AssertedCallerSHA256: "caller-sha", OrderSHA256: "order-sha", PolicyUID: "policy-uid", PolicyGeneration: 1}
 	v.Pod.LiteLLMClientObservation = &model.LiteLLMClientObservation{
 		EventName: "client-observed", EventUID: "client-event-uid", CreatorIdentity: "console-creator",
 		TargetPodUID: v.Pod.UID, PeerPodUID: "peer-uid", ClientSHA256: "client-hash",

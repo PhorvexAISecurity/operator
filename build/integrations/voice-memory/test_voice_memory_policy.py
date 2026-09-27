@@ -3,7 +3,8 @@ import pathlib
 import tempfile
 import unittest
 
-from voice_memory_policy import PolicyError, VoiceMemoryPolicy, authorization_status, canonical_bytes, note_sha256, parse_rule
+from voice_memory_policy import (PolicyError, VoiceMemoryPolicy, agency_phones, agency_session_kind,
+                                 authorization_status, canonical_bytes, note_sha256, parse_rule)
 
 
 DEPLOYMENT_UID = "11111111-1111-4111-8111-111111111111"
@@ -135,6 +136,49 @@ class VoiceMemoryPolicyTest(unittest.TestCase):
         self.assertNotIn(NOTE.encode(), raw)
         self.assertNotIn(CALLER.encode(), raw)
         self.assertFalse(self.policy.record_context("CA-run-1", CALLER, [{"note": NOTE}]))
+
+    def test_agency_session_is_exact_and_caller_remains_asserted(self):
+        import sys
+        sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "voice-agency"))
+        import ws_probe
+        run = "agencya1"
+        self.assertEqual(agency_phones(run), ws_probe.agency_phones(run))
+        for phase in ("attack", "replay", "benign", "own-control"):
+            _, call = ws_probe.identity(run, phase)
+            self.assertEqual(agency_session_kind(run, call, agency_phones(run)[0]), phase)
+            with self.assertRaises(PolicyError):
+                agency_session_kind(run, call, agency_phones(run)[1])
+        with self.assertRaises(PolicyError):
+            agency_session_kind(run, "CA-other", agency_phones(run)[0])
+        self.assertEqual(agency_session_kind("", "CA-other", agency_phones(run)[0]), "")
+
+    def test_refund_callback_receipt_is_private_digest_only_and_one_shot(self):
+        import json
+        self.state_dir.mkdir(mode=0o700)
+        sid = "CA-owned-synthetic"
+        refund = "RF-aabbccdd"
+        self.assertTrue(self.policy.record_refund_callback(sid, CALLER, 0, "started", "9142", 100))
+        self.assertTrue(self.policy.record_refund_callback(sid, CALLER, 0, "crm-returned", "9142", 100,
+                                                            {"status": "issued", "refund_id": refund, "order_id": "9142"}))
+        self.assertTrue(self.policy.record_refund_callback(sid, CALLER, 1, "denied", "9142", 100,
+                                                            denial_reason="refund-policy-denied"))
+        self.assertFalse(self.policy.record_refund_callback(sid, CALLER, 2, "denied", "9142", 100))
+        self.assertFalse(self.policy.record_refund_callback(sid, CALLER, 2, "started", "9142", 100,
+                                                             denial_reason="test-scope"))
+        self.assertFalse(self.policy.record_refund_callback(sid, CALLER, 0, "started", "9142", 100))
+        key = hashlib.sha256(sid.encode()).hexdigest()
+        path = self.state_dir / f"refund-{key}-0-crm-returned.json"
+        raw = path.read_text()
+        receipt = json.loads(raw)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertTrue(receipt["crmIssued"])
+        self.assertEqual(receipt["denialReason"], "")
+        self.assertEqual(json.loads((self.state_dir / f"refund-{key}-1-denied.json").read_text())["denialReason"],
+                         "refund-policy-denied")
+        self.assertEqual(receipt["callSIDHash"], key)
+        self.assertEqual(receipt["refundIDSHA256"], hashlib.sha256(refund.encode()).hexdigest())
+        for protected in (sid, CALLER, "9142", refund):
+            self.assertNotIn(protected, raw)
 
     def test_state_requires_exact_mounted_bearer(self):
         token = self.root / "token"
