@@ -3018,6 +3018,16 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			continue
 		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
+			pendingClient, clientFenceErr := actuator.PendingLiteLLMClientOperation(ctx, m.BoundaryReader,
+				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			if clientFenceErr != nil || pendingClient {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "protected-owned-client-operation-unresolved")
+				m.Log.Info("same-Pod protected owned-client operation fences dispatch",
+					"namespace", decisions[i].Namespace, "pod", decisions[i].Pod,
+					"action", decisions[i].Action, "error", clientFenceErr)
+				continue
+			}
 			pending, fenceErr := actuator.PendingOutputPolicyOperation(ctx, m.BoundaryReader,
 				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
 			if fenceErr != nil || pending {

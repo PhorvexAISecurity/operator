@@ -27,16 +27,15 @@ func liveFixture(t *testing.T) (client.Client, string) {
 		t.Fatalf("reviewed gateway source drift: %s", hash)
 	}
 	immutable := true
-	attacker := strings.Repeat("a", 64)
-	control := strings.Repeat("b", 64)
+	seedSHA := strings.Repeat("a", 64)
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName, Namespace: Namespace, UID: types.UID("service-uid")},
 		Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "litellm"}, Ports: []corev1.ServicePort{{Port: 4000, TargetPort: intstr.FromInt32(4001)}}}}
 	source := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: SourceConfigMapName, Namespace: Namespace, UID: types.UID("source-uid")},
 		Immutable: &immutable, Data: map[string]string{SourceKey: string(code)}}
 	clients := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: ClientsConfigMapName, Namespace: Namespace, UID: types.UID("clients-uid")},
-		Immutable: &immutable, Data: map[string]string{ClientsKey: `{"attackerSHA256":"` + attacker + `","controlSHA256":"` + control + `","modelAlias":"gpt-4o-mini","version":1}`}}
+		Immutable: &immutable, Data: map[string]string{ClientsKey: `{"modelAlias":"gpt-4o-mini","seedSHA256":"` + seedSHA + `","version":2}`}}
 	policy := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: PolicyConfigMapName, Namespace: Namespace, UID: types.UID("policy-cm-uid"), ResourceVersion: "1"},
-		Data: map[string]string{PolicyKey: `{"active":false,"clientSHA256":"` + attacker + `","operationId":"","revision":0,"version":1}`}}
+		Data: map[string]string{PolicyKey: `{"entries":[],"revision":0,"version":2}`}}
 	objects := []client.Object{svc, source, clients, policy}
 	for i, name := range []string{"litellm-a", "litellm-b"} {
 		gatewayImage := "gateway@sha256:" + strings.Repeat("c", 64)
@@ -44,11 +43,12 @@ func liveFixture(t *testing.T) (client.Client, string) {
 		ip := "10.1.0." + string(rune('1'+i))
 		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: Namespace, UID: uid,
 			Labels: map[string]string{"app": "litellm"}, Annotations: map[string]string{
-				SourceSHAAnnotation: hash, GatewayImageAnnotation: gatewayImage, PolicyUIDAnnotation: "policy-cm-uid", ServiceUIDAnnotation: "service-uid", ClientSHAAnnotation: attacker}},
+				SourceSHAAnnotation: hash, GatewayImageAnnotation: gatewayImage, PolicyUIDAnnotation: "policy-cm-uid", ServiceUIDAnnotation: "service-uid", SeedSHAAnnotation: seedSHA}},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "litellm", Image: "backend@sha256:" + strings.Repeat(string(rune('d'+i)), 64)},
-				{Name: GatewayContainerName, Image: gatewayImage, Command: []string{"python", "-B", "/opt/phorvex/gateway.py"},
+				{Name: GatewayContainerName, Image: gatewayImage, Command: []string{"python3", "-B", "/opt/phorvex/gateway.py"},
 					Env: []corev1.EnvVar{{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"}}},
 						{Name: "PHORVEX_LITELLM_CLIENTS_FILE", Value: "/etc/phorvex-litellm/clients.json"},
+						{Name: "PHORVEX_LITELLM_TRIAL_SEED_FILE", Value: "/etc/phorvex-litellm-seed/seed"},
 						{Name: "PHORVEX_LITELLM_POLICY_FILE", Value: "/etc/phorvex-litellm-policy/state.json"},
 						{Name: "PHORVEX_LITELLM_STATUS_TOKEN_FILE", Value: "/etc/phorvex-litellm-status/token"},
 						{Name: "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID", Value: "policy-cm-uid"},
@@ -57,11 +57,13 @@ func liveFixture(t *testing.T) (client.Client, string) {
 						{Name: "litellm-live-gateway-source", MountPath: "/opt/phorvex", ReadOnly: true},
 						{Name: "litellm-live-clients", MountPath: "/etc/phorvex-litellm", ReadOnly: true},
 						{Name: "litellm-live-policy", MountPath: "/etc/phorvex-litellm-policy", ReadOnly: true},
-						{Name: "litellm-live-status", MountPath: "/etc/phorvex-litellm-status", ReadOnly: true}}}},
+						{Name: "litellm-live-status", MountPath: "/etc/phorvex-litellm-status", ReadOnly: true},
+						{Name: "litellm-live-trial-seed", MountPath: "/etc/phorvex-litellm-seed", ReadOnly: true}}}},
 				Volumes: []corev1.Volume{{Name: "litellm-live-gateway-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SourceConfigMapName}}}},
 					{Name: "litellm-live-clients", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: ClientsConfigMapName}}}},
 					{Name: "litellm-live-policy", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: PolicyConfigMapName}}}},
-					{Name: "litellm-live-status", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "status-secret"}}}}},
+					{Name: "litellm-live-status", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "status-secret"}}},
+					{Name: "litellm-live-trial-seed", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: TrialSeedSecretName}}}}},
 			Status: corev1.PodStatus{PodIP: ip, ContainerStatuses: []corev1.ContainerStatus{
 				{Name: "litellm", ImageID: "backend@sha256:" + strings.Repeat(string(rune('d'+i)), 64), Ready: true},
 				{Name: GatewayContainerName, ImageID: gatewayImage, Ready: true}}}}
@@ -85,18 +87,18 @@ func liveFixture(t *testing.T) (client.Client, string) {
 	if e = discoveryv1.AddToScheme(scheme); e != nil {
 		t.Fatal(e)
 	}
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(), attacker
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(), seedSHA
 }
 
 func TestOwnedClientLiveExactGatewayAndEndpointGraph(t *testing.T) {
 	ctx := context.Background()
-	c, attacker := liveFixture(t)
+	c, seedSHA := liveFixture(t)
 	approvedGatewayImage := "gateway@sha256:" + strings.Repeat("c", 64)
 	if _, e := ValidateLive(ctx, c, "pod-a", "pod-b"); e == nil {
 		t.Fatal("unreviewed gateway image accepted")
 	}
 	got, e := validateLive(ctx, c, "pod-a", "pod-b", approvedGatewayImage)
-	if e != nil || len(got.Pods) != 2 || got.ClientSHA256 != attacker || got.State.Active {
+	if e != nil || len(got.Pods) != 2 || got.SeedSHA256 != seedSHA || len(got.State.Entries) != 0 {
 		t.Fatalf("valid graph: %+v %v", got, e)
 	}
 	for _, tc := range []struct {
@@ -109,10 +111,10 @@ func TestOwnedClientLiveExactGatewayAndEndpointGraph(t *testing.T) {
 			o.Data[SourceKey] += "\n"
 			_ = c.Update(ctx, o)
 		}},
-		{"policy-other-client", func(c client.Client) {
+		{"policy-legacy-state", func(c client.Client) {
 			o := &corev1.ConfigMap{}
 			_ = c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: PolicyConfigMapName}, o)
-			o.Data[PolicyKey] = strings.Replace(o.Data[PolicyKey], attacker, strings.Repeat("c", 64), 1)
+			o.Data[PolicyKey] = `{"active":false,"revision":0,"version":1}`
 			_ = c.Update(ctx, o)
 		}},
 		{"sidecar-not-ready", func(c client.Client) {

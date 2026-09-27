@@ -161,7 +161,8 @@ func aiView() *model.WorkloadView {
 	v.Pod.LiteLLMClientObservation = &model.LiteLLMClientObservation{
 		EventName: "client-observed", EventUID: "client-event-uid", CreatorIdentity: "console-creator",
 		TargetPodUID: v.Pod.UID, PeerPodUID: "peer-uid", ClientSHA256: "client-hash",
-		ConfigMapUID: "cm-uid", ServiceUID: "service-uid", GatewaySourceSHA256: "source-hash",
+		ConfigMapUID: "cm-uid", ClientsConfigMapUID: "clients-cm-uid", SeedSHA256: "seed-hash",
+		ServiceUID: "service-uid", GatewaySourceSHA256: "source-hash",
 		PolicyName: "litellm-policy", PolicyUID: "litellm-policy-uid", PolicyGeneration: 1,
 	}
 	return v

@@ -3,8 +3,6 @@ package actuator
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +29,7 @@ const litellmStatusTokenPath = "/etc/phorvex-litellm-status/token"
 type litellmRevokeReceipt struct {
 	Version             int    `json:"version"`
 	Phase               string `json:"phase"`
+	AbortReason         string `json:"abortReason"`
 	PolicyName          string `json:"policyName"`
 	PolicyUID           string `json:"policyUID"`
 	PolicyGeneration    int64  `json:"policyGeneration"`
@@ -41,37 +39,13 @@ type litellmRevokeReceipt struct {
 	EventUID            string `json:"eventUID"`
 	ClientSHA256        string `json:"clientSHA256"`
 	ConfigMapUID        string `json:"configMapUID"`
+	ClientsConfigMapUID string `json:"clientsConfigMapUID"`
+	SeedSHA256          string `json:"seedSHA256"`
 	ServiceUID          string `json:"serviceUID"`
 	SourceSHA256        string `json:"sourceSHA256"`
 	OperationID         string `json:"operationId"`
 	SelectionDecisionID string `json:"selectionDecisionId"`
 	TickID              string `json:"tickId"`
-}
-
-func litellmJournalName(policyUID, clientSHA string) string {
-	h := sha256.Sum256([]byte(policyUID + ":" + clientSHA))
-	return "phorvex-litellm-revoke-" + hex.EncodeToString(h[:12])
-}
-
-func litellmReceiptRaw(r litellmRevokeReceipt) string { raw, _ := json.Marshal(r); return string(raw) }
-func litellmReadReceipt(cm *corev1.ConfigMap) (litellmRevokeReceipt, error) {
-	var r litellmRevokeReceipt
-	raw := cm.Data["receipt"]
-	if len(raw) == 0 || len(raw) > 2048 {
-		return r, errors.New("owned-client journal absent or oversized")
-	}
-	d := json.NewDecoder(strings.NewReader(raw))
-	d.DisallowUnknownFields()
-	if e := d.Decode(&r); e != nil {
-		return r, e
-	}
-	if _, e := d.Token(); e != io.EOF || raw != litellmReceiptRaw(r) || r.Version != 1 ||
-		(r.Phase != "prepared" && r.Phase != "terminal-full") || !litellmclient.ValidSHA(r.ClientSHA256) ||
-		!litellmclient.ValidSHA(r.SourceSHA256) || r.OperationID == "" || r.SelectionDecisionID != r.OperationID ||
-		r.EventName == "" || r.EventUID == "" || r.TickID == "" {
-		return litellmRevokeReceipt{}, errors.New("owned-client journal noncanonical or incomplete")
-	}
-	return r, nil
 }
 
 func litellmClientCapability(ctx context.Context, reader client.Reader, journalNamespace string, t Target) (bool, string) {
@@ -82,8 +56,16 @@ func litellmClientCapability(ctx context.Context, reader client.Reader, journalN
 	if e != nil {
 		return false, "litellm-client-revoke: " + e.Error()
 	}
-	if live.State.Active {
-		return false, "litellm-client-revoke: owned client already denied"
+	if len(live.State.Entries) >= 256 {
+		return false, "litellm-client-revoke: owned-client policy capacity exhausted"
+	}
+	journal := &corev1.ConfigMap{}
+	if e = reader.Get(ctx, client.ObjectKey{Namespace: journalNamespace, Name: litellmclient.JournalName}, journal); e != nil {
+		return false, "litellm-client-revoke: protected journal unavailable"
+	}
+	doc, e := litellmReadJournal(journal)
+	if e != nil || !doc.matchesPolicy(live.State) {
+		return false, "litellm-client-revoke: protected prior history unresolved"
 	}
 	return true, ""
 }
@@ -96,6 +78,7 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 		o == nil || o.TargetPodUID != req.TargetUID || o.PeerPodUID == "" || o.EventUID == "" ||
 		o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration ||
 		o.GatewaySourceSHA256 != litellmclient.ApprovedSourceSHA256 || !litellmclient.ValidSHA(o.ClientSHA256) ||
+		o.ClientsConfigMapUID == "" || !litellmclient.ValidSHA(o.SeedSHA256) ||
 		o.ObservedAt.IsZero() || time.Since(o.ObservedAt) < 0 || time.Since(o.ObservedAt) >= 60*time.Second {
 		return litellmclient.Live{}, errors.New("owned-client request/observation authority incomplete")
 	}
@@ -103,7 +86,8 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 	if e != nil {
 		return live, e
 	}
-	if live.ServiceUID != o.ServiceUID || live.PolicyUID != o.ConfigMapUID || live.ClientSHA256 != o.ClientSHA256 ||
+	if live.ServiceUID != o.ServiceUID || live.PolicyUID != o.ConfigMapUID ||
+		live.ClientsUID != o.ClientsConfigMapUID || live.SeedSHA256 != o.SeedSHA256 ||
 		live.SourceSHA256 != o.GatewaySourceSHA256 {
 		return live, errors.New("owned-client source, Service or credential drift")
 	}
@@ -145,8 +129,7 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 		return live, e
 	}
 	if event.DeletionTimestamp != nil || string(event.UID) != o.EventUID || event.Spec.Rule.Type != litellmclient.RuleType ||
-		event.Spec.Rule.Source != "redteam" || event.CreationTimestamp.IsZero() ||
-		event.CreationTimestamp.Time.Before(o.ObservedAt) || time.Since(event.CreationTimestamp.Time) >= 60*time.Second ||
+		event.Spec.Rule.Source != "redteam" || !litellmEventTimeMatches(event.CreationTimestamp.Time, o.ObservedAt, time.Now()) ||
 		event.Annotations["phorvex.ai/creator-identity"] != o.CreatorIdentity ||
 		o.CreatorIdentity != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
 		event.Annotations[model.ConsoleTargetPodUIDAnnotation] != req.TargetUID ||
@@ -157,6 +140,7 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 	assertion, e := litellmclient.ParseObservation(event.Annotations[litellmclient.ObservationAnnotation])
 	if e != nil || assertion.TargetPodUID != o.TargetPodUID || assertion.PeerPodUID != o.PeerPodUID ||
 		assertion.ClientSHA256 != o.ClientSHA256 || assertion.ConfigMapUID != o.ConfigMapUID ||
+		assertion.ClientsConfigMapUID != o.ClientsConfigMapUID || assertion.SeedSHA256 != o.SeedSHA256 ||
 		assertion.ServiceUID != o.ServiceUID || assertion.PolicyName != o.PolicyName ||
 		assertion.PolicyUID != o.PolicyUID || assertion.PolicyGeneration != o.PolicyGeneration ||
 		!assertion.ObservedAt.Equal(o.ObservedAt) {
@@ -165,17 +149,34 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 	return live, nil
 }
 
+// Kubernetes SecurityEvent CreationTimestamp has second precision on common
+// API-server paths. An observation made during that same second can therefore
+// appear later than the stored creation time without being a future assertion.
+func litellmEventTimeMatches(created, observed, now time.Time) bool {
+	return !created.IsZero() && !observed.IsZero() &&
+		!observed.After(created.Add(time.Second)) && created.Sub(observed) < 60*time.Second &&
+		!created.After(now.Add(time.Second)) && now.Sub(created) < 60*time.Second &&
+		!observed.After(now) && now.Sub(observed) < 60*time.Second
+}
+
 type litellmGatewayState struct {
-	Version      int                        `json:"version"`
-	PodUID       string                     `json:"podUID"`
-	SourceSHA256 string                     `json:"sourceSHA256"`
-	ConfigMapUID string                     `json:"configMapUID"`
-	ClientSHA256 string                     `json:"clientSHA256"`
-	Active       bool                       `json:"active"`
-	Revision     uint64                     `json:"revision"`
-	OperationID  string                     `json:"operationId"`
-	Ready        bool                       `json:"ready"`
-	Counters     map[string]json.RawMessage `json:"counters"`
+	Version      int    `json:"version"`
+	PodUID       string `json:"podUID"`
+	SourceSHA256 string `json:"sourceSHA256"`
+	SeedSHA256   string `json:"seedSHA256"`
+	ConfigMapUID string `json:"configMapUID"`
+	ClientSHA256 string `json:"clientSHA256"`
+	Active       bool   `json:"active"`
+	Revision     uint64 `json:"revision"`
+	OperationID  string `json:"operationId"`
+	Role         string `json:"role"`
+	Ready        bool   `json:"ready"`
+	Counters     struct {
+		ForwardedRequests   uint64 `json:"forwardedRequests"`
+		UpstreamCompletions uint64 `json:"upstreamCompletions"`
+		DeniedRequests      uint64 `json:"deniedRequests"`
+		UsageTokens         uint64 `json:"usageTokens"`
+	} `json:"counters"`
 }
 
 func litellmStatusToken() (string, error) {
@@ -194,7 +195,10 @@ func litellmStatusToken() (string, error) {
 	return string(raw), nil
 }
 
-func litellmCheckGatewayState(ctx context.Context, ec EnactCtx, live litellmclient.Live, opID string, wantActive bool) error {
+func litellmCheckGatewayState(ctx context.Context, ec EnactCtx, live litellmclient.Live, clientSHA, opID string, wantActive bool) error {
+	if !litellmclient.ValidSHA(clientSHA) {
+		return errors.New("owned-client status query hash invalid")
+	}
 	token := ec.LiteLLMStatusToken
 	if token == "" {
 		var e error
@@ -214,7 +218,7 @@ func litellmCheckGatewayState(ctx context.Context, ec EnactCtx, live litellmclie
 		if net.ParseIP(pod.IP) == nil {
 			return errors.New("owned-client Pod IP invalid")
 		}
-		url := "http://" + net.JoinHostPort(pod.IP, "4002") + "/v1/admission/state"
+		url := "http://" + net.JoinHostPort(pod.IP, "4002") + "/v1/admission/state?clientSHA256=" + clientSHA
 		req, e := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if e != nil {
 			return e
@@ -234,40 +238,59 @@ func litellmCheckGatewayState(ctx context.Context, ec EnactCtx, live litellmclie
 		if json.Unmarshal(raw, &canonical) != nil {
 			return errors.New("owned-client gateway status malformed")
 		}
+		statusKeys := []string{"version", "podUID", "sourceSHA256", "seedSHA256", "configMapUID", "clientSHA256",
+			"active", "revision", "operationId", "role", "ready", "counters"}
+		if len(canonical) != len(statusKeys) {
+			return errors.New("owned-client gateway status keyset differs")
+		}
+		for _, key := range statusKeys {
+			if _, ok := canonical[key]; !ok {
+				return errors.New("owned-client gateway status keyset differs")
+			}
+		}
+		counterMap, ok := canonical["counters"].(map[string]any)
+		if !ok || len(counterMap) != 4 {
+			return errors.New("owned-client gateway counters keyset differs")
+		}
+		for _, key := range []string{"forwardedRequests", "upstreamCompletions", "deniedRequests", "usageTokens"} {
+			if _, ok := counterMap[key]; !ok {
+				return errors.New("owned-client gateway counters keyset differs")
+			}
+		}
 		reencoded, _ := json.Marshal(canonical)
 		if !bytes.Equal(raw, reencoded) {
 			return errors.New("owned-client gateway status noncanonical")
 		}
 		d := json.NewDecoder(bytes.NewReader(raw))
 		d.DisallowUnknownFields()
-		if d.Decode(&state) != nil || state.Version != 1 || state.PodUID != pod.UID ||
+		if d.Decode(&state) != nil || state.Version != 2 || state.PodUID != pod.UID ||
 			state.SourceSHA256 != live.SourceSHA256 || state.ConfigMapUID != live.PolicyUID ||
-			state.ClientSHA256 != live.ClientSHA256 || state.Active != wantActive ||
-			state.OperationID != opID || !state.Ready || len(state.Counters) != 2 ||
-			state.Counters["attacker"] == nil || state.Counters["control"] == nil {
+			state.SeedSHA256 != live.SeedSHA256 || state.ClientSHA256 != clientSHA ||
+			state.Active != wantActive || state.OperationID != opID || state.Role != "attacker" ||
+			!state.Ready || state.Counters.ForwardedRequests == 0 || state.Counters.UpstreamCompletions == 0 {
 			return errors.New("owned-client gateway effective state differs")
 		}
-		if (wantActive && state.Revision != 1) || (!wantActive && state.Revision != 0) {
+		if state.Revision != live.State.Revision {
 			return errors.New("owned-client gateway effective revision differs")
 		}
 	}
 	return nil
 }
 
-func litellmReadback(ctx context.Context, ec EnactCtx, live litellmclient.Live, opID string) error {
-	return litellmCheckGatewayState(ctx, ec, live, opID, true)
+func litellmReadback(ctx context.Context, ec EnactCtx, live litellmclient.Live, clientSHA, opID string) error {
+	return litellmCheckGatewayState(ctx, ec, live, clientSHA, opID, true)
 }
 
 // Projected ConfigMap files can lag a successful API-server CAS. Observe both
 // exact sidecars for a finite interval; never issue another policy write.
-func litellmAwaitReadback(ctx context.Context, ec EnactCtx, live litellmclient.Live, opID string) error {
-	deadline := time.NewTimer(90 * time.Second)
+func litellmAwaitReadback(ctx context.Context, ec EnactCtx, live litellmclient.Live, clientSHA, opID string) error {
+	deadline := time.NewTimer(15 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
 	var last error
 	for {
-		if last = litellmReadback(ctx, ec, live, opID); last == nil {
+		if last = litellmReadback(ctx, ec, live, clientSHA, opID); last == nil {
 			return nil
 		}
 		select {
@@ -292,61 +315,85 @@ func (litellmClientRevokeHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 		return HandlerResult{}, RefusedWithoutEffect(e)
 	}
 	o := req.LiteLLMClientObservation
-	receipt := litellmRevokeReceipt{Version: 1, Phase: "prepared", PolicyName: req.PolicyName, PolicyUID: req.PolicyUID,
+	// Prove the next canonical policy value fits the mounted gateway reader
+	// before persisting a prepared intent. The later RV CAS still rechecks it.
+	preview, previewErr := live.State.Append(o.ClientSHA256, req.OperationID)
+	if previewErr != nil {
+		return HandlerResult{}, RefusedWithoutEffect(previewErr)
+	}
+	if _, previewErr = litellmclient.EncodeState(preview); previewErr != nil {
+		return HandlerResult{}, RefusedWithoutEffect(previewErr)
+	}
+	receipt := litellmRevokeReceipt{Version: 2, Phase: "prepared", PolicyName: req.PolicyName, PolicyUID: req.PolicyUID,
 		PolicyGeneration: req.PolicyGeneration, TargetUID: req.TargetUID, PeerUID: o.PeerPodUID, EventName: o.EventName, EventUID: o.EventUID,
-		ClientSHA256: o.ClientSHA256, ConfigMapUID: o.ConfigMapUID, ServiceUID: o.ServiceUID,
+		ClientSHA256: o.ClientSHA256, ConfigMapUID: o.ConfigMapUID,
+		ClientsConfigMapUID: o.ClientsConfigMapUID, SeedSHA256: o.SeedSHA256, ServiceUID: o.ServiceUID,
 		SourceSHA256: o.GatewaySourceSHA256, OperationID: req.OperationID, SelectionDecisionID: req.OperationID, TickID: req.TickID}
-	journalName := litellmJournalName(req.PolicyUID, o.ClientSHA256)
 	journal := &corev1.ConfigMap{}
-	key := client.ObjectKey{Namespace: ec.JournalNamespace, Name: journalName}
-	newJournal := false
-	if e = ec.Reader.Get(ctx, key, journal); apierrors.IsNotFound(e) {
-		if live.State.Active {
-			return HandlerResult{}, RefusedWithoutEffect(errors.New("owned client already denied without matching operation journal"))
-		}
-		if e = litellmCheckGatewayState(ctx, ec, live, "", false); e != nil {
-			return HandlerResult{}, RefusedWithoutEffect(e)
-		}
-		journal = &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: ec.JournalNamespace, Name: journalName},
-			Data: map[string]string{"receipt": litellmReceiptRaw(receipt)}}
-		if e = ec.Client.Create(ctx, journal); e != nil {
-			return HandlerResult{MutationKind: "partial"}, e
-		}
-		newJournal = true
-	} else if e != nil {
-		return HandlerResult{}, e
-	} else {
-		stored, parseErr := litellmReadReceipt(journal)
+	key := client.ObjectKey{Namespace: ec.JournalNamespace, Name: litellmclient.JournalName}
+	newPrepared := false
+	if e = ec.Reader.Get(ctx, key, journal); e != nil {
+		return HandlerResult{}, RefusedWithoutEffect(e)
+	}
+	journalDoc, e := litellmReadJournal(journal)
+	if e != nil {
+		return HandlerResult{}, RefusedWithoutEffect(e)
+	}
+	index := journalDoc.index(o.ClientSHA256)
+	if index >= 0 {
+		stored := journalDoc.Receipts[index]
 		comparison := stored
 		comparison.Phase = "prepared"
-		if parseErr != nil || comparison != receipt {
-			return HandlerResult{}, RefusedWithoutEffect(errors.New("owned-client journal occupied by another operation"))
-		}
-		if !live.State.Active || live.State.OperationID != req.OperationID {
-			return HandlerResult{MutationKind: "partial"}, errors.New("owned-client prepared journal requires reconciliation; no second CAS")
+		entry, exists := live.State.Entry(o.ClientSHA256)
+		if comparison != receipt || !exists || entry.OperationID != req.OperationID {
+			return HandlerResult{}, RefusedWithoutEffect(errors.New("owned-client prior protected entry differs from same operation"))
 		}
 		if stored.Phase == "terminal-full" {
-			if e = litellmAwaitReadback(ctx, ec, live, req.OperationID); e != nil {
+			if e = litellmAwaitReadback(ctx, ec, live, o.ClientSHA256, req.OperationID); e != nil {
 				return HandlerResult{MutationKind: "partial"}, e
 			}
 			return HandlerResult{MutationKind: "forward-only", NoEffect: NoEffectReconciled,
 				ObjectsTouched: []string{req.Namespace + "/" + litellmclient.PolicyConfigMapName}}, nil
 		}
+	} else {
+		if !journalDoc.matchesPolicy(live.State) {
+			return HandlerResult{}, RefusedWithoutEffect(errors.New("owned-client prior protected history is not terminal and joined"))
+		}
+		if _, exists := live.State.Entry(o.ClientSHA256); exists {
+			return HandlerResult{}, RefusedWithoutEffect(errors.New("owned client already denied without protected entry"))
+		}
+		if e = litellmCheckGatewayState(ctx, ec, live, o.ClientSHA256, "", false); e != nil {
+			return HandlerResult{}, RefusedWithoutEffect(e)
+		}
+		journalDoc, e = journalDoc.append(receipt)
+		if e != nil {
+			return HandlerResult{}, RefusedWithoutEffect(e)
+		}
+		journal.Data[litellmclient.JournalKey] = litellmJournalRaw(journalDoc)
+		if e = ec.Client.Update(ctx, journal); e != nil {
+			return HandlerResult{MutationKind: "partial"}, e
+		}
+		newPrepared = true
 	}
-	if newJournal {
+	if newPrepared {
 		cm := &corev1.ConfigMap{}
 		if e = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: litellmclient.PolicyConfigMapName}, cm); e != nil {
 			return HandlerResult{MutationKind: "partial"}, e
 		}
 		prior, parseErr := litellmclient.ParseState(cm.Data[litellmclient.PolicyKey])
 		if parseErr != nil || string(cm.UID) != live.PolicyUID || cm.ResourceVersion != live.PolicyRV ||
-			prior.Active || prior.ClientSHA256 != o.ClientSHA256 {
+			len(prior.Entries) != len(live.State.Entries) {
+			if parseErr == nil {
+				if abortErr := litellmAbortNoWrite(ctx, ec, receipt, "pre-cas-authority-changed"); abortErr != nil {
+					return HandlerResult{MutationKind: "partial"}, abortErr
+				}
+			}
 			return HandlerResult{MutationKind: "partial"}, errors.New("owned-client pre-CAS policy authority changed")
 		}
-		next := prior
-		next.Active = true
-		next.Revision = 1
-		next.OperationID = req.OperationID
+		next, appendErr := prior.Append(o.ClientSHA256, req.OperationID)
+		if appendErr != nil {
+			return HandlerResult{MutationKind: "partial"}, appendErr
+		}
 		encoded, encodeErr := litellmclient.EncodeState(next)
 		if encodeErr != nil {
 			return HandlerResult{MutationKind: "partial"}, encodeErr
@@ -355,26 +402,90 @@ func (litellmClientRevokeHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 		// One exact resourceVersion CAS. A lost acknowledgement is ambiguous and
 		// never retried; the prepared journal prevents an unreviewed second write.
 		if e = ec.Client.Update(ctx, cm); e != nil {
+			if apierrors.IsConflict(e) {
+				if abortErr := litellmAbortNoWrite(ctx, ec, receipt, "definitive-policy-conflict"); abortErr != nil {
+					return HandlerResult{MutationKind: "partial"}, fmt.Errorf("policy CAS conflict; protected abort unresolved: %w", abortErr)
+				}
+			}
 			return HandlerResult{MutationKind: "partial"}, e
 		}
 	}
 	current, e := litellmclient.ValidateLive(ctx, ec.Reader, o.TargetPodUID, o.PeerPodUID)
-	if e != nil || !current.State.Active || current.State.OperationID != req.OperationID ||
+	entry, exists := current.State.Entry(o.ClientSHA256)
+	if e != nil || !exists || !entry.Active || entry.OperationID != req.OperationID ||
 		current.PolicyUID != live.PolicyUID || current.ServiceUID != live.ServiceUID ||
-		current.SourceSHA256 != live.SourceSHA256 {
+		current.SourceSHA256 != live.SourceSHA256 || current.ClientsUID != live.ClientsUID ||
+		current.SeedSHA256 != live.SeedSHA256 {
 		return HandlerResult{MutationKind: "partial"}, errors.New("owned-client post-CAS authority not confirmed")
 	}
-	if e = litellmAwaitReadback(ctx, ec, current, req.OperationID); e != nil {
+	if e = litellmAwaitReadback(ctx, ec, current, o.ClientSHA256, req.OperationID); e != nil {
 		return HandlerResult{MutationKind: "partial"}, e
 	}
 	receipt.Phase = "terminal-full"
-	journal.Data["receipt"] = litellmReceiptRaw(receipt)
-	if e = ec.Client.Update(ctx, journal); e != nil {
+	freshJournal := &corev1.ConfigMap{}
+	if e = ec.Reader.Get(ctx, key, freshJournal); e != nil {
+		return HandlerResult{MutationKind: "partial"}, e
+	}
+	journalDoc, e = litellmReadJournal(freshJournal)
+	if e != nil {
+		return HandlerResult{MutationKind: "partial"}, e
+	}
+	index = journalDoc.index(o.ClientSHA256)
+	prepared := receipt
+	prepared.Phase = "prepared"
+	if index < 0 || journalDoc.Receipts[index].Phase != "prepared" ||
+		journalDoc.Receipts[index] != prepared {
+		return HandlerResult{MutationKind: "partial"}, errors.New("owned-client prepared journal entry changed")
+	}
+	journalDoc.Receipts[index] = receipt
+	freshJournal.Data[litellmclient.JournalKey] = litellmJournalRaw(journalDoc)
+	if e = ec.Client.Update(ctx, freshJournal); e != nil {
 		return HandlerResult{MutationKind: "partial"}, e
 	}
 	return HandlerResult{MutationKind: "forward-only", Emitted: true,
-		ObjectsTouched: []string{req.Namespace + "/" + litellmclient.PolicyConfigMapName, ec.JournalNamespace + "/" + journalName},
+		ObjectsTouched: []string{req.Namespace + "/" + litellmclient.PolicyConfigMapName, ec.JournalNamespace + "/" + litellmclient.JournalName},
 		Note:           fmt.Sprintf("owned LiteLLM client deny effective on both gateway Pods for operation %s", req.OperationID)}, nil
 }
 
 func init() { HandlerRegistry.Register(litellmClientRevokeHandler{}) }
+
+// litellmAbortNoWrite retires a protected intent only after a definite
+// pre-write refusal and a fresh read proving its credential has no policy
+// entry. A timeout or lost acknowledgement must never reach this path.
+func litellmAbortNoWrite(ctx context.Context, ec EnactCtx, prepared litellmRevokeReceipt, reason string) error {
+	policy := &corev1.ConfigMap{}
+	if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.PolicyConfigMapName}, policy); e != nil {
+		return e
+	}
+	if string(policy.UID) != prepared.ConfigMapUID {
+		return errors.New("owned-client abort policy UID changed")
+	}
+	state, e := litellmclient.ParseState(policy.Data[litellmclient.PolicyKey])
+	if e != nil {
+		return e
+	}
+	if _, exists := state.Entry(prepared.ClientSHA256); exists {
+		return errors.New("owned-client abort credential may have been committed")
+	}
+	journal := &corev1.ConfigMap{}
+	if e = ec.Reader.Get(ctx, client.ObjectKey{Namespace: ec.JournalNamespace, Name: litellmclient.JournalName}, journal); e != nil {
+		return e
+	}
+	doc, e := litellmReadJournal(journal)
+	if e != nil {
+		return e
+	}
+	index := doc.index(prepared.ClientSHA256)
+	if index < 0 || doc.Receipts[index] != prepared || prepared.Phase != "prepared" {
+		return errors.New("owned-client abort prepared receipt changed")
+	}
+	aborted := prepared
+	aborted.Phase = "aborted"
+	aborted.AbortReason = reason
+	doc.Receipts[index] = aborted
+	if !doc.matchesPolicy(state) {
+		return errors.New("owned-client abort prior policy history differs")
+	}
+	journal.Data[litellmclient.JournalKey] = litellmJournalRaw(doc)
+	return ec.Client.Update(ctx, journal)
+}
