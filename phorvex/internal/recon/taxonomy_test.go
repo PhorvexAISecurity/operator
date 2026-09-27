@@ -197,6 +197,7 @@ func TestNoDeadFactKinds(t *testing.T) {
 				ClientSHA256: "client-hash", ConfigMapUID: "cm-uid", ClientsConfigMapUID: "clients-cm-uid",
 				SeedSHA256: "seed-hash", ServiceUID: "service-uid",
 				GatewaySourceSHA256: "source-hash", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
+		boundVoiceMCPView(),
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {
@@ -212,6 +213,29 @@ func TestNoDeadFactKinds(t *testing.T) {
 				"dead taxonomy reads as capability", name, value)
 		}
 	}
+}
+
+func TestVoiceMCPObservedDescriptorProducesDistinctCover(t *testing.T) {
+	view := boundVoiceMCPView()
+	if !view.Pod.HasBoundVoiceMCPObservation() {
+		t.Fatal("representative source-bound MCP observation is incomplete")
+	}
+	af := ucwRecon{}.AssetFacts(view, FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1})
+	keys := af.CoverByAction[model.ActionVoiceMCPToolPin]
+	if len(keys) != 1 {
+		t.Fatalf("MCP descriptor observation has %d covers, want one", len(keys))
+	}
+	for _, fact := range af.Facts {
+		if fact.Key() == keys[0] {
+			if fact.Kind != FactVoiceMCPDescriptorSteering || fact.SteeredBy == nil ||
+				fact.SteeredBy.RuleType != model.AttackVectorVoiceMCP || len(fact.SteeredBy.Events) != 1 ||
+				fact.SteeredBy.Events[0].EventUID != view.Pod.VoiceMCPObservation.EventUID {
+				t.Fatalf("MCP fact lost exact observed-event attribution: %+v", fact)
+			}
+			return
+		}
+	}
+	t.Fatal("MCP cover refers to no emitted fact")
 }
 
 // declaredFactKinds reads every Fact* string constant straight out of facts.go, so a newly-added
