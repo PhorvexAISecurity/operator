@@ -329,23 +329,8 @@ func (s *Server) runVoiceMemoryLive(record *attackRecord, id string) {
 	probe := record.VoiceMemoryProbe
 	var failure error
 	defer func() {
+		s.finishVoiceMemoryRecord(record, failure)
 		voiceMemoryRunning.Store(false)
-		if failure != nil {
-			probe.Issue = failure.Error()
-		}
-		voiceMemoryFinalizeOutcome(record)
-		if probe.Status == "UNKNOWN" {
-			record.OutcomeClass = "voice-memory-unknown"
-		} else {
-			record.OutcomeClass = "voice-memory-" + strings.ToLower(probe.Status)
-		}
-		record.Status = "done"
-		publishAttack(record)
-		if err := s.persistAttack(record); err != nil {
-			record.Status = "partial"
-			record.PersistenceError = "Voice memory evidence persistence unavailable"
-			publishAttack(record)
-		}
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
@@ -499,6 +484,31 @@ func (s *Server) runVoiceMemoryLive(record *attackRecord, id string) {
 		probe.Status = "UNKNOWN"
 		failure = errors.New("poison absent without selected exact memory action")
 	}
+}
+
+func (s *Server) finishVoiceMemoryRecord(record *attackRecord, failure error) {
+	probe := record.VoiceMemoryProbe
+	if failure != nil {
+		probe.Issue = failure.Error()
+	}
+	voiceMemoryFinalizeOutcome(record)
+	if probe.Status == "UNKNOWN" {
+		record.OutcomeClass = "voice-memory-unknown"
+	} else {
+		record.OutcomeClass = "voice-memory-" + strings.ToLower(probe.Status)
+	}
+	record.Status = "done"
+	if err := s.persistAttack(record); err != nil {
+		// A successful replay is not a public DEFENDED result if its terminal
+		// record could not be retained. The first measured exposure remains true.
+		probe.Status = "UNKNOWN"
+		voiceMemoryFinalizeOutcome(record)
+		record.OutcomeClass = "voice-memory-unknown"
+		record.Status = "partial"
+		record.PersistenceError = "Voice memory evidence persistence unavailable"
+		probe.Issue = record.PersistenceError
+	}
+	publishAttack(record)
 }
 
 func voiceMemoryFinalizeOutcome(record *attackRecord) {

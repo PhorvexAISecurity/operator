@@ -2,6 +2,7 @@ package console
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,6 +93,49 @@ func TestVoiceMemoryCleanupFailureCannotPublishDefended(t *testing.T) {
 	if record.Outcome != "DEFENDED" || record.Containment != "exact-memory-note-revoked" {
 		t.Fatal("verified exact cleanup lost defended outcome")
 	}
+}
+
+func TestVoiceMemoryPersistenceFailureCannotPublishDefended(t *testing.T) {
+	id := "voice-memory-durable-terminal-test"
+	defer func() {
+		attackMu.Lock()
+		defer attackMu.Unlock()
+		for i, candidate := range attackList {
+			if candidate.ID == id {
+				attackList = append(attackList[:i], attackList[i+1:]...)
+				break
+			}
+		}
+	}()
+	s := NewServer(Config{StateDir: t.TempDir(), StateAppend: func(_ string, _ []byte) error {
+		attackMu.Lock()
+		defer attackMu.Unlock()
+		for _, candidate := range attackList {
+			if candidate.ID == id && candidate.Outcome == "DEFENDED" {
+				t.Fatal("DEFENDED became public before durable append")
+			}
+		}
+		return errors.New("synthetic storage fault")
+	}})
+	record := &attackRecord{ID: id, Outcome: "DEFENDED", Containment: "exact-memory-note-revoked",
+		VoiceMemoryProbe: &voiceMemoryProbeResult{Status: "DEFENDED", FirstContextObserved: true,
+			Cleanup: "deleted-exact-owned-record"}}
+	s.finishVoiceMemoryRecord(record, nil)
+	if record.Status != "partial" || record.Outcome != "LANDED" || record.Containment != "" ||
+		record.VoiceMemoryProbe.Status != "UNKNOWN" || record.PersistenceError == "" {
+		t.Fatalf("persistence fault retained success: %+v", record)
+	}
+	attackMu.Lock()
+	defer attackMu.Unlock()
+	for _, candidate := range attackList {
+		if candidate.ID == id {
+			if candidate.Outcome != "LANDED" || candidate.Containment != "" || candidate.Status != "partial" {
+				t.Fatalf("public terminal result falsely defended: %+v", candidate)
+			}
+			return
+		}
+	}
+	t.Fatal("partial terminal record absent")
 }
 
 func TestVoiceMemoryDecisionRequiresExactTraceOwners(t *testing.T) {
