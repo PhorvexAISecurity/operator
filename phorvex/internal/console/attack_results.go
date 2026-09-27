@@ -122,6 +122,8 @@ type attackRecord struct {
 	DecisionEvidence         *decisionEvidence  `json:"decisionEvidence,omitempty"`
 	DecisionTraceEvidence    []decisionEvidence `json:"decisionTraceEvidence,omitempty"`
 	TemporalDecisionEvidence *decisionEvidence  `json:"temporalDecisionEvidence,omitempty"`
+	DecisionAuditReadGap     bool               `json:"decisionAuditReadGap,omitempty"`
+	DecisionAuditCoverage    string             `json:"decisionAuditCoverage,omitempty"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
 	Why                       string  `json:"why"`
@@ -754,6 +756,18 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if up := s.workloadUptimeBoundKind(r.Namespace, r.Deploy, r.OwnerKind, r.OwnerUID); up >= 0 && up < minUp {
 			minUp = up
 		}
+		if r.EvidenceKind == "vllm-in-place-effect" && r.AttackID != "poison" {
+			// The live audit may rotate before the watch ends. Retain exact
+			// event-bound rows from every bounded poll, including polls before
+			// or after the mechanism effect. A failed poll is a visible gap.
+			timeout := min(22*time.Second, deadline.Sub(s.cfg.now()))
+			if timeout > 0 {
+				if s.fillReasoningWithTimeout(ctxName, r, timeout) != nil {
+					r.DecisionAuditReadGap = true
+				}
+				r.DecisionAuditCoverage = "sampled-live-tail"
+			}
+		}
 		if r.Outcome != "" || r.ResponseObserved || (r.EffectEvidence != nil && r.AttackID != "poison") {
 			continue
 		}
@@ -922,7 +936,7 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	if r.EvidenceKind == "" {
 		s.fillReasoning(ctxName, r)
 		s.fillCost(ctxName, r)
-	} else if r.EvidenceKind == "vllm-in-place-effect" || r.EvidenceKind == "vllm-unsupported-stimulus" || r.EvidenceKind == "catalogue-signal" {
+	} else if r.EvidenceKind == "vllm-unsupported-stimulus" || r.EvidenceKind == "catalogue-signal" {
 		// The manager audit can carry the SecurityEvent UID in steeredBy facts, but this
 		// bounded console correlator does not consume that binding yet. Keep this temporal.
 		s.fillReasoning(ctxName, r)
@@ -1158,6 +1172,10 @@ type exactDecisionMatch struct {
 // dispositions when the audit carries immutable identity. A workload/time candidate is
 // retained separately for old records; it never becomes causal evidence.
 func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
+	_ = s.fillReasoningWithTimeout(ctxName, r, 10*time.Second)
+}
+
+func (s *Server) fillReasoningWithTimeout(ctxName string, r *attackRecord, timeout time.Duration) error {
 	s.parseDescReasoning(r)
 	target := r.Pod
 	if r.DefendedPod != "" {
@@ -1165,7 +1183,7 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	}
 	fired, err := time.Parse(time.RFC3339Nano, r.FiredAt)
 	if err != nil {
-		return
+		return err
 	}
 	collectedAt := s.cfg.now()
 	temporalStart, temporalDeadline := fired, collectedAt
@@ -1175,12 +1193,13 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	if persistedEnd, parseErr := time.Parse(time.RFC3339Nano, r.ObservationEnd); parseErr == nil && persistedEnd.After(temporalStart) && persistedEnd.Before(temporalDeadline) {
 		temporalDeadline = persistedEnd
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	records, err := s.readDecisionWindow(ctx, ctxName)
 	if err != nil {
-		return
+		return err
 	}
+	r.TemporalDecisionEvidence = nil
 	var best, noop *audit.Record
 	exact := make([]exactDecisionMatch, 0)
 	for i := range records {
@@ -1221,28 +1240,61 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	if best != nil {
 		temporal := decisionEvidenceFromAudit(best, correlation, "temporal-candidate", matchedEventReference{})
 		r.TemporalDecisionEvidence = &temporal
-		if len(exact) == 0 {
+		if len(exact) == 0 && len(r.DecisionTraceEvidence) == 0 {
 			r.DecisionEvidence = &temporal
 		}
 	}
-	if len(exact) > 0 {
-		summary := exact[0]
-		for i := 1; i < len(exact); i++ {
-			if decisionDispositionRank(exact[i].evidence) > decisionDispositionRank(summary.evidence) ||
-				(decisionDispositionRank(exact[i].evidence) == decisionDispositionRank(summary.evidence) && exact[i].record.Time.After(summary.record.Time)) {
-				summary = exact[i]
-			}
-		}
-		evidence := summary.evidence
-		r.DecisionEvidence = &evidence
-		chosen = summary.record
-		exact = boundedDecisionMatches(exact, summary)
-		r.DecisionTraceEvidence = make([]decisionEvidence, len(exact))
-		for i := range exact {
-			r.DecisionTraceEvidence[i] = exact[i].evidence
+	// A prior poll can have seen the selected row before audit rotation. Keep
+	// only previously validated evidence for this same immutable event/Pod, then
+	// join newly read rows. Later exact NOOPs remain visible but cannot erase an
+	// earlier selected dispatch.
+	allExact := make([]decisionEvidence, 0, len(r.DecisionTraceEvidence)+len(exact))
+	for _, prior := range r.DecisionTraceEvidence {
+		if validPriorDecisionEvidence(r, prior, collectedAt) {
+			allExact = append(allExact, prior)
 		}
 	}
-	if len(exact) == 0 {
+	for _, match := range exact {
+		if len(allExact) > 0 &&
+			(conflictingNonempty(match.evidence.TrustVerdict, allExact[0].TrustVerdict) ||
+				conflictingNonempty(match.evidence.CreatorIdentity, allExact[0].CreatorIdentity) ||
+				conflictingNonempty(match.evidence.DeclaredSource, allExact[0].DeclaredSource)) {
+			r.DecisionAuditReadGap = true
+			continue
+		}
+		allExact = append(allExact, match.evidence)
+	}
+	if len(allExact) > 0 {
+		sort.SliceStable(allExact, func(i, j int) bool {
+			return decisionEvidenceTime(allExact[i]).Before(decisionEvidenceTime(allExact[j]))
+		})
+		unique := allExact[:0]
+		for _, evidence := range allExact {
+			if len(unique) == 0 || !sameDecisionEvidence(unique[len(unique)-1], evidence) {
+				unique = append(unique, evidence)
+			}
+		}
+		summary := unique[0]
+		for _, candidate := range unique[1:] {
+			if decisionDispositionRank(candidate) > decisionDispositionRank(summary) ||
+				(decisionDispositionRank(candidate) == decisionDispositionRank(summary) && decisionEvidenceTime(candidate).After(decisionEvidenceTime(summary))) {
+				summary = candidate
+			}
+		}
+		r.DecisionEvidence = &summary
+		r.DecisionTraceEvidence = boundedDecisionEvidence(unique, summary)
+		for _, match := range exact {
+			if sameDecisionEvidence(match.evidence, summary) {
+				chosen = match.record
+				break
+			}
+		}
+	}
+	if len(allExact) == 0 {
+		r.DecisionTraceEvidence = nil
+		if r.DecisionEvidence != nil && r.DecisionEvidence.Correlation == "exact-event-uid" {
+			r.DecisionEvidence = r.TemporalDecisionEvidence
+		}
 		chosen = best
 	}
 	if chosen != nil {
@@ -1258,15 +1310,48 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 			r.EconomicsAvailable = true
 		}
 	}
+	return nil
 }
 
-func boundedDecisionMatches(all []exactDecisionMatch, summary exactDecisionMatch) []exactDecisionMatch {
+func sameDecisionEvidence(a, b decisionEvidence) bool {
+	return a.Time == b.Time && a.TickID == b.TickID && a.DecisionID == b.DecisionID &&
+		a.Action == b.Action && a.EventName == b.EventName && a.EventUID == b.EventUID &&
+		a.TargetUID == b.TargetUID && a.PolicyUID == b.PolicyUID &&
+		a.Selected == b.Selected && a.Actuated == b.Actuated && a.DispatchOutcome == b.DispatchOutcome
+}
+
+func decisionEvidenceTime(e decisionEvidence) time.Time {
+	parsed, _ := time.Parse(time.RFC3339Nano, e.Time)
+	return parsed
+}
+
+func validPriorDecisionEvidence(r *attackRecord, e decisionEvidence, collectedAt time.Time) bool {
+	if r.StimulusEvidence == nil || !r.StimulusEvidence.Observed ||
+		e.Correlation != "exact-event-uid" ||
+		(e.Source != "decision-trace-steered-event" && e.Source != "generic-event-evidence") ||
+		e.EventName != r.StimulusEvidence.EventName || e.EventUID != r.StimulusEvidence.EventUID ||
+		e.EventRule != r.StimulusEvidence.EventRule || e.TargetUID != r.TargetUID ||
+		r.StimulusEvidence.TargetUID != r.TargetUID ||
+		(e.TrustVerdict != "" && e.TrustVerdict != "trusted") ||
+		(e.CreatorIdentity != "" && !strings.HasPrefix(e.CreatorIdentity, "system:serviceaccount:")) {
+		return false
+	}
+	created, err1 := time.Parse(time.RFC3339Nano, r.StimulusEvidence.EventCreatedAt)
+	start, err2 := time.Parse(time.RFC3339Nano, r.ObservationStart)
+	end, err3 := time.Parse(time.RFC3339Nano, r.ObservationEnd)
+	observed, err4 := time.Parse(time.RFC3339Nano, e.Time)
+	return err1 == nil && err2 == nil && err3 == nil && err4 == nil &&
+		!created.IsZero() && !start.IsZero() && end.After(start) &&
+		!observed.Before(created) && !observed.After(end) && !observed.After(collectedAt)
+}
+
+func boundedDecisionEvidence(all []decisionEvidence, summary decisionEvidence) []decisionEvidence {
 	if len(all) <= maxDecisionTraceEvidence {
 		return all
 	}
 	// Preserve the beginning and end of a long-lived event plus the authoritative
-	// summary disposition. Audit records are immutable; pointer identity is safe here.
-	out := append([]exactDecisionMatch(nil), all[:maxDecisionTraceEvidence/2]...)
+	// summary disposition. Each element was already bound to this exact event.
+	out := append([]decisionEvidence(nil), all[:maxDecisionTraceEvidence/2]...)
 	for _, candidate := range all[len(all)-maxDecisionTraceEvidence/2:] {
 		if len(out) == maxDecisionTraceEvidence {
 			break
@@ -1275,11 +1360,11 @@ func boundedDecisionMatches(all []exactDecisionMatch, summary exactDecisionMatch
 	}
 	found := false
 	for i := range out {
-		found = found || out[i].record == summary.record
+		found = found || sameDecisionEvidence(out[i], summary)
 	}
 	if !found {
 		out[len(out)/2] = summary
-		sort.SliceStable(out, func(i, j int) bool { return out[i].record.Time.Before(out[j].record.Time) })
+		sort.SliceStable(out, func(i, j int) bool { return decisionEvidenceTime(out[i]).Before(decisionEvidenceTime(out[j])) })
 	}
 	return out
 }
