@@ -3011,13 +3011,15 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
 			reason := "sensitive-output-selection-id-unavailable"
 			if decisions[i].Action == model.ActionVoiceMemoryNoteRevoke {
 				reason = "voice-memory-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionVoiceRefundPairDeny {
+				reason = "voice-refund-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionAdapterRotate {
 				reason = "adapter-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
@@ -3111,6 +3113,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			AdapterObservation:       v.Pod.AdapterObservation,
 			OutputPolicyObservation:  v.Pod.OutputPolicyObservation,
 			VoiceMemoryObservation:   v.Pod.VoiceMemoryObservation,
+			VoiceRefundObservation:   v.Pod.VoiceRefundObservation,
 			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
 			PolicyName:               pol.PolicyName,
 			PolicyUID:                pol.PolicyUID,
@@ -3133,6 +3136,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate || decisions[i].Action == model.ActionAdapterRotate ||
 			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
+			decisions[i].Action == model.ActionVoiceRefundPairDeny ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID

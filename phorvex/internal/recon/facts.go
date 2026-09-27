@@ -108,6 +108,9 @@ const (
 	// FactVoiceMemoryContamination is repeat exposure of one exact caller's
 	// observed harmful memory note. Quarantine cannot undo first contamination.
 	FactVoiceMemoryContamination = "voiceMemoryContamination"
+	// FactVoiceRefundPairExposure is repeat use of one asserted caller/order pair
+	// after an observed model callback and owned CRM refund side effect.
+	FactVoiceRefundPairExposure = "voiceRefundPairExposure"
 	// FactLiteLLMOwnedClientChannel is the repeat-use capability of one
 	// synthetic client credential at the installed admission gateway. It does
 	// not represent copied master-key knowledge or prior completions.
