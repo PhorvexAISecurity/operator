@@ -83,6 +83,8 @@ def authority(transport, pins: dict) -> dict:
     containers = [x for x in status.get("containerStatuses", []) if x.get("name") == "bot"]
     ready = any(x.get("type") == "Ready" and x.get("status") == "True" for x in status.get("conditions", []))
     ports = service.get("spec", {}).get("ports", [])
+    bot_specs = [x for x in pod.get("spec", {}).get("containers", []) if x.get("name") == "bot"]
+    agency_env = [x for x in bot_specs[0].get("env", []) if x.get("name") == "VOICE_AGENCY_TEST_ENABLED"] if len(bot_specs) == 1 else []
     if cluster.get("metadata", {}).get("uid") != pins["clusterUID"] or meta.get("uid") != pins["podUID"] or \
             meta.get("namespace") != "voice" or meta.get("name") != pins["pod"] or \
             meta.get("deletionTimestamp") or status.get("phase") != "Running" or not ready or \
@@ -91,6 +93,7 @@ def authority(transport, pins: dict) -> dict:
             containers[0].get("containerID") != pins["containerID"] or \
             service.get("metadata", {}).get("uid") != pins["serviceUID"] or \
             service.get("spec", {}).get("selector") != {"app": "voice-bot"} or \
+            len(agency_env) != 1 or agency_env[0].get("value") != "true" or "valueFrom" in agency_env[0] or \
             len(ports) != 1 or ports[0].get("port") != 8080 or ports[0].get("targetPort") != 8080 or \
             ports[0].get("protocol", "TCP") != "TCP" or source_sha(transport, pins["pod"]) != pins["sourceSHA256"]:
         raise RuntimeError("Voice cluster, Pod, source, or Service authority changed")
@@ -153,7 +156,7 @@ def main() -> None:
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     pins = {"pod": args.pod, "podUID": args.pod_uid, "imageID": args.image_id,
             "containerID": args.container_id, "sourceSHA256": args.source_sha256,
-            "serviceUID": args.service_uid, "clusterUID": args.cluster_uid}
+            "serviceUID": args.service_uid, "clusterUID": args.cluster_uid, "run": args.run}
     receipt = {"schema": "voice-agency-baseline-v1", "run": args.run, "phase": args.phase,
                "pins": pins, "status": "INTENT_RECORDED", "scope": "one fixed direct WebSocket speech probe",
                "crmEffect": "NOT_ATTESTED_BY_TRANSPORT", "callerAuthentication": "NOT_PROVED"}
