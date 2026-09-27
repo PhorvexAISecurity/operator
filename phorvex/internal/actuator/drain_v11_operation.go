@@ -29,8 +29,8 @@ func drainV11OperatorBinding(pod *corev1.Pod, capabilitySHA, backendDigest strin
 	}
 	containers := make([]drainV11ContainerBinding, 0, len(pod.Status.ContainerStatuses))
 	for _, status := range pod.Status.ContainerStatuses {
-		if status.ContainerID == "" || status.RestartCount != 0 {
-			return "", fmt.Errorf("drain v11 participant container identity is unavailable or restarted")
+		if status.ContainerID == "" || status.RestartCount < 0 {
+			return "", fmt.Errorf("drain v11 participant container identity or restart count is invalid")
 		}
 		containers = append(containers, drainV11ContainerBinding{Name: status.Name,
 			ContainerID: status.ContainerID, RestartCount: status.RestartCount})

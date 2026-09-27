@@ -761,6 +761,44 @@ func TestDrainV11OperatorBindingPinsSourcesContainersAndReadiness(t *testing.T) 
 	}
 }
 
+func TestDrainV11RecoveredContainerRestartBindsCurrentIncarnation(t *testing.T) {
+	pod := drainV11TestPod("recovered")
+	pod.Status.ContainerStatuses[1].RestartCount = 1 // Guardrail restarted before this operation.
+	capabilitySHA, incarnation := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	binding, err := drainV11OperatorBinding(pod, capabilitySHA, incarnation)
+	if err != nil || !validDrainV11Hex(binding, 32) {
+		t.Fatalf("stable recovered participant binding = %q, %v", binding, err)
+	}
+	receipt := &drainV11Receipt{
+		TargetNamespace: pod.Namespace, TargetName: pod.Name,
+		Owner:            drainV11Owner{PodUID: string(pod.UID)},
+		CapabilitySHA256: capabilitySHA, ExpectedIncarnation: incarnation,
+		ProxySource: "proxy-source", EngineSource: "engine-source", OperatorBinding: binding,
+	}
+	authority := func(candidate *corev1.Pod) error {
+		reader := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(candidate).Build()
+		return drainV11Authority(t.Context(), EnactCtx{Reader: reader}, receipt)
+	}
+	if err := authority(pod); err != nil {
+		t.Fatalf("unchanged current incarnation rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*corev1.Pod){
+		"later restart":        func(p *corev1.Pod) { p.Status.ContainerStatuses[1].RestartCount++ },
+		"new container ID":     func(p *corev1.Pod) { p.Status.ContainerStatuses[1].ContainerID = "containerd://replacement" },
+		"missing container ID": func(p *corev1.Pod) { p.Status.ContainerStatuses[1].ContainerID = "" },
+		"negative restart":     func(p *corev1.Pod) { p.Status.ContainerStatuses[1].RestartCount = -1 },
+		"not Ready":            func(p *corev1.Pod) { p.Status.Conditions[0].Status = corev1.ConditionFalse },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := pod.DeepCopy()
+			mutate(candidate)
+			if err := authority(candidate); err == nil {
+				t.Fatal("changed or unavailable participant retained protected authority")
+			}
+		})
+	}
+}
+
 func TestBindDrainV11StatusRejectsSelfConsistentMalformedProofWithoutMutation(t *testing.T) {
 	nonce := strings.Repeat("6", 32)
 	owner := drainV11Owner{Tenant: "tenant", NamespaceUID: "namespace", PolicyUID: "policy", PodUID: "pod", ServiceUID: "service"}
