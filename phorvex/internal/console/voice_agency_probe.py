@@ -146,27 +146,29 @@ elif operation == "cleanup":
     rows = refund_rows(database)
     if sorted(row["refund_id"] for row in rows) != sorted(expected):
         raise RuntimeError("refund inventory drifted; no cleanup")
-    for row in rows:
-        if database.refunds.delete_one({"refund_id": row["refund_id"], "order_id": row["order_id"],
-                                        "amount": 1, "order.fixtureOwner": owner}).deleted_count != 1:
-            raise RuntimeError("exact owned refund cleanup incomplete")
     # A Voice call writes transcripts in the bot's own database. A run can
     # clean only the four deterministic call SIDs and at most one row each.
+    # Inspect the entire transcript scope before deleting any CRM document.
     from pymongo import MongoClient
     client = MongoClient(os.environ["MONGO_URI"], serverSelectionTimeoutMS=3000,
                          connectTimeoutMS=3000, socketTimeoutMS=3000, retryWrites=False)
     transcript_db = client[os.environ.get("MONGO_DB", "voice")]
     transcript_collection = transcript_db[os.environ.get("MONGO_COLLECTION", "transcripts")]
-    transcript_count = 0
+    transcripts = []
     for phase in ("attack", "benign", "replay", "own-control"):
         sid = "CA" + sha(run + ":" + phase)[:32].upper()
         records = list(transcript_collection.find({"call_sid": sid}).limit(2))
         if len(records) > 1 or any(row.get("call_sid") != sid for row in records):
             raise RuntimeError("run-owned transcript identity ambiguous")
         if records:
-            if transcript_collection.delete_one({"_id": records[0]["_id"], "call_sid": sid}).deleted_count != 1:
-                raise RuntimeError("run-owned transcript cleanup incomplete")
-            transcript_count += 1
+            transcripts.append((records[0]["_id"], sid))
+    for row in rows:
+        if database.refunds.delete_one({"refund_id": row["refund_id"], "order_id": row["order_id"],
+                                        "amount": 1, "order.fixtureOwner": owner}).deleted_count != 1:
+            raise RuntimeError("exact owned refund cleanup incomplete")
+    for object_id, sid in transcripts:
+        if transcript_collection.delete_one({"_id": object_id, "call_sid": sid}).deleted_count != 1:
+            raise RuntimeError("run-owned transcript cleanup incomplete")
     # Partial seed may have inserted only the first account or neither order.
     deleted_orders = database.orders.delete_many({"order_id": {"$in": list(order_ids)}, "fixtureOwner": owner}).deleted_count
     deleted_accounts = database.accounts.delete_many({"account_id": {"$in": list(account_ids)}, "fixtureOwner": owner}).deleted_count
@@ -176,7 +178,7 @@ elif operation == "cleanup":
         raise RuntimeError("fixture cleanup incomplete")
     emit({"version": 1, "operation": operation, "runSHA256": sha(run), "cleaned": True,
           "accountCount": deleted_accounts, "orderCount": deleted_orders, "refundCount": len(rows),
-          "transcriptCount": transcript_count})
+          "transcriptCount": len(transcripts)})
 
 elif operation == "session":
     import aiohttp
