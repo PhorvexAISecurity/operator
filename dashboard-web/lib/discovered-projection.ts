@@ -1,4 +1,5 @@
 import type { GraphNode } from "@/lib/api";
+import { auditTimeAtLeast } from "@/lib/audit-snapshot";
 
 export interface DecisionPodRow {
   namespace?: string;
@@ -36,7 +37,8 @@ export function projectDiscoveredPods(graphNodes: GraphNode[], decisions: Decisi
     const key = `${decision.namespace}/${decision.pod}`;
     byKey.set(key, [...(byKey.get(key) ?? []), decision]);
   }
-  const newest = (rows: DecisionPodRow[]) => [...rows].sort((a, b) => (b.time ?? "").localeCompare(a.time ?? ""))[0];
+  const newest = (rows: DecisionPodRow[]) => rows.reduce<DecisionPodRow | undefined>((current, row) =>
+    !current || auditTimeAtLeast(row.time, current.time) ? row : current, undefined);
   const scanKeys = new Set(graphNodes.map((node) => node.key));
   const scanned = graphNodes.map((node): DiscoveredPod => {
     const [ns, ...rest] = node.key.split("/");
@@ -51,7 +53,7 @@ export function projectDiscoveredPods(graphNodes: GraphNode[], decisions: Decisi
   // If a scan fails, retain bounded decision evidence with its time and UID. These
   // rows are labelled as decisions, never presented as verified current scan Pods.
   const auditOnly = Array.from(byKey.entries()).filter(([key]) => !scanKeys.has(key)).map(([key, rows]): DiscoveredPod => {
-    const decision = newest(rows);
+    const decision = newest(rows)!;
     return {
       key, ns: decision.namespace!, pod: decision.pod!, uid: decision.decisionTrace?.assetUID || null,
       stage: stage(decision.stage), asset: finite(decision.assetValue) ? decision.assetValue : null,

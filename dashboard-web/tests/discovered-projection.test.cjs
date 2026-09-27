@@ -4,17 +4,18 @@ const path = require("node:path");
 const test = require("node:test");
 const ts = require("typescript");
 
-function load(relative) {
+function load(relative, dependencies = {}) {
   const source = fs.readFileSync(path.join(__dirname, relative), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const moduleObject = { exports: {} };
-  new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+  new Function("require", "module", "exports", compiled)((name) => dependencies[name] ?? require(name), moduleObject, moduleObject.exports);
   return moduleObject.exports;
 }
-const { projectDiscoveredPods, stageGroup } = load("../lib/discovered-projection.ts");
-const { recordAuditSnapshot } = load("../lib/audit-snapshot.ts");
+const snapshot = load("../lib/audit-snapshot.ts");
+const { projectDiscoveredPods, stageGroup } = load("../lib/discovered-projection.ts", { "@/lib/audit-snapshot": snapshot });
+const { recordAuditSnapshot, auditTimeMillis } = snapshot;
 
 const graph = [{ key: "vllm/current", uid: "pod-new", blast: 0.949, ai: true }];
 const decision = (assetUID, assetValue, stage, time) => ({
@@ -90,4 +91,28 @@ test("default shared snapshot retains one row per workload name", () => {
   recordAuditSnapshot(records, { kind: "phorvex.decision", ...decision("pod-old", 8.2, "impact", "2026-09-27T16:31:00Z") }, "operator");
   assert.equal(records.size, 1);
   assert.equal(Array.from(records.values())[0].assetValue, 8.2);
+});
+
+test("fractional RFC3339Nano time outranks a later-arriving whole-second row in both paths", () => {
+  const fraction = "2026-09-27T12:00:00.1Z";
+  const whole = "2026-09-27T12:00:00Z";
+  assert.ok(auditTimeMillis(fraction) > auditTimeMillis(whole));
+  const records = new Map();
+  recordAuditSnapshot(records, { kind: "phorvex.decision", ...decision("pod-new", 2.5, "exploit", fraction) }, "operator", true);
+  recordAuditSnapshot(records, { kind: "phorvex.decision", ...decision("pod-new", 1.1, "recon", whole) }, "operator", true);
+  assert.equal(Array.from(records.values())[0].assetValue, 2.5);
+  const [projected] = projectDiscoveredPods(graph, [decision("pod-new", 2.5, "exploit", fraction), decision("pod-new", 1.1, "recon", whole)]);
+  assert.equal(projected.asset, 2.5);
+  assert.equal(projected.stage, "exploit");
+});
+
+test("invalid or missing time cannot displace a valid decision", () => {
+  assert.equal(auditTimeMillis("not-a-time"), null);
+  assert.equal(auditTimeMillis(undefined), null);
+  const records = new Map();
+  recordAuditSnapshot(records, { kind: "phorvex.decision", ...decision("pod-new", 2.5, "exploit", "2026-09-27T12:00:00Z") }, "operator", true);
+  recordAuditSnapshot(records, { kind: "phorvex.decision", ...decision("pod-new", 0, "recon", "not-a-time") }, "operator", true);
+  assert.equal(Array.from(records.values())[0].assetValue, 2.5);
+  const [projected] = projectDiscoveredPods(graph, [decision("pod-new", 2.5, "exploit", "2026-09-27T12:00:00Z"), decision("pod-new", 0, "recon", "not-a-time")]);
+  assert.equal(projected.asset, 2.5);
 });
