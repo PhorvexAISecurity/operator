@@ -78,6 +78,7 @@ type attackRecord struct {
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
+	VoiceMCPProbe        *voiceMCPLiveProbeResult    `json:"voiceMCPProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	LoRACleanupStatus    string                      `json:"loraCleanupStatus,omitempty"`
@@ -439,7 +440,7 @@ func attackSnapshots(p *Principal) []*attackRecord {
 // Live views include reviewed Voice observations. Experiment-only signals
 // and unknown evidence kinds remain excluded, as do observations in default reports.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
+	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || rec.EvidenceKind == "voice-mcp-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
