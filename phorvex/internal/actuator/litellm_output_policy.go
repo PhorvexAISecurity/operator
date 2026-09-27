@@ -730,6 +730,11 @@ func recoverLiteOutputOperations(ctx context.Context, ec EnactCtx, allow func(mo
 	}
 	result := make([]RecoveryEvent, 0, len(doc.Receipts))
 	for _, r := range doc.Receipts {
+		// Terminal history is immutable evidence, not a new recovery effect.
+		// Replaying every older row would also re-credit effects after a rollout.
+		if r.Phase == "terminal-full" {
+			continue
+		}
 		event := RecoveryEvent{Receipt: outputpolicy.LiteJournalName + "/" + r.Rule.RunNonce, Kind: string(model.ActionSensitiveOutputPolicyActivate), Outcome: "refused"}
 		event.Phase = r.Phase
 		event.PolicyNamespace = outputpolicy.LiteNamespace

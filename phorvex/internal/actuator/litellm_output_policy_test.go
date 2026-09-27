@@ -179,6 +179,9 @@ func TestLiteOutputFixedJournalPreservesHistoryAndFencesPrepared(t *testing.T) {
 	if pending, err := pendingLiteOutputOperations(context.Background(), c, ec.JournalNamespace, r.TargetUID); err != nil || pending {
 		t.Fatalf("terminal row still pending: pending=%t err=%v", pending, err)
 	}
+	if recovered, err := recoverLiteOutputOperations(context.Background(), ec, nil); err != nil || len(recovered) != 0 {
+		t.Fatalf("historical terminal row re-credited as a recovery effect: rows=%d err=%v", len(recovered), err)
+	}
 	mutated := desired
 	mutated.Entries = append([]outputpolicy.LiteEntry(nil), desired.Entries...)
 	mutated.Entries[0].ContextSecretUID = "unrelated-private-source"
