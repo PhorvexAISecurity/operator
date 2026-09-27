@@ -194,6 +194,23 @@ func TestLiteLiveReadyEndpointsAcrossSlices(t *testing.T) {
 	}
 }
 
+func TestLiteLiveBackendBypassClassification(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+		want   bool
+	}{
+		{http.StatusBadRequest, `{"error":{"message":"No connected db."}}`, true},
+		{http.StatusUnauthorized, `{"error":"invalid key"}`, true},
+		{http.StatusBadRequest, `{"error":"model unavailable"}`, false},
+		{http.StatusOK, `{"data":[{"id":"gpt-4o-mini"}]}`, false},
+	} {
+		if got := liteBackendAuthRejected(tc.status, []byte(tc.body)); got != tc.want {
+			t.Fatalf("backend auth classification status %d = %v, want %v", tc.status, got, tc.want)
+		}
+	}
+}
+
 func TestLiteLivePriorJournalMatchesActiveEntriesAndAborts(t *testing.T) {
 	active := strings.Repeat("a", 64)
 	aborted := strings.Repeat("b", 64)

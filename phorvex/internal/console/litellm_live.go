@@ -129,6 +129,7 @@ type liteLLMLiveProbeResult struct {
 	BothGatewaysActive          bool     `json:"bothGatewaysActive"`
 	ReplayBlockedBeforeUpstream bool     `json:"replayBlockedBeforeUpstream"`
 	BenignContinuity            bool     `json:"benignContinuity"`
+	BackendBypassRejected       bool     `json:"backendBypassRejected"`
 	DefenseScope                string   `json:"defenseScope"`
 	Issues                      []string `json:"issues"`
 }
@@ -775,6 +776,48 @@ func (w *liteLiveWorker) statuses(snapshot liteLiveSnapshot, label, clientSHA, r
 	return out, nil
 }
 
+// The owned token is a gateway credential, not a LiteLLM backend master key.
+// Check the exact backend PodIPs directly so the defended result never implies
+// that the gateway policy also protects a leaked master key or raw PodIP route.
+func (w *liteLiveWorker) backendBypassControl(snapshot liteLiveSnapshot, label string) error {
+	for i, pod := range snapshot.Pods {
+		ctx, stop := context.WithTimeout(w.ctx, 8*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			"http://"+snapshot.PodIPs[pod.UID]+":4000/v1/models", nil)
+		if err != nil {
+			stop()
+			return errors.New("LiteLLM exact backend control URL unavailable")
+		}
+		req.Header.Set("Authorization", "Bearer "+w.attackerToken)
+		response, err := liteHTTPClient(8 * time.Second).Do(req)
+		if err != nil {
+			stop()
+			return errors.New("LiteLLM direct backend owned-token control unavailable")
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 8193))
+		_ = response.Body.Close()
+		stop()
+		if readErr != nil || len(body) > 8192 ||
+			!liteBackendAuthRejected(response.StatusCode, body) {
+			return errors.New("LiteLLM owned token unexpectedly reached backend authorization")
+		}
+		if err = w.saveJSON(fmt.Sprintf("%s-backend-%d.json", label, i), map[string]any{
+			"podUID": pod.UID, "status": response.StatusCode, "bodySHA256": liteSHA(body),
+			"classification": "BACKEND_AUTH_REJECTED"}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func liteBackendAuthRejected(status int, body []byte) bool {
+	if status == http.StatusUnauthorized {
+		return true
+	}
+	return status == http.StatusBadRequest &&
+		strings.Contains(strings.ToLower(string(body)), "no connected db")
+}
+
 func liteCounterSum(states map[string]liteLiveStatus, field string) int64 {
 	var n int64
 	for _, s := range states {
@@ -905,6 +948,9 @@ func (w *liteLiveWorker) execute(probe *liteLLMLiveProbeResult) (err error) {
 	}
 	preControl, err := w.statuses(before, "before-control", w.controlSHA, "")
 	if err != nil {
+		return err
+	}
+	if err = w.backendBypassControl(before, "before"); err != nil {
 		return err
 	}
 	count := 2
@@ -1047,6 +1093,10 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 		liteCounterSum(finalControl, "completed") != liteCounterSum(baselineControl, "completed")+1 {
 		return errors.New("LiteLLM attacker replay or benign upstream counters differ")
 	}
+	if err = w.backendBypassControl(final, "after"); err != nil {
+		return err
+	}
+	probe.BackendBypassRejected = true
 	probe.ReplayBlockedBeforeUpstream = true
 	probe.BenignContinuity = true
 	terminal, err := audit.auditClose(auditStart, created)

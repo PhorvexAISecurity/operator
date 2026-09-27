@@ -72,6 +72,10 @@ quality. Invalid bearer rejection is a negative control, not a defense. The
 result is scoped to owned trial credentials at the LiteLLM Service path; it
 does not claim global LiteLLM protection or master-key compromise recovery.
 The owned trial tokens are never installed as LiteLLM backend master keys.
+Before and after action, the console sends each trial attacker token directly
+to both exact backend PodIPs at `/v1/models` and requires backend
+authentication rejection. This is a bypass negative control; it does not
+claim a compromised master key would be contained by the gateway.
 
 Offline checks:
 
