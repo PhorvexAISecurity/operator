@@ -93,7 +93,7 @@ func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
 		model.ActionVoiceMemoryNoteRevoke:         0.25,
 		model.ActionVoiceRefundPairDeny:           0.25,
 		model.ActionVoiceOutputPolicyActivate:     0.25,
-		model.ActionVoiceMCPToolPin:                 0.25,
+		model.ActionVoiceMCPToolPin:               0.25,
 		model.ActionLiteLLMClientRevoke:           0.25,
 		model.ActionRequestDrain:                  0.10,
 		model.ActionGuardrailRotate:               0.20,
