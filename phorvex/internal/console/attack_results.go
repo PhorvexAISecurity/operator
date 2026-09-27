@@ -189,6 +189,7 @@ type attackEffectEvidence struct {
 type vllmEffectBaseline struct {
 	kind        string
 	before      string
+	serviceName string
 	serviceUID  string
 	adapterName string
 }

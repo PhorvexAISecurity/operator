@@ -120,7 +120,6 @@ spec:
 
 const (
 	vllmGuardrailURL = "http://localhost:8000"
-	vllmRouteService = "vllm-infer"
 )
 
 type guardrailState struct {
@@ -439,6 +438,10 @@ type vllmServiceState struct {
 	} `json:"spec"`
 }
 
+type vllmServiceList struct {
+	Items []vllmServiceState `json:"items"`
+}
+
 type vllmEndpointSliceList struct {
 	Items []struct {
 		Metadata struct {
@@ -464,6 +467,7 @@ type vllmEndpointSliceList struct {
 type endpointSetupAuthority struct {
 	pod                 string
 	targetUID           string
+	serviceName         string
 	serviceUID          string
 	originalLabels      *map[string]string
 	originalAnnotations *map[string]string
@@ -557,14 +561,14 @@ func (s *Server) prepareEndpointEffect(podName, targetUID string) (*endpointSetu
 	if pod.Metadata.UID != targetUID {
 		return nil, fmt.Errorf("target Pod UID changed before endpoint setup")
 	}
-	service, err := s.readVLLMService()
+	service, err := s.resolveVLLMService(pod)
 	if err != nil {
 		return nil, err
 	}
 	if pod.Metadata.ResourceVersion == "" || service.Metadata.ResourceVersion == "" || service.Spec.Selector == nil {
 		return nil, fmt.Errorf("endpoint setup resourceVersion or selector authority is unavailable")
 	}
-	authority := &endpointSetupAuthority{pod: podName, targetUID: targetUID, serviceUID: service.Metadata.UID, originalLabels: copyOptionalStringMap(pod.Metadata.Labels), originalAnnotations: copyOptionalStringMap(pod.Metadata.Annotations), originalSelector: copyOptionalStringMap(service.Spec.Selector)}
+	authority := &endpointSetupAuthority{pod: podName, targetUID: targetUID, serviceName: service.Metadata.Name, serviceUID: service.Metadata.UID, originalLabels: copyOptionalStringMap(pod.Metadata.Labels), originalAnnotations: copyOptionalStringMap(pod.Metadata.Annotations), originalSelector: copyOptionalStringMap(service.Spec.Selector)}
 	authority.stagedLabels = copyOptionalStringMap(authority.originalLabels)
 	if authority.stagedLabels == nil {
 		labels := map[string]string{}
@@ -576,7 +580,7 @@ func (s *Server) prepareEndpointEffect(podName, targetUID string) (*endpointSetu
 		annotations := map[string]string{}
 		authority.stagedAnnotations = &annotations
 	}
-	(*authority.stagedAnnotations)["phorvex.ai/route-service"] = vllmRouteService
+	(*authority.stagedAnnotations)["phorvex.ai/route-service"] = authority.serviceName
 	authority.stagedSelector = copyOptionalStringMap(authority.originalSelector)
 	(*authority.stagedSelector)["phorvex.ai/route-key"] = "ep-old"
 	fail := func(cause error) (*endpointSetupAuthority, error) {
@@ -598,17 +602,17 @@ func (s *Server) prepareEndpointEffect(podName, targetUID string) (*endpointSetu
 		return fail(fmt.Errorf("endpoint Pod setup acknowledgement or readback is incomplete"))
 	}
 	serviceOps := replaceOptionalMapPatch("/spec/selector", authority.originalSelector, authority.stagedSelector)
-	if err := s.exactJSONPatch("service", vllmRouteService, authority.serviceUID, service.Metadata.ResourceVersion, serviceOps...); err != nil {
+	if err := s.exactJSONPatch("service", authority.serviceName, authority.serviceUID, service.Metadata.ResourceVersion, serviceOps...); err != nil {
 		return fail(err)
 	}
 	authority.serviceStaged = true
 	for attempt := 0; attempt < 12; attempt++ {
 		currentPod, podErr := s.readVLLMPod(podName)
-		currentService, serviceErr := s.readVLLMService()
+		currentService, serviceErr := s.readVLLMService(authority.serviceName)
 		if podErr == nil && serviceErr == nil && currentPod.Metadata.UID == targetUID && currentService.Metadata.UID == authority.serviceUID &&
 			stringMapsEqual(currentPod.Metadata.Labels, authority.stagedLabels) && stringMapsEqual(currentPod.Metadata.Annotations, authority.stagedAnnotations) &&
 			stringMapsEqual(currentService.Spec.Selector, authority.stagedSelector) {
-			ready, endpointErr := s.targetReadyInRoute(authority.serviceUID, targetUID)
+			ready, endpointErr := s.targetReadyInRoute(authority.serviceName, authority.serviceUID, targetUID)
 			if endpointErr == nil && ready {
 				return authority, nil
 			}
@@ -628,7 +632,7 @@ func (s *Server) restoreEndpointSetup(authority *endpointSetupAuthority) error {
 	if err != nil || pod.Metadata.UID != authority.targetUID {
 		return fmt.Errorf("target Pod identity changed; refusing restoration")
 	}
-	service, err := s.readVLLMService()
+	service, err := s.readVLLMService(authority.serviceName)
 	if err != nil || service.Metadata.UID != authority.serviceUID {
 		return fmt.Errorf("route Service identity changed; refusing restoration")
 	}
@@ -646,7 +650,7 @@ func (s *Server) restoreEndpointSetup(authority *endpointSetupAuthority) error {
 	}
 	if authority.serviceStaged {
 		ops := replaceOptionalMapPatch("/spec/selector", authority.stagedSelector, authority.originalSelector)
-		if err := s.exactJSONPatch("service", vllmRouteService, authority.serviceUID, service.Metadata.ResourceVersion, ops...); err != nil {
+		if err := s.exactJSONPatch("service", authority.serviceName, authority.serviceUID, service.Metadata.ResourceVersion, ops...); err != nil {
 			return err
 		}
 	}
@@ -658,7 +662,7 @@ func (s *Server) restoreEndpointSetup(authority *endpointSetupAuthority) error {
 		}
 	}
 	restoredPod, podErr := s.readVLLMPod(authority.pod)
-	restoredService, serviceErr := s.readVLLMService()
+	restoredService, serviceErr := s.readVLLMService(authority.serviceName)
 	if podErr != nil || serviceErr != nil || restoredPod.Metadata.UID != authority.targetUID || restoredService.Metadata.UID != authority.serviceUID ||
 		!stringMapsEqual(restoredPod.Metadata.Labels, authority.originalLabels) || !stringMapsEqual(restoredPod.Metadata.Annotations, authority.originalAnnotations) || !stringMapsEqual(restoredService.Spec.Selector, authority.originalSelector) {
 		return fmt.Errorf("endpoint setup restoration readback is incomplete")
@@ -728,27 +732,71 @@ func (s *Server) readVLLMPod(pod string) (vllmPodState, error) {
 	return state, err
 }
 
-func (s *Server) readVLLMService() (vllmServiceState, error) {
+func (s *Server) readVLLMService(name string) (vllmServiceState, error) {
 	var state vllmServiceState
-	err := decodeKubectlJSON(s, vllmAttackNS, &state, "get", "service", vllmRouteService, "-o", "json")
-	if err == nil && (state.Metadata.Name != vllmRouteService || state.Metadata.UID == "") {
+	if !validVLLMIdentity(name) {
+		return state, fmt.Errorf("route Service name is invalid")
+	}
+	err := decodeKubectlJSON(s, vllmAttackNS, &state, "get", "service", name, "-o", "json")
+	if err == nil && (state.Metadata.Name != name || state.Metadata.UID == "") {
 		err = fmt.Errorf("route Service identity is absent or mismatched")
 	}
 	return state, err
 }
 
-func (s *Server) targetReadyInRoute(serviceUID, targetUID string) (bool, error) {
+// Resolve exactly one existing Service whose full selector selects the target.
+// A Pod route annotation may narrow identity, but never overrides ambiguity.
+func (s *Server) resolveVLLMService(pod vllmPodState) (vllmServiceState, error) {
+	var list vllmServiceList
+	if err := decodeKubectlJSON(s, vllmAttackNS, &list, "get", "services", "-o", "json"); err != nil {
+		return vllmServiceState{}, err
+	}
+	var selected *vllmServiceState
+	for i := range list.Items {
+		item := &list.Items[i]
+		if item.Metadata.Name == "" || item.Metadata.UID == "" || item.Spec.Selector == nil || len(*item.Spec.Selector) == 0 || pod.Metadata.Labels == nil {
+			continue
+		}
+		matches := true
+		for key, value := range *item.Spec.Selector {
+			if (*pod.Metadata.Labels)[key] != value {
+				matches = false
+				break
+			}
+		}
+		if !matches {
+			continue
+		}
+		if selected != nil {
+			return vllmServiceState{}, fmt.Errorf("multiple Services select the exact target Pod")
+		}
+		selected = item
+	}
+	if selected == nil {
+		return vllmServiceState{}, fmt.Errorf("no Service selects the exact target Pod")
+	}
+	if annotated := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/route-service"); annotated != "" && annotated != selected.Metadata.Name {
+		return vllmServiceState{}, fmt.Errorf("target Pod route annotation differs from selecting Service")
+	}
+	state, err := s.readVLLMService(selected.Metadata.Name)
+	if err != nil || state.Metadata.UID != selected.Metadata.UID || !stringMapsEqual(state.Spec.Selector, selected.Spec.Selector) {
+		return vllmServiceState{}, fmt.Errorf("selecting Service identity or selector changed during resolution: %v", err)
+	}
+	return state, nil
+}
+
+func (s *Server) targetReadyInRoute(serviceName, serviceUID, targetUID string) (bool, error) {
 	var slices vllmEndpointSliceList
-	if err := decodeKubectlJSON(s, vllmAttackNS, &slices, "get", "endpointslice", "-l", "kubernetes.io/service-name="+vllmRouteService, "-o", "json"); err != nil {
+	if err := decodeKubectlJSON(s, vllmAttackNS, &slices, "get", "endpointslice", "-l", "kubernetes.io/service-name="+serviceName, "-o", "json"); err != nil {
 		return false, err
 	}
 	for _, slice := range slices.Items {
-		if slice.Metadata.Labels["kubernetes.io/service-name"] != vllmRouteService {
+		if slice.Metadata.Labels["kubernetes.io/service-name"] != serviceName {
 			return false, fmt.Errorf("EndpointSlice service label is mismatched")
 		}
 		owned := false
 		for _, owner := range slice.Metadata.OwnerReferences {
-			if owner.Kind == "Service" && owner.Name == vllmRouteService && owner.UID == serviceUID {
+			if owner.Kind == "Service" && owner.Name == serviceName && owner.UID == serviceUID {
 				owned = true
 			}
 		}
@@ -871,14 +919,17 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 		if after == "" || after == r.vllmEffect.before {
 			return nil, nil
 		}
-		service, err := s.readVLLMService()
+		if stringMapValue(pod.Metadata.Annotations, "phorvex.ai/route-service") != r.vllmEffect.serviceName {
+			return nil, fmt.Errorf("route Service annotation changed across endpoint observation")
+		}
+		service, err := s.readVLLMService(r.vllmEffect.serviceName)
 		if err != nil {
 			return nil, err
 		}
 		if service.Metadata.UID != r.vllmEffect.serviceUID || stringMapValue(service.Spec.Selector, "phorvex.ai/route-key") != after {
 			return nil, nil
 		}
-		ready, err := s.targetReadyInRoute(service.Metadata.UID, r.TargetUID)
+		ready, err := s.targetReadyInRoute(r.vllmEffect.serviceName, service.Metadata.UID, r.TargetUID)
 		if err != nil {
 			return nil, err
 		}
@@ -886,7 +937,7 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 			return nil, nil
 		}
 		postPod, podErr := s.readVLLMPod(r.Pod)
-		postService, serviceErr := s.readVLLMService()
+		postService, serviceErr := s.readVLLMService(r.vllmEffect.serviceName)
 		if podErr != nil || serviceErr != nil || postPod.Metadata.UID != r.TargetUID || postService.Metadata.UID != r.vllmEffect.serviceUID ||
 			stringMapValue(postPod.Metadata.Labels, "phorvex.ai/route-key") != after || stringMapValue(postService.Spec.Selector, "phorvex.ai/route-key") != after {
 			return nil, fmt.Errorf("target or route identity changed across endpoint observation")

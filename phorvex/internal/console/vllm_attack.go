@@ -321,7 +321,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		stimulus.Limitation = "synthetic route signal; no SSRF, model-extraction, locator-revocation or session-revocation attack was executed"
 		base.stimulus = stimulus
-		base.vllmEffect = &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceUID: authority.serviceUID}
+		base.vllmEffect = &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceName: authority.serviceName, serviceUID: authority.serviceUID}
 		base.outcomeClass = "behavioral-oracle-unsupported"
 		attackID := s.startVLLMEffectRecord(vllmAttackNS, pod, "Endpoint route-effect observation", "endpoint-rotate", "route-effect-only", "endpoint-rotate", base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "endpoint-rotate",
