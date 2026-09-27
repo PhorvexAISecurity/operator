@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -137,8 +139,11 @@ func containsM007(values []string, want string) bool {
 
 func TestM007LiteLLMExactOptInGrant(t *testing.T) {
 	disabled, enabled := os.Getenv("M007_RENDERED_RBAC"), os.Getenv("M007_LITELLM_RENDERED_RBAC")
-	if disabled == "" || enabled == "" {
-		t.Skip("requires the disabled and LiteLLM-enabled Helm renders")
+	if disabled == "" {
+		disabled = m007RenderForTest(t, false)
+	}
+	if enabled == "" {
+		enabled = m007RenderForTest(t, true)
 	}
 	const name = "m007-phorvex-litellm-client-revoke"
 	for _, role := range m007ReadRoles(t, disabled) {
@@ -187,6 +192,25 @@ func TestM007LiteLLMExactOptInGrant(t *testing.T) {
 	if matches != 1 {
 		t.Fatalf("expected one exact LiteLLM policy binding, got %d", matches)
 	}
+}
+
+func m007RenderForTest(t *testing.T, litellmEnabled bool) string {
+	t.Helper()
+	args := []string{"template", "m007", "../../charts/phorvex", "-n", "phorvex-system",
+		"--set", "phorvex.actuatorNamespaces[0]=phorvex-tenant"}
+	if litellmEnabled {
+		args = append(args, "--set", "phorvex.actuator=native", "--set", "phorvex.litellmClientRevoke.enabled=true",
+			"--set", "phorvex.litellmClientRevoke.statusSecret=exact-status-token")
+	}
+	raw, err := exec.Command("helm", args...).Output()
+	if err != nil {
+		t.Fatalf("render M007 RBAC fixture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "rendered.yaml")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 func TestM007GeneratedAndRoutineContracts(t *testing.T) {
 	roles := m007ReadRoles(t, "../../config/rbac/generated-native/role.yaml")
