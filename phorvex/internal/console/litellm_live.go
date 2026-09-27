@@ -143,6 +143,7 @@ type liteLiveWorker struct {
 	stop          context.CancelFunc
 	out           string
 	reads         int
+	readLimit     int
 	attackerToken string
 	controlToken  string
 	attackerSHA   string
@@ -331,7 +332,11 @@ func (w *liteLiveWorker) saveJSON(name string, value any) error {
 // kube never forces the workstation EKS context inside the console Pod. The
 // installed service-account projection is the runtime authority.
 func (w *liteLiveWorker) kube(label string, args ...string) (map[string]any, error) {
-	if w.reads >= 110 {
+	limit := w.readLimit
+	if limit == 0 {
+		limit = 110
+	}
+	if w.reads >= limit {
 		return nil, errors.New("LiteLLM Kubernetes read budget")
 	}
 	w.reads++
@@ -360,6 +365,9 @@ func liteInt(value map[string]any, key string) int64 {
 
 func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	var out liteLiveSnapshot
+	if !staticSHA256.MatchString(w.p.SourceSHA256) {
+		return out, errors.New("LiteLLM reviewed source digest invalid")
+	}
 	cluster, e := w.kube(label+"-cluster", "get", "namespace", "kube-system", "-o", "json")
 	if e != nil {
 		return out, e
@@ -371,6 +379,24 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	dep, e := w.kube(label+"-deployment", "-n", "litellm", "get", "deployment", "litellm", "-o", "json")
 	if e != nil {
 		return out, e
+	}
+	sourceName := ""
+	template := availabilityMap(availabilityMap(dep["spec"])["template"])
+	annotations := availabilityMap(liteMeta(template)["annotations"])
+	if liteStr(annotations, "phorvex.ai/litellm-gateway-source-sha256") != w.p.SourceSHA256 {
+		return out, errors.New("LiteLLM Deployment source annotation differs")
+	}
+	volumes, _ := availabilityMap(template["spec"])["volumes"].([]any)
+	for _, raw := range volumes {
+		volume := availabilityMap(raw)
+		if liteStr(volume, "name") == "litellm-live-gateway-source" {
+			sourceName = liteStr(availabilityMap(volume["configMap"]), "name")
+		}
+	}
+	const legacySourceSHA = "59a0521cf3a7621dc6e8db6f0a2f5e0c66a6cad8228253638c039edf110f0450"
+	if sourceName != "phorvex-litellm-admission-gateway-"+w.p.SourceSHA256[:12] &&
+		!(sourceName == "phorvex-litellm-admission-gateway" && w.p.SourceSHA256 == legacySourceSHA) {
+		return out, errors.New("LiteLLM Deployment immutable source name differs")
 	}
 	svc, e := w.kube(label+"-service", "-n", "litellm", "get", "service", "litellm", "-o", "json")
 	if e != nil {
@@ -384,7 +410,7 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	if e != nil {
 		return out, e
 	}
-	source, e := w.kube(label+"-source", "-n", "litellm", "get", "configmap", "phorvex-litellm-admission-gateway", "-o", "json")
+	source, e := w.kube(label+"-source", "-n", "litellm", "get", "configmap", sourceName, "-o", "json")
 	if e != nil {
 		return out, e
 	}
@@ -413,7 +439,7 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	if out.ClusterUID == "" || out.NamespaceUID == "" || out.DeploymentUID == "" || out.ServiceUID == "" ||
 		out.SourceConfigMapUID == "" || out.ClientsConfigMapUID == "" || out.PolicyConfigMapUID == "" ||
 		out.PolicyUID == "" || out.PolicyGeneration < 1 ||
-		liteStr(liteMeta(source), "name") != "phorvex-litellm-admission-gateway" || source["immutable"] != true ||
+		liteStr(liteMeta(source), "name") != sourceName || source["immutable"] != true ||
 		liteStr(liteMeta(clients), "name") != "phorvex-litellm-live-clients" || clients["immutable"] != true ||
 		liteStr(liteMeta(policy), "name") != w.p.PolicyName {
 		return out, errors.New("LiteLLM installed source or policy identity drift")

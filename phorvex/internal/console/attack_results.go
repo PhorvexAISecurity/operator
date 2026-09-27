@@ -79,6 +79,7 @@ type attackRecord struct {
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
+	LiteLLMOutputProbe   *liteLLMOutputProbeResult   `json:"litellmOutputProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	LoRACleanupStatus    string                      `json:"loraCleanupStatus,omitempty"`
 	LoRACleanupError     string                      `json:"loraCleanupError,omitempty"`

@@ -72,6 +72,10 @@ var liveAttackCatalogue = []LiveAttack{
 		"litellm-live", "Measures bounded accepted requests, injects a labeled test event, then checks whether the brain revokes that client while legitimate requests continue. It does not measure unlimited spending."},
 	{"ai2-query-extraction", "LiteLLM repeated-query client containment", "/api/litellm/live/fire", "AML.T0024", "litellm-client-revoke",
 		"litellm-live", "Runs bounded distinct queries through the installed LiteLLM Service and checks client revocation, replay denial and benign continuity. It does not establish successful model replication."},
+	{"ai2-sensitive-info-disclosure", "LiteLLM private document disclosure", "/api/litellm/output/fire", "OWASP LLM02", "sensitive-output-policy-activate",
+		"litellm-output", "Sends a real model request with a separate server-owned synthetic case record. A test signal follows only if the original completion actually reveals the private record value."},
+	{"ai2-system-prompt-leakage", "LiteLLM private instruction leakage", "/api/litellm/output/fire", "OWASP LLM07", "sensitive-output-policy-activate",
+		"litellm-output", "Sends a real model request with a separate server-owned private system clause. A test signal follows only if the original completion actually reveals that clause."},
 }
 
 // appStack is the set of signals the compatibility rules read off a namespace.
@@ -86,6 +90,7 @@ type appStack struct {
 	VoiceMemoryHook bool   `json:"voiceMemoryHook"` // declared source and owner-bound rule are installed
 	VoiceAgencyLive bool   `json:"voiceAgencyLive"` // reviewed profile and matching Voice source are installed
 	LiteLLMLive     bool   `json:"litellmLive"`     // reviewed configuration is present; Fire verifies runtime
+	LiteLLMOutput   bool   `json:"litellmOutput"`   // reviewed private-context output configuration is present
 }
 
 // servedModelImage matches the serving stacks the AI attacks are meaningful against. Substring
@@ -150,6 +155,8 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 	if ns == "litellm" {
 		_, _, err := loadLiteLiveProfile(s.cfg)
 		st.LiteLLMLive = err == nil
+		_, _, outputErr := loadLiteOutputProfile(s.cfg)
+		st.LiteLLMOutput = st.LiteLLMLive && outputErr == nil
 	}
 	if st.VoiceMemoryHook {
 		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-memory-policy", metav1.GetOptions{})
@@ -209,6 +216,9 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.LiteLLMLive {
 		out = append(out, "litellm-client-revoke")
 	}
+	if st.LiteLLMOutput {
+		out = append(out, "sensitive-output-policy-activate")
+	}
 	return out
 }
 
@@ -225,6 +235,14 @@ func compatibleLive(st appStack) []compatEntry {
 				e.Reason = "Reviewed Voice agency profile and source are present; Fire verifies owned CRM records, current Pods, policy and rule before the trial"
 			} else {
 				e.Reason = "Voice agency profile, source, owned rule or governance is unavailable"
+			}
+		case "litellm-output":
+			e.Compatible = st.Namespace == "litellm" && st.Workload
+			e.Armed = e.Compatible && st.Armed && st.LiteLLMOutput
+			if e.Armed {
+				e.Reason = "LiteLLM output profile is present; Fire verifies current Service, private source and policy before any signal"
+			} else {
+				e.Reason = "LiteLLM private-context output hook, reviewed profile or governance is unavailable"
 			}
 		case "litellm-live":
 			e.Compatible = st.Namespace == "litellm" && st.Workload

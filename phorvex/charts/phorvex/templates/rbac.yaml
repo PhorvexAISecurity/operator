@@ -308,3 +308,35 @@ subjects:
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- if .Values.phorvex.litellmOutput.enabled }}
+{{- if not .Values.phorvex.litellmClientRevoke.enabled }}{{- fail "litellmOutput requires litellmClientRevoke for the private status credential" }}{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-litellm-output
+  namespace: litellm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["litellm-output-policy"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["phorvex-litellm-output-document", "phorvex-litellm-output-prompt"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-litellm-output
+  namespace: litellm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-litellm-output
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -16,6 +16,9 @@
 {{- if and .Values.phorvex.console.voiceAgencyLive.enabled (not .Values.phorvex.console.enabled) }}
 {{- fail "voiceAgencyLive.enabled requires console.enabled" }}
 {{- end }}
+{{- if and .Values.phorvex.console.litellmOutput.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "litellmOutput.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -345,7 +348,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
-  resourceNames: ["phorvex-litellm-admission-gateway", "phorvex-litellm-live-clients", "phorvex-litellm-client-policy"]
+  resourceNames: [{{ .sourceConfigMapName | quote }}, "phorvex-litellm-live-clients", "phorvex-litellm-client-policy"]
   verbs: ["get"]
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
@@ -385,6 +388,71 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "phorvex.fullname" $ }}-console-litellm-live-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- with .Values.phorvex.console.litellmOutput }}
+{{- if and $.Values.phorvex.console.enabled .enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-output-source
+  namespace: litellm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["litellm-output-policy"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames:
+  {{- range $index := until 32 }}
+  - {{ printf "litellm-output-rule-%02d" $index | quote }}
+  {{- end }}
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["phorvex-litellm-output-document", "phorvex-litellm-output-prompt"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-output-source
+  namespace: litellm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-output-source
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-output-journal
+  namespace: {{ default $.Release.Namespace $.Values.phorvex.operatorNamespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-litellm-output-journal"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-output-journal
+  namespace: {{ default $.Release.Namespace $.Values.phorvex.operatorNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-output-journal
 subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.consoleServiceAccountName" $ }}

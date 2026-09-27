@@ -150,7 +150,9 @@
 {{- $journal := required "console.guardrailOutput.outputPolicyJournalName is required" .Values.phorvex.console.guardrailOutput.outputPolicyJournalName }}
 {{- if not (regexMatch "^phorvex-output-[0-9a-f]{32}$" $journal) }}{{- fail "console.guardrailOutput.outputPolicyJournalName is invalid" }}{{- end }}
 {{- end }}
+{{- if and .Values.phorvex.console.litellmOutput.enabled (not .Values.phorvex.console.litellmLive.enabled) }}{{- fail "console.litellmOutput requires litellmLive" }}{{- end }}
 {{- if .Values.phorvex.console.litellmLive.enabled }}
+{{- if ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system effective operator namespace for protected journals" }}{{- end }}
 {{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.litellmLive.enabled requires catalogueV1.enabled" }}{{- end }}
 {{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system release namespace" }}{{- end }}
 {{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
@@ -165,7 +167,19 @@
 {{- $name := required (printf "console.litellmLive.%s required" .) (index $.Values.phorvex.console.litellmLive .) }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail (printf "console.litellmLive.%s invalid" .) }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.litellmOutput.enabled }}
+{{- if not .Values.phorvex.litellmOutput.enabled }}{{- fail "console.litellmOutput requires native litellmOutput.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.litellmLive.enabled }}{{- fail "console.litellmOutput requires litellmLive" }}{{- end }}
+{{- $sha := required "console.litellmOutput.profileSHA256 required" .Values.phorvex.console.litellmOutput.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.litellmOutput.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- $name := required "console.litellmOutput.configMapName required" .Values.phorvex.console.litellmOutput.configMapName }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail "console.litellmOutput.configMapName invalid" }}{{- end }}
+{{- if ne .Values.phorvex.console.litellmOutput.documentSeedSecret "phorvex-litellm-output-document" }}{{- fail "console.litellmOutput.documentSeedSecret invalid" }}{{- end }}
+{{- if ne .Values.phorvex.console.litellmOutput.promptSeedSecret "phorvex-litellm-output-prompt" }}{{- fail "console.litellmOutput.promptSeedSecret invalid" }}{{- end }}
+{{- end }}
 {{- if ne .Values.phorvex.console.litellmLive.journalName "phorvex-litellm-revoke-journal" }}{{- fail "console.litellmLive.journalName invalid" }}{{- end }}
+{{- $sourceName := .Values.phorvex.console.litellmLive.sourceConfigMapName }}
+{{- if and (ne $sourceName "phorvex-litellm-admission-gateway") (not (regexMatch "^phorvex-litellm-admission-gateway-[0-9a-f]{12}$" $sourceName)) }}{{- fail "console.litellmLive.sourceConfigMapName invalid" }}{{- end }}
 {{- end }}
 {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceAgencyLive requires phorvex-system release and effective operator namespaces" }}{{- end }}
@@ -322,6 +336,12 @@ spec:
         {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
         - name: PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.voiceAgencyLive.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_LITELLM_OUTPUT_ENABLED
+          value: {{ .Values.phorvex.console.litellmOutput.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.litellmOutput.enabled }}
+        - name: PHORVEX_CONSOLE_LITELLM_OUTPUT_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.litellmOutput.profileSHA256 | quote }}
         {{- end }}
         {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
@@ -703,6 +723,11 @@ spec:
           subPath: profile.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.litellmOutput.enabled }}
+        - name: litellm-output-reviewed-inputs
+          mountPath: /etc/phorvex-litellm-output
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -874,6 +899,27 @@ spec:
           items:
           - key: profile.json
             path: profile.json
+      {{- end }}
+      {{- if .Values.phorvex.console.litellmOutput.enabled }}
+      - name: litellm-output-reviewed-inputs
+        projected:
+          defaultMode: 0440
+          sources:
+          - configMap:
+              name: {{ .Values.phorvex.console.litellmOutput.configMapName | quote }}
+              items:
+              - key: profile.json
+                path: profile.json
+          - secret:
+              name: {{ .Values.phorvex.console.litellmOutput.documentSeedSecret | quote }}
+              items:
+              - key: seed
+                path: document-seed
+          - secret:
+              name: {{ .Values.phorvex.console.litellmOutput.promptSeedSecret | quote }}
+              items:
+              - key: seed
+                path: prompt-seed
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

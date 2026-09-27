@@ -2,6 +2,7 @@ import { api, AttackResult, CompatEntry, Lens, VllmAttackAction } from "@/lib/ap
 
 type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } | { kind: "voice-agency" } |
   { kind: "litellm"; scenario: "ai2-unbounded-consumption" | "ai2-query-extraction" } |
+  { kind: "litellm-output"; scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage" } |
   { kind: "foothold"; namespace: string; action: "foothold" | "clear" };
 
 const vllmActions = new Set<string>([
@@ -23,6 +24,9 @@ export function liveAttackRoute(entry: Pick<CompatEntry, "id" | "endpoint">, nam
   if (entry.endpoint === "/api/litellm/live/fire" && namespace === "litellm" &&
       (entry.id === "ai2-unbounded-consumption" || entry.id === "ai2-query-extraction"))
     return { kind: "litellm", scenario: entry.id };
+  if (entry.endpoint === "/api/litellm/output/fire" && namespace === "litellm" &&
+      (entry.id === "ai2-sensitive-info-disclosure" || entry.id === "ai2-system-prompt-leakage"))
+    return { kind: "litellm-output", scenario: entry.id };
   return null;
 }
 
@@ -32,13 +36,14 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
     case "voice": return api.voiceMemoryFire("ai2-agent-memory-contamination", lens);
     case "voice-agency": return api.voiceAgencyFire("ai2-agent-excessive-agency", lens);
     case "litellm": return api.litellmLiveFire(route.scenario, lens);
+    case "litellm-output": return api.litellmOutputFire(route.scenario, lens);
     case "foothold": return api.workloadAttack(route.namespace, route.action, lens);
   }
 }
 
 // Voice and LiteLLM have 900-second server observation windows; leave a bounded margin for publication.
 export function liveAttackPollBudgetMs(route: LiveRoute): number {
-  return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "litellm" ? 960_000 : 150_000;
+  return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "litellm" || route.kind === "litellm-output" ? 960_000 : 150_000;
 }
 
 export function liveAttackVerdict(result: AttackResult) {

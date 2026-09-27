@@ -71,6 +71,11 @@ type Config struct {
 	LiteLLMLiveEnabled       bool
 	LiteLLMLiveProfileSHA256 string
 	LiteLLMLiveProfilePath   string
+	// LiteLLMOutput is a separate reviewed profile for two server-owned,
+	// real-provider confidentiality objectives. It cannot enable client revoke.
+	LiteLLMOutputEnabled       bool
+	LiteLLMOutputProfileSHA256 string
+	LiteLLMOutputProfilePath   string
 	// PodBoundTokenEnabled requires the separately reviewed fixed fixture,
 	// trusted creator and authenticated exact-window audit authority.
 	PodBoundTokenEnabled bool
