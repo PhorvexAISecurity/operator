@@ -62,7 +62,7 @@ func ValidCaller(s string) bool { return callerPattern.MatchString(s) }
 
 func (r Rule) Valid() bool {
 	if r.Version != 1 || !ValidUID(r.DeploymentUID) || !ValidUID(r.PolicyUID) || !ValidSHA(r.SourceSHA256) ||
-		r.Revision > (1<<53)-1 || len(r.Entries) > MaxEntries ||
+		r.Revision > (1<<53)-1 || r.Entries == nil || len(r.Entries) > MaxEntries ||
 		(r.Revision == 0 && (r.OperationID != "" || len(r.Entries) != 0)) ||
 		(r.Revision > 0 && (!ValidSHA(r.OperationID) || len(r.Entries) == 0)) {
 		return false

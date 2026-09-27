@@ -39,6 +39,11 @@ func TestCanonicalAppendPreservesEarlierRevocations(t *testing.T) {
 
 func TestCanonicalRuleRejectsNoncanonicalAndCapacity(t *testing.T) {
 	initial := testRule()
+	nilEntries := initial
+	nilEntries.Entries = nil
+	if nilEntries.Valid() {
+		t.Fatal("null entries accepted despite app requiring an array")
+	}
 	if _, err := Parse(" " + string(initial.Bytes())); err == nil {
 		t.Fatal("noncanonical leading space accepted")
 	}
