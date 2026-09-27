@@ -63,7 +63,11 @@ export function showSecurityOutcomeSections(result: AttackResult): boolean {
   return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" && result.evidenceKind !== "litellm-live-client-policy";
 }
 
-export function attackCSVRow(r: AttackResult): (string | number | undefined)[] {
+export function attackCSVRow(r: AttackResult): (string | number)[] {
+  return attackCSVCells(r).map((value) => value ?? "");
+}
+
+function attackCSVCells(r: AttackResult): (string | number | undefined)[] {
   const identity = [r.firedAt, r.service, r.attack, r.mitre];
   if (isCatalogueSignalResult(r)) {
     return [...identity, "CATALOGUE SIGNAL · UNSCORED", "", ...Array(11).fill(""), r.observationError || r.stimulusEvidence?.limitation || "behavioral outcome not measured"];
