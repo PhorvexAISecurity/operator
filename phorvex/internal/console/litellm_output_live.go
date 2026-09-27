@@ -197,7 +197,7 @@ func (s *Server) runLiteOutput(record *attackRecord, baseProfile liteLLMLiveProf
 	defer stop()
 	out := s.cfg.statePath(filepath.Join("litellm-output", record.ID))
 	base := &liteLiveWorker{s: s, record: record, p: baseProfile, profileSHA: s.cfg.LiteLLMLiveProfileSHA256,
-		ctx: ctx, stop: stop, out: out}
+		ctx: ctx, stop: stop, out: out, readLimit: 180}
 	w := &liteOutputWorker{base: base, profile: profile, probe: record.LiteLLMOutputProbe,
 		objective: record.AttackID, role: liteOutputRole(record.AttackID)}
 	var err error

@@ -143,6 +143,7 @@ type liteLiveWorker struct {
 	stop          context.CancelFunc
 	out           string
 	reads         int
+	readLimit     int
 	attackerToken string
 	controlToken  string
 	attackerSHA   string
@@ -331,7 +332,11 @@ func (w *liteLiveWorker) saveJSON(name string, value any) error {
 // kube never forces the workstation EKS context inside the console Pod. The
 // installed service-account projection is the runtime authority.
 func (w *liteLiveWorker) kube(label string, args ...string) (map[string]any, error) {
-	if w.reads >= 110 {
+	limit := w.readLimit
+	if limit == 0 {
+		limit = 110
+	}
+	if w.reads >= limit {
 		return nil, errors.New("LiteLLM Kubernetes read budget")
 	}
 	w.reads++
