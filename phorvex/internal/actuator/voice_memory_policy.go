@@ -407,8 +407,17 @@ func voiceMemoryResume(ctx context.Context, ec EnactCtx, journal *corev1.ConfigM
 	defer cancel()
 	for {
 		current, scopeErr := voiceMemoryScopeAt(deadline, ec.Reader, target)
-		if scopeErr == nil && current.rule.SHA256() == receipt.Desired.SHA256() {
-			scopeErr = voiceMemoryReadback(deadline, current, receipt.Desired, ec.VoiceMemoryTransport)
+		if scopeErr == nil {
+			switch current.rule.SHA256() {
+			case receipt.Desired.SHA256():
+				scopeErr = voiceMemoryReadback(deadline, current, receipt.Desired, ec.VoiceMemoryTransport)
+			case receipt.Prior.SHA256():
+				// The boundary reader may still project the old rule after the CAS.
+				// Wait for the desired bytes; an old read is not an effect.
+				scopeErr = fmt.Errorf("voice memory desired rule not yet observed")
+			default:
+				return HandlerResult{MutationKind: "partial", Note: "voice memory prepared operation superseded after write"}, fmt.Errorf("voice memory rule superseded prepared operation")
+			}
 		}
 		if scopeErr == nil {
 			if receipt.Phase == "prepared" {

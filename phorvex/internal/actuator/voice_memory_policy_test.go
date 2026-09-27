@@ -27,6 +27,29 @@ type voiceMemoryRoundTrip func(*http.Request) (*http.Response, error)
 
 func (f voiceMemoryRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+type voiceMemorySupersedingClient struct {
+	client.Client
+	superseding voicememorypolicy.Rule
+	updated     bool
+}
+
+func (c *voiceMemorySupersedingClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if err := c.Client.Update(ctx, obj, opts...); err != nil {
+		return err
+	}
+	cm, ok := obj.(*corev1.ConfigMap)
+	if !ok || cm.Namespace != voicememorypolicy.Namespace || cm.Name != voicememorypolicy.ConfigMapName || c.updated {
+		return nil
+	}
+	c.updated = true
+	fresh := &corev1.ConfigMap{}
+	if err := c.Client.Get(ctx, client.ObjectKey{Namespace: cm.Namespace, Name: cm.Name}, fresh); err != nil {
+		return err
+	}
+	fresh.Data[voicememorypolicy.RuleKey] = string(c.superseding.Bytes())
+	return c.Client.Update(ctx, fresh)
+}
+
 func TestVoiceMemoryPrivateAllPodReadback(t *testing.T) {
 	rule := voicememorypolicy.Rule{Version: 1, DeploymentUID: "11111111-1111-4111-8111-111111111111", PolicyUID: "22222222-2222-4222-8222-222222222222", SourceSHA256: strings.Repeat("a", 64), Entries: []voicememorypolicy.Entry{}}
 	s := voiceMemoryScope{rule: rule, secret: []byte(strings.Repeat("s", 32)), pods: []corev1.Pod{
@@ -200,5 +223,53 @@ func TestVoiceMemoryNativeAppendKeepsPreviousCaller(t *testing.T) {
 	}
 	if ok, why := voiceMemoryCapability(ctx, c, "operator", Target{Namespace: "voice", Pod: "bot-1", UID: string(podUID), PolicyName: "voice-policy", PolicyUID: string(policyUID)}, transport); ok || why == "" {
 		t.Fatalf("legacy optional-policy Pod accepted without required mode: %t %s", ok, why)
+	}
+	// A conflicting API write immediately after our desired CAS must never be
+	// mistaken for complete readback or turn the prepared receipt terminal.
+	podLive.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "VOICE_MEMORY_POLICY_REQUIRED", Value: "true"}}
+	if err := c.Update(ctx, podLive); err != nil {
+		t.Fatal(err)
+	}
+	currentCM := &corev1.ConfigMap{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "voice", Name: voicememorypolicy.ConfigMapName}, currentCM); err != nil {
+		t.Fatal(err)
+	}
+	currentCM.Data[voicememorypolicy.RuleKey] = string(first.Bytes())
+	if err := c.Update(ctx, currentCM); err != nil {
+		t.Fatal(err)
+	}
+	journal, secondReceipt, err := voiceMemoryJournalGet(ctx, ec, voiceMemoryJournalName(string(depUID), 2))
+	if err != nil || secondReceipt.Phase != "terminal-full" {
+		t.Fatalf("second terminal journal unavailable: %v %+v", err, secondReceipt)
+	}
+	secondReceipt.Phase = "prepared"
+	preparedJSON, err := json.Marshal(secondReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal.Data["receipt.json"] = string(preparedJSON)
+	if err := c.Update(ctx, journal); err != nil {
+		t.Fatal(err)
+	}
+	superseding, err := voicememorypolicy.Append(first, voicememorypolicy.Entry{CallerID: "+15551234999", NoteSHA256: strings.Repeat("e", 64)}, strings.Repeat("f", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracer := &voiceMemorySupersedingClient{Client: c, superseding: superseding}
+	resumeCtx := EnactCtx{Reader: c, Client: tracer, JournalNamespace: "operator", VoiceMemoryTransport: transport}
+	result, err = voiceMemoryResume(ctx, resumeCtx, journal, secondReceipt)
+	if err == nil || result.Emitted || result.MutationKind != "partial" || !tracer.updated {
+		t.Fatalf("post-CAS superseding rule falsely confirmed: %+v %v updated=%t", result, err, tracer.updated)
+	}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "voice", Name: voicememorypolicy.ConfigMapName}, currentCM); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := voicememorypolicy.Parse(currentCM.Data[voicememorypolicy.RuleKey])
+	if err != nil || actual.SHA256() != superseding.SHA256() {
+		t.Fatalf("superseding rule was replayed or overwritten: %+v %v", actual, err)
+	}
+	_, retained, err := voiceMemoryJournalGet(ctx, ec, voiceMemoryJournalName(string(depUID), 2))
+	if err != nil || retained.Phase != "prepared" {
+		t.Fatalf("superseded operation was marked terminal: %+v %v", retained, err)
 	}
 }
