@@ -7,7 +7,7 @@ import {
 } from "@/lib/api";
 import { clearQueryEventProvider, QueryChange, setQueryEventProvider } from "@/lib/query-events";
 import { createScopedUIStore, ScopedUIProvider } from "@/lib/use-scoped-ui-state";
-import { recordAuditSnapshot } from "@/lib/audit-snapshot";
+import { sampleAuditSnapshot } from "@/lib/audit-snapshot";
 
 const QUERY_GC = 5 * 60_000;
 const sessionContext = React.createContext<{ identity: string; providerToken: string; ready: boolean; session: Session } | null>(null);
@@ -107,24 +107,18 @@ export function useScanSnapshot(lens: Lens, context: string, namespace: string, 
   return { ...query, refetch, data: authorizedData(query.data, query.error) };
 }
 
-// A single 2.5s bounded sample is shared by exact identity+lens+context+tenant+epoch mode for 30s.
+// One bounded sample is shared by exact identity+lens+context+tenant+epoch mode for 30s.
 // `_settleMs` remains accepted for source compatibility; varying callers cannot race one key
 // with different sampling semantics.
-export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _settleMs = 2500, enabled = true, preserveEpochs = false) {
+export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _settleMs = 2500, enabled = true, preserveEpochs = false, expectedPods: { key: string; uid: string }[] = []) {
+  const epochs = expectedPods.map((pod) => `${pod.key}\u0000${pod.uid}`).sort();
+  const currentEpochs = new Set(epochs);
   const query = useApiRead<any[]>({
-    lens, resource: "audit-snapshot", parameters: { context, tenant, tail: 80, preserveEpochs }, staleTime: 30_000, enabled,
-    fetcher: (signal) => new Promise((resolve, reject) => {
-      const records = new Map<string, any>();
-      let stop = () => {};
-      let settled = false;
-      const cleanup = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); stop(); };
-      const finish = () => { if (settled) return; settled = true; cleanup(); resolve(Array.from(records.values())); };
-      const timer = setTimeout(finish, 2500);
-      const abort = () => { if (settled) return; settled = true; cleanup(); reject(new DOMException("Aborted", "AbortError")); };
-      const fail = (error: unknown) => { if (settled) return; settled = true; cleanup(); reject(error instanceof Error ? error : new Error("Decision stream failed")); };
-      signal.addEventListener("abort", abort, { once: true });
-      try { stop = liveStream(lens, (event) => { recordAuditSnapshot(records, event, lens, preserveEpochs); }, tenant || undefined, 80, context, fail); }
-      catch (error) { fail(error); }
+    lens, resource: "audit-snapshot", parameters: { context, tenant, tail: 80, preserveEpochs, epochs }, staleTime: 30_000, enabled,
+    fetcher: (signal) => sampleAuditSnapshot({
+      lens, signal, preserveEpochs,
+      eligible: (event) => event.kind === "phorvex.decision" && currentEpochs.has(`${event.namespace}/${event.pod}\u0000${event.decisionTrace?.assetUID}`),
+      subscribe: (onEvent, onError) => liveStream(lens, onEvent, tenant || undefined, 80, context, onError),
     }),
   });
   // EventSource does not expose its HTTP status. A failed sample could be a denial, so never

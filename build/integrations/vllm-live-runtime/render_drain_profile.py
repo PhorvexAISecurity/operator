@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import re
 
+import render_guardrail_profile as guardrail_profile
+
 
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 COMPLETION_SHA = "30ed34497113131c2749b7091bc4a49b5dd374b23b15bc5c7981c3e90ede804a"
@@ -39,7 +41,8 @@ def selected_container(pod: dict, name: str) -> dict:
     return row
 
 
-def render(inputs: dict[str, dict], context: str, audit_identity: str) -> tuple[bytes, dict]:
+def render(inputs: dict[str, dict], context: str, audit_identity: str,
+           retained_lease_profile: bytes | None = None) -> tuple[bytes, dict]:
     cluster, pod, svc, policy = (inputs[key] for key in ("cluster", "pod", "service", "policy"))
     manager, console, console_deployment, sources = (inputs[key] for key in ("manager", "console", "console_deployment", "sources"))
     if not context or context == "in-cluster" or "__SET_" in context or not audit_identity or "__SET_" in audit_identity:
@@ -59,6 +62,20 @@ def render(inputs: dict[str, dict], context: str, audit_identity: str) -> tuple[
         raise ValueError("console Deployment owner identity unavailable")
     labels = pod["metadata"].get("labels", {})
     annotations = pod["metadata"].get("annotations", {})
+    leased = "phorvex.ai/endpoint-lease-source-sha256" in annotations
+    base_inputs = {"cluster", "pod", "service", "policy", "manager", "console",
+                   "console_deployment", "sources"}
+    if leased:
+        if retained_lease_profile is None or set(inputs) != base_inputs | {
+                "endpointslices", "source", "lease_policy", "console_replicaset"}:
+            raise ValueError("leased target needs exact retained caller authority originals")
+        guardrail_profile.render({key: inputs[key] for key in guardrail_profile.ROLES +
+                                  (guardrail_profile.LEASE_ROLE,)}, context, retained_lease_profile)
+        lease_data = guardrail_profile.unique_json(retained_lease_profile)
+        if lease_data["auditSourceIdentity"] != audit_identity:
+            raise ValueError("retained caller audit identity differs")
+    elif retained_lease_profile is not None or set(inputs) != base_inputs:
+        raise ValueError("nonleased target cannot retain caller authority")
     selector = svc.get("spec", {}).get("selector", {})
     if svc.get("metadata", {}).get("name") != "vllm" or svc.get("spec", {}).get("ports") != [{"port": 8000, "protocol": "TCP", "targetPort": 8000}]:
         raise ValueError("reviewed public Service route or port drift")
@@ -91,6 +108,8 @@ def render(inputs: dict[str, dict], context: str, audit_identity: str) -> tuple[
         "drainProxySourceSHA256": annotations["phorvex.ai/drain-proxy-source"],
         "drainEngineSourceSHA256": annotations["phorvex.ai/drain-engine-source"], "maxRunSeconds": 240,
     }
+    if leased:
+        profile["retainedCallerLeaseProfileSHA256"] = hashlib.sha256(retained_lease_profile).hexdigest()
     raw = (json.dumps(profile, sort_keys=True, separators=(",", ":")) + "\n").encode()
     sha = hashlib.sha256(raw).hexdigest()
     journal = hashlib.sha256(("request-drain/" + profile["policyUID"] + "/" + profile["podUID"]).encode()).hexdigest()[:40]
@@ -107,11 +126,24 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("cluster", "pod", "service", "policy", "manager", "console", "console-deployment", "sources", "context", "audit-source-identity", "out"):
         parser.add_argument("--" + name, required=True)
+    for name in ("endpointslices", "source", "lease-policy", "console-replicaset", "retained-caller-lease-profile", "retained-caller-lease-profile-sha256"):
+        parser.add_argument("--" + name)
     args = parser.parse_args()
     inputs, hashes = {}, {}
     for name in ("cluster", "pod", "service", "policy", "manager", "console", "console_deployment", "sources"):
         inputs[name], hashes[name] = read(getattr(args, name))
-    raw, values = render(inputs, args.context, args.audit_source_identity)
+    retained = None
+    optional = ("endpointslices", "source", "lease_policy", "console_replicaset")
+    if any(getattr(args, name) is not None for name in optional) or args.retained_caller_lease_profile is not None or args.retained_caller_lease_profile_sha256 is not None:
+        if not all(getattr(args, name) is not None for name in optional) or not args.retained_caller_lease_profile or not HEX.fullmatch(args.retained_caller_lease_profile_sha256 or ""):
+            raise ValueError("retained caller originals or profile pin incomplete")
+        for name in optional:
+            inputs[name], hashes[name] = read(getattr(args, name))
+        retained = guardrail_profile.read_regular_bounded(Path(args.retained_caller_lease_profile), 8192)
+        if hashlib.sha256(retained).hexdigest() != args.retained_caller_lease_profile_sha256:
+            raise ValueError("retained caller lease profile byte/hash drift")
+        hashes["retained_caller_lease_profile"] = args.retained_caller_lease_profile_sha256
+    raw, values = render(inputs, args.context, args.audit_source_identity, retained)
     output = Path(args.out)
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     os.chmod(output, 0o700)

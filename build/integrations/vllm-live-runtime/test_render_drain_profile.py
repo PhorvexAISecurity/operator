@@ -1,9 +1,16 @@
 """The opt-in profile can be rendered before its own console Pod rolls."""
 
+import copy
+import hashlib
 import json
+from pathlib import Path
+import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
-from render_drain_profile import COMPLETION_SHA, ENGINE_SHA, render
+from render_drain_profile import COMPLETION_SHA, ENGINE_SHA, main, render
+from test_render_guardrail_profile import lease_fixture
 
 
 UID = "11111111-1111-4111-8111-111111111111"
@@ -33,6 +40,18 @@ def inputs():
             "console_deployment": {"kind": "Deployment", "metadata": {"name": "phorvex-phorvex-console",
                                                                 "namespace": "phorvex-system", "uid": UID}},
             "sources": {"serving_completion.py": COMPLETION_SHA, "serving_engine.py": ENGINE_SHA}}
+
+
+def leased_inputs():
+    objects, retained = lease_fixture()
+    objects["pod"]["metadata"]["labels"]["phorvex.ai/serving"] = "true"
+    objects["pod"]["metadata"]["annotations"].update({
+        "phorvex.ai/drain-proxy-source": "b" * 64,
+        "phorvex.ai/drain-engine-source": "c" * 64})
+    objects["policy"]["spec"]["actions"]["enabled"].append("request-drain")
+    objects["sources"] = {"serving_completion.py": COMPLETION_SHA,
+                          "serving_engine.py": ENGINE_SHA}
+    return objects, retained
 
 
 class DrainProfileRender(unittest.TestCase):
@@ -71,6 +90,69 @@ class DrainProfileRender(unittest.TestCase):
         bad = inputs()
         bad["sources"]["serving_engine.py"] = "e" * 64
         with self.assertRaises(ValueError): render(bad, "dev-test", "reviewed-audit")
+
+    def test_leased_target_requires_exact_retained_authority(self):
+        objects, retained = leased_inputs()
+        audit = json.loads(retained)["auditSourceIdentity"]
+        raw, _ = render(objects, "dev-test", audit, retained)
+        self.assertEqual(json.loads(raw)["retainedCallerLeaseProfileSHA256"],
+                         hashlib.sha256(retained).hexdigest())
+        self.assertNotIn("clientBSHA256", json.loads(raw))
+        with self.assertRaises(ValueError): render(objects, "dev-test", audit)
+        with self.assertRaises(ValueError): render(objects, "dev-test", "different-audit", retained)
+        absent = copy.deepcopy(objects)
+        del absent["source"]
+        with self.assertRaises(ValueError): render(absent, "dev-test", audit, retained)
+
+    def test_nonleased_target_rejects_retained_authority(self):
+        objects = inputs()
+        with self.assertRaises(ValueError): render(objects, "dev-test", "reviewed-audit", b"{}")
+        objects["pod"]["metadata"]["annotations"]["phorvex.ai/endpoint-lease-source-sha256"] = ""
+        with self.assertRaises(ValueError): render(objects, "dev-test", "reviewed-audit")
+
+    def test_retained_profile_identity_and_installed_projection_mismatch(self):
+        objects, retained = leased_inputs()
+        audit = json.loads(retained)["auditSourceIdentity"]
+        wrong_uid = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        for field, value in (("serviceUID", wrong_uid), ("sourceConfigMapUID", wrong_uid),
+                             ("policyUID", wrong_uid), ("proxyImage", "different-image"),
+                             ("policyGeneration", 999)):
+            with self.subTest(field=field):
+                altered = json.loads(retained)
+                altered[field] = value
+                changed = json.dumps(altered, sort_keys=True, separators=(",", ":")).encode()
+                with self.assertRaises(ValueError): render(objects, "dev-test", audit, changed)
+        changed = copy.deepcopy(objects)
+        changed["pod"]["metadata"]["annotations"]["phorvex.ai/endpoint-lease-source-sha256"] = "f" * 64
+        with self.assertRaises(ValueError): render(changed, "dev-test", audit, retained)
+        changed = copy.deepcopy(objects)
+        console_spec = changed["console"]["spec"]["containers"][0]
+        next(row for row in console_spec["env"] if row["name"] == "PHORVEX_CONSOLE_ENDPOINT_LEASE_PROFILE_SHA256")["value"] = "f" * 64
+        with self.assertRaises(ValueError): render(changed, "dev-test", audit, retained)
+
+    def test_cli_requires_exact_retained_profile_bytes(self):
+        objects, retained = leased_inputs()
+        audit = json.loads(retained)["auditSourceIdentity"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            arguments = ["render_drain_profile.py"]
+            for key, value in objects.items():
+                path = root / (key + ".json")
+                path.write_text(json.dumps(value))
+                arguments.extend(("--" + key.replace("_", "-"), str(path)))
+            profile_path = root / "retained.json"
+            profile_path.write_bytes(retained)
+            arguments.extend(("--context", "dev-test", "--audit-source-identity", audit,
+                              "--retained-caller-lease-profile", str(profile_path),
+                              "--retained-caller-lease-profile-sha256", "0" * 64,
+                              "--out", str(root / "output")))
+            with patch.object(sys, "argv", arguments), self.assertRaisesRegex(ValueError, "byte/hash drift"):
+                main()
+            arguments[-3] = hashlib.sha256(retained).hexdigest()
+            with patch.object(sys, "argv", arguments):
+                main()
+            rendered = json.loads((root / "output" / "profile.json").read_bytes())
+            self.assertEqual(rendered["retainedCallerLeaseProfileSHA256"], arguments[-3])
 
 
 if __name__ == "__main__":
