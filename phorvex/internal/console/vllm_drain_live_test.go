@@ -234,8 +234,9 @@ func TestDrainSelfIncarnationBracketsProfileRollout(t *testing.T) {
 func TestDrainLiveVerdictCreditsOnlyCompleteOwnedChain(t *testing.T) {
 	record := func(status string) *attackRecord {
 		return &attackRecord{Pod: "vllm-0", DrainLiveProbe: &drainLiveProbeResult{Status: status},
-			StimulusEvidence: &attackStimulusEvidence{EventCreatedAt: "2026-09-27T19:00:00Z"},
-			DecisionEvidence: &decisionEvidence{Action: "request-drain", Time: "2026-09-27T19:00:07.5Z"}}
+			StimulusEvidence: &attackStimulusEvidence{EventUID: "event-1", EventCreatedAt: "2026-09-27T19:00:00Z"},
+			DecisionEvidence: &decisionEvidence{Action: "request-drain", Time: "2026-09-27T19:00:07.5Z", Selected: true,
+				Correlation: "exact-event-uid", EventUID: "event-1", DrainOperation: &model.DrainOperationEvidence{OperationID: "op-1"}}}
 	}
 	r := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
 	applyDrainLiveVerdict(r)
@@ -262,10 +263,20 @@ func TestDrainLiveVerdictCreditsOnlyCompleteOwnedChain(t *testing.T) {
 	if missingDecision.Outcome != "" || missingDecision.Actuated {
 		t.Fatalf("credit without exact decision evidence: %+v", missingDecision)
 	}
-	reversed := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
-	reversed.DecisionEvidence.Time = "2026-09-27T18:59:59Z"
-	applyDrainLiveVerdict(reversed)
-	if reversed.Outcome != "DEFENDED" || reversed.TimeToDefendSec != 0 {
-		t.Fatalf("decision before event must not produce a negative or fabricated time: %+v", reversed)
+	for name, mutate := range map[string]func(*attackRecord){
+		"decision before event": func(r *attackRecord) { r.DecisionEvidence.Time = "2026-09-27T18:59:59Z" },
+		"unparseable decision":  func(r *attackRecord) { r.DecisionEvidence.Time = "later" },
+		"candidate only":        func(r *attackRecord) { r.DecisionEvidence.Selected = false },
+		"temporal correlation":  func(r *attackRecord) { r.DecisionEvidence.Correlation = "temporal" },
+		"other event":           func(r *attackRecord) { r.DecisionEvidence.EventUID = "event-2" },
+		"other action":          func(r *attackRecord) { r.DecisionEvidence.Action = "kv-reset" },
+		"no drain operation":    func(r *attackRecord) { r.DecisionEvidence.DrainOperation = nil },
+	} {
+		r := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+		mutate(r)
+		applyDrainLiveVerdict(r)
+		if r.Outcome != "" || r.Actuated || r.TimeToDefendSec != 0 {
+			t.Fatalf("%s earned credit: %+v", name, r)
+		}
 	}
 }

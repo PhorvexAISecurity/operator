@@ -962,14 +962,15 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 		r.DrainLiveProbe.Issue = drainLiveSafeIssue(err)
 	}
 	applyDrainLiveVerdict(r)
-	publishAttack(r)
+	// Persist before the one terminal publish: followers stop at the first
+	// terminal record, so credit must never be visible before it is durable.
 	if e := s.persistAttack(r); e != nil {
-		r.Status = "partial"
-		r.Outcome, r.DefendedPod, r.Containment = "", "", ""
+		r.Status, r.OutcomeClass = "partial", "drain-observation-unknown"
+		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
 		r.Actuated, r.TimeToDefendSec = false, 0
 		r.PersistenceError = "request-drain evidence persistence unavailable; unsafe to retry"
-		publishAttack(r)
 	}
+	publishAttack(r)
 }
 
 // applyDrainLiveVerdict grants credit only for the complete owned chain: the
@@ -986,16 +987,20 @@ func applyDrainLiveVerdict(r *attackRecord) {
 	r.Outcome, r.DefendedPod, r.Containment = "", "", ""
 	r.Actuated, r.DwellOngoing = false, false
 	r.TimeToDefendSec, r.DwellSec = 0, 0
-	if r.DrainLiveProbe.Status != "OWNED_ABORT_AND_CONTINUITY_OBSERVED" || r.DecisionEvidence == nil || r.StimulusEvidence == nil {
+	d, stimulus := r.DecisionEvidence, r.StimulusEvidence
+	if r.DrainLiveProbe.Status != "OWNED_ABORT_AND_CONTINUITY_OBSERVED" || d == nil || stimulus == nil ||
+		!d.Selected || d.Correlation != "exact-event-uid" || d.EventUID == "" || d.EventUID != stimulus.EventUID ||
+		d.Action != "request-drain" || d.DrainOperation == nil {
+		return
+	}
+	created, createdErr := time.Parse(time.RFC3339Nano, stimulus.EventCreatedAt)
+	decided, decidedErr := time.Parse(time.RFC3339Nano, d.Time)
+	if createdErr != nil || decidedErr != nil || decided.Before(created) {
 		return
 	}
 	r.Outcome, r.DefendedPod, r.Containment = "DEFENDED", r.Pod, "owned-inflight-request-aborted-service-reopened"
-	r.Action, r.Actuated = r.DecisionEvidence.Action, true
-	created, createdErr := time.Parse(time.RFC3339Nano, r.StimulusEvidence.EventCreatedAt)
-	decided, decidedErr := time.Parse(time.RFC3339Nano, r.DecisionEvidence.Time)
-	if createdErr == nil && decidedErr == nil && !decided.Before(created) {
-		r.TimeToDefendSec = decided.Sub(created).Seconds()
-	}
+	r.Action, r.Actuated = d.Action, true
+	r.TimeToDefendSec = round2(decided.Sub(created).Seconds())
 }
 
 func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackRecord, p drainLiveProfile) error {
