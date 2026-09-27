@@ -16,6 +16,7 @@ import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-resu
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
 import { GuardrailOutputProbe } from "@/components/panels/guardrail-output-probe";
+import { VoiceMemoryProbe } from "@/components/panels/voice-memory-probe";
 
 // AttackResultsPanel shows persisted behavioral results and explicitly unscored mechanism/signal
 // observations. Signal-only rows never contribute behavioral outcomes or economics.
@@ -165,6 +166,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {signal && <CatalogueSignalResult result={r} />}
         {r.guardrailEffectProbe && <GuardrailEffectProbe result={r.guardrailEffectProbe} />}
         {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
+        {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
         {!signal && (r.stimulusEvidence || r.effectEvidence) && (
           <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-2.5 text-[11px]">
             <div className="font-medium text-warning">Mechanism evidence</div>
