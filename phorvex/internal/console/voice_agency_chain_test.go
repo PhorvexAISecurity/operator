@@ -103,6 +103,24 @@ func TestVoiceAgencyRuleUsesNativeCanonicalContract(t *testing.T) {
 	}
 }
 
+func TestVoiceAgencyPreflightRequiresNativeRuleMounts(t *testing.T) {
+	pod := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", VolumeMounts: []corev1.VolumeMount{
+		{Name: "rule", MountPath: "/etc/phorvex/voice-refund-policy", ReadOnly: true},
+		{Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true},
+		{Name: "state", MountPath: "/var/lib/phorvex-voice-memory"}}}},
+		Volumes: []corev1.Volume{{Name: "rule", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: voiceAgencyConfigMapName}}}},
+			{Name: "token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "voice-memory-state-token"}}},
+			{Name: "state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}}}}
+	if !voiceAgencyActuatorMounts(pod) {
+		t.Fatal("reviewed native mounts refused")
+	}
+	pod.Spec.Volumes[0].ConfigMap.Name = "foreign"
+	if voiceAgencyActuatorMounts(pod) {
+		t.Fatal("foreign policy mount admitted before first loss")
+	}
+}
+
 func TestVoiceAgencyBenignStatusRequiresActualMatchingCRMReply(t *testing.T) {
 	run := "a1b2c3d4e5f60708"
 	pod := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"

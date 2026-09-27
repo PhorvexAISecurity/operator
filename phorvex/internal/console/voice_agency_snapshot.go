@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"sort"
 	"time"
 
@@ -64,7 +65,11 @@ func voiceAgencyServingPod(p *corev1.Pod, dep *appsv1.Deployment, source string)
 		p.Annotations["phorvex.ai/voice-refund-source-sha256"] != source ||
 		p.Annotations["phorvex.ai/voice-refund-policy-configmap"] != voiceAgencyConfigMapName ||
 		len(p.OwnerReferences) != 1 || p.OwnerReferences[0].APIVersion != "apps/v1" ||
-		p.OwnerReferences[0].Kind != "ReplicaSet" || p.OwnerReferences[0].UID == "" || !voiceAgencyRequiredMode(p) {
+		p.OwnerReferences[0].Kind != "ReplicaSet" || p.OwnerReferences[0].UID == "" || !voiceAgencyRequiredMode(p) ||
+		!voiceAgencyActuatorMounts(p) || p.Status.PodIP == "" {
+		return false
+	}
+	if _, err := netip.ParseAddr(p.Status.PodIP); err != nil {
 		return false
 	}
 	ready := false
@@ -74,6 +79,49 @@ func voiceAgencyServingPod(p *corev1.Pod, dep *appsv1.Deployment, source string)
 		}
 	}
 	return ready
+}
+
+func voiceAgencyActuatorMounts(p *corev1.Pod) bool {
+	var bot *corev1.Container
+	for i := range p.Spec.Containers {
+		if p.Spec.Containers[i].Name == "bot" {
+			bot = &p.Spec.Containers[i]
+		}
+	}
+	if bot == nil {
+		return false
+	}
+	paths := map[string]string{}
+	state := ""
+	for _, mount := range bot.VolumeMounts {
+		if mount.SubPath != "" {
+			continue
+		}
+		if mount.ReadOnly {
+			paths[mount.MountPath] = mount.Name
+		}
+		if mount.MountPath == "/var/lib/phorvex-voice-memory" {
+			state = mount.Name
+		}
+	}
+	policy, secret := paths["/etc/phorvex/voice-refund-policy"], paths["/etc/phorvex/voice-memory-state-token"]
+	if policy == "" || secret == "" || state == "" {
+		return false
+	}
+	valid := 0
+	for _, volume := range p.Spec.Volumes {
+		if volume.Name == policy && volume.ConfigMap != nil && volume.ConfigMap.Name == voiceAgencyConfigMapName &&
+			(volume.ConfigMap.Optional == nil || !*volume.ConfigMap.Optional) {
+			valid++
+		}
+		if volume.Name == secret && volume.Secret != nil && volume.Secret.SecretName == "voice-memory-state-token" {
+			valid++
+		}
+		if volume.Name == state && volume.EmptyDir != nil {
+			valid++
+		}
+	}
+	return valid == 3
 }
 
 func voiceAgencyPin(p corev1.Pod, source string) (voiceAgencyPodPin, error) {
