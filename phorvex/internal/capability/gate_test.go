@@ -80,11 +80,39 @@ func mcpCapableFixture() (*model.WorkloadView, Witness) {
 	return view, witness
 }
 
+func endpointLeaseCapableFixture() (*model.WorkloadView, Witness) {
+	p := model.Pod{Namespace: "vllm", Name: "vllm-0", UID: "11111111-1111-4111-8111-111111111111"}
+	p.EndpointLeaseObservation = &model.EndpointLeaseObservation{
+		EventName: "lease-event", EventUID: "22222222-2222-4222-8222-222222222222",
+		CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+		ScenarioID:      "ai2-endpoint-security", EvidenceSource: "TEST_INJECTED",
+		PolicyName: "vllm-defense", PolicyUID: "33333333-3333-4333-8333-333333333333", PolicyGeneration: 1,
+		TargetPodUID: p.UID, ServiceUID: "44444444-4444-4444-8444-444444444444",
+		PolicyConfigMapUID: "55555555-5555-4555-8555-555555555555", ProxySourceSHA256: strings.Repeat("a", 64),
+		SecretUID: "66666666-6666-4666-8666-666666666666", SeedSHA256: strings.Repeat("b", 64),
+		RevokedClientHMAC: strings.Repeat("c", 64), RetainedClientHMAC: strings.Repeat("d", 64),
+		AcceptedStatus: 200, AcceptedResponseSHA256: strings.Repeat("e", 64),
+		RetainedBaselineStatus: 200, RetainedBaselineResponseSHA256: strings.Repeat("f", 64),
+		ObservedAt: time.Now().UTC(),
+	}
+	view := &model.WorkloadView{Pod: p}
+	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+		WithPolicyIdentity("vllm-defense", p.EndpointLeaseObservation.PolicyUID)
+	return view, witness
+}
+
 // TestCapable_AllPredicatesGreen uses the generic leader for ordinary AI moves
 // and an exact observed Voice target for MCP descriptor pinning.
 func TestCapable_AllPredicatesGreen(t *testing.T) {
 	views, wit := capFleet()
 	for action := range AICapabilityActions {
+		if action == model.ActionEndpointLeaseRevoke {
+			lease, scoped := endpointLeaseCapableFixture()
+			if ok, why := scoped.Capable(lease, action); !ok {
+				t.Errorf("source-bound vLLM endpoint lease target not capable: %s", why)
+			}
+			continue
+		}
 		if action == model.ActionVoiceMCPToolPin {
 			voice, scoped := mcpCapableFixture()
 			if ok, why := scoped.Capable(voice, action); !ok {
@@ -98,6 +126,22 @@ func TestCapable_AllPredicatesGreen(t *testing.T) {
 		if ok, why := wit.Capable(views[0], action); !ok {
 			t.Errorf("leader not capable for %s: %s", action, why)
 		}
+	}
+}
+
+func TestEndpointLeaseCapabilityRequiresBoundObservationAndPolicyIdentity(t *testing.T) {
+	view, witness := endpointLeaseCapableFixture()
+	if ok, why := witness.Capable(view, model.ActionEndpointLeaseRevoke); !ok {
+		t.Fatalf("complete observed lease source excluded: %s", why)
+	}
+	missing := *view
+	missing.Pod = view.Pod
+	missing.Pod.EndpointLeaseObservation = nil
+	if ok, _ := witness.Capable(&missing, model.ActionEndpointLeaseRevoke); ok {
+		t.Fatal("absent endpoint lease observation accepted")
+	}
+	if ok, _ := witness.WithPolicyIdentity("other", "77777777-7777-4777-8777-777777777777").Capable(view, model.ActionEndpointLeaseRevoke); ok {
+		t.Fatal("wrong selecting policy accepted")
 	}
 }
 
