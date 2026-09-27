@@ -21,12 +21,13 @@ import (
 func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *testing.T) {
 	const source = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	const image = "example.test/proxy@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const engineImage = "example.test/engine@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	const podUID = "44444444-4444-4444-8444-444444444444"
 	const policyUID = "55555555-5555-4555-8555-555555555555"
-	if err := ConfigureEndpointLeaseApprovedAuthority(source, image); err != nil {
+	if err := ConfigureEndpointLeaseApprovedAuthority(source, image, engineImage); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = ConfigureEndpointLeaseApprovedAuthority("", "") })
+	t.Cleanup(func() { _ = ConfigureEndpointLeaseApprovedAuthority("", "", "") })
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
@@ -73,10 +74,10 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 		SecretUID: observation.SecretUID, SeedSHA256: observation.SeedSHA256, SourceSHA256: source,
 		State: endpointlease.State{Version: 1, Revision: 0, AllowedClientHMACs: []string{observation.RevokedClientHMAC, observation.RetainedClientHMAC}}}
 	validations := 0
-	validate := func(_ context.Context, _ client.Reader, gotPod, gotSource, gotImage string) (endpointlease.Live, error) {
+	validate := func(_ context.Context, _ client.Reader, gotPod, gotSource, gotImage, gotEngineImage string) (endpointlease.Live, error) {
 		validations++
-		if gotPod != podUID || gotSource != source || gotImage != image {
-			t.Fatalf("unreviewed authority: %s %s %s", gotPod, gotSource, gotImage)
+		if gotPod != podUID || gotSource != source || gotImage != image || gotEngineImage != engineImage {
+			t.Fatalf("unreviewed authority: %s %s %s %s", gotPod, gotSource, gotImage, gotEngineImage)
 		}
 		return live, nil
 	}
@@ -127,17 +128,18 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 func TestEndpointLeaseAuthorityRequiresIndependentCompletePins(t *testing.T) {
 	const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	const image = "example.test/proxy@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	t.Cleanup(func() { _ = ConfigureEndpointLeaseApprovedAuthority("", "") })
-	for _, pins := range [][2]string{{sha, ""}, {"", image}, {"upper", image}, {sha, "proxy:latest"}} {
-		if err := ConfigureEndpointLeaseApprovedAuthority(pins[0], pins[1]); err == nil {
-			t.Fatalf("invalid endpoint lease source/image pair accepted: %q %q", pins[0], pins[1])
+	const engineImage = "example.test/engine@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	t.Cleanup(func() { _ = ConfigureEndpointLeaseApprovedAuthority("", "", "") })
+	for _, pins := range [][3]string{{sha, "", engineImage}, {"", image, engineImage}, {sha, image, ""}, {"upper", image, engineImage}, {sha, "proxy:latest", engineImage}, {sha, image, "engine:latest"}} {
+		if err := ConfigureEndpointLeaseApprovedAuthority(pins[0], pins[1], pins[2]); err == nil {
+			t.Fatalf("invalid endpoint lease source/image/engine pins accepted: %q %q %q", pins[0], pins[1], pins[2])
 		}
 	}
-	if err := ConfigureEndpointLeaseApprovedAuthority(sha, image); err != nil {
+	if err := ConfigureEndpointLeaseApprovedAuthority(sha, image, engineImage); err != nil {
 		t.Fatal(err)
 	}
-	gotSHA, gotImage := endpointLeaseApprovedAuthority()
-	if gotSHA != sha || gotImage != image {
-		t.Fatalf("approved source/image pair drifted: %q %q", gotSHA, gotImage)
+	gotSHA, gotImage, gotEngineImage := endpointLeaseApprovedAuthority()
+	if gotSHA != sha || gotImage != image || gotEngineImage != engineImage {
+		t.Fatalf("approved source/image/engine pins drifted: %q %q %q", gotSHA, gotImage, gotEngineImage)
 	}
 }

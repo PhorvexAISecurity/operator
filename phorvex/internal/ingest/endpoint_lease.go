@@ -25,11 +25,11 @@ func bindEndpointLeaseObservation(ctx context.Context, reader client.Reader, p *
 	bindEndpointLeaseObservationWithValidator(ctx, reader, p, events, endpointlease.ValidateLive)
 }
 
-type endpointLeaseLiveValidator func(context.Context, client.Reader, string, string, string) (endpointlease.Live, error)
+type endpointLeaseLiveValidator func(context.Context, client.Reader, string, string, string, string) (endpointlease.Live, error)
 
 func bindEndpointLeaseObservationWithValidator(ctx context.Context, reader client.Reader, p *model.Pod, events []model.SecurityEventInfo, validate endpointLeaseLiveValidator) {
 	p.EndpointLeaseObservation = nil
-	approved, image := endpointLeaseApprovedAuthority()
+	approved, image, engineImage := endpointLeaseApprovedAuthority()
 	if p.Namespace != endpointlease.Namespace || p.UID == "" || reader == nil || validate == nil || approved == "" {
 		return
 	}
@@ -57,7 +57,7 @@ func bindEndpointLeaseObservationWithValidator(ctx context.Context, reader clien
 	if chosen == nil {
 		return
 	}
-	live, err := validate(ctx, reader, payload.TargetPodUID, approved, image)
+	live, err := validate(ctx, reader, payload.TargetPodUID, approved, image, engineImage)
 	if err != nil || live.ServiceUID != payload.ServiceUID || live.PolicyUID != payload.PolicyConfigMapUID ||
 		live.SecretUID != payload.SecretUID || live.SeedSHA256 != payload.SeedSHA256 ||
 		live.SourceSHA256 != payload.ProxySourceSHA256 || live.State.Revision != payload.PriorRevision {

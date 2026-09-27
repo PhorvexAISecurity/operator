@@ -223,6 +223,7 @@ phorvex:
     enabled: false
     approvedSourceSHA256: ""
     approvedProxyImage: ""
+    approvedEngineImage: ""
   voiceOutput:
     enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update

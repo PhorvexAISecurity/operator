@@ -47,10 +47,18 @@ func TestEndpointLeaseTypedFactReachesNewActionWithoutEndpointPathCredit(t *test
 	if !foundCandidate {
 		t.Fatalf("typed lease fact did not reach candidate set: %+v", set)
 	}
+	foundSelectedRevoke := false
 	for _, d := range e.Decide([]*model.WorkloadView{v}, pol) {
-		if d.Selected && d.Action != model.ActionEndpointLeaseRevoke {
+		if !d.Selected {
+			continue
+		}
+		if d.Action != model.ActionEndpointLeaseRevoke {
 			t.Fatalf("selected unrelated action %+v", d)
 		}
+		foundSelectedRevoke = true
+	}
+	if !foundSelectedRevoke {
+		t.Fatal("ordinary policy and cost did not select endpoint-lease-revoke")
 	}
 	v.Pod.EndpointLeaseObservation.PolicyUID = "other-policy"
 	set, _ = e.AssembleSet([]*model.WorkloadView{v}, pol)
