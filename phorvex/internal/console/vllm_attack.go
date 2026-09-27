@@ -130,6 +130,26 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"message": "A fixed synthetic support application-output disclosure is measuring. An event is injected only after the original guarded response and legitimate controls prove a landed baseline. The first disclosure remains landed; the reader requires a selected protected activation and intact repeated service for a narrow defended result."})
 		return
 	}
+	if body.Action == "request-drain" && s.cfg.DrainLiveEnabled {
+		profile, raw, profileErr := loadDrainLiveProfile(s.cfg)
+		if profileErr != nil {
+			writeJSON(w, 503, map[string]string{"error": "reviewed request-drain profile unavailable"})
+			return
+		}
+		if !drainLiveInFlight.CompareAndSwap(false, true) {
+			writeJSON(w, 409, map[string]string{"error": "one reviewed request-drain measurement is already active"})
+			return
+		}
+		if err := s.persistEffectIntent("/api/vllm/attack", actorOf(r), vllmAttackNS, body.Action); err != nil {
+			drainLiveInFlight.Store(false)
+			writeJSON(w, 503, map[string]string{"error": "request-drain launch evidence unavailable"})
+			return
+		}
+		attackID := s.startDrainLive(profile, raw)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": body.Action, "attackId": attackID,
+			"message": "One fixed owned completion is measuring request-drain admission, exact native disposition and benign continuity. Natural detection and wallet-exhaustion efficacy remain untested."})
+		return
+	}
 
 	pod, err := s.cfg.execText(8*time.Second, "kubectl", "-n", vllmAttackNS, "get", "pod", "-l", "app=vllm", "-o", "jsonpath={.items[0].metadata.name}")
 	pod = strings.TrimSpace(pod)

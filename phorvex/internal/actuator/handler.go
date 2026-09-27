@@ -94,6 +94,7 @@ type HandlerResult struct {
 	// effect is unknown; it is not a confirmed or credited emission.
 	MutationKind        string
 	GracefulTermination *model.GracefulTerminationReceipt
+	DrainOperation      *model.DrainOperationEvidence
 	// Emitted is true only for a confirmed mutation or confirmed partial
 	// mutation. It stays false for refusal, definite no-effect, and an attempted
 	// external mutation whose result is unknown.
@@ -159,6 +160,7 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		RollbackRef:         hr.RollbackRef,
 		MutationKind:        hr.MutationKind,
 		GracefulTermination: hr.GracefulTermination,
+		DrainOperation:      model.CloneDrainOperationEvidence(hr.DrainOperation),
 	}, err
 }
 

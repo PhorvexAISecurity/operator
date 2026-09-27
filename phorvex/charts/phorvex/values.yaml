@@ -426,6 +426,13 @@ phorvex:
       outputPolicyConfigMapName: ""
       outputPolicyJournalName: ""
       targetNamespace: vllm
+    # One exact-source, fixed-model request-drain observation. A digest-pinned
+    # profile is required before this default-off arm can create an event.
+    drainLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      journalName: ""
     # Reviewed real LiteLLM Service-path client policy trial. Off until the
     # owner has installed the gateway and pinned a complete runtime profile.
     litellmLive:

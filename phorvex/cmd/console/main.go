@@ -393,6 +393,17 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.GuardrailEffectProfileSHA256 = guardrailEffectProfileSHA256
 	cfg.GuardrailEffectProfilePath = "/etc/phorvex-guardrail-effect/config.guardrail-effect.yaml"
+	drainLiveEnabled, err := readBool("PHORVEX_CONSOLE_DRAIN_LIVE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.DrainLiveEnabled = drainLiveEnabled
+	drainLiveSHA, _ := lookup("PHORVEX_CONSOLE_DRAIN_LIVE_PROFILE_SHA256")
+	if drainLiveEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(drainLiveSHA) {
+		return errors.New("PHORVEX_CONSOLE_DRAIN_LIVE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.DrainLiveProfileSHA256 = drainLiveSHA
+	cfg.DrainLiveProfilePath = "/etc/phorvex-drain-live/profile.json"
 	guardrailOutputEnabled, err := readBool("PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED")
 	if err != nil {
 		return err

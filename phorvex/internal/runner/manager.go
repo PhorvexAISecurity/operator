@@ -3279,6 +3279,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
+			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
 
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
@@ -3386,6 +3387,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
+			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
@@ -3412,6 +3414,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].RollbackRef = res.RollbackRef
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
+			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
 			switch disposition {
 			case actuator.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")

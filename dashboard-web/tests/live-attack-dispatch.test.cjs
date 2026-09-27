@@ -84,7 +84,7 @@ test("typed observation budgets cover 900-second runs and stay finite", () => {
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-sensitive-info-disclosure", endpoint: "/api/litellm/output/fire" }, "litellm")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-system-prompt-leakage", endpoint: "/api/voice/output/live/fire" }, "voice")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-mcp-tool-poisoning", endpoint: "/api/voice/mcp/live/fire" }, "voice")), 960_000);
-  assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm")), 150_000);
+  assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm")), 270_000);
 });
 
 test("completed exact NOOP shows reason and blocked candidate without inventing defense", () => {

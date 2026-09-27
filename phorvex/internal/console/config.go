@@ -56,6 +56,10 @@ type Config struct {
 	GuardrailEffectEnabled       bool
 	GuardrailEffectProfileSHA256 string
 	GuardrailEffectProfilePath   string
+	// DrainLive admits only the reviewed, exact-source vLLM request-drain arm.
+	DrainLiveEnabled       bool
+	DrainLiveProfileSHA256 string
+	DrainLiveProfilePath   string
 	// Version 2 of the same guardrail catalogue parent. This opt-in profile
 	// binds the synthetic support app, proxy, rule, and real model source.
 	GuardrailOutputEnabled       bool
