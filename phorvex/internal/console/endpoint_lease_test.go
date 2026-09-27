@@ -55,12 +55,25 @@ func TestEndpointLeaseProfileAndPolicyCanonical(t *testing.T) {
 	if err != nil || !endpointLeaseBefore(parsed, p) {
 		t.Fatalf("valid prior rejected: %v", err)
 	}
-	after, err := endpointLeaseDesired(parsed, p, leaseHex('f'))
+	decisionID := string(bytes.Repeat([]byte{'f'}, 32)) // real DecisionTrace ID width
+	after, err := endpointLeaseDesired(parsed, p, decisionID)
 	if err != nil || after.Revision != 1 || len(after.RevokedClientHMACs) != 1 || after.AllowedClientHMACs[0] != p.ClientBHMAC {
 		t.Fatalf("desired revocation differs: %v", err)
 	}
 	if _, err := parseEndpointLeaseState(append(stateRaw, '\n'), p); err == nil {
 		t.Fatal("noncanonical policy accepted")
+	}
+	if accepted, err := parseEndpointLeaseState(endpointLeaseStateBytes(after), p); err != nil || accepted.LastOperationID != decisionID {
+		t.Fatalf("real 32-hex selected operation rejected: %v", err)
+	}
+	for _, malformed := range []string{decisionID[:31], "Z" + decisionID[1:]} {
+		if _, err := endpointLeaseDesired(parsed, p, malformed); err == nil {
+			t.Fatalf("malformed selected operation accepted: %q", malformed)
+		}
+		after.LastOperationID = malformed
+		if _, err := parseEndpointLeaseState(endpointLeaseStateBytes(after), p); err == nil {
+			t.Fatalf("malformed stored operation accepted: %q", malformed)
+		}
 	}
 }
 
@@ -93,7 +106,7 @@ func TestEndpointLeaseTerminalRequiresExactOldIncarnations(t *testing.T) {
 	before := endpointLeaseState{Version: 1, ServiceUID: p.ServiceUID, ProxySourceSHA256: p.ProxySourceSHA256,
 		SecretUID: p.TenantSecretUID, SeedSHA256: p.SeedSHA256,
 		AllowedClientHMACs: []string{p.ClientAHMAC, p.ClientBHMAC}, RevokedClientHMACs: []string{}}
-	decision := endpointLeaseDecision{Action: endpointLeaseAction, DecisionID: leaseHex('f'), TickID: "tick-1", Selected: true}
+	decision := endpointLeaseDecision{Action: endpointLeaseAction, DecisionID: string(bytes.Repeat([]byte{'f'}, 32)), TickID: "tick-1", Selected: true}
 	desired, err := endpointLeaseDesired(before, p, decision.DecisionID)
 	if err != nil {
 		t.Fatal(err)
@@ -119,6 +132,12 @@ func TestEndpointLeaseTerminalRequiresExactOldIncarnations(t *testing.T) {
 	after.Receipts[0].PreCASProxyContainerIDs[0] = "containerd://replacement"
 	if endpointLeaseTerminalRow(after, prior, snap, p, event, decision, pod, desired) {
 		t.Fatal("restarted old proxy accepted")
+	}
+	after.Receipts[0].PreCASProxyContainerIDs[0] = "containerd://old"
+	badDecision := decision
+	badDecision.DecisionID = "Z" + decision.DecisionID[1:]
+	if endpointLeaseTerminalRow(after, prior, snap, p, event, badDecision, pod, desired) {
+		t.Fatal("malformed selected decision accepted")
 	}
 }
 

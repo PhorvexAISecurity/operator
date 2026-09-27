@@ -163,7 +163,7 @@ func endpointLeaseTerminalRow(after endpointLeaseJournal, before endpointLeaseJo
 	p endpointLeaseProfile, event *attackStimulusEvidence, decision endpointLeaseDecision,
 	target corev1.Pod, desired endpointLeaseState) bool {
 	if event == nil || !decision.Selected || decision.Action != endpointLeaseAction ||
-		!staticSHA256.MatchString(decision.DecisionID) || len(after.Receipts) != len(before.Receipts)+1 {
+		!endpointLeaseOperationID.MatchString(decision.DecisionID) || len(after.Receipts) != len(before.Receipts)+1 {
 		return false
 	}
 	for i := range before.Receipts {

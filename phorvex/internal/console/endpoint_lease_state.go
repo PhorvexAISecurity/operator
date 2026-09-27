@@ -9,8 +9,11 @@ import (
 	"errors"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 )
+
+var endpointLeaseOperationID = regexp.MustCompile(`^[0-9a-f]{32,64}$`)
 
 type endpointLeaseState struct {
 	Version            int      `json:"version"`
@@ -75,7 +78,7 @@ func parseEndpointLeaseState(raw []byte, p endpointLeaseProfile) (endpointLeaseS
 		len(state.AllowedClientHMACs) > 256 || len(state.RevokedClientHMACs) > 256 ||
 		!endpointLeaseSortedIDs(state.AllowedClientHMACs) || !endpointLeaseSortedIDs(state.RevokedClientHMACs) ||
 		(state.Revision == 0 && state.LastOperationID != "") ||
-		(state.Revision > 0 && !staticSHA256.MatchString(state.LastOperationID)) {
+		(state.Revision > 0 && !endpointLeaseOperationID.MatchString(state.LastOperationID)) {
 		return state, errors.New("endpoint lease state authority invalid")
 	}
 	for _, id := range state.AllowedClientHMACs {
@@ -97,7 +100,7 @@ func endpointLeaseBefore(state endpointLeaseState, p endpointLeaseProfile) bool 
 }
 
 func endpointLeaseDesired(prior endpointLeaseState, p endpointLeaseProfile, operationID string) (endpointLeaseState, error) {
-	if !endpointLeaseBefore(prior, p) || !staticSHA256.MatchString(operationID) {
+	if !endpointLeaseBefore(prior, p) || !endpointLeaseOperationID.MatchString(operationID) {
 		return endpointLeaseState{}, errors.New("endpoint lease cutover prerequisites differ")
 	}
 	after := prior
