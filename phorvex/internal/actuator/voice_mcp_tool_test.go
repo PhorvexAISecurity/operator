@@ -102,21 +102,27 @@ func makeVoiceMCPFixture(t *testing.T) *voiceMCPFixture {
 	bh := sha256.Sum256([]byte(voiceSourceBytes["bot.py"] + "\x00" + voiceSourceBytes["voice_memory_policy.py"] + "\x00" + voiceSourceBytes["voice_output_policy.py"] + "\x00" + voiceSourceBytes["voice_mcp_policy.py"]))
 	voiceSourceName := "voice-memory-source-" + hex.EncodeToString(bh[:])[:12]
 	immutable := true
-	voiceSource := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "voice", Name: voiceSourceName, UID: ids[2], ResourceVersion: "1"}, Immutable: &immutable, Data: voiceSourceBytes}
+	voiceSource := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "voice", Name: voiceSourceName, UID: ids[2], ResourceVersion: "1",
+		OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(voiceDep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Immutable: &immutable, Data: voiceSourceBytes}
 	volumes := []corev1.Volume{
 		{Name: "rule", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: voicemcppolicy.ConfigMapName}}}},
 		{Name: "token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: voiceMCPSecretName}}},
 		{Name: "ledger", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		{Name: "source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: voiceSourceName}}}},
+		{Name: "mcp-test-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "voice-mcp-test-token"}}},
 	}
 	mounts := []corev1.VolumeMount{{Name: "rule", MountPath: "/etc/phorvex/voice-mcp-tool-policy", ReadOnly: true}, {Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true}, {Name: "ledger", MountPath: "/var/lib/phorvex-voice-memory"},
+		{Name: "mcp-test-token", MountPath: "/etc/phorvex/voice-mcp-test-token", ReadOnly: true},
 		{Name: "source", MountPath: "/app/bot.py", ReadOnly: true, SubPath: "bot.py"}, {Name: "source", MountPath: "/app/voice_memory_policy.py", ReadOnly: true, SubPath: "voice_memory_policy.py"}, {Name: "source", MountPath: "/app/voice_output_policy.py", ReadOnly: true, SubPath: "voice_output_policy.py"}, {Name: "source", MountPath: "/app/voice_mcp_policy.py", ReadOnly: true, SubPath: "voice_mcp_policy.py"}}
 	creator := "system:serviceaccount:phorvex-system:console"
 	voiceDep.Spec.Template.Annotations = map[string]string{"phorvex.ai/voice-mcp-policy-configmap": voicemcppolicy.ConfigMapName, "phorvex.ai/voice-mcp-source-configmap": voiceSourceName, "phorvex.ai/voice-mcp-source-sha256": voiceSHA, "phorvex.ai/voice-mcp-event-creator": creator}
-	voiceDep.Spec.Template.Spec = corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_MCP_POLICY_REQUIRED", Value: "true"}, {Name: "MCP_URL", Value: voiceMCPInstalledURL}}, VolumeMounts: mounts}}, Volumes: volumes}
+	bot := corev1.Container{Name: "bot", Image: "registry.example.test/bot@sha256:" + strings.Repeat("b", 64), Command: []string{"python3", "-B", "/app/bot.py"},
+		Env: []corev1.EnvVar{{Name: "VOICE_MCP_POLICY_REQUIRED", Value: "true"}, {Name: "MCP_URL", Value: voiceMCPInstalledURL},
+			{Name: "VOICE_MCP_TEST_ENABLED", Value: "true"}, {Name: "VOICE_MCP_SERVER_SOURCE_SHA256", Value: voicemcppolicy.ReviewedMCPSourceSHA256}}, VolumeMounts: mounts}
+	voiceDep.Spec.Template.Spec = corev1.PodSpec{Containers: []corev1.Container{bot}, Volumes: volumes}
 	voicePod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "voice", Name: "bot-1", UID: ids[3], Labels: map[string]string{"app": "bot"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(voiceRS, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}, Annotations: map[string]string{
 		"phorvex.ai/voice-mcp-policy-configmap": voicemcppolicy.ConfigMapName, "phorvex.ai/voice-mcp-source-configmap": voiceSourceName, "phorvex.ai/voice-mcp-source-sha256": voiceSHA, "phorvex.ai/voice-mcp-event-creator": creator}},
-		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_MCP_POLICY_REQUIRED", Value: "true"}, {Name: "MCP_URL", Value: voiceMCPInstalledURL}}, VolumeMounts: mounts}}, Volumes: volumes}, Status: corev1.PodStatus{PodIP: "127.0.0.1", Conditions: ready}}
+		Spec: corev1.PodSpec{Containers: []corev1.Container{bot}, Volumes: volumes}, Status: corev1.PodStatus{PodIP: "127.0.0.1", Conditions: ready}}
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "voice", Name: "voice-defense", UID: ids[4], Generation: 1}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "bot"}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionVoiceMCPToolPin}}}}
 	rule := voicemcppolicy.Rule{Version: 1, DeploymentUID: string(ids[0]), PolicyUID: string(ids[4]), SourceSHA256: voiceSHA, Entries: []voicemcppolicy.Entry{}}
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "voice", Name: voicemcppolicy.ConfigMapName, UID: ids[5], ResourceVersion: "1", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(voiceDep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Data: map[string]string{voicemcppolicy.RuleKey: string(rule.Bytes())}}
@@ -273,6 +279,25 @@ func TestVoiceMCPNativeRefusesSourceAndReadbackDrift(t *testing.T) {
 		t.Fatalf("other MCP URL admitted: %+v %v", result, err)
 	}
 	voiceCurrent.Spec.Containers[0].Env[1].Value = voiceMCPInstalledURL
+	if err := f.client.Update(ctx, voiceCurrent); err != nil {
+		t.Fatal(err)
+	}
+	voiceCurrent.Spec.Containers[0].Command = []string{"python3", "/app/bot.py"}
+	if err := f.client.Update(ctx, voiceCurrent); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := (voiceMCPHandler{}).Enact(ctx, f.ec, f.req); err == nil || result.Emitted {
+		t.Fatalf("unreviewed bot command admitted: %+v %v", result, err)
+	}
+	voiceCurrent.Spec.Containers[0].Command = []string{"python3", "-B", "/app/bot.py"}
+	voiceCurrent.Spec.Containers[0].VolumeMounts[3].ReadOnly = false
+	if err := f.client.Update(ctx, voiceCurrent); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := (voiceMCPHandler{}).Enact(ctx, f.ec, f.req); err == nil || result.Emitted {
+		t.Fatalf("writable test-token mount admitted: %+v %v", result, err)
+	}
+	voiceCurrent.Spec.Containers[0].VolumeMounts[3].ReadOnly = true
 	if err := f.client.Update(ctx, voiceCurrent); err != nil {
 		t.Fatal(err)
 	}

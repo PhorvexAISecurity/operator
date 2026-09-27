@@ -94,16 +94,21 @@ func voiceMCPRequiredMode(pod *corev1.Pod, sourceName string) bool {
 		return false
 	}
 	var bot *corev1.Container
+	botCount := 0
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == "bot" {
 			bot = &pod.Spec.Containers[i]
+			botCount++
 		}
 	}
-	if bot == nil {
+	if bot == nil || botCount != 1 || len(bot.Command) != 3 || bot.Command[0] != "python3" || bot.Command[1] != "-B" ||
+		bot.Command[2] != "/app/bot.py" || len(bot.Args) != 0 || bot.Image == "" {
 		return false
 	}
 	required := 0
 	boundURL := 0
+	testEnabled := 0
+	serverSource := 0
 	for _, variable := range bot.Env {
 		if variable.Name == "VOICE_MCP_POLICY_REQUIRED" {
 			if variable.Value != "true" || variable.ValueFrom != nil {
@@ -117,12 +122,25 @@ func voiceMCPRequiredMode(pod *corev1.Pod, sourceName string) bool {
 			}
 			boundURL++
 		}
+		if variable.Name == "VOICE_MCP_TEST_ENABLED" {
+			if variable.Value != "true" || variable.ValueFrom != nil {
+				return false
+			}
+			testEnabled++
+		}
+		if variable.Name == "VOICE_MCP_SERVER_SOURCE_SHA256" {
+			if variable.Value != voicemcppolicy.ReviewedMCPSourceSHA256 || variable.ValueFrom != nil {
+				return false
+			}
+			serverSource++
+		}
 	}
-	if required != 1 || boundURL != 1 {
+	if required != 1 || boundURL != 1 || testEnabled != 1 || serverSource != 1 {
 		return false
 	}
 	sourceVolume := ""
 	policyVolume := ""
+	testTokenVolume := ""
 	for _, volume := range pod.Spec.Volumes {
 		if volume.ConfigMap != nil && volume.ConfigMap.Name == sourceName && (volume.ConfigMap.Optional == nil || !*volume.ConfigMap.Optional) {
 			sourceVolume = volume.Name
@@ -130,8 +148,11 @@ func voiceMCPRequiredMode(pod *corev1.Pod, sourceName string) bool {
 		if volume.ConfigMap != nil && volume.ConfigMap.Name == voicemcppolicy.ConfigMapName && (volume.ConfigMap.Optional == nil || !*volume.ConfigMap.Optional) {
 			policyVolume = volume.Name
 		}
+		if volume.Secret != nil && volume.Secret.SecretName == "voice-mcp-test-token" {
+			testTokenVolume = volume.Name
+		}
 	}
-	if sourceVolume == "" || policyVolume == "" {
+	if sourceVolume == "" || policyVolume == "" || testTokenVolume == "" {
 		return false
 	}
 	found := map[string]bool{}
@@ -139,13 +160,25 @@ func voiceMCPRequiredMode(pod *corev1.Pod, sourceName string) bool {
 		if mount.Name == policyVolume && mount.MountPath == "/etc/phorvex/voice-mcp-tool-policy" && mount.ReadOnly && mount.SubPath == "" {
 			found["policy"] = true
 		}
+		if mount.Name == testTokenVolume && mount.MountPath == "/etc/phorvex/voice-mcp-test-token" && mount.ReadOnly && mount.SubPath == "" {
+			found["test-token"] = true
+		}
 		for _, name := range []string{"bot.py", "voice_memory_policy.py", "voice_output_policy.py", "voice_mcp_policy.py"} {
 			if mount.Name == sourceVolume && mount.MountPath == "/app/"+name && mount.ReadOnly && mount.SubPath == name {
 				found[name] = true
 			}
 		}
 	}
-	return len(found) == 5
+	return len(found) == 6
+}
+
+func voiceMCPBotImage(spec corev1.PodSpec) string {
+	for _, container := range spec.Containers {
+		if container.Name == "bot" {
+			return container.Image
+		}
+	}
+	return ""
 }
 
 func bindVoiceMCPObservation(ctx context.Context, reader client.Reader, pod *model.Pod, events []model.SecurityEventInfo) {
@@ -221,6 +254,7 @@ func bindVoiceMCPObservation(ctx context.Context, reader client.Reader, pod *mod
 		}
 	}
 	if !voiceMCPRequiredMode(live, sourceName) || !voiceMCPRequiredMode(&corev1.Pod{Spec: dep.Spec.Template.Spec}, sourceName) ||
+		voiceMCPBotImage(live.Spec) != voiceMCPBotImage(dep.Spec.Template.Spec) ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-policy-configmap"] != voicemcppolicy.ConfigMapName ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-source-configmap"] != sourceName ||
 		live.Annotations["phorvex.ai/voice-mcp-source-configmap"] != sourceName ||
@@ -234,7 +268,10 @@ func bindVoiceMCPObservation(ctx context.Context, reader client.Reader, pod *mod
 	}
 	computed, err := voicemcppolicy.RuntimeSourceSHA(sourceCM)
 	bundleDigest, bundleErr := voicemcppolicy.BundleSourceSHA(sourceCM)
-	if err != nil || bundleErr != nil || computed != payload.SourceSHA256 || sourceName != "voice-memory-source-"+bundleDigest[:12] || sourceCM.UID == "" {
+	if err != nil || bundleErr != nil || computed != payload.SourceSHA256 || sourceName != "voice-memory-source-"+bundleDigest[:12] || sourceCM.UID == "" ||
+		len(sourceCM.OwnerReferences) != 1 || sourceCM.OwnerReferences[0].Controller == nil || !*sourceCM.OwnerReferences[0].Controller ||
+		sourceCM.OwnerReferences[0].APIVersion != "apps/v1" || sourceCM.OwnerReferences[0].Kind != "Deployment" ||
+		sourceCM.OwnerReferences[0].UID != dep.UID || sourceCM.OwnerReferences[0].Name != dep.Name {
 		return
 	}
 	cm := &corev1.ConfigMap{}

@@ -75,16 +75,21 @@ func voiceMCPOwner(ctx context.Context, reader client.Reader, pod *corev1.Pod) (
 
 func voiceMCPMounts(pod *corev1.Pod) (string, bool) {
 	var bot *corev1.Container
+	botCount := 0
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == "bot" {
 			bot = &pod.Spec.Containers[i]
+			botCount++
 		}
 	}
-	if bot == nil {
+	if bot == nil || botCount != 1 || len(bot.Command) != 3 || bot.Command[0] != "python3" || bot.Command[1] != "-B" ||
+		bot.Command[2] != "/app/bot.py" || len(bot.Args) != 0 || bot.Image == "" {
 		return "", false
 	}
 	required := 0
 	boundURL := 0
+	testEnabled := 0
+	serverSource := 0
 	for _, variable := range bot.Env {
 		if variable.Name == "VOICE_MCP_POLICY_REQUIRED" {
 			if variable.Value != "true" || variable.ValueFrom != nil {
@@ -98,11 +103,23 @@ func voiceMCPMounts(pod *corev1.Pod) (string, bool) {
 			}
 			boundURL++
 		}
+		if variable.Name == "VOICE_MCP_TEST_ENABLED" {
+			if variable.Value != "true" || variable.ValueFrom != nil {
+				return "", false
+			}
+			testEnabled++
+		}
+		if variable.Name == "VOICE_MCP_SERVER_SOURCE_SHA256" {
+			if variable.Value != voicemcppolicy.ReviewedMCPSourceSHA256 || variable.ValueFrom != nil {
+				return "", false
+			}
+			serverSource++
+		}
 	}
-	if required != 1 || boundURL != 1 {
+	if required != 1 || boundURL != 1 || testEnabled != 1 || serverSource != 1 {
 		return "", false
 	}
-	var policyVolume, secretVolume, sourceVolume, ledgerVolume string
+	var policyVolume, secretVolume, sourceVolume, ledgerVolume, testTokenVolume string
 	sourceFiles := map[string]string{"/app/bot.py": "bot.py", "/app/voice_memory_policy.py": "voice_memory_policy.py", "/app/voice_output_policy.py": "voice_output_policy.py", "/app/voice_mcp_policy.py": "voice_mcp_policy.py"}
 	seen := map[string]bool{}
 	for _, mount := range bot.VolumeMounts {
@@ -122,6 +139,11 @@ func voiceMCPMounts(pod *corev1.Pod) (string, bool) {
 				return "", false
 			}
 			ledgerVolume = mount.Name
+		case "/etc/phorvex/voice-mcp-test-token":
+			if !mount.ReadOnly || mount.SubPath != "" {
+				return "", false
+			}
+			testTokenVolume = mount.Name
 		default:
 			if file, ok := sourceFiles[mount.MountPath]; ok {
 				if !mount.ReadOnly || mount.SubPath != file || sourceVolume != "" && sourceVolume != mount.Name || seen[file] {
@@ -132,7 +154,7 @@ func voiceMCPMounts(pod *corev1.Pod) (string, bool) {
 			}
 		}
 	}
-	if policyVolume == "" || secretVolume == "" || sourceVolume == "" || ledgerVolume == "" || len(seen) != len(sourceFiles) {
+	if policyVolume == "" || secretVolume == "" || sourceVolume == "" || ledgerVolume == "" || testTokenVolume == "" || len(seen) != len(sourceFiles) {
 		return "", false
 	}
 	var sourceName string
@@ -160,9 +182,23 @@ func voiceMCPMounts(pod *corev1.Pod) (string, bool) {
 				return "", false
 			}
 			valid++
+		case testTokenVolume:
+			if volume.Secret == nil || volume.Secret.SecretName != "voice-mcp-test-token" {
+				return "", false
+			}
+			valid++
 		}
 	}
-	return sourceName, valid == 4
+	return sourceName, valid == 5
+}
+
+func voiceMCPBotImage(spec corev1.PodSpec) string {
+	for _, container := range spec.Containers {
+		if container.Name == "bot" {
+			return container.Image
+		}
+	}
+	return ""
 }
 
 func voiceMCPReady(pod *corev1.Pod) bool {
@@ -201,7 +237,7 @@ func voiceMCPScopeAt(ctx context.Context, reader client.Reader, target Target) (
 		return scope, err
 	}
 	templateSource, templateOK := voiceMCPMounts(&corev1.Pod{Spec: dep.Spec.Template.Spec})
-	if !templateOK || templateSource == "" ||
+	if !templateOK || templateSource == "" || voiceMCPBotImage(dep.Spec.Template.Spec) != voiceMCPBotImage(pod.Spec) ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-policy-configmap"] != voicemcppolicy.ConfigMapName ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-source-configmap"] != templateSource ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-source-sha256"] != pod.Annotations["phorvex.ai/voice-mcp-source-sha256"] ||
@@ -286,7 +322,10 @@ func voiceMCPScopeAt(ctx context.Context, reader client.Reader, target Target) (
 		if err != nil || bundleErr != nil || digest != rule.SourceSHA256 || sourceName != "voice-memory-source-"+bundleDigest[:12] {
 			return scope, fmt.Errorf("voice MCP runtime source identity changed")
 		}
-		if source.UID == "" || source.ResourceVersion == "" ||
+		if source.UID == "" || source.ResourceVersion == "" || len(source.OwnerReferences) != 1 ||
+			source.OwnerReferences[0].Controller == nil || !*source.OwnerReferences[0].Controller ||
+			source.OwnerReferences[0].APIVersion != "apps/v1" || source.OwnerReferences[0].Kind != "Deployment" ||
+			source.OwnerReferences[0].Name != dep.Name || source.OwnerReferences[0].UID != dep.UID ||
 			(scope.sourceName != "" && (sourceName != scope.sourceName || string(source.UID) != scope.sourceUID)) {
 			return scope, fmt.Errorf("voice MCP runtime source ConfigMap identity changed")
 		}
