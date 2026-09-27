@@ -1,0 +1,42 @@
+{{- /*
+Console RBAC for the reviewed Voice Live DEFENSIVE cases (memory, refund, output).
+The console snapshots read each item's owner-bound policy ConfigMap in the Voice
+namespace and exec the serving Pod for its authenticated in-Pod probe. The
+catalogue fixture Role (console-rbac.yaml, phorvex subchart) grants pods, pods/exec
+and deployments there but NOT configmaps, so the memory/refund/output snapshots
+fail closed at their ConfigMap read. This adds only the missing read-only inputs,
+scoped to the Voice namespace, bound to the existing console ServiceAccount.
+Rendered by the umbrella chart so it deploys without repackaging the subchart,
+matching the catalogue-*-profile.yaml pattern.
+*/ -}}
+{{- $child := get .Values.phorvex "phorvex" | default dict -}}
+{{- $console := get $child "console" | default dict -}}
+{{- $catalogue := get $console "catalogueV1" | default dict -}}
+{{- $voice := get $catalogue "voice" | default dict -}}
+{{- if and (get $console "enabled") (get $catalogue "enabled") (get $voice "enabled") (get $voice "namespace") -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: phorvex-phorvex-console-voice-defense
+  namespace: {{ $voice.namespace | quote }}
+rules:
+# Read the owner-bound Voice memory/refund/output policy rule ConfigMaps and the
+# reviewed joint source ConfigMap. Get+list only; the console never writes them.
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: phorvex-phorvex-console-voice-defense
+  namespace: {{ $voice.namespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: phorvex-phorvex-console-voice-defense
+subjects:
+- kind: ServiceAccount
+  name: phorvex-phorvex-console
+  namespace: {{ .Release.Namespace }}
+{{- end -}}
