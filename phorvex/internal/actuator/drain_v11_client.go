@@ -183,6 +183,7 @@ type drainV11Receipt struct {
 	SnapshotRunning           int                             `json:"snapshotRunning,omitempty"`
 	SnapshotSwapped           int                             `json:"snapshotSwapped,omitempty"`
 	SnapshotCached            int                             `json:"snapshotCached,omitempty"`
+	SnapshotOverlap           int                             `json:"snapshotOverlap,omitempty"`
 	ProxyActive               int                             `json:"proxyActive,omitempty"`
 	ProxyCancelled            int                             `json:"proxyCancelled,omitempty"`
 	ObservationNonces         []string                        `json:"observationNonces,omitempty"`
@@ -263,8 +264,10 @@ func (r *drainV11Receipt) confirmed() bool {
 		!validDrainV11Decimal(r.Revision, true) || !validDrainV11Hex(r.ReceiptSHA256, sha256.Size) ||
 		!validDrainV11Decimal(r.AdmissionGeneration, false) || r.LastTransition == "" ||
 		r.SnapshotWaiting < 0 || r.SnapshotRunning < 0 || r.SnapshotSwapped < 0 || r.SnapshotCached < 0 ||
+		r.SnapshotOverlap < 0 || r.SnapshotOverlap > r.SnapshotCached ||
+		r.SnapshotOverlap > r.SnapshotWaiting+r.SnapshotRunning+r.SnapshotSwapped ||
 		r.ProxyActive < 0 || r.ProxyCancelled < 0 || r.Aborted < 0 || r.CompletedBeforeAbort < 0 ||
-		r.SnapshotWaiting+r.SnapshotRunning+r.SnapshotSwapped+r.SnapshotCached != r.Aborted+r.CompletedBeforeAbort ||
+		r.SnapshotWaiting+r.SnapshotRunning+r.SnapshotSwapped+r.SnapshotCached-r.SnapshotOverlap != r.Aborted+r.CompletedBeforeAbort ||
 		len(r.ObservationNonces) != 2 || len(r.ObservationSequences) != 2 || len(r.ObservationHashes) != 2 {
 		return false
 	}
@@ -396,6 +399,7 @@ func bindDrainV11Status(receipt *drainV11Receipt, status drainV11StatusResponse,
 	queue := status.EngineSnapshot["0"]
 	receipt.SnapshotWaiting, receipt.SnapshotRunning = len(queue.Waiting), len(queue.Running)
 	receipt.SnapshotSwapped, receipt.SnapshotCached = len(queue.Swapped), len(queue.Cached)
+	receipt.SnapshotOverlap = receipt.SnapshotWaiting + receipt.SnapshotRunning + receipt.SnapshotSwapped + receipt.SnapshotCached - len(status.TerminalDispositions)
 	var before struct {
 		Active int `json:"active"`
 	}
@@ -561,7 +565,10 @@ func drainV11QueueIDs(queues map[string]drainV11Queues, requireZero bool) (map[s
 		return nil, fmt.Errorf("drain v11 evidence omitted a required queue")
 	}
 	ids := map[string]struct{}{}
-	for _, values := range [][]string{queue.Waiting, queue.Running, queue.Swapped, queue.Cached} {
+	// Scheduler ownership is exclusive across waiting, running and swapped.
+	// Cached metadata can describe one of those same requests while its output
+	// is in flight; the engine producer unions the four queues by request ID.
+	for _, values := range [][]string{queue.Waiting, queue.Running, queue.Swapped} {
 		if requireZero && len(values) != 0 {
 			return nil, fmt.Errorf("drain v11 quiescence observation has a nonempty queue")
 		}
@@ -574,6 +581,20 @@ func drainV11QueueIDs(queues map[string]drainV11Queues, requireZero bool) (map[s
 			}
 			ids[id] = struct{}{}
 		}
+	}
+	if requireZero && len(queue.Cached) != 0 {
+		return nil, fmt.Errorf("drain v11 quiescence observation has a nonempty queue")
+	}
+	cached := map[string]struct{}{}
+	for _, id := range queue.Cached {
+		if id == "" || len(id) > 512 {
+			return nil, fmt.Errorf("drain v11 snapshot has an invalid request ID")
+		}
+		if _, exists := cached[id]; exists {
+			return nil, fmt.Errorf("drain v11 snapshot repeats a request ID")
+		}
+		cached[id] = struct{}{}
+		ids[id] = struct{}{}
 	}
 	return ids, nil
 }

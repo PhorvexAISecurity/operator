@@ -284,6 +284,52 @@ func testDrainV11Status(t *testing.T, owner drainV11Owner, nonce *string) drainV
 	return status
 }
 
+func TestDrainV11CachedMetadataMayOverlapOneSchedulerQueue(t *testing.T) {
+	pod := drainV11TestPod("overlap")
+	receipt, status := drainV11ConfirmedReceipt(t, pod, strings.Repeat("a", 64), strings.Repeat("b", 64))
+	// The patched engine independently includes scheduled requests in cached
+	// metadata while output is in flight. Its terminal map uses unique IDs.
+	status.EngineSnapshot["0"] = drainV11Queues{
+		Waiting: []string{}, Running: []string{"request-a"}, Swapped: []string{}, Cached: []string{"request-a"},
+	}
+	status.TerminalDispositions = map[string]string{"request-a": "completed-before-abort"}
+	status.Revision = "4"
+	resignDrainV11Status(t, &status)
+	if err := bindDrainV11Status(receipt, status, nil); err != nil {
+		t.Fatalf("producer-valid cached/scheduler overlap rejected: %v", err)
+	}
+	if !receipt.confirmed() || receipt.SnapshotRunning != 1 || receipt.SnapshotCached != 1 ||
+		receipt.SnapshotOverlap != 1 || receipt.CompletedBeforeAbort != 1 || receipt.Aborted != 0 ||
+		len(receipt.SnapshotDigests) != 1 {
+		t.Fatalf("overlap changed unique disposition or durable quiescence proof: %#v", receipt)
+	}
+	tampered := *receipt
+	tampered.SnapshotOverlap = 0
+	if tampered.confirmed() {
+		t.Fatal("receipt with omitted overlap remained confirmed")
+	}
+	for name, mutate := range map[string]func(*drainV11StatusResponse){
+		"two scheduler queues": func(s *drainV11StatusResponse) {
+			s.EngineSnapshot["0"] = drainV11Queues{Waiting: []string{"request-a"}, Running: []string{"request-a"}, Swapped: []string{}, Cached: []string{}}
+		},
+		"duplicate cached metadata": func(s *drainV11StatusResponse) {
+			s.EngineSnapshot["0"] = drainV11Queues{Waiting: []string{}, Running: []string{}, Swapped: []string{}, Cached: []string{"request-a", "request-a"}}
+		},
+		"missing unique disposition": func(s *drainV11StatusResponse) {
+			s.TerminalDispositions = map[string]string{}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := status
+			mutate(&candidate)
+			resignDrainV11Status(t, &candidate)
+			if err := validateDrainV11Status(candidate, candidate.OperationID, candidate.OperationGeneration, nil); err == nil {
+				t.Fatal("invalid snapshot accepted with a self-consistent digest")
+			}
+		})
+	}
+}
+
 func TestDrainV11HTTPClientRetainsRawCapabilityHashAndExactMediaType(t *testing.T) {
 	body := `{"schema":"phorvex.drain.v1","capability":"operation-bound-quiescence-v1","pod_uid":"pod-uid","ledger_id":"11111111111111111111111111111111","proxy_boot_id":"22222222222222222222222222222222","engine_boot_id":"33333333333333333333333333333333","incarnation_digest":"4444444444444444444444444444444444444444444444444444444444444444","proxy_source":"proxy-source","engine_source":"engine-source","engine_mode":"v0-frontend-multiprocessing","virtual_engine_ids":[0],"generation_high_water":"0","next_operation_generation":"1","admission":"OPEN"}`
 	contentType := "application/json; charset=utf-8"
