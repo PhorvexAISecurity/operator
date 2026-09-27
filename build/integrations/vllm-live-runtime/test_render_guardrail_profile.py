@@ -212,6 +212,12 @@ class RenderGuardrailProfileTest(unittest.TestCase):
         self.assertEqual(fixture_data["sourceSHA256"], renderer.digest(renderer.PROXY.read_bytes()))
         with self.assertRaises(ValueError):
             renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        after, retained_after = lease_fixture()
+        state = json.loads(after["lease_policy"]["data"]["state.json"])
+        state.update(revision=1, allowedClientHMACs=["c" * 64],
+                     revokedClientHMACs=["b" * 64], lastOperationID="d" * 32)
+        after["lease_policy"]["data"]["state.json"] = json.dumps(state, sort_keys=True, separators=(",", ":"))
+        renderer.render(after, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained_after)
         for change in (
             lambda o, p: o["source"]["data"].pop("endpoint_lease.py"),
             lambda o, p: o["source"]["data"].update({"endpoint_lease.py": "wrong"}),
