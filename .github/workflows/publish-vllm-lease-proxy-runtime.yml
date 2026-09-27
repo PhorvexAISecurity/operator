@@ -1,0 +1,143 @@
+name: Publish pinned vLLM endpoint-lease proxy runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: vllm-lease-proxy-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: self-hosted
+    timeout-minutes: 150
+    env:
+      AWS_REGION: us-east-2
+      RECIPE: build/integrations/vllm-lease-proxy-runtime
+    steps:
+      - name: Require reviewed main source
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_REF" = refs/heads/main || {
+            echo '::error::Dispatch this workflow from main only.' >&2
+            exit 1
+          }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Require stable build headroom
+        run: |
+          set -euo pipefail
+          available_kib="$(df -Pk . | awk 'NR==2 {print $4}')"
+          [[ "$available_kib" =~ ^[0-9]+$ ]] || exit 1
+          test "$available_kib" -ge $((30 * 1024 * 1024)) || {
+            echo '::error::Need 30 GiB free on the shared builder before this image build.' >&2
+            exit 1
+          }
+
+      - name: Verify recipe and prepare exact wheel closure
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 "$RECIPE/verify_recipe.py"
+          (cd "$RECIPE" && python3 -m unittest -v test_recipe.py)
+          python3 "$RECIPE/prepare_wheelhouse.py" --prepare
+          python3 "$RECIPE/verify_wheelhouse.py" \
+            "$RECIPE/requirements.lock" "$RECIPE/wheelhouse.sha256" "$RECIPE/wheelhouse"
+          test "$(git status --porcelain --untracked-files=no)" = ''
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Refuse an existing source tag
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/phorvex:vllm-lease-proxy-$SOURCE_SHA"
+          error_file="$(mktemp)"
+          trap 'rm -f "$error_file"' EXIT
+          if docker buildx imagetools inspect "$image" >/dev/null 2>"$error_file"; then
+            echo '::error::Source tag already exists; refusing overwrite.' >&2
+            exit 1
+          fi
+          if ! grep -Eiq 'manifest unknown|404 Not Found|not found' "$error_file"; then
+            echo '::error::Could not prove source tag absent from ECR.' >&2
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Build offline and publish one immutable image
+        id: build
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          available_kib="$(df -Pk . | awk 'NR==2 {print $4}')"
+          [[ "$available_kib" =~ ^[0-9]+$ ]] || exit 1
+          test "$available_kib" -ge $((30 * 1024 * 1024)) || {
+            echo '::error::Builder disk headroom fell below 30 GiB before build.' >&2
+            exit 1
+          }
+          metadata="$(mktemp)"
+          trap 'rm -f "$metadata"' EXIT
+          docker buildx build --platform linux/amd64 --network=none --pull \
+            --push --tag "$IMAGE" --metadata-file "$metadata" \
+            --file "$RECIPE/Dockerfile" "$RECIPE"
+          METADATA="$metadata" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          digest = json.loads(Path(os.environ['METADATA']).read_text()).get('containerimage.digest')
+          if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+              raise SystemExit('buildx did not return a valid published digest')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write('digest=' + digest + '\n')
+          PY
+
+      - name: Verify remote digest and record source-bound receipt
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMAGE" | \
+            grep -Eq "^Digest:[[:space:]]+$DIGEST$"
+          python3 "$RECIPE/verify_recipe.py"
+          python3 "$RECIPE/write_publish_receipt.py"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vllm-lease-proxy-runtime-publish-${{ github.sha }}
+          path: vllm-lease-proxy-publish-receipt.json
+          if-no-files-found: error

@@ -11,8 +11,10 @@ publish an image, create credentials, or change a cluster.
 The 2026-09-27 09:40 UTC read retained in the private campaign runtime shows the
 Ready vLLM container still uses official
 `docker.io/vllm/vllm-openai@sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2`.
-The `vllm` Service selects `phorvex.ai/role=leader`; it does **not** select
-`app=vllm` in the observed version. The derivative is not installed. A separate
+The initial `vllm` Service selected `phorvex.ai/role=leader`; it did **not** select
+`app=vllm`. Later endpoint work added a Pod-only `phorvex.ai/route-key` to the
+selected Pod and Service. Re-read the exact selector before each render. The
+derivative is not installed. A separate
 read of that exact Pod's local Hugging Face cache found one snapshot revision
 `b25037543e9394b818fdfca67ab2a00ecc7dd641` and `config.json` SHA-256
 `ec0c1f5f875ad8bc1f78c5140c22dbdde1b55478442ad358e7a4d9ecf947a327`.
@@ -22,13 +24,22 @@ The renderer derives `PHORVEX_MODEL_DIGEST` from the model name, revision, and
 config hash; after rollout, the owner must verify that the new Pod loaded the
 same pinned snapshot and config.
 
-No immutable drain-v11 publication receipt exists yet. The published reset-only
+An immutable drain-v11 publication receipt now exists; its exact JSON bytes and
+image digest must be reviewed against the current source before use. The published reset-only
 image `phorvex@sha256:af3e5ce57d156c09533dde6bb7feab8f252ef3dbc3277b77c2baef4bd781897f`
 cannot satisfy operation-bound request drain. The normal publisher in
 `.github/workflows/publish-vllm-drain-v11.yml` is source-commit keyed,
 main-only, refuses an existing tag, builds the exact linux/amd64 derivative,
-and emits a digest/recipe receipt. It must run and its original artifact must be
-reviewed before rendering a deployable candidate.
+and emits a digest/recipe receipt. Publication does not prove installed runtime.
+
+The renderer stays strict by default: every existing Service selector field
+must match the Deployment template. If the **only** mismatch is the selected
+Pod's `phorvex.ai/route-key`, pass all three optional SHA-pinned originals:
+that Ready Pod, its owning ReplicaSet, and the complete Service EndpointSlice
+list. Exact Pod → ReplicaSet → Deployment owner UIDs, Pod selector labels, and
+the sole Ready Service-owned endpoint must agree. The candidate copies only
+that route-key into its template; it retains the original Service selector
+and adds `phorvex.ai/serving=true`. Other mismatches still refuse.
 
 ## Normal workload-owner sequence
 
@@ -38,7 +49,9 @@ reviewed before rendering a deployable candidate.
    the resulting platform manifest/image ID separately before admitting the
    running Pod. The publisher does not deploy.
 2. Read exact current `vllm/vllm` Deployment, `vllm/guardrail-proxy` ConfigMap,
-   `vllm/vllm-defense` policy, and `vllm/vllm` Service originals. Record each
+   `vllm/vllm-defense` policy, and `vllm/vllm` Service originals. If the Service
+   selector has a Pod-only route-key, also read the selected Pod, its owning
+   ReplicaSet, and all EndpointSlices labeled for that Service. Record each
    original SHA-256. Re-read if any UID, resourceVersion, selector, image,
    source ConfigMap or policy changes. The renderer refuses a changed original
    workload/source/model route or publication recipe.
@@ -60,6 +73,17 @@ reviewed before rendering a deployable candidate.
      --model-config-sha256 ec0c1f5f875ad8bc1f78c5140c22dbdde1b55478442ad358e7a4d9ecf947a327 \
      --out PRIVATE_NEW_DIRECTORY
    ```
+
+   For a Pod-only route-key, additionally pass **all six** arguments:
+
+   ```sh
+   --current-pod POD.json --current-pod-sha256 POD_SHA256 \
+   --current-replicaset REPLICASET.json --current-replicaset-sha256 REPLICASET_SHA256 \
+   --current-endpointslices ENDPOINTSLICES.json --current-endpointslices-sha256 ENDPOINTSLICES_SHA256
+   ```
+
+   `ENDPOINTSLICES.json` is the complete `kubectl get endpointslices -l
+   kubernetes.io/service-name=vllm -o json` list, not one selected slice.
 
    The result contains candidate Deployment, ConfigMap, Service, additive
    serving-security values, a non-secret Secret contract, and a publication
@@ -96,7 +120,7 @@ reviewed before rendering a deployable candidate.
    proxy source hashes, ledger origin, public benign inference, and private
    authenticated capability before changing the Service selector.
 6. Only after the new Pod is Ready, apply the candidate Service selector that
-   retains the existing `phorvex.ai/role=leader` predicate and adds
+   retains all exact original predicates, including a proven route-key, and adds
    `phorvex.ai/serving=true`. Verify a sole owned EndpointSlice target and the
    Service UID/selector. Never apply the Service change first: that would
    remove the old Pod from serving endpoints. Preserve the old protected

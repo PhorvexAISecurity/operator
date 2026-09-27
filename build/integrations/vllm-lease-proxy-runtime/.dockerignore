@@ -1,0 +1,8 @@
+*
+!Dockerfile
+!requirements.lock
+!wheelhouse.sha256
+!verify_wheelhouse.py
+!verify_runtime.py
+!wheelhouse/
+!wheelhouse/*.whl
