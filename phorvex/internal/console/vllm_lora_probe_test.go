@@ -21,7 +21,7 @@ import (
 func loRAPodFixture(t *testing.T) vllmPodState {
 	t.Helper()
 	var pod vllmPodState
-	raw := `{"metadata":{"name":"vllm-0","uid":"pod-uid","labels":{"phorvex.ai/lora-enabled":"true"}},"spec":{"containers":[{"name":"vllm","args":["--model","Qwen/Qwen2.5-7B-Instruct-AWQ","--enable-lora","--max-loras","4","--max-lora-rank","16"],"env":[{"name":"VLLM_ALLOW_RUNTIME_LORA_UPDATING","value":"1"}]}]}}`
+	raw := `{"metadata":{"name":"vllm-0","uid":"pod-uid","labels":{"phorvex.ai/lora-enabled":"true"}},"spec":{"containers":[{"name":"vllm","args":["--model","Qwen/Qwen2.5-7B-Instruct-AWQ","--enable-lora","--max-loras","4","--max-lora-rank","16","--revision","b25037543e9394b818fdfca67ab2a00ecc7dd641"],"env":[{"name":"VLLM_ALLOW_RUNTIME_LORA_UPDATING","value":"1"}]}]}}`
 	if err := json.Unmarshal([]byte(raw), &pod); err != nil {
 		t.Fatal(err)
 	}
@@ -40,6 +40,11 @@ func TestLiveLoRAPrerequisitesRequireTruthfulCapabilityAndExactRuntime(t *testin
 		{"missing label", func(p *vllmPodState) { delete(*p.Metadata.Labels, "phorvex.ai/lora-enabled") }},
 		{"false label", func(p *vllmPodState) { (*p.Metadata.Labels)["phorvex.ai/lora-enabled"] = "false" }},
 		{"wrong model", func(p *vllmPodState) { p.Spec.Containers[0].Args[1] = "other" }},
+		{"missing revision", func(p *vllmPodState) { p.Spec.Containers[0].Args = p.Spec.Containers[0].Args[:7] }},
+		{"wrong revision", func(p *vllmPodState) { p.Spec.Containers[0].Args[8] = "ffffffffffffffffffffffffffffffffffffffff" }},
+		{"duplicate revision", func(p *vllmPodState) {
+			p.Spec.Containers[0].Args = append(p.Spec.Containers[0].Args, "--revision", liveLoRAModelRevision)
+		}},
 		{"runtime update disabled", func(p *vllmPodState) { p.Spec.Containers[0].Env[0].Value = "0" }},
 		{"LoRA disabled", func(p *vllmPodState) { p.Spec.Containers[0].Args[2] = "--disable-lora" }},
 		{"rank drift", func(p *vllmPodState) { p.Spec.Containers[0].Args[6] = "32" }},
@@ -69,22 +74,52 @@ func TestZeroLoRAArtifactHasNoWeightDeltaAndExactCleanup(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(stubDir, "transformers"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	stub := `class Config:
+	stub := `import os
+class Config:
     model_type = "qwen2"
     hidden_size = 3584
     num_hidden_layers = 28
-    num_attention_heads = 28
+    num_attention_heads = 28 if os.environ.get("TEST_WRONG_SHAPE") != "1" else 32
     num_key_value_heads = 4
     quantization_config = {"quant_method": "awq"}
 class AutoConfig:
     @staticmethod
-    def from_pretrained(model, local_files_only=False, trust_remote_code=True):
+    def from_pretrained(model, revision=None, local_files_only=False, trust_remote_code=True):
         assert model == "Qwen/Qwen2.5-7B-Instruct-AWQ"
         assert local_files_only and not trust_remote_code
+        assert revision == "b25037543e9394b818fdfca67ab2a00ecc7dd641"
+        assert os.path.isfile(os.path.join(os.path.dirname(__file__), "snapshots", revision, "config.json"))
         return Config()
 `
 	if err := os.WriteFile(filepath.Join(stubDir, "transformers", "__init__.py"), []byte(stub), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	// The installed model has a pinned snapshot but no refs/main cache entry.
+	snapshot := filepath.Join(stubDir, "transformers", "snapshots", liveLoRAModelRevision)
+	if err := os.MkdirAll(snapshot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(snapshot, "config.json"), []byte(`{"model_type":"qwen2"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var wrongNonce [8]byte
+	if _, err := rand.Read(wrongNonce[:]); err != nil {
+		t.Fatal(err)
+	}
+	wrongName := "phorvex-probe-" + hex.EncodeToString(wrongNonce[:])
+	defer os.RemoveAll(filepath.Join("/tmp", wrongName))
+	wrongRevision := exec.Command(python, "-c", zeroLoRAScript, wrongName, "pod-uid", strings.Repeat("f", 40))
+	wrongRevision.Env = append(os.Environ(), "PYTHONPATH="+stubDir, "PYTHONDONTWRITEBYTECODE=1")
+	if out, err := wrongRevision.CombinedOutput(); err == nil || !strings.Contains(string(out), "unreviewed model revision") {
+		t.Fatalf("wrong script revision was admitted: %v %s", err, out)
+	}
+	wrongShape := exec.Command(python, "-c", zeroLoRAScript, wrongName, "pod-uid", liveLoRAModelRevision)
+	wrongShape.Env = append(os.Environ(), "PYTHONPATH="+stubDir, "PYTHONDONTWRITEBYTECODE=1", "TEST_WRONG_SHAPE=1")
+	if out, err := wrongShape.CombinedOutput(); err == nil || !strings.Contains(string(out), "reviewed Qwen AWQ shape") {
+		t.Fatalf("wrong model shape was admitted: %v %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join("/tmp", wrongName)); !os.IsNotExist(err) {
+		t.Fatalf("wrong model shape staged an artifact: %v", err)
 	}
 	var nonce [8]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
@@ -93,7 +128,7 @@ class AutoConfig:
 	name := "phorvex-probe-" + hex.EncodeToString(nonce[:])
 	path := filepath.Join("/tmp", name)
 	defer os.RemoveAll(path)
-	cmd := exec.Command(python, "-c", zeroLoRAScript, name, "pod-uid")
+	cmd := exec.Command(python, "-c", zeroLoRAScript, name, "pod-uid", liveLoRAModelRevision)
 	cmd.Env = append(os.Environ(), "PYTHONPATH="+stubDir, "PYTHONDONTWRITEBYTECODE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "PHORVEX_LORA_READY ") {
