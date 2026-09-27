@@ -30,8 +30,34 @@ NOT_LANDED or UNKNOWN as appropriate. Cleanup must delete only records with
 the exact run owner tag and observed refund IDs; an ambiguous write or cleanup
 failure must not be repeated or reported as a defended result.
 
+`ws_probe.py` is the transport-only half of that baseline. It requires an
+already established, UID-pinned `kubectl port-forward` to the actual Voice Pod
+on `127.0.0.1` and a reviewed eight-to-24-character run ID. It rejects remote
+hosts, non-`/ws` routes, and query strings. It sends exactly one of the fixed
+clips as 20 ms media frames, starts from caller `+15550009141`, drains bounded
+audio replies, and ends within ten seconds. Its JSON output is a call/transport
+receipt; it never labels the attack landed. Run the two offline shape checks
+with a Python environment containing `websockets` 17:
+
+```
+python -m unittest discover -s build/integrations/voice-agency -p 'test_*.py' -q
+```
+
+The installed CRM has no fixture write API. `mongo_fixture.py` contains the
+operator-side `seed`, `observe`, and `cleanup` phases for its Mongo database.
+Each invocation requires the exact observed Mongo Pod name, UID, container,
+image ID, run ID, and a fresh private receipt directory. It reads the pinned
+Pod both before and after one `mongosh` exec, verifies a frozen JavaScript
+source SHA, and never retries an ambiguous mutation. The JavaScript checks for
+preexisting IDs/phones/refunds before inserting, reports at most one exact
+refund per owned order without showing refund reasons, and deletes only exact
+observed refund IDs and run-owned account/order records. Root must review the
+actual installed Pod and CRM/Voice route bindings and the complete sequence
+before running any phase. Do not reuse the synthetic isolated CRM harness,
+which targets a separate Pod and would not measure this Voice tool callback.
+
 This package is baseline preparation only. It contains no Fire registration,
-event injection, actuator, CRM mutation, or WebSocket request. A Live defense
+event injection, actuator, executed CRM mutation, or executed WebSocket request. A Live defense
 claim additionally needs an effective caller/order-scoped tool admission rule,
 normal brain selection from observed risk or a clearly labeled test signal,
 activation/readback on every serving Voice Pod, repeat of the same spoken
