@@ -196,6 +196,28 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionVoiceRefundPairDeny] = append(af.CoverByAction[model.ActionVoiceRefundPairDeny], f.Key())
 	}
+	if view.Pod.HasBoundVoiceMCPObservation() {
+		o := view.Pod.VoiceMCPObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactVoiceMCPDescriptorSteering, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorVoiceMCP,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorVoiceMCP, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionVoiceMCPToolPin] = append(af.CoverByAction[model.ActionVoiceMCPToolPin], f.Key())
+	}
+	if view.Pod.HasBoundVoiceOutputObservation() {
+		o := view.Pod.VoiceOutputObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactVoiceOutputExposure, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorVoiceOutput,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorVoiceOutput, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionVoiceOutputPolicyActivate] = append(af.CoverByAction[model.ActionVoiceOutputPolicyActivate], f.Key())
+	}
 	if view.Pod.HasBoundLiteLLMClientObservation() {
 		o := view.Pod.LiteLLMClientObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactLiteLLMOwnedClientChannel, Weight: base * urg * vectorDominance}

@@ -3011,7 +3011,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny ||
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
@@ -3020,6 +3020,10 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "voice-memory-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionVoiceRefundPairDeny {
 				reason = "voice-refund-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionVoiceMCPToolPin {
+				reason = "voice-mcp-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionVoiceOutputPolicyActivate {
+				reason = "voice-output-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionAdapterRotate {
 				reason = "adapter-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
@@ -3037,6 +3041,13 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				m.Log.Info("same-Pod protected owned-client operation fences dispatch",
 					"namespace", decisions[i].Namespace, "pod", decisions[i].Pod,
 					"action", decisions[i].Action, "error", clientFenceErr)
+				continue
+			}
+			pendingVoiceOutput, voiceOutputFenceErr := actuator.PendingVoiceOutputOperation(ctx, m.BoundaryReader,
+				m.OperatorNamespace, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+			if voiceOutputFenceErr != nil || pendingVoiceOutput {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "protected-voice-output-operation-unresolved")
 				continue
 			}
 			pending, fenceErr := actuator.PendingOutputPolicyOperation(ctx, m.BoundaryReader,
@@ -3114,6 +3125,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			OutputPolicyObservation:  v.Pod.OutputPolicyObservation,
 			VoiceMemoryObservation:   v.Pod.VoiceMemoryObservation,
 			VoiceRefundObservation:   v.Pod.VoiceRefundObservation,
+			VoiceMCPObservation:      v.Pod.VoiceMCPObservation,
+			VoiceOutputObservation:   v.Pod.VoiceOutputObservation,
 			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
 			PolicyName:               pol.PolicyName,
 			PolicyUID:                pol.PolicyUID,
@@ -3137,6 +3150,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
 			decisions[i].Action == model.ActionVoiceRefundPairDeny ||
+			decisions[i].Action == model.ActionVoiceOutputPolicyActivate ||
+			decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID

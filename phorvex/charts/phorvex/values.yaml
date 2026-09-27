@@ -213,6 +213,12 @@ phorvex:
   # Opt-in exact asserted-caller/order refund pair denial in the Voice app.
   voiceRefund:
     enabled: false
+  # Opt-in Voice MCP descriptor pinning requires a reviewed immutable MCP image.
+  voiceMCP:
+    enabled: false
+    approvedImage: ""
+  voiceOutput:
+    enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update
   # only to this one preinstalled ConfigMap in the named fixture namespace.
   outputPolicy:

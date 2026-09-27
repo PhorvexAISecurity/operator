@@ -60,11 +60,20 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
                 self.assertIn("want 17", "; ".join(validator.v3_action_status(combined)))
 
     def test_current_eighteen_requires_its_new_marker(self):
-        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE18)
+        current = self.trace(validator.LIVE18_ACTIONS, validator.ACTION_VOCABULARY_LIVE18)
         self.assertEqual(validator.v3_action_status(current), [])
         self.assertEqual(validator.check_ordering(current).status, validator.PASS)
         prior = self.trace(validator.VOICE17_ACTIONS, validator.ACTION_VOCABULARY_LIVE18)
         self.assertIn("want 18", "; ".join(validator.v3_action_status(prior)))
+
+    def test_live20_remains_historical_and_live21_appends_mcp(self):
+        historical = self.trace(validator.LIVE20_ACTIONS, validator.ACTION_VOCABULARY_LIVE20)
+        self.assertEqual(validator.v3_action_status(historical), [])
+        current = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE21)
+        self.assertEqual(validator.v3_action_status(current), [])
+        self.assertEqual(validator.check_ordering(current).status, validator.PASS)
+        self.assertIn("want 20", "; ".join(validator.v3_action_status(
+            current | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE20})))
 
     def test_new_marked_fifteen_and_unknown_marker_are_refused(self):
         incomplete = self.trace(validator.LEGACY_MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)

@@ -116,6 +116,8 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionSensitiveOutputPolicyActivate: {plain: "ai-context-required:"},
 	model.ActionVoiceMemoryNoteRevoke:         {plain: "ai-context-required:"},
 	model.ActionVoiceRefundPairDeny:           {plain: "ai-context-required:"},
+	model.ActionVoiceOutputPolicyActivate:     {plain: "ai-context-required:"},
+	model.ActionVoiceMCPToolPin:               {plain: "ai-context-required:"},
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 }
 
@@ -186,6 +188,37 @@ func aiView() *model.WorkloadView {
 	return v
 }
 
+// aiViewForAction supplies the exact Voice namespace and observed output marker only
+// for the Voice output action. Other actions retain the shared AI fixture.
+func aiViewForAction(action model.Action) *model.WorkloadView {
+	v := aiView()
+	if action != model.ActionVoiceOutputPolicyActivate && action != model.ActionVoiceMCPToolPin {
+		return v
+	}
+	v.Pod.Namespace = "voice"
+	if action == model.ActionVoiceMCPToolPin {
+		v.Pod.VoiceMCPConfigMap = "voice-mcp-tool-policy"
+		v.Pod.VoiceMCPDeploymentUID = "deployment-uid"
+		v.Pod.VoiceMCPSourceSHA256 = "source-sha"
+		v.Pod.VoiceMCPEventCreator = "console-creator"
+		v.Pod.VoiceMCPObservation = &model.VoiceMCPObservation{EventName: "observed", EventUID: "event-uid", CreatorIdentity: "console-creator",
+			ScenarioID: "ai2-mcp-tool-poisoning", RunSHA256: "run-sha", TargetPodUID: v.Pod.UID, DeploymentUID: "deployment-uid",
+			ConfigMapUID: "cm-uid", SourceSHA256: "source-sha", ToolName: "store_directory", GoodDescriptorSHA256: "good-sha",
+			ObservedDescriptorSHA256: "observed-sha", PolicyName: "voice-policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
+			MCPServiceUID: "service-uid", MCPPodUID: "mcp-pod-uid", MCPDeploymentUID: "mcp-deployment-uid", MCPConfigMapUID: "mcp-cm-uid", MCPSourceSHA256: "mcp-source-sha"}
+		return v
+	}
+	v.Pod.VoiceOutputConfigMap = "voice-output-policy"
+	v.Pod.VoiceOutputDeploymentUID = "deployment-uid"
+	v.Pod.VoiceOutputSourceSHA256 = "source-sha"
+	v.Pod.VoiceOutputEventCreator = "console-creator"
+	v.Pod.VoiceOutputObservation = &model.VoiceOutputObservation{EventName: "observed", EventUID: "event-uid", CreatorIdentity: "console-creator",
+		ScenarioID: "ai2-system-prompt-leakage", EvidenceSource: "TEST_INJECTED", TargetPodUID: v.Pod.UID,
+		DeploymentUID: "deployment-uid", ConfigMapUID: "cm-uid", SourceSHA256: "source-sha", MarkerSHA256: "marker-sha",
+		PolicyName: "voice-policy", PolicyUID: "policy-uid", PolicyGeneration: 1, RawModelMarkerObserved: true, AssistantOutputMarkerObserved: true}
+	return v
+}
+
 // assertVerdict checks the verdict family for one (fixture, action) pair.
 func assertVerdict(t *testing.T, fixture string, a model.Action, got feasibility.Verdict, family string) {
 	t.Helper()
@@ -236,9 +269,9 @@ func TestFeasibilityVerdictsPerAction(t *testing.T) {
 		// feasible (nothing else constrains a bare pod under a zero policy).
 		assertVerdict(t, "plain workload", a, feasibility.Evaluate(plainView(), move, pol), want.plain)
 		// Positive AI context (GPU + model id + MIG device): every action is feasible.
-		assertVerdict(t, "ai context", a, feasibility.Evaluate(aiView(), move, pol), "")
+		assertVerdict(t, "ai context", a, feasibility.Evaluate(aiViewForAction(a), move, pol), "")
 		// AI context WITHOUT a MIG device: only mig-rebind loses, on the MIG law specifically.
-		noMIG := aiView()
+		noMIG := aiViewForAction(a)
 		noMIG.Pod.MIGDevice = ""
 		family := ""
 		if a == model.ActionMIGRebind {
@@ -252,14 +285,14 @@ func TestFeasibilityVerdictsPerAction(t *testing.T) {
 			t.Errorf("%q has no exposure clock; anti-over-rotation could never govern it", a)
 			continue
 		}
-		vetoed := aiView()
+		vetoed := aiViewForAction(a)
 		vetoed.ExposureByVariable = map[string]time.Duration{clock: time.Second}
 		got := feasibility.Evaluate(vetoed, move, fresh)
 		assertVerdict(t, "fresh clock", a, got, "anti-over-rotation:")
 		if !got.Feasible && !strings.Contains(got.Reason, clock) {
 			t.Errorf("fresh clock: %q veto %q does not name its own clock %q", a, got.Reason, clock)
 		}
-		stale := aiView()
+		stale := aiViewForAction(a)
 		stale.ExposureByVariable = map[string]time.Duration{clock: window + time.Minute}
 		assertVerdict(t, "stale clock", a, feasibility.Evaluate(stale, move, fresh), "")
 	}
@@ -288,11 +321,11 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionDebugger || a == model.ActionCustomInject {
 			family = "code-exec-guard:"
 		}
-		if a == model.ActionLiteLLMClientRevoke {
+		if a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin {
 			family = "ai-context-required:"
 		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
-		stateful := aiView()
+		stateful := aiViewForAction(a)
 		stateful.Pod.Stateful = true
 		family = ""
 		if a == model.ActionRotate {

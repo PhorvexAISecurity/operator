@@ -64,6 +64,9 @@ type EnactCtx struct {
 	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
 	VoiceMemoryTransport         http.RoundTripper // private fixed-Pod-IP readback seam
 	VoiceRefundTransport         http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPTransport            http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPApprovedImage        string            // operator-configured reviewed MCP repo@sha256; never event-derived
+	VoiceOutputTransport         http.RoundTripper // private fixed-Pod-IP readback seam
 	LiteLLMStatusTransport       http.RoundTripper // test-only exact PodIP status-readback seam
 	LiteLLMStatusToken           string            // test-only; runtime reads the fixed mounted Secret path
 	OutputPolicyReadbackTimeout  time.Duration
@@ -124,6 +127,15 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		}
 		if fenceErr != nil && !apierrors.IsNotFound(fenceErr) {
 			return Result{}, fenceErr
+		}
+	}
+	if req.Action != model.ActionVoiceOutputPolicyActivate && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
+		pending, err := PendingVoiceOutputOperation(ctx, ec.Reader, ec.JournalNamespace, req.Namespace, req.Pod, req.TargetUID)
+		if err != nil || pending {
+			if err != nil {
+				return Result{}, fmt.Errorf("native actuator: exact Voice Pod output journal unavailable: %w", err)
+			}
+			return Result{}, fmt.Errorf("native actuator: exact Voice Pod has unresolved output operation")
 		}
 	}
 	if err := prepareServingAttempt(ctx, &ec, req); err != nil {

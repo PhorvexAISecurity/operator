@@ -18,10 +18,11 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 )
 
 func main() {
-	var operatorNS, namespace, policy, planOut, applyPlan, resultOut, servingSecurityFile, servingSecurityMode string
+	var operatorNS, namespace, policy, planOut, applyPlan, resultOut, servingSecurityFile, servingSecurityMode, voiceMCPApprovedImage string
 	var maxItems int
 	flag.StringVar(&operatorNS, "operator-namespace", "", "protected operator namespace (required)")
 	flag.StringVar(&namespace, "namespace", "", "target policy namespace (required)")
@@ -32,10 +33,14 @@ func main() {
 	flag.StringVar(&resultOut, "result-out", "", "durably write apply results before exit (required with --apply-plan)")
 	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "operator-owned serving TLS credential binding configuration")
 	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "secure-required or explicit legacy-plaintext")
+	flag.StringVar(&voiceMCPApprovedImage, "voice-mcp-approved-image", os.Getenv("PHORVEX_VOICE_MCP_APPROVED_IMAGE"), "reviewed immutable MCP repo@sha256 for Voice MCP receipt recovery")
 	flag.Parse()
 	if operatorNS == "" || namespace == "" || policy == "" || (planOut != "" && applyPlan != "") || (applyPlan != "" && resultOut == "") {
 		fmt.Fprintln(os.Stderr, "usage: phorvex-recovery --operator-namespace NS --namespace NS --policy NAME [--max-items N] [--plan-out FILE | --apply-plan FILE --result-out FILE]")
 		os.Exit(2)
+	}
+	if voiceMCPApprovedImage != "" && !voicemcppolicy.ValidApprovedImage(voiceMCPApprovedImage) {
+		fatal(fmt.Errorf("invalid reviewed MCP image reference"))
 	}
 	cfg, err := ctrlconfig.GetConfig()
 	if err != nil {
@@ -54,6 +59,7 @@ func main() {
 	}
 	native := actuator.NewNativeActuator(c)
 	native.Reader, native.JournalNamespace = c, operatorNS
+	native.VoiceMCPApprovedImage = voiceMCPApprovedImage
 	mode, err := actuator.ParseServingSecurityMode(servingSecurityMode)
 	if err != nil {
 		fatal(err)
