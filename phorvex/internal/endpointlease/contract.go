@@ -20,6 +20,7 @@ const (
 	ServiceName               = "vllm"
 	PolicyConfigMapName       = "phorvex-endpoint-lease-policy"
 	PolicyKey                 = "state.json"
+	SourceConfigMapName       = "guardrail-proxy"
 	SecretName                = "phorvex-endpoint-lease-keys"
 	JournalName               = "phorvex-endpoint-lease-journal"
 	JournalKey                = "receipts.json"
@@ -29,7 +30,7 @@ const (
 	SourceSHAAnnotation       = "phorvex.ai/endpoint-lease-source-sha256"
 	SourceConfigMapAnnotation = "phorvex.ai/endpoint-lease-source-configmap"
 	PolicyUIDAnnotation       = "phorvex.ai/endpoint-lease-policy-configmap-uid"
-	ProxyContainerName        = "guardrail-proxy"
+	ProxyContainerName        = "guardrail"
 	StatusPath                = "/v1/endpoint-lease/state"
 	MaxStateBytes             = 16 << 10
 	MaxObservationBytes       = 4 << 10
