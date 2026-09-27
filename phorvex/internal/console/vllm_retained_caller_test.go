@@ -18,10 +18,13 @@ import (
 func TestRetainedCallerBRemainsUsableAfterDurableARevocation(t *testing.T) {
 	a, b := strings.Repeat("a", 64), strings.Repeat("b", 64)
 	p := endpointLeaseProfile{PolicyUID: "policy", PolicyConfigMapUID: "policy-cm", TenantSecretUID: "tenant",
-		ServiceUID: "service", ProxySourceSHA256: strings.Repeat("c", 64), ClientBHMAC: b}
+		ServiceUID: "service", ProxySourceSHA256: strings.Repeat("c", 64), ClientAHMAC: a, ClientBHMAC: b}
 	before := endpointLeaseState{Revision: 0, AllowedClientHMACs: []string{a, b}}
 	if !retainedCallerAllowed(before, endpointLeaseJournal{Version: 1, Receipts: []endpointLeaseJournalReceipt{}}, p) {
 		t.Fatal("authorized B refused before cutover")
+	}
+	if retainedCallerAllowed(endpointLeaseState{AllowedClientHMACs: []string{b}}, endpointLeaseJournal{Version: 1, Receipts: []endpointLeaseJournalReceipt{}}, p) {
+		t.Fatal("unexplained B-only revision zero admitted")
 	}
 	after := endpointLeaseState{Revision: 1, AllowedClientHMACs: []string{b}, RevokedClientHMACs: []string{a},
 		LastOperationID: strings.Repeat("d", 64)}

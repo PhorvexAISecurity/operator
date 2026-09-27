@@ -54,7 +54,7 @@ func retainedCallerAllowed(state endpointLeaseState, journal endpointLeaseJourna
 		return false
 	}
 	if state.Revision == 0 {
-		return true
+		return endpointLeaseBefore(state, p)
 	}
 	// A post-cutover state needs a durable matching terminal row. Historical
 	// aborted attempts are allowed, unresolved prepared attempts are not.
