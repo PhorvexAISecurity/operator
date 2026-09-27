@@ -370,14 +370,21 @@ func TestEndpointRouteResolvesInstalledSelectingServiceWithoutObsoleteName(t *te
 	const installed = `{"metadata":{"name":"vllm","uid":"service-uid","resourceVersion":"19"},"spec":{"selector":{"app":"vllm"}}}`
 	for _, tc := range []struct {
 		name, listed, exact string
+		podLabels           map[string]string
 		wantError           bool
 	}{
-		{"installed vllm; obsolete vllm-infer absent", `{"items":[` + installed + `]}`, installed, false},
-		{"ambiguous selecting Services", `{"items":[` + installed + `,{"metadata":{"name":"other","uid":"other-uid"},"spec":{"selector":{"app":"vllm"}}}]}`, installed, true},
-		{"mismatched selector on exact re-read", `{"items":[` + installed + `]}`, `{"metadata":{"name":"vllm","uid":"service-uid","resourceVersion":"20"},"spec":{"selector":{"app":"other"}}}`, true},
-		{"missing selecting Service", `{"items":[{"metadata":{"name":"other","uid":"other-uid"},"spec":{"selector":{"app":"other"}}}]}`, installed, true},
+		{"installed vllm; obsolete vllm-infer absent", `{"items":[` + installed + `]}`, installed, nil, false},
+		{"ambiguous selecting Services", `{"items":[` + installed + `,{"metadata":{"name":"other","uid":"other-uid"},"spec":{"selector":{"app":"vllm"}}}]}`, installed, nil, true},
+		{"mismatched selector on exact re-read", `{"items":[` + installed + `]}`, `{"metadata":{"name":"vllm","uid":"service-uid","resourceVersion":"20"},"spec":{"selector":{"app":"other"}}}`, nil, true},
+		{"missing selecting Service", `{"items":[{"metadata":{"name":"other","uid":"other-uid"},"spec":{"selector":{"app":"other"}}}]}`, installed, nil, true},
+		{"missing empty-valued Pod label is not selected", `{"items":[{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}]}`, `{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}`, nil, true},
+		{"present empty-valued Pod label is selected", `{"items":[{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}]}`, `{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}`, map[string]string{"app": "vllm", "phorvex.ai/route-key": ""}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			selectedPod := pod
+			if tc.podLabels != nil {
+				selectedPod.Metadata.Labels = &tc.podLabels
+			}
 			calls := 0
 			s := &Server{cfg: Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
 				calls++
@@ -394,7 +401,7 @@ func TestEndpointRouteResolvesInstalledSelectingServiceWithoutObsoleteName(t *te
 					return "", errors.New("obsolete or unexpected service lookup: " + joined)
 				}
 			}}}
-			service, err := s.resolveVLLMService(pod)
+			service, err := s.resolveVLLMService(selectedPod)
 			if tc.wantError {
 				if err == nil {
 					t.Fatalf("unsafe Service resolution accepted: %+v", service)

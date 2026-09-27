@@ -759,7 +759,8 @@ func (s *Server) resolveVLLMService(pod vllmPodState) (vllmServiceState, error) 
 		}
 		matches := true
 		for key, value := range *item.Spec.Selector {
-			if (*pod.Metadata.Labels)[key] != value {
+			actual, exists := (*pod.Metadata.Labels)[key]
+			if !exists || actual != value {
 				matches = false
 				break
 			}
