@@ -89,17 +89,23 @@ func TestVoiceOutputReviewPinsAndCompatibility(t *testing.T) {
 		}
 	}
 	for _, st := range []appStack{{Namespace: "voice", Workload: true, Armed: true}, {Namespace: "voice", Workload: true, Armed: true, VoiceOutputLive: true}} {
-		found := false
+		found := 0
 		for _, row := range compatibleLive(st) {
 			if row.ID == voiceOutputScenario {
-				found = true
+				if row.StackLabel != "voice-output" {
+					if row.Compatible || row.Armed {
+						t.Fatalf("same-ID foreign-stack row admitted on Voice: %+v", row)
+					}
+					continue
+				}
+				found++
 				if row.Armed != st.VoiceOutputLive || row.Endpoint != voiceOutputRoute || row.Expected != voiceOutputAction {
 					t.Fatalf("Voice output row wrong: %+v", row)
 				}
 			}
 		}
-		if !found {
-			t.Fatal("Voice output Live row absent")
+		if found != 1 {
+			t.Fatalf("expected one Voice output Live row, got %d", found)
 		}
 	}
 }
