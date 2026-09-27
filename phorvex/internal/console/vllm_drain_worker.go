@@ -129,7 +129,7 @@ finally:conn.close()
 `
 
 func (s *Server) drainInstalledSource(ctx context.Context, out, phase string, p drainLiveProfile) error {
-	args := []string{"--context=" + p.Context, "-n", "vllm", "exec", p.PodName, "-c", "vllm", "--", "python3", "-B", "-c", drainInstalledSourcePython}
+	args := []string{"-n", "vllm", "exec", p.PodName, "-c", "vllm", "--", "python3", "-B", "-c", drainInstalledSourcePython}
 	raw, err := s.drainReadKube(ctx, out, phase+"-installed-source", false, args...)
 	if err != nil {
 		return err
@@ -146,7 +146,7 @@ func (s *Server) drainModelInventory(ctx context.Context, out, phase string, p d
 	if p.retainedCaller != nil {
 		code = drainRetainedModelPython
 	}
-	raw, err := s.drainReadKubeInput(ctx, out, phase+"-model-inventory", false, p.retainedCaller.bearer(), "--context="+p.Context, "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", code)
+	raw, err := s.drainReadKubeInput(ctx, out, phase+"-model-inventory", false, p.retainedCaller.bearer(), "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", code)
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		return err
 	}
 	read := func(label string, allowEmpty bool, args ...string) ([]byte, error) {
-		return s.drainReadKube(ctx, out, phase+"-"+label, allowEmpty, append([]string{"--context=" + p.Context}, args...)...)
+		return s.drainReadKube(ctx, out, phase+"-"+label, allowEmpty, args...)
 	}
 	raw, err := read("cluster", false, "get", "namespace", "kube-system", "-o", "json")
 	if err != nil {
@@ -470,7 +470,7 @@ func (s *Server) drainBenign(ctx context.Context, p drainLiveProfile, body []byt
 	}
 	c, stop := context.WithTimeout(ctx, 25*time.Second)
 	defer stop()
-	cmd := exec.CommandContext(c, "kubectl", "--context="+p.Context, "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainBenignPython)
+	cmd := exec.CommandContext(c, "kubectl", "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainBenignPython)
 	input := []byte(base64Body(body))
 	if p.retainedCaller != nil {
 		input, _ = json.Marshal(map[string]string{"body": base64Body(body), "bearer": base64Body(p.retainedCaller.bearer())})
@@ -621,7 +621,7 @@ func startDrainStream(parent context.Context, p drainLiveProfile, body []byte, n
 		input, _ = json.Marshal(map[string]string{"body": base64Body(body), "nonce": nonce,
 			"bearer": base64Body(p.retainedCaller.bearer())})
 	}
-	cmd := exec.CommandContext(ctx, "kubectl", "--context="+p.Context, "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainStreamPython)
+	cmd := exec.CommandContext(ctx, "kubectl", "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainStreamPython)
 	cmd.Stdin = bytes.NewReader(input)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

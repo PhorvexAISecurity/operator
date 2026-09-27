@@ -103,9 +103,10 @@ spec:
 		return nil, fmt.Errorf("write SecurityEvent manifest: %w", err)
 	}
 	createArgs := []string{"create", "-f", f.Name(), "-o", "json"}
-	if kubeContext != "" {
-		createArgs = append([]string{"--context=" + kubeContext}, createArgs...)
-	}
+	// kubeContext is the reviewed external profile provenance retained with
+	// the create originals. This in-Pod kubectl uses the mounted service account;
+	// that external context name is not present in its kubeconfig. The caller
+	// already binds the in-cluster kube-system UID before creating this event.
 	out, err := s.cfg.execText(10*time.Second, "kubectl", createArgs...)
 	if (evType == "GuardrailBypass" || kubeContext != "") && len(out) > 0 && len(out) <= 64<<10 {
 		candidate.createReply = []byte(out)
