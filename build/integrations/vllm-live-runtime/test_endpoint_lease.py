@@ -40,18 +40,21 @@ A_ID = hmac.new(SEED, A, hashlib.sha256).hexdigest()
 B_ID = hmac.new(SEED, B, hashlib.sha256).hexdigest()
 
 
-def rule(revision=0):
+def rule(revision=0, seed=SEED):
+    a_id = hmac.new(seed, A, hashlib.sha256).hexdigest()
+    b_id = hmac.new(seed, B, hashlib.sha256).hexdigest()
     return {"version": 1, "revision": revision, "serviceUID": SERVICE,
             "proxySourceSHA256": SOURCE, "secretUID": SECRET,
-            "seedSHA256": hashlib.sha256(SEED).hexdigest(),
-            "allowedClientHMACs": sorted((A_ID, B_ID)) if revision == 0 else [B_ID],
-            "revokedClientHMACs": [] if revision == 0 else [A_ID],
+            "seedSHA256": hashlib.sha256(seed).hexdigest(),
+            "allowedClientHMACs": sorted((a_id, b_id)) if revision == 0 else [b_id],
+            "revokedClientHMACs": [] if revision == 0 else [a_id],
             "lastOperationID": "" if revision == 0 else "d" * 64}
 
 
 class FakeKubernetes:
-    def __init__(self):
-        self.state = rule()
+    def __init__(self, seed=SEED):
+        self.seed = seed
+        self.state = rule(seed=seed)
         self.secret_uid = SECRET
         self.fail = False
         self.calls = []
@@ -69,20 +72,20 @@ class FakeKubernetes:
                      "metadata": {"name": lease_module.SECRET_NAME,
                                   "namespace": "vllm", "uid": self.secret_uid},
                      "data": {key: base64.b64encode(data).decode() for key, data in
-                              (("client-a", A), ("client-b", B), ("seed", SEED))}}
+                              (("client-a", A), ("client-b", B), ("seed", self.seed))}}
         return copy.deepcopy(value)
 
 
 @contextmanager
-def fixture():
+def fixture(seed=SEED):
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         generation = root / "..2026_09_27"
         generation.mkdir()
-        for name, value in (("client-a", A), ("client-b", B), ("seed", SEED)):
+        for name, value in (("client-a", A), ("client-b", B), ("seed", seed)):
             (generation / name).write_bytes(value)
         (root / "..data").symlink_to(generation.name)
-        api = FakeKubernetes()
+        api = FakeKubernetes(seed)
         identity = lease_module.Identity(POD, SERVICE, POLICY, SECRET,
                                          SOURCE, SOURCE, root)
         yield lease_module.EndpointLease(identity, api), api, root
@@ -105,6 +108,45 @@ def status_url():
 
 
 class EndpointLeaseTest(unittest.TestCase):
+    def test_binary_seed_keeps_live_authority_and_caller_checks(self):
+        seed = b"\x00\xff" * 16
+        with fixture(seed) as (lease, api, _root):
+            downstream, calls = app_with_calls()
+            boundary = dual.ServingBoundary(downstream, UPSTREAM, ADMIN, lease)
+
+            async def exercise():
+                self.assertTrue(await lease.ready())
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=boundary),
+                                             base_url="http://127.0.0.1:8000") as public:
+                    self.assertEqual((await public.get("/health")).status_code, 200)
+                    for bearer in (A, B):
+                        self.assertEqual((await public.post("/v1/chat/completions", headers={
+                            "Authorization": "Bearer " + bearer.decode()})).status_code, 200)
+                    self.assertEqual((await public.post("/v1/chat/completions", headers={
+                        "Authorization": "Bearer " + (b"x" * 48).decode()})).status_code, 401)
+                    api.state = rule(1, seed)
+                    self.assertEqual((await public.post("/v1/chat/completions", headers={
+                        "Authorization": "Bearer " + A.decode()})).status_code, 401)
+                    self.assertEqual((await public.post("/v1/chat/completions", headers={
+                        "Authorization": "Bearer " + B.decode()})).status_code, 200)
+                secret = await api("secret")
+                secret["data"]["client-a"] = base64.b64encode(b"\x00" * 48).decode()
+                with self.assertRaises(lease_module.AuthorityUnavailable):
+                    lease_module._secret_bytes(secret, SECRET)
+                secret["data"]["client-a"] = base64.b64encode(A).decode()
+                secret["data"]["seed"] = base64.b64encode(seed[:31]).decode()
+                with self.assertRaises(lease_module.AuthorityUnavailable):
+                    lease_module._secret_bytes(secret, SECRET)
+                secret["data"]["seed"] = base64.b64encode(seed * 9).decode()
+                with self.assertRaises(lease_module.AuthorityUnavailable):
+                    lease_module._secret_bytes(secret, SECRET)
+                secret["data"]["seed"] = base64.b64encode(seed).decode() + "="
+                with self.assertRaises(lease_module.AuthorityUnavailable):
+                    lease_module._secret_bytes(secret, SECRET)
+
+            asyncio.run(exercise())
+            self.assertEqual(sum(path == "/v1/chat/completions" for path, _ in calls), 3)
+
     def test_canonical_wire_and_source_closure(self):
         before = lease_module.canonical(rule())
         after = lease_module.canonical(rule(1))

@@ -125,7 +125,8 @@ def _secret_bytes(value: dict, uid: str) -> dict[str, bytes]:
         except ValueError as exc:
             raise AuthorityUnavailable("Secret encoding differs") from exc
         if base64.b64encode(raw).decode("ascii") != encoded or \
-                not 32 <= len(raw) <= 256 or any(byte < 33 or byte > 126 for byte in raw):
+                not 32 <= len(raw) <= 256 or \
+                (key != "seed" and any(byte < 33 or byte > 126 for byte in raw)):
             raise AuthorityUnavailable("Secret credential shape differs")
         result[key] = raw
     if len(set(result.values())) != len(SECRET_KEYS):
