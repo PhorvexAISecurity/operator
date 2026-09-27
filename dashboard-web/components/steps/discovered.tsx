@@ -13,12 +13,9 @@ import { useLocalPage } from "@/lib/use-local-page";
 import { PaginationBar } from "@/components/ui/pagination";
 import { useAuditSnapshot, useScanSnapshot } from "@/lib/query";
 import { useScopedUIState } from "@/lib/use-scoped-ui-state";
+import { DiscoveredPod, StageGroup, projectDiscoveredPods, stageGroup } from "@/lib/discovered-projection";
 
-interface PodNode { key: string; ns: string; pod: string; stage: string; asset: number; blast: number; ai: boolean }
-interface StreamPod { key: string; ns: string; pod: string; stage: string; asset?: number; blast?: number; ai: boolean }
-
-const STAGE_COL: Record<string, number> = { recon: 0, "early reconnaissance": 0, exploit: 1, exploitation: 1, lateral: 2, impact: 3, exfil: 3 };
-const stageName = (s: string) => s || "recon";
+type PodNode = DiscoveredPod;
 
 export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
   const sel = useSelectedTarget();
@@ -28,21 +25,13 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   const [listQuery, setListQuery] = useScopedUIState(`discovered-filter\u0000${scopeKey}`, "");
   const scanQuery = useScanSnapshot(lens, sel.context, "", lens !== "owner");
   const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant);
-  const streamPods: StreamPod[] = (auditQuery.data || []).flatMap((e) => e.namespace && e.pod ? [{ key: `${e.namespace}/${e.pod}`, ns: e.namespace, pod: e.pod, stage: stageName(e.stage), asset: e.assetValue, blast: e.blastRadius, ai: !!e.aiClassified }] : []);
   const scan = scanQuery.data;
-  const scanPods: PodNode[] = (scan?.graphNodes ?? []).map((n) => { const [ns, ...rest] = n.key.split("/"); return { key: n.key, ns, pod: rest.join("/"), stage: "recon", asset: n.blast, blast: n.blast, ai: n.ai }; });
   const edges = scan?.graphEdges ?? [];
   const nodes = scan?.nodeList ?? [];
   const reportedNodeCount = typeof scan?.nodes === "number" ? scan.nodes : null;
 
-  const pods = React.useMemo(() => {
-    const merged = new Map<string, StreamPod>(scanPods.map((p) => [p.key, { ...p }]));
-    streamPods.forEach((p) => {
-      const scanned = merged.get(p.key);
-      merged.set(p.key, scanned ? { ...scanned, ...p, asset: p.asset ?? scanned.asset, blast: p.blast ?? scanned.blast, ai: p.ai || scanned.ai } : { ...p });
-    });
-    return Array.from(merged.values()).map((p) => ({ ...p, asset: p.asset ?? 0, blast: p.blast ?? 0 }));
-  }, [scanPods, streamPods]);
+  const pods = React.useMemo(() => projectDiscoveredPods(scan?.graphNodes ?? [], auditQuery.data ?? []), [scan?.graphNodes, auditQuery.data]);
+  const scannedPods = pods.filter((p) => p.source === "scan");
 
   const scoped = true;
   const visibleNodes = scoped ? nodes : [];
@@ -51,7 +40,7 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   const visibleError = scoped && scanQuery.error ? String((scanQuery.error as Error).message || scanQuery.error) : "";
   const streamSettled = lens === "owner" && !tenant ? true : !!auditQuery.data || !!auditQuery.error;
   const loading = (lens !== "owner" && !scan && scanQuery.isPending) || !streamSettled;
-  const scanPhase = lens === "owner" ? "Owner view" : scanQuery.isFetching && !scan ? "Scanning nodes" : visibleError ? "Scan error" : `${visibleNodes.length} nodes listed`;
+  const scanPhase = lens === "owner" ? "Owner view" : scanQuery.isFetching && !scan ? "Scanning nodes" : visibleError ? "Scan error" : `${visibleNodes.length} nodes listed${scanQuery.dataUpdatedAt ? ` · snapshot ${new Date(scanQuery.dataUpdatedAt).toISOString().slice(11, 16)} UTC` : ""}`;
   const evidencePhase = !scoped || !streamSettled ? "Loading initial evidence" : `${pods.length} workloads loaded`;
   const query = listQuery.trim().toLowerCase();
   const matchingPods = pods.filter((p) => !query || p.key.toLowerCase().includes(query));
@@ -71,7 +60,7 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   );
 
   const owner = lens === "owner";
-  const jewels = [...pods].sort((a, b) => b.asset - a.asset);
+  const jewels = [...pods].sort((a, b) => a.asset == null ? (b.asset == null ? 0 : 1) : b.asset == null ? -1 : b.asset - a.asset);
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -116,10 +105,10 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
             {matchingNodes.length > 0 && <div className="mt-3"><PaginationBar page={nodePage.page} pageSize={12} total={matchingNodes.length} hasNext={nodePage.hasNext} onPrevious={() => nodePage.setPage((p) => Math.max(0, p - 1))} onNext={() => nodePage.setPage((p) => p + 1)} /></div>}
             <div className="mt-2 text-[11px] text-muted-foreground">Workloads listed: {pods.length}</div>
           </CardContent></Card>
-          <Segmented value={tab} onChange={setTab} tabs={[{ id: "graph", label: "Blast-radius graph" }, { id: "jewels", label: "Crown jewels", count: jewels.filter(j => j.asset > 0).length }, { id: "killchain", label: "Kill-chain" }, { id: "physics", label: "Physics (scan)" }]} />
-          {tab === "graph" && <BlastGraph pods={pods} edges={visibleEdges} />}
+          <Segmented value={tab} onChange={setTab} tabs={[{ id: "graph", label: "Blast-radius graph" }, { id: "jewels", label: "Crown jewels", count: jewels.filter(j => j.source === "scan" && j.asset != null && j.asset > 0).length }, { id: "killchain", label: "Kill-chain" }, { id: "physics", label: "Physics (scan)" }]} />
+          {tab === "graph" && <BlastGraph pods={scannedPods} edges={visibleEdges} />}
           {tab === "jewels" && <CrownJewels jewels={query ? jewels.filter((j) => j.key.toLowerCase().includes(query)) : jewels} scopeKey={`${scopeKey}\u0000${listQuery}`} />}
-          {tab === "killchain" && <KillChain pods={pods} />}
+          {tab === "killchain" && <KillChain pods={scannedPods} />}
           {/* Physics is the platform scan — always all namespaces (ns="") so it shows the
               per-pod scan response, independent of the bounded decision stream. */}
           {tab === "physics" && <PhysicsPanel lens={lens} ns="" />}
@@ -131,13 +120,13 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
 }
 
 function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
-  const cols = ["recon", "exploit", "lateral", "impact"];
-  const W = 880, H = 380, colW = W / cols.length;
-  // Grid-pack nodes WITHIN each kill-chain column (idle workloads cluster at "recon"; a column
-  // can hold the whole platform without overlap). Sub-columns × rows scale with the count.
+  const cols: StageGroup[] = ["recon", "exploit", "lateral", "impact", "ai", "other", "unknown"];
+  const W = 1120, H = 380, colW = W / cols.length;
+  // Grid-pack nodes within each observed stage group. Missing and AI stages have
+  // their own columns, so neither is represented as reconnaissance.
   const placed = pods.map((p) => {
-    const c = STAGE_COL[p.stage] ?? 0;
-    const inCol = pods.filter((q) => (STAGE_COL[q.stage] ?? 0) === c);
+    const c = cols.indexOf(stageGroup(p.stage));
+    const inCol = pods.filter((q) => stageGroup(q.stage) === cols[c]);
     const idx = inCol.indexOf(p);
     const n = inCol.length;
     const rows = Math.max(1, Math.ceil(Math.sqrt(n * (H - 70) / colW)));
@@ -145,7 +134,7 @@ function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
     const r0 = idx % rows, c0 = Math.floor(idx / rows);
     const x = colW * c + (colW / (subCols + 1)) * (c0 + 1);
     const y = 48 + ((H - 64) / (rows + 1)) * (r0 + 1);
-    const r = n > 8 ? 5 + Math.min(9, p.asset * 7) : 10 + Math.min(22, p.asset * 9);
+    const r = p.asset == null ? 6 : n > 8 ? 5 + Math.min(9, p.asset * 7) : 10 + Math.min(22, p.asset * 9);
     return { ...p, x, y, r };
   });
   const pos = new Map(placed.map((p) => [p.key, p]));
@@ -172,36 +161,37 @@ function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
         })}
         {placed.map((p) => (
           <g key={p.key}>
-            <title>{p.key} · blast {p.blast.toFixed(2)}{p.ai ? " · AI" : ""}</title>
-            <circle cx={p.x} cy={p.y} r={p.r + (placed.length > 8 ? 4 : 8) + p.blast * (placed.length > 8 ? 6 : 10)} fill="hsl(184 78% 46% / 0.06)" />
+            <title>{p.key} · asset {p.asset == null ? "unknown" : p.asset.toFixed(2)} · stage {p.stage ?? "unknown"} · blast {p.blast == null ? "unknown" : p.blast.toFixed(2)}{p.ai ? " · AI" : ""}</title>
+            <circle cx={p.x} cy={p.y} r={p.r + (placed.length > 8 ? 4 : 8) + (p.blast ?? 0) * (placed.length > 8 ? 6 : 10)} fill="hsl(184 78% 46% / 0.06)" />
             <circle cx={p.x} cy={p.y} r={p.r} fill={p.ai ? "hsl(212 80% 60% / 0.25)" : "hsl(184 78% 46% / 0.22)"} stroke={p.ai ? "hsl(212 80% 60%)" : "hsl(184 78% 46%)"} strokeWidth={1.5} />
             {placed.length <= 8 && <text x={p.x} y={p.y + p.r + 13} textAnchor="middle" className="fill-foreground/70" style={{ fontSize: 10, fontFamily: "monospace" }}>{p.pod}</text>}
           </g>
         ))}
       </svg>
       <div className="flex flex-wrap items-center gap-4 px-3 pb-2 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary/40 ring-1 ring-primary" /> node size = asset value · halo = blast radius</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary/40 ring-1 ring-primary" /> node size = observed asset value; small = unknown · halo = blast radius</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-info/40 ring-1 ring-info" /> AI/inference workload</span>
         <span>→ = lateral reach (network + RBAC + co-location)</span>
-        <span>column = current kill-chain stage</span>
+        <span>column = observed stage group; unknown means no matching decision in this sample</span>
       </div>
     </CardContent></Card>
   );
 }
 
 function CrownJewels({ jewels, scopeKey }: { jewels: PodNode[]; scopeKey: string }) {
-  const max = Math.max(1, ...jewels.map((j) => j.asset));
+  const max = Math.max(1, ...jewels.map((j) => j.asset ?? 0));
   const page = useLocalPage(jewels, 12, scopeKey);
   return (
     <Card><CardContent className="p-5">
-      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold"><Gem className="h-4 w-4 text-warning" /> Highest-value assets</div>
+      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold"><Gem className="h-4 w-4 text-warning" /> Observed asset values</div>
       <div className="space-y-2">
         {page.pageItems.map((j) => (
           <div key={j.key} className="flex items-center gap-3">
             <span className="w-44 shrink-0 truncate font-mono text-[12px]">{j.key}</span>
-            <div className="h-2 flex-1 rounded-full bg-muted/40"><div className="h-2 rounded-full bg-warning/70" style={{ width: `${Math.max(4, (j.asset / max) * 100)}%` }} /></div>
-            <span className="w-16 text-right text-[11px] tabular text-muted-foreground">value {j.asset.toFixed(2)}</span>
+            <div className="h-2 flex-1 rounded-full bg-muted/40">{j.asset != null && <div className="h-2 rounded-full bg-warning/70" style={{ width: `${Math.max(4, (j.asset / max) * 100)}%` }} />}</div>
+            <span className="w-24 text-right text-[11px] tabular text-muted-foreground">{j.asset == null ? "value unknown" : `value ${j.asset.toFixed(2)}`}</span>
             {j.ai && <Badge variant="modeled">AI</Badge>}
+            <span className="text-[10px] text-muted-foreground" title={j.evidenceTime ?? undefined}>{j.source === "decision" ? `decision ${j.evidenceTime ? `${j.evidenceTime.slice(11, 16)} UTC` : "time unknown"}; current Pod unverified` : j.evidenceTime ? `UID-matched decision ${j.evidenceTime.slice(11, 16)} UTC` : "no matched decision"}</span>
           </div>
         ))}
       </div>
@@ -211,23 +201,20 @@ function CrownJewels({ jewels, scopeKey }: { jewels: PodNode[]; scopeKey: string
 }
 
 function KillChain({ pods }: { pods: PodNode[] }) {
-  const stages = ["recon", "exploit", "lateral", "impact"];
-  const counts = stages.map((s) => pods.filter((p) => (STAGE_COL[p.stage] ?? 0) === stages.indexOf(s)).length);
+  const stages: StageGroup[] = ["recon", "exploit", "lateral", "impact", "ai", "other", "unknown"];
+  const counts = stages.map((s) => pods.filter((p) => stageGroup(p.stage) === s).length);
   return (
     <Card><CardContent className="p-5">
       <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold"><GitBranch className="h-4 w-4 text-primary" /> Kill-chain distribution</div>
-      <div className="flex items-stretch gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {stages.map((s, i) => (
-          <React.Fragment key={s}>
-            <div className="flex-1 rounded-lg border border-border bg-elevated/30 p-3 text-center">
-              <div className="text-2xl font-semibold tabular">{counts[i]}</div>
-              <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{s}</div>
-            </div>
-            {i < stages.length - 1 && <div className="flex items-center text-muted-foreground/40"><ArrowRight className="h-4 w-4" /></div>}
-          </React.Fragment>
+          <div key={s} className="rounded-lg border border-border bg-elevated/30 p-3 text-center">
+            <div className="text-2xl font-semibold tabular">{counts[i]}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{s}</div>
+          </div>
         ))}
       </div>
-      <div className="mt-3 text-[11px] text-muted-foreground">Phorvex acts on the <span className="text-primary">moved-before-next-stage</span> horizon — evicting before a workload advances. The 4 AI stages (gpu-side-channel · model-theft · llm-jacking · prompt-inject-persist) classify here too; magnitudes [SP-0-PENDING-P4].</div>
+      <div className="mt-3 text-[11px] text-muted-foreground">Counts cover Pods in the scan snapshot, using UID-matched decision stages. AI includes gpu-side-channel, model-theft, llm-jacking and prompt-inject-persist. Unknown means no matching stage was observed in the bounded decision sample.</div>
     </CardContent></Card>
   );
 }

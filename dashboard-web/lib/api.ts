@@ -379,7 +379,7 @@ export interface RegistryView { names: string[]; generatable: string[]; missing:
 export interface AblationResult { ratio: number; p1PerDollar: number; randomPerDollar: number; ran: boolean; note: string; raw: string }
 export interface PhysWitness { pod: string; imageRarity: number; coResidency: number; slack: number; pdbMinAvail: number; migValid: boolean; epss: number; stateful: boolean; gpuPresent: boolean; vramFraction: number; smOccupancy: number; linkBandwidth: number }
 export interface KillchainRow { pod: string; stage: string; ai: boolean; pHold: number; preemptMargin: number; projNextStageSec: number; infectionFrontier: number }
-export interface GraphNode { key: string; blast: number; ai: boolean }
+export interface GraphNode { key: string; blast: number; ai: boolean; uid?: string }
 export interface GraphEdge { src: string; dst: string }
 export interface NodeInfo { name: string; allocCPUm: number; allocMemMi: number; allocGPU: number; migKinds: number }
 export interface ScanResult { platform: string; nodes: number; pods: number; nodeList: NodeInfo[]; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
