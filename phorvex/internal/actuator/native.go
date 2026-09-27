@@ -43,6 +43,7 @@ type NativeActuator struct {
 	VoiceRefundTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
 	VoiceMCPTransport        http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
 	VoiceMCPApprovedImage    string            // reviewed immutable MCP image from manager configuration
+	VoiceOutputTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
 	migProfiles              *MIGProfiles
 	servingSecurity          *ServingSecurityConfig
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
@@ -99,6 +100,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	}
 	if a == model.ActionVoiceMCPToolPin {
 		return voiceMCPCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceMCPTransport, n.VoiceMCPApprovedImage)
+	}
+	if a == model.ActionVoiceOutputPolicyActivate {
+		return voiceOutputCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceOutputTransport)
 	}
 	if a == model.ActionLiteLLMClientRevoke {
 		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
@@ -284,7 +288,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future

@@ -58,6 +58,7 @@ route-key with the target Ready and at least two Ready backends.
 | `voice-memory-note-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-memory-note-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `litellm-client-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "litellm-client-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `voice-refund-pair-deny` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-refund-pair-deny" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `voice-output-policy-activate` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-output-policy-activate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -84,6 +85,7 @@ route-key with the target Ready and at least two Ready backends.
 | `voice-memory-note-revoke` | native | yes | — | exact live Voice Deployment, owned policy ConfigMap, private readback Secret and operation journal | support does not verify the observed note, CAS append or per-Pod application effect; dispatch checks these |
 | `litellm-client-revoke` | native | yes | — | reviewed LiteLLM gateway on two Ready Service Pods, one owned-client observation, policy ConfigMap and protected journal | support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks |
 | `voice-refund-pair-deny` | native | yes | — | exact live Voice Deployment, owned refund ConfigMap, private readback Secret and operation journal | support does not verify the observed refund pair, CAS append or per-Pod application effect; dispatch checks these |
+| `voice-output-policy-activate` | native | yes | — | exact Voice Deployment, owned output rule, authenticated all-Pod readback and fixed protected journal | support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression |
 
 ## hybrid
 
@@ -110,3 +112,4 @@ route-key with the target Ready and at least two Ready backends.
 | `voice-memory-note-revoke` | native | yes | — | exact live Voice Deployment, owned policy ConfigMap, private readback Secret and operation journal | support does not verify the observed note, CAS append or per-Pod application effect; dispatch checks these |
 | `litellm-client-revoke` | native | yes | — | reviewed LiteLLM gateway on two Ready Service Pods, one owned-client observation, policy ConfigMap and protected journal | support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks |
 | `voice-refund-pair-deny` | native | yes | — | exact live Voice Deployment, owned refund ConfigMap, private readback Secret and operation journal | support does not verify the observed refund pair, CAS append or per-Pod application effect; dispatch checks these |
+| `voice-output-policy-activate` | native | yes | — | exact Voice Deployment, owned output rule, authenticated all-Pod readback and fixed protected journal | support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression |

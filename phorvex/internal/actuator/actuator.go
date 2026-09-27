@@ -127,6 +127,7 @@ type Request struct {
 	VoiceMemoryObservation   *model.VoiceMemoryObservation     // selection-time exact caller/note digest authority
 	VoiceRefundObservation   *model.VoiceRefundObservation     // selection-time asserted caller/order pair authority
 	VoiceMCPObservation      *model.VoiceMCPObservation        // selection-time installed Voice/MCP source authority
+	VoiceOutputObservation   *model.VoiceOutputObservation     // selection-time observed synthetic output marker
 	LiteLLMClientObservation *model.LiteLLMClientObservation   // selection-time owned-client gateway authority
 	TargetUID                string                            // Bound identity from the selecting snapshot.
 	TargetNamespaceUID       string                            // Bound by the protected quarantine-capacity reservation.

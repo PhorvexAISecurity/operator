@@ -348,6 +348,9 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionVoiceMCPToolPin {
 					e.Prerequisite = "reviewed MCP image, exact Voice and MCP sources, owned descriptor ConfigMap, private readback and protected journal"
 				}
+				if a == model.ActionVoiceOutputPolicyActivate {
+					e.Prerequisite = "exact Voice Deployment, owned output rule, authenticated all-Pod readback and fixed protected journal"
+				}
 				if a == model.ActionLiteLLMClientRevoke {
 					e.Prerequisite = "reviewed LiteLLM gateway on two Ready Service Pods, one owned-client observation, policy ConfigMap and protected journal"
 				}
@@ -362,6 +365,8 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not verify the observed refund pair, CAS append or per-Pod application effect; dispatch checks these"
 				} else if a == model.ActionVoiceMCPToolPin {
 					e.UnverifiedEffect = "support does not verify the observed model steering, CAS append or later tool behavior; dispatch checks installed sources and per-Pod projection"
+				} else if a == model.ActionVoiceOutputPolicyActivate {
+					e.UnverifiedEffect = "support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression"
 				} else if a == model.ActionLiteLLMClientRevoke {
 					e.UnverifiedEffect = "support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks"
 				} else {

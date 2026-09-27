@@ -248,6 +248,38 @@ subjects:
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- if .Values.phorvex.voiceOutput.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "voiceOutput requires native or hybrid actuator" }}{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-output
+  namespace: voice
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["voice-output-policy"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["voice-memory-state-token"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-output
+  namespace: voice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-voice-output
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- if .Values.phorvex.voiceRefund.enabled }}
 {{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "voiceRefund requires native or hybrid actuator" }}{{- end }}
 ---

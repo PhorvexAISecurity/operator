@@ -109,6 +109,9 @@ const (
 	ActionVoiceMemoryNoteRevoke Action = "voice-memory-note-revoke"
 	// ActionVoiceRefundPairDeny blocks one exact asserted-caller/order pair in the Voice app.
 	ActionVoiceRefundPairDeny Action = "voice-refund-pair-deny"
+	// ActionVoiceOutputPolicyActivate blocks one observed synthetic hidden-context
+	// marker before Voice speech and assistant transcript persistence.
+	ActionVoiceOutputPolicyActivate Action = "voice-output-policy-activate"
 	// ActionLiteLLMClientRevoke denies one observed, owned client credential at
 	// the installed LiteLLM admission gateway. It does not revoke the master key.
 	ActionLiteLLMClientRevoke Action = "litellm-client-revoke"
@@ -144,6 +147,7 @@ var MutatingActions = []Action{
 	ActionVoiceMemoryNoteRevoke,
 	ActionLiteLLMClientRevoke,
 	ActionVoiceRefundPairDeny,
+	ActionVoiceOutputPolicyActivate,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -507,6 +511,11 @@ type Pod struct {
 	VoiceRefundDeploymentUID  string
 	VoiceRefundEventCreator   string
 	VoiceRefundObservation    *VoiceRefundObservation
+	VoiceOutputConfigMap      string
+	VoiceOutputSourceSHA256   string
+	VoiceOutputDeploymentUID  string
+	VoiceOutputEventCreator   string
+	VoiceOutputObservation    *VoiceOutputObservation
 	LiteLLMClientObservation  *LiteLLMClientObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
@@ -583,6 +592,17 @@ func (p Pod) HasBoundVoiceRefundObservation() bool {
 		o.PolicyUID != "" && o.PolicyGeneration > 0 && o.AssertedCallerSHA256 != "" && o.OrderSHA256 != ""
 }
 
+func (p Pod) HasBoundVoiceOutputObservation() bool {
+	o := p.VoiceOutputObservation
+	return o != nil && p.Namespace == "voice" && p.UID != "" && p.VoiceOutputConfigMap == "voice-output-policy" &&
+		o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceOutputDeploymentUID &&
+		o.SourceSHA256 == p.VoiceOutputSourceSHA256 && o.ConfigMapUID != "" &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.CreatorIdentity == p.VoiceOutputEventCreator && o.PolicyName != "" && o.PolicyUID != "" &&
+		o.PolicyGeneration > 0 && o.MarkerSHA256 != "" && o.ScenarioID == "ai2-system-prompt-leakage" &&
+		o.EvidenceSource == "TEST_INJECTED" && o.RawModelMarkerObserved && o.AssistantOutputMarkerObserved
+}
+
 // HasBoundLiteLLMClientObservation licenses only the installed, synthetic
 // gateway credential channel. A generic copied credential never satisfies it.
 func (p Pod) HasBoundLiteLLMClientObservation() bool {
@@ -613,6 +633,7 @@ const (
 	AttackVectorSensitiveOutput    = "phorvex.attack.sensitive-output"
 	AttackVectorVoiceMemory        = "phorvex.attack.voice-memory-note"
 	AttackVectorVoiceRefund        = "phorvex.attack.voice-refund-pair"
+	AttackVectorVoiceOutput        = "phorvex.attack.voice-output-leak"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 )
 
@@ -685,6 +706,7 @@ type SecurityEventInfo struct {
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
+	VoiceOutputRaw                    string // synthetic hidden-context marker hash assertion; never marker bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
@@ -782,6 +804,22 @@ type VoiceRefundObservation struct {
 	PolicyName, PolicyUID                  string
 	PolicyGeneration                       int64
 	SelectedRevision                       uint64
+	ObservedAt                             time.Time
+}
+
+// VoiceOutputObservation binds a trusted synthetic first-loss event to the
+// selected Voice Pod and append-only output rule. It carries no hidden text.
+type VoiceOutputObservation struct {
+	EventName, EventUID, CreatorIdentity   string
+	ScenarioID, EvidenceSource             string
+	TargetPodUID, DeploymentUID            string
+	ConfigMapUID, ConfigMapResourceVersion string
+	RuleSHA256, SourceSHA256, MarkerSHA256 string
+	PolicyName, PolicyUID                  string
+	PolicyGeneration                       int64
+	SelectedRevision                       uint64
+	RawModelMarkerObserved                 bool
+	AssistantOutputMarkerObserved          bool
 	ObservedAt                             time.Time
 }
 
@@ -1055,6 +1093,7 @@ type Decision struct {
 	OutputPolicyObservation *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
 	VoiceMemoryObservation  *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
 	VoiceRefundObservation  *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
+	VoiceOutputObservation  *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
 	Existential             *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
