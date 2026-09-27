@@ -253,7 +253,7 @@ func (s *Server) executeMeasuredGuardrailEffect(w *availabilityWorker, record *a
 		}
 	}
 	for i := 0; i < 6; i++ {
-		j, e := w.journal(fmt.Sprintf("journal-poll-%d", i), w.p.Fixture.JournalInitiallyAbsent)
+		j, e := w.journal(fmt.Sprintf("journal-poll-%d", i), w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal)
 		if e != nil {
 			return e
 		}

@@ -926,7 +926,7 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 		}
 		if name == guardrailAvailabilityConfig {
 			cfg, parseErr := parseGuardrailAvailabilityProfile(raw)
-			if parseErr != nil || cfg.Fixture.JournalInitiallyAbsent || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity != cfg.Fixture.AuditURL+"|"+cfg.Fixture.AuditServerName {
+			if parseErr != nil || cfg.Fixture.JournalInitiallyAbsent || cfg.Fixture.CaptureCurrentJournal || rm.cfg.AuditSource == nil || rm.cfg.AuditSourceIdentity != cfg.Fixture.AuditURL+"|"+cfg.Fixture.AuditServerName {
 				return dest, fmt.Errorf("guardrail availability suite reviewed route or audit authority unavailable")
 			}
 			for _, file := range []string{cfg.Fixture.ScopedTokenFile, cfg.Fixture.AuditCAFile, cfg.Fixture.AuditClientCertFile, cfg.Fixture.AuditClientKeyFile} {

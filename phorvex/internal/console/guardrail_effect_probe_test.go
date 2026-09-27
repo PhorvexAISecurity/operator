@@ -244,6 +244,24 @@ func TestGuardrailEffectSeparateReviewedProfileAndKnownVariant(t *testing.T) {
 	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
 		t.Fatal("first-operation profile with preexisting UID admitted")
 	}
+	reusable := strings.Replace(string(raw), "  activeVariant: pgv2", "  activeVariant: \"\"\n  captureCurrentJournal: true", 1)
+	reusable = strings.Replace(reusable, "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", "  guardrailJournalUID: \"\"", 1)
+	if err := os.WriteFile(path, []byte(reusable), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash([]byte(reusable))
+	parsed, _, err = loadGuardrailEffectProfile(cfg)
+	if err != nil || !parsed.Fixture.CaptureCurrentJournal || parsed.Fixture.ActiveVariant != "" || parsed.Fixture.GuardrailJournalUID != "" {
+		t.Fatalf("reusable exact-target effect profile refused: %v", err)
+	}
+	badReusable := []byte(strings.Replace(reusable, "  guardrailJournalUID: \"\"", "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", 1))
+	if err := os.WriteFile(path, badReusable, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(badReusable)
+	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
+		t.Fatal("reusable current-state profile with preauthorized journal UID admitted")
+	}
 }
 
 func TestGuardrailEffectFixedBaselineGate(t *testing.T) {
@@ -559,5 +577,68 @@ func TestGuardrailEffectOriginalReaderReplaysAbsenceAndDualSource(t *testing.T) 
 			}
 			e.files[tc.file] = original
 		})
+	}
+}
+
+func TestGuardrailEffectReusableProfileFreezesTwoSequentialFires(t *testing.T) {
+	p := guardrailAvailabilityProfile{Context: "reviewed-cluster"}
+	f := &p.Fixture
+	f.CaptureCurrentJournal = true
+	f.GuardrailJournalName = "exact-slot"
+	f.PolicyName, f.PolicyUID = "vllm-defense", "policy-uid"
+	f.PodName, f.PodUID = "target-pod", "target-uid"
+	first := availabilitySnapshot{JournalAbsent: true, Receipt: mustAvailabilityJSON(availabilityJournalAbsence(p.Context, f.GuardrailJournalName)),
+		ActiveVariant: "pgv1", PodVariant: "pgv1", PolicyUID: f.PolicyUID, TargetPodUID: f.PodUID}
+	if err := guardrailEffectProtected(first, p); err != nil {
+		t.Fatalf("first Fire absent baseline refused: %v", err)
+	}
+	makeNext := func(before availabilitySnapshot, generation int64, next, tick string) (availabilitySnapshot, availabilityDecision) {
+		selected := availabilityDecision{TickID: tick}
+		op := availabilityOperationID(tick, f.PolicyUID, "vllm", f.PodUID)
+		after := before
+		after.JournalAbsent = false
+		after.JournalUID = "fresh-slot-uid"
+		after.JournalResourceVersion = fmt.Sprintf("%d", generation)
+		after.ActiveVariant, after.PodVariant = next, next
+		after.GuardrailEpoch = availabilityEpoch(op)
+		after.Receipt = mustAvailabilityJSON(map[string]any{
+			"version": 9, "kind": "guardrail-rotate", "effectDomain": "guardrail-variant-v1",
+			"phase": "terminal-full", "generation": generation,
+			"priorVariant": before.ActiveVariant, "nextVariant": next,
+			"operationID": op, "tickID": tick, "policyNamespace": "vllm", "policyName": f.PolicyName,
+			"policyUID": f.PolicyUID, "targetName": f.PodName, "targetUID": f.PodUID,
+			"expectedGuardrail": map[string]any{"present": true, "value": after.GuardrailEpoch},
+		})
+		return after, selected
+	}
+	second, selected1 := makeNext(first, 1, "pgv2", "selected-first")
+	if _, err := guardrailEffectTransition(first, second, selected1, p); err != nil {
+		t.Fatalf("first Fire did not join generation one: %v", err)
+	}
+	if err := guardrailEffectProtected(second, p); err != nil {
+		t.Fatalf("same immutable profile refused current terminal baseline on second Fire: %v", err)
+	}
+	if err := availabilityAdmissionMatches(second, second, second); err != nil {
+		t.Fatalf("second run could not freeze its original current baseline: %v", err)
+	}
+	drift := second
+	drift.JournalResourceVersion = "changed-before-event"
+	if availabilityAdmissionMatches(second, second, drift) == nil {
+		t.Fatal("second Fire admitted changed journal before event")
+	}
+	third, selected2 := makeNext(second, 2, "pgv1", "selected-second")
+	if third.JournalUID != second.JournalUID {
+		t.Fatal("native journal UID did not stay bound across second Fire")
+	}
+	if _, err := guardrailEffectTransition(second, third, selected2, p); err != nil {
+		t.Fatalf("second Fire did not join generation two: %v", err)
+	}
+	prepared := second
+	var receipt map[string]any
+	_ = availabilityDecode(prepared.Receipt, &receipt)
+	receipt["phase"] = "prepared"
+	prepared.Receipt = mustAvailabilityJSON(receipt)
+	if err := guardrailEffectProtected(prepared, p); err == nil {
+		t.Fatal("unresolved protected journal admitted to a new Fire")
 	}
 }

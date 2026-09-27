@@ -40,6 +40,7 @@ type guardrailAvailabilityProfile struct {
 		GuardrailJournalName   string `json:"guardrailJournalName"`
 		GuardrailJournalUID    string `json:"guardrailJournalUID"`
 		JournalInitiallyAbsent bool   `json:"journalInitiallyAbsent,omitempty"`
+		CaptureCurrentJournal  bool   `json:"captureCurrentJournal,omitempty"`
 		ManagerPodName         string `json:"managerPodName"`
 		ManagerPodUID          string `json:"managerPodUID"`
 		ManagerImageID         string `json:"managerImageID"`
@@ -82,7 +83,10 @@ func parseGuardrailAvailabilityProfile(raw []byte) (guardrailAvailabilityProfile
 		len(p.ScenarioFilter) != 0 || len(p.DefenderFilter) != 0 || !staticRunID.MatchString(f.RunID) ||
 		f.Transport != "in-cluster" || !staticUID.MatchString(f.ClusterUID) || !staticUID.MatchString(f.PodUID) ||
 		!staticUID.MatchString(f.ServiceUID) || !staticUID.MatchString(f.SourceUID) ||
-		((f.JournalInitiallyAbsent && f.GuardrailJournalUID != "") || (!f.JournalInitiallyAbsent && !staticUID.MatchString(f.GuardrailJournalUID))) || !staticUID.MatchString(f.ManagerPodUID) ||
+		(f.JournalInitiallyAbsent && f.CaptureCurrentJournal) ||
+		(((f.JournalInitiallyAbsent || f.CaptureCurrentJournal) && f.GuardrailJournalUID != "") ||
+			(!f.JournalInitiallyAbsent && !f.CaptureCurrentJournal && !staticUID.MatchString(f.GuardrailJournalUID))) ||
+		!staticUID.MatchString(f.ManagerPodUID) ||
 		!staticUID.MatchString(f.ConsoleDeploymentUID) || !staticUID.MatchString(f.PolicyUID) ||
 		!mongoPinnedImage.MatchString(f.PodImageID) || !mongoPinnedImage.MatchString(f.ManagerImageID) ||
 		!mongoPinnedImage.MatchString(f.ConsoleImageID) || !staticSHA256.MatchString(f.SourceSHA256) ||

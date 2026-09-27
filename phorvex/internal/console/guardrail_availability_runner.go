@@ -617,7 +617,7 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if e != nil {
 		return out, e
 	}
-	journal, e := w.journal(label+"-journal", f.JournalInitiallyAbsent)
+	journal, e := w.journal(label+"-journal", f.JournalInitiallyAbsent || f.CaptureCurrentJournal)
 	if e != nil {
 		return out, e
 	}
@@ -675,7 +675,7 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	}
 	requireAbsent := availabilityJournalShouldBeAbsent(w.p, label)
 	out.Receipt, out.JournalUID, out.JournalResourceVersion, out.JournalAbsent, e = availabilityJournalReceipt(journal, w.p.Context, f.GuardrailJournalName,
-		requireAbsent || (f.JournalInitiallyAbsent && availabilityIsJournalAbsence(journal, w.p.Context, f.GuardrailJournalName)))
+		requireAbsent || ((f.JournalInitiallyAbsent || f.CaptureCurrentJournal) && availabilityIsJournalAbsence(journal, w.p.Context, f.GuardrailJournalName)))
 	if e != nil {
 		return out, e
 	}
@@ -752,7 +752,7 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	out.PodVariant = availabilityString(availabilityMap(availabilityMeta(pod)["annotations"]), "phorvex.ai/guardrail-variant")
 	out.GuardrailEpoch = availabilityString(availabilityMap(availabilityMeta(pod)["labels"]), "phorvex.ai/guardrail-epoch")
 	out.ModelIdentity = model
-	if out.ClusterUID != f.ClusterUID || out.ManagerPodUID != f.ManagerPodUID || out.ManagerImageID != f.ManagerImageID || out.ConsolePodUID != w.selfUID || out.ConsoleDeploymentUID != f.ConsoleDeploymentUID || out.ConsoleImageID != f.ConsoleImageID || out.TargetPodUID != f.PodUID || out.TargetImageID != f.PodImageID || out.ServiceUID != f.ServiceUID || out.SourceUID != f.SourceUID || out.SourceSHA256 != f.SourceSHA256 || out.BoundarySourceSHA256 != f.BoundarySourceSHA256 || out.PolicyUID != f.PolicyUID || out.PolicyGeneration != f.PolicyGeneration || out.PolicyObservedGeneration != out.PolicyGeneration || (!f.JournalInitiallyAbsent && out.JournalUID != f.GuardrailJournalUID) {
+	if out.ClusterUID != f.ClusterUID || out.ManagerPodUID != f.ManagerPodUID || out.ManagerImageID != f.ManagerImageID || out.ConsolePodUID != w.selfUID || out.ConsoleDeploymentUID != f.ConsoleDeploymentUID || out.ConsoleImageID != f.ConsoleImageID || out.TargetPodUID != f.PodUID || out.TargetImageID != f.PodImageID || out.ServiceUID != f.ServiceUID || out.SourceUID != f.SourceUID || out.SourceSHA256 != f.SourceSHA256 || out.BoundarySourceSHA256 != f.BoundarySourceSHA256 || out.PolicyUID != f.PolicyUID || out.PolicyGeneration != f.PolicyGeneration || out.PolicyObservedGeneration != out.PolicyGeneration || (!f.JournalInitiallyAbsent && !f.CaptureCurrentJournal && out.JournalUID != f.GuardrailJournalUID) {
 		return out, errors.New("reviewed source or installed identity changed")
 	}
 	if e = w.saveJSON(label+"-snapshot.json", out); e != nil {
@@ -860,7 +860,7 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	if e != nil {
 		return out, e
 	}
-	journal, e := w.journal(label+"-journal", w.p.Fixture.JournalInitiallyAbsent)
+	journal, e := w.journal(label+"-journal", w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal)
 	if e != nil {
 		return out, e
 	}
@@ -903,7 +903,7 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	}
 	requireAbsent := availabilityJournalShouldBeAbsent(w.p, label)
 	receipt, journalUID, journalRV, absent, e := availabilityJournalReceipt(journal, w.p.Context, w.p.Fixture.GuardrailJournalName,
-		requireAbsent || (w.p.Fixture.JournalInitiallyAbsent && availabilityIsJournalAbsence(journal, w.p.Context, w.p.Fixture.GuardrailJournalName)))
+		requireAbsent || ((w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal) && availabilityIsJournalAbsence(journal, w.p.Context, w.p.Fixture.GuardrailJournalName)))
 	if e != nil {
 		return out, e
 	}
@@ -937,8 +937,8 @@ func (rm *RunManager) runGuardrailAvailability(ctx context.Context, id string, s
 	var p guardrailAvailabilityProfile
 	if e == nil {
 		p, e = parseGuardrailAvailabilityProfile(raw)
-		if e == nil && p.Fixture.JournalInitiallyAbsent {
-			e = errors.New("guardrail availability cannot use first-operation journal mode")
+		if e == nil && (p.Fixture.JournalInitiallyAbsent || p.Fixture.CaptureCurrentJournal) {
+			e = errors.New("guardrail availability cannot use effect journal modes")
 		}
 	}
 	p.Fixture.RunID = id

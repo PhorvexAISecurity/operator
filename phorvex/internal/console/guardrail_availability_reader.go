@@ -83,8 +83,8 @@ func readGuardrailAvailabilityResult(out, id, admittedSHA string) (*GuardrailAva
 		return nil, errors.New("reviewed guardrail availability profile receipt differs")
 	}
 	e.p, err = parseGuardrailAvailabilityProfile(profileRaw)
-	if err != nil || e.p.Fixture.JournalInitiallyAbsent {
-		return nil, errors.New("guardrail availability original cannot use first-operation journal mode")
+	if err != nil || e.p.Fixture.JournalInitiallyAbsent || e.p.Fixture.CaptureCurrentJournal {
+		return nil, errors.New("guardrail availability original cannot use effect journal modes")
 	}
 	if err = e.decode("self-identity.json", &e.self); err != nil || e.self["name"] == "" || !staticUID.MatchString(e.self["uid"]) {
 		return nil, errors.New("downward API self identity receipt differs")
@@ -121,7 +121,7 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 	}
 	expectedAbsent := availabilityJournalShouldBeAbsent(e.p, name)
 	journalRaw, journalUID, journalRV, journalAbsent, journalErr := availabilityJournalReceipt(journal, e.p.Context, e.p.Fixture.GuardrailJournalName,
-		expectedAbsent || (e.p.Fixture.JournalInitiallyAbsent && availabilityIsJournalAbsence(journal, e.p.Context, e.p.Fixture.GuardrailJournalName)))
+		expectedAbsent || ((e.p.Fixture.JournalInitiallyAbsent || e.p.Fixture.CaptureCurrentJournal) && availabilityIsJournalAbsence(journal, e.p.Context, e.p.Fixture.GuardrailJournalName)))
 	if journalErr != nil {
 		return s, journalErr
 	}
@@ -173,7 +173,7 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 		}
 		rsName, rsUID, re := availabilityController(console, "ReplicaSet")
 		depName, depUID, de := availabilityController(rs, "Deployment")
-		if re != nil || de != nil || availabilityString(availabilityMeta(rs), "name") != rsName || availabilityUID(rs) != rsUID || availabilityString(availabilityMeta(dep), "name") != depName || availabilityUID(dep) != depUID || depName != e.p.Fixture.ConsoleDeploymentName || depUID != e.p.Fixture.ConsoleDeploymentUID || availabilityString(availabilityMeta(console), "name") != e.self["name"] || availabilityUID(console) != e.self["uid"] || s.ConsolePodUID != e.self["uid"] || s.ConsoleReplicaSetUID != rsUID || s.ConsoleDeploymentUID != depUID || s.ClusterUID != availabilityUID(cluster) || s.ClusterUID != e.p.Fixture.ClusterUID || s.ManagerPodUID != availabilityUID(manager) || s.ManagerPodUID != e.p.Fixture.ManagerPodUID || s.ManagerImageID != e.p.Fixture.ManagerImageID || s.ConsoleImageID != e.p.Fixture.ConsoleImageID || s.ServiceUID != availabilityUID(service) || s.ServiceUID != e.p.Fixture.ServiceUID || s.PolicyUID != availabilityUID(policy) || s.PolicyUID != e.p.Fixture.PolicyUID || s.TargetPodUID != e.p.Fixture.PodUID || s.SourceUID != e.p.Fixture.SourceUID || s.SourceSHA256 != e.p.Fixture.SourceSHA256 || s.BoundarySourceSHA256 != e.p.Fixture.BoundarySourceSHA256 || (!e.p.Fixture.JournalInitiallyAbsent && s.JournalUID != e.p.Fixture.GuardrailJournalUID) || e.p.Fixture.EventCreator != "system:serviceaccount:phorvex-system:"+availabilityString(availabilityMap(console["spec"]), "serviceAccountName") {
+		if re != nil || de != nil || availabilityString(availabilityMeta(rs), "name") != rsName || availabilityUID(rs) != rsUID || availabilityString(availabilityMeta(dep), "name") != depName || availabilityUID(dep) != depUID || depName != e.p.Fixture.ConsoleDeploymentName || depUID != e.p.Fixture.ConsoleDeploymentUID || availabilityString(availabilityMeta(console), "name") != e.self["name"] || availabilityUID(console) != e.self["uid"] || s.ConsolePodUID != e.self["uid"] || s.ConsoleReplicaSetUID != rsUID || s.ConsoleDeploymentUID != depUID || s.ClusterUID != availabilityUID(cluster) || s.ClusterUID != e.p.Fixture.ClusterUID || s.ManagerPodUID != availabilityUID(manager) || s.ManagerPodUID != e.p.Fixture.ManagerPodUID || s.ManagerImageID != e.p.Fixture.ManagerImageID || s.ConsoleImageID != e.p.Fixture.ConsoleImageID || s.ServiceUID != availabilityUID(service) || s.ServiceUID != e.p.Fixture.ServiceUID || s.PolicyUID != availabilityUID(policy) || s.PolicyUID != e.p.Fixture.PolicyUID || s.TargetPodUID != e.p.Fixture.PodUID || s.SourceUID != e.p.Fixture.SourceUID || s.SourceSHA256 != e.p.Fixture.SourceSHA256 || s.BoundarySourceSHA256 != e.p.Fixture.BoundarySourceSHA256 || (!e.p.Fixture.JournalInitiallyAbsent && !e.p.Fixture.CaptureCurrentJournal && s.JournalUID != e.p.Fixture.GuardrailJournalUID) || e.p.Fixture.EventCreator != "system:serviceaccount:phorvex-system:"+availabilityString(availabilityMap(console["spec"]), "serviceAccountName") {
 			return s, errors.New("original installed identity or console owner chain differs")
 		}
 		generation, _ := availabilityMeta(policy)["generation"].(float64)

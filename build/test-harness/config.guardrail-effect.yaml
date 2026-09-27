@@ -29,6 +29,9 @@ guardrailAvailabilityFixture:
   # dispatch. In that mode guardrailJournalUID must be empty and the selected
   # native operation must create generation one with a fresh UID.
   journalInitiallyAbsent: false
+  # Reusable mode: set true with empty guardrailJournalUID and activeVariant.
+  # Each Fire freezes the current protected journal/variant in original reads.
+  captureCurrentJournal: false
   guardrailJournalUID: "__SET_REVIEWED_GUARDRAIL_JOURNAL_UID__"
   managerPodName: "__SET_REVIEWED_MANAGER_POD_NAME__"
   managerPodUID: "__SET_REVIEWED_MANAGER_POD_UID__"
