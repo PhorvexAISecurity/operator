@@ -38,6 +38,7 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
 
 // Voice and LiteLLM have 900-second server observation windows; leave a bounded margin for publication.
 export function liveAttackPollBudgetMs(route: LiveRoute): number {
+  if (route.kind === "vllm" && route.action === "request-drain") return 270_000;
   return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "litellm" ? 960_000 : 150_000;
 }
 

@@ -64,7 +64,7 @@ test("typed observation budgets cover 900-second runs and stay finite", () => {
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "litellm")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-agent-memory-contamination", endpoint: "/api/voice/live/fire" }, "voice")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/agency/live/fire" }, "voice")), 960_000);
-  assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm")), 150_000);
+  assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm")), 270_000);
 });
 
 test("completed exact NOOP shows reason and blocked candidate without inventing defense", () => {

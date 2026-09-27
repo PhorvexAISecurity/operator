@@ -119,6 +119,7 @@ type Record struct {
 	RollbackRef         string                            `json:"rollbackRef,omitempty"`
 	MutationKind        string                            `json:"mutationKind,omitempty"`
 	GracefulTermination *model.GracefulTerminationReceipt `json:"gracefulTermination,omitempty"`
+	DrainOperation      *model.DrainOperationEvidence     `json:"drainOperation,omitempty"`
 
 	// M-18 Phoenix forensic identity of the emission attempt: the AMTD context, the
 	// created SecurityEvent's name and server-assigned UID, and the logical rule tuple.
@@ -718,6 +719,7 @@ func toRecord(d model.Decision, prepareWire bool) Record {
 		RollbackRef:            d.RollbackRef,
 		MutationKind:           d.MutationKind,
 		GracefulTermination:    gracefulTerminationRecord(d.GracefulTermination),
+		DrainOperation:         model.CloneDrainOperationEvidence(d.DrainOperation),
 		Phoenix:                phoenixRecord(d.Phoenix),
 		PreemptMargin:          round4(d.PreemptMargin),
 		ProjectedNextStageSec:  round4(d.ProjectedNextStageSec),

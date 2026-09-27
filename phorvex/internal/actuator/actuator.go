@@ -199,6 +199,7 @@ type Result struct {
 	// GracefulTermination is the exact acknowledged native rotate request. It
 	// never claims the old process exited or a replacement became ready.
 	GracefulTermination *model.GracefulTerminationReceipt
+	DrainOperation      *model.DrainOperationEvidence
 }
 
 // Target is the per-asset context the capability gate (T1-E) passes to SupportsAction.

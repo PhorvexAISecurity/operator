@@ -150,6 +150,16 @@
 {{- $journal := required "console.guardrailOutput.outputPolicyJournalName is required" .Values.phorvex.console.guardrailOutput.outputPolicyJournalName }}
 {{- if not (regexMatch "^phorvex-output-[0-9a-f]{32}$" $journal) }}{{- fail "console.guardrailOutput.outputPolicyJournalName is invalid" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.drainLive.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.drainLive.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.drainLive.enabled requires scopedToken.existingSecret" }}{{- end }}
+{{- $name := required "console.drainLive.configMapName is required" .Values.phorvex.console.drainLive.configMapName }}
+{{- if not (regexMatch "^phorvex-catalogue-drain-live-[0-9a-f]{12}$" $name) }}{{- fail "console.drainLive.configMapName must be digest-named" }}{{- end }}
+{{- $sha := required "console.drainLive.profileSHA256 is required" .Values.phorvex.console.drainLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.drainLive.profileSHA256 must be SHA-256" }}{{- end }}
+{{- if ne $name (printf "phorvex-catalogue-drain-live-%s" (trunc 12 $sha)) }}{{- fail "console.drainLive profile name/hash mismatch" }}{{- end }}
+{{- if not (regexMatch "^phorvex-operation-[0-9a-f]{40}$" .Values.phorvex.console.drainLive.journalName) }}{{- fail "console.drainLive.journalName must be exact protected journal" }}{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.litellmLive.enabled }}
 {{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.litellmLive.enabled requires catalogueV1.enabled" }}{{- end }}
 {{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system release namespace" }}{{- end }}
@@ -311,6 +321,12 @@ spec:
         - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailOutput.profileSHA256 | quote }}
         {{- end }}
+        - name: PHORVEX_CONSOLE_DRAIN_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.drainLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.drainLive.enabled }}
+        - name: PHORVEX_CONSOLE_DRAIN_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.drainLive.profileSHA256 | quote }}
+        {{- end }}
         - name: PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED
           value: {{ .Values.phorvex.console.litellmLive.enabled | default false | quote }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
@@ -323,7 +339,7 @@ spec:
         - name: PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.voiceAgencyLive.profileSHA256 | quote }}
         {{- end }}
-        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
+        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled .Values.phorvex.console.drainLive.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
           valueFrom:
             fieldRef:
@@ -689,6 +705,12 @@ spec:
           subPath: config.guardrail-output-response.yaml
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.drainLive.enabled }}
+        - name: drain-live-reviewed-profile
+          mountPath: /etc/phorvex-drain-live/profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
         - name: litellm-live-reviewed-inputs
           mountPath: /etc/phorvex-litellm-live
@@ -842,6 +864,15 @@ spec:
           items:
           - key: config.guardrail-output-response.yaml
             path: config.guardrail-output-response.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.drainLive.enabled }}
+      - name: drain-live-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.drainLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
       {{- end }}
       {{- if .Values.phorvex.console.litellmLive.enabled }}
       - name: litellm-live-reviewed-inputs

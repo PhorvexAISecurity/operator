@@ -1048,6 +1048,43 @@ type GracefulTerminationReceipt struct {
 	TerminationStatus           string `json:"terminationStatus"`
 }
 
+// DrainRequestDisposition is a bounded digest of a validated v11 scheduler ID.
+// Raw request IDs can be caller controlled and must not enter the manager audit.
+type DrainRequestDisposition struct {
+	RequestSHA256 string `json:"requestSHA256"`
+	Disposition   string `json:"disposition"`
+}
+
+// DrainOperationEvidence is the terminal native observation copied before the
+// protected operation journal is removed. It does not itself prove mitigation.
+type DrainOperationEvidence struct {
+	OperationID        string                    `json:"operationID"`
+	Generation         string                    `json:"generation"`
+	PolicyUID          string                    `json:"policyUID"`
+	TargetUID          string                    `json:"targetUID"`
+	ServiceUID         string                    `json:"serviceUID"`
+	BackendIncarnation string                    `json:"backendIncarnation"`
+	ReceiptSHA256      string                    `json:"receiptSHA256"`
+	ProxyActive        int                       `json:"proxyActive"`
+	SnapshotRunning    int                       `json:"snapshotRunning"`
+	Aborted            int                       `json:"aborted"`
+	CompletedBefore    int                       `json:"completedBeforeAbort"`
+	SnapshotRequests   []string                  `json:"snapshotRequestSHA256,omitempty"`
+	Dispositions       []DrainRequestDisposition `json:"dispositions,omitempty"`
+	Reopened           bool                      `json:"reopened"`
+	Restored           bool                      `json:"restored"`
+}
+
+func CloneDrainOperationEvidence(in *DrainOperationEvidence) *DrainOperationEvidence {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.SnapshotRequests = append([]string(nil), in.SnapshotRequests...)
+	out.Dispositions = append([]DrainRequestDisposition(nil), in.Dispositions...)
+	return &out
+}
+
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
@@ -1161,6 +1198,7 @@ type Decision struct {
 	// exact native rotate Eviction request. It records the requested bound while leaving
 	// physical termination explicitly unconfirmed.
 	GracefulTermination *GracefulTerminationReceipt
+	DrainOperation      *DrainOperationEvidence
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately
