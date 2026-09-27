@@ -116,6 +116,7 @@ spec:
                       - sensitive-output-policy-activate
                       - voice-memory-note-revoke
                       - voice-refund-pair-deny
+                      - voice-output-policy-activate
                       - litellm-client-revoke
                       - kv-migrate-invalidate
                       - disable

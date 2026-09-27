@@ -466,6 +466,7 @@ const (
 	ActionSensitiveOutputPolicyActivate ActionType = "sensitive-output-policy-activate"
 	ActionVoiceMemoryNoteRevoke         ActionType = "voice-memory-note-revoke"
 	ActionVoiceRefundPairDeny           ActionType = "voice-refund-pair-deny"
+	ActionVoiceOutputPolicyActivate     ActionType = "voice-output-policy-activate"
 	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
 	ActionDisable                       ActionType = "disable"
