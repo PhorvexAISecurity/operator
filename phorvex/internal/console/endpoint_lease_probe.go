@@ -26,6 +26,8 @@ token=os.environ.get('PHORVEX_GUARDRAIL_ADMIN_KEY','')
 cert=os.environ.get('PHORVEX_ADMIN_TLS_CERT_FILE','')
 if not 32<=len(token)<=256 or not cert:raise RuntimeError('admin authority')
 ctx=ssl.create_default_context(cafile=cert)
+# The mounted certificate is the exact server leaf, not its issuing CA.
+ctx.verify_flags|=ssl.VERIFY_X509_PARTIAL_CHAIN
 raw=socket.create_connection(('127.0.0.1',8443),timeout=8)
 sock=ctx.wrap_socket(raw,server_hostname='vllm-admin.vllm.svc')
 try:
