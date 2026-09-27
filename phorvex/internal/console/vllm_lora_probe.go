@@ -11,6 +11,7 @@ import (
 )
 
 const liveLoRABaseModel = "Qwen/Qwen2.5-7B-Instruct-AWQ"
+const liveLoRAModelRevision = "b25037543e9394b818fdfca67ab2a00ecc7dd641"
 
 // This probe is deliberately a zero-delta PEFT adapter. It tests whether an
 // unapproved adapter can be loaded and then evicted; it does not poison model
@@ -19,11 +20,13 @@ const zeroLoRAScript = `
 import hashlib, json, os, struct, sys
 from transformers import AutoConfig
 
-name, pod_uid = sys.argv[1:3]
+name, pod_uid, revision = sys.argv[1:4]
 model = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 if not name.startswith("phorvex-probe-") or len(name) != 30 or any(c not in "0123456789abcdef" for c in name[14:]):
     raise SystemExit("invalid probe identity")
-cfg = AutoConfig.from_pretrained(model, local_files_only=True, trust_remote_code=False)
+if revision != "b25037543e9394b818fdfca67ab2a00ecc7dd641":
+    raise SystemExit("unreviewed model revision")
+cfg = AutoConfig.from_pretrained(model, revision=revision, local_files_only=True, trust_remote_code=False)
 quant = getattr(cfg, "quantization_config", {}) or {}
 if (cfg.model_type, cfg.hidden_size, cfg.num_hidden_layers, cfg.num_attention_heads, cfg.num_key_value_heads, quant.get("quant_method")) != ("qwen2", 3584, 28, 28, 4, "awq"):
     raise SystemExit("installed base model configuration is not the reviewed Qwen AWQ shape")
@@ -134,7 +137,7 @@ func liveLoRAPrerequisites(pod vllmPodState) error {
 			return fmt.Errorf("duplicate vLLM containers")
 		}
 		found = true
-		for _, expected := range [][]string{{"--model", liveLoRABaseModel}, {"--max-loras", "4"}, {"--max-lora-rank", "16"}} {
+		for _, expected := range [][]string{{"--model", liveLoRABaseModel}, {"--revision", liveLoRAModelRevision}, {"--max-loras", "4"}, {"--max-lora-rank", "16"}} {
 			count := 0
 			for i, arg := range c.Args {
 				if arg == expected[0] {
@@ -183,7 +186,7 @@ func (s *Server) stageZeroLoRA(pod, podUID string) (string, string, error) {
 	if err := s.cfg.appendState(s.cfg.statePath("effect-intents.jsonl"), intent); err != nil {
 		return "", "", fmt.Errorf("durable LoRA fixture intent: %w", err)
 	}
-	out, err := s.cfg.execText(30*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "-c", "vllm", "--", "python3", "-c", zeroLoRAScript, name, podUID)
+	out, err := s.cfg.execText(30*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "-c", "vllm", "--", "python3", "-c", zeroLoRAScript, name, podUID, liveLoRAModelRevision)
 	if err != nil {
 		return name, path, fmt.Errorf("stage zero-delta LoRA fixture: %w", err)
 	}

@@ -161,7 +161,7 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 		}
 		pod := map[string]any{"metadata": map[string]any{"name": "vllm-0", "uid": uid, "resourceVersion": "11",
 			"labels": labels, "annotations": annotations},
-			"spec": map[string]any{"containers": []any{map[string]any{"name": "vllm", "args": []string{"--model", liveLoRABaseModel, "--enable-lora", "--max-loras", "4", "--max-lora-rank", "16"}, "env": []any{map[string]string{"name": "VLLM_ALLOW_RUNTIME_LORA_UPDATING", "value": "1"}}}}}}
+			"spec": map[string]any{"containers": []any{map[string]any{"name": "vllm", "args": []string{"--model", liveLoRABaseModel, "--enable-lora", "--max-loras", "4", "--max-lora-rank", "16", "--revision", liveLoRAModelRevision}, "env": []any{map[string]string{"name": "VLLM_ALLOW_RUNTIME_LORA_UPDATING", "value": "1"}}}}}}
 		encoded, _ := json.Marshal(pod)
 		return string(encoded), nil
 	case strings.Contains(joined, "get pod vllm-0") && strings.Contains(joined, "metadata.uid"):
@@ -179,6 +179,12 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 		return "", nil
 	case strings.Contains(joined, "-- python3 -c"):
 		name, uid := args[len(args)-2], args[len(args)-1]
+		if strings.Contains(joined, "PHORVEX_LORA_READY") {
+			name, uid = args[len(args)-3], args[len(args)-2]
+			if args[len(args)-1] != liveLoRAModelRevision {
+				return "", errors.New("fixture received an unreviewed model revision")
+			}
+		}
 		if args[len(args)-1] == "verify" {
 			name, uid = args[len(args)-3], args[len(args)-2]
 		}
