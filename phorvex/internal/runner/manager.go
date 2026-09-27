@@ -3011,7 +3011,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny ||
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
@@ -3020,6 +3020,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "voice-memory-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionVoiceRefundPairDeny {
 				reason = "voice-refund-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionVoiceMCPToolPin {
+				reason = "voice-mcp-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionAdapterRotate {
 				reason = "adapter-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
@@ -3114,6 +3116,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			OutputPolicyObservation:  v.Pod.OutputPolicyObservation,
 			VoiceMemoryObservation:   v.Pod.VoiceMemoryObservation,
 			VoiceRefundObservation:   v.Pod.VoiceRefundObservation,
+			VoiceMCPObservation:      v.Pod.VoiceMCPObservation,
 			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
 			PolicyName:               pol.PolicyName,
 			PolicyUID:                pol.PolicyUID,
@@ -3137,6 +3140,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
 			decisions[i].Action == model.ActionVoiceRefundPairDeny ||
+			decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID

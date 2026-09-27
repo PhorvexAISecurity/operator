@@ -280,3 +280,35 @@ subjects:
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- if .Values.phorvex.voiceMCP.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "voiceMCP requires native or hybrid actuator" }}{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-mcp
+  namespace: voice
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["voice-mcp-tool-policy"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["voice-memory-state-token"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-mcp
+  namespace: voice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-voice-mcp
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -64,6 +64,8 @@ type EnactCtx struct {
 	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
 	VoiceMemoryTransport         http.RoundTripper // private fixed-Pod-IP readback seam
 	VoiceRefundTransport         http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPTransport            http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPApprovedImage        string            // operator-configured reviewed MCP repo@sha256; never event-derived
 	LiteLLMStatusTransport       http.RoundTripper // test-only exact PodIP status-readback seam
 	LiteLLMStatusToken           string            // test-only; runtime reads the fixed mounted Secret path
 	OutputPolicyReadbackTimeout  time.Duration

@@ -111,6 +111,9 @@ const (
 	// FactVoiceRefundPairExposure is repeat use of one asserted caller/order pair
 	// after an observed model callback and owned CRM refund side effect.
 	FactVoiceRefundPairExposure = "voiceRefundPairExposure"
+	// FactVoiceMCPDescriptorSteering is the prospective repeat path after one
+	// observed poisoned descriptor entered the installed Voice model context.
+	FactVoiceMCPDescriptorSteering = "voiceMcpDescriptorSteering"
 	// FactLiteLLMOwnedClientChannel is the repeat-use capability of one
 	// synthetic client credential at the installed admission gateway. It does
 	// not represent copied master-key knowledge or prior completions.
