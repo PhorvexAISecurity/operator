@@ -35,9 +35,13 @@ The CLI reads `vllm` Namespace; exact `vllm/vllm` Deployment,
 that Pod's controlling ReplicaSet; and EndpointSlices labeled for the `vllm`
 Service. It requires one Ready Pod with an exact Pod→ReplicaSet→Deployment
 controller chain and one Ready EndpointSlice target belonging to the same
-Service UID. It re-reads the four principal objects and refuses UID or
-resourceVersion drift, then re-reads the current Pod and refuses UID or
-resourceVersion drift there too. An ordinary Service selector that matches
+Service UID. It re-reads the Deployment, source ConfigMap and Service and
+refuses UID or resourceVersion drift. For the policy it requires unchanged
+UID, generation, spec, labels, annotations, owner references, finalizers and
+deletion state; routine status-only resourceVersion ticks are accepted. It
+retains private exact policy bytes and hashes from both reads as
+`original-policy.json` and `policy-after.json`. It then re-reads the current
+Pod and refuses UID or resourceVersion drift there too. An ordinary Service selector that matches
 the Deployment template uses the renderer's default route path. Only a
 reviewed additional Pod-only `phorvex.ai/route-key` selector supplies the
 current Pod/ReplicaSet/EndpointSlice route originals to the renderer; any

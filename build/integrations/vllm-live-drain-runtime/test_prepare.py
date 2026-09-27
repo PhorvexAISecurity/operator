@@ -33,6 +33,14 @@ if key=='pod vllm-1' and os.environ.get('FAKE_KUBE_POD_REREAD')=='changed':
     calls=[json.loads(line) for line in Path(os.environ['FAKE_KUBE_LOG']).read_text().splitlines()]
     if sum(' '.join(row[row.index('get')+1:-2])==key for row in calls)>=2:
         obj['metadata']['resourceVersion']='8'
+if key=='phorvexpolicy vllm-defense' and os.environ.get('FAKE_KUBE_POLICY_REREAD'):
+    calls=[json.loads(line) for line in Path(os.environ['FAKE_KUBE_LOG']).read_text().splitlines()]
+    if sum(' '.join(row[row.index('get')+1:-2])==key for row in calls)>=2:
+        obj['metadata']['resourceVersion']='8'
+        obj['status']={'lastTickTime':'2026-09-27T12:28:40Z'}
+        mode=os.environ['FAKE_KUBE_POLICY_REREAD']
+        if mode=='spec': obj['spec']['mode']='paused'
+        if mode=='generation': obj['metadata']['generation']=2
 print(json.dumps(obj,separators=(',',':')))
 """)
         self.kubectl.chmod(self.kubectl.stat().st_mode | stat.S_IXUSR)
@@ -69,6 +77,8 @@ print(json.dumps(obj,separators=(',',':')))
                                              "volumes": [{"name": "guardrail-src", "configMap": {"name": "guardrail-proxy"}}]}}}
         cm = meta("ConfigMap", "guardrail-proxy", "source-uid")
         policy = meta("PhorvexPolicy", "vllm-defense", "policy-uid")
+        policy["metadata"]["generation"] = 1
+        policy["spec"] = {"mode": "active", "actions": {"enabled": ["request-drain"]}}
         service = meta("Service", "vllm", "service-uid")
         service["spec"] = {"selector": {"phorvex.ai/role": "leader"}}
         pod = meta("Pod", "vllm-1", "pod-uid")
@@ -111,6 +121,33 @@ print(json.dumps(obj,separators=(',',':')))
         self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((out / "original-current-pod.json").stat().st_mode), 0o600)
         self.assertEqual(prepare.sha((out / "publication.json").read_bytes()), manifest["publicationReceiptSHA256"])
+        self.assertEqual(prepare.sha((out / "policy-after.json").read_bytes()), manifest["policyAfter"]["sha256"])
+
+    def test_policy_status_tick_retains_both_receipts_without_refusing_candidate(self):
+        out = self.root / "policy-status-tick"
+        with mock.patch.dict(os.environ, FAKE_KUBE_POLICY_REREAD="status"):
+            with mock.patch.object(prepare.drain_render, "render", return_value={"candidate.json": b"{}"}) as renderer:
+                manifest = prepare.prepare("reviewed-dev", out, self.receipt, str(self.kubectl))
+        renderer.assert_called_once()
+        before = json.loads((out / manifest["originals"]["policy"]["file"]).read_bytes())
+        after = json.loads((out / manifest["policyAfter"]["file"]).read_bytes())
+        self.assertEqual(before["metadata"]["resourceVersion"], "7")
+        self.assertEqual(after["metadata"]["resourceVersion"], "8")
+        self.assertEqual(after["status"]["lastTickTime"], "2026-09-27T12:28:40Z")
+        self.assertEqual(prepare.sha((out / manifest["policyAfter"]["file"]).read_bytes()),
+                         manifest["policyAfter"]["sha256"])
+        self.assertEqual(stat.S_IMODE((out / "policy-after.json").stat().st_mode), 0o600)
+
+    def test_policy_spec_or_generation_change_refuses_candidate(self):
+        for mode in ("spec", "generation"):
+            with self.subTest(mode=mode), mock.patch.dict(os.environ, FAKE_KUBE_POLICY_REREAD=mode):
+                self.log.unlink(missing_ok=True)
+                out = self.root / ("policy-" + mode)
+                with mock.patch.object(prepare.drain_render, "render") as renderer:
+                    with self.assertRaisesRegex(ValueError, "policy authority changed"):
+                        prepare.prepare("reviewed-dev", out, self.receipt, str(self.kubectl))
+                    renderer.assert_not_called()
+                self.assertFalse(out.exists())
 
     def test_template_aligned_service_reaches_real_drain_renderer(self):
         dep = self.objects["deployment vllm"]

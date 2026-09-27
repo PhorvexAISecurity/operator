@@ -46,6 +46,21 @@ def exact_object(obj: dict, kind: str, name: str, namespace: str | None) -> dict
     return meta
 
 
+def policy_authority(obj: dict) -> tuple:
+    """Fields that can change the policy's meaning or ownership, excluding status ticks."""
+    meta = exact_object(obj, "PhorvexPolicy", "vllm-defense", "vllm")
+    if (type(meta.get("generation")) is not int or meta["generation"] < 1 or
+            not isinstance(obj.get("spec"), dict) or not obj["spec"] or
+            any(not isinstance(meta.get(key, {}), dict) for key in ("labels", "annotations")) or
+            not isinstance(meta.get("ownerReferences", []), list) or
+            not isinstance(meta.get("finalizers", []), list)):
+        raise ValueError("policy authority unavailable")
+    return (meta["uid"], meta["generation"], obj["spec"],
+            meta.get("labels", {}), meta.get("annotations", {}),
+            meta.get("deletionTimestamp"), meta.get("ownerReferences", []),
+            meta.get("finalizers", []))
+
+
 def controller_ref(obj: dict, kind: str, name: str, uid: str) -> None:
     refs = obj.get("metadata", {}).get("ownerReferences", [])
     owners = [ref for ref in refs if ref.get("controller") is True]
@@ -188,7 +203,7 @@ def prepare(context: str, out: Path, publication_path: Path, kubectl: str = "kub
     cm = capture("configmap", "vllm", "configmap", "guardrail-proxy")
     exact_object(cm, "ConfigMap", "guardrail-proxy", "vllm")
     policy = capture("policy", "vllm", "phorvexpolicy", "vllm-defense")
-    exact_object(policy, "PhorvexPolicy", "vllm-defense", "vllm")
+    policy_authority(policy)
     service = capture("service", "vllm", "service", "vllm")
     exact_object(service, "Service", "vllm", "vllm")
     pods = capture("pod-list", "vllm", "pods", selector=selector_from(deployment))
@@ -214,14 +229,19 @@ def prepare(context: str, out: Path, publication_path: Path, kubectl: str = "kub
     if mismatch not in (set(), {"phorvex.ai/route-key"}):
         raise ValueError("unreviewed current Service selector mismatch")
     route_state = (current, rs, slices) if mismatch else None
+    policy_after = None
     for label, resource, name in (("deployment", "deployment", "vllm"),
                                   ("configmap", "configmap", "guardrail-proxy"),
                                   ("policy", "phorvexpolicy", "vllm-defense"),
                                   ("service", "service", "vllm")):
-        reread, _ = run_get(context, "vllm", resource, name, kubectl=kubectl)
+        reread, raw = run_get(context, "vllm", resource, name, kubectl=kubectl)
         before = originals[label][0]["metadata"]
         after = reread.get("metadata", {})
-        if before.get("uid") != after.get("uid") or before.get("resourceVersion") != after.get("resourceVersion"):
+        if label == "policy":
+            if policy_authority(originals[label][0]) != policy_authority(reread):
+                raise ValueError("policy authority changed during read-only snapshot")
+            policy_after = (reread, raw)
+        elif before.get("uid") != after.get("uid") or before.get("resourceVersion") != after.get("resourceVersion"):
             raise ValueError(label + " changed during read-only snapshot")
     pod_reread, _ = run_get(context, "vllm", "pod", current["metadata"]["name"], kubectl=kubectl)
     if (pod_reread.get("metadata", {}).get("uid") != current["metadata"]["uid"] or
@@ -241,6 +261,11 @@ def prepare(context: str, out: Path, publication_path: Path, kubectl: str = "kub
         manifest["originals"][label] = {"file": filename, "sha256": sha(raw),
                                         "uid": obj.get("metadata", {}).get("uid"),
                                         "resourceVersion": obj.get("metadata", {}).get("resourceVersion")}
+    policy_after_obj, policy_after_raw = policy_after
+    write_private(out / "policy-after.json", policy_after_raw)
+    manifest["policyAfter"] = {"file": "policy-after.json", "sha256": sha(policy_after_raw),
+                               "uid": policy_after_obj["metadata"]["uid"],
+                               "resourceVersion": policy_after_obj["metadata"]["resourceVersion"]}
     write_private(out / "publication.json", published_raw)
     for name, raw in candidates.items():
         write_private(out / name, raw)
