@@ -34,8 +34,8 @@ the exact run owner tag and observed refund IDs; an ambiguous write or cleanup
 failure must not be repeated or reported as a defended result.
 
 `ws_probe.py` is the transport-only half of that baseline. It requires an
-already established, UID-pinned `kubectl port-forward` to the actual Voice Pod
-on `127.0.0.1` and a reviewed eight-to-24-character run ID. It rejects remote
+owned, UID-pinned `kubectl port-forward` to the actual Voice Pod on `127.0.0.1`
+and a reviewed eight-to-24-character run ID. It rejects remote
 hosts, non-`/ws` routes, and query strings. It sends exactly one of the fixed
 clips as 20 ms media frames, starts from caller `+15550009141`, drains bounded
 audio replies, and ends within ten seconds. Its JSON output is a call/transport
@@ -45,6 +45,14 @@ with a Python environment containing `websockets` 17:
 ```
 python -m unittest discover -s build/integrations/voice-agency -p 'test_*.py' -q
 ```
+
+`forward_probe.py` creates and closes that one owned forward through the
+same reviewed SSH transport. Without `--dispatch` it performs no I/O. Dispatch
+requires fresh cluster, Voice Pod UID/image/container/source, and Service UID
+pins; it verifies the exact Ready EndpointSlice target and `/app/bot.py` hash
+before and after the request. An unused private output directory retains
+intent, progress, result, and forward cleanup evidence. It never treats
+transport media as a CRM write or security result.
 
 The installed CRM has no fixture write API. `mongo_fixture.py` contains the
 operator-side `seed`, `observe`, and `cleanup` phases for its Mongo database.

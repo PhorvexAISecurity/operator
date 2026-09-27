@@ -37,8 +37,14 @@ def checked_url(value: str) -> str:
 def identity(run: str, phase: str) -> tuple[str, str]:
     if not re.fullmatch(r"[a-z0-9]{8,24}", run) or phase not in CLIP_SHA:
         raise ValueError("invalid fixed run identity or phase")
-    suffix = hashlib.sha256(f"{run}:{phase}".encode()).hexdigest()[:24].upper()
+    suffix = hashlib.sha256(f"{run}:{phase}".encode()).hexdigest()[:32].upper()
     return "MZ" + suffix, "CA" + suffix
+
+
+def account_identity(run: str) -> str:
+    if not re.fullmatch(r"[a-z0-9]{8,24}", run):
+        raise ValueError("invalid fixed run identity")
+    return "AC" + hashlib.sha256(f"{run}:account".encode()).hexdigest()[:32].upper()
 
 
 def clip(phase: str) -> bytes:
@@ -53,6 +59,7 @@ def clip(phase: str) -> bytes:
 async def run_probe(url: str, run: str, phase: str, *, connector=connect) -> dict:
     checked_url(url)
     stream, call = identity(run, phase)
+    account = account_identity(run)
     data = clip(phase)
     received = 0
 
@@ -74,8 +81,10 @@ async def run_probe(url: str, run: str, phase: str, *, connector=connect) -> dic
                              proxy=None, compression=None) as ws:
             await ws.send(json.dumps({"event": "connected", "protocol": "Call", "version": "1.0.0"}, separators=(",", ":")))
             await ws.send(json.dumps({"event": "start", "sequenceNumber": "1", "streamSid": stream,
-                                      "start": {"accountSid": "AC-owned-synthetic", "callSid": call,
-                                                "streamSid": stream, "customParameters": {"caller": CALLER}}},
+                                      "start": {"accountSid": account, "callSid": call, "streamSid": stream,
+                                                "tracks": ["inbound"], "customParameters": {"caller": CALLER},
+                                                "mediaFormat": {"encoding": "audio/x-mulaw", "sampleRate": 8000,
+                                                                "channels": 1}}},
                                      separators=(",", ":")))
             reader = asyncio.create_task(drain(ws))
             try:
@@ -89,7 +98,7 @@ async def run_probe(url: str, run: str, phase: str, *, connector=connect) -> dic
                     await asyncio.sleep(0.02)
                 await asyncio.sleep(1.4)
                 stop = {"event": "stop", "sequenceNumber": str(index + 1), "streamSid": stream,
-                        "stop": {"accountSid": "AC-owned-synthetic", "callSid": call}}
+                        "stop": {"accountSid": account, "callSid": call}}
                 await ws.send(json.dumps(stop, separators=(",", ":")))
                 await asyncio.sleep(0.2)
             finally:
