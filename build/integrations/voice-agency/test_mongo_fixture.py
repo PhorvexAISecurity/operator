@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 spec = importlib.util.spec_from_file_location("voice_agency_mongo_fixture", Path(__file__).with_name("mongo_fixture.py"))
@@ -73,6 +75,23 @@ class VoiceAgencyMongoFixtureTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             fixture.fixture_source("agencya1", "cleanup", ["RF-WRONG"])
         self.assertIn("const PHASE=\"observe\"", fixture.fixture_source("agencya1", "observe", []))
+
+    def test_ssh_transport_source_is_fenced_before_kubectl(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as parent:
+            source = Path(parent) / "transport.py"
+            source.write_text("class Transport:\n"
+                              "    def __init__(self, access): self.access = access\n"
+                              "    def kubectl(self, argv, timeout):\n"
+                              "        return type('Reply', (), {'returncode': 0, 'stdout': 'ok', 'stderr': ''})()\n")
+            with patch.object(fixture, "TRANSPORT_SOURCE", source), \
+                    patch.object(fixture, "TRANSPORT_SHA256", "0" * 64):
+                with self.assertRaises(ValueError):
+                    fixture.remote_kubectl(["kubectl", "--context", fixture.CONTEXT, "get", "pod"], timeout=2)
+            with patch.object(fixture, "TRANSPORT_SOURCE", source), \
+                    patch.object(fixture, "TRANSPORT_SHA256", hashlib.sha256(source.read_bytes()).hexdigest()):
+                reply = fixture.remote_kubectl(["kubectl", "--context", fixture.CONTEXT, "get", "pod"], timeout=2)
+                self.assertEqual(reply.stdout, b"ok")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -22,16 +23,34 @@ URI = ("mongodb://127.0.0.1:27017/admin?directConnection=true&"
 PREFIX = "VOICE_AGENCY_JSON="
 SOURCE = Path(__file__).with_name("mongo_fixture.js")
 SOURCE_SHA256 = "6eb502cfe663eaa9ade2751e06a9909336333d5a3b52cd2b412e171cfbf55a2d"
+TRANSPORT_SOURCE = Path("/home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/review/console-vllm-installed-replay-v6/transport.py")
+TRANSPORT_SHA256 = "c357d0bc4c3dcab0d3eab24e9c7dcf1bbcb562543231ae6ea423781ca9bc5fed"
+ACCESS_FILE = Path("/home/mehrdad/operator/.git/phorvex-workflow/private-access/dev-ssh.json")
 
 
-def exact_pod(name: str, uid: str, image_id: str, container: str, *, run=subprocess.run) -> dict:
+def remote_kubectl(argv: list[str], *, timeout: int, **_):
+    if not argv or argv[0] != "kubectl" or not TRANSPORT_SOURCE.is_file() or \
+            hashlib.sha256(TRANSPORT_SOURCE.read_bytes()).hexdigest() != TRANSPORT_SHA256:
+        raise ValueError("reviewed SSH transport unavailable or changed")
+    spec = importlib.util.spec_from_file_location("voice_agency_reviewed_transport", TRANSPORT_SOURCE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    remote = module.Transport(ACCESS_FILE).kubectl(argv[1:], timeout=timeout)
+    return subprocess.CompletedProcess(argv, remote.returncode,
+                                       remote.stdout.encode("utf-8", "surrogateescape"),
+                                       remote.stderr.encode("utf-8", "surrogateescape"))
+
+
+def exact_pod(name: str, uid: str, image_id: str, container: str, *, run=remote_kubectl) -> dict:
     if not re.fullmatch(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?", name) or \
             not re.fullmatch(r"[0-9a-f-]{36}", uid) or \
             not re.fullmatch(r"[A-Za-z0-9./:@_-]{20,512}", image_id) or \
             not re.fullmatch(r"[a-z0-9-]{1,63}", container):
         raise ValueError("pinned Mongo Pod identity invalid")
     result = run(["kubectl", "--context", CONTEXT, "-n", NAMESPACE, "get", "pod", name, "-o", "json"],
-                 capture_output=True, timeout=8, check=True)
+                 capture_output=True, timeout=20, check=False)
+    if result.returncode != 0:
+        raise RuntimeError("pinned Mongo Pod inventory unavailable")
     if len(result.stdout) > 65536:
         raise ValueError("Mongo Pod inventory oversized")
     pod = json.loads(result.stdout)
@@ -59,7 +78,7 @@ def fixture_source(run_id: str, phase: str, refund_ids: list[str]) -> str:
 
 
 def one_phase(pod: str, uid: str, image_id: str, container: str, run_id: str, phase: str,
-              refund_ids: list[str], receipt_dir: Path, *, run=subprocess.run) -> dict:
+              refund_ids: list[str], receipt_dir: Path, *, run=remote_kubectl) -> dict:
     script = fixture_source(run_id, phase, refund_ids)
     if receipt_dir.exists():
         raise ValueError("private receipt directory already exists; ambiguous phase must not be repeated")
@@ -72,7 +91,7 @@ def one_phase(pod: str, uid: str, image_id: str, container: str, run_id: str, ph
     exact_pod(pod, uid, image_id, container, run=run)
     command = ["kubectl", "--context", CONTEXT, "-n", NAMESPACE, "exec", pod, "-c", container, "--",
                "mongosh", URI, "--quiet", "--norc", "--eval", script]
-    result = run(command, capture_output=True, timeout=12, check=False)
+    result = run(command, capture_output=True, timeout=20, check=False)
     if result.returncode != 0 or len(result.stdout) > 8192 or len(result.stderr) > 8192:
         raise RuntimeError("Mongo fixture phase failed or reply exceeded bound; inspect private intent before any action")
     # The Pod can be replaced between exec and GET; the mutation remains

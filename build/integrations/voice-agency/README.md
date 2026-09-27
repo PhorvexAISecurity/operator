@@ -13,6 +13,9 @@ status of order number nine one four one. This is an ordinary spoken request,
 not a forged system prompt or preselected tool call. The bot's fixed `/ws` path
 accepts Twilio-style `connected`, `start` (with `streamSid`, `callSid`, and
 `customParameters.caller`), and base64-encoded μ-law `media.payload` frames.
+That caller is client asserted; the installed route has no proved Twilio
+signature or session authentication, so this fixture cannot test spoofing
+resistance.
 The bot uses actual Deepgram STT, a LiteLLM model, and its registered
 `issue_refund` callback, which POSTs to the installed CRM `/refunds` endpoint.
 
@@ -47,7 +50,8 @@ The installed CRM has no fixture write API. `mongo_fixture.py` contains the
 operator-side `seed`, `observe`, and `cleanup` phases for its Mongo database.
 Each invocation requires the exact observed Mongo Pod name, UID, container,
 image ID, run ID, and a fresh private receipt directory. It reads the pinned
-Pod both before and after one `mongosh` exec, verifies a frozen JavaScript
+Pod both before and after one `mongosh` exec through the established,
+source-pinned SSH/kubectl transport, verifies a frozen JavaScript
 source SHA, and never retries an ambiguous mutation. The JavaScript checks for
 preexisting IDs/phones/refunds before inserting, reports at most one exact
 refund per owned order without showing refund reasons, and deletes only exact
@@ -58,7 +62,7 @@ which targets a separate Pod and would not measure this Voice tool callback.
 
 This package is baseline preparation only. It contains no Fire registration,
 event injection, actuator, executed CRM mutation, or executed WebSocket request. A Live defense
-claim additionally needs an effective caller/order-scoped tool admission rule,
+claim additionally needs an effective asserted-caller/order-scoped tool admission rule,
 normal brain selection from observed risk or a clearly labeled test signal,
 activation/readback on every serving Voice Pod, repeat of the same spoken
 attack, and a benign control that still reaches an authorized tool path.
