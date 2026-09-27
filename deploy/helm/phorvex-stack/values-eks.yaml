@@ -73,6 +73,17 @@ phorvex:
       enabled: true
       targetNamespace: vllm
       configMapName: phorvex-output-policy-guardrail-output-fixture
+    # Reviewed Voice actuator authority. Each flag renders only the manager's
+    # Voice-namespace Role for its own policy ConfigMap plus the private state
+    # token Secret; the manager and console Deployments are unchanged. Without
+    # it the brain binds the Voice observation but excludes the action as
+    # voice-memory-scope-unavailable (Secret get forbidden).
+    voiceMemory:
+      enabled: true
+    voiceRefund:
+      enabled: true
+    voiceOutput:
+      enabled: true
     # DEV caller-lease runtime: reviewed five-file source and immutable images.
     # Console admission is enabled separately after capturing the new manager.
     endpointLease:
