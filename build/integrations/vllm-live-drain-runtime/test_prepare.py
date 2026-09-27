@@ -1,6 +1,7 @@
 """No-cluster tests for exact read-only vLLM rollout preparation."""
 
 import json
+import copy
 import os
 from pathlib import Path
 import stat
@@ -28,6 +29,10 @@ if len(args)<7 or args[:2]!=['--context','reviewed-dev'] or args.count('get')!=1
 key=' '.join(args[args.index('get')+1:-2])
 obj=json.loads(Path(os.environ['FAKE_KUBE_DATA']).read_text()).get(key)
 if obj is None: sys.exit(5)
+if key=='pod vllm-1' and os.environ.get('FAKE_KUBE_POD_REREAD')=='changed':
+    calls=[json.loads(line) for line in Path(os.environ['FAKE_KUBE_LOG']).read_text().splitlines()]
+    if sum(' '.join(row[row.index('get')+1:-2])==key for row in calls)>=2:
+        obj['metadata']['resourceVersion']='8'
 print(json.dumps(obj,separators=(',',':')))
 """)
         self.kubectl.chmod(self.kubectl.stat().st_mode | stat.S_IXUSR)
@@ -57,7 +62,8 @@ print(json.dumps(obj,separators=(',',':')))
         meta = lambda kind, name, uid: {"kind": kind, "metadata": {"name": name, "namespace": "vllm",
                                                        "uid": uid, "resourceVersion": "7"}}
         dep = meta("Deployment", "vllm", "deployment-uid")
-        dep["spec"] = {"selector": {"matchLabels": {"app": "vllm"}}}
+        dep["spec"] = {"selector": {"matchLabels": {"app": "vllm"}},
+                       "template": {"metadata": {"labels": {"app": "vllm", "phorvex.ai/role": "leader"}}}}
         cm = meta("ConfigMap", "guardrail-proxy", "source-uid")
         policy = meta("PhorvexPolicy", "vllm-defense", "policy-uid")
         service = meta("Service", "vllm", "service-uid")
@@ -85,14 +91,14 @@ print(json.dumps(obj,separators=(',',':')))
         def renderer(*args):
             seen.append(args)
             self.assertEqual(args[0]["metadata"]["uid"], "deployment-uid")
-            self.assertEqual(args[-1][0]["metadata"]["uid"], "pod-uid")
+            self.assertIsNone(args[-1], "template-aligned route must not pass Pod-only mismatch evidence")
             return {"deployment.candidate.json": b'{"reviewOnly":true}',
                     "secret-contract.json": b'{"secretBytesIncluded":false}'}
         out = self.root / "review"
         with mock.patch.object(prepare.drain_render, "render", side_effect=renderer):
             manifest = prepare.prepare("reviewed-dev", out, self.receipt, str(self.kubectl))
         calls = [json.loads(row) for row in self.log.read_text().splitlines()]
-        self.assertEqual(len(calls), 13)
+        self.assertEqual(len(calls), 14)
         self.assertTrue(all(row[0:2] == ["--context", "reviewed-dev"] and row.count("get") == 1 for row in calls))
         self.assertTrue(all("secret" not in " ".join(row).lower() and "exec" not in row for row in calls))
         self.assertEqual(manifest["status"], "REVIEW_ONLY")
@@ -101,6 +107,49 @@ print(json.dumps(obj,separators=(',',':')))
         self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((out / "original-current-pod.json").stat().st_mode), 0o600)
         self.assertEqual(prepare.sha((out / "publication.json").read_bytes()), manifest["publicationReceiptSHA256"])
+
+    def test_template_aligned_service_reaches_real_drain_renderer(self):
+        dep = self.objects["deployment vllm"]
+        dep["spec"]["template"]["spec"] = {"containers": [
+            {"name": "vllm", "image": "reset-image", "args": ["--model", "Qwen/Qwen2.5-7B-Instruct-AWQ"]},
+            {"name": "guardrail", "image": "python:3.11-slim", "env": []}], "volumes": []}
+        cm = self.objects["configmap guardrail-proxy"]
+        cm["data"] = {"guardrail_proxy.py": "public proxy", "dual_server.py": "private control"}
+        self.objects["service vllm"]["spec"]["ports"] = [{"port": 8000, "targetPort": 8000}]
+        self.data.write_text(json.dumps(self.objects))
+        class Base:
+            PUBLISHED_IMAGE = "reset-image"
+            @staticmethod
+            def render(deployment, configmap, _policy, image, *_):
+                if image != "reset-image":
+                    raise ValueError("unexpected base image")
+                return {"deployment.candidate.json": json.dumps(copy.deepcopy(deployment)).encode(),
+                        "configmap.candidate.json": json.dumps(copy.deepcopy(configmap)).encode(),
+                        "values.overlay.yaml": json.dumps({"phorvex": {"phorvex": {"servingSecurity": {
+                            "bindings": [{"profileID": "vllm-reset-ack-v1"}]}}}}).encode(),
+                        "secret-contract.json": b'{"credentialBytesIncluded":false}'}
+        out = self.root / "real-render"
+        with mock.patch.object(prepare.drain_render, "base_renderer", return_value=Base):
+            manifest = prepare.prepare("reviewed-dev", out, self.receipt, str(self.kubectl))
+        candidate = json.loads((out / "deployment.candidate.json").read_bytes())
+        join = json.loads((out / "publication-join.json").read_bytes())
+        self.assertEqual(candidate["spec"]["template"]["spec"]["containers"][0]["image"], self.image)
+        self.assertNotIn("currentRouteAuthority", join)
+        self.assertEqual(len(manifest["candidates"]), 6)
+
+    def test_reviewed_pod_only_route_key_passes_route_originals(self):
+        route = "current-route"
+        self.objects["service vllm"]["spec"]["selector"]["phorvex.ai/route-key"] = route
+        for key in ("pods -l app=vllm", "pod vllm-1"):
+            pod = self.objects[key]["items"][0] if key.startswith("pods") else self.objects[key]
+            pod["metadata"]["labels"]["phorvex.ai/route-key"] = route
+        self.data.write_text(json.dumps(self.objects))
+        seen = []
+        with mock.patch.object(prepare.drain_render, "render", side_effect=lambda *args: (seen.append(args[-1]) or {"candidate.json": b"{}"})):
+            prepare.prepare("reviewed-dev", self.root / "route-key", self.receipt, str(self.kubectl))
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0][0]["metadata"]["uid"], "pod-uid")
+        self.assertEqual(seen[0][1]["metadata"]["uid"], "rs-uid")
 
     def test_unsafe_context_existing_output_and_wrong_publication_do_not_read_cluster(self):
         with self.assertRaises(ValueError):
@@ -140,6 +189,30 @@ print(json.dumps(obj,separators=(',',':')))
                     prepare.prepare("reviewed-dev", out, self.receipt, str(self.kubectl))
                 renderer.assert_not_called()
             self.assertFalse(out.exists())
+
+    def test_contradictory_ready_route_and_interleaved_pod_change_refuse(self):
+        for contradiction in ({"terminating": True}, {"serving": False}):
+            objects = self.fixture()
+            conditions = objects["endpointslices -l kubernetes.io/service-name=vllm"]["items"][0]["endpoints"][0]["conditions"]
+            conditions.update(contradiction)
+            self.data.write_text(json.dumps(objects))
+            with self.assertRaisesRegex(ValueError, "contradictory Ready"):
+                prepare.prepare("reviewed-dev", self.root / "contradictory", self.receipt, str(self.kubectl))
+            self.assertFalse((self.root / "contradictory").exists())
+        objects = self.fixture()
+        objects["service vllm"]["spec"]["selector"]["other-label"] = "wrong"
+        objects["pod vllm-1"]["metadata"]["labels"]["other-label"] = "wrong"
+        objects["pods -l app=vllm"]["items"][0]["metadata"]["labels"]["other-label"] = "wrong"
+        self.data.write_text(json.dumps(objects))
+        with self.assertRaisesRegex(ValueError, "unreviewed current Service selector mismatch"):
+            prepare.prepare("reviewed-dev", self.root / "other-mismatch", self.receipt, str(self.kubectl))
+        self.assertFalse((self.root / "other-mismatch").exists())
+        self.data.write_text(json.dumps(self.fixture()))
+        self.log.unlink(missing_ok=True)
+        with mock.patch.dict(os.environ, FAKE_KUBE_POD_REREAD="changed"):
+            with self.assertRaisesRegex(ValueError, "current Pod changed"):
+                prepare.prepare("reviewed-dev", self.root / "pod-changed", self.receipt, str(self.kubectl))
+        self.assertFalse((self.root / "pod-changed").exists())
 
 
 if __name__ == "__main__":

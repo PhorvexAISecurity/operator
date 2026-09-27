@@ -36,7 +36,13 @@ that Pod's controlling ReplicaSet; and EndpointSlices labeled for the `vllm`
 Service. It requires one Ready Pod with an exact Pod→ReplicaSet→Deployment
 controller chain and one Ready EndpointSlice target belonging to the same
 Service UID. It re-reads the four principal objects and refuses UID or
-resourceVersion drift. The private manifest records each original's exact
+resourceVersion drift, then re-reads the current Pod and refuses UID or
+resourceVersion drift there too. An ordinary Service selector that matches
+the Deployment template uses the renderer's default route path. Only a
+reviewed additional Pod-only `phorvex.ai/route-key` selector supplies the
+current Pod/ReplicaSet/EndpointSlice route originals to the renderer; any
+other selector mismatch refuses the candidate. A Ready EndpointSlice target
+marked terminating or non-serving also refuses. The private manifest records each original's exact
 bytes, hash, UID and resourceVersion. A failing read or ambiguous route emits
 no candidate directory.
 

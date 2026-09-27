@@ -90,8 +90,12 @@ def select_current(deployment: dict, service: dict, pods: dict, rs: dict, slices
         controller_ref(item, "Service", "vllm", service["metadata"]["uid"])
         if meta.get("labels", {}).get("kubernetes.io/service-name") != "vllm":
             raise ValueError("foreign EndpointSlice in current route")
-        ready.extend(row.get("targetRef", {}) for row in item.get("endpoints", [])
-                     if row.get("conditions", {}).get("ready") is True)
+        for row in item.get("endpoints", []):
+            conditions = row.get("conditions", {})
+            if conditions.get("ready") is True:
+                if conditions.get("terminating") is True or conditions.get("serving") is False:
+                    raise ValueError("contradictory Ready EndpointSlice target")
+                ready.append(row.get("targetRef", {}))
     if len(ready) != 1 or any(ready[0].get(k) != v for k, v in
                               {"kind": "Pod", "namespace": "vllm", "name": pod_meta["name"], "uid": pod_meta["uid"]}.items()):
         raise ValueError("current Service lacks one Ready owned Pod target")
@@ -186,6 +190,14 @@ def prepare(context: str, out: Path, publication_path: Path, kubectl: str = "kub
     rs = capture("current-replicaset", "vllm", "replicaset", rs_refs[0]["name"])
     slices = capture("current-endpointslices", "vllm", "endpointslices", selector="kubernetes.io/service-name=vllm")
     current = select_current(deployment, service, {"kind": "PodList", "items": [pod]}, rs, slices)
+    template_labels = deployment.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
+    service_selector = service.get("spec", {}).get("selector", {})
+    if not isinstance(template_labels, dict) or not isinstance(service_selector, dict) or not service_selector:
+        raise ValueError("current Service/Deployment selector unavailable")
+    mismatch = {key for key, value in service_selector.items() if template_labels.get(key) != value}
+    if mismatch not in (set(), {"phorvex.ai/route-key"}):
+        raise ValueError("unreviewed current Service selector mismatch")
+    route_state = (current, rs, slices) if mismatch else None
     for label, resource, name in (("deployment", "deployment", "vllm"),
                                   ("configmap", "configmap", "guardrail-proxy"),
                                   ("policy", "phorvexpolicy", "vllm-defense"),
@@ -195,10 +207,13 @@ def prepare(context: str, out: Path, publication_path: Path, kubectl: str = "kub
         after = reread.get("metadata", {})
         if before.get("uid") != after.get("uid") or before.get("resourceVersion") != after.get("resourceVersion"):
             raise ValueError(label + " changed during read-only snapshot")
+    pod_reread, _ = run_get(context, "vllm", "pod", current["metadata"]["name"], kubectl=kubectl)
+    if (pod_reread.get("metadata", {}).get("uid") != current["metadata"]["uid"] or
+            pod_reread.get("metadata", {}).get("resourceVersion") != current["metadata"]["resourceVersion"]):
+        raise ValueError("current Pod changed during read-only snapshot")
     candidates = drain_render.render(deployment, cm, policy, service, published,
                                      "vllm-control", "vllm-serving-admin", "vllm-admin.vllm.svc",
-                                     MODEL_REVISION, MODEL_CONFIG_SHA256,
-                                     (current, rs, slices))
+                                     MODEL_REVISION, MODEL_CONFIG_SHA256, route_state)
     out.mkdir(mode=0o700, parents=False, exist_ok=False)
     manifest = {"status": "REVIEW_ONLY", "context": context,
                 "publicationReceiptSHA256": sha(published_raw), "publicationSource": PUBLISHED_SOURCE,
