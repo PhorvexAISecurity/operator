@@ -417,6 +417,7 @@ func (s *Server) runVoiceMemoryLive(record *attackRecord, id string) {
 	}
 	probe.FirstContextObserved, probe.FirstBenignObserved = true, true
 	probe.Status = "LANDED"
+	record.Outcome = "LANDED"
 	record.OutcomeClass = "voice-memory-first-exposure-landed"
 	publishAttack(record)
 
