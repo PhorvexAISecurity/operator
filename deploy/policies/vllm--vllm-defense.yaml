@@ -16,6 +16,7 @@ spec:
     - request-drain
     - guardrail-rotate
     - kv-migrate-invalidate
+    - endpoint-lease-revoke
   assetValue:
     blastRadiusFromGraph: true
     fromLabels:
