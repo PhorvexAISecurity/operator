@@ -73,6 +73,13 @@ phorvex:
       enabled: true
       targetNamespace: vllm
       configMapName: phorvex-output-policy-guardrail-output-fixture
+    # DEV caller-lease runtime: reviewed five-file source and immutable images.
+    # Console admission is enabled separately after capturing the new manager.
+    endpointLease:
+      enabled: true
+      approvedSourceSHA256: c031693170c1d21d0a23405af255f83319efa240ce84d9c25d2436388528a3ff
+      approvedProxyImage: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:91cd4812dcb808d0498ddd0f7f768d64c34e86d05229cec25250abdd1402db32
+      approvedEngineImage: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:3534dec6b97c1b6e4042b3cb2987c6cf8c4d4e4167a833320e2f1b7f4135d050
     # PHVX-9b requires every NaN-cost veto to be visible. The live EKS cluster
     # already runs kube-prometheus-stack, so render the dedicated rule here.
     costNaNAlert:

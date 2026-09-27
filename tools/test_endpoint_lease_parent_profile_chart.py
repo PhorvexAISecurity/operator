@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -11,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "deploy/helm/phorvex-stack"
-HELM = Path("/home/mehrdad/.local/share/phorvex-tools/helm/3.16.4/helm")
+HELM = os.environ.get("HELM_BIN", "helm")
 PROFILE = b'{"version":1}'
 DIGEST = hashlib.sha256(PROFILE).hexdigest()
 NAME = "phorvex-catalogue-endpoint-lease-" + DIGEST[:12]
