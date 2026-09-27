@@ -165,6 +165,10 @@ func bindVoiceOutputObservation(ctx context.Context, reader client.Reader, p *mo
 	if !ok || string(dep.UID) != payload.DeploymentUID {
 		return
 	}
+	source, err := voiceoutputpolicy.VerifySource(ctx, reader, live, dep)
+	if err != nil || source.SourceSHA256 != payload.SourceSHA256 {
+		return
+	}
 	cm := &corev1.ConfigMap{}
 	if reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: p.VoiceOutputConfigMap}, cm) != nil || cm.DeletionTimestamp != nil || string(cm.UID) != payload.ConfigMapUID || len(cm.OwnerReferences) != 1 || cm.OwnerReferences[0].Controller == nil || !*cm.OwnerReferences[0].Controller || cm.OwnerReferences[0].UID != dep.UID || cm.OwnerReferences[0].Name != dep.Name || cm.OwnerReferences[0].Kind != "Deployment" || cm.OwnerReferences[0].APIVersion != "apps/v1" || len(cm.Data) != 1 || len(cm.BinaryData) != 0 {
 		return
