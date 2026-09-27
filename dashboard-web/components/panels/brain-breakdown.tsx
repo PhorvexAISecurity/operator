@@ -34,6 +34,8 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
   const [sel, setSel] = React.useState<Rec | null>(null);
   const [flash, setFlash] = React.useState(0);
   const [dataScope, setDataScope] = React.useState("");
+  const [streamError, setStreamError] = React.useState("");
+  const [noJournal, setNoJournal] = React.useState(false);
   const liveRef = React.useRef(live);
   const snapshotRef = React.useRef<Rec[] | null>(null);
   const scopeKey = `${lens}\u0000${target.context}`;
@@ -43,14 +45,18 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
     liveRef.current = true;
     snapshotRef.current = null;
     setRecs([]); setSnapshot(null); setNewCount(0); setSel(null); setLive(true); setFlash(0);
+    setStreamError(""); setNoJournal(false);
+    const idleTimer = setTimeout(() => { if (alive) setNoJournal(true); }, 15_000);
     const stop = liveStream(lens, (d) => {
       if (!alive || d?.kind !== "phorvex.decision") return;
+      clearTimeout(idleTimer);
+      setStreamError(""); setNoJournal(false);
       setDataScope(scopeKey);
       setRecs((prev) => [d, ...prev].slice(0, 60));
       if (snapshotRef.current) setNewCount((count) => count + 1);
       if (liveRef.current) { setSel(d); setFlash((f) => f + 1); }
-    }, undefined, 40, target.context);
-    return () => { alive = false; liveRef.current = false; stop(); };
+    }, undefined, 40, target.context, (error) => { if (alive) setStreamError(error.message); });
+    return () => { alive = false; liveRef.current = false; clearTimeout(idleTimer); stop(); };
   }, [lens, target.context, scopeKey]);
 
   const decisionList = dataScope === scopeKey ? (snapshot ?? recs) : [];
@@ -73,8 +79,9 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
   if (!sel || dataScope !== scopeKey) {
     return (
       <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> waiting for the operator&apos;s next decision…
-        <span className="text-muted-foreground/70">(it ticks every few seconds; fire an attack to see it act)</span>
+        {streamError ? <span role="alert">Decision stream unavailable: {streamError}. No decision journal is available in this view.</span>
+          : noJournal ? <span>No decision journal entry received for this context yet. The operator&apos;s decision state is unverified here.</span>
+          : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for a decision journal entry…</>}
       </div>
     );
   }
@@ -87,6 +94,7 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="space-y-4">
+      {streamError && <div role="alert" className="text-[12px] text-warning">Decision stream unavailable: {streamError}. Showing the last received journal entry; current decisions are unverified.</div>}
       {/* header + live control */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5 text-[13px] font-medium">

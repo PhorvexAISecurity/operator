@@ -19,7 +19,7 @@ new Function("require", "module", "exports", compiled)((name) => {
   assert.equal(name, "@/lib/api");
   return { api };
 }, subject, subject.exports);
-const { liveAttackRoute, dispatchLiveAttack, liveAttackPollBudgetMs, liveAttackVerdict } = subject.exports;
+const { liveAttackRoute, dispatchLiveAttack, liveAttackPollBudgetMs, liveAttackVerdict, liveAttackFollowMessage } = subject.exports;
 
 test("only exact advertised endpoint, ID and namespace pairs dispatch", async () => {
   const positives = [
@@ -70,4 +70,11 @@ test("completed exact NOOP shows reason and blocked candidate without inventing 
   assert.equal(verdict.reason, "no eligible candidate");
   assert.deepEqual(verdict.blocked, ["request-drain: ineligible — missing serving selector"]);
   assert.equal(liveAttackVerdict({ status: "partial", phorvexAction: "", why: "observer failed" }).action, "UNCONFIRMED");
+});
+
+test("cached running record changes from bounded follow-up to explicit timeout, never a final verdict", () => {
+  const running = { id: "exact-2", status: "running", observationDeadline: "2026-09-27T09:24:00Z" };
+  assert.match(liveAttackFollowMessage("exact-2", true, running), /still running.*observation deadline/);
+  assert.match(liveAttackFollowMessage("exact-2", false, running), /last read was running.*no final outcome is inferred/);
+  assert.equal(liveAttackFollowMessage("exact-2", false, { ...running, status: "done", decisionEvidence: { action: "noop" } }), "");
 });

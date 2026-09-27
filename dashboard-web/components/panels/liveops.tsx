@@ -2,7 +2,7 @@
 import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, LiveHistoryPage, RunStatus, AttackResult } from "@/lib/api";
-import { dispatchLiveAttack, liveAttackPollBudgetMs, liveAttackRoute, liveAttackVerdict } from "@/lib/live-attack-dispatch";
+import { dispatchLiveAttack, liveAttackFollowMessage, liveAttackPollBudgetMs, liveAttackRoute, liveAttackVerdict } from "@/lib/live-attack-dispatch";
 import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { useOwnerTenant } from "@/lib/owner";
 import { useSelectedTarget } from "@/lib/provider-store";
@@ -235,6 +235,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [attackRecordId, setAttackRecordId] = React.useState("");
   const [attackFollowUntil, setAttackFollowUntil] = React.useState(0);
   const [completedAttackRecord, setCompletedAttackRecord] = React.useState<AttackResult | null>(null);
+  const [lastAttackRecord, setLastAttackRecord] = React.useState<AttackResult | null>(null);
   React.useEffect(() => {
     if (!attackFollowUntil) return;
     const timer = setTimeout(() => setAttackFollowUntil(0), Math.max(0, attackFollowUntil - Date.now()));
@@ -247,13 +248,15 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     active: (row) => row.status === "running" });
   React.useEffect(() => {
     const row = attackRecordQuery.data;
+    if (row && row.id === attackRecordId) setLastAttackRecord(row);
     if (row && row.id === attackRecordId && (row.status === "done" || row.status === "partial")) {
       setCompletedAttackRecord(row);
       setAttackFollowUntil(0);
     }
   }, [attackRecordId, attackRecordQuery.data]);
-  const attackRecord = completedAttackRecord || attackRecordQuery.data;
+  const attackRecord = completedAttackRecord || attackRecordQuery.data || lastAttackRecord;
   const attackVerdict = attackRecord ? liveAttackVerdict(attackRecord) : null;
+  const attackFollowMessage = liveAttackFollowMessage(attackRecordId, attackFollowUntil > 0, attackRecord);
   const fireAttack = async (action: string) => {
     const workload = selWl;
     if (!queryScope.ready || targetQuery.error || workloadQuery.error || lens !== "operator" || !mutatesDefaultContext || !workload || !wls.some((item) => `${item.ns}/${item.name}` === workload)) {
@@ -271,7 +274,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       return;
     }
     const request = mutationGeneration.current;
-    setAttacking(action); setAttackMsg(""); setAttackRecordId(""); setAttackFollowUntil(0); setCompletedAttackRecord(null);
+    setAttacking(action); setAttackMsg(""); setAttackRecordId(""); setAttackFollowUntil(0); setCompletedAttackRecord(null); setLastAttackRecord(null);
     clearLiveSelection(lens, sel.context);
     try {
       const r = await dispatchLiveAttack(route, lens);
@@ -320,7 +323,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   }, [lens, owner, sel.context]);
   React.useEffect(() => {
     mutationGeneration.current++;
-    setAttacking(""); setAttackMsg(""); setComparing(""); setCompareMsg(""); setAttackRecordId(""); setAttackFollowUntil(0); setCompletedAttackRecord(null);
+    setAttacking(""); setAttackMsg(""); setComparing(""); setCompareMsg(""); setAttackRecordId(""); setAttackFollowUntil(0); setCompletedAttackRecord(null); setLastAttackRecord(null);
   }, [lens, sel.context, sel.provider, selWl]);
   React.useEffect(() => {
     const def = wls.find((w) => w.images.join(" ").toLowerCase().includes("vllm")) || wls[0];
@@ -442,9 +445,8 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
               {attackVerdict?.blocked.map((candidate) => <div key={candidate}>Candidate: {candidate}</div>)}
             </div>
           )}
-          {attackRecordId && !attackRecord && attackFollowUntil > 0 && !attackRecordQuery.error && <div className="text-[11px] text-muted-foreground">Following exact result {attackRecordId}…</div>}
-          {attackRecordId && !attackRecord && !attackFollowUntil && <div className="text-[11px] text-warning">No completed exact result was confirmed for {attackRecordId} within the bounded follow-up. Check the record directly.</div>}
-          {attackRecordQuery.error && <div className="text-[11px] text-warning">Could not read exact result {attackRecordId}: {String((attackRecordQuery.error as Error).message || attackRecordQuery.error)}</div>}
+          {attackFollowMessage && !attackRecordQuery.error && <div className={`text-[11px] ${attackFollowUntil ? "text-muted-foreground" : "text-warning"}`}>{attackFollowMessage}</div>}
+          {attackRecordQuery.error && attackFollowUntil > 0 && <div className="text-[11px] text-warning">Could not read exact result {attackRecordId}: {String((attackRecordQuery.error as Error).message || attackRecordQuery.error)}</div>}
         </details>
       )}
       {!owner && <div aria-label="Selected attack receipt"><AttackResultsPanel lens={lens} compact /></div>}

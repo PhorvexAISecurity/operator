@@ -54,3 +54,10 @@ export function liveAttackVerdict(result: AttackResult) {
     noop,
   };
 }
+
+export function liveAttackFollowMessage(id: string, active: boolean, last: AttackResult | null | undefined): string {
+  if (!id || last?.status === "done" || last?.status === "partial") return "";
+  if (!active) return `No completed exact result was confirmed for ${id} within the bounded follow-up${last?.status === "running" ? "; last read was running" : ""}. Check the record directly; no final outcome is inferred.`;
+  if (last?.status === "running") return `Exact result ${id} is still running${last.observationDeadline ? `; observation deadline ${last.observationDeadline}` : ""}. Following this record within the bounded window.`;
+  return `Following exact result ${id}…`;
+}
