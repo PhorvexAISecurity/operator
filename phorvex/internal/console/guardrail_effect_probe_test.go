@@ -522,7 +522,7 @@ func TestGuardrailEffectOriginalReaderReplaysAbsenceAndDualSource(t *testing.T) 
 		"status": map[string]any{"containerStatuses": []any{map[string]any{"name": "guardrail", "containerID": s.TargetContainerID, "imageID": s.TargetImageID, "ready": true, "restartCount": 0}}}})
 	put("kube-002-"+label+"-source.json", map[string]any{"metadata": map[string]any{"uid": s.SourceUID}, "data": map[string]any{"guardrail_proxy.py": proxy, "dual_server.py": dual}})
 	put("kube-003-"+label+"-journal.json", absence)
-	runtime := map[string]any{"_mountedSourceSHA256": s.SourceSHA256, "_mountedBoundarySHA256": s.BoundarySourceSHA256,
+	runtime := map[string]any{"_mountedSourceSHA256": s.SourceSHA256, "_mountedBoundarySHA256": s.BoundarySourceSHA256, "_rawAuthConfigured": true,
 		"8000/v1/guardrail/state": map[string]any{"status": 200, "body": map[string]any{"mode": "enforce", "ready": true, "active": "pgv1", "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]any{"pgv1": 0.5, "pgv2": 0.5}}},
 		"8000/v1/models":          map[string]any{"status": 200, "body": map[string]any{"data": []any{modelRow}}},
 		"8001/v1/models":          map[string]any{"status": 200, "body": map[string]any{"data": []any{modelRow}}}}
