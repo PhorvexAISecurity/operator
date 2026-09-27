@@ -59,7 +59,7 @@ func TestVoiceMemoryConsoleEventToNativeRuleReadback(t *testing.T) {
 		OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))},
 		Annotations: map[string]string{"phorvex.ai/voice-memory-policy-configmap": voicememorypolicy.ConfigMapName,
 			"phorvex.ai/voice-memory-source-sha256": voiceMemorySourceSHA256, "phorvex.ai/voice-memory-event-creator": creator}},
-		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", VolumeMounts: []corev1.VolumeMount{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_MEMORY_POLICY_REQUIRED", Value: "true"}}, VolumeMounts: []corev1.VolumeMount{
 			{Name: "policy", MountPath: "/etc/phorvex/voice-memory-policy", ReadOnly: true},
 			{Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true},
 			{Name: "state", MountPath: "/var/lib/phorvex-voice-memory"}}}}, Volumes: []corev1.Volume{
@@ -126,6 +126,25 @@ func TestVoiceMemoryConsoleEventToNativeRuleReadback(t *testing.T) {
 	observed := snapshot.PodByKey["voice/voice-bot-1"]
 	if observed == nil || observed.VoiceMemoryObservation == nil || observed.VoiceMemoryObservation.EventUID != eventUID {
 		t.Fatalf("console event did not bind through snapshot: %+v", observed)
+	}
+	legacyPod := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "voice", Name: pod.Name}, legacyPod); err != nil {
+		t.Fatal(err)
+	}
+	legacyPod.Spec.Containers[0].Env = nil
+	if err := c.Update(ctx, legacyPod); err != nil {
+		t.Fatal(err)
+	}
+	legacySnapshot, err := ingest.CollectSnapshot(ctx, c, now.Add(time.Second), nil, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy := legacySnapshot.PodByKey["voice/voice-bot-1"]; legacy == nil || legacy.VoiceMemoryObservation != nil {
+		t.Fatalf("legacy-mode Pod retained Voice memory authority: %+v", legacy)
+	}
+	legacyPod.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "VOICE_MEMORY_POLICY_REQUIRED", Value: "true"}}
+	if err := c.Update(ctx, legacyPod); err != nil {
+		t.Fatal(err)
 	}
 	view := &model.WorkloadView{Pod: *observed, Physics: model.NeutralPhysics(), Phase: model.PhaseWarm,
 		Events: snapshot.EventByPod["voice/voice-bot-1"], ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour}}

@@ -135,7 +135,8 @@ func bindVoiceMemoryObservation(ctx context.Context, reader client.Reader, p *mo
 	if reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: p.Name}, live) != nil || string(live.UID) != p.UID ||
 		live.Annotations["phorvex.ai/voice-memory-policy-configmap"] != p.VoiceMemoryConfigMap ||
 		live.Annotations["phorvex.ai/voice-memory-source-sha256"] != p.VoiceMemorySourceSHA256 ||
-		live.Annotations["phorvex.ai/voice-memory-event-creator"] != chosen.CreatorIdentity {
+		live.Annotations["phorvex.ai/voice-memory-event-creator"] != chosen.CreatorIdentity ||
+		!voiceMemoryRequiredPolicyMode(live) {
 		return
 	}
 	dep, ok := voiceMemoryDeployment(ctx, reader, live)
@@ -162,4 +163,24 @@ func bindVoiceMemoryObservation(ctx context.Context, reader client.Reader, p *mo
 		RuleSHA256: rule.SHA256(), SourceSHA256: payload.SourceSHA256, CallerID: payload.CallerID, NoteSHA256: payload.NoteSHA256,
 		PolicyName: payload.PolicyName, PolicyUID: payload.PolicyUID, PolicyGeneration: payload.PolicyGeneration,
 		SelectedRevision: rule.Revision, ObservedAt: payload.ObservedAt}
+}
+
+func voiceMemoryRequiredPolicyMode(pod *corev1.Pod) bool {
+	for _, container := range pod.Spec.Containers {
+		if container.Name != "bot" {
+			continue
+		}
+		count := 0
+		for _, variable := range container.Env {
+			if variable.Name != "VOICE_MEMORY_POLICY_REQUIRED" {
+				continue
+			}
+			if variable.Value != "true" || variable.ValueFrom != nil {
+				return false
+			}
+			count++
+		}
+		return count == 1
+	}
+	return false
 }

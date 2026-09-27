@@ -86,7 +86,7 @@ func TestVoiceMemoryNativeAppendKeepsPreviousCaller(t *testing.T) {
 		{Name: "token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: voiceMemorySecretName}}},
 		{Name: "state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}
-	bot := corev1.Container{Name: "bot", VolumeMounts: []corev1.VolumeMount{{Name: "policy", MountPath: "/etc/phorvex/voice-memory-policy", ReadOnly: true},
+	bot := corev1.Container{Name: "bot", Env: []corev1.EnvVar{{Name: "VOICE_MEMORY_POLICY_REQUIRED", Value: "true"}}, VolumeMounts: []corev1.VolumeMount{{Name: "policy", MountPath: "/etc/phorvex/voice-memory-policy", ReadOnly: true},
 		{Name: "token", MountPath: "/etc/phorvex/voice-memory-state-token", ReadOnly: true}, {Name: "state", MountPath: "/var/lib/phorvex-voice-memory"}}}
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "bot-1", Namespace: "voice", UID: podUID, Labels: map[string]string{"app": "bot"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}, Annotations: map[string]string{
 		"phorvex.ai/voice-memory-policy-configmap": voicememorypolicy.ConfigMapName, "phorvex.ai/voice-memory-source-sha256": source, "phorvex.ai/voice-memory-event-creator": creator}},
@@ -192,5 +192,13 @@ func TestVoiceMemoryNativeAppendKeepsPreviousCaller(t *testing.T) {
 	}
 	if ok, why := voiceMemoryCapability(ctx, c, "operator", Target{Namespace: "voice", Pod: "bot-1", UID: string(podUID), PolicyName: "voice-policy", PolicyUID: string(policyUID)}, transport); ok || why == "" {
 		t.Fatalf("stale subPath mount accepted: %t %s", ok, why)
+	}
+	podLive.Spec.Containers[0].VolumeMounts[0].SubPath = ""
+	podLive.Spec.Containers[0].Env = nil
+	if err := c.Update(ctx, podLive); err != nil {
+		t.Fatal(err)
+	}
+	if ok, why := voiceMemoryCapability(ctx, c, "operator", Target{Namespace: "voice", Pod: "bot-1", UID: string(podUID), PolicyName: "voice-policy", PolicyUID: string(policyUID)}, transport); ok || why == "" {
+		t.Fatalf("legacy optional-policy Pod accepted without required mode: %t %s", ok, why)
 	}
 }

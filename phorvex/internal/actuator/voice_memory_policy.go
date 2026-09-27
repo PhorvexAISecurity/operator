@@ -79,6 +79,18 @@ func voiceMemoryMounts(pod *corev1.Pod) bool {
 	if bot == nil {
 		return false
 	}
+	requiredMode := 0
+	for _, variable := range bot.Env {
+		if variable.Name == "VOICE_MEMORY_POLICY_REQUIRED" {
+			if variable.Value != "true" || variable.ValueFrom != nil {
+				return false
+			}
+			requiredMode++
+		}
+	}
+	if requiredMode != 1 {
+		return false
+	}
 	paths := map[string]string{}
 	for _, m := range bot.VolumeMounts {
 		if m.ReadOnly && m.SubPath == "" {
