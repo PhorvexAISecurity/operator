@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
 import os
 from pathlib import Path
 import re
@@ -46,6 +47,7 @@ ADMIN_LOCAL = {
     ("POST", "/v1/drain"),
     ("GET", "/v1/drain/capability"),
     ("POST", "/v1/drain/operations"),
+    ("GET", "/v1/endpoint-lease/state"),
 }
 ADMIN_OPERATION = re.compile(
     r"/v1/drain/operations/[0-9]+/[0-9a-f]{32,64}(?:/(?:cancel|reopen))?\Z"
@@ -68,11 +70,41 @@ async def _reply(send, status: int, code: bytes):
     await send({"type": "http.response.body", "body": body})
 
 
+async def _json_reply(send, value: dict):
+    body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    if len(body) > 8192:
+        await _reply(send, 503, b"lease_unavailable")
+        return
+    await send({"type": "http.response.start", "status": 200,
+                "headers": [(b"content-type", b"application/json"),
+                            (b"content-length", str(len(body)).encode())]})
+    await send({"type": "http.response.body", "body": body})
+
+
+def _status_query(raw: bytes) -> tuple[str, str] | None:
+    if len(raw) > 192:
+        return None
+    parts = raw.split(b"&")
+    if len(parts) != 2:
+        return None
+    fields = {}
+    for part in parts:
+        key, sep, value = part.partition(b"=")
+        if not sep or key not in (b"revokedClientHMAC", b"retainedClientHMAC") or \
+                key in fields or not re.fullmatch(b"[0-9a-f]{64}", value):
+            return None
+        fields[key] = value.decode("ascii")
+    if len(fields) != 2:
+        return None
+    return fields[b"revokedClientHMAC"], fields[b"retainedClientHMAC"]
+
+
 class ServingBoundary:
-    def __init__(self, app, upstream_key: str, admin_key: str):
+    def __init__(self, app, upstream_key: str, admin_key: str, lease=None):
         if upstream_key == admin_key:
             raise ValueError("admin and upstream keys must differ")
         self.app, self.upstream_key, self.admin_key = app, upstream_key, admin_key
+        self.lease = lease
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "lifespan":
@@ -88,11 +120,23 @@ class ServingBoundary:
         pair = method, path
         headers = list(scope.get("headers") or ())
         auth = [v for k, v in headers if k.lower() == b"authorization"]
+        admission = None
         if port == PUBLIC_PORT:
             if pair not in PUBLIC_MODEL and pair not in PUBLIC_LOCAL:
                 await _reply(send, 404, b"route_unavailable")
                 return
+            if self.lease is not None and pair == ("GET", "/health") and \
+                    not await self.lease.ready():
+                await _reply(send, 503, b"lease_unavailable")
+                return
             if pair in PUBLIC_MODEL:
+                if self.lease is not None:
+                    admission = await self.lease.admit(auth)
+                    if admission.status != 200:
+                        await _reply(send, admission.status,
+                                     b"unauthorized" if admission.status == 401
+                                     else b"lease_unavailable")
+                        return
                 headers = [(k, v) for k, v in headers if k.lower() != b"authorization"]
                 headers.append((b"authorization", ("Bearer " + self.upstream_key).encode()))
         elif port == ADMIN_PORT:
@@ -102,6 +146,20 @@ class ServingBoundary:
                 return
             if len(auth) != 1 or not hmac.compare_digest(auth[0], ("Bearer " + self.admin_key).encode()):
                 await _reply(send, 401, b"unauthorized")
+                return
+            if pair == ("GET", "/v1/endpoint-lease/state"):
+                if self.lease is None:
+                    await _reply(send, 404, b"route_unavailable")
+                    return
+                query = _status_query(scope.get("query_string", b""))
+                if query is None:
+                    await _reply(send, 400, b"invalid_request")
+                    return
+                value = await self.lease.status(*query)
+                if value is None:
+                    await _reply(send, 503, b"lease_unavailable")
+                else:
+                    await _json_reply(send, value)
                 return
             if pair in ADMIN_MODEL:
                 headers = [(k, v) for k, v in headers if k.lower() != b"authorization"]
@@ -149,11 +207,21 @@ class ServingBoundary:
             return
         projected = dict(scope)
         projected["headers"] = headers
-        await self.app(projected, receive, send)
+        try:
+            await self.app(projected, receive, send)
+        finally:
+            if admission is not None:
+                release = asyncio.create_task(self.lease.finish(admission))
+                try:
+                    await asyncio.shield(release)
+                except asyncio.CancelledError:
+                    await release
+                    raise
 
 
 async def serve():
     import uvicorn
+    import guardrail_proxy
     from guardrail_proxy import GuardrailRuntime, create_app, load_config
 
     upstream, admin = _credential("VLLM_API_KEY"), _credential("PHORVEX_GUARDRAIL_ADMIN_KEY")
@@ -162,8 +230,28 @@ async def serve():
     if not cert.is_file() or not key.is_file():
         raise ValueError("admin TLS certificate and key are required")
     runtime = GuardrailRuntime(load_config())
+    lease_mode = os.environ.get("PHORVEX_ENDPOINT_LEASE_REQUIRED", "false")
+    if lease_mode not in ("true", "false"):
+        raise ValueError("PHORVEX_ENDPOINT_LEASE_REQUIRED must be true or false")
+    lease = None
+    if lease_mode == "true":
+        from endpoint_lease import EndpointLease, Identity, source_sha256
+        import endpoint_lease
+        actual_source = source_sha256(Path(guardrail_proxy.__file__).read_bytes(),
+                                      Path(__file__).read_bytes(),
+                                      Path(endpoint_lease.__file__).read_bytes(),
+                                      (Path(__file__).parent / "drain_v11.py").read_bytes(),
+                                      (Path(__file__).parent / "drain_v11_init.py").read_bytes())
+        lease = EndpointLease(Identity(
+            pod_uid=os.environ.get("POD_UID", ""),
+            service_uid=os.environ.get("PHORVEX_ENDPOINT_LEASE_SERVICE_UID", ""),
+            policy_configmap_uid=os.environ.get("PHORVEX_ENDPOINT_LEASE_POLICY_CONFIGMAP_UID", ""),
+            secret_uid=os.environ.get("PHORVEX_ENDPOINT_LEASE_SECRET_UID", ""),
+            source_sha256=os.environ.get("PHORVEX_ENDPOINT_LEASE_SOURCE_SHA256", ""),
+            source_actual_sha256=actual_source,
+            secret_dir=Path(os.environ.get("PHORVEX_ENDPOINT_LEASE_SECRET_DIR", ""))))
     app = ServingBoundary(create_app(runtime=runtime, upstream_api_key=upstream,
-                                     admin_api_key=admin), upstream, admin)
+                                     admin_api_key=admin), upstream, admin, lease)
     public = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=PUBLIC_PORT,
                                            lifespan="on", proxy_headers=False, log_level="info"))
     private = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=ADMIN_PORT,

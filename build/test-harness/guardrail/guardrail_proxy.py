@@ -48,6 +48,12 @@ VARIANT_MODELS = {
     "pgv2": "protectai/deberta-v3-base-prompt-injection-v2",
     "pgv1": "protectai/deberta-v3-base-prompt-injection",
 }
+# Reviewed Hub commits for the two installed classifier variants. A cache ref
+# named "main" is mutable and must not select model bytes at startup.
+VARIANT_REVISIONS = {
+    "pgv2": "90c9989b1a342275dd0d1a95aad283c04e075671",
+    "pgv1": "373b6af0f8d16739cff5de28be326652246bfaa3",
+}
 DEFAULT_THRESHOLD = 0.5
 MODES = frozenset(("enforce", "observe"))
 RESET_RESPONSE_MAX_BYTES = 1 << 16
@@ -165,14 +171,19 @@ class GuardrailRuntime:
 
             torch.set_num_threads(2)
             for name, hf_id in VARIANT_MODELS.items():
-                classifier = pipeline("text-classification", model=hf_id, truncation=True, max_length=512)
+                expected_revision = VARIANT_REVISIONS[name]
+                classifier = pipeline("text-classification", model=hf_id,
+                                      revision=expected_revision, truncation=True,
+                                      max_length=512)
                 revision = getattr(getattr(getattr(classifier, "model", None), "config", None), "_commit_hash", None)
-                self.install_classifier(name, classifier, revision or "unknown")
+                if revision != expected_revision:
+                    raise RuntimeError(f"{name} classifier revision differs from reviewed pin")
+                self.install_classifier(name, classifier, revision)
                 print(json.dumps({
                     "event": "guardrail_model_loaded",
                     "variant": name,
                     "model": hf_id,
-                    "revision": revision or "unknown",
+                    "revision": revision,
                 }, separators=(",", ":")), flush=True)
         except Exception as exc:
             with self.lock:
