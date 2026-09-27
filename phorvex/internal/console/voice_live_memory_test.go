@@ -132,11 +132,23 @@ func TestVoiceMemoryServingPodRequiresPinAndReady(t *testing.T) {
 		Annotations: map[string]string{"phorvex.ai/voice-memory-source-sha256": voiceMemorySourceSHA256,
 			"phorvex.ai/voice-memory-policy-configmap": "voice-memory-policy"},
 		OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet"}}},
-		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "bot"}}},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "bot", Env: []corev1.EnvVar{
+			{Name: "VOICE_MEMORY_POLICY_REQUIRED", Value: "true"}}}}},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
 	if !voiceMemoryServingPod(pod, &appsv1.Deployment{}) {
 		t.Fatal("pinned ready Pod refused")
 	}
+	pod.Spec.Containers[0].Env[0].Value = "false"
+	if voiceMemoryServingPod(pod, &appsv1.Deployment{}) {
+		t.Fatal("legacy optional-policy Pod accepted")
+	}
+	pod.Spec.Containers[0].Env[0].Value = "true"
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
+		corev1.EnvVar{Name: "VOICE_MEMORY_POLICY_REQUIRED", Value: "false"})
+	if voiceMemoryServingPod(pod, &appsv1.Deployment{}) {
+		t.Fatal("duplicate required-mode environment accepted")
+	}
+	pod.Spec.Containers[0].Env = pod.Spec.Containers[0].Env[:1]
 	pod.Annotations["phorvex.ai/voice-memory-source-sha256"] = strings.Repeat("0", 64)
 	if voiceMemoryServingPod(pod, &appsv1.Deployment{}) {
 		t.Fatal("wrong source accepted")

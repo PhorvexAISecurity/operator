@@ -263,7 +263,16 @@ func voiceMemoryServingPod(pod *corev1.Pod, dep *appsv1.Deployment) bool {
 	container := false
 	for _, c := range pod.Spec.Containers {
 		if c.Name == "bot" {
-			container = true
+			requiredMode, requiredNames := 0, 0
+			for _, env := range c.Env {
+				if env.Name == "VOICE_MEMORY_POLICY_REQUIRED" {
+					requiredNames++
+					if env.Value == "true" && env.ValueFrom == nil {
+						requiredMode++
+					}
+				}
+			}
+			container = requiredNames == 1 && requiredMode == 1
 		}
 	}
 	return ready && container
