@@ -9,7 +9,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestM178ResetPrefixCacheRequiresExplicitTrueAcknowledgement(t *testing.T) {
@@ -95,5 +97,69 @@ func TestM178ResetAcknowledgementParserRejectsAmbiguousReservedKeys(t *testing.T
 	}
 	if err := parseResetPrefixCacheAcknowledgement(`{"success":true,"nested":{"x":1}}`); err != nil {
 		t.Fatalf("harmless extension rejected: %v", err)
+	}
+}
+
+func TestM178ResetDeadlineCoversDelayedAckButPreservesUnknownTimeout(t *testing.T) {
+	defaultClient := newHTTPVLLM()
+	if defaultClient.hc.Timeout != 3*time.Second || defaultClient.resetTimeout <= 10*time.Second || defaultClient.resetTimeout >= 40*time.Second {
+		t.Fatalf("reset bound must cover the 10s engine RPC within the default outer tick: ordinary=%s reset=%s", defaultClient.hc.Timeout, defaultClient.resetTimeout)
+	}
+	for _, tc := range []struct {
+		name           string
+		selectedClient bool
+		resetTimeout   time.Duration
+		outerTimeout   time.Duration
+		wantUnknown    bool
+	}{
+		{name: "legacy delayed acknowledgement", resetTimeout: 200 * time.Millisecond},
+		{name: "trusted endpoint delayed acknowledgement", selectedClient: true, resetTimeout: 200 * time.Millisecond},
+		{name: "reset client expires after accepted request", resetTimeout: 25 * time.Millisecond, wantUnknown: true},
+		{name: "outer caller deadline wins", resetTimeout: 200 * time.Millisecond, outerTimeout: 25 * time.Millisecond, wantUnknown: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.Method != http.MethodPost || r.URL.Path != defaultResetPath {
+					t.Errorf("unexpected reset request %s %s", r.Method, r.URL.Path)
+				}
+				time.Sleep(90 * time.Millisecond)
+				_, _ = w.Write([]byte(`{"success":true}`))
+			}))
+			defer server.Close()
+			host, portText, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			port, err := strconv.Atoi(portText)
+			if err != nil {
+				t.Fatal(err)
+			}
+			baseClient := &http.Client{Timeout: 25 * time.Millisecond}
+			v := &httpVLLM{hc: baseClient, resetTimeout: tc.resetTimeout}
+			ep := servingEndpoint{podIP: host, port: port, resetPath: defaultResetPath}
+			if tc.selectedClient {
+				ep.client = &http.Client{Timeout: 25 * time.Millisecond}
+			}
+			ctx := context.Background()
+			if tc.outerTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.outerTimeout)
+				defer cancel()
+			}
+			err = v.ResetPrefixCache(ctx, ep)
+			if requests.Load() != 1 || baseClient.Timeout != 25*time.Millisecond ||
+				(tc.selectedClient && ep.client.Timeout != 25*time.Millisecond) {
+				t.Fatalf("reset copied the wrong client or sent multiple times: requests=%d base=%s endpoint=%v err=%v", requests.Load(), baseClient.Timeout, ep.client, err)
+			}
+			if tc.wantUnknown {
+				if err == nil || !errors.Is(err, errServingOutcomeUnknown) || errors.Is(err, errStackUnreachable) {
+					t.Fatalf("accepted timed-out reset must remain unknown: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("delayed valid acknowledgement rejected: %v", err)
+			}
+		})
 	}
 }

@@ -268,9 +268,16 @@ type vLLMClient interface {
 
 // httpVLLM is the REAL vLLM HTTP control-plane client. [PENDING-GPU-VALIDATION] — calibrate the health/
 // model/reset routes against the deployed vLLM version; on kind (no vLLM) calls surface errStackUnreachable.
-type httpVLLM struct{ hc *http.Client }
+type httpVLLM struct {
+	hc           *http.Client
+	resetTimeout time.Duration // zero preserves an explicitly injected client's timeout
+}
 
-func newHTTPVLLM() *httpVLLM { return &httpVLLM{hc: &http.Client{Timeout: 3 * time.Second}} }
+const resetAcknowledgementTimeout = 12 * time.Second
+
+func newHTTPVLLM() *httpVLLM {
+	return &httpVLLM{hc: &http.Client{Timeout: 3 * time.Second}, resetTimeout: resetAcknowledgementTimeout}
+}
 
 func (c *httpVLLM) do(ctx context.Context, method, url, token string) (int, string, error) {
 	return c.request(ctx, method, url, token, "", nil)
@@ -437,6 +444,25 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 	return inventory.nonempty(), nil
 }
 
+// withResetAcknowledgementTimeout copies the selected Pod-bound client. Both the
+// direct reset route and local invalidation proxy await the same vLLM reset RPC.
+func (c *httpVLLM) withResetAcknowledgementTimeout(ep servingEndpoint) servingEndpoint {
+	if c.resetTimeout <= 0 {
+		return ep
+	}
+	client := ep.client
+	if client == nil {
+		client = c.hc
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resetClient := *client
+	resetClient.Timeout = c.resetTimeout
+	ep.client = &resetClient
+	return ep
+}
+
 func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) error {
 	var err error
 	ep, err = ep.validated()
@@ -446,6 +472,11 @@ func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) err
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
+	// The reset-ack derivative may wait up to 10 seconds for its correlated engine
+	// RPC. Copy only the selected reset client so its bounded acknowledgement can
+	// arrive without lengthening model, guardrail, adapter, or drain calls. An
+	// earlier caller deadline still wins, and any timeout remains outcome-unknown.
+	ep = c.withResetAcknowledgementTimeout(ep)
 	code, body, err := c.doEndpoint(ctx, ep, http.MethodPost, ep.resetPath)
 	if err != nil {
 		return err
