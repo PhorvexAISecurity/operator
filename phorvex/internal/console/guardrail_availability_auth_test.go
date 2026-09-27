@@ -89,7 +89,7 @@ func TestGuardrailEffectDualListenerSourceJoinsConfigMapAndMount(t *testing.T) {
 	const sourceText = "fixed dual-listener source"
 	pin := availabilityHash([]byte(sourceText))
 	source := map[string]any{"data": map[string]any{"dual_server.py": sourceText}}
-	runtime := map[string]any{"_mountedBoundarySHA256": pin}
+	runtime := map[string]any{"_mountedBoundarySHA256": pin, "_rawAuthConfigured": true}
 	if got, err := availabilityBoundarySource(source, runtime, pin); err != nil || got != pin {
 		t.Fatalf("exact dual-listener source refused: %s %v", got, err)
 	}
@@ -105,6 +105,7 @@ func TestGuardrailEffectDualListenerSourceJoinsConfigMapAndMount(t *testing.T) {
 		{"missing source", map[string]any{"data": map[string]any{}}, runtime, pin},
 		{"changed ConfigMap", map[string]any{"data": map[string]any{"dual_server.py": "changed"}}, runtime, pin},
 		{"changed mounted file", source, map[string]any{"_mountedBoundarySHA256": strings.Repeat("c", 64)}, pin},
+		{"unauthenticated raw backend", source, map[string]any{"_mountedBoundarySHA256": pin, "_rawAuthConfigured": false}, pin},
 		{"invalid profile pin", source, runtime, "invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -314,7 +314,7 @@ func (w *availabilityWorker) execGuardrail(label, code string, stdin []byte, bou
 	return stdout.Bytes(), nil
 }
 
-const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8001:\n   key=os.environ.get('VLLM_API_KEY','')\n   if key:headers['Authorization']='Bearer '+key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
+const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\no['_rawAuthConfigured']=bool(os.environ.get('VLLM_API_KEY',''))\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8001:\n   key=os.environ.get('VLLM_API_KEY','')\n   if key:headers['Authorization']='Bearer '+key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
 
 func availabilityBoundarySource(source, runtime map[string]any, pin string) (string, error) {
 	if pin == "" {
@@ -326,6 +326,9 @@ func availabilityBoundarySource(source, runtime map[string]any, pin string) (str
 	text := availabilityString(availabilityMap(source["data"]), "dual_server.py")
 	if text == "" || len(text) > 1<<20 || availabilityHash([]byte(text)) != pin || runtime["_mountedBoundarySHA256"] != pin {
 		return "", errors.New("mounted dual-listener source differs from reviewed ConfigMap")
+	}
+	if runtime["_rawAuthConfigured"] != true {
+		return "", errors.New("reviewed dual-listener requires configured raw vLLM authentication")
 	}
 	return pin, nil
 }
