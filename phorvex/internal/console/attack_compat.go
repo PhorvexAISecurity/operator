@@ -29,6 +29,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/phorvex/phorvex/internal/actuator"
 )
 
 // LiveAttack is one attack the console can fire directly at a live workload. The ID is the exact
@@ -358,7 +360,10 @@ func compatibleLive(st appStack) []compatEntry {
 			// principle but the console cannot yet fire at it.
 			e.Compatible = st.VLLM
 			e.Armed = st.VLLM && st.Namespace == vllmAttackNS
-			if !e.Compatible {
+			if a.ID == "kv-migrate-invalidate" && e.Compatible {
+				e.Armed = false
+				e.Reason = actuator.ReasonKVMigrationConnectorUnavailable
+			} else if !e.Compatible {
 				e.Reason = "no vLLM serving image in this app"
 			} else if e.Armed {
 				e.Reason = "vLLM serving stack detected — armed"

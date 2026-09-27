@@ -71,11 +71,11 @@ func TestProtectedServingCapabilityExcludesExactPendingDomain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, action := range []model.Action{model.ActionKVReset, model.ActionKVMigrateInvalidate} {
-		ok, why := native.SupportsAction(t.Context(), action, target)
-		if ok || !strings.Contains(why, "protected-serving-journal") || !strings.Contains(why, kvEffectDomain) || !strings.Contains(why, "dispatching") {
-			t.Fatalf("%s pending shared domain support=(%v,%q), want exact preselection exclusion", action, ok, why)
-		}
+	if ok, why := native.SupportsAction(t.Context(), model.ActionKVReset, target); ok || !strings.Contains(why, "protected-serving-journal") || !strings.Contains(why, kvEffectDomain) || !strings.Contains(why, "dispatching") {
+		t.Fatalf("KV reset pending shared domain support=(%v,%q), want exact preselection exclusion", ok, why)
+	}
+	if ok, why := native.SupportsAction(t.Context(), model.ActionKVMigrateInvalidate, target); ok || why != ReasonKVMigrationConnectorUnavailable {
+		t.Fatalf("migration support=(%v,%q), want missing remote connector exclusion before journal lookup", ok, why)
 	}
 	if ok, why := native.SupportsAction(t.Context(), model.ActionGuardrailRotate, target); !ok {
 		t.Fatalf("independent guardrail domain was excluded by KV receipt: %q", why)
