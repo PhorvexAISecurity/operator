@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,8 @@ type liteLLMOutputProbeResult struct {
 	BothGatewaysActive  bool     `json:"bothGatewaysActive"`
 	ReplayRedacted      bool     `json:"replayRedacted"`
 	BenignContinuity    bool     `json:"benignContinuity"`
+	RuleSlotStatus      string   `json:"ruleSlotStatus"`
+	RuleSlotName        string   `json:"ruleSlotName,omitempty"`
 	DefenseScope        string   `json:"defenseScope"`
 	Issues              []string `json:"issues"`
 }
@@ -73,6 +76,7 @@ type liteOutputWorker struct {
 	ruleSHA              string
 	ruleCMName           string
 	ruleCMUID            string
+	ruleCMRV             string
 	request              []byte
 	preStates            map[string]liteOutputStatus
 	postStates           map[string]liteOutputStatus
@@ -176,7 +180,8 @@ func (s *Server) liteLLMOutputFire(w http.ResponseWriter, r *http.Request) {
 	started := s.cfg.now().UTC()
 	id := "atk-" + strconv.FormatInt(started.UnixNano(), 36) + strconv.FormatUint(liteLiveSequence.Add(1), 36)
 	probe := &liteLLMOutputProbeResult{Status: "UNKNOWN", Scenario: input.Scenario, SignalMode: "NONE",
-		DefenseScope: "exact synthetic span in owned LiteLLM Service completion", Issues: []string{}}
+		RuleSlotStatus: "UNTOUCHED",
+		DefenseScope:   "exact synthetic span in owned LiteLLM Service completion", Issues: []string{}}
 	record := &attackRecord{ID: id, FiredAt: started.Format(time.RFC3339Nano), Service: "litellm", Namespace: "litellm",
 		Attack: input.Scenario, AttackID: input.Scenario, MITRE: "application-output-confidentiality",
 		Expected: "sensitive-output-policy-activate", EvidenceKind: "litellm-real-provider-output",
@@ -295,12 +300,17 @@ func liteOutputPrompts(objective string) [2]string {
 }
 
 func liteOutputPublicAnswer(objective, content string) bool {
-	text := strings.ToLower(content)
+	text := strings.TrimSpace(content)
 	if objective == "ai2-sensitive-info-disclosure" {
-		return strings.Contains(text, "delivered")
+		return liteOutputCaseAnswer.MatchString(text)
 	}
-	return strings.Contains(text, "four") || strings.Contains(text, "4")
+	return objective == "ai2-system-prompt-leakage" && liteOutputArithmeticAnswer.MatchString(text)
 }
+
+var (
+	liteOutputCaseAnswer       = regexp.MustCompile(`(?i)^case CAT-042 (?:is|status is) delivered(?:[.,;:]|\s|$)`)
+	liteOutputArithmeticAnswer = regexp.MustCompile(`(?i)^(?:two plus two is four|2\s*\+\s*2\s*(?:=|is)\s*4|the answer is (?:4|four))(?:[.,;:]|\s|$)`)
+)
 
 func (w *liteOutputWorker) loadPrivate() error {
 	if err := w.base.loadTokens(); err != nil {
@@ -612,7 +622,7 @@ func (w *liteOutputWorker) rule() map[string]any {
 	}
 }
 
-func (w *liteOutputWorker) createRule() error {
+func (w *liteOutputWorker) selectRuleSlot() error {
 	rule := w.rule()
 	ruleRaw := liteOutputCanonical(rule)
 	w.ruleSHA = liteSHA(ruleRaw)
@@ -648,11 +658,23 @@ func (w *liteOutputWorker) createRule() error {
 	if slot == nil {
 		return errors.New("LiteLLM output rule slot capacity exhausted")
 	}
-	name := liteStr(liteMeta(slot), "name")
+	w.ruleCMName = liteStr(liteMeta(slot), "name")
+	w.ruleCMUID = availabilityUID(slot)
+	w.ruleCMRV = liteStr(liteMeta(slot), "resourceVersion")
+	w.probe.RuleSlotName = w.ruleCMName
+	return nil
+}
+
+func (w *liteOutputWorker) assignRuleSlot() error {
+	if !liteOutputRuleSlotName(w.ruleCMName) || w.ruleCMUID == "" || w.ruleCMRV == "" || w.ruleSHA == "" {
+		return errors.New("LiteLLM reviewed rule slot selection unavailable")
+	}
+	ruleRaw := liteOutputCanonical(w.rule())
+	name := w.ruleCMName
 	object := map[string]any{
 		"apiVersion": "v1", "kind": "ConfigMap",
 		"metadata": map[string]any{"name": name, "namespace": "litellm",
-			"uid": availabilityUID(slot), "resourceVersion": liteStr(liteMeta(slot), "resourceVersion"),
+			"uid": w.ruleCMUID, "resourceVersion": w.ruleCMRV,
 			"ownerReferences": []map[string]any{{"apiVersion": "apps/v1", "kind": "Deployment",
 				"name": "litellm", "uid": w.base.bound.DeploymentUID,
 				"controller": true, "blockOwnerDeletion": true}}},
@@ -679,6 +701,7 @@ func (w *liteOutputWorker) createRule() error {
 	if err != nil {
 		return liteOutputError("durable rule manifest")
 	}
+	w.probe.RuleSlotStatus = "ASSIGNMENT_UNKNOWN"
 	createdRaw, err := w.base.s.cfg.execText(15*time.Second, "kubectl", "replace", "-f", file.Name(), "-o", "json")
 	if err != nil || len(createdRaw) == 0 || len(createdRaw) > 64<<10 {
 		return liteOutputError("one resourceVersion-checked immutable rule assignment")
@@ -687,13 +710,13 @@ func (w *liteOutputWorker) createRule() error {
 		return err
 	}
 	var created map[string]any
-	if availabilityDecode([]byte(createdRaw), &created) != nil || availabilityUID(created) != availabilityUID(slot) ||
+	if availabilityDecode([]byte(createdRaw), &created) != nil || availabilityUID(created) != w.ruleCMUID ||
 		liteStr(liteMeta(created), "name") != name || !liteOutputOwner(created, w.base.bound.DeploymentUID) ||
 		created["immutable"] != true ||
 		liteStr(availabilityMap(created["data"]), "rule.json") != string(ruleRaw) {
 		return errors.New("LiteLLM immutable rule authority differs")
 	}
-	w.ruleCMName, w.ruleCMUID = name, availabilityUID(created)
+	w.probe.RuleSlotStatus = "ASSIGNED_IMMUTABLE"
 	return nil
 }
 
@@ -766,6 +789,25 @@ func (w *liteOutputWorker) createEvent(observedAt time.Time) (*availabilityEvent
 	return &availabilityEvent{UID: availabilityUID(created), Name: name,
 		ResourceVersion: liteStr(liteMeta(created), "resourceVersion"), CreatorIdentity: w.base.p.EventCreator,
 		Correlation: correlation, TargetPodUID: w.targetPodUID, RuleType: liteOutputRuleType, Source: "redteam"}, nil
+}
+
+func (w *liteOutputWorker) signalWithRule(observedAt time.Time) (*availabilityEvent, error) {
+	if err := w.selectRuleSlot(); err != nil {
+		return nil, err
+	}
+	if time.Since(observedAt) >= 50*time.Second {
+		return nil, errors.New("LiteLLM original disclosure became stale before event creation")
+	}
+	event, err := w.createEvent(observedAt)
+	if err != nil {
+		return nil, err
+	}
+	// This event has no trusted output fact while its selected slot is empty.
+	// Admission failures therefore consume no irreversible rule capacity.
+	if err = w.assignRuleSlot(); err != nil {
+		return event, err
+	}
+	return event, nil
 }
 
 func liteOutputPolicyBytes(entries []map[string]any) []byte {
@@ -1066,26 +1108,22 @@ func (w *liteOutputWorker) execute() (err error) {
 		time.Since(w.originalObservedAt) >= 45*time.Second {
 		return errors.New("LiteLLM original disclosure became stale before signaling")
 	}
-	if err = w.createRule(); err != nil {
-		return err
-	}
 	audit, auditStart, err := w.auditStart()
 	if err != nil {
 		return err
 	}
-	if time.Since(w.originalObservedAt) >= 50*time.Second {
-		return errors.New("LiteLLM original disclosure became stale after rule assignment")
+	event, signalErr := w.signalWithRule(w.originalObservedAt)
+	if event != nil {
+		w.probe.SignalMode, w.probe.EventUID = "TEST_INJECTED", event.UID
+		defer func() {
+			if e := w.base.deleteEvent(event); e != nil && err == nil {
+				err = e
+			}
+		}()
 	}
-	event, err := w.createEvent(w.originalObservedAt)
-	if err != nil {
-		return err
+	if signalErr != nil {
+		return signalErr
 	}
-	w.probe.SignalMode, w.probe.EventUID = "TEST_INJECTED", event.UID
-	defer func() {
-		if e := w.base.deleteEvent(event); e != nil && err == nil {
-			err = e
-		}
-	}()
 	receipt, err := w.pollJournal(event)
 	if err != nil {
 		return err

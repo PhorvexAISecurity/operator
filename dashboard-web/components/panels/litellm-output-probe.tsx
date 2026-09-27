@@ -5,6 +5,7 @@ export function LiteLLMOutputProbe({ result }: { result: LiteLLMOutputProbeResul
     <div className="font-medium">LiteLLM real-provider output · {result.status}</div>
     <div>Original server-owned text: {result.initialDisclosure ? `disclosed in model completion ${result.originalCompletionId || "unknown"}` : "no verified disclosure"}.</div>
     <div>Signal: {result.signalMode}{result.eventUID ? ` (${result.eventUID})` : ""}. This test-generated signal does not establish natural detection.</div>
+    <div>One-use rule slot: {result.ruleSlotStatus}{result.ruleSlotName ? ` (${result.ruleSlotName})` : ""}. An assigned slot remains consumed even if this run ends inconclusively.</div>
     <div>Brain choice: {result.selectedAction || "unverified"}{result.selectionDecisionId ? ` · ${result.selectionDecisionId}` : ""}.</div>
     <div>Protected operation: {result.terminalJournal ? "terminal" : "unverified"}; both gateways: {result.bothGatewaysActive ? "active" : "unverified"}.</div>
     <div>Identical replay: {result.replayRedacted ? "exact private span removed with public answer" : "not verified"}; unrelated completion: {result.benignContinuity ? "preserved" : "unverified"}.</div>

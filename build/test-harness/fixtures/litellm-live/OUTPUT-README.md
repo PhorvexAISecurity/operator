@@ -42,7 +42,9 @@ Service (target port 4001), policy and reviewed live profile JSON with
 preserves the existing client-policy/journal objects, emits a new immutable
 source ConfigMap named with the new source digest, and patches the existing
 sidecar's source mount, source annotation and environment along with the
-output mounts. It emits a new immutable live profile with the migrated source
+output mounts. The Deployment patch tests the reviewed UID and resourceVersion,
+so a concurrent template change requires a fresh review and render. It emits a
+new immutable live profile with the migrated source
 SHA; update the chart's `litellmLive.configMapName`, `profileSHA256`, and
 `sourceConfigMapName` pins together. Do not reapply the old phase-one mutable
 client policy or journal as part of this migration.
@@ -66,8 +68,12 @@ The fixed journal `phorvex-system/phorvex-litellm-output-journal` starts with
 canonical `{"receipts":[],"version":2}` under the native actor's protection.
 It is not Helm-managed mutable data and an upgrade must never reset it. The
 console reads and updates only the 32 named rule slots. After actual
-disclosure, it assigns one empty slot with a single resourceVersion-checked
-update to canonical `rule.json` and `immutable:true`, then binds that exact
-slot name and UID into the event and protected journal. An assigned slot is
-never cleared or reused, even if the run ends inconclusively. No
+disclosure and authenticated audit preflight, it selects one empty slot,
+creates the test-generated event bound to that slot's UID, then assigns the
+canonical `rule.json` and `immutable:true` with a single resourceVersion-checked
+update. The event carries no trusted output fact until the slot is immutable;
+an event-admission failure consumes no slot. The private rule intent and
+assignment reply are retained, and the public result reports whether assignment
+is confirmed or unknown. An assigned slot is never cleared or reused, even if
+the run ends inconclusively. No
 namespace-wide ConfigMap create permission is granted.

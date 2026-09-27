@@ -174,6 +174,7 @@ def output_phase_two_existing(deployment, service, policy, client_policy_cm_uid,
                                     policy.get("metadata", {}))
     if (deployment.get("kind") != "Deployment" or depmeta.get("name") != "litellm" or
             depmeta.get("namespace") != NAMESPACE or not depmeta.get("uid") or
+            not depmeta.get("resourceVersion") or
             service.get("kind") != "Service" or svcmeta.get("name") != "litellm" or
             svcmeta.get("namespace") != NAMESPACE or not svcmeta.get("uid") or
             service.get("spec", {}).get("selector") != {"app": "litellm"} or
@@ -237,6 +238,7 @@ def output_phase_two_existing(deployment, service, policy, client_policy_cm_uid,
     }
     patch = [
         {"op": "test", "path": "/metadata/uid", "value": depmeta["uid"]},
+        {"op": "test", "path": "/metadata/resourceVersion", "value": depmeta["resourceVersion"]},
         {"op": "test", "path": "/spec/template/metadata/annotations/phorvex.ai~1litellm-gateway-source-sha256",
          "value": LEGACY_SOURCE_SHA},
         {"op": "replace", "path": "/spec/template/metadata/annotations/phorvex.ai~1litellm-gateway-source-sha256",

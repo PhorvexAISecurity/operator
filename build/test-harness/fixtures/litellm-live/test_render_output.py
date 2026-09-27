@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 import json
 from pathlib import Path
 import sys
@@ -18,6 +19,7 @@ class OutputRenderTests(unittest.TestCase):
     def test_installed_first_batch_migrates_immutable_source_without_resetting_client_state(self):
         deployment, service, policy = originals()
         deployment["metadata"]["uid"] = "reviewed-deployment-uid"
+        deployment["metadata"]["resourceVersion"] = "12345"
         service["spec"]["ports"][0]["targetPort"] = 4001
         policy["spec"]["actions"]["enabled"].append("litellm-client-revoke")
         template = deployment["spec"]["template"]
@@ -50,6 +52,7 @@ class OutputRenderTests(unittest.TestCase):
         self.assertNotIn("client-policy-configmap.json", objects)
         self.assertNotIn("protected-journal-configmap.json", objects)
         patch = objects["deployment-json-patch.json"]
+        self.assertIn({"op": "test", "path": "/metadata/resourceVersion", "value": "12345"}, patch)
         self.assertIn({"op": "replace", "path": "/spec/template/spec/volumes/0/configMap/name",
                        "value": "phorvex-litellm-admission-gateway-" + source_sha[:12]}, patch)
         migrated = objects["console-live-profile-configmap.json"]["data"]["profile.json"]
@@ -59,6 +62,60 @@ class OutputRenderTests(unittest.TestCase):
             module.output_phase_two(deployment, service, policy,
                 "client-policy-uid", "output-policy-uid", "document-uid", "prompt-uid",
                 "a" * 64, image, live_profile=live)
+
+    def test_installed_gateway_patch_refuses_stale_deployment_snapshot(self):
+        deployment, service, policy = originals()
+        deployment["metadata"].update(uid="reviewed-deployment-uid", resourceVersion="12345")
+        service["spec"]["ports"][0]["targetPort"] = 4001
+        policy["spec"]["actions"]["enabled"].append("litellm-client-revoke")
+        template = deployment["spec"]["template"]
+        template["metadata"].setdefault("labels", {})["r6th.io/rotation-target"] = "true"
+        template["metadata"]["annotations"] = {
+            "phorvex.ai/litellm-gateway-source-sha256": module.LEGACY_SOURCE_SHA,
+            "phorvex.ai/litellm-live-service-uid": service["metadata"]["uid"],
+            "phorvex.ai/litellm-client-policy-configmap-uid": "client-policy-uid"}
+        template["spec"]["volumes"] = [{"name": "litellm-live-gateway-source",
+                                          "configMap": {"name": "phorvex-litellm-admission-gateway"}}]
+        image = "docker.io/library/python@sha256:" + "b" * 64
+        template["spec"]["containers"].append({"name": "litellm-admission-gateway", "image": image,
+            "command": ["python3", "-B", "/opt/phorvex/gateway.py"],
+            "env": [{"name": "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256", "value": module.LEGACY_SOURCE_SHA},
+                    {"name": "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID", "value": "client-policy-uid"},
+                    {"name": "PHORVEX_LITELLM_TRIAL_SEED_FILE", "value": "/etc/phorvex-litellm-seed/seed"}],
+            "volumeMounts": [{"name": "litellm-live-gateway-source", "mountPath": "/opt/phorvex",
+                              "readOnly": True}]})
+        live = {"version": 2, "sourceSHA256": module.LEGACY_SOURCE_SHA,
+                "gatewayImage": image, "clientsSHA256": "c" * 64, "seedSHA256": "a" * 64,
+                "policyName": "litellm-defense", "modelAlias": "gpt-4o-mini",
+                "eventCreator": "console-identity", "auditSourceIdentity": "audit-identity",
+                "maxRunSeconds": 900}
+        with self.assertRaisesRegex(ValueError, "owner graph"):
+            missing = copy.deepcopy(deployment)
+            del missing["metadata"]["resourceVersion"]
+            module.output_phase_two(missing, service, policy, "client-policy-uid", "output-policy-uid",
+                                    "document-uid", "prompt-uid", "a" * 64, image, live_profile=live)
+        objects, _ = module.output_phase_two(deployment, service, policy, "client-policy-uid",
+                                              "output-policy-uid", "document-uid", "prompt-uid",
+                                              "a" * 64, image, live_profile=live)
+        guard = next(op for op in objects["deployment-json-patch.json"]
+                     if op["path"] == "/metadata/resourceVersion")
+        self.assertEqual(guard, {"op": "test", "path": "/metadata/resourceVersion",
+                                 "value": "12345"})
+        changed = copy.deepcopy(deployment)
+        changed["metadata"]["resourceVersion"] = "12346"
+        # A JSON Patch test must fail before any replace/add against a changed snapshot.
+        def check_preconditions(current):
+            for op in objects["deployment-json-patch.json"]:
+                if op["op"] != "test":
+                    continue
+                value = current
+                for segment in op["path"].split("/")[1:]:
+                    value = value[segment.replace("~1", "/").replace("~0", "~")]
+                if value != op["value"]:
+                    raise ValueError("stale deployment snapshot")
+        check_preconditions(deployment)
+        with self.assertRaisesRegex(ValueError, "stale deployment snapshot"):
+            check_preconditions(changed)
 
     def test_private_phase_one_owner_and_phase_two_exact_patches(self):
         deployment, service, policy = originals()
