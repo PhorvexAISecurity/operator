@@ -1,0 +1,142 @@
+name: Publish vLLM reset acknowledgement image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: vllm-reset-ack-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: self-hosted
+    timeout-minutes: 150
+    env:
+      AWS_REGION: us-east-2
+      RECIPE: build/integrations/vllm-0.7.3-reset-ack
+    steps:
+      - name: Require reviewed main source
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_REF" = refs/heads/main || {
+            echo '::error::Dispatch this workflow from main only.' >&2
+            exit 1
+          }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::Expected a full source commit SHA.' >&2
+            exit 1
+          }
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify pinned recipe and checkout
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 "$RECIPE/verify_recipe.py"
+          (cd "$RECIPE" && python3 -m unittest -v test_recipe.py)
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Refuse an existing source tag
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/phorvex:vllm-reset-ack-$SOURCE_SHA"
+          error_file="$(mktemp)"
+          trap 'rm -f "$error_file"' EXIT
+          if docker buildx imagetools inspect "$image" >/dev/null 2>"$error_file"; then
+            echo '::error::This source tag already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+          if ! grep -Eiq 'manifest unknown|404 Not Found|not found' "$error_file"; then
+            echo '::error::Could not prove the source tag is absent from ECR.' >&2
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: ./build/integrations/vllm-0.7.3-reset-ack
+          file: ./build/integrations/vllm-0.7.3-reset-ack/Dockerfile
+          platforms: linux/amd64
+          push: true
+          pull: true
+          tags: ${{ steps.image.outputs.image }}
+
+      - name: Record published digest and recipe
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          digest = os.environ['DIGEST']
+          if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+              raise SystemExit('build-push-action did not return a valid digest')
+          recipe = Path('build/integrations/vllm-0.7.3-reset-ack')
+          files = (
+              'Dockerfile', 'manifest.json', 'base-image-receipt.json',
+              'verify_recipe.py', 'vllm-0.7.3-reset-ack.patch',
+              'apply_patch.py', 'test_contract.py',
+          )
+          manifest = json.loads((recipe / 'manifest.json').read_text())
+          receipt = {
+              'schemaVersion': 1,
+              'sourceSHA': os.environ['SOURCE_SHA'],
+              'image': os.environ['IMAGE'],
+              'digest': digest,
+              'imageByDigest': os.environ['IMAGE'].split(':vllm-reset-ack-', 1)[0] + '@' + digest,
+              'platform': 'linux/amd64',
+              'baseImage': manifest['base_image'],
+              'recipeSHA256': {
+                  name: hashlib.sha256((recipe / name).read_bytes()).hexdigest()
+                  for name in files
+              },
+              'githubRunID': os.environ['RUN_ID'],
+              'githubRunAttempt': os.environ['RUN_ATTEMPT'],
+          }
+          Path('vllm-reset-ack-publish-receipt.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n'
+          )
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+              summary.write(f"Published `{receipt['imageByDigest']}` from `{receipt['sourceSHA']}`.\n")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vllm-reset-ack-publish-${{ github.sha }}
+          path: vllm-reset-ack-publish-receipt.json
+          if-no-files-found: error
