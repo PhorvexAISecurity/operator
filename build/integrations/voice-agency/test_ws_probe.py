@@ -55,7 +55,8 @@ class VoiceAgencyWebSocketProbeTest(unittest.TestCase):
                                                  connector=FakeConnect(socket)))
         self.assertEqual(result["phase"], "attack")
         self.assertEqual([x["event"] for x in socket.sent[:2]], ["connected", "start"])
-        self.assertEqual(socket.sent[1]["start"]["customParameters"], {"caller": probe.CALLER})
+        self.assertEqual(socket.sent[1]["start"]["customParameters"],
+                         {"caller": probe.agency_phones("agencya1")[0], "agencyRunId": "agencya1"})
         self.assertEqual(socket.sent[1]["start"]["mediaFormat"],
                          {"encoding": "audio/x-mulaw", "sampleRate": 8000, "channels": 1})
         self.assertEqual(len(socket.sent[1]["start"]["accountSid"]), 34)

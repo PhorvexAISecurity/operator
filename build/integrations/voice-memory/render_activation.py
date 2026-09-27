@@ -18,9 +18,10 @@ import stat
 from voice_memory_policy import canonical_bytes, source_sha256
 
 
-SOURCE_SHA = "c378d172483887270514f2ead600f7c4b8e1ad4928cdead9348ca11e46a90010"
+SOURCE_SHA = "1113ef85f192bac9b1ccab46edfb6dfe26d7786030bb2de24a85a8a55909359f"
 SOURCE_CONFIGMAP = "voice-memory-source-" + SOURCE_SHA[:12]
 POLICY_CONFIGMAP = "voice-memory-policy"
+REFUND_CONFIGMAP = "voice-refund-policy"
 TOKEN_SECRET = "voice-memory-state-token"
 UID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 CREATOR = re.compile(r"system:serviceaccount:[a-z0-9-]+:[a-z0-9-]+\Z")
@@ -57,15 +58,18 @@ def add_array(patch: list[dict], parent: str, key: str, old: dict, values: list[
 
 def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid: str,
            expected_policy_uid: str, expected_image: str, approved_image: str,
-           runtime_image_ids: list[str], bot_uid: int, creator: str) -> dict[str, object]:
+           runtime_image_ids: list[str], bot_uid: int, creator: str,
+           agency_test_enabled: bool = False) -> dict[str, object]:
     dep_meta = object_meta(deployment, "Deployment", "voice-bot", expected_deployment_uid)
     object_meta(policy, "PhorvexPolicy", "voice-defense", expected_policy_uid)
     require(bool(CREATOR.fullmatch(creator)), "invalid event creator identity")
+    require(type(agency_test_enabled) is bool, "invalid agency test mode")
     require(0 <= bot_uid <= 65535, "bot UID outside reviewed bound")
     require(32 <= len(token) <= 256 and all(33 <= byte <= 126 for byte in token), "invalid private state token")
     require(policy.get("spec", {}).get("mode") == "active", "Voice policy is not active")
     enabled = policy["spec"].get("actions", {}).get("enabled", [])
     require("voice-memory-note-revoke" in enabled and len(enabled) > 1, "Voice memory action must be a normal alternative")
+    require("voice-refund-pair-deny" in enabled, "Voice refund action must be a normal alternative")
 
     template = deployment.get("spec", {}).get("template", {})
     template_meta = template.get("metadata", {})
@@ -91,17 +95,21 @@ def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid
     annotations = template_meta.get("annotations", {})
     require(isinstance(mounts, list) and isinstance(volumes, list) and isinstance(env, list) and
             isinstance(init_containers, list) and isinstance(annotations, dict), "Deployment shape invalid")
-    names = {"voice-memory-source", "voice-memory-rule", "voice-memory-token", "voice-memory-state"}
+    names = {"voice-memory-source", "voice-memory-rule", "voice-refund-rule", "voice-memory-token", "voice-memory-state"}
     paths = {"/app/bot.py", "/app/voice_memory_policy.py", "/etc/phorvex/voice-memory-policy",
+             "/etc/phorvex/voice-refund-policy",
              "/etc/phorvex/voice-memory-state-token", "/var/lib/phorvex-voice-memory"}
     require(not any(v.get("name") in names for v in volumes), "volume name already in use")
     require(not any(m.get("name") in names or m.get("mountPath") in paths for m in mounts), "mount already in use")
-    added_env = {"POD_UID", "VOICE_MEMORY_POLICY_REQUIRED"}
+    added_env = {"POD_UID", "VOICE_MEMORY_POLICY_REQUIRED", "VOICE_REFUND_POLICY_REQUIRED", "VOICE_AGENCY_TEST_ENABLED"}
     require(not any(e.get("name") in added_env for e in env), "memory environment already configured")
     require(not any(c.get("name") == "voice-memory-state-owner" for c in init_containers), "state init already configured")
     new_annotations = {"phorvex.ai/voice-memory-policy-configmap": POLICY_CONFIGMAP,
                        "phorvex.ai/voice-memory-source-sha256": SOURCE_SHA,
-                       "phorvex.ai/voice-memory-event-creator": creator}
+                       "phorvex.ai/voice-memory-event-creator": creator,
+                       "phorvex.ai/voice-refund-policy-configmap": REFUND_CONFIGMAP,
+                       "phorvex.ai/voice-refund-source-sha256": SOURCE_SHA,
+                       "phorvex.ai/voice-refund-event-creator": creator}
     require(not any(k in annotations for k in new_annotations), "memory annotation already configured")
     root = Path(__file__).resolve().parent
     require(source_sha256(root / "bot.py", root / "voice_memory_policy.py") == SOURCE_SHA,
@@ -118,6 +126,9 @@ def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid
     rule_cm = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": POLICY_CONFIGMAP,
                "namespace": "voice", "ownerReferences": owner_ref(expected_deployment_uid)},
                "data": {"rule.json": canonical_bytes(initial_rule).decode("utf-8")}}
+    refund_cm = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": REFUND_CONFIGMAP,
+                 "namespace": "voice", "ownerReferences": owner_ref(expected_deployment_uid)},
+                 "data": {"rule.json": canonical_bytes(initial_rule).decode("utf-8")}}
     secret = {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": TOKEN_SECRET,
               "namespace": "voice", "ownerReferences": owner_ref(expected_deployment_uid)},
               "type": "Opaque", "data": {"token": base64.b64encode(token).decode("ascii")}}
@@ -139,6 +150,7 @@ def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid
     add_array(patch, "/spec/template/spec", "volumes", spec, [
         {"name": "voice-memory-source", "configMap": {"name": SOURCE_CONFIGMAP}},
         {"name": "voice-memory-rule", "configMap": {"name": POLICY_CONFIGMAP, "optional": True}},
+        {"name": "voice-refund-rule", "configMap": {"name": REFUND_CONFIGMAP}},
         {"name": "voice-memory-token", "secret": {"secretName": TOKEN_SECRET}},
         {"name": "voice-memory-state", "emptyDir": {}},
     ])
@@ -147,13 +159,16 @@ def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid
         {"name": "voice-memory-source", "mountPath": "/app/bot.py", "subPath": "bot.py", "readOnly": True},
         {"name": "voice-memory-source", "mountPath": "/app/voice_memory_policy.py", "subPath": "voice_memory_policy.py", "readOnly": True},
         {"name": "voice-memory-rule", "mountPath": "/etc/phorvex/voice-memory-policy", "readOnly": True},
+        {"name": "voice-refund-rule", "mountPath": "/etc/phorvex/voice-refund-policy", "readOnly": True},
         {"name": "voice-memory-token", "mountPath": "/etc/phorvex/voice-memory-state-token", "readOnly": True},
         {"name": "voice-memory-state", "mountPath": "/var/lib/phorvex-voice-memory"},
     ])
+    agency_env = [{"name": "VOICE_AGENCY_TEST_ENABLED", "value": "true"}] if agency_test_enabled else []
     add_array(patch, container_path, "env", bot, [
         {"name": "POD_UID", "valueFrom": {"fieldRef": {"fieldPath": "metadata.uid"}}},
         {"name": "VOICE_MEMORY_POLICY_REQUIRED", "value": "true"},
-    ])
+        {"name": "VOICE_REFUND_POLICY_REQUIRED", "value": "true"},
+    ] + agency_env)
     add_array(patch, "/spec/template/spec", "initContainers", spec, [
         {"name": "voice-memory-state-owner", "image": approved_image,
          "command": ["python3", "-B", "-c", "import os; os.chmod('/state', 0o700); os.chown('/state', " + str(bot_uid) + ", -1)"],
@@ -162,6 +177,7 @@ def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid
          "volumeMounts": [{"name": "voice-memory-state", "mountPath": "/state"}]},
     ])
     return {"source-configmap.json": source_cm, "policy-configmap.json": rule_cm,
+            "refund-policy-configmap.json": refund_cm,
             "state-token-secret.json": secret, "deployment-patch.json": patch}
 
 
@@ -178,6 +194,7 @@ def main() -> None:
                         help="private JSON array of current serving bot container imageIDs")
     parser.add_argument("--bot-uid", type=int, required=True)
     parser.add_argument("--event-creator", required=True)
+    parser.add_argument("--agency-test-enabled", action="store_true", help="enable stable bounded Voice agency test sessions")
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
     require(not args.out_dir.exists(), "output directory already exists")
@@ -187,7 +204,7 @@ def main() -> None:
     objects = render(json.loads(args.deployment_json.read_text()), json.loads(args.policy_json.read_text()),
                      args.token_file.read_bytes(), args.expected_deployment_uid, args.expected_policy_uid,
                      args.expected_image, args.approved_image, json.loads(args.runtime_image_ids_json.read_text()),
-                     args.bot_uid, args.event_creator)
+                     args.bot_uid, args.event_creator, args.agency_test_enabled)
     args.out_dir.mkdir(mode=0o700, parents=False)
     os.chmod(args.out_dir, 0o700)
     for name, value in objects.items():
@@ -197,7 +214,7 @@ def main() -> None:
             output.write(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8"))
             output.flush()
             os.fsync(output.fileno())
-    print("Rendered four private files; source SHA-256:", SOURCE_SHA)
+    print("Rendered five private files; source SHA-256:", SOURCE_SHA)
 
 
 if __name__ == "__main__":

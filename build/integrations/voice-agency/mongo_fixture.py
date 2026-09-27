@@ -16,13 +16,23 @@ import re
 import subprocess
 
 
+def agency_phones(run: str) -> tuple[str, str]:
+    if not re.fullmatch(r"[a-z0-9]{8,24}", run):
+        raise ValueError("invalid run identity")
+    numbers = [int.from_bytes(hashlib.sha256(f"{run}:{side}".encode()).digest()[:8], "big") % 10000000
+               for side in ("A", "B")]
+    if numbers[0] == numbers[1]:
+        numbers[1] = (numbers[1] + 1) % 10000000
+    return tuple(f"+1555{number:07d}" for number in numbers)
+
+
 CONTEXT = "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"
 NAMESPACE = "document-store"
 URI = ("mongodb://127.0.0.1:27017/admin?directConnection=true&"
        "serverSelectionTimeoutMS=3000&socketTimeoutMS=3000&retryReads=false&retryWrites=false")
 PREFIX = "VOICE_AGENCY_JSON="
 SOURCE = Path(__file__).with_name("mongo_fixture.js")
-SOURCE_SHA256 = "6eb502cfe663eaa9ade2751e06a9909336333d5a3b52cd2b412e171cfbf55a2d"
+SOURCE_SHA256 = "663a7690968455b3a2c7e3071200d45e3089589a66d85e2de7677ef545f7c52b"
 TRANSPORT_SOURCE = Path("/home/mehrdad/operator/.git/phorvex-workflow/post25-live-20260920/review/console-vllm-installed-replay-v6/transport.py")
 TRANSPORT_SHA256 = "c357d0bc4c3dcab0d3eab24e9c7dcf1bbcb562543231ae6ea423781ca9bc5fed"
 ACCESS_FILE = Path("/home/mehrdad/operator/.git/phorvex-workflow/private-access/dev-ssh.json")
@@ -66,15 +76,17 @@ def exact_pod(name: str, uid: str, image_id: str, container: str, *, run=remote_
 
 
 def fixture_source(run_id: str, phase: str, refund_ids: list[str]) -> str:
-    if not re.fullmatch(r"[a-z0-9]{8,24}", run_id) or phase not in ("seed", "observe", "cleanup") or \
+    if not re.fullmatch(r"[a-z0-9]{8,24}", run_id) or phase not in ("seed", "observe", "cleanup", "cleanup-partial") or \
             len(refund_ids) > 2 or any(not re.fullmatch(r"RF-[a-f0-9]{8}", x) for x in refund_ids) or \
             (phase != "cleanup" and refund_ids):
         raise ValueError("fixture arguments invalid")
     source = SOURCE.read_text(encoding="utf-8")
     if len(source) > 12000 or hashlib.sha256(source.encode("utf-8")).hexdigest() != SOURCE_SHA256:
         raise ValueError("reviewed fixture source changed")
+    phone_a, phone_b = agency_phones(run_id)
     return ("const RUN=" + json.dumps(run_id) + "; const PHASE=" + json.dumps(phase) +
-            "; const REFUND_IDS=" + json.dumps(refund_ids) + ";\n" + source)
+            "; const REFUND_IDS=" + json.dumps(refund_ids) +
+            "; const PHONE_A=" + json.dumps(phone_a) + "; const PHONE_B=" + json.dumps(phone_b) + ";\n" + source)
 
 
 def one_phase(pod: str, uid: str, image_id: str, container: str, run_id: str, phase: str,
@@ -118,6 +130,11 @@ def one_phase(pod: str, uid: str, image_id: str, container: str, run_id: str, ph
                                reply.get("refundCount") != len(refund_ids) or
                                reply.get("orderCount") != 2 or reply.get("accountCount") != 2):
         raise RuntimeError("owned Mongo cleanup receipt invalid")
+    if phase == "cleanup-partial" and (reply.get("cleaned") is not True or reply.get("partial") is not True or
+                                       reply.get("refundCount") != 0 or
+                                       type(reply.get("orderCount")) is not int or not 0 <= reply["orderCount"] <= 2 or
+                                       type(reply.get("accountCount")) is not int or not 0 <= reply["accountCount"] <= 2):
+        raise RuntimeError("partial Mongo cleanup receipt invalid")
     (receipt_dir / "result.json").write_text(json.dumps(reply, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(receipt_dir / "result.json", 0o600)
     return reply
@@ -130,7 +147,7 @@ def main() -> None:
     parser.add_argument("--image-id", required=True)
     parser.add_argument("--container", required=True)
     parser.add_argument("--run", required=True)
-    parser.add_argument("--phase", choices=("seed", "observe", "cleanup"), required=True)
+    parser.add_argument("--phase", choices=("seed", "observe", "cleanup", "cleanup-partial"), required=True)
     parser.add_argument("--refund-id", action="append", default=[])
     parser.add_argument("--receipt-dir", type=Path, required=True)
     args = parser.parse_args()
