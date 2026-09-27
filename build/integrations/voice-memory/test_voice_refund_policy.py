@@ -76,6 +76,20 @@ class VoiceRefundPolicyTest(unittest.TestCase):
         (self.policy_dir / "rule.json").unlink()
         self.assertFalse(replacement.allow_refund("+15551230004", "9141"))
 
+    def test_decision_distinguishes_exact_pair_from_missing_corrupt_or_stale_rule(self):
+        caller, order = "+15551230001", "9142"
+        self.assertEqual(self.policy.refund_decision(caller, order), "policy-unavailable")
+        self.write(rule())
+        self.assertEqual(self.policy.refund_decision(caller, order), "allow")
+        self.write(rule(1, [entry(caller, order)], OP))
+        self.assertEqual(self.policy.refund_decision(caller, order), "exact-pair-denied")
+        (self.policy_dir / "rule.json").write_bytes(b"{bad")
+        self.assertEqual(self.policy.refund_decision(caller, order), "policy-unavailable")
+        self.write(rule())
+        self.assertEqual(self.policy.refund_decision(caller, order), "policy-unavailable")
+        self.write(rule(1, [entry(caller, order)], OP))
+        self.assertEqual(self.policy.refund_decision(caller, order), "exact-pair-denied")
+
     def test_strict_canonical_schema_capacity_and_duplicates(self):
         base = canonical_bytes(rule())
         for raw in (base + b"\n", base.replace(b'"version":1', b'"version":1,"version":1'),

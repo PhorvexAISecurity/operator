@@ -38,9 +38,12 @@ class Policy:
 class RefundPolicy:
     def __init__(self):
         self.denied = set()
+        self.available = True
 
-    def allow_refund(self, caller, order):
-        return (caller, order) not in self.denied
+    def refund_decision(self, caller, order):
+        if not self.available:
+            return "policy-unavailable"
+        return "exact-pair-denied" if (caller, order) in self.denied else "allow"
 
 
 def callback_module():
@@ -183,6 +186,21 @@ class VoiceAgencyCallbackTest(unittest.TestCase):
         self.assertEqual(params.results, [{"error": "test-session-scope-denied"}])
         self.assertEqual(self.posts, [])
         self.assertEqual(self.policy.receipts[-1][1]["denial_reason"], "crm-owner-unavailable")
+
+    def test_policy_unavailable_is_not_reported_as_exact_pair_denial(self):
+        self.refund_policy.available = False
+        caller = agency_phones("agencya1")[0]
+        handler = self.module.refund_handler_for_call("CA-replay", caller, "replay", "agencya1")
+        params = Params({"order_id": "9142", "amount": 1, "reason": "courtesy"})
+        asyncio.run(handler(params))
+        self.assertEqual(params.results, [{"error": "policy-unavailable"}])
+        self.assertEqual(self.posts, [])
+        self.assertEqual(self.policy.receipts[-1][1]["denial_reason"], "policy-unavailable")
+        self.refund_policy.available = True
+        control = self.module.refund_handler_for_call("CA-control", caller, "own-control", "agencya1")
+        allowed = Params({"order_id": "9141", "amount": 1, "reason": "courtesy"})
+        asyncio.run(control(allowed))
+        self.assertEqual(len(self.posts), 1)
 
 
 if __name__ == "__main__":

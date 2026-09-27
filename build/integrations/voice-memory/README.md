@@ -11,7 +11,7 @@ at `/app/bot.py` and `/app/voice_memory_policy.py` from an immutable source imag
 or immutable ConfigMap. The active process freezes
 `SHA256(bot.py bytes || NUL || voice_memory_policy.py bytes)` at import. Keep the
 existing `/ws` Service and model/provider configuration. The reviewed composite
-source SHA-256 is `1113ef85f192bac9b1ccab46edfb6dfe26d7786030bb2de24a85a8a55909359f`.
+source SHA-256 is `585fd2dce545cfdd163635c2e2929b193e2395329a5073b9ae14a8f033c08a9c`.
 The memory rule is an
 optional ConfigMap named `voice-memory-policy` in namespace `voice`; mount its
 directory read-only without `subPath` at `/etc/phorvex/voice-memory-policy`.

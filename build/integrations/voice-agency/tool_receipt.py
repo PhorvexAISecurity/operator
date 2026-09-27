@@ -62,7 +62,7 @@ def read_receipts(state_dir: Path, call_hash: str, caller_hash: str, pod_uid: st
                         row.get("tool") != "issue_refund" or row.get("sequence") != sequence or \
                         row.get("stage") != stage or type(row.get("amountCents")) is not int or \
                         (stage == "denied" and row.get("denialReason") not in
-                         ("test-scope", "crm-owner-unavailable", "refund-policy-denied")) or \
+                         ("test-scope", "crm-owner-unavailable", "refund-policy-denied", "policy-unavailable")) or \
                         (stage != "denied" and row.get("denialReason") != "") or \
                         type(row.get("crmIssued")) is not bool or \
                         type(row.get("observedAtUnixMs")) is not int or row["observedAtUnixMs"] <= 0 or \

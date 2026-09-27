@@ -313,7 +313,7 @@ class VoiceMemoryPolicy:
                 type(sequence) is not int or not 0 <= sequence < 4 or
                 stage not in ("started", "denied", "crm-returned", "result-delivered") or
                 (stage == "denied" and denial_reason not in
-                 ("test-scope", "crm-owner-unavailable", "refund-policy-denied")) or
+                 ("test-scope", "crm-owner-unavailable", "refund-policy-denied", "policy-unavailable")) or
                 (stage != "denied" and denial_reason != "") or
                 type(amount_cents) is not int or not -1 <= amount_cents <= 10000000):
             return False
@@ -558,16 +558,22 @@ class VoiceRefundPolicy:
             except (PolicyError, OSError, TypeError, KeyError, ValueError):
                 return None, True
 
-    def allow_refund(self, asserted_caller: str, order_id: str) -> bool:
+    def refund_decision(self, asserted_caller: str, order_id: str) -> str:
+        """Distinguish an exact rule match from a fail-closed projection error."""
         rule, closed = self._read()
         if closed:
-            return False
+            return "policy-unavailable"
         if rule is None:
-            return True
+            return "allow"
         caller_hash = hashlib.sha256(asserted_caller.encode("utf-8")).hexdigest()
         order_hash = hashlib.sha256(order_id.encode("utf-8")).hexdigest()
-        return (caller_hash, order_hash) not in {
-            (entry["assertedCallerSHA256"], entry["orderSHA256"]) for entry in rule["entries"]}
+        if (caller_hash, order_hash) in {
+                (entry["assertedCallerSHA256"], entry["orderSHA256"]) for entry in rule["entries"]}:
+            return "exact-pair-denied"
+        return "allow"
+
+    def allow_refund(self, asserted_caller: str, order_id: str) -> bool:
+        return self.refund_decision(asserted_caller, order_id) == "allow"
 
     def state(self) -> tuple[int, dict[str, Any]]:
         rule, closed = self._read()
