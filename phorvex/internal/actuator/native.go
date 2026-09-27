@@ -91,6 +91,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if a == model.ActionVoiceMemoryNoteRevoke {
 		return voiceMemoryCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceMemoryTransport)
 	}
+	if a == model.ActionLiteLLMClientRevoke {
+		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
+	}
 	// Transport is checked before its dependent allocation evidence.
 	if a == model.ActionMIGRebind && !NodeExecWired() {
 		return false, ReasonTransportUnwired

@@ -77,7 +77,10 @@ type attackRecord struct {
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
+	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
+	LoRACleanupStatus    string                      `json:"loraCleanupStatus,omitempty"`
+	LoRACleanupError     string                      `json:"loraCleanupError,omitempty"`
 	ProducerRoute        string                      `json:"producerRoute,omitempty"`
 	ResultSchema         string                      `json:"resultSchemaVersion,omitempty"`
 	ObservationStart     string                      `json:"observationStartedAt,omitempty"`
@@ -140,13 +143,15 @@ type attackRecord struct {
 	Cost             attackCost `json:"cost"`
 	PersistenceError string     `json:"persistenceError,omitempty"`
 
-	started     time.Time       // unexported, for elapsed timing
-	accepted    time.Time       // producer acknowledgement, for signal-response latency
-	baseEpoch   string          // pre-attack adapter epoch (poison detection)
-	baseKVEpoch string          // pre-attack kv-reset epoch (kvcache detection)
-	baseQuar    map[string]bool // pre-attack quarantine SecurityEvent names
-	baseNP      map[string]bool // pre-attack quarantine NetworkPolicy names
-	vllmEffect  *vllmEffectBaseline
+	started                   time.Time       // unexported, for elapsed timing
+	accepted                  time.Time       // producer acknowledgement, for signal-response latency
+	baseEpoch                 string          // pre-attack adapter epoch (poison detection)
+	baseKVEpoch               string          // pre-attack kv-reset epoch (kvcache detection)
+	baseQuar                  map[string]bool // pre-attack quarantine SecurityEvent names
+	baseNP                    map[string]bool // pre-attack quarantine NetworkPolicy names
+	vllmEffect                *vllmEffectBaseline
+	loRATerminalPersisted     bool
+	loRATerminalPersistFailed bool
 }
 
 type attackStimulusEvidence struct {
@@ -182,9 +187,10 @@ type attackEffectEvidence struct {
 // vllmEffectBaseline is private watcher authority captured and checked by the launch path.
 // It is deliberately not reconstructed from old receipts or Pod annotations.
 type vllmEffectBaseline struct {
-	kind       string
-	before     string
-	serviceUID string
+	kind        string
+	before      string
+	serviceUID  string
+	adapterName string
 }
 
 type decisionEvidence struct {
@@ -691,10 +697,18 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		if up := s.workloadUptimeBoundKind(r.Namespace, r.Deploy, r.OwnerKind, r.OwnerUID); up >= 0 && up < minUp {
 			minUp = up
 		}
-		if r.Outcome != "" || r.ResponseObserved || r.EffectEvidence != nil {
+		if r.Outcome != "" || r.ResponseObserved || (r.EffectEvidence != nil && r.AttackID != "poison") {
 			continue
 		}
 		if r.EvidenceKind == "vllm-in-place-effect" {
+			if r.AttackID == "poison" {
+				s.observeOwnedLoRAOutcome(ctxName, r, deadline)
+				publishAttack(r)
+				if r.loRATerminalPersisted {
+					break
+				}
+				continue
+			}
 			effect, probeErr := s.observeVLLMInPlaceEffect(r)
 			if probeErr != nil {
 				r.ObservationError = "in-place effect observation: " + probeErr.Error()
@@ -804,7 +818,9 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 			publishAttack(r)
 		}
 	}
-	if r.EvidenceKind == "vllm-in-place-effect" {
+	if r.EvidenceKind == "vllm-in-place-effect" && r.AttackID == "poison" {
+		s.finishOwnedLoRAOutcome(ctxName, r)
+	} else if r.EvidenceKind == "vllm-in-place-effect" {
 		// These scenarios currently have an exact setup/effect oracle but no behavioral attack
 		// oracle. Preserve the action evidence without manufacturing DEFENDED/LANDED, dwell or
 		// containment. In particular, an epoch/selector transition is not attacker mitigation.
@@ -863,8 +879,22 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 		}
 	}
 	r.Status = "done"
-	if r.ObservationError != "" {
+	if r.ObservationError != "" || (r.EvidenceKind == "vllm-in-place-effect" && r.AttackID == "poison" && (r.LoRACleanupStatus == "unknown" || r.PersistenceError != "")) {
 		r.Status = "partial"
+	}
+	if r.EvidenceKind == "vllm-in-place-effect" && r.AttackID == "poison" {
+		if !r.loRATerminalPersisted {
+			if err := s.persistAttack(r); err != nil {
+				r.Outcome, r.Action, r.DefendedPod, r.Actuated, r.TimeToDefendSec = "", "", "", false, 0
+				r.OutcomeClass = "unapproved-adapter-capability-unresolved"
+				r.ObservationError = "terminal LoRA outcome evidence was not durable"
+				r.Status = "partial"
+				r.PersistenceError = "LoRA terminal evidence persistence failed; unsafe to retry: " + err.Error()
+				s.recordStateError(fmt.Errorf("persist LoRA outcome: %w", err))
+			}
+		}
+		publishAttack(r)
+		return
 	}
 	publishAttack(r)
 	if err := s.persistAttack(r); err != nil {
@@ -1198,6 +1228,13 @@ func boundedDecisionMatches(all []exactDecisionMatch, summary exactDecisionMatch
 }
 
 func exactDecisionEvidence(r *attackRecord, d *audit.Record, collectedAt time.Time) (decisionEvidence, bool) {
+	if r.AttackID == "poison" && r.EvidenceKind == "vllm-in-place-effect" {
+		trace := d.DecisionTrace
+		if trace == nil || trace.Validate() != nil || trace.SelectedAction != d.Action ||
+			trace.DispatchOutcome != d.DispatchOutcome || trace.DecisionID == "" || trace.TickID == "" {
+			return decisionEvidence{}, false
+		}
+	}
 	if r.StimulusEvidence == nil || !r.StimulusEvidence.Observed || r.StimulusEvidence.EventName == "" ||
 		r.StimulusEvidence.EventUID == "" || r.StimulusEvidence.EventRule == "" || r.TargetUID == "" ||
 		r.StimulusEvidence.TargetUID != r.TargetUID {

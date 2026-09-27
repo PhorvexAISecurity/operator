@@ -404,6 +404,10 @@ func (k httpKVTransfer) InvalidateLocal(ctx context.Context, ep servingEndpoint)
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
+	// The local invalidation proxy waits for the same bounded reset-ack RPC as
+	// /reset_prefix_cache. Keep its client deadline aligned without changing
+	// deadlines for guardrail, drain, adapter, or remote peer calls.
+	ep = k.v.withResetAcknowledgementTimeout(ep)
 	code, body, err := k.v.postJSONEndpoint(ctx, ep, ep.kvInvPath, map[string]bool{"local": true})
 	if err != nil {
 		return err

@@ -68,9 +68,13 @@ LEGACY_MUTATING_ACTIONS = [
     "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate",
 ]
 OUTPUT16_ACTIONS = LEGACY_MUTATING_ACTIONS + ["sensitive-output-policy-activate"]
-MUTATING_ACTIONS = OUTPUT16_ACTIONS + ["voice-memory-note-revoke"]
+VOICE17_ACTIONS = OUTPUT16_ACTIONS + ["voice-memory-note-revoke"]
+LITELLM17_ACTIONS = OUTPUT16_ACTIONS + ["litellm-client-revoke"]
+MUTATING_ACTIONS = OUTPUT16_ACTIONS + ["voice-memory-note-revoke", "litellm-client-revoke"]
 ACTION_VOCABULARY_OUTPUT16 = "v2-output16"
 ACTION_VOCABULARY_VOICE17 = "v3-voice17"
+ACTION_VOCABULARY_LITELLM17 = "v3-litellm17"
+ACTION_VOCABULARY_LIVE18 = "v4-live18"
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
 
 
@@ -85,6 +89,10 @@ def trace_action_vocabulary(tr: dict) -> tuple[list[str] | None, str | None]:
     if version == ACTION_VOCABULARY_OUTPUT16:
         return OUTPUT16_ACTIONS, None
     if version == ACTION_VOCABULARY_VOICE17:
+        return VOICE17_ACTIONS, None
+    if version == ACTION_VOCABULARY_LITELLM17:
+        return LITELLM17_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE18:
         return MUTATING_ACTIONS, None
     return None, f"decisionTrace.actionVocabularyVersion={version!r} is unknown"
 

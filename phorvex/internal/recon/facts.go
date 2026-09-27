@@ -108,6 +108,10 @@ const (
 	// FactVoiceMemoryContamination is repeat exposure of one exact caller's
 	// observed harmful memory note. Quarantine cannot undo first contamination.
 	FactVoiceMemoryContamination = "voiceMemoryContamination"
+	// FactLiteLLMOwnedClientChannel is the repeat-use capability of one
+	// synthetic client credential at the installed admission gateway. It does
+	// not represent copied master-key knowledge or prior completions.
+	FactLiteLLMOwnedClientChannel = "litellmOwnedClientChannel"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement

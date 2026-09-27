@@ -179,6 +179,12 @@ func TestNoDeadFactKinds(t *testing.T) {
 				ScenarioID: "voice-live", CaseID: "owned-memory",
 				TargetPodUID: "voice-uid", DeploymentUID: "deployment-uid", ConfigMapUID: "voice-cm-uid", SourceSHA256: "source-sha",
 				CallerID: "+15551234567", NoteSHA256: "note-sha", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
+		{Pod: model.Pod{Namespace: "litellm", Name: "owned-client", UID: "owned-uid",
+			LiteLLMClientObservation: &model.LiteLLMClientObservation{EventName: "event", EventUID: "event-uid",
+				CreatorIdentity: "console", TargetPodUID: "owned-uid", PeerPodUID: "peer-uid",
+				ClientSHA256: "client-hash", ConfigMapUID: "cm-uid", ClientsConfigMapUID: "clients-cm-uid",
+				SeedSHA256: "seed-hash", ServiceUID: "service-uid",
+				GatewaySourceSHA256: "source-hash", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

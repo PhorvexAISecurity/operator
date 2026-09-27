@@ -137,6 +137,8 @@ func TestRouteContractsAreCoherent(t *testing.T) {
 	stateChanging := map[string]bool{
 		"/api/policy/edit":            true,
 		"/api/vllm/attack":            true,
+		"/api/voice/live/fire":        true,
+		"/api/litellm/live/fire":      true,
 		"/api/workload/attack":        true,
 		"/api/workload/fire-scenario": true,
 		"/api/availability-arms/run":  true,

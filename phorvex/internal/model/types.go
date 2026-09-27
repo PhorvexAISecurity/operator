@@ -107,6 +107,9 @@ const (
 	// ActionVoiceMemoryNoteRevoke appends one observed caller/note digest to the
 	// Voice application's deployment-bound memory quarantine.
 	ActionVoiceMemoryNoteRevoke Action = "voice-memory-note-revoke"
+	// ActionLiteLLMClientRevoke denies one observed, owned client credential at
+	// the installed LiteLLM admission gateway. It does not revoke the master key.
+	ActionLiteLLMClientRevoke Action = "litellm-client-revoke"
 	// ActionKVMigrateInvalidate invalidates/migrates KV across disaggregated prefill/decode
 	// (kv-reset is local-only). Local invalidate is real; cross-worker migrate is DEFERRED
 	// [PENDING-GPU-VALIDATION] (needs a disaggregated P/D deployment).
@@ -137,6 +140,7 @@ var MutatingActions = []Action{
 	ActionAdapterRotate, ActionRequestDrain, ActionGuardrailRotate, ActionKVMigrateInvalidate,
 	ActionSensitiveOutputPolicyActivate,
 	ActionVoiceMemoryNoteRevoke,
+	ActionLiteLLMClientRevoke,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -495,6 +499,7 @@ type Pod struct {
 	VoiceMemoryDeploymentUID  string
 	VoiceMemoryEventCreator   string
 	VoiceMemoryObservation    *VoiceMemoryObservation
+	LiteLLMClientObservation  *LiteLLMClientObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -560,6 +565,18 @@ func (p Pod) HasBoundVoiceMemoryObservation() bool {
 		o.PolicyUID != "" && o.PolicyGeneration > 0 && o.CallerID != "" && o.NoteSHA256 != ""
 }
 
+// HasBoundLiteLLMClientObservation licenses only the installed, synthetic
+// gateway credential channel. A generic copied credential never satisfies it.
+func (p Pod) HasBoundLiteLLMClientObservation() bool {
+	o := p.LiteLLMClientObservation
+	return o != nil && p.Namespace == "litellm" && p.UID != "" &&
+		o.TargetPodUID == p.UID && o.PeerPodUID != "" && o.PeerPodUID != p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.ClientSHA256 != "" && o.ConfigMapUID != "" && o.ServiceUID != "" &&
+		o.ClientsConfigMapUID != "" && o.SeedSHA256 != "" && o.GatewaySourceSHA256 != ""
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -574,9 +591,10 @@ const (
 	// AttackVectorPodBoundAPIAuth reports exposure of a copied projected
 	// default-audience bearer for this exact Pod. It does not establish that a
 	// generic copied credential was erased, or request a particular action.
-	AttackVectorPodBoundAPIAuth = "phorvex.attack.pod-bound-api-auth"
-	AttackVectorSensitiveOutput = "phorvex.attack.sensitive-output"
-	AttackVectorVoiceMemory     = "phorvex.attack.voice-memory-note"
+	AttackVectorPodBoundAPIAuth    = "phorvex.attack.pod-bound-api-auth"
+	AttackVectorSensitiveOutput    = "phorvex.attack.sensitive-output"
+	AttackVectorVoiceMemory        = "phorvex.attack.voice-memory-note"
+	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -647,6 +665,7 @@ type SecurityEventInfo struct {
 	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
+	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -729,6 +748,27 @@ type VoiceMemoryObservation struct {
 	PolicyGeneration                       int64
 	SelectedRevision                       uint64
 	ObservedAt                             time.Time
+}
+
+// LiteLLMClientObservation binds one trusted synthetic abuse event to the
+// exact gateway source, client hash, policy CM and two serving Pod lifetimes.
+// It deliberately contains no bearer token or master-key material.
+type LiteLLMClientObservation struct {
+	EventName           string    `json:"eventName"`
+	EventUID            string    `json:"eventUID"`
+	CreatorIdentity     string    `json:"creatorIdentity"`
+	TargetPodUID        string    `json:"targetPodUID"`
+	PeerPodUID          string    `json:"peerPodUID"`
+	ClientSHA256        string    `json:"clientSHA256"`
+	ConfigMapUID        string    `json:"configMapUID"`
+	ClientsConfigMapUID string    `json:"clientsConfigMapUID"`
+	SeedSHA256          string    `json:"seedSHA256"`
+	ServiceUID          string    `json:"serviceUID"`
+	GatewaySourceSHA256 string    `json:"gatewaySourceSHA256"`
+	PolicyName          string    `json:"policyName"`
+	PolicyUID           string    `json:"policyUID"`
+	PolicyGeneration    int64     `json:"policyGeneration"`
+	ObservedAt          time.Time `json:"observedAt"`
 }
 
 // VectorSteeringAttribution describes the one factor applied to one recon fact.
