@@ -545,6 +545,15 @@ func (p Pod) HasBoundAdapterObservation() bool {
 
 func (p Pod) HasBoundSensitiveOutputObservation() bool {
 	o := p.OutputPolicyObservation
+	if o != nil && o.Version == 2 {
+		v := o.LiteLLM
+		return p.Namespace == "litellm" && p.UID != "" && v != nil &&
+			o.TargetPodUID == p.UID && o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+			o.ConfigMapUID != "" && o.PolicyName == "litellm-defense" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+			v.PeerPodUID != "" && v.PeerPodUID != p.UID && v.RuleConfigMapName != "" && v.RuleConfigMapUID != "" && v.RuleSHA256 != "" && v.ProtectedSHA256 != "" &&
+			v.ServiceUID != "" && v.DeploymentUID != "" && v.SourceSHA256 != "" && v.ContextSecretUID != "" &&
+			v.ContextSeedSHA256 != "" && v.RequestSHA256 != "" && v.OriginalCompletionSHA256 != ""
+	}
 	return o != nil && p.UID != "" && p.OutputPolicyConfigMap != "" &&
 		o.TargetPodUID == p.UID && o.RuleSHA256 == p.OutputPolicyRuleSHA256 &&
 		o.ProxySourceSHA256 == p.OutputProxySourceSHA256 &&
@@ -665,6 +674,7 @@ type SecurityEventInfo struct {
 	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
+	SensitiveOutputV2Raw              string // LiteLLM output assertion; parsed and bound separately from v1
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
@@ -716,22 +726,24 @@ type AdapterObservation struct {
 // SensitiveOutputObservation licenses only one source-bound response-field rule.
 // It contains no secret marker or raw customer response.
 type SensitiveOutputObservation struct {
-	EventName                        string    `json:"eventName"`
-	EventUID                         string    `json:"eventUID"`
-	CreatorIdentity                  string    `json:"creatorIdentity"`
-	TargetPodUID                     string    `json:"targetPodUID"`
-	ConfigMapUID                     string    `json:"configMapUID"`
-	SelectedRevision                 uint64    `json:"selectedRevision"`
-	SelectedConfigMapResourceVersion string    `json:"selectedConfigMapResourceVersion"`
-	PolicyName                       string    `json:"policyName"`
-	PolicyUID                        string    `json:"policyUID"`
-	PolicyGeneration                 int64     `json:"policyGeneration"`
-	RuleSHA256                       string    `json:"ruleSHA256"`
-	ProxySourceSHA256                string    `json:"proxySourceSHA256"`
-	SupportSourceSHA256              string    `json:"supportSourceSHA256"`
-	ProxyImageID                     string    `json:"proxyImageID"`
-	SupportImageID                   string    `json:"supportImageID"`
-	ObservedAt                       time.Time `json:"observedAt"`
+	Version                          int                    `json:"version,omitempty"`
+	LiteLLM                          *LiteOutputObservation `json:"liteLLM,omitempty"`
+	EventName                        string                 `json:"eventName"`
+	EventUID                         string                 `json:"eventUID"`
+	CreatorIdentity                  string                 `json:"creatorIdentity"`
+	TargetPodUID                     string                 `json:"targetPodUID"`
+	ConfigMapUID                     string                 `json:"configMapUID"`
+	SelectedRevision                 uint64                 `json:"selectedRevision"`
+	SelectedConfigMapResourceVersion string                 `json:"selectedConfigMapResourceVersion"`
+	PolicyName                       string                 `json:"policyName"`
+	PolicyUID                        string                 `json:"policyUID"`
+	PolicyGeneration                 int64                  `json:"policyGeneration"`
+	RuleSHA256                       string                 `json:"ruleSHA256"`
+	ProxySourceSHA256                string                 `json:"proxySourceSHA256"`
+	SupportSourceSHA256              string                 `json:"supportSourceSHA256"`
+	ProxyImageID                     string                 `json:"proxyImageID"`
+	SupportImageID                   string                 `json:"supportImageID"`
+	ObservedAt                       time.Time              `json:"observedAt"`
 }
 
 // VoiceMemoryObservation is one trusted, source-bound test observation of an
@@ -748,6 +760,25 @@ type VoiceMemoryObservation struct {
 	PolicyGeneration                       int64
 	SelectedRevision                       uint64
 	ObservedAt                             time.Time
+}
+
+// LiteOutputObservation is digest-only evidence of a real completion from an
+// installed, server-owned LiteLLM context. It never carries protected bytes.
+type LiteOutputObservation struct {
+	ObjectiveID              string `json:"objectiveId"`
+	RunNonce                 string `json:"runNonce"`
+	PeerPodUID               string `json:"peerPodUID"`
+	RuleConfigMapName        string `json:"ruleConfigMapName"`
+	RuleConfigMapUID         string `json:"ruleConfigMapUID"`
+	RuleSHA256               string `json:"ruleSHA256"`
+	ProtectedSHA256          string `json:"protectedSHA256"`
+	SourceSHA256             string `json:"sourceSHA256"`
+	ServiceUID               string `json:"serviceUID"`
+	DeploymentUID            string `json:"deploymentUID"`
+	ContextSecretUID         string `json:"contextSecretUID"`
+	ContextSeedSHA256        string `json:"contextSeedSHA256"`
+	RequestSHA256            string `json:"requestSHA256"`
+	OriginalCompletionSHA256 string `json:"originalCompletionSHA256"`
 }
 
 // LiteLLMClientObservation binds one trusted synthetic abuse event to the

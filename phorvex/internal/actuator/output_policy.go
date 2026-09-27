@@ -122,6 +122,9 @@ func outputPolicyImageID(p *corev1.Pod, name string) string {
 }
 
 func outputPolicyCapability(ctx context.Context, reader client.Reader, journalNS string, target Target) (bool, string) {
+	if target.Namespace == outputpolicy.LiteNamespace {
+		return liteOutputCapability(ctx, reader, journalNS, target)
+	}
 	if reader == nil || journalNS == "" || target.Namespace == "" || target.Pod == "" || target.UID == "" {
 		return false, "output-policy-authority-unavailable"
 	}
@@ -554,6 +557,9 @@ type outputPolicyHandler struct{}
 
 func (outputPolicyHandler) Name() string { return string(model.ActionSensitiveOutputPolicyActivate) }
 func (outputPolicyHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	if req.OutputPolicyObservation != nil && req.OutputPolicyObservation.Version == 2 {
+		return enactLiteOutputPolicy(ctx, ec, req)
+	}
 	if ec.DryRun {
 		return HandlerResult{}, errDryRunGuard
 	}
@@ -775,6 +781,9 @@ func recoverOutputPolicyOperations(ctx context.Context, ec EnactCtx, allow func(
 func PendingOutputPolicyOperation(ctx context.Context, reader client.Reader, operatorNamespace, namespace, podUID string) (bool, error) {
 	if reader == nil || operatorNamespace == "" || namespace == "" || podUID == "" {
 		return false, fmt.Errorf("output policy journal authority unavailable")
+	}
+	if namespace == outputpolicy.LiteNamespace {
+		return pendingLiteOutputOperations(ctx, reader, operatorNamespace, podUID)
 	}
 	probe, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()

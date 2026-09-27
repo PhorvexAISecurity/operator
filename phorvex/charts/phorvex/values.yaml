@@ -11,6 +11,8 @@ phorvex:
   litellmClientRevoke:
     enabled: false
     statusSecret: ""
+  litellmOutput:
+    enabled: false
   # Base tick interval for the decision loop (per-tenant cadence honored on top).
   baseInterval: 10s
   # Consecutive unsupported observations before ActionsSupported becomes False.
