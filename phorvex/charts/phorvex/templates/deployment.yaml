@@ -286,8 +286,13 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled .Values.phorvex.litellmClientRevoke.enabled }}
         volumeMounts:
+        {{- if .Values.phorvex.litellmClientRevoke.enabled }}
+        - name: litellm-client-revoke-status
+          mountPath: /etc/phorvex-litellm-status
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
           mountPath: {{ .Values.phorvex.epss.mountPath }}
@@ -344,8 +349,17 @@ spec:
           mountPath: {{ .Values.phorvex.scopedOutcome.evidenceMountPath }}
         {{- end }}
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled .Values.phorvex.litellmClientRevoke.enabled }}
       volumes:
+      {{- if .Values.phorvex.litellmClientRevoke.enabled }}
+      - name: litellm-client-revoke-status
+        secret:
+          secretName: {{ required "litellmClientRevoke.statusSecret required" .Values.phorvex.litellmClientRevoke.statusSecret | quote }}
+          defaultMode: 0440
+          items:
+          - key: token
+            path: token
+      {{- end }}
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
         configMap:

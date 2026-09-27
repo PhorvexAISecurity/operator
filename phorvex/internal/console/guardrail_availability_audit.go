@@ -183,6 +183,13 @@ func availabilitySpans(start availabilityAuditStart, m audittransport.Manifest) 
 }
 
 func availabilityProjectAudit(raw []byte, before availabilitySnapshot, targetName string, event *availabilityEvent) ([]availabilityDecision, int, error) {
+	return availabilityProjectAuditNamespace(raw, before, targetName, event, "vllm")
+}
+
+func availabilityProjectAuditNamespace(raw []byte, before availabilitySnapshot, targetName string, event *availabilityEvent, namespace string) ([]availabilityDecision, int, error) {
+	if namespace != "vllm" && namespace != "litellm" {
+		return nil, 0, errors.New("audit projection namespace unavailable")
+	}
 	if len(raw) == 0 || raw[len(raw)-1] != '\n' {
 		return nil, 0, errors.New("audit terminal line incomplete")
 	}
@@ -203,14 +210,14 @@ func availabilityProjectAudit(raw []byte, before availabilitySnapshot, targetNam
 		if rec.Kind != "phorvex.decision" {
 			continue
 		}
-		targetRelated := rec.Namespace == "vllm" && rec.Pod == targetName
+		targetRelated := rec.Namespace == namespace && rec.Pod == targetName
 		if rec.DecisionTrace != nil && rec.DecisionTrace.AssetUID == before.TargetPodUID {
 			targetRelated = true
 		}
 		if !targetRelated {
 			continue
 		}
-		if rec.Namespace != "vllm" || rec.Pod != targetName || rec.DecisionTrace == nil || rec.DecisionTrace.AssetUID != before.TargetPodUID || rec.DecisionTrace.PolicyUID != before.PolicyUID || rec.DecisionTrace.AssetNamespace != "vllm" || rec.DecisionTrace.AssetName != rec.Pod {
+		if rec.Namespace != namespace || rec.Pod != targetName || rec.DecisionTrace == nil || rec.DecisionTrace.AssetUID != before.TargetPodUID || rec.DecisionTrace.PolicyUID != before.PolicyUID || rec.DecisionTrace.AssetNamespace != namespace || rec.DecisionTrace.AssetName != rec.Pod {
 			unbound++
 			continue
 		}
@@ -368,7 +375,11 @@ func (w *availabilityWorker) auditClose(start availabilityAuditStart, event *ava
 			return out, errors.New("audit frozen generation changed after read")
 		}
 	}
-	rows, unbound, e := availabilityProjectAudit(raw.Bytes(), w.before, w.p.Fixture.PodName, event)
+	namespace := w.auditNamespace
+	if namespace == "" {
+		namespace = "vllm"
+	}
+	rows, unbound, e := availabilityProjectAuditNamespace(raw.Bytes(), w.before, w.p.Fixture.PodName, event, namespace)
 	if e != nil {
 		return out, e
 	}

@@ -10,6 +10,9 @@
 {{- if and .Values.phorvex.console.guardrailOutput.enabled (not .Values.phorvex.console.enabled) }}
 {{- fail "guardrailOutput.enabled requires console.enabled" }}
 {{- end }}
+{{- if and .Values.phorvex.console.litellmLive.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "litellmLive.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -322,6 +325,63 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "phorvex.fullname" $ }}-console-litellm-control
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- with .Values.phorvex.console.litellmLive }}
+{{- if and $.Values.phorvex.console.enabled .enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-live-source
+  namespace: litellm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-litellm-admission-gateway", "phorvex-litellm-live-clients", "phorvex-litellm-client-policy"]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-live-source
+  namespace: litellm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-live-source
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-live-journal
+  namespace: {{ default $.Release.Namespace $.Values.phorvex.operatorNamespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .journalName | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-live-journal
+  namespace: {{ default $.Release.Namespace $.Values.phorvex.operatorNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-litellm-live-journal
 subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.consoleServiceAccountName" $ }}

@@ -8,6 +8,9 @@ phorvex:
     repository: phorvex/phorvex
     pullPolicy: IfNotPresent
     tag: "0.1.0-p0"
+  litellmClientRevoke:
+    enabled: false
+    statusSecret: ""
   # Base tick interval for the decision loop (per-tenant cadence honored on top).
   baseInterval: 10s
   # Consecutive unsupported observations before ActionsSupported becomes False.
@@ -408,6 +411,16 @@ phorvex:
       outputPolicyConfigMapName: ""
       outputPolicyJournalName: ""
       targetNamespace: vllm
+    # Reviewed real LiteLLM Service-path client policy trial. Off until the
+    # owner has installed the gateway and pinned a complete runtime profile.
+    litellmLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      attackerSecret: ""
+      controlSecret: ""
+      statusSecret: ""
+      journalName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

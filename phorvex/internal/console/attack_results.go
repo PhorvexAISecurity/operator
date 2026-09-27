@@ -76,6 +76,7 @@ type attackRecord struct {
 	EffectEvidence       *attackEffectEvidence       `json:"effectEvidence,omitempty"`
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
+	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	ProducerRoute        string                      `json:"producerRoute,omitempty"`
 	ResultSchema         string                      `json:"resultSchemaVersion,omitempty"`

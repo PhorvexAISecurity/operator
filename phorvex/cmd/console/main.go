@@ -404,6 +404,17 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.GuardrailOutputProfileSHA256 = guardrailOutputProfileSHA256
 	cfg.GuardrailOutputProfilePath = "/etc/phorvex-guardrail-output/config.guardrail-output-response.yaml"
+	liteLLMLiveEnabled, err := readBool("PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.LiteLLMLiveEnabled = liteLLMLiveEnabled
+	liteLLMLiveProfileSHA256, _ := lookup("PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256")
+	if liteLLMLiveEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(liteLLMLiveProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.LiteLLMLiveProfileSHA256 = liteLLMLiveProfileSHA256
+	cfg.LiteLLMLiveProfilePath = "/etc/phorvex-litellm-live/profile.json"
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err
