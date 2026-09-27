@@ -45,8 +45,8 @@ and a reviewed eight-to-24-character run ID. It rejects remote
 hosts, non-`/ws` routes, and query strings. It sends exactly one of the fixed
 clips as 20 ms media frames, starts from run-derived caller A, drains bounded
 audio replies, and ends within ten seconds. Its JSON output is a call/transport
-receipt; it never labels the attack landed. Run the two offline shape checks
-with a Python environment containing `websockets` 17:
+receipt; it never labels the attack landed. Run the offline checks with a Python
+environment containing `websockets` (the integrated suite was verified with 13.1):
 
 ```
 python -m unittest discover -s build/integrations/voice-agency -p 'test_*.py' -q

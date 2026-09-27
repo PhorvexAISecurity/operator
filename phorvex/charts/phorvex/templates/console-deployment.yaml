@@ -168,7 +168,7 @@
 {{- if ne .Values.phorvex.console.litellmLive.journalName "phorvex-litellm-revoke-journal" }}{{- fail "console.litellmLive.journalName invalid" }}{{- end }}
 {{- end }}
 {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
-{{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.voiceAgencyLive requires phorvex-system release namespace" }}{{- end }}
+{{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceAgencyLive requires phorvex-system release and effective operator namespaces" }}{{- end }}
 {{- if not .Values.phorvex.voiceRefund.enabled }}{{- fail "console.voiceAgencyLive requires voiceRefund.enabled" }}{{- end }}
 {{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
 {{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceAgencyLive requires the profile-bound console service account" }}{{- end }}
