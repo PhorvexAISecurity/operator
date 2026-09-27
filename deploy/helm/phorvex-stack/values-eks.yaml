@@ -323,13 +323,21 @@ phorvex:
     # ── Serving-control transport (kv-reset, kv-migrate-invalidate, guardrail-rotate,
     # adapter-rotate, request-drain, warm-swap, model-shard-replace) ──────────────────
     # Default `secure-required` needs an exact TLS binding (policy UID + workload SA +
-    # bearer/CA Secret) per serving workload; with none configured EVERY serving-control
-    # actuator is "unsupported" and a KV attack can only be answered by rotate. This dev
-    # cluster's vLLM control endpoints are plain HTTP inside the cluster, so the explicit
-    # migration mode is the truthful setting. Visibly insecure by contract: move back to
-    # secure-required + bindings once the serving pods expose TLS admin endpoints.
+    # bearer/CA Secret) per serving workload. The reviewed vLLM reset/drain runtime
+    # exposes its admin endpoint over TLS with the exact policy and workload identity
+    # below. Keep other serving bindings here if additional workloads are enrolled.
     servingSecurity:
-      mode: legacy-plaintext
+      mode: secure-required
+      bindings:
+        - namespace: vllm
+          policyName: vllm-defense
+          policyUID: 5cef9d07-12ed-48a2-9f51-f8f45fb2442d
+          serviceAccount: default
+          profileID: vllm-drain-v11
+          secretName: vllm-serving-admin
+          bearerKey: bearer
+          caKey: ca.crt
+          serverName: vllm-admin.vllm.svc
     # ── Detector allowlist (M-94) ─────────────────────────────────────────────────
     # Chart default plus the console: attacks fired from the console UI create
     # SecurityEvents as the console ServiceAccount, and an unlisted creator carries no
