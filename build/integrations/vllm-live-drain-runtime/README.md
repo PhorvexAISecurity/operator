@@ -75,8 +75,17 @@ reviewed before rendering a deployable candidate.
    Merge the additive secure-required binding with any **current** serving
    bindings; do not replace other targets' configuration from this one-target
    overlay.
-5. Install the reviewed source ConfigMap, Secrets, secure operator binding,
-   and Deployment through the workload owner's normal deployment path. The
+5. Use an owner-coordinated maintenance transition for the currently observed
+   single-replica workload. Its `maxSurge: 0`, `maxUnavailable: 1` strategy does
+   not require a second GPU, but replacing it interrupts serving. The current
+   source ConfigMap is mutable and directory-mounted: applying new source while
+   the old Pod runs creates a mixed-source interval. Stage the image and Secrets,
+   stop the old replica, verify its serving endpoint is absent, then install and
+   verify the reviewed ConfigMap before starting the candidate Deployment at one
+   replica. Keep the original ConfigMap and Deployment for rollback during the
+   same stopped-workload transition. The PDB's zero allowed evictions does not
+   make a Deployment replacement disruption-free. Install the secure operator
+   binding through its normal configuration path. The
    derivative runs vLLM on loopback `8001` with `VLLM_API_KEY`; one guardrail
    process serves public inference on `8000` and private TLS control on `8443`.
    An init container writes `origin.json` and `ledger.json` once into a
