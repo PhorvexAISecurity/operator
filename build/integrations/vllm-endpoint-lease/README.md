@@ -58,7 +58,7 @@ does **not** contain the five executable source files; the immutable source
 ConfigMap and its independent five-file digest bind them separately. The
 publisher build commit need not equal the earlier reviewed app source commit.
 The engine is independently pinned to
-`753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:3534dec6b97c1b6e4042b3cb2987c6cf8c4d4e4167a833320e2f1b7f4135d050`.
+`753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:5f80f90be83db84932e1bf70b8fe12ecc3d4f48ffc7b1131003707d8862bdb51`.
 `adopt` checks it against the reviewed drain publication join and candidate
 `vllm` container, then emits `ADOPTION.engineImage` for manager and console
 approved-image configuration. It also requires engine loopback

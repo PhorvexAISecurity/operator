@@ -30,7 +30,7 @@ PROXY_RECIPE_FILES = (".dockerignore", "Dockerfile", "requirements.lock", "wheel
                       "verify_recipe.py", "test_recipe.py", "write_publish_receipt.py", "README.md")
 PROXY_BASE_IMAGE = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
 PROXY_COMMAND = '["python3", "-B", "/src/dual_server.py"]'
-APPROVED_ENGINE_IMAGE = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:3534dec6b97c1b6e4042b3cb2987c6cf8c4d4e4167a833320e2f1b7f4135d050"
+APPROVED_ENGINE_IMAGE = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:5f80f90be83db84932e1bf70b8fe12ecc3d4f48ffc7b1131003707d8862bdb51"
 TENANT_SECRET = "phorvex-endpoint-lease-keys"
 CONSOLE_SECRET = "vllm-endpoint-lease-callers"
 SOURCE_CM = "guardrail-proxy"
