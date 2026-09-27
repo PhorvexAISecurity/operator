@@ -381,6 +381,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe.Issues = append([]string(nil), r.VoiceOutputProbe.Issues...)
 		c.VoiceOutputProbe = &probe
 	}
+	if r.VoiceMCPProbe != nil {
+		probe := *r.VoiceMCPProbe
+		probe.Issues = append([]string(nil), r.VoiceMCPProbe.Issues...)
+		c.VoiceMCPProbe = &probe
+	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect
 		c.vllmEffect = &baseline
@@ -413,6 +418,17 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe := *r.EndpointLeaseProbe
 		probe.Issues = append([]string(nil), r.EndpointLeaseProbe.Issues...)
 		c.EndpointLeaseProbe = &probe
+	}
+	if r.LiteLLMLiveProbe != nil {
+		probe := *r.LiteLLMLiveProbe
+		probe.Issues = append([]string(nil), r.LiteLLMLiveProbe.Issues...)
+		c.LiteLLMLiveProbe = &probe
+	}
+	if r.LiteLLMOutputProbe != nil {
+		probe := *r.LiteLLMOutputProbe
+		probe.Issues = append([]string(nil), r.LiteLLMOutputProbe.Issues...)
+		probe.ReservedRuleSlots = append([]string(nil), r.LiteLLMOutputProbe.ReservedRuleSlots...)
+		c.LiteLLMOutputProbe = &probe
 	}
 	if r.Claim != nil {
 		claim := *r.Claim
@@ -461,10 +477,19 @@ func attackSnapshots(p *Principal) []*attackRecord {
 	return out
 }
 
-// Live views include reviewed Voice observations. Endpoint lease observations
+// Live views include reviewed Voice observations. Other reviewed live observations
 // are opt-in; experiment-only signals and unknown evidence kinds stay excluded.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || rec.EvidenceKind == "voice-mcp-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal" || rec.EvidenceKind == "vllm-endpoint-lease-live"))
+	switch rec.EvidenceKind {
+	case "", "voice-memory-live", "voice-agency-live", "voice-mcp-live":
+		return true
+	case "vllm-in-place-effect", "vllm-unsupported-stimulus", "catalogue-signal",
+		"vllm-endpoint-lease-live", "vllm-drain-owned-observation", "voice-output-live",
+		"litellm-live-client-policy", "litellm-real-provider-output":
+		return observations
+	default:
+		return false
+	}
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
