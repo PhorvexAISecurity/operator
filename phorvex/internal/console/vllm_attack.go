@@ -190,11 +190,12 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		s.writeVLLMSetupFailure(w, r, action, phase, targetUID, "", candidate, possibleEffect, restoration, cause)
 	}
+	var selectedAdapterName string
 	startEffect := func(attack, action, evidenceLabel, expected, kind, before, limitation string, stimulus *attackStimulusEvidence) string {
 		stimulus.Limitation = limitation
 		base.stimulus = stimulus
 		base.outcomeClass = "behavioral-oracle-unsupported"
-		base.vllmEffect = &vllmEffectBaseline{kind: kind, before: before}
+		base.vllmEffect = &vllmEffectBaseline{kind: kind, before: before, adapterName: selectedAdapterName}
 		return s.startVLLMEffectRecord(vllmAttackNS, pod, attack, action, evidenceLabel, expected, base)
 	}
 	startUnsupported := func(attack, action, evidenceLabel, expected, limitation string, stimulus *attackStimulusEvidence) string {
@@ -211,24 +212,45 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 
 	switch body.Action {
 	case "poison":
-		if stringMapValue(target.Metadata.Labels, "phorvex.ai/lora-enabled") != "true" {
-			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("target does not declare LoRA support"))
+		if err := liveLoRAPrerequisites(target); err != nil {
+			setupFailure(body.Action, "setup", nil, false, err)
 			return
 		}
-		attempted, producerErr := runBoundedProducer(func() error { return loadVLLMAdapter(execIn, "evil", "/tmp/evil-lora") })
+		models, inventoryErr := readVLLMModels(execIn)
+		if inventoryErr != nil || len(models) != 1 || models[0] != liveLoRABaseModel {
+			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("exact installed base-model inventory is unavailable or differs: %v", inventoryErr))
+			return
+		}
+		if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err != nil {
+			setupFailure(body.Action, "setup", nil, false, fmt.Errorf("base-model control failed: %w", err))
+			return
+		}
+		var adapterName string
+		attempted, producerErr := runBoundedProducer(func() error {
+			name, path, err := s.stageZeroLoRA(pod, targetUID)
+			adapterName = name
+			if err != nil {
+				return err
+			}
+			if err := loadVLLMAdapter(execIn, name, path); err != nil {
+				return err
+			}
+			return probeLoRARoute(execIn, name, true)
+		})
 		if producerErr != nil {
 			setupFailure(body.Action, "producer", nil, attempted, producerErr)
 			return
 		}
-		stimulus, eventErr := createStimulus("AdapterPoisoning", "verified unapproved LoRA adapter inventory entry", "0.9", "evil")
+		stimulus, eventErr := createStimulus("AdapterPoisoning", "verified unapproved zero-delta LoRA adapter route and inventory entry", "0.9", adapterName)
 		if eventErr != nil {
 			setupFailure(body.Action, "stimulus", stimulus, true, eventErr)
 			return
 		}
-		attackID := startEffect("Unapproved LoRA load observation", "poison", "adapter-effect-only", "adapter-rotate", "adapter-epoch", base.epoch, "adapter load and inventory were confirmed; no same-probe model behavior corruption or mitigation was measured", stimulus)
+		selectedAdapterName = adapterName
+		attackID := startEffect("Unapproved LoRA load observation", "poison", "adapter-effect-only", "adapter-rotate", "adapter-epoch", base.epoch, "zero-delta adapter route and inventory were confirmed; no model answer corruption is claimed", stimulus)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
 			"attackId": attackID,
-			"message":  "An unapproved adapter load and exact detector stimulus were confirmed on " + pod + ". The console will report an exact adapter completion effect if observed; model behavior mitigation is not established."})
+			"message":  "An unapproved zero-delta adapter route and exact detector stimulus were confirmed on " + pod + ". The console will report exact adapter removal if observed; model answer corruption is not claimed."})
 	case "kvcache":
 		payload := map[string]any{"model": "Qwen/Qwen2.5-7B-Instruct-AWQ", "prompt": kvCachePublicPrefix, "max_tokens": 1}
 		attempted, producerErr := runBoundedProducer(func() error { return runVLLMCompletion(execIn, false, payload) })

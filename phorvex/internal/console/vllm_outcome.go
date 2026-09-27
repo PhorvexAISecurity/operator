@@ -370,6 +370,16 @@ type vllmPodState struct {
 		Labels          *map[string]string `json:"labels"`
 		Annotations     *map[string]string `json:"annotations"`
 	} `json:"metadata"`
+	Spec struct {
+		Containers []struct {
+			Name string   `json:"name"`
+			Args []string `json:"args"`
+			Env  []struct {
+				Name  string `json:"name"`
+				Value string `json:"value"`
+			} `json:"env"`
+		} `json:"containers"`
+	} `json:"spec"`
 }
 
 type vllmServiceState struct {
@@ -731,6 +741,9 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 	}
 	switch r.vllmEffect.kind {
 	case "adapter-epoch":
+		if !validRunOwnedLoRA(r.vllmEffect.adapterName) {
+			return nil, fmt.Errorf("run-owned adapter identity is unavailable")
+		}
 		afterAnnotation := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/adapter-epoch")
 		afterLabel := stringMapValue(pod.Metadata.Labels, "phorvex.ai/adapter-epoch")
 		if afterAnnotation == "" || afterAnnotation == r.vllmEffect.before {
@@ -743,7 +756,35 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 		if err != nil || postPod.Metadata.UID != r.TargetUID || stringMapValue(postPod.Metadata.Annotations, "phorvex.ai/adapter-epoch") != afterAnnotation || stringMapValue(postPod.Metadata.Labels, "phorvex.ai/adapter-epoch") != afterLabel {
 			return nil, fmt.Errorf("target identity or adapter epoch changed across observation")
 		}
-		return &attackEffectEvidence{Kind: r.vllmEffect.kind, Observed: true, ObservedAt: s.cfg.now().UTC().Format(time.RFC3339Nano), TargetUID: r.TargetUID, Before: r.vllmEffect.before, After: afterAnnotation, Correlation: "exact-security-event-uid-and-target", Limitation: "adapter removal/completion metadata is an in-place mechanism effect; no same-probe model behavior mitigation was measured"}, nil
+		execIn := func(sh string) (string, error) {
+			return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", r.Pod, "--", "sh", "-c", sh)
+		}
+		models, err := readVLLMModels(execIn)
+		if err != nil {
+			return nil, fmt.Errorf("adapter removal inventory: %w", err)
+		}
+		basePresent, adapterPresent := false, false
+		for _, model := range models {
+			basePresent = basePresent || model == liveLoRABaseModel
+			adapterPresent = adapterPresent || model == r.vllmEffect.adapterName
+		}
+		if !basePresent || adapterPresent {
+			return nil, nil
+		}
+		if err := probeLoRARoute(execIn, r.vllmEffect.adapterName, false); err != nil {
+			return nil, fmt.Errorf("adapter route still available: %w", err)
+		}
+		if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err != nil {
+			return nil, fmt.Errorf("base-model continuity: %w", err)
+		}
+		lastPod, err := s.readVLLMPod(r.Pod)
+		if err != nil || lastPod.Metadata.UID != r.TargetUID || stringMapValue(lastPod.Metadata.Annotations, "phorvex.ai/adapter-epoch") != afterAnnotation {
+			return nil, fmt.Errorf("target identity changed across adapter route checks")
+		}
+		if err := s.removeZeroLoRA(r.Pod, r.TargetUID, r.vllmEffect.adapterName); err != nil {
+			return nil, fmt.Errorf("run-owned adapter artifact cleanup: %w", err)
+		}
+		return &attackEffectEvidence{Kind: r.vllmEffect.kind, Observed: true, ObservedAt: s.cfg.now().UTC().Format(time.RFC3339Nano), TargetUID: r.TargetUID, Before: r.vllmEffect.before, After: afterAnnotation, Correlation: "exact-security-event-uid-target-and-adapter-route", Limitation: "run-owned adapter disappeared from inventory and its route returned 404 while the base model still served; no model answer corruption is claimed"}, nil
 	case "kv-reset-epoch":
 		after := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/kv-reset-epoch")
 		if after == "" || after == r.vllmEffect.before {
@@ -824,7 +865,7 @@ func (s *Server) validateVLLMEvent(r *attackRecord) error {
 		return fmt.Errorf("correlated SecurityEvent identity or target changed")
 	}
 	if r.vllmEffect != nil && r.vllmEffect.kind == "adapter-epoch" &&
-		(event.Metadata.Annotations["phorvex.ai/adapter-name"] != "evil" || event.Metadata.Annotations["phorvex.ai/target-pod-uid"] != r.TargetUID) {
+		(event.Metadata.Annotations["phorvex.ai/adapter-name"] != r.vllmEffect.adapterName || event.Metadata.Annotations["phorvex.ai/target-pod-uid"] != r.TargetUID) {
 		return fmt.Errorf("correlated adapter SecurityEvent identity changed")
 	}
 	return nil

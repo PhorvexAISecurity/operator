@@ -181,9 +181,10 @@ type attackEffectEvidence struct {
 // vllmEffectBaseline is private watcher authority captured and checked by the launch path.
 // It is deliberately not reconstructed from old receipts or Pod annotations.
 type vllmEffectBaseline struct {
-	kind       string
-	before     string
-	serviceUID string
+	kind        string
+	before      string
+	serviceUID  string
+	adapterName string
 }
 
 type decisionEvidence struct {

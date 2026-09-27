@@ -114,6 +114,7 @@ type remainingHandlerFixture struct {
 	loseCreateAck    bool
 	guardrailCurrent string
 	guardrailRoster  string
+	omitLoRALabel    bool
 }
 
 func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...string) (string, error) {
@@ -141,8 +142,13 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 			annotations["phorvex.ai/guardrail-variants"] = f.guardrailRoster
 		}
 		f.mu.Unlock()
+		labels := map[string]string{"app": "vllm"}
+		if !f.omitLoRALabel {
+			labels["phorvex.ai/lora-enabled"] = "true"
+		}
 		pod := map[string]any{"metadata": map[string]any{"name": "vllm-0", "uid": uid, "resourceVersion": "11",
-			"labels": map[string]string{"app": "vllm", "phorvex.ai/lora-enabled": "true"}, "annotations": annotations}}
+			"labels": labels, "annotations": annotations},
+			"spec": map[string]any{"containers": []any{map[string]any{"name": "vllm", "args": []string{"--model", liveLoRABaseModel, "--enable-lora", "--max-loras", "4", "--max-lora-rank", "16"}, "env": []any{map[string]string{"name": "VLLM_ALLOW_RUNTIME_LORA_UPDATING", "value": "1"}}}}}}
 		encoded, _ := json.Marshal(pod)
 		return string(encoded), nil
 	case strings.Contains(joined, "get pod vllm-0") && strings.Contains(joined, "metadata.uid"):
@@ -158,6 +164,10 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 		return "1|1", nil
 	case strings.Contains(joined, "get networkpolicy") || (strings.Contains(joined, "get securityevent") && strings.Contains(joined, "--no-headers")):
 		return "", nil
+	case strings.Contains(joined, "-- python3 -c"):
+		name, uid := args[len(args)-2], args[len(args)-1]
+		b, _ := json.Marshal(map[string]string{"adapter": name, "podUid": uid, "baseModel": liveLoRABaseModel, "path": "/tmp/" + name, "safetensorsSha256": strings.Repeat("a", 64)})
+		return "PHORVEX_LORA_READY " + string(b), nil
 	case strings.Contains(joined, " exec "):
 		out, err := actualVLLMExec(f.t, f.serverURL)(args[len(args)-1])
 		f.mu.Lock()
@@ -419,18 +429,25 @@ func TestGuardrailHandlerRefusesUnpinnedMeasuredProfileBeforeEvent(t *testing.T)
 
 func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T) {
 	var mu sync.Mutex
-	loaded := false
+	loadedName := ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch r.URL.Path {
 		case "/v1/load_lora_adapter":
-			loaded = true
+			var request struct {
+				LoRAName string `json:"lora_name"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || !strings.HasPrefix(request.LoRAName, "phorvex-probe-") {
+				http.Error(w, "invalid run-owned adapter", http.StatusBadRequest)
+				return
+			}
+			loadedName = request.LoRAName
 			_ = json.NewEncoder(w).Encode(map[string]bool{"loaded": true})
 		case "/v1/models":
 			data := []map[string]string{{"id": "Qwen/Qwen2.5-7B-Instruct-AWQ"}}
-			if loaded {
-				data = append(data, map[string]string{"id": "evil"})
+			if loadedName != "" {
+				data = append(data, map[string]string{"id": loadedName})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 		case "/v1/completions", "/v1/chat/completions":
@@ -479,5 +496,26 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
 				}
 			}
 		})
+	}
+}
+
+func TestPoisonMissingTruthfulCapabilityCreatesNoEventOrAdapter(t *testing.T) {
+	fixture := &remainingHandlerFixture{t: t, events: map[string]string{}, omitLoRALabel: true}
+	cfg := Config{StateDir: t.TempDir(), Exec: fixture.exec}
+	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+	response := httptest.NewRecorder()
+	s.vllmAttack(response, httptest.NewRequest(http.MethodPost, "/api/vllm/attack", strings.NewReader(`{"action":"poison"}`)))
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "lora-enabled") {
+		t.Fatalf("missing capability was not refused before producer: %d %s", response.Code, response.Body.String())
+	}
+	fixture.mu.Lock()
+	defer fixture.mu.Unlock()
+	if fixture.creates != 0 {
+		t.Fatalf("created %d detector events without capability", fixture.creates)
+	}
+	for _, command := range fixture.commands {
+		if strings.Contains(command, "-- python3 -c") || strings.Contains(command, "/v1/load_lora_adapter") {
+			t.Fatalf("LoRA mutation attempted without capability: %s", command)
+		}
 	}
 }
