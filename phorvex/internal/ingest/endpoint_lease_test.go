@@ -91,6 +91,12 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 		})
 	}
 	check("positive", event, live, true)
+	duplicate := model.Pod{Namespace: "vllm", Name: "vllm-a", UID: podUID}
+	bindEndpointLeaseObservationWithValidator(context.Background(), reader, &duplicate,
+		[]model.SecurityEventInfo{event, event}, validate)
+	if duplicate.HasBoundEndpointLeaseObservation() {
+		t.Fatal("competing trusted assertions bound one credential fact")
+	}
 	wrongSource := event
 	changed := observation
 	changed.ProxySourceSHA256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
