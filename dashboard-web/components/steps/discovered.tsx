@@ -24,7 +24,7 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   const [tab, setTab] = useScopedUIState<"graph" | "jewels" | "killchain" | "physics">(`discovered-tab\u0000${scopeKey}`, "graph");
   const [listQuery, setListQuery] = useScopedUIState(`discovered-filter\u0000${scopeKey}`, "");
   const scanQuery = useScanSnapshot(lens, sel.context, "", lens !== "owner");
-  const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant);
+  const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant, lens !== "owner");
   const scan = scanQuery.data;
   const edges = scan?.graphEdges ?? [];
   const nodes = scan?.nodeList ?? [];
