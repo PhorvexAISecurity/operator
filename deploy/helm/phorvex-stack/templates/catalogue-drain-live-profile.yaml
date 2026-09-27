@@ -1,0 +1,25 @@
+{{- $source := .Values.catalogueProfiles.drainLive -}}
+{{- $child := get .Values.phorvex "phorvex" | default dict -}}
+{{- $console := get $child "console" | default dict -}}
+{{- $runtime := get $console "drainLive" | default dict -}}
+{{- if $source.enabled -}}
+{{- $name := required "catalogueProfiles.drainLive.configMapName is required" $source.configMapName -}}
+{{- $encoded := required "catalogueProfiles.drainLive.profileBase64 is required" $source.profileBase64 -}}
+{{- if not (kindIs "string" $encoded) -}}{{- fail "catalogueProfiles.drainLive.profileBase64 must be a string" -}}{{- end -}}
+{{- $raw := b64dec $encoded -}}
+{{- if or (eq $raw "") (gt (len $raw) 16384) (ne (b64enc $raw) $encoded) -}}{{- fail "catalogueProfiles.drainLive.profileBase64 must be canonical bounded base64" -}}{{- end -}}
+{{- $digest := sha256sum $raw -}}
+{{- if ne $name (printf "phorvex-catalogue-drain-live-%s" (trunc 12 $digest)) -}}{{- fail "catalogueProfiles.drainLive name must match decoded profile SHA" -}}{{- end -}}
+{{- if (get $runtime "enabled") -}}
+{{- if ne (get $runtime "configMapName") $name -}}{{- fail "console.drainLive.configMapName must match source" -}}{{- end -}}
+{{- if ne (get $runtime "profileSHA256") $digest -}}{{- fail "console.drainLive.profileSHA256 must match source" -}}{{- end -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace }}
+immutable: true
+binaryData:
+  profile.json: {{ $encoded | quote }}
+{{- end -}}

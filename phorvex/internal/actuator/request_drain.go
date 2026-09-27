@@ -246,7 +246,7 @@ func waitDrainEndpointState(ctx context.Context, ec EnactCtx, r operationReceipt
 	}
 }
 
-func requestDrainResult(cm *corev1.ConfigMap, pod *corev1.Pod, emitted bool, note string) HandlerResult {
+func requestDrainResult(cm *corev1.ConfigMap, pod *corev1.Pod, emitted bool, note string, terminal ...*operationReceipt) HandlerResult {
 	objects := make([]string, 0, 2)
 	rollback := ""
 	if pod != nil {
@@ -256,7 +256,24 @@ func requestDrainResult(cm *corev1.ConfigMap, pod *corev1.Pod, emitted bool, not
 		objects = append(objects, objRef("ConfigMap", cm.Namespace, cm.Name))
 		rollback = cm.Namespace + "/" + cm.Name + "@" + string(cm.UID)
 	}
-	return HandlerResult{Emitted: emitted, MutationKind: "reversible", RollbackRef: rollback, ObjectsTouched: objects, Note: note}
+	result := HandlerResult{Emitted: emitted, MutationKind: "reversible", RollbackRef: rollback, ObjectsTouched: objects, Note: note}
+	if len(terminal) == 1 && terminal[0] != nil {
+		r := terminal[0]
+		if r.Version == operationDrainReceiptVersion && r.Kind == "request-drain" &&
+			r.Phase == "restored" && r.DrainV11 != nil && r.DrainV11.reopened() {
+			result.DrainOperation = &model.DrainOperationEvidence{
+				OperationID: r.DrainV11.OperationID, Generation: r.DrainV11.OperationGeneration,
+				PolicyUID: r.PolicyUID, TargetUID: r.TargetUID, ServiceUID: r.ServiceUID,
+				BackendIncarnation: r.DrainV11.BackendIncarnation, ReceiptSHA256: r.DrainV11.ReceiptSHA256,
+				ProxyActive: r.DrainV11.ProxyActive, SnapshotRunning: r.DrainV11.SnapshotRunning,
+				Aborted: r.DrainV11.Aborted, CompletedBefore: r.DrainV11.CompletedBeforeAbort,
+				SnapshotRequests: append([]string(nil), r.DrainV11.SnapshotDigests...),
+				Dispositions:     append([]model.DrainRequestDisposition(nil), r.DrainV11.TerminalDigests...),
+				Reopened:         true, Restored: true,
+			}
+		}
+	}
+	return result
 }
 
 func drainPodWithReceipt(ctx context.Context, ec EnactCtx, pod *corev1.Pod, r operationReceipt) (*corev1.Pod, bool, error) {
@@ -741,11 +758,11 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 		return requestDrainResult(cm, stopped, true, "request-drain partial confirmed mutation: "+effect), fmt.Errorf("request-drain restoration after confirmed abort: %w", err)
 	}
 	if r.Aborted == 0 {
-		return requestDrainResult(cm, stopped, true, "request-drain v11 quiesced and reopened without aborting active work; exact serving state restored"),
+		return requestDrainResult(cm, stopped, true, "request-drain v11 quiesced and reopened without aborting active work; exact serving state restored", &r),
 			fmt.Errorf("request-drain v11 confirmed zero aborted requests")
 	}
 	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, r.Aborted)
-	return requestDrainResult(cm, stopped, true, fmt.Sprintf("request-drain: %d in-flight aborted; operation-bound backend reopened; exact serving state restored; does not block re-entry — pair with quarantine/route-rotate", r.Aborted)), nil
+	return requestDrainResult(cm, stopped, true, fmt.Sprintf("request-drain: %d in-flight aborted; operation-bound backend reopened; exact serving state restored; does not block re-entry — pair with quarantine/route-rotate", r.Aborted), &r), nil
 }
 
 func rollbackRequestDrain(ctx context.Context, ec EnactCtx, req Request, ref string) error {

@@ -1,0 +1,54 @@
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.console.voiceOutputLive.enabled }}
+{{- $full := include "phorvex.fullname" . }}
+# The console can read only the exact Voice output rule and protected journal.
+# It cannot activate a rule; the selected native action owns that mutation.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-console-voice-output-rule
+  namespace: voice
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["voice-output-policy"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-console-voice-output-rule
+  namespace: voice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-console-voice-output-rule
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-console-voice-output-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-voice-output-journal"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-console-voice-output-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-console-voice-output-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

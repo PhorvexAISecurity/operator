@@ -76,8 +76,11 @@ type attackRecord struct {
 	EffectEvidence       *attackEffectEvidence       `json:"effectEvidence,omitempty"`
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
+	DrainLiveProbe       *drainLiveProbeResult       `json:"drainLiveProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
+	VoiceOutputProbe     *voiceOutputProbeResult     `json:"voiceOutputProbe,omitempty"`
+	VoiceMCPProbe        *voiceMCPLiveProbeResult    `json:"voiceMCPProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	LiteLLMOutputProbe   *liteLLMOutputProbeResult   `json:"litellmOutputProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
@@ -197,41 +200,42 @@ type vllmEffectBaseline struct {
 }
 
 type decisionEvidence struct {
-	Correlation         string                   `json:"correlation"`
-	Source              string                   `json:"source,omitempty"`
-	Time                string                   `json:"time"`
-	EventName           string                   `json:"eventName,omitempty"`
-	EventUID            string                   `json:"eventUid,omitempty"`
-	EventRule           string                   `json:"eventRule,omitempty"`
-	DeclaredSource      string                   `json:"declaredSource,omitempty"`
-	TrustVerdict        string                   `json:"trustVerdict,omitempty"`
-	CreatorIdentity     string                   `json:"creatorIdentity,omitempty"`
-	TargetUID           string                   `json:"targetUid,omitempty"`
-	DecisionID          string                   `json:"decisionId,omitempty"`
-	TickID              string                   `json:"tickId,omitempty"`
-	BrainImage          string                   `json:"brainImage,omitempty"`
-	GitSHA              string                   `json:"gitSha,omitempty"`
-	PolicyNamespace     string                   `json:"policyNamespace,omitempty"`
-	PolicyName          string                   `json:"policyName,omitempty"`
-	PolicyUID           string                   `json:"policyUid,omitempty"`
-	Action              string                   `json:"action"`
-	Reason              string                   `json:"reason"`
-	Selected            bool                     `json:"selected"`
-	Feasible            bool                     `json:"feasible"`
-	InfeasibleWhy       string                   `json:"infeasibleWhy,omitempty"`
-	DryRun              bool                     `json:"dryRun"`
-	DryRunCause         string                   `json:"dryRunCause,omitempty"`
-	ActuationBrakeCause string                   `json:"actuationBrakeCause,omitempty"`
-	KillSwitch          bool                     `json:"killSwitch"`
-	KillSwitchCause     string                   `json:"killSwitchCause,omitempty"`
-	Actuated            bool                     `json:"actuated"`
-	DispatchOutcome     string                   `json:"dispatchOutcome,omitempty"`
-	DispatchReason      string                   `json:"dispatchReason,omitempty"`
-	Handler             string                   `json:"handler,omitempty"`
-	ObjectsTouched      []string                 `json:"objectsTouched,omitempty"`
-	RollbackRef         string                   `json:"rollbackRef,omitempty"`
-	MutationKind        string                   `json:"mutationKind,omitempty"`
-	ActionStatus        []decisionActionEvidence `json:"actionStatus,omitempty"`
+	Correlation         string                        `json:"correlation"`
+	Source              string                        `json:"source,omitempty"`
+	Time                string                        `json:"time"`
+	EventName           string                        `json:"eventName,omitempty"`
+	EventUID            string                        `json:"eventUid,omitempty"`
+	EventRule           string                        `json:"eventRule,omitempty"`
+	DeclaredSource      string                        `json:"declaredSource,omitempty"`
+	TrustVerdict        string                        `json:"trustVerdict,omitempty"`
+	CreatorIdentity     string                        `json:"creatorIdentity,omitempty"`
+	TargetUID           string                        `json:"targetUid,omitempty"`
+	DecisionID          string                        `json:"decisionId,omitempty"`
+	TickID              string                        `json:"tickId,omitempty"`
+	BrainImage          string                        `json:"brainImage,omitempty"`
+	GitSHA              string                        `json:"gitSha,omitempty"`
+	PolicyNamespace     string                        `json:"policyNamespace,omitempty"`
+	PolicyName          string                        `json:"policyName,omitempty"`
+	PolicyUID           string                        `json:"policyUid,omitempty"`
+	Action              string                        `json:"action"`
+	Reason              string                        `json:"reason"`
+	Selected            bool                          `json:"selected"`
+	Feasible            bool                          `json:"feasible"`
+	InfeasibleWhy       string                        `json:"infeasibleWhy,omitempty"`
+	DryRun              bool                          `json:"dryRun"`
+	DryRunCause         string                        `json:"dryRunCause,omitempty"`
+	ActuationBrakeCause string                        `json:"actuationBrakeCause,omitempty"`
+	KillSwitch          bool                          `json:"killSwitch"`
+	KillSwitchCause     string                        `json:"killSwitchCause,omitempty"`
+	Actuated            bool                          `json:"actuated"`
+	DispatchOutcome     string                        `json:"dispatchOutcome,omitempty"`
+	DispatchReason      string                        `json:"dispatchReason,omitempty"`
+	Handler             string                        `json:"handler,omitempty"`
+	ObjectsTouched      []string                      `json:"objectsTouched,omitempty"`
+	RollbackRef         string                        `json:"rollbackRef,omitempty"`
+	MutationKind        string                        `json:"mutationKind,omitempty"`
+	DrainOperation      *model.DrainOperationEvidence `json:"drainOperation,omitempty"`
+	ActionStatus        []decisionActionEvidence      `json:"actionStatus,omitempty"`
 }
 
 type decisionActionEvidence struct {
@@ -369,26 +373,38 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe.Issues = append([]string(nil), r.VoiceAgencyProbe.Issues...)
 		c.VoiceAgencyProbe = &probe
 	}
+	if r.VoiceOutputProbe != nil {
+		probe := *r.VoiceOutputProbe
+		probe.Issues = append([]string(nil), r.VoiceOutputProbe.Issues...)
+		c.VoiceOutputProbe = &probe
+	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect
 		c.vllmEffect = &baseline
 	}
 	if r.DecisionEvidence != nil {
 		evidence := *r.DecisionEvidence
+		evidence.DrainOperation = model.CloneDrainOperationEvidence(r.DecisionEvidence.DrainOperation)
 		evidence.ObjectsTouched = append([]string(nil), r.DecisionEvidence.ObjectsTouched...)
 		evidence.ActionStatus = append([]decisionActionEvidence(nil), r.DecisionEvidence.ActionStatus...)
 		c.DecisionEvidence = &evidence
 	}
 	if r.TemporalDecisionEvidence != nil {
 		evidence := *r.TemporalDecisionEvidence
+		evidence.DrainOperation = model.CloneDrainOperationEvidence(r.TemporalDecisionEvidence.DrainOperation)
 		evidence.ObjectsTouched = append([]string(nil), r.TemporalDecisionEvidence.ObjectsTouched...)
 		evidence.ActionStatus = append([]decisionActionEvidence(nil), r.TemporalDecisionEvidence.ActionStatus...)
 		c.TemporalDecisionEvidence = &evidence
 	}
 	c.DecisionTraceEvidence = append([]decisionEvidence(nil), r.DecisionTraceEvidence...)
 	for i := range c.DecisionTraceEvidence {
+		c.DecisionTraceEvidence[i].DrainOperation = model.CloneDrainOperationEvidence(r.DecisionTraceEvidence[i].DrainOperation)
 		c.DecisionTraceEvidence[i].ObjectsTouched = append([]string(nil), r.DecisionTraceEvidence[i].ObjectsTouched...)
 		c.DecisionTraceEvidence[i].ActionStatus = append([]decisionActionEvidence(nil), r.DecisionTraceEvidence[i].ActionStatus...)
+	}
+	if r.DrainLiveProbe != nil {
+		probe := *r.DrainLiveProbe
+		c.DrainLiveProbe = &probe
 	}
 	if r.Claim != nil {
 		claim := *r.Claim
@@ -440,7 +456,7 @@ func attackSnapshots(p *Principal) []*attackRecord {
 // Live views include reviewed Voice observations. Experiment-only signals
 // and unknown evidence kinds remain excluded, as do observations in default reports.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
+	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || rec.EvidenceKind == "voice-mcp-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
@@ -1268,7 +1284,8 @@ func boundedDecisionMatches(all []exactDecisionMatch, summary exactDecisionMatch
 }
 
 func exactDecisionEvidence(r *attackRecord, d *audit.Record, collectedAt time.Time) (decisionEvidence, bool) {
-	if r.AttackID == "poison" && r.EvidenceKind == "vllm-in-place-effect" {
+	if (r.AttackID == "poison" && r.EvidenceKind == "vllm-in-place-effect") ||
+		(r.AttackID == "request-drain" && r.EvidenceKind == "vllm-drain-owned-observation" && d.Selected) {
 		trace := d.DecisionTrace
 		if trace == nil || trace.Validate() != nil || trace.SelectedAction != d.Action ||
 			trace.DispatchOutcome != d.DispatchOutcome || trace.DecisionID == "" || trace.TickID == "" {
@@ -1371,6 +1388,7 @@ func decisionEvidenceFromAudit(d *audit.Record, correlation, source string, ref 
 		KillSwitchCause: d.KillSwitchCause, Actuated: d.Actuated, DispatchOutcome: d.DispatchOutcome,
 		DispatchReason: d.DispatchReason, Handler: d.Handler, ObjectsTouched: append([]string(nil), d.ObjectsTouched...),
 		RollbackRef: d.RollbackRef, MutationKind: d.MutationKind,
+		DrainOperation: model.CloneDrainOperationEvidence(d.DrainOperation),
 	}
 	if trace := d.DecisionTrace; trace != nil && trace.Validate() == nil {
 		e.DecisionID, e.TickID, e.BrainImage, e.GitSHA = trace.DecisionID, trace.TickID, trace.BrainImage, trace.GitSHA

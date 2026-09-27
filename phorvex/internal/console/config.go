@@ -56,6 +56,10 @@ type Config struct {
 	GuardrailEffectEnabled       bool
 	GuardrailEffectProfileSHA256 string
 	GuardrailEffectProfilePath   string
+	// DrainLive admits only the reviewed, exact-source vLLM request-drain arm.
+	DrainLiveEnabled       bool
+	DrainLiveProfileSHA256 string
+	DrainLiveProfilePath   string
 	// Version 2 of the same guardrail catalogue parent. This opt-in profile
 	// binds the synthetic support app, proxy, rule, and real model source.
 	GuardrailOutputEnabled       bool
@@ -66,6 +70,16 @@ type Config struct {
 	VoiceAgencyLiveEnabled       bool
 	VoiceAgencyLiveProfileSHA256 string
 	VoiceAgencyLiveProfilePath   string
+	// VoiceOutputLive binds a synthetic noncredential marker trial to reviewed
+	// source, policy and exact real Voice serving Pods.
+	VoiceOutputLiveEnabled       bool
+	VoiceOutputLiveProfileSHA256 string
+	VoiceOutputLiveProfilePath   string
+	// The separately reviewed Voice MCP descriptor trial requires an exact
+	// source, policy, Service and real model-behavior preflight at Fire time.
+	VoiceMCPLiveEnabled       bool
+	VoiceMCPLiveProfileSHA256 string
+	VoiceMCPLiveProfilePath   string
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
 	LiteLLMLiveEnabled       bool

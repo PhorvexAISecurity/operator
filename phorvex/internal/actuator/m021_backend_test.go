@@ -281,6 +281,14 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || !strings.HasPrefix(why, "voice-refund-scope-unavailable:") {
 				t.Fatalf("voice refund requires exact target, policy and private hook authority: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionVoiceOutputPolicyActivate:
+			if ok || !registered || !strings.HasPrefix(why, "voice-output-scope-unavailable:") {
+				t.Fatalf("Voice output requires exact target, policy and private hook authority: ok=%v registered=%v why=%q", ok, registered, why)
+			}
+		case model.ActionVoiceMCPToolPin:
+			if ok || !registered || why != "voice-mcp-approved-image-unavailable" {
+				t.Fatalf("Voice MCP needs a reviewed manager image pin: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		case model.ActionLiteLLMClientRevoke:
 			if ok || !registered || !strings.Contains(why, "litellm-client-revoke:") {
 				t.Fatalf("owned-client gateway requires exact live authority: ok=%v registered=%v why=%q", ok, registered, why)

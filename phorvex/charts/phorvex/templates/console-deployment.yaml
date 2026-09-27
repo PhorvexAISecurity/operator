@@ -151,6 +151,16 @@
 {{- if not (regexMatch "^phorvex-output-[0-9a-f]{32}$" $journal) }}{{- fail "console.guardrailOutput.outputPolicyJournalName is invalid" }}{{- end }}
 {{- end }}
 {{- if and .Values.phorvex.console.litellmOutput.enabled (not .Values.phorvex.console.litellmLive.enabled) }}{{- fail "console.litellmOutput requires litellmLive" }}{{- end }}
+{{- if .Values.phorvex.console.drainLive.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.drainLive.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.drainLive.enabled requires scopedToken.existingSecret" }}{{- end }}
+{{- $name := required "console.drainLive.configMapName is required" .Values.phorvex.console.drainLive.configMapName }}
+{{- if not (regexMatch "^phorvex-catalogue-drain-live-[0-9a-f]{12}$" $name) }}{{- fail "console.drainLive.configMapName must be digest-named" }}{{- end }}
+{{- $sha := required "console.drainLive.profileSHA256 is required" .Values.phorvex.console.drainLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.drainLive.profileSHA256 must be SHA-256" }}{{- end }}
+{{- if ne $name (printf "phorvex-catalogue-drain-live-%s" (trunc 12 $sha)) }}{{- fail "console.drainLive profile name/hash mismatch" }}{{- end }}
+{{- if not (regexMatch "^phorvex-operation-[0-9a-f]{40}$" .Values.phorvex.console.drainLive.journalName) }}{{- fail "console.drainLive.journalName must be exact protected journal" }}{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.litellmLive.enabled }}
 {{- if ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system effective operator namespace for protected journals" }}{{- end }}
 {{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.litellmLive.enabled requires catalogueV1.enabled" }}{{- end }}
@@ -197,6 +207,39 @@
 {{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.voiceAgencyLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
 {{- $uid := required "console.voiceAgencyLive.deploymentUID required" .Values.phorvex.console.voiceAgencyLive.deploymentUID }}
 {{- if not (regexMatch "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" $uid) }}{{- fail "console.voiceAgencyLive.deploymentUID must be lowercase UUID" }}{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+{{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.voiceOutputLive requires phorvex-system release namespace" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceOutputLive requires the profile-bound console service account" }}{{- end }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
+{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}
+{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.voiceOutputLive requires exact console creator in trustedDetectors" }}{{- end }}
+{{- $name := required "console.voiceOutputLive.configMapName required" .Values.phorvex.console.voiceOutputLive.configMapName }}
+{{- if or (gt (len $name) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name)) }}{{- fail "console.voiceOutputLive.configMapName invalid" }}{{- end }}
+{{- $sha := required "console.voiceOutputLive.profileSHA256 required" .Values.phorvex.console.voiceOutputLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.voiceOutputLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- end }}
+{{- if .Values.phorvex.console.voiceMCPLive.enabled }}
+{{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceMCPLive requires phorvex-system release and effective operator namespaces" }}{{- end }}
+{{- if not .Values.phorvex.voiceMCP.enabled }}{{- fail "console.voiceMCPLive requires native voiceMCP.enabled" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceMCPLive requires profile-bound console service account" }}{{- end }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
+{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}
+{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.voiceMCPLive requires exact console creator in trustedDetectors" }}{{- end }}
+{{- range list "configMapName" "sourceConfigMapName" "mcpSourceConfigMapName" }}
+{{- $name := required (printf "console.voiceMCPLive.%s required" .) (index $.Values.phorvex.console.voiceMCPLive .) }}
+{{- if or (gt (len $name) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name)) }}{{- fail (printf "console.voiceMCPLive.%s invalid" .) }}{{- end }}
+{{- end }}
+{{- $sha := required "console.voiceMCPLive.profileSHA256 required" .Values.phorvex.console.voiceMCPLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.voiceMCPLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- $uid := required "console.voiceMCPLive.deploymentUID required" .Values.phorvex.console.voiceMCPLive.deploymentUID }}
+{{- if not (regexMatch "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" $uid) }}{{- fail "console.voiceMCPLive.deploymentUID must be lowercase UUID" }}{{- end }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -325,6 +368,12 @@ spec:
         - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailOutput.profileSHA256 | quote }}
         {{- end }}
+        - name: PHORVEX_CONSOLE_DRAIN_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.drainLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.drainLive.enabled }}
+        - name: PHORVEX_CONSOLE_DRAIN_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.drainLive.profileSHA256 | quote }}
+        {{- end }}
         - name: PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED
           value: {{ .Values.phorvex.console.litellmLive.enabled | default false | quote }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
@@ -343,7 +392,19 @@ spec:
         - name: PHORVEX_CONSOLE_LITELLM_OUTPUT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.litellmOutput.profileSHA256 | quote }}
         {{- end }}
-        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
+        - name: PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.voiceOutputLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+        - name: PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.voiceOutputLive.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_VOICE_MCP_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.voiceMCPLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.voiceMCPLive.enabled }}
+        - name: PHORVEX_CONSOLE_VOICE_MCP_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.voiceMCPLive.profileSHA256 | quote }}
+        {{- end }}
+        {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled .Values.phorvex.console.drainLive.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
           valueFrom:
             fieldRef:
@@ -709,6 +770,12 @@ spec:
           subPath: config.guardrail-output-response.yaml
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.drainLive.enabled }}
+        - name: drain-live-reviewed-profile
+          mountPath: /etc/phorvex-drain-live/profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
         - name: litellm-live-reviewed-inputs
           mountPath: /etc/phorvex-litellm-live
@@ -726,6 +793,18 @@ spec:
         {{- if .Values.phorvex.console.litellmOutput.enabled }}
         - name: litellm-output-reviewed-inputs
           mountPath: /etc/phorvex-litellm-output
+          readOnly: true
+        {{- end }}
+        {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+        - name: voice-output-reviewed-profile
+          mountPath: /etc/phorvex-voice-output/profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
+        {{- if .Values.phorvex.console.voiceMCPLive.enabled }}
+        - name: voice-mcp-reviewed-profile
+          mountPath: /etc/phorvex-voice-mcp/profile.json
+          subPath: profile.json
           readOnly: true
         {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
@@ -868,6 +947,15 @@ spec:
           - key: config.guardrail-output-response.yaml
             path: config.guardrail-output-response.yaml
       {{- end }}
+      {{- if .Values.phorvex.console.drainLive.enabled }}
+      - name: drain-live-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.drainLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
+      {{- end }}
       {{- if .Values.phorvex.console.litellmLive.enabled }}
       - name: litellm-live-reviewed-inputs
         projected:
@@ -920,6 +1008,24 @@ spec:
               items:
               - key: seed
                 path: prompt-seed
+      {{- end }}
+      {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+      - name: voice-output-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.voiceOutputLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
+      {{- end }}
+      {{- if .Values.phorvex.console.voiceMCPLive.enabled }}
+      - name: voice-mcp-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.voiceMCPLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

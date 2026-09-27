@@ -213,6 +213,12 @@ phorvex:
   # Opt-in exact asserted-caller/order refund pair denial in the Voice app.
   voiceRefund:
     enabled: false
+  # Opt-in Voice MCP descriptor pinning requires a reviewed immutable MCP image.
+  voiceMCP:
+    enabled: false
+    approvedImage: ""
+  voiceOutput:
+    enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update
   # only to this one preinstalled ConfigMap in the named fixture namespace.
   outputPolicy:
@@ -420,6 +426,13 @@ phorvex:
       outputPolicyConfigMapName: ""
       outputPolicyJournalName: ""
       targetNamespace: vllm
+    # One exact-source, fixed-model request-drain observation. A digest-pinned
+    # profile is required before this default-off arm can create an event.
+    drainLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      journalName: ""
     # Reviewed real LiteLLM Service-path client policy trial. Off until the
     # owner has installed the gateway and pinned a complete runtime profile.
     litellmLive:
@@ -445,6 +458,19 @@ phorvex:
       profileSHA256: ""
       documentSeedSecret: phorvex-litellm-output-document
       promptSeedSecret: phorvex-litellm-output-prompt
+    # Reviewed real Voice synthetic output marker trial. Off until the
+    # output-policy ConfigMap, protected journal and exact profile are pinned.
+    voiceOutputLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+    voiceMCPLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      deploymentUID: ""
+      sourceConfigMapName: ""
+      mcpSourceConfigMapName: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

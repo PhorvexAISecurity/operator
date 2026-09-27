@@ -112,6 +112,10 @@ catalogueProfiles:
     enabled: false
     configMapName: ""
     profileBase64: ""
+  drainLive:
+    enabled: false
+    configMapName: ""
+    profileBase64: ""
   podBoundTokenCPU:
     enabled: false
     configMapName: ""

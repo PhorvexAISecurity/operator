@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 )
 
 // no_identical_cover_test.go — PHVX-26 / PHORVEXSEC-120.
@@ -28,9 +29,25 @@ type coverArchetype struct {
 	fctx FactContext
 }
 
-// coverArchetypes derives the boolean product of every workload predicate that gates fact emission
-// or cover today. It is generated rather than hand-listed: HasGPU, ModelID, Stateful,
-// SuspectAdapter, MIGDevice and RouteService exercise the production branches.
+func boundVoiceMCPView() *model.WorkloadView {
+	p := model.Pod{Namespace: "voice", Name: "voice-mcp", UID: "11111111-1111-4111-8111-111111111111",
+		VoiceMCPConfigMap: "voice-mcp-tool-policy", VoiceMCPDeploymentUID: "22222222-2222-4222-8222-222222222222",
+		VoiceMCPSourceSHA256: strings.Repeat("a", 64), VoiceMCPEventCreator: "system:serviceaccount:phorvex-system:console"}
+	p.VoiceMCPObservation = &model.VoiceMCPObservation{EventName: "mcp-event", EventUID: "33333333-3333-4333-8333-333333333333",
+		CreatorIdentity: p.VoiceMCPEventCreator, ScenarioID: "ai2-mcp-tool-poisoning", RunSHA256: strings.Repeat("b", 64),
+		TargetPodUID: p.UID, DeploymentUID: p.VoiceMCPDeploymentUID, ConfigMapUID: "44444444-4444-4444-8444-444444444444",
+		SourceConfigMapUID: "55555555-5555-4555-8555-555555555555", SourceSHA256: p.VoiceMCPSourceSHA256,
+		ToolName: voicemcppolicy.StoreDirectory, GoodDescriptorSHA256: voicemcppolicy.StoreDirectoryGoodSHA256,
+		ObservedDescriptorSHA256: strings.Repeat("c", 64), MCPServiceName: voicemcppolicy.MCPServiceName,
+		MCPServiceUID: "66666666-6666-4666-8666-666666666666", MCPPodName: "mcp-server-1",
+		MCPPodUID: "77777777-7777-4777-8777-777777777777", MCPDeploymentUID: "88888888-8888-4888-8888-888888888888",
+		MCPConfigMapUID: "99999999-9999-4999-8999-999999999999", MCPSourceSHA256: voicemcppolicy.ReviewedMCPSourceSHA256,
+		PolicyName: "voice-defense", PolicyUID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", PolicyGeneration: 1}
+	return &model.WorkloadView{Pod: p, Physics: model.NeutralPhysics()}
+}
+
+// coverArchetypes derives the ordinary boolean product and adds separate
+// source-bound Voice MCP and warm-pool witnesses for their event/owner branches.
 func coverArchetypes() []coverArchetype {
 	bools := []bool{false, true}
 	out := make([]coverArchetype, 0, 64)
@@ -86,6 +103,8 @@ func coverArchetypes() []coverArchetype {
 	out = append(out, coverArchetype{name: "configured-warm-pool", view: &model.WorkloadView{Pod: pod, Physics: model.NeutralPhysics()},
 		fctx: FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1, HasGPU: true,
 			Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}})
+	out = append(out, coverArchetype{name: "voice-mcp-observed", view: boundVoiceMCPView(),
+		fctx: FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1}})
 	return out
 }
 

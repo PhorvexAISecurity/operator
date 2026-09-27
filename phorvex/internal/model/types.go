@@ -109,6 +109,12 @@ const (
 	ActionVoiceMemoryNoteRevoke Action = "voice-memory-note-revoke"
 	// ActionVoiceRefundPairDeny blocks one exact asserted-caller/order pair in the Voice app.
 	ActionVoiceRefundPairDeny Action = "voice-refund-pair-deny"
+	// ActionVoiceOutputPolicyActivate blocks one observed synthetic hidden-context
+	// marker before Voice speech and assistant transcript persistence.
+	ActionVoiceOutputPolicyActivate Action = "voice-output-policy-activate"
+	// ActionVoiceMCPToolPin binds an observed Voice MCP tool response to an
+	// exact reviewed tool authority after the normal selector chooses it.
+	ActionVoiceMCPToolPin Action = "voice-mcp-tool-pin"
 	// ActionLiteLLMClientRevoke denies one observed, owned client credential at
 	// the installed LiteLLM admission gateway. It does not revoke the master key.
 	ActionLiteLLMClientRevoke Action = "litellm-client-revoke"
@@ -144,6 +150,8 @@ var MutatingActions = []Action{
 	ActionVoiceMemoryNoteRevoke,
 	ActionLiteLLMClientRevoke,
 	ActionVoiceRefundPairDeny,
+	ActionVoiceOutputPolicyActivate,
+	ActionVoiceMCPToolPin,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -507,6 +515,16 @@ type Pod struct {
 	VoiceRefundDeploymentUID  string
 	VoiceRefundEventCreator   string
 	VoiceRefundObservation    *VoiceRefundObservation
+	VoiceOutputConfigMap      string
+	VoiceOutputSourceSHA256   string
+	VoiceOutputDeploymentUID  string
+	VoiceOutputEventCreator   string
+	VoiceOutputObservation    *VoiceOutputObservation
+	VoiceMCPConfigMap         string
+	VoiceMCPSourceSHA256      string
+	VoiceMCPDeploymentUID     string
+	VoiceMCPEventCreator      string
+	VoiceMCPObservation       *VoiceMCPObservation
 	LiteLLMClientObservation  *LiteLLMClientObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
@@ -592,6 +610,30 @@ func (p Pod) HasBoundVoiceRefundObservation() bool {
 		o.PolicyUID != "" && o.PolicyGeneration > 0 && o.AssertedCallerSHA256 != "" && o.OrderSHA256 != ""
 }
 
+func (p Pod) HasBoundVoiceOutputObservation() bool {
+	o := p.VoiceOutputObservation
+	return o != nil && p.Namespace == "voice" && p.UID != "" && p.VoiceOutputConfigMap == "voice-output-policy" &&
+		o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceOutputDeploymentUID &&
+		o.SourceSHA256 == p.VoiceOutputSourceSHA256 && o.ConfigMapUID != "" &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.CreatorIdentity == p.VoiceOutputEventCreator && o.PolicyName != "" && o.PolicyUID != "" &&
+		o.PolicyGeneration > 0 && o.MarkerSHA256 != "" && o.ScenarioID == "ai2-system-prompt-leakage" &&
+		o.EvidenceSource == "TEST_INJECTED" && o.RawModelMarkerObserved && o.AssistantOutputMarkerObserved
+}
+
+func (p Pod) HasBoundVoiceMCPObservation() bool {
+	o := p.VoiceMCPObservation
+	return o != nil && p.Namespace == "voice" && p.UID != "" && p.VoiceMCPConfigMap == "voice-mcp-tool-policy" &&
+		o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceMCPDeploymentUID &&
+		o.SourceSHA256 == p.VoiceMCPSourceSHA256 && o.ConfigMapUID != "" && o.SourceConfigMapUID != "" &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.CreatorIdentity == p.VoiceMCPEventCreator && o.ScenarioID == "ai2-mcp-tool-poisoning" && o.RunSHA256 != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 && o.ToolName == "store_directory" &&
+		o.GoodDescriptorSHA256 != "" && o.ObservedDescriptorSHA256 != "" &&
+		o.MCPServiceName == "mcp-server" && o.MCPServiceUID != "" && o.MCPPodName != "" && o.MCPPodUID != "" && o.MCPDeploymentUID != "" &&
+		o.MCPConfigMapUID != "" && o.MCPSourceSHA256 != ""
+}
+
 // HasBoundLiteLLMClientObservation licenses only the installed, synthetic
 // gateway credential channel. A generic copied credential never satisfies it.
 func (p Pod) HasBoundLiteLLMClientObservation() bool {
@@ -622,6 +664,8 @@ const (
 	AttackVectorSensitiveOutput    = "phorvex.attack.sensitive-output"
 	AttackVectorVoiceMemory        = "phorvex.attack.voice-memory-note"
 	AttackVectorVoiceRefund        = "phorvex.attack.voice-refund-pair"
+	AttackVectorVoiceOutput        = "phorvex.attack.voice-output-leak"
+	AttackVectorVoiceMCP           = "phorvex.attack.voice-mcp-descriptor"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 )
 
@@ -695,6 +739,8 @@ type SecurityEventInfo struct {
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
 	SensitiveOutputV2Raw              string // LiteLLM output assertion; parsed and bound separately from v1
+	VoiceOutputRaw                    string // synthetic hidden-context marker hash assertion; never marker bytes
+	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
@@ -814,6 +860,43 @@ type LiteOutputObservation struct {
 	ContextSeedSHA256        string `json:"contextSeedSHA256"`
 	RequestSHA256            string `json:"requestSHA256"`
 	OriginalCompletionSHA256 string `json:"originalCompletionSHA256"`
+}
+
+// VoiceOutputObservation binds a trusted synthetic first-loss event to the
+// selected Voice Pod and append-only output rule. It carries no hidden text.
+type VoiceOutputObservation struct {
+	EventName, EventUID, CreatorIdentity   string
+	ScenarioID, EvidenceSource             string
+	TargetPodUID, DeploymentUID            string
+	ConfigMapUID, ConfigMapResourceVersion string
+	RuleSHA256, SourceSHA256, MarkerSHA256 string
+	PolicyName, PolicyUID                  string
+	PolicyGeneration                       int64
+	SelectedRevision                       uint64
+	RawModelMarkerObserved                 bool
+	AssistantOutputMarkerObserved          bool
+	ObservedAt                             time.Time
+}
+
+// VoiceMCPObservation binds the first observed descriptor steering to exact
+// Voice and MCP source lifetimes. It carries no event-controlled replacement.
+type VoiceMCPObservation struct {
+	EventName, EventUID, CreatorIdentity   string
+	ScenarioID, RunSHA256                  string
+	TargetPodUID, DeploymentUID            string
+	ConfigMapUID, ConfigMapResourceVersion string
+	SourceConfigMapUID                     string
+	RuleSHA256, SourceSHA256               string
+	ToolName, GoodDescriptorSHA256         string
+	ObservedDescriptorSHA256               string
+	MCPServiceName, MCPServiceUID          string
+	MCPPodName, MCPPodUID                  string
+	MCPDeploymentUID, MCPConfigMapUID      string
+	MCPSourceSHA256                        string
+	PolicyName, PolicyUID                  string
+	PolicyGeneration                       int64
+	SelectedRevision                       uint64
+	ObservedAt                             time.Time
 }
 
 // LiteLLMClientObservation binds one trusted synthetic abuse event to the
@@ -1079,6 +1162,43 @@ type GracefulTerminationReceipt struct {
 	TerminationStatus           string `json:"terminationStatus"`
 }
 
+// DrainRequestDisposition is a bounded digest of a validated v11 scheduler ID.
+// Raw request IDs can be caller controlled and must not enter the manager audit.
+type DrainRequestDisposition struct {
+	RequestSHA256 string `json:"requestSHA256"`
+	Disposition   string `json:"disposition"`
+}
+
+// DrainOperationEvidence is the terminal native observation copied before the
+// protected operation journal is removed. It does not itself prove mitigation.
+type DrainOperationEvidence struct {
+	OperationID        string                    `json:"operationID"`
+	Generation         string                    `json:"generation"`
+	PolicyUID          string                    `json:"policyUID"`
+	TargetUID          string                    `json:"targetUID"`
+	ServiceUID         string                    `json:"serviceUID"`
+	BackendIncarnation string                    `json:"backendIncarnation"`
+	ReceiptSHA256      string                    `json:"receiptSHA256"`
+	ProxyActive        int                       `json:"proxyActive"`
+	SnapshotRunning    int                       `json:"snapshotRunning"`
+	Aborted            int                       `json:"aborted"`
+	CompletedBefore    int                       `json:"completedBeforeAbort"`
+	SnapshotRequests   []string                  `json:"snapshotRequestSHA256,omitempty"`
+	Dispositions       []DrainRequestDisposition `json:"dispositions,omitempty"`
+	Reopened           bool                      `json:"reopened"`
+	Restored           bool                      `json:"restored"`
+}
+
+func CloneDrainOperationEvidence(in *DrainOperationEvidence) *DrainOperationEvidence {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.SnapshotRequests = append([]string(nil), in.SnapshotRequests...)
+	out.Dispositions = append([]DrainRequestDisposition(nil), in.Dispositions...)
+	return &out
+}
+
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
@@ -1086,6 +1206,8 @@ type Decision struct {
 	OutputPolicyObservation *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
 	VoiceMemoryObservation  *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
 	VoiceRefundObservation  *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
+	VoiceOutputObservation  *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
+	VoiceMCPObservation     *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
 	Existential             *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
@@ -1192,6 +1314,7 @@ type Decision struct {
 	// exact native rotate Eviction request. It records the requested bound while leaving
 	// physical termination explicitly unconfirmed.
 	GracefulTermination *GracefulTerminationReceipt
+	DrainOperation      *DrainOperationEvidence
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately

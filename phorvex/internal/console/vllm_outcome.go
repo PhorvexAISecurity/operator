@@ -41,6 +41,10 @@ func (s *Server) createCorrelatedVLLMEvent(pod, targetUID, evType, desc, anomaly
 }
 
 func (s *Server) createCorrelatedVLLMEventWithAdapter(pod, targetUID, evType, desc, anomaly, adapter string) (*attackStimulusEvidence, error) {
+	return s.createCorrelatedVLLMEventWithAdapterContext("", pod, targetUID, evType, desc, anomaly, adapter, nil)
+}
+
+func (s *Server) createCorrelatedVLLMEventWithAdapterContext(kubeContext, pod, targetUID, evType, desc, anomaly, adapter string, precreate func([]byte) error) (*attackStimulusEvidence, error) {
 	if targetUID == "" {
 		return nil, fmt.Errorf("target Pod UID is unavailable")
 	}
@@ -73,8 +77,13 @@ spec:
     source: "redteam"
   anomalyScore: %q
 `, name, annotations, correlation, desc, vllmAttackNS, pod, ruleType, anomaly)
-	if evType == "GuardrailBypass" {
+	if evType == "GuardrailBypass" || kubeContext != "" {
 		candidate.createManifest = []byte(manifest)
+	}
+	if precreate != nil {
+		if err := precreate([]byte(manifest)); err != nil {
+			return candidate, fmt.Errorf("durable event intent unavailable: %w", err)
+		}
 	}
 	f, err := os.CreateTemp("", "phorvex-vllm-event-*.yaml")
 	if err != nil {
@@ -93,8 +102,12 @@ spec:
 	if err != nil {
 		return nil, fmt.Errorf("write SecurityEvent manifest: %w", err)
 	}
-	out, err := s.cfg.execText(10*time.Second, "kubectl", "create", "-f", f.Name(), "-o", "json")
-	if evType == "GuardrailBypass" && len(out) > 0 && len(out) <= 64<<10 {
+	createArgs := []string{"create", "-f", f.Name(), "-o", "json"}
+	if kubeContext != "" {
+		createArgs = append([]string{"--context=" + kubeContext}, createArgs...)
+	}
+	out, err := s.cfg.execText(10*time.Second, "kubectl", createArgs...)
+	if (evType == "GuardrailBypass" || kubeContext != "") && len(out) > 0 && len(out) <= 64<<10 {
 		candidate.createReply = []byte(out)
 	}
 	if len(out) > 64<<10 {
@@ -425,6 +438,15 @@ type vllmPodState struct {
 			} `json:"env"`
 		} `json:"containers"`
 	} `json:"spec"`
+	Status struct {
+		ContainerStatuses []struct {
+			Name         string `json:"name"`
+			ContainerID  string `json:"containerID"`
+			ImageID      string `json:"imageID"`
+			Ready        bool   `json:"ready"`
+			RestartCount int32  `json:"restartCount"`
+		} `json:"containerStatuses"`
+	} `json:"status"`
 }
 
 type vllmServiceState struct {
@@ -435,6 +457,11 @@ type vllmServiceState struct {
 	} `json:"metadata"`
 	Spec struct {
 		Selector *map[string]string `json:"selector"`
+		Ports    []struct {
+			Port       int             `json:"port"`
+			Protocol   string          `json:"protocol"`
+			TargetPort json.RawMessage `json:"targetPort"`
+		} `json:"ports"`
 	} `json:"spec"`
 }
 

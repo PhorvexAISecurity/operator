@@ -12,10 +12,13 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 const (
@@ -145,53 +148,73 @@ func strictDrainV11Decode(body string, target any) error {
 }
 
 type drainV11Receipt struct {
-	OperationID               string              `json:"operationID"`
-	OperationGeneration       string              `json:"operationGeneration"`
-	Attempt                   int                 `json:"attempt"`
-	Supersedes                *drainV11Supersedes `json:"supersedes,omitempty"`
-	OwnerDigest               string              `json:"ownerDigest,omitempty"`
-	ExpectedIncarnation       string              `json:"expectedIncarnation"`
-	BackendIncarnation        string              `json:"backendIncarnation,omitempty"`
-	LedgerID                  string              `json:"ledgerID"`
-	ProxyBootID               string              `json:"proxyBootID"`
-	EngineBootID              string              `json:"engineBootID"`
-	Revision                  string              `json:"revision,omitempty"`
-	State                     string              `json:"state,omitempty"`
-	ReceiptSHA256             string              `json:"receiptSHA256,omitempty"`
-	Deadline                  string              `json:"deadline"`
-	CancelNotBefore           string              `json:"cancelNotBefore"`
-	CancellationGraceDeadline string              `json:"cancellationGraceDeadline"`
-	TransitionReason          string              `json:"transitionReason,omitempty"`
-	CancelBoundaryRevision    string              `json:"cancelBoundaryRevision,omitempty"`
-	Owner                     drainV11Owner       `json:"owner"`
-	Aborted                   int                 `json:"aborted,omitempty"`
-	CompletedBeforeAbort      int                 `json:"completedBeforeAbort,omitempty"`
-	TargetNamespace           string              `json:"targetNamespace"`
-	TargetName                string              `json:"targetName"`
-	CapabilitySHA256          string              `json:"capabilitySHA256"`
-	ProxySource               string              `json:"proxySource"`
-	EngineSource              string              `json:"engineSource"`
-	OperatorBinding           string              `json:"operatorBinding"`
-	AdmissionGeneration       string              `json:"admissionGeneration,omitempty"`
-	LastTransition            string              `json:"lastTransition,omitempty"`
-	SnapshotWaiting           int                 `json:"snapshotWaiting,omitempty"`
-	SnapshotRunning           int                 `json:"snapshotRunning,omitempty"`
-	SnapshotSwapped           int                 `json:"snapshotSwapped,omitempty"`
-	SnapshotCached            int                 `json:"snapshotCached,omitempty"`
-	ProxyActive               int                 `json:"proxyActive,omitempty"`
-	ProxyCancelled            int                 `json:"proxyCancelled,omitempty"`
-	ObservationNonces         []string            `json:"observationNonces,omitempty"`
-	ObservationSequences      []string            `json:"observationSequences,omitempty"`
-	ObservationHashes         []string            `json:"observationHashes,omitempty"`
-	CreateRequests            int                 `json:"createRequests,omitempty"`
-	StatusRequests            int                 `json:"statusRequests,omitempty"`
-	CancelRequests            int                 `json:"cancelRequests,omitempty"`
-	ReopenRequests            int                 `json:"reopenRequests,omitempty"`
+	OperationID               string                          `json:"operationID"`
+	OperationGeneration       string                          `json:"operationGeneration"`
+	Attempt                   int                             `json:"attempt"`
+	Supersedes                *drainV11Supersedes             `json:"supersedes,omitempty"`
+	OwnerDigest               string                          `json:"ownerDigest,omitempty"`
+	ExpectedIncarnation       string                          `json:"expectedIncarnation"`
+	BackendIncarnation        string                          `json:"backendIncarnation,omitempty"`
+	LedgerID                  string                          `json:"ledgerID"`
+	ProxyBootID               string                          `json:"proxyBootID"`
+	EngineBootID              string                          `json:"engineBootID"`
+	Revision                  string                          `json:"revision,omitempty"`
+	State                     string                          `json:"state,omitempty"`
+	ReceiptSHA256             string                          `json:"receiptSHA256,omitempty"`
+	Deadline                  string                          `json:"deadline"`
+	CancelNotBefore           string                          `json:"cancelNotBefore"`
+	CancellationGraceDeadline string                          `json:"cancellationGraceDeadline"`
+	TransitionReason          string                          `json:"transitionReason,omitempty"`
+	CancelBoundaryRevision    string                          `json:"cancelBoundaryRevision,omitempty"`
+	Owner                     drainV11Owner                   `json:"owner"`
+	Aborted                   int                             `json:"aborted,omitempty"`
+	CompletedBeforeAbort      int                             `json:"completedBeforeAbort,omitempty"`
+	TerminalDigests           []model.DrainRequestDisposition `json:"terminalDigests,omitempty"`
+	SnapshotDigests           []string                        `json:"snapshotDigests,omitempty"`
+	TargetNamespace           string                          `json:"targetNamespace"`
+	TargetName                string                          `json:"targetName"`
+	CapabilitySHA256          string                          `json:"capabilitySHA256"`
+	ProxySource               string                          `json:"proxySource"`
+	EngineSource              string                          `json:"engineSource"`
+	OperatorBinding           string                          `json:"operatorBinding"`
+	AdmissionGeneration       string                          `json:"admissionGeneration,omitempty"`
+	LastTransition            string                          `json:"lastTransition,omitempty"`
+	SnapshotWaiting           int                             `json:"snapshotWaiting,omitempty"`
+	SnapshotRunning           int                             `json:"snapshotRunning,omitempty"`
+	SnapshotSwapped           int                             `json:"snapshotSwapped,omitempty"`
+	SnapshotCached            int                             `json:"snapshotCached,omitempty"`
+	ProxyActive               int                             `json:"proxyActive,omitempty"`
+	ProxyCancelled            int                             `json:"proxyCancelled,omitempty"`
+	ObservationNonces         []string                        `json:"observationNonces,omitempty"`
+	ObservationSequences      []string                        `json:"observationSequences,omitempty"`
+	ObservationHashes         []string                        `json:"observationHashes,omitempty"`
+	CreateRequests            int                             `json:"createRequests,omitempty"`
+	StatusRequests            int                             `json:"statusRequests,omitempty"`
+	CancelRequests            int                             `json:"cancelRequests,omitempty"`
+	ReopenRequests            int                             `json:"reopenRequests,omitempty"`
 }
 
 func (r *drainV11Receipt) prepared() bool {
 	if r == nil {
 		return false
+	}
+	if len(r.TerminalDigests) > 16 {
+		return false
+	}
+	if len(r.SnapshotDigests) > 16 || len(r.SnapshotDigests) != len(r.TerminalDigests) {
+		return false
+	}
+	for i, row := range r.SnapshotDigests {
+		if !validDrainV11Hex(row, sha256.Size) || (i > 0 && r.SnapshotDigests[i-1] >= row) || row != r.TerminalDigests[i].RequestSHA256 {
+			return false
+		}
+	}
+	for i, row := range r.TerminalDigests {
+		if !validDrainV11Hex(row.RequestSHA256, sha256.Size) ||
+			(row.Disposition != "aborted" && row.Disposition != "completed-before-abort") ||
+			(i > 0 && r.TerminalDigests[i-1].RequestSHA256 >= row.RequestSHA256) {
+			return false
+		}
 	}
 	deadline, deadlineErr := time.Parse(time.RFC3339Nano, r.Deadline)
 	cancelAt, cancelErr := time.Parse(time.RFC3339Nano, r.CancelNotBefore)
@@ -324,6 +347,29 @@ func bindDrainV11Status(receipt *drainV11Receipt, status drainV11StatusResponse,
 		return fmt.Errorf("drain v11 owner digest mismatch")
 	}
 	aborted, completed := 0, 0
+	// The response has already been validated against the exact engine snapshot.
+	// Retain only a small, sorted digest projection: raw caller-controlled IDs
+	// must never be written to a journal or manager audit. Larger snapshots keep
+	// the aggregate mechanism result but cannot credit an owned request.
+	var terminalDigests []model.DrainRequestDisposition
+	var snapshotDigests []string
+	if len(status.TerminalDispositions) <= 16 {
+		snapshotIDs, _ := drainV11QueueIDs(status.EngineSnapshot, false)
+		for id := range snapshotIDs {
+			hash := sha256.Sum256([]byte(id))
+			snapshotDigests = append(snapshotDigests, hex.EncodeToString(hash[:]))
+		}
+		sort.Strings(snapshotDigests)
+		terminalDigests = make([]model.DrainRequestDisposition, 0, len(status.TerminalDispositions))
+		for id, disposition := range status.TerminalDispositions {
+			hash := sha256.Sum256([]byte(id))
+			terminalDigests = append(terminalDigests, model.DrainRequestDisposition{
+				RequestSHA256: hex.EncodeToString(hash[:]), Disposition: disposition})
+		}
+		sort.Slice(terminalDigests, func(i, j int) bool {
+			return terminalDigests[i].RequestSHA256 < terminalDigests[j].RequestSHA256
+		})
+	}
 	for _, disposition := range status.TerminalDispositions {
 		switch disposition {
 		case "aborted":
@@ -342,6 +388,8 @@ func bindDrainV11Status(receipt *drainV11Receipt, status drainV11StatusResponse,
 	receipt.State = status.State
 	receipt.ReceiptSHA256 = status.ReceiptSHA256
 	receipt.Aborted, receipt.CompletedBeforeAbort = aborted, completed
+	receipt.TerminalDigests = terminalDigests
+	receipt.SnapshotDigests = snapshotDigests
 	receipt.AdmissionGeneration, receipt.LastTransition = status.AdmissionGeneration, status.LastTransition
 	receipt.TransitionReason = status.TransitionReason
 	receipt.CancelBoundaryRevision = status.CancelBoundaryRevision

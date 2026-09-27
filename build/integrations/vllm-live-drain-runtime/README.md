@@ -75,8 +75,17 @@ reviewed before rendering a deployable candidate.
    Merge the additive secure-required binding with any **current** serving
    bindings; do not replace other targets' configuration from this one-target
    overlay.
-5. Install the reviewed source ConfigMap, Secrets, secure operator binding,
-   and Deployment through the workload owner's normal deployment path. The
+5. Use an owner-coordinated maintenance transition for the currently observed
+   single-replica workload. Its `maxSurge: 0`, `maxUnavailable: 1` strategy does
+   not require a second GPU, but replacing it interrupts serving. The current
+   source ConfigMap is mutable and directory-mounted: applying new source while
+   the old Pod runs creates a mixed-source interval. Stage the image and Secrets,
+   stop the old replica, verify its serving endpoint is absent, then install and
+   verify the reviewed ConfigMap before starting the candidate Deployment at one
+   replica. Keep the original ConfigMap and Deployment for rollback during the
+   same stopped-workload transition. The PDB's zero allowed evictions does not
+   make a Deployment replacement disruption-free. Install the secure operator
+   binding through its normal configuration path. The
    derivative runs vLLM on loopback `8001` with `VLLM_API_KEY`; one guardrail
    process serves public inference on `8000` and private TLS control on `8443`.
    An init container writes `origin.json` and `ledger.json` once into a
@@ -105,15 +114,19 @@ undocumented private file.
 
 ## Result limits
 
-The current Live console `request-drain` path creates one synthetic
+The default legacy Live console `request-drain` path creates one synthetic
 `DenialOfWallet` SecurityEvent and explicitly records **response-only**. It
 launches no bounded in-flight request producer and has no original admission,
 abort/quiescence, reopen, or benign-continuity reader. A working drain backend
 therefore removes a real actuator prerequisite but cannot by itself turn that
-Live row into a behavioral `DEFENDED` or `LANDED` outcome. The next console
-repair must retain a bounded original inference request and independently
-read the v11 operation receipt plus the same-request outcome. Do not claim a
-full defense from a Service selector, capability response or SecurityEvent.
+Live row into a behavioral `DEFENDED` or `LANDED` outcome. The opt-in replacement
+documented in [REQUEST-DRAIN-LIVE.md](../vllm-live-runtime/REQUEST-DRAIN-LIVE.md)
+retains a bounded original inference request and independently reads the v11
+operation receipt and that request's outcome. It requires separate reviewed
+console profile activation after this runtime is installed. Its positive result
+proves request-drain mechanics and continuity, not wallet-exhaustion prevention.
+Do not claim a full defense from a Service selector, capability response or
+SecurityEvent.
 
 Local controls:
 

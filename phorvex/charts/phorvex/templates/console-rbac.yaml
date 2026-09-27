@@ -19,6 +19,9 @@
 {{- if and .Values.phorvex.console.litellmOutput.enabled (not .Values.phorvex.console.enabled) }}
 {{- fail "litellmOutput.enabled requires console.enabled" }}
 {{- end }}
+{{- if and .Values.phorvex.console.voiceOutputLive.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "voiceOutputLive.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -689,4 +692,55 @@ subjects:
   name: {{ include "phorvex.consoleServiceAccountName" $ }}
   namespace: {{ $.Release.Namespace }}
 {{- end }}
+{{- end }}
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.console.drainLive.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-drain-live-route
+  namespace: vllm
+rules:
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-drain-live-route
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-console-drain-live-route
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-drain-live-journal
+  namespace: phorvex-system
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .Values.phorvex.console.drainLive.journalName | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-drain-live-journal
+  namespace: phorvex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-console-drain-live-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
 {{- end }}

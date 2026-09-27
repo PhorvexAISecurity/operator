@@ -18,6 +18,7 @@ import (
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 )
 
 // okActuator is a capability-transport stub that always says wired (isolates the CONFIG
@@ -59,16 +60,62 @@ func capFleet() ([]*model.WorkloadView, Witness) {
 	return views, wit
 }
 
-// TestCapable_AllPredicatesGreen: the leader pod is fully capable for every AI action.
+func mcpCapableFixture() (*model.WorkloadView, Witness) {
+	p := model.Pod{Namespace: "voice", Name: "bot", UID: "11111111-1111-4111-8111-111111111111", HasGPU: true, ModelID: "voice-model",
+		VoiceMCPConfigMap: "voice-mcp-tool-policy", VoiceMCPDeploymentUID: "22222222-2222-4222-8222-222222222222",
+		VoiceMCPSourceSHA256: strings.Repeat("a", 64), VoiceMCPEventCreator: "system:serviceaccount:phorvex-system:console"}
+	p.VoiceMCPObservation = &model.VoiceMCPObservation{EventName: "mcp-event", EventUID: "33333333-3333-4333-8333-333333333333",
+		CreatorIdentity: p.VoiceMCPEventCreator, ScenarioID: "ai2-mcp-tool-poisoning", RunSHA256: strings.Repeat("b", 64),
+		TargetPodUID: p.UID, DeploymentUID: p.VoiceMCPDeploymentUID, ConfigMapUID: "44444444-4444-4444-8444-444444444444",
+		SourceConfigMapUID: "55555555-5555-4555-8555-555555555555", SourceSHA256: p.VoiceMCPSourceSHA256,
+		ToolName: voicemcppolicy.StoreDirectory, GoodDescriptorSHA256: voicemcppolicy.StoreDirectoryGoodSHA256,
+		ObservedDescriptorSHA256: strings.Repeat("c", 64), MCPServiceName: voicemcppolicy.MCPServiceName,
+		MCPServiceUID: "66666666-6666-4666-8666-666666666666", MCPPodName: "mcp-server-1",
+		MCPPodUID: "77777777-7777-4777-8777-777777777777", MCPDeploymentUID: "88888888-8888-4888-8888-888888888888",
+		MCPConfigMapUID: "99999999-9999-4999-8999-999999999999", MCPSourceSHA256: voicemcppolicy.ReviewedMCPSourceSHA256,
+		PolicyName: "voice-defense", PolicyUID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", PolicyGeneration: 1}
+	view := &model.WorkloadView{Pod: p}
+	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+		WithPolicyIdentity("voice-defense", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	return view, witness
+}
+
+// TestCapable_AllPredicatesGreen uses the generic leader for ordinary AI moves
+// and an exact observed Voice target for MCP descriptor pinning.
 func TestCapable_AllPredicatesGreen(t *testing.T) {
 	views, wit := capFleet()
 	for action := range AICapabilityActions {
-		if action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionVoiceRefundPairDeny || action == model.ActionLiteLLMClientRevoke {
+		if action == model.ActionVoiceMCPToolPin {
+			voice, scoped := mcpCapableFixture()
+			if ok, why := scoped.Capable(voice, action); !ok {
+				t.Errorf("source-bound Voice MCP target not capable: %s", why)
+			}
+			continue
+		}
+		if action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionVoiceRefundPairDeny || action == model.ActionVoiceOutputPolicyActivate || action == model.ActionLiteLLMClientRevoke {
 			continue // unlike generic AI actions, this requires an exact trusted event
 		}
 		if ok, why := wit.Capable(views[0], action); !ok {
 			t.Errorf("leader not capable for %s: %s", action, why)
 		}
+	}
+}
+
+func TestVoiceMCPCapabilityRequiresCompleteSourceAndPolicyJoin(t *testing.T) {
+	view, witness := mcpCapableFixture()
+	if ok, why := witness.Capable(view, model.ActionVoiceMCPToolPin); !ok {
+		t.Fatalf("complete observed source excluded: %s", why)
+	}
+	missingSource := *view
+	missingSource.Pod = view.Pod
+	copyObservation := *view.Pod.VoiceMCPObservation
+	copyObservation.SourceConfigMapUID = ""
+	missingSource.Pod.VoiceMCPObservation = &copyObservation
+	if ok, _ := witness.Capable(&missingSource, model.ActionVoiceMCPToolPin); ok {
+		t.Fatal("missing immutable Voice source UID accepted")
+	}
+	if ok, _ := witness.WithPolicyIdentity("other", "other-uid").Capable(view, model.ActionVoiceMCPToolPin); ok {
+		t.Fatal("different selecting policy accepted")
 	}
 }
 

@@ -60,6 +60,7 @@ import (
 	"github.com/phorvex/phorvex/internal/runner"
 	"github.com/phorvex/phorvex/internal/scopedoutcome"
 	"github.com/phorvex/phorvex/internal/startupauthz"
+	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -165,6 +166,7 @@ func main() {
 		migProfilesFile                  string
 		servingSecurityFile              string
 		servingSecurityMode              string
+		voiceMCPApprovedImage            string
 		migNodeExec                      bool
 		migAgentNamespace                string
 		migAgentServiceAccounts          string
@@ -207,6 +209,7 @@ func main() {
 	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
 	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "Operator-owned versioned exact policy/workload binding configuration for serving TLS credentials.")
 	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "Serving control mode: secure-required (default) or explicit legacy-plaintext migration compatibility.")
+	flag.StringVar(&voiceMCPApprovedImage, "voice-mcp-approved-image", os.Getenv("PHORVEX_VOICE_MCP_APPROVED_IMAGE"), "Reviewed immutable MCP repo@sha256 required for Voice MCP pinning; empty disables that action.")
 	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
 	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
 	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
@@ -277,6 +280,10 @@ func main() {
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	if voiceMCPApprovedImage != "" && !voicemcppolicy.ValidApprovedImage(voiceMCPApprovedImage) {
+		setupLog.Error(fmt.Errorf("invalid reviewed MCP image reference"), "voice MCP image configuration invalid")
+		os.Exit(1)
+	}
 	if parsed, err := ingest.ParsePCIeClassTable(pcieClassTableRaw); err != nil {
 		setupLog.Error(err, "invalid --pcie-class-table; refusing to start with an unparseable PCIe capacity table")
 		os.Exit(1)
@@ -486,12 +493,14 @@ func main() {
 		native.SetAdapterSources(adapterSources)
 		native.SetMIGProfiles(migProfiles)
 		native.SetServingSecurity(servingSecurity)
+		native.VoiceMCPApprovedImage = voiceMCPApprovedImage
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
 		hybrid.SetAdapterSources(adapterSources)
 		hybrid.SetMIGProfiles(migProfiles)
 		hybrid.SetServingSecurity(servingSecurity)
+		hybrid.SetVoiceMCPApprovedImage(voiceMCPApprovedImage)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.OperatorNamespace = operatorNS

@@ -6,12 +6,11 @@ The added hooks affect the existing Mongo `caller_memory` recall/remember path
 and the `issue_refund` callback. They do not authenticate caller IDs or undo
 the first contaminated call.
 
-For the normal Voice Deployment rollout, install these two source files together
-at `/app/bot.py` and `/app/voice_memory_policy.py` from an immutable source image
-or immutable ConfigMap. The active process freezes
+The memory/refund feature hashes these two files at `/app/bot.py` and
+`/app/voice_memory_policy.py`. The active process freezes
 `SHA256(bot.py bytes || NUL || voice_memory_policy.py bytes)` at import. Keep the
 existing `/ws` Service and model/provider configuration. The reviewed composite
-source SHA-256 is `585fd2dce545cfdd163635c2e2929b193e2395329a5073b9ae14a8f033c08a9c`.
+source SHA-256 is `25fd02b6710f1d687a1c71ba4caf142afcbf57d86c662aef66cf39e7ff370f95`.
 The memory rule is an
 optional ConfigMap named `voice-memory-policy` in namespace `voice`; mount its
 directory read-only without `subPath` at `/etc/phorvex/voice-memory-policy`.
@@ -75,8 +74,12 @@ private, owned regular file containing 32–256 printable ASCII bytes without a
 newline. The output directory must not exist and is created mode `0700`; all
 five generated files are mode `0600`. The script never prints the token.
 
-The rendered source ConfigMap is immutable and contains exactly `bot.py` and
-`voice_memory_policy.py`; its name includes the reviewed source SHA prefix.
+The legacy memory-only rendered source ConfigMap is immutable and contains
+exactly `bot.py` and `voice_memory_policy.py`. For the combined MCP/output
+activation, one immutable ConfigMap contains exactly `bot.py`,
+`voice_memory_policy.py`, `voice_output_policy.py`, and `voice_mcp_policy.py`.
+Its name binds the four files in that order with NUL separators. Separate
+feature digests bind bot+memory, bot+memory+output, and bot+memory+MCP.
 The mutable `voice-memory-policy` and `voice-refund-policy` ConfigMaps each have
 one canonical rev0 `rule.json` key and an exact Deployment controller owner
 reference. The token Secret has the same owner. Create these four objects first,
@@ -99,5 +102,51 @@ Only a run-owned CRM order can pass the test-session refund scope, and the bot
 stores private digest-only refund/read callback receipts. This test restriction
 does not authenticate the caller and is separate from the refund policy action.
 
-Run the source tests with
+The combined activation requires fresh, explicit memory/refund ConfigMap and
+protected journal inventories. An absent ConfigMap is represented by JSON
+`null`; an existing nonzero rule or pending journal fails locally because its
+source and operation lineage cannot be reset during this rollout. The current
+read-only cluster inventory found all four rule ConfigMaps absent. Joint
+activation adds a required MCP rule and a two-phase output rule ConfigMap:
+create output `rule.json` with an empty `configMapUID` (the app stays unready),
+then use `bind_output_uid.py` against the created ConfigMap's fresh UID and
+resourceVersion to patch only that UID field. Create separate private test
+token Secrets for MCP and output sessions; neither token is an HTTP rule
+mutation credential. The bot starts with `python3 -B /app/bot.py`, and
+`MCP_URL` is fixed to `http://mcp-server.mcp.svc.cluster.local:8000/mcp/`.
+
+Run source tests with a Python 3.11 environment containing the installed
+Voice probe's `websockets.asyncio.client` dependency:
 `python3 -m unittest discover -s build/integrations/voice-memory -p 'test_*.py'`.
+
+For the separate Voice output Live console activation, render the exact
+reviewed profile locally after the joint four-file source is frozen. Supply
+the intended console's actual `-audit-source-url` and
+`-audit-source-server-dns` values; the profile binds their concatenation,
+which the console checks against its running audit transport identity. For
+example, from this repository root:
+
+```
+python3 build/integrations/voice-memory/render_output_profile.py \
+  --audit-source-url 'https://phorvex-phorvex-audit-source.phorvex-system.svc:8445' \
+  --audit-source-server-dns 'phorvex-phorvex-audit-source.phorvex-system.svc' \
+  --output-dir /path/to/private/voice-output-profile
+```
+
+The renderer recomputes the output source digest from the exact mounted
+`bot.py`, `voice_memory_policy.py`, and `voice_output_policy.py` bytes and
+requires it to match the joint activation renderer. It hashes the embedded
+console probe and checks both fixed audio clips. It writes canonical
+`profile.json`, an immutable `phorvex-system` ConfigMap containing that exact
+profile, and an additive `console-values.yaml` fragment with the ConfigMap
+name and profile SHA-256. Review the generated values against the installed
+audit source and chart, provision the profile ConfigMap, then enable
+`phorvex.console.voiceOutputLive` through normal chart delivery. Native
+`phorvex.voiceOutput` and the application source/rule/journal/token bundle
+must be installed and verified separately. The console route remains disabled
+by default; producing these files does not change a workload or prove a
+model disclosure, brain selection, or defended result.
+
+Run the local renderer checks from `build/integrations/voice-memory` with
+`python3 -m unittest -q test_render_output_profile.py`. The test refuses
+source/clip drift and a mismatched audit URL.

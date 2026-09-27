@@ -64,6 +64,9 @@ type EnactCtx struct {
 	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
 	VoiceMemoryTransport         http.RoundTripper // private fixed-Pod-IP readback seam
 	VoiceRefundTransport         http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPTransport            http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPApprovedImage        string            // operator-configured reviewed MCP repo@sha256; never event-derived
+	VoiceOutputTransport         http.RoundTripper // private fixed-Pod-IP readback seam
 	LiteLLMStatusTransport       http.RoundTripper // test-only exact PodIP status-readback seam
 	LiteLLMStatusToken           string            // test-only; runtime reads the fixed mounted Secret path
 	OutputPolicyReadbackTimeout  time.Duration
@@ -91,6 +94,7 @@ type HandlerResult struct {
 	// effect is unknown; it is not a confirmed or credited emission.
 	MutationKind        string
 	GracefulTermination *model.GracefulTerminationReceipt
+	DrainOperation      *model.DrainOperationEvidence
 	// Emitted is true only for a confirmed mutation or confirmed partial
 	// mutation. It stays false for refusal, definite no-effect, and an attempted
 	// external mutation whose result is unknown.
@@ -126,6 +130,15 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 			return Result{}, fenceErr
 		}
 	}
+	if req.Action != model.ActionVoiceOutputPolicyActivate && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
+		pending, err := PendingVoiceOutputOperation(ctx, ec.Reader, ec.JournalNamespace, req.Namespace, req.Pod, req.TargetUID)
+		if err != nil || pending {
+			if err != nil {
+				return Result{}, fmt.Errorf("native actuator: exact Voice Pod output journal unavailable: %w", err)
+			}
+			return Result{}, fmt.Errorf("native actuator: exact Voice Pod has unresolved output operation")
+		}
+	}
 	if err := prepareServingAttempt(ctx, &ec, req); err != nil {
 		if pending, lookupErr := pendingProtectedServingReceipt(ctx, ec, req); pending {
 			return Result{Actuator: "native", Handler: string(req.Action), MutationKind: "partial", Note: "protected serving operation remains pending; preparation failure cannot authorize fallback"}, errors.Join(err, lookupErr)
@@ -147,6 +160,7 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		RollbackRef:         hr.RollbackRef,
 		MutationKind:        hr.MutationKind,
 		GracefulTermination: hr.GracefulTermination,
+		DrainOperation:      model.CloneDrainOperationEvidence(hr.DrainOperation),
 	}, err
 }
 
