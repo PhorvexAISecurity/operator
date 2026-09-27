@@ -95,6 +95,7 @@ type GraphNode struct {
 	Key   string  `json:"key"`
 	Blast float64 `json:"blast"`
 	AI    bool    `json:"ai"`
+	UID   string  `json:"uid,omitempty"` // Pod epoch; absent from older scanner output
 }
 
 // GraphEdge is a directed lateral-movement path src -> dst (keys "ns/pod").
@@ -106,7 +107,7 @@ type GraphEdge struct {
 var (
 	reWitness   = regexp.MustCompile(`^\s*(\S+/\S+)\s+K8s:\s+imgRarity=([\d.]+)\s+coRes=([\d.]+)\s+slack=([\d.]+)\s+pdbMinAvail=(-?\d+)\s+migValid=(\w+)\s+epss=([\d.]+)(?:\s+stateful=(\w+))?`)
 	reKill      = regexp.MustCompile(`^\s*(\S+/\S+)\s+stage=(\S+)\s+\[([^\]]+)\]\s+PHold=([\d.]+)\s+PreemptMargin=([\d.]+)\s+ProjNextStage=([\d.]+)s\s+infectionFrontier=([\d.]+)`)
-	reNode      = regexp.MustCompile(`^\s*NODE\s+(\S+/\S+)\s+blast=([\d.]+)\s+ai=([01])`)
+	reNode      = regexp.MustCompile(`^\s*NODE\s+(\S+/\S+)\s+blast=([\d.]+)\s+ai=([01])(?:\s+uid=([a-zA-Z0-9-]+))?`)
 	reEdge      = regexp.MustCompile(`^\s*EDGE\s+(\S+/\S+)\s+->\s+(\S+/\S+)`)
 	reAI        = regexp.MustCompile(`AI:\s*VRAMfrac=([\d.]+)\s+SM=([\d.]+)\s+link=([\d.]+)\s+modelRarity=([\d.]+)`)
 	rePlatform  = regexp.MustCompile(`platform-adapter:\s*(\S+)`)
@@ -165,7 +166,7 @@ func (c *Config) Scan(ns, kubeContext, promURL string) (ScanResult, error) {
 		} else if m := reKill.FindStringSubmatch(ln); m != nil {
 			res.Killchain = append(res.Killchain, KillchainRow{Pod: m[1], Stage: m[2], AI: strings.Contains(m[3], "AI"), PHold: atof(m[4]), PreemptMargin: atof(m[5]), ProjNextSec: atof(m[6]), Frontier: atof(m[7])})
 		} else if m := reNode.FindStringSubmatch(ln); m != nil {
-			res.GraphNodes = append(res.GraphNodes, GraphNode{Key: m[1], Blast: atof(m[2]), AI: m[3] == "1"})
+			res.GraphNodes = append(res.GraphNodes, GraphNode{Key: m[1], Blast: atof(m[2]), AI: m[3] == "1", UID: m[4]})
 		} else if m := reEdge.FindStringSubmatch(ln); m != nil {
 			res.GraphEdges = append(res.GraphEdges, GraphEdge{Src: m[1], Dst: m[2]})
 		} else if m := rePlatform.FindStringSubmatch(ln); m != nil {

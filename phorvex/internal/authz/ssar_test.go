@@ -128,3 +128,31 @@ func TestAllowed_ErrorNotCached(t *testing.T) {
 		t.Fatalf("errored reviews must not cache: want 2 calls, got %d", f.calls)
 	}
 }
+
+func TestOperatorScopedVerbRequiresResolvedNamespaceAndIsolatesCache(t *testing.T) {
+	f := &fakeSSAR{allowNS: map[string]bool{"operator-a": true}}
+	c := NewCheckerWithClient(f, time.Minute)
+	verb := Verb{Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}
+	if allowed, unknown, _ := c.Allowed(context.Background(), "vllm", []Verb{verb}); allowed || !unknown || f.calls != 0 {
+		t.Fatalf("missing operator scope allowed=%t unknown=%t calls=%d", allowed, unknown, f.calls)
+	}
+	if allowed, unknown, _ := c.Observed("vllm", []Verb{verb}); allowed || !unknown || f.calls != 0 {
+		t.Fatalf("missing observed scope allowed=%t unknown=%t calls=%d", allowed, unknown, f.calls)
+	}
+	a := verb
+	a.Namespace = "operator-a"
+	b := verb
+	b.Namespace = "operator-b"
+	if VerbSetKey([]Verb{a}) == VerbSetKey([]Verb{b}) {
+		t.Fatal("operator namespaces collapsed in verb set key")
+	}
+	if allowed, unknown, _ := c.Allowed(context.Background(), "vllm", []Verb{a}); !allowed || unknown {
+		t.Fatal("operator-a grant was not observed")
+	}
+	if allowed, unknown, _ := c.Allowed(context.Background(), "vllm", []Verb{b}); allowed || unknown {
+		t.Fatal("operator-b inherited operator-a cached grant")
+	}
+	if f.calls != 2 || f.last.Namespace != "operator-b" {
+		t.Fatalf("cache scopes calls=%d last=%+v", f.calls, f.last)
+	}
+}

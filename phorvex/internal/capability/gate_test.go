@@ -97,6 +97,7 @@ func endpointLeaseCapableFixture() (*model.WorkloadView, Witness) {
 	}
 	view := &model.WorkloadView{Pod: p}
 	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+		WithOperatorNamespace("phorvex-system").
 		WithPolicyIdentity("vllm-defense", p.EndpointLeaseObservation.PolicyUID)
 	return view, witness
 }
@@ -675,5 +676,112 @@ func TestCapableAndAuthorized(t *testing.T) {
 	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, azErr, okActuator{})
 	if ok, _ := witE.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); !ok {
 		t.Fatal("rbac-unknown must fail open (ok=true)")
+	}
+}
+
+type endpointLeaseScopeSSAR struct {
+	attributes     []authzv1.ResourceAttributes
+	allowJournalNS string
+}
+
+func (s *endpointLeaseScopeSSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authzv1.SelfSubjectAccessReview, error) {
+	a := *sar.Spec.ResourceAttributes
+	s.attributes = append(s.attributes, a)
+	sar.Status.Allowed = a.Name != "phorvex-endpoint-lease-journal" || a.Namespace == s.allowJournalNS
+	sar.Status.Denied = !sar.Status.Allowed
+	return sar, nil
+}
+
+func TestEndpointLeaseRuntimeAuthorizationUsesOperatorNamespace(t *testing.T) {
+	view, base := endpointLeaseCapableFixture()
+	for _, tc := range []struct {
+		name, allowedNS, operatorNS string
+		wantAllowed                 bool
+	}{
+		{name: "operator allowed", allowedNS: "control-plane", operatorNS: "control-plane", wantAllowed: true},
+		{name: "tenant only allowed", allowedNS: "vllm", operatorNS: "control-plane"},
+		{name: "different operator namespace", allowedNS: "control-plane", operatorNS: "other-operator"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reviews := &endpointLeaseScopeSSAR{allowJournalNS: tc.allowedNS}
+			w := base.WithOperatorNamespace(tc.operatorNS)
+			w.az = authz.NewCheckerWithClient(reviews, time.Minute)
+			ok, why := w.CapableAndAuthorized(view, model.ActionEndpointLeaseRevoke)
+			if ok != tc.wantAllowed {
+				t.Fatalf("status allowed=%t want=%t: %s", ok, tc.wantAllowed, why)
+			}
+			result := w.Eligible(view, model.ActionEndpointLeaseRevoke, []string{"lease-cover"})
+			if tc.wantAllowed && result != nil {
+				t.Fatalf("eligible action excluded: %+v", result)
+			}
+			if !tc.wantAllowed && (result == nil || !result.Excluded || result.Kind != ReasonNoRBAC) {
+				t.Fatalf("denied action eligible: %+v", result)
+			}
+			observed := w.EligibleObserved(view, model.ActionEndpointLeaseRevoke, []string{"lease-cover"})
+			if tc.wantAllowed && observed != nil {
+				t.Fatalf("observed allowed action excluded: %+v", observed)
+			}
+			if !tc.wantAllowed && (observed == nil || !observed.Excluded || observed.Kind != ReasonNoRBAC) {
+				t.Fatalf("observed denied action eligible: %+v", observed)
+			}
+			journalChecks := map[string]bool{}
+			for _, a := range reviews.attributes {
+				if a.Name == "phorvex-endpoint-lease-journal" {
+					journalChecks[a.Verb] = true
+					if a.Namespace != tc.operatorNS {
+						t.Fatalf("journal checked in %q", a.Namespace)
+					}
+				}
+			}
+			if !journalChecks["get"] || (tc.wantAllowed && !journalChecks["update"]) {
+				t.Fatal("journal was not authorized")
+			}
+		})
+	}
+}
+
+func TestEndpointLeaseJournalAuthorizationCacheIsolatedByOperatorNamespace(t *testing.T) {
+	view, base := endpointLeaseCapableFixture()
+	reviews := &endpointLeaseScopeSSAR{allowJournalNS: "operator-a"}
+	base.az = authz.NewCheckerWithClient(reviews, time.Minute)
+	for _, tc := range []struct {
+		ns      string
+		allowed bool
+	}{{"operator-a", true}, {"operator-b", false}, {"operator-a", true}} {
+		ok, why := base.WithOperatorNamespace(tc.ns).CapableAndAuthorized(view, model.ActionEndpointLeaseRevoke)
+		if ok != tc.allowed {
+			t.Fatalf("operator %s allowed=%t want=%t: %s", tc.ns, ok, tc.allowed, why)
+		}
+	}
+	var aChecks, bChecks int
+	for _, a := range reviews.attributes {
+		if a.Name == "phorvex-endpoint-lease-journal" && a.Verb == "get" {
+			if a.Namespace == "operator-a" {
+				aChecks++
+			}
+			if a.Namespace == "operator-b" {
+				bChecks++
+			}
+		}
+	}
+	if aChecks != 1 || bChecks != 1 {
+		t.Fatalf("journal cache scopes: operator-a=%d operator-b=%d", aChecks, bChecks)
+	}
+}
+
+func TestEndpointLeaseMissingOperatorNamespaceExcludesBeforeAuthorization(t *testing.T) {
+	view, base := endpointLeaseCapableFixture()
+	reviews := &endpointLeaseScopeSSAR{allowJournalNS: "vllm"}
+	w := base.WithOperatorNamespace("")
+	w.az = authz.NewCheckerWithClient(reviews, time.Minute)
+	if ok, why := w.CapableAndAuthorized(view, model.ActionEndpointLeaseRevoke); ok || !strings.Contains(why, "operator journal namespace") {
+		t.Fatalf("status accepted missing namespace: ok=%t why=%q", ok, why)
+	}
+	result := w.Eligible(view, model.ActionEndpointLeaseRevoke, []string{"lease-cover"})
+	if result == nil || !result.Excluded || result.Kind != ReasonCapability || result.RBACUnknown {
+		t.Fatalf("generator accepted missing namespace: %+v", result)
+	}
+	if len(reviews.attributes) != 0 {
+		t.Fatalf("missing operator namespace triggered SSAR: %+v", reviews.attributes)
 	}
 }

@@ -7,6 +7,7 @@ import {
 } from "@/lib/api";
 import { clearQueryEventProvider, QueryChange, setQueryEventProvider } from "@/lib/query-events";
 import { createScopedUIStore, ScopedUIProvider } from "@/lib/use-scoped-ui-state";
+import { recordAuditSnapshot } from "@/lib/audit-snapshot";
 
 const QUERY_GC = 5 * 60_000;
 const sessionContext = React.createContext<{ identity: string; providerToken: string; ready: boolean; session: Session } | null>(null);
@@ -106,12 +107,12 @@ export function useScanSnapshot(lens: Lens, context: string, namespace: string, 
   return { ...query, refetch, data: authorizedData(query.data, query.error) };
 }
 
-// A single 2.5s bounded sample is shared by exact identity+lens+context+tenant for 30s.
+// A single 2.5s bounded sample is shared by exact identity+lens+context+tenant+epoch mode for 30s.
 // `_settleMs` remains accepted for source compatibility; varying callers cannot race one key
 // with different sampling semantics.
-export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _settleMs = 2500, enabled = true) {
+export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _settleMs = 2500, enabled = true, preserveEpochs = false) {
   const query = useApiRead<any[]>({
-    lens, resource: "audit-snapshot", parameters: { context, tenant, tail: 80 }, staleTime: 30_000, enabled,
+    lens, resource: "audit-snapshot", parameters: { context, tenant, tail: 80, preserveEpochs }, staleTime: 30_000, enabled,
     fetcher: (signal) => new Promise((resolve, reject) => {
       const records = new Map<string, any>();
       let stop = () => {};
@@ -122,7 +123,7 @@ export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _sett
       const abort = () => { if (settled) return; settled = true; cleanup(); reject(new DOMException("Aborted", "AbortError")); };
       const fail = (error: unknown) => { if (settled) return; settled = true; cleanup(); reject(error instanceof Error ? error : new Error("Decision stream failed")); };
       signal.addEventListener("abort", abort, { once: true });
-      try { stop = liveStream(lens, (event) => { if (event.pod) records.set(`${event.namespace}/${event.pod}`, event); }, tenant || undefined, 80, context, fail); }
+      try { stop = liveStream(lens, (event) => { recordAuditSnapshot(records, event, lens, preserveEpochs); }, tenant || undefined, 80, context, fail); }
       catch (error) { fail(error); }
     }),
   });

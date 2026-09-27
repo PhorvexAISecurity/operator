@@ -195,10 +195,11 @@ type Witness struct {
 	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
 	// per-namespace label sets (already GET-derived observation substrate) so the scope
 	// check is O(1) and needs no per-candidate network read.
-	codeExec   AdmissionVerifier
-	nsLabels   map[string]map[string]string
-	policyName string
-	policyUID  string
+	codeExec          AdmissionVerifier
+	nsLabels          map[string]map[string]string
+	policyName        string
+	policyUID         string
+	operatorNamespace string
 }
 
 // BuildWitness assembles the per-tick witness.
@@ -219,6 +220,13 @@ func (w Witness) WithCodeExec(cev AdmissionVerifier, nsLabels map[string]map[str
 // It performs no API read and is therefore safe for EligibleObserved counterfactuals.
 func (w Witness) WithPolicyIdentity(name, uid string) Witness {
 	w.policyName, w.policyUID = name, uid
+	return w
+}
+
+// WithOperatorNamespace binds operator-scoped RBAC checks to the same namespace
+// used by native protected journals.
+func (w Witness) WithOperatorNamespace(namespace string) Witness {
+	w.operatorNamespace = namespace
 	return w
 }
 
@@ -460,7 +468,15 @@ func (w Witness) requiredVerbs(action model.Action) []authz.Verb {
 			}
 		}
 	}
-	return actuator.RequiredVerbsForBackend(backend, action)
+	verbs := actuator.RequiredVerbsForBackend(backend, action)
+	resolved := make([]authz.Verb, len(verbs))
+	copy(resolved, verbs)
+	for i := range resolved {
+		if resolved[i].OperatorScoped {
+			resolved[i].Namespace = w.operatorNamespace
+		}
+	}
+	return resolved
 }
 
 // configWhy returns the missing per-target CONFIG fixture for an AI action, from the
@@ -519,6 +535,9 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 			return "pod has no current UID/source-bound LiteLLM owned-client observation"
 		}
 	case model.ActionEndpointLeaseRevoke:
+		if w.operatorNamespace == "" {
+			return "endpoint-lease-revoke: operator journal namespace is unavailable"
+		}
 		if !pod.HasBoundEndpointLeaseObservation() || pod.EndpointLeaseObservation.PolicyName != w.policyName ||
 			pod.EndpointLeaseObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/source-bound endpoint lease observation"

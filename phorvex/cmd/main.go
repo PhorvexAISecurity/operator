@@ -991,7 +991,7 @@ func runScan(namespace, promURL, kubeContext string, backend actuator.BackendRes
 			if phys[key].GPUPresent {
 				ai = 1
 			}
-			fmt.Printf("  NODE %s blast=%.3f ai=%d\n", key, snap.Graph.BlastRadius(p.Namespace, p.Name), ai)
+			fmt.Printf("  NODE %s blast=%.3f ai=%d uid=%s\n", key, snap.Graph.BlastRadius(p.Namespace, p.Name), ai, p.UID)
 			for _, nb := range snap.Graph.Neighbors(p.Namespace, p.Name) {
 				fmt.Printf("  EDGE %s -> %s\n", key, nb)
 			}
