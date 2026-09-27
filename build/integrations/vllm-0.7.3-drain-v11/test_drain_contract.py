@@ -74,8 +74,12 @@ def verify_patched_source(source_root: Path):
 
 
 class Group:
-    def __init__(self, request_id):
+    def __init__(self, request_id, finished=False):
         self.request_id = request_id
+        self.finished = finished
+
+    def is_finished(self):
+        return self.finished
 
 
 class FakeLLMEngine:
@@ -170,8 +174,9 @@ class DrainProducerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.snapshot[0]["swapped"], ["swap"])
         self.assertEqual(response.queues[0]["waiting"], [])
         self.assertEqual(llm.abort_calls[-1], {"wait", "pre", "run", "swap"})
-        self.assertEqual(set(response.terminal_dispositions),
-                         {"wait", "pre", "run", "swap"})
+        self.assertEqual(response.terminal_dispositions,
+                         {"wait": "aborted", "pre": "aborted",
+                          "run": "aborted", "swap": "aborted"})
 
         post = self.RPCProcessRequest(prompt="p", params=object(), request_id="post")
         engine._handle_process_request(post)
@@ -230,6 +235,32 @@ class DrainProducerTest(unittest.IsolatedAsyncioTestCase):
             self.RPCDrainBeginRequest("4" * 32, "2"))
         self.assertIsNone(engine.outputs[-1].error)
         self.assertEqual(engine.outputs[-1].operation_generation, "2")
+
+    def test_running_work_with_queued_async_output_is_aborted(self):
+        # vLLM's async output queue holds the last step of every generating
+        # request, so an active stream appears in both running and cached.
+        llm = FakeLLMEngine(running=("stream",), cached=("stream",))
+        llm.scheduler_contexts[0].output_queue.append(types.SimpleNamespace(
+            seq_group_metadata_list=[Group("stream")]))
+        engine = self.engine(llm)
+        engine._handle_drain_begin_request(self.RPCDrainBeginRequest("9" * 32, "1"))
+        response = engine.outputs[-1]
+        self.assertIsNone(response.error)
+        self.assertEqual(response.snapshot[0]["running"], ["stream"])
+        self.assertEqual(response.snapshot[0]["cached"], ["stream"])
+        self.assertEqual(response.terminal_dispositions, {"stream": "aborted"})
+        self.assertEqual(llm.abort_calls[-1], {"stream"})
+
+    def test_already_finished_scheduler_work_completed_before_abort(self):
+        llm = FakeLLMEngine(cached=("done", "queued-only"))
+        llm.scheduler[0].running.append(Group("done", finished=True))
+        llm.scheduler[0].running.append(Group("live"))
+        engine = self.engine(llm)
+        engine._handle_drain_begin_request(self.RPCDrainBeginRequest("a" * 32, "1"))
+        self.assertEqual(engine.outputs[-1].terminal_dispositions,
+                         {"done": "completed-before-abort",
+                          "queued-only": "completed-before-abort",
+                          "live": "aborted"})
 
     def test_unsupported_and_generation_conflicts_refuse_without_admission(self):
         unsupported = self.engine(supported=False)
