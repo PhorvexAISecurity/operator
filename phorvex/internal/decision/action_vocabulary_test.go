@@ -87,6 +87,12 @@ func TestDecisionTraceActionVocabularyKeepsHistoricalRows(t *testing.T) {
 	if err := outputPolicyHistorical.Validate(); err != nil {
 		t.Fatalf("historical Live20 trace rejected: %v", err)
 	}
+	live21Historical := *trace
+	live21Historical.ActionVocabularyVersion = model.DecisionActionVocabularyLive21
+	live21Historical.ActionStatus = append([]model.DecisionActionStatusV3(nil), trace.ActionStatus[:21]...)
+	if err := live21Historical.Validate(); err != nil {
+		t.Fatalf("historical Live21 trace rejected: %v", err)
+	}
 
 	legacy := *trace
 	legacy.ActionVocabularyVersion = ""
