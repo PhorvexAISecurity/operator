@@ -961,6 +961,21 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	if err != nil {
 		r.DrainLiveProbe.Issue = drainLiveSafeIssue(err)
 	}
+	applyDrainLiveVerdict(r)
+	publishAttack(r)
+	if e := s.persistAttack(r); e != nil {
+		r.Status = "partial"
+		r.Outcome, r.DefendedPod, r.Containment = "", "", ""
+		r.Actuated, r.TimeToDefendSec = false, 0
+		r.PersistenceError = "request-drain evidence persistence unavailable; unsafe to retry"
+		publishAttack(r)
+	}
+}
+
+// applyDrainLiveVerdict grants credit only for the complete owned chain: the
+// exact event's selected request-drain natively aborted the owned in-flight
+// completion, and the same audited operation reopened to a benign completion.
+func applyDrainLiveVerdict(r *attackRecord) {
 	if r.DrainLiveProbe.Status == "UNKNOWN" {
 		r.Status = "partial"
 		r.OutcomeClass = "drain-observation-unknown"
@@ -971,11 +986,15 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	r.Outcome, r.DefendedPod, r.Containment = "", "", ""
 	r.Actuated, r.DwellOngoing = false, false
 	r.TimeToDefendSec, r.DwellSec = 0, 0
-	publishAttack(r)
-	if e := s.persistAttack(r); e != nil {
-		r.Status = "partial"
-		r.PersistenceError = "request-drain evidence persistence unavailable; unsafe to retry"
-		publishAttack(r)
+	if r.DrainLiveProbe.Status != "OWNED_ABORT_AND_CONTINUITY_OBSERVED" || r.DecisionEvidence == nil || r.StimulusEvidence == nil {
+		return
+	}
+	r.Outcome, r.DefendedPod, r.Containment = "DEFENDED", r.Pod, "owned-inflight-request-aborted-service-reopened"
+	r.Action, r.Actuated = r.DecisionEvidence.Action, true
+	created, createdErr := time.Parse(time.RFC3339Nano, r.StimulusEvidence.EventCreatedAt)
+	decided, decidedErr := time.Parse(time.RFC3339Nano, r.DecisionEvidence.Time)
+	if createdErr == nil && decidedErr == nil && !decided.Before(created) {
+		r.TimeToDefendSec = decided.Sub(created).Seconds()
 	}
 }
 

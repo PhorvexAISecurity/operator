@@ -230,3 +230,42 @@ func TestDrainSelfIncarnationBracketsProfileRollout(t *testing.T) {
 		t.Fatal("same Pod UID container restart accepted")
 	}
 }
+
+func TestDrainLiveVerdictCreditsOnlyCompleteOwnedChain(t *testing.T) {
+	record := func(status string) *attackRecord {
+		return &attackRecord{Pod: "vllm-0", DrainLiveProbe: &drainLiveProbeResult{Status: status},
+			StimulusEvidence: &attackStimulusEvidence{EventCreatedAt: "2026-09-27T19:00:00Z"},
+			DecisionEvidence: &decisionEvidence{Action: "request-drain", Time: "2026-09-27T19:00:07.5Z"}}
+	}
+	r := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+	applyDrainLiveVerdict(r)
+	if r.Status != "done" || r.Outcome != "DEFENDED" || !r.Actuated || r.Action != "request-drain" ||
+		r.DefendedPod != "vllm-0" || r.Containment != "owned-inflight-request-aborted-service-reopened" ||
+		r.OutcomeClass != "drain-owned_abort_and_continuity_observed" || r.TimeToDefendSec != 7.5 {
+		t.Fatalf("complete owned chain was not credited: %+v", r)
+	}
+	for _, status := range []string{"MECHANISM_ONLY", "NO_DISCRIMINATING_OVERLAP", "UNKNOWN"} {
+		r := record(status)
+		applyDrainLiveVerdict(r)
+		if r.Outcome != "" || r.Actuated || r.Containment != "" || r.DefendedPod != "" || r.TimeToDefendSec != 0 {
+			t.Fatalf("%s earned credit: %+v", status, r)
+		}
+	}
+	unknown := record("UNKNOWN")
+	applyDrainLiveVerdict(unknown)
+	if unknown.Status != "partial" || unknown.OutcomeClass != "drain-observation-unknown" {
+		t.Fatalf("unknown drain was not partial: %+v", unknown)
+	}
+	missingDecision := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+	missingDecision.DecisionEvidence = nil
+	applyDrainLiveVerdict(missingDecision)
+	if missingDecision.Outcome != "" || missingDecision.Actuated {
+		t.Fatalf("credit without exact decision evidence: %+v", missingDecision)
+	}
+	reversed := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+	reversed.DecisionEvidence.Time = "2026-09-27T18:59:59Z"
+	applyDrainLiveVerdict(reversed)
+	if reversed.Outcome != "DEFENDED" || reversed.TimeToDefendSec != 0 {
+		t.Fatalf("decision before event must not produce a negative or fabricated time: %+v", reversed)
+	}
+}
