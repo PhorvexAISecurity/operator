@@ -176,7 +176,8 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "nonzero or unsafe"):
             render(deployment(), reviewed, b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
                    IMAGE, APPROVED_IMAGE, IMAGE_IDS, 10001, CREATOR,
-                   mcp_tool_enabled=True, output_enabled=True,
+                   mcp_tool_enabled=True, mcp_test_token=b"m" * 48,
+                   output_enabled=True, output_test_token=b"o" * 48,
                    existing_memory_cm=existing, journal_inventory=[])
 
         with self.assertRaises(ValueError):
@@ -189,7 +190,24 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "MCP_URL"):
             render(wrong_route, reviewed, b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
                    IMAGE, APPROVED_IMAGE, IMAGE_IDS, 10001, CREATOR,
-                   mcp_tool_enabled=True, output_enabled=True, journal_inventory=[])
+                   mcp_tool_enabled=True, mcp_test_token=b"m" * 48,
+                   output_enabled=True, output_test_token=b"o" * 48,
+                   journal_inventory=[])
+
+    def test_enabled_action_requires_its_private_test_token(self):
+        reviewed = policy()
+        reviewed["spec"]["actions"]["enabled"].extend(
+            ["voice-mcp-tool-pin", "voice-output-policy-activate"])
+        with self.assertRaisesRegex(ValueError, "MCP action requires"):
+            render(deployment(), reviewed, b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
+                   IMAGE, APPROVED_IMAGE, IMAGE_IDS, 10001, CREATOR,
+                   mcp_tool_enabled=True, output_enabled=True,
+                   output_test_token=b"o" * 48, journal_inventory=[])
+        with self.assertRaisesRegex(ValueError, "output action requires"):
+            render(deployment(), reviewed, b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
+                   IMAGE, APPROVED_IMAGE, IMAGE_IDS, 10001, CREATOR,
+                   mcp_tool_enabled=True, mcp_test_token=b"m" * 48,
+                   output_enabled=True, journal_inventory=[])
 
 
 if __name__ == "__main__":

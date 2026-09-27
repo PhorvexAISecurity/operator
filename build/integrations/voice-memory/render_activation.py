@@ -139,6 +139,10 @@ def render(deployment: dict, policy: dict, token: bytes, expected_deployment_uid
     require(type(agency_test_enabled) is bool, "invalid agency test mode")
     require(type(mcp_tool_enabled) is bool, "invalid MCP tool policy mode")
     require(type(output_enabled) is bool, "invalid Voice output policy mode")
+    require(mcp_tool_enabled == (mcp_test_token is not None),
+            "MCP action requires its private test token")
+    require(output_enabled == (output_test_token is not None),
+            "output action requires its private test token")
     if mcp_test_token is not None:
         require(mcp_tool_enabled and 32 <= len(mcp_test_token) <= 256 and
                 all(33 <= byte <= 126 for byte in mcp_test_token), "invalid MCP test token")
