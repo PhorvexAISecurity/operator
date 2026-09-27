@@ -1,9 +1,10 @@
 """Read-only, Pod-local enforcement of exact revoked Voice memory notes.
 
 The operator owns the projected rule. This module has no mutation HTTP surface.
-An empty optional projection preserves the existing bot until a rule is installed;
-once a valid rule has been seen, missing, corrupt, or replayed policy fails closed
-for memory alone. The ledger lives on a Pod emptyDir across bot restarts.
+An empty optional projection preserves the existing bot until a rule is installed.
+The normal activated rollout requires a rule before serving memory, including on
+replacement Pods with a fresh ledger. Missing, corrupt, or replayed policy then
+fails closed for memory. The ledger lives on a Pod emptyDir across bot restarts.
 """
 
 from __future__ import annotations
@@ -113,11 +114,13 @@ def authorization_status(token_file: pathlib.Path, supplied: str) -> int:
 
 
 class VoiceMemoryPolicy:
-    def __init__(self, policy_dir: pathlib.Path, state_dir: pathlib.Path, source_sha: str, pod_uid: str):
+    def __init__(self, policy_dir: pathlib.Path, state_dir: pathlib.Path, source_sha: str, pod_uid: str,
+                 required: bool = False):
         self.policy_dir = pathlib.Path(policy_dir)
         self.state_dir = pathlib.Path(state_dir)
         self.source_sha = source_sha
         self.pod_uid = pod_uid
+        self.required = required
         self._lock = threading.Lock()
         self._seen = False
 
@@ -180,7 +183,7 @@ class VoiceMemoryPolicy:
                     with (self.policy_dir / "rule.json").open("rb") as stream:
                         raw = stream.read(MAX_RULE_BYTES + 1)
                 except FileNotFoundError:
-                    return None, ledger is not None or self._seen
+                    return None, self.required or ledger is not None or self._seen
                 rule = parse_rule(raw, self.source_sha)
                 digest = hashlib.sha256(raw).hexdigest()
                 if ledger is not None:

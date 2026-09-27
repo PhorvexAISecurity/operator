@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/model"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -72,6 +73,57 @@ func TestVoiceMemoryReceiptRequiresExactCallerPodAndBenignNote(t *testing.T) {
 	}
 	if voiceMemoryReceiptMatches(reply, "CAexample01234567", "+15551230001", "pod-uid", voiceMemoryDigest(voiceMemoryAttackNote), voiceMemoryDigest("different benign"), true) {
 		t.Fatal("benign-control drift accepted")
+	}
+}
+
+func TestVoiceMemoryCleanupFailureCannotPublishDefended(t *testing.T) {
+	record := &attackRecord{Outcome: "DEFENDED", Containment: "exact-memory-note-revoked",
+		VoiceMemoryProbe: &voiceMemoryProbeResult{Status: "UNKNOWN", FirstContextObserved: true,
+			Cleanup: "unresolved-exact-owned-record"}}
+	voiceMemoryFinalizeOutcome(record)
+	if record.Outcome != "LANDED" || record.Containment != "" {
+		t.Fatalf("unresolved cleanup retained defended result: outcome=%q containment=%q", record.Outcome, record.Containment)
+	}
+	record.Outcome = "DEFENDED"
+	record.Containment = "exact-memory-note-revoked"
+	record.VoiceMemoryProbe.Status = "DEFENDED"
+	record.VoiceMemoryProbe.Cleanup = "deleted-exact-owned-record"
+	voiceMemoryFinalizeOutcome(record)
+	if record.Outcome != "DEFENDED" || record.Containment != "exact-memory-note-revoked" {
+		t.Fatal("verified exact cleanup lost defended outcome")
+	}
+}
+
+func TestVoiceMemoryDecisionRequiresExactTraceOwners(t *testing.T) {
+	now := time.Now().UTC()
+	record := &attackRecord{Pod: "voice-bot-a", TargetUID: "pod-uid", started: now.Add(-time.Second)}
+	snap := voiceMemorySnapshot{PolicyUID: "policy-uid"}
+	trace := caseTraceValidTrace(now, true, false)
+	trace.AssetNamespace, trace.AssetName, trace.AssetUID = "voice", record.Pod, record.TargetUID
+	trace.PolicyNamespace, trace.PolicyName, trace.PolicyUID = "voice", voiceMemoryPolicyName, snap.PolicyUID
+	trace.DispatchOutcome = model.DispatchEmitted
+	row := audit.Record{Kind: "phorvex.decision", Time: now, Namespace: "voice", Pod: record.Pod,
+		Action: string(model.ActionRotate), Selected: true, Actuated: true, DispatchOutcome: model.DispatchEmitted,
+		DecisionTrace: trace, Events: []model.EventEvidence{{EventUID: "event-uid", TargetPodUID: record.TargetUID,
+			TrustVerdict: "trusted", Weight: 1}}}
+	if err := trace.Validate(); err != nil {
+		t.Fatalf("valid Voice trace fixture: %v", err)
+	}
+	selected, ok := voiceMemorySelectedDecision(row, record, snap, "event-uid")
+	if !ok || selected.DecisionID != trace.DecisionID || !selected.Actuated {
+		t.Fatalf("exact selected decision lost: %+v valid=%t", selected, ok)
+	}
+	wrong := *trace
+	wrong.PolicyUID = "other-policy"
+	row.DecisionTrace = &wrong
+	if _, ok := voiceMemorySelectedDecision(row, record, snap, "event-uid"); ok {
+		t.Fatal("wrong policy UID credited")
+	}
+	wrong = *trace
+	wrong.AssetUID = "other-pod"
+	row.DecisionTrace = &wrong
+	if _, ok := voiceMemorySelectedDecision(row, record, snap, "event-uid"); ok {
+		t.Fatal("wrong target Pod UID credited")
 	}
 }
 

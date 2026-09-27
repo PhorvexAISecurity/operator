@@ -71,11 +71,15 @@ MEMORY_COLLECTION = os.environ.get("MEMORY_COLLECTION", "caller_memory")
 # source digest is frozen at import: a changed mounted file cannot advertise a
 # new runtime identity while these loaded Python objects still execute.
 _memory_source = source_sha256(pathlib.Path(__file__), pathlib.Path(__file__).with_name("voice_memory_policy.py"))
+_memory_policy_mode = os.environ.get("VOICE_MEMORY_POLICY_REQUIRED", "false")
+if _memory_policy_mode not in ("true", "false"):
+    raise RuntimeError("invalid VOICE_MEMORY_POLICY_REQUIRED")
 _memory_policy = VoiceMemoryPolicy(
     pathlib.Path(os.environ.get("VOICE_MEMORY_POLICY_DIR", "/etc/phorvex/voice-memory-policy")),
     pathlib.Path(os.environ.get("VOICE_MEMORY_STATE_DIR", "/var/lib/phorvex-voice-memory")),
     _memory_source,
     os.environ.get("POD_UID", ""),
+    required=_memory_policy_mode == "true",
 )
 _memory_state_token_path = pathlib.Path(os.environ.get(
     "VOICE_MEMORY_STATE_TOKEN_FILE", "/etc/phorvex/voice-memory-state-token/token"))
@@ -483,6 +487,8 @@ app = FastAPI()
 
 @app.get("/healthz")
 async def healthz():
+    if _memory_policy.required and _memory_policy.state()[0] != 200:
+        return JSONResponse({"ok": False}, status_code=503)
     return {"ok": True}
 
 

@@ -66,6 +66,20 @@ class VoiceMemoryPolicyTest(unittest.TestCase):
         restarted = VoiceMemoryPolicy(self.policy_dir, self.state_dir, SOURCE_SHA, DEPLOYMENT_UID)
         self.assertFalse(restarted.allow_write(CALLER, "unrelated note"))
 
+    def test_replacement_pod_requires_rule_before_serving_memory(self):
+        replacement = VoiceMemoryPolicy(self.policy_dir, self.root / "replacement-state", SOURCE_SHA,
+                                        "33333333-3333-4333-8333-333333333333", required=True)
+        self.assertEqual(replacement.filter_notes(CALLER, [{"note": NOTE}]), [])
+        self.assertFalse(replacement.allow_write(CALLER, NOTE))
+        self.assertEqual(replacement.state()[0], 503)
+        self.write(rule(1, [entry()], OPERATION))
+        self.assertEqual(replacement.state()[0], 200)
+        self.assertEqual(replacement.filter_notes(CALLER, [{"note": NOTE}, {"note": "benign"}]),
+                         [{"note": "benign"}])
+        (self.policy_dir / "rule.json").unlink()
+        self.assertEqual(replacement.filter_notes(CALLER, [{"note": "benign"}]), [])
+        self.assertEqual(replacement.state()[0], 503)
+
     def test_replay_drift_and_append_only(self):
         first = entry()
         self.write(rule(1, [first], OPERATION))
