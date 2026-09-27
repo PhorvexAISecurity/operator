@@ -25,6 +25,7 @@ func TestM071RunnerKeepsUncertainAdapterDispatchOutOfFallback(t *testing.T) {
 	}
 	decisions := tracedSelectedDecision()
 	decisions[0].Action = model.ActionAdapterRotate
+	decisions[0].Trace.DecisionID = "selected-adapter-decision"
 	pod := model.Pod{
 		Namespace: "ns", Name: "p1", UID: "pod-uid", ModelID: "fixture-model",
 		SuspectAdapter: "adapter-a", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
@@ -37,11 +38,27 @@ func TestM071RunnerKeepsUncertainAdapterDispatchOutOfFallback(t *testing.T) {
 		AdapterName:     pod.SuspectAdapter,
 	}
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: pod}}
-	policy := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
+	policy := model.Policy{Tenant: "tenant", TickID: "selected-tick", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
 	got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views)
 	decision := decisions[0]
 	if act.calls != 1 || got != 0 || decision.Actuated || decision.Trace.DispatchOutcome != model.DispatchError ||
 		decision.Trace.DispatchReason != "outcome-unknown" || len(decision.ObjectsTouched) != 1 || len(m.fallbackDecisions) != 0 {
 		t.Fatalf("uncertain adapter effect entered fallback or lost evidence: calls=%d actuations=%d decision=%+v fallbacks=%+v", act.calls, got, decision, m.fallbackDecisions)
+	}
+}
+
+func TestAdapterSelectionIDsReachNativeRequest(t *testing.T) {
+	act := &dispatchFakeActuator{emit: true}
+	m := &Manager{Actuator: act, Log: logr.Discard()}
+	decisions := tracedSelectedDecision()
+	decisions[0].Action = model.ActionAdapterRotate
+	decisions[0].Trace.DecisionID = "selected-adapter-decision"
+	pod := model.Pod{Namespace: "ns", Name: "p1", UID: "pod-uid", SuspectAdapter: "adapter-a", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
+		AdapterObservation: &model.AdapterObservation{EventName: "adapter-detected", EventUID: "event-uid", CreatorIdentity: "system:serviceaccount:ns:detector", TargetPodUID: "pod-uid", AdapterName: "adapter-a"}}
+	views := map[string]*model.WorkloadView{"ns/p1": {Pod: pod}}
+	policy := model.Policy{Tenant: "tenant", TickID: "selected-tick", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
+	_ = actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views)
+	if act.calls != 1 || act.last.OperationID != "selected-adapter-decision" || act.last.TickID != "selected-tick" {
+		t.Fatalf("adapter request lost selecting identity: calls=%d request=%+v", act.calls, act.last)
 	}
 }

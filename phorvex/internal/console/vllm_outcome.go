@@ -1,6 +1,7 @@
 package console
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -181,6 +182,11 @@ func boundedVLLMHTTP(execIn func(string) (string, error), method, path, body, pu
 	if err != nil {
 		return vllmHTTPResponse{}, fmt.Errorf("%s HTTP command: %w (%s)", purpose, err, strings.TrimSpace(out))
 	}
+	return parseVLLMHTTPOutput(out, purpose)
+}
+
+func parseVLLMHTTPOutput(out, purpose string) (vllmHTTPResponse, error) {
+	const begin, status = "__PHORVEX_HTTP_BEGIN__", "__PHORVEX_HTTP_STATUS__"
 	start := strings.LastIndex(out, begin+"\n")
 	end := strings.LastIndex(out, "\n"+status)
 	if start < 0 || end < start {
@@ -198,6 +204,38 @@ func boundedVLLMHTTP(execIn func(string) (string, error), method, path, body, pu
 	return vllmHTTPResponse{Status: code, Body: bodyBytes}, nil
 }
 
+// The workload API key exists only in the target vLLM container environment. A
+// fixed local Python client reads it in-process; no credential is put in kubectl
+// argv, the shell command, stdout, or a console-side environment variable.
+const vllmLocalHTTPPython = `import base64,http.client,os,sys
+host,port,method,path,body=sys.argv[1:6]
+headers={"Content-Type":"application/json"}
+key=os.environ.get("VLLM_API_KEY","")
+if key:headers["Authorization"]="Bearer "+key
+connection=http.client.HTTPConnection(host,int(port),timeout=15)
+try:
+ connection.request(method,path,base64.b64decode(body),headers)
+ response=connection.getresponse()
+ data=response.read(65537)
+ if len(data)>65536:raise RuntimeError("vLLM response exceeds bound")
+ sys.stdout.buffer.write(b"__PHORVEX_HTTP_BEGIN__\n"+data+b"\n__PHORVEX_HTTP_STATUS__"+str(response.status).encode()+b"\n")
+finally:connection.close()
+`
+
+func boundedVLLMLocalHTTP(execIn func(string) (string, error), method, path, body string, allowed map[string]bool) (vllmHTTPResponse, error) {
+	if !allowed[method+" "+path] || (method != http.MethodGet && method != http.MethodPost) ||
+		len(body) > 8192 || strings.ContainsAny(path, "' \t\r\n") {
+		return vllmHTTPResponse{}, fmt.Errorf("unsupported vLLM workload request")
+	}
+	encoded := base64.StdEncoding.EncodeToString([]byte(body))
+	cmd := "python3 -c '" + vllmLocalHTTPPython + "' '127.0.0.1' '8001' '" + method + "' '" + path + "' '" + encoded + "'"
+	out, err := execIn(cmd)
+	if err != nil {
+		return vllmHTTPResponse{}, fmt.Errorf("local vLLM HTTP command: %w (%s)", err, strings.TrimSpace(out))
+	}
+	return parseVLLMHTTPOutput(out, "local vLLM workload")
+}
+
 // vllmHTTP executes the real serving-stack HTTP producer from the target Pod. Markers isolate
 // stdout from kubectl's default-container warnings, and every caller validates status and schema.
 func vllmHTTP(execIn func(string) (string, error), method, path, body string) (vllmHTTPResponse, error) {
@@ -207,12 +245,13 @@ func vllmHTTP(execIn func(string) (string, error), method, path, body string) (v
 
 func vllmWorkloadHTTP(execIn func(string) (string, error), method, path, body string) (vllmHTTPResponse, error) {
 	allowed := map[string]bool{
-		http.MethodGet + " /v1/models":             true,
-		http.MethodPost + " /v1/load_lora_adapter": true,
-		http.MethodPost + " /v1/completions":       true,
-		http.MethodPost + " /v1/chat/completions":  true,
+		http.MethodGet + " /v1/models":               true,
+		http.MethodPost + " /v1/load_lora_adapter":   true,
+		http.MethodPost + " /v1/unload_lora_adapter": true,
+		http.MethodPost + " /v1/completions":         true,
+		http.MethodPost + " /v1/chat/completions":    true,
 	}
-	return boundedVLLMHTTP(execIn, method, path, body, "vLLM workload", allowed)
+	return boundedVLLMLocalHTTP(execIn, method, path, body, allowed)
 }
 
 func decodeOneJSON(data []byte, dst any) error {
@@ -757,7 +796,7 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 			return nil, fmt.Errorf("target identity or adapter epoch changed across observation")
 		}
 		execIn := func(sh string) (string, error) {
-			return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", r.Pod, "--", "sh", "-c", sh)
+			return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", r.Pod, "-c", "vllm", "--", "sh", "-c", sh)
 		}
 		models, err := readVLLMModels(execIn)
 		if err != nil {
@@ -780,9 +819,6 @@ func (s *Server) observeVLLMInPlaceEffect(r *attackRecord) (*attackEffectEvidenc
 		lastPod, err := s.readVLLMPod(r.Pod)
 		if err != nil || lastPod.Metadata.UID != r.TargetUID || stringMapValue(lastPod.Metadata.Annotations, "phorvex.ai/adapter-epoch") != afterAnnotation {
 			return nil, fmt.Errorf("target identity changed across adapter route checks")
-		}
-		if err := s.removeZeroLoRA(r.Pod, r.TargetUID, r.vllmEffect.adapterName); err != nil {
-			return nil, fmt.Errorf("run-owned adapter artifact cleanup: %w", err)
 		}
 		return &attackEffectEvidence{Kind: r.vllmEffect.kind, Observed: true, ObservedAt: s.cfg.now().UTC().Format(time.RFC3339Nano), TargetUID: r.TargetUID, Before: r.vllmEffect.before, After: afterAnnotation, Correlation: "exact-security-event-uid-target-and-adapter-route", Limitation: "run-owned adapter disappeared from inventory and its route returned 404 while the base model still served; no model answer corruption is claimed"}, nil
 	case "kv-reset-epoch":

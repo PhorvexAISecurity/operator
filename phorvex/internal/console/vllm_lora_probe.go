@@ -65,6 +65,9 @@ print("PHORVEX_LORA_READY " + json.dumps({"adapter": name, "podUid": pod_uid,
 const removeZeroLoRAScript = `
 import hashlib, json, os, stat, sys
 name, pod_uid = sys.argv[1:3]
+mode = sys.argv[3] if len(sys.argv) > 3 else "remove"
+if mode not in ("verify", "remove"):
+    raise SystemExit("invalid probe operation")
 if not name.startswith("phorvex-probe-") or len(name) != 30 or any(c not in "0123456789abcdef" for c in name[14:]):
     raise SystemExit("invalid probe identity")
 path = "/tmp/" + name
@@ -89,6 +92,9 @@ with open(path + "/adapter_model.safetensors", "rb") as f:
         digest.update(part)
 if digest.hexdigest() != owner["safetensorsSha256"]:
     raise SystemExit("probe adapter bytes changed")
+if mode == "verify":
+    print("PHORVEX_LORA_OWNED " + json.dumps({"adapter": name, "podUid": pod_uid, "safetensorsSha256": digest.hexdigest()}, sort_keys=True))
+    raise SystemExit(0)
 for file in sorted(files):
     os.unlink(path + "/" + file)
 os.rmdir(path)
@@ -236,6 +242,33 @@ func (s *Server) removeZeroLoRA(pod, podUID, name string) error {
 	return nil
 }
 
+func (s *Server) verifyZeroLoRA(pod, podUID, name string) error {
+	if !validRunOwnedLoRA(name) {
+		return fmt.Errorf("run-owned adapter identity is invalid")
+	}
+	before, err := s.readVLLMPod(pod)
+	if err != nil || before.Metadata.UID != podUID {
+		return fmt.Errorf("target Pod identity changed before LoRA owner verification")
+	}
+	out, err := s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "-c", "vllm", "--", "python3", "-c", removeZeroLoRAScript, name, podUID, "verify")
+	if err != nil {
+		return fmt.Errorf("run-owned LoRA owner verification: %w", err)
+	}
+	const marker = "PHORVEX_LORA_OWNED "
+	idx := strings.LastIndex(out, marker)
+	var receipt struct {
+		Adapter, PodUID, SafetensorsSHA256 string
+	}
+	if idx < 0 || len(out)-idx > 1024 || json.Unmarshal([]byte(strings.TrimSpace(out[idx+len(marker):])), &receipt) != nil || receipt.Adapter != name || receipt.PodUID != podUID || !validSHA256Hex(receipt.SafetensorsSHA256) {
+		return fmt.Errorf("run-owned LoRA owner verification receipt is invalid")
+	}
+	after, err := s.readVLLMPod(pod)
+	if err != nil || after.Metadata.UID != podUID {
+		return fmt.Errorf("target Pod identity changed across LoRA owner verification")
+	}
+	return nil
+}
+
 func probeLoRARoute(execIn func(string) (string, error), model string, wantPresent bool) error {
 	if !validRunOwnedLoRA(model) && model != liveLoRABaseModel {
 		return fmt.Errorf("invalid LoRA route model identity")
@@ -249,20 +282,38 @@ func probeLoRARoute(execIn func(string) (string, error), model string, wantPrese
 		if response.Status != http.StatusOK {
 			return fmt.Errorf("LoRA route returned HTTP %d before defense", response.Status)
 		}
-		return runVLLMCompletionReadback(response)
+		return runVLLMCompletionReadback(response, model)
 	}
 	if response.Status != http.StatusNotFound {
 		return fmt.Errorf("LoRA route returned HTTP %d after defense; expected 404", response.Status)
 	}
+	var missing struct {
+		Object  string `json:"object"`
+		Message string `json:"message"`
+		Type    string `json:"type"`
+		Code    int    `json:"code"`
+	}
+	if err := decodeOneJSON(response.Body, &missing); err != nil || missing.Object != "error" || missing.Type != "NotFoundError" || missing.Code != http.StatusNotFound || missing.Message != "The model `"+model+"` does not exist." {
+		return fmt.Errorf("LoRA route 404 was not an exact vLLM model-not-found response")
+	}
 	return nil
 }
 
-func runVLLMCompletionReadback(response vllmHTTPResponse) error {
+func runVLLMCompletionReadback(response vllmHTTPResponse, model string) error {
 	var completion struct {
-		ID      string            `json:"id"`
-		Choices []json.RawMessage `json:"choices"`
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		Model   string `json:"model"`
+		Choices []struct {
+			Index        *int    `json:"index"`
+			Text         *string `json:"text"`
+			FinishReason *string `json:"finish_reason"`
+		} `json:"choices"`
+		Usage struct {
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
-	if err := decodeOneJSON(response.Body, &completion); err != nil || completion.ID == "" || len(completion.Choices) == 0 {
+	if err := decodeOneJSON(response.Body, &completion); err != nil || completion.ID == "" || completion.Object != "text_completion" || completion.Model != model || len(completion.Choices) != 1 || completion.Choices[0].Index == nil || *completion.Choices[0].Index != 0 || completion.Choices[0].Text == nil || completion.Choices[0].FinishReason == nil || (*completion.Choices[0].FinishReason != "stop" && *completion.Choices[0].FinishReason != "length") || completion.Usage.CompletionTokens < 1 {
 		return fmt.Errorf("LoRA route completion acknowledgement is malformed")
 	}
 	return nil

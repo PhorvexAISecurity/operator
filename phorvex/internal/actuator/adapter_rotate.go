@@ -367,6 +367,7 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 		AdapterEventName: req.AdapterObservation.EventName, AdapterEventUID: req.AdapterObservation.EventUID,
 		AdapterEventCreatedAt: req.AdapterObservation.CreatedAt.UTC().Format(time.RFC3339Nano),
 		AdapterCreator:        req.AdapterObservation.CreatorIdentity, AdapterEndpointSHA256: adapterEndpointConfigDigest(pod),
+		AdapterDecisionID: req.OperationID, TickID: req.TickID,
 	}
 	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
 		r.Version = adapterRotateSecureReceiptVersion
@@ -386,6 +387,9 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 			return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate pending protected operation conflicts with current request"))
 		}
 		if recorded.AdapterEventUID == r.AdapterEventUID {
+			if recorded.TickID != r.TickID || recorded.AdapterDecisionID != r.AdapterDecisionID {
+				return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate selecting decision conflicts with protected operation"))
+			}
 			return continueAdapterOperation(ctx, ec, cm, &recorded, false)
 		}
 		oldCreatedAt, oldErr := time.Parse(time.RFC3339Nano, recorded.AdapterEventCreatedAt)
@@ -414,7 +418,7 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 	}
 	if apierrors.IsAlreadyExists(err) {
 		cm, recorded, requireErr := journalRequire(ctx, ec, r)
-		if requireErr != nil || recorded.Kind != r.Kind || recorded.AdapterEventUID != r.AdapterEventUID || recorded.AdapterName != r.AdapterName {
+		if requireErr != nil || recorded.Kind != r.Kind || recorded.AdapterEventUID != r.AdapterEventUID || recorded.AdapterName != r.AdapterName || recorded.TickID != r.TickID || recorded.AdapterDecisionID != r.AdapterDecisionID {
 			return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate pending protected operation conflicts with current request: %w", requireErr))
 		}
 		return continueAdapterOperation(ctx, ec, cm, &recorded, false)

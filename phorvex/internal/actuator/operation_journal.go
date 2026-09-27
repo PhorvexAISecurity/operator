@@ -82,6 +82,10 @@ type operationReceipt struct {
 	AdapterEventUID       string `json:"adapterEventUID,omitempty"`
 	AdapterEventCreatedAt string `json:"adapterEventCreatedAt,omitempty"`
 	AdapterCreator        string `json:"adapterCreator,omitempty"`
+	// AdapterDecisionID and TickID bind a new detector operation to the exact
+	// selecting manager audit row. Historical receipts without both remain
+	// recoverable but cannot prove the Live capability-removal outcome.
+	AdapterDecisionID     string `json:"adapterDecisionID,omitempty"`
 	AdapterEndpointSHA256 string `json:"adapterEndpointSHA256,omitempty"`
 	ServingBindingSHA256  string `json:"servingBindingSHA256,omitempty"`
 	ServingServiceAccount string `json:"servingServiceAccount,omitempty"`
@@ -458,6 +462,7 @@ func (r operationReceipt) valid() bool {
 		if (r.Version != adapterRotateReceiptVersion && r.Version != adapterRotateSecureReceiptVersion) || !boundedLabelMap(r.TargetLabels) ||
 			!validRuntimeAdapterName(r.AdapterName) || r.AdapterEventName == "" || r.AdapterEventUID == "" ||
 			r.AdapterCreator == "" || len(r.AdapterEventName) > 253 || len(r.AdapterEventUID) > 253 || len(r.AdapterCreator) > 512 ||
+			(r.TickID == "") != (r.AdapterDecisionID == "") || len(r.TickID) > 253 || len(r.AdapterDecisionID) > 253 ||
 			(r.AdapterSourcePresent && (r.AdapterSource == "" || len(r.AdapterSource) > maxAdapterSourcePathBytes)) || (!r.AdapterSourcePresent && r.AdapterSource != "") || (r.Version == adapterRotateSecureReceiptVersion && (!validDigest(r.ServingBindingSHA256) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0)) {
 			return false
 		}

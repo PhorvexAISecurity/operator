@@ -128,6 +128,11 @@ class AutoConfig:
 	if err := json.Unmarshal(ownerData, &owner); err != nil || owner["safetensorsSha256"] != hex.EncodeToString(digest[:]) {
 		t.Fatalf("owner manifest: %v %v", err, owner)
 	}
+	verify := exec.Command(python, "-c", removeZeroLoRAScript, name, "pod-uid", "verify")
+	verify.Env = cmd.Env
+	if out, err := verify.CombinedOutput(); err != nil || !strings.Contains(string(out), "PHORVEX_LORA_OWNED ") {
+		t.Fatalf("read-only owner verification: %v %s", err, out)
+	}
 	owner["podUid"] = "wrong-pod"
 	tampered, _ := json.Marshal(owner)
 	if err := os.WriteFile(filepath.Join(path, "phorvex-owner.json"), tampered, 0o600); err != nil {
@@ -137,6 +142,11 @@ class AutoConfig:
 	refused.Env = cmd.Env
 	if out, err := refused.CombinedOutput(); err == nil || !strings.Contains(string(out), "owner identity changed") {
 		t.Fatalf("tampered cleanup was admitted: %v %s", err, out)
+	}
+	verify = exec.Command(python, "-c", removeZeroLoRAScript, name, "pod-uid", "verify")
+	verify.Env = cmd.Env
+	if out, err := verify.CombinedOutput(); err == nil || !strings.Contains(string(out), "owner identity changed") {
+		t.Fatalf("tampered owner verification was admitted: %v %s", err, out)
 	}
 	if err := os.WriteFile(filepath.Join(path, "phorvex-owner.json"), ownerData, 0o600); err != nil {
 		t.Fatal(err)
@@ -154,6 +164,10 @@ class AutoConfig:
 
 func TestLoRARouteRequiresExactServingAndRemovalStatus(t *testing.T) {
 	status := http.StatusNotFound
+	malformed := false
+	html404 := false
+	wrong404 := false
+	wrongModel := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Model string `json:"model"`
@@ -162,13 +176,31 @@ func TestLoRARouteRequiresExactServingAndRemovalStatus(t *testing.T) {
 			http.Error(w, "invalid", 400)
 			return
 		}
+		responseStatus := status
 		if request.Model == liveLoRABaseModel {
-			status = http.StatusOK
-		} else {
-			w.WriteHeader(status)
+			responseStatus = http.StatusOK
 		}
-		if status == http.StatusOK {
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "choices": []map[string]any{{"index": 0}}})
+		w.WriteHeader(responseStatus)
+		if responseStatus == http.StatusNotFound {
+			if html404 {
+				_, _ = w.Write([]byte("<html>missing</html>"))
+				return
+			}
+			missingModel := request.Model
+			if wrong404 {
+				missingModel = "another-model"
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"object": "error", "message": "The model `" + missingModel + "` does not exist.", "type": "NotFoundError", "code": 404})
+		} else if responseStatus == http.StatusOK {
+			if malformed {
+				_, _ = w.Write([]byte(`{"id":"cmpl-1","choices":[null]}`))
+				return
+			}
+			responseModel := request.Model
+			if wrongModel {
+				responseModel = "another-model"
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "object": "text_completion", "model": responseModel, "choices": []map[string]any{{"index": 0, "text": "blue", "finish_reason": "length"}}, "usage": map[string]int{"completion_tokens": 1}})
 		}
 	}))
 	defer server.Close()
@@ -176,12 +208,54 @@ func TestLoRARouteRequiresExactServingAndRemovalStatus(t *testing.T) {
 	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err != nil {
 		t.Fatal(err)
 	}
+	html404 = true
+	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err == nil {
+		t.Fatal("HTML transport 404 misreported as adapter removal")
+	}
+	html404 = false
+	wrong404 = true
+	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err == nil {
+		t.Fatal("404 for another model misreported as adapter removal")
+	}
+	wrong404 = false
 	status = http.StatusForbidden
 	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err == nil {
 		t.Fatal("403 misreported as adapter removal")
 	}
 	if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err != nil {
 		t.Fatal(err)
+	}
+	wrongModel = true
+	if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err == nil {
+		t.Fatal("completion for another model misreported as serving")
+	}
+	wrongModel = false
+	malformed = true
+	if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err == nil {
+		t.Fatal("null completion choice misreported as serving")
+	}
+}
+
+func TestLocalVLLMRequestReadsAPIKeyOnlyInsideTargetProcess(t *testing.T) {
+	t.Setenv("VLLM_API_KEY", "test-secret-never-in-command")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer test-secret-never-in-command" || r.URL.Path != "/v1/models" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": liveLoRABaseModel}}})
+	}))
+	defer server.Close()
+	actual := actualVLLMExec(t, server.URL)
+	execIn := func(command string) (string, error) {
+		if strings.Contains(command, "test-secret-never-in-command") || !strings.Contains(command, "'127.0.0.1' '8001'") {
+			t.Fatalf("local vLLM command exposed key or lost fixed loopback: %q", command)
+		}
+		return actual(command)
+	}
+	models, err := readVLLMModels(execIn)
+	if err != nil || len(models) != 1 || models[0] != liveLoRABaseModel {
+		t.Fatalf("authenticated local models read failed: models=%q err=%v", models, err)
 	}
 }
 
@@ -193,14 +267,16 @@ func TestAdapterEffectNeedsExactEventInventoryRouteAndBaseContinuity(t *testing.
 		adapterStatus    int
 		baseStatus       int
 		eventAdapter     string
+		html404          bool
 		wantEffect       bool
 	}{
-		{"removed with base live", false, http.StatusNotFound, http.StatusOK, name, true},
-		{"still in inventory", true, http.StatusNotFound, http.StatusOK, name, false},
-		{"route still serves", false, http.StatusOK, http.StatusOK, name, false},
-		{"guardrail refusal is not absence", false, http.StatusForbidden, http.StatusOK, name, false},
-		{"base model failed", false, http.StatusNotFound, http.StatusServiceUnavailable, name, false},
-		{"event named other adapter", false, http.StatusNotFound, http.StatusOK, "other", false},
+		{"removed with base live", false, http.StatusNotFound, http.StatusOK, name, false, true},
+		{"still in inventory", true, http.StatusNotFound, http.StatusOK, name, false, false},
+		{"route still serves", false, http.StatusOK, http.StatusOK, name, false, false},
+		{"guardrail refusal is not absence", false, http.StatusForbidden, http.StatusOK, name, false, false},
+		{"transport HTML 404", false, http.StatusNotFound, http.StatusOK, name, true, false},
+		{"base model failed", false, http.StatusNotFound, http.StatusServiceUnavailable, name, false, false},
+		{"event named other adapter", false, http.StatusNotFound, http.StatusOK, "other", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +298,13 @@ func TestAdapterEffectNeedsExactEventInventoryRouteAndBaseContinuity(t *testing.
 					}
 					w.WriteHeader(status)
 					if status == http.StatusOK {
-						_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "choices": []map[string]int{{"index": 0}}})
+						_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "object": "text_completion", "model": request.Model, "choices": []map[string]any{{"index": 0, "text": "blue", "finish_reason": "length"}}, "usage": map[string]int{"completion_tokens": 1}})
+					} else if status == http.StatusNotFound {
+						if tc.html404 {
+							_, _ = w.Write([]byte("<html>missing</html>"))
+						} else {
+							_ = json.NewEncoder(w).Encode(map[string]any{"object": "error", "message": "The model `" + request.Model + "` does not exist.", "type": "NotFoundError", "code": 404})
+						}
 					}
 				default:
 					http.NotFound(w, r)
@@ -254,7 +336,7 @@ func TestAdapterEffectNeedsExactEventInventoryRouteAndBaseContinuity(t *testing.
 			record := &attackRecord{Namespace: "vllm", Pod: "vllm-0", TargetUID: "pod-uid", StimulusEvidence: &attackStimulusEvidence{Observed: true, TargetUID: "pod-uid", EventName: "event-name", EventUID: "event-uid", EventCreatedAt: "2026-09-27T00:00:00Z", EventRule: model.AttackVectorAdapter, Correlation: "corr"}, vllmEffect: &vllmEffectBaseline{kind: "adapter-epoch", before: "old", adapterName: name}}
 			effect, err := s.observeVLLMInPlaceEffect(record)
 			if tc.wantEffect {
-				if err != nil || effect == nil || !effect.Observed || cleanupCalls != 1 {
+				if err != nil || effect == nil || !effect.Observed || cleanupCalls != 0 {
 					t.Fatalf("effect=%+v err=%v cleanup=%d", effect, err, cleanupCalls)
 				}
 			} else if effect != nil || cleanupCalls != 0 {

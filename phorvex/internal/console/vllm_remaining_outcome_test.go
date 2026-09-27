@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,8 +17,13 @@ import (
 
 func actualVLLMExec(t *testing.T, serverURL string) func(string) (string, error) {
 	t.Helper()
+	endpoint, err := url.Parse(serverURL)
+	if err != nil || endpoint.Hostname() != "127.0.0.1" || endpoint.Port() == "" {
+		t.Fatalf("test vLLM endpoint invalid: %q %v", serverURL, err)
+	}
 	return func(command string) (string, error) {
 		command = strings.ReplaceAll(command, vllmGuardrailURL, serverURL)
+		command = strings.ReplaceAll(command, "'127.0.0.1' '8001'", "'127.0.0.1' '"+endpoint.Port()+"'")
 		out, err := exec.Command("sh", "-c", command).CombinedOutput()
 		return string(out), err
 	}
@@ -114,6 +120,7 @@ type remainingHandlerFixture struct {
 	loseCreateAck    bool
 	guardrailCurrent string
 	guardrailRoster  string
+	adapterEpoch     string
 	omitLoRALabel    bool
 }
 
@@ -141,10 +148,16 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 		if f.guardrailRoster != "" {
 			annotations["phorvex.ai/guardrail-variants"] = f.guardrailRoster
 		}
+		if f.adapterEpoch != "" {
+			annotations["phorvex.ai/adapter-epoch"] = f.adapterEpoch
+		}
 		f.mu.Unlock()
 		labels := map[string]string{"app": "vllm"}
 		if !f.omitLoRALabel {
 			labels["phorvex.ai/lora-enabled"] = "true"
+		}
+		if f.adapterEpoch != "" {
+			labels["phorvex.ai/adapter-epoch"] = f.adapterEpoch
 		}
 		pod := map[string]any{"metadata": map[string]any{"name": "vllm-0", "uid": uid, "resourceVersion": "11",
 			"labels": labels, "annotations": annotations},
@@ -166,7 +179,16 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 		return "", nil
 	case strings.Contains(joined, "-- python3 -c"):
 		name, uid := args[len(args)-2], args[len(args)-1]
+		if args[len(args)-1] == "verify" {
+			name, uid = args[len(args)-3], args[len(args)-2]
+		}
 		b, _ := json.Marshal(map[string]string{"adapter": name, "podUid": uid, "baseModel": liveLoRABaseModel, "path": "/tmp/" + name, "safetensorsSha256": strings.Repeat("a", 64)})
+		if args[len(args)-1] == "verify" {
+			return "PHORVEX_LORA_OWNED " + string(b), nil
+		}
+		if strings.Contains(joined, "PHORVEX_LORA_REMOVED") {
+			return "PHORVEX_LORA_REMOVED " + string(b), nil
+		}
 		return "PHORVEX_LORA_READY " + string(b), nil
 	case strings.Contains(joined, " exec "):
 		out, err := actualVLLMExec(f.t, f.serverURL)(args[len(args)-1])
@@ -214,6 +236,9 @@ func (f *remainingHandlerFixture) exec(_ time.Duration, bin string, args ...stri
 					return event, nil
 				}
 			}
+		}
+		if strings.Contains(joined, "--ignore-not-found") {
+			return "", nil
 		}
 		return "", errors.New("event not found")
 	default:
@@ -450,8 +475,28 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
 				data = append(data, map[string]string{"id": loadedName})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+		case "/v1/unload_lora_adapter":
+			var request struct {
+				LoRAName string `json:"lora_name"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&request)
+			if request.LoRAName != loadedName || loadedName == "" {
+				http.Error(w, "adapter absent", http.StatusNotFound)
+				return
+			}
+			loadedName = ""
+			_ = json.NewEncoder(w).Encode(map[string]bool{"unloaded": true})
 		case "/v1/completions", "/v1/chat/completions":
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "choices": []map[string]any{{"index": 0}}})
+			var request struct {
+				Model string `json:"model"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&request)
+			if strings.HasPrefix(request.Model, "phorvex-probe-") && request.Model != loadedName {
+				w.WriteHeader(http.StatusNotFound)
+				_ = json.NewEncoder(w).Encode(map[string]any{"object": "error", "message": "The model `" + request.Model + "` does not exist.", "type": "NotFoundError", "code": 404})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "cmpl-1", "object": "text_completion", "model": request.Model, "choices": []map[string]any{{"index": 0, "text": "blue", "finish_reason": "length"}}, "usage": map[string]int{"completion_tokens": 1}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -484,7 +529,14 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
 				}
 				time.Sleep(time.Millisecond)
 			}
-			if record == nil || record.Outcome != "" || record.Actuated || record.Containment != "" || record.DwellSec != 0 || record.DwellOngoing || record.StimulusEvidence == nil || !record.StimulusEvidence.Observed || record.StimulusEvidence.BehavioralExecuted {
+			if record == nil || record.Actuated || record.Containment != "" || record.DwellSec != 0 || record.DwellOngoing || record.StimulusEvidence == nil || !record.StimulusEvidence.Observed || record.StimulusEvidence.BehavioralExecuted {
+				t.Fatalf("nonbehavioral flow manufactured verdict: %+v", record)
+			}
+			if action == "poison" {
+				if record.Outcome != "LANDED" || record.OutcomeClass != "unapproved-adapter-route-available" || record.LoRACleanupStatus != "completed" {
+					t.Fatalf("live unauthorized adapter route was not reported narrowly: %+v", record)
+				}
+			} else if record.Outcome != "" {
 				t.Fatalf("nonbehavioral flow manufactured verdict: %+v", record)
 			}
 			fixture.mu.Lock()
