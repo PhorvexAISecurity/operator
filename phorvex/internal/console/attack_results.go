@@ -77,6 +77,7 @@ type attackRecord struct {
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
+	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	LoRACleanupStatus    string                      `json:"loraCleanupStatus,omitempty"`
@@ -331,6 +332,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe := *r.VoiceMemoryProbe
 		c.VoiceMemoryProbe = &probe
 	}
+	if r.VoiceAgencyProbe != nil {
+		probe := *r.VoiceAgencyProbe
+		probe.Issues = append([]string(nil), r.VoiceAgencyProbe.Issues...)
+		c.VoiceAgencyProbe = &probe
+	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect
 		c.vllmEffect = &baseline
@@ -399,10 +405,10 @@ func attackSnapshots(p *Principal) []*attackRecord {
 	return out
 }
 
-// Live views opt into the two console observation kinds. Experiment-only signals
+// Live views include reviewed Voice observations. Experiment-only signals
 // and unknown evidence kinds remain excluded, as do observations in default reports.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
+	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || rec.EvidenceKind == "voice-agency-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {
