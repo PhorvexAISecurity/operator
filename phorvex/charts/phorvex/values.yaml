@@ -208,6 +208,9 @@ phorvex:
   # policy ConfigMap and private state-token Secret in namespace voice.
   voiceMemory:
     enabled: false
+  # Opt-in exact asserted-caller/order refund pair denial in the Voice app.
+  voiceRefund:
+    enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update
   # only to this one preinstalled ConfigMap in the named fixture namespace.
   outputPolicy:
@@ -424,6 +427,13 @@ phorvex:
       seedSecret: ""
       statusSecret: ""
       journalName: phorvex-litellm-revoke-journal
+    # Reviewed direct Voice/CRM agency trial. A Deployment UID pin limits
+    # read-only journal access to that one Voice rollout and revisions 1..256.
+    voiceAgencyLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      deploymentUID: ""
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:

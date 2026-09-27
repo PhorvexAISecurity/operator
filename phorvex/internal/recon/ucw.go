@@ -185,6 +185,17 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionVoiceMemoryNoteRevoke] = append(af.CoverByAction[model.ActionVoiceMemoryNoteRevoke], f.Key())
 	}
+	if view.Pod.HasBoundVoiceRefundObservation() {
+		o := view.Pod.VoiceRefundObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactVoiceRefundPairExposure, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorVoiceRefund,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorVoiceRefund, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionVoiceRefundPairDeny] = append(af.CoverByAction[model.ActionVoiceRefundPairDeny], f.Key())
+	}
 	if view.Pod.HasBoundLiteLLMClientObservation() {
 		o := view.Pod.LiteLLMClientObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactLiteLLMOwnedClientChannel, Weight: base * urg * vectorDominance}

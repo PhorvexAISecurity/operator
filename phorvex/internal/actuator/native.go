@@ -40,6 +40,7 @@ type NativeActuator struct {
 	RouteObservationTimeout  time.Duration
 	RouteObservationInterval time.Duration
 	VoiceMemoryTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	VoiceRefundTransport     http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
 	migProfiles              *MIGProfiles
 	servingSecurity          *ServingSecurityConfig
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
@@ -90,6 +91,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	}
 	if a == model.ActionVoiceMemoryNoteRevoke {
 		return voiceMemoryCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceMemoryTransport)
+	}
+	if a == model.ActionVoiceRefundPairDeny {
+		return voiceRefundCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceRefundTransport)
 	}
 	if a == model.ActionLiteLLMClientRevoke {
 		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
@@ -275,7 +279,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future

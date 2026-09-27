@@ -308,6 +308,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 			bindAdapterObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindSensitiveOutputObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindVoiceMemoryObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+			bindVoiceRefundObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindLiteLLMClientObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 		}
 	}
@@ -737,6 +738,9 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out.VoiceMemoryConfigMap = p.Annotations["phorvex.ai/voice-memory-policy-configmap"]
 	out.VoiceMemorySourceSHA256 = p.Annotations["phorvex.ai/voice-memory-source-sha256"]
 	out.VoiceMemoryEventCreator = p.Annotations["phorvex.ai/voice-memory-event-creator"]
+	out.VoiceRefundConfigMap = p.Annotations["phorvex.ai/voice-refund-policy-configmap"]
+	out.VoiceRefundSourceSHA256 = p.Annotations["phorvex.ai/voice-refund-source-sha256"]
+	out.VoiceRefundEventCreator = p.Annotations["phorvex.ai/voice-refund-event-creator"]
 	// Serving is an explicit workload declaration, never inferred from a GPU allocation.
 	// A model-id is itself a serving declaration; otherwise serving-port must be a valid
 	// TCP port. Readiness and PodIP are separate structural prerequisites and do not prove

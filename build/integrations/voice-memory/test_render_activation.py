@@ -25,7 +25,7 @@ def deployment():
 def policy():
     return {"kind": "PhorvexPolicy", "metadata": {"name": "voice-defense", "namespace": "voice",
             "uid": POLICY_UID, "resourceVersion": "93"},
-            "spec": {"mode": "active", "actions": {"enabled": ["voice-memory-note-revoke", "rotate"]}}}
+            "spec": {"mode": "active", "actions": {"enabled": ["voice-memory-note-revoke", "voice-refund-pair-deny", "rotate"]}}}
 
 
 def apply_patch(value, operations):
@@ -54,7 +54,7 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         before = deployment()
         objects = render(before, policy(), b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
                          IMAGE, APPROVED_IMAGE, IMAGE_IDS, 10001, CREATOR)
-        self.assertEqual(set(objects), {"source-configmap.json", "policy-configmap.json",
+        self.assertEqual(set(objects), {"source-configmap.json", "policy-configmap.json", "refund-policy-configmap.json",
                                         "state-token-secret.json", "deployment-patch.json"})
         source = objects["source-configmap.json"]
         self.assertTrue(source["immutable"])
@@ -64,6 +64,7 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         self.assertEqual((rule["deploymentUID"], rule["policyUID"], rule["sourceSHA256"]),
                          (DEPLOYMENT_UID, POLICY_UID, SOURCE_SHA))
         self.assertEqual((rule["revision"], rule["entries"]), (0, []))
+        self.assertEqual(json.loads(objects["refund-policy-configmap.json"]["data"]["rule.json"]), rule)
 
         updated = apply_patch(before, objects["deployment-patch.json"])
         self.assertEqual(updated["spec"]["template"]["metadata"]["annotations"]["existing"], "keep")
@@ -72,10 +73,13 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         self.assertEqual(bot["env"][0], before["spec"]["template"]["spec"]["containers"][0]["env"][0])
         self.assertEqual(bot["readinessProbe"], before["spec"]["template"]["spec"]["containers"][0]["readinessProbe"])
         self.assertIn({"name": "VOICE_MEMORY_POLICY_REQUIRED", "value": "true"}, bot["env"])
+        self.assertIn({"name": "VOICE_REFUND_POLICY_REQUIRED", "value": "true"}, bot["env"])
         self.assertIn({"name": "POD_UID", "valueFrom": {"fieldRef": {"fieldPath": "metadata.uid"}}}, bot["env"])
         mounts = {m["mountPath"]: m for m in bot["volumeMounts"]}
         self.assertEqual(mounts["/etc/phorvex/voice-memory-policy"]["readOnly"], True)
         self.assertNotIn("subPath", mounts["/etc/phorvex/voice-memory-policy"])
+        self.assertNotIn("subPath", mounts["/etc/phorvex/voice-refund-policy"])
+        self.assertEqual(mounts["/etc/phorvex/voice-refund-policy"]["readOnly"], True)
         self.assertEqual(mounts["/app/bot.py"]["subPath"], "bot.py")
         state = updated["spec"]["template"]["spec"]
         self.assertEqual(state["initContainers"][0]["name"], "voice-memory-state-owner")
@@ -99,6 +103,14 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             render(deployment(), policy(), b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
                    IMAGE, APPROVED_IMAGE, IMAGE_IDS[:2] + ["other@sha256:" + "b" * 64], 10001, CREATOR)
+
+    def test_stable_agency_mode_does_not_pin_one_run_to_deployment(self):
+        objects = render(deployment(), policy(), b"s" * 48, DEPLOYMENT_UID, POLICY_UID,
+                         IMAGE, APPROVED_IMAGE, IMAGE_IDS, 10001, CREATOR, True)
+        updated = apply_patch(deployment(), objects["deployment-patch.json"])
+        env = updated["spec"]["template"]["spec"]["containers"][0]["env"]
+        self.assertIn({"name": "VOICE_AGENCY_TEST_ENABLED", "value": "true"}, env)
+        self.assertFalse(any(item["name"] == "VOICE_AGENCY_TEST_RUN_ID" for item in env))
 
 
 if __name__ == "__main__":

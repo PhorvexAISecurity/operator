@@ -13,7 +13,6 @@ import tempfile
 import threading
 from typing import Awaitable, Callable
 
-import httpx
 
 SCHEMA = "phorvex.drain.v1"
 CAPABILITY = "operation-bound-quiescence-v1"
@@ -290,6 +289,9 @@ class EngineHTTPClient:
     source: str
 
     async def _call(self, method: str, path: str, body: dict | None = None) -> dict:
+        # The Pod-scoped ledger initializer imports this module in the base
+        # Python image before the serving proxy's HTTP dependencies exist.
+        import httpx
         async with httpx.AsyncClient(
                 timeout=httpx.Timeout(10.0, connect=2.0), trust_env=False,
                 follow_redirects=False) as client:

@@ -172,6 +172,7 @@ func TestInvestorIsReadOnly(t *testing.T) {
 		{"/api/workload/fire-scenario", `{"namespace":"vllm","scenario":"kv-poison"}`},
 		{"/api/vllm/attack", `{"action":"poison"}`},
 		{"/api/voice/live/fire", `{"scenario":"ai2-agent-memory-contamination"}`},
+		{"/api/voice/agency/live/fire", `{"scenario":"ai2-agent-excessive-agency"}`},
 		{"/api/litellm/live/fire", `{"scenario":"ai2-query-extraction"}`},
 		{"/api/live/clear", `{}`},
 		{"/api/runs/start", `{"config":"p3-v3"}`},

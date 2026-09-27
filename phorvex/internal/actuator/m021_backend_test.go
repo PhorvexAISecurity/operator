@@ -277,6 +277,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || !strings.HasPrefix(why, "voice-memory-scope-unavailable:") {
 				t.Fatalf("voice memory requires exact target, policy and private hook authority: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionVoiceRefundPairDeny:
+			if ok || !registered || !strings.HasPrefix(why, "voice-refund-scope-unavailable:") {
+				t.Fatalf("voice refund requires exact target, policy and private hook authority: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		case model.ActionLiteLLMClientRevoke:
 			if ok || !registered || !strings.Contains(why, "litellm-client-revoke:") {
 				t.Fatalf("owned-client gateway requires exact live authority: ok=%v registered=%v why=%q", ok, registered, why)

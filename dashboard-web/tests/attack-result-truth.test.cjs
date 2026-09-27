@@ -124,7 +124,7 @@ test("unversioned historical rows retain a separate provenance classification", 
 });
 
 test("scoped Live CSV leaves unmeasured dwell, availability and economics blank", () => {
-  for (const evidenceKind of ["voice-memory-live", "litellm-live-client-policy"]) {
+  for (const evidenceKind of ["voice-memory-live", "voice-agency-live", "litellm-live-client-policy"]) {
     const r = { evidenceKind, status: "done", outcome: "DEFENDED", actuated: true, phorvexAction: "native-action",
       containment: "exact-scope", dwellOngoing: false, dwellSec: 0, timeToDefendSec: 0,
       uptimeBefore: 0, uptimeDip: 0, uptimeAfter: 0, cost: { without: 0, r6: 0, with: 0, savings: 0 } };
@@ -135,6 +135,7 @@ test("scoped Live CSV leaves unmeasured dwell, availability and economics blank"
     assert.deepEqual(cells.slice(7, 17), Array(10).fill(""));
     assert.match(cells[17], /not measured/);
     assert.equal(attackCSVRow({ ...r, actuated: false })[5], "");
+    assert.equal(showSecurityOutcomeSections(r), false);
   }
   assert.equal(attackCSVRow(base).length, 18);
 });

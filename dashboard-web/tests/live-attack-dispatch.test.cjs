@@ -9,6 +9,7 @@ const response = { message: "accepted", attackId: "exact-1" };
 const api = {
   vllmAttack: async (...args) => { calls.push(["vllm", ...args]); return response; },
   voiceMemoryFire: async (...args) => { calls.push(["voice", ...args]); return response; },
+  voiceAgencyFire: async (...args) => { calls.push(["voice-agency", ...args]); return response; },
   litellmLiveFire: async (...args) => { calls.push(["litellm", ...args]); return response; },
   workloadAttack: async (...args) => { calls.push(["workload", ...args]); return response; },
 };
@@ -25,6 +26,7 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
   const positives = [
     [{ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm", "vllm"],
     [{ id: "ai2-agent-memory-contamination", endpoint: "/api/voice/live/fire" }, "voice", "voice"],
+    [{ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/agency/live/fire" }, "voice", "voice-agency"],
     [{ id: "ai2-unbounded-consumption", endpoint: "/api/litellm/live/fire" }, "litellm", "litellm"],
     [{ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "litellm", "litellm"],
     [{ id: "foothold", endpoint: "/api/workload/attack" }, "nats", "foothold"],
@@ -34,7 +36,7 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
     assert.equal(route.kind, kind);
     assert.equal((await dispatchLiveAttack(route, "operator")).attackId, "exact-1");
   }
-  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "voice", "litellm", "litellm", "workload"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "voice", "voice-agency", "litellm", "litellm", "workload"]);
   assert.deepEqual(calls.at(-1), ["workload", "nats", "foothold", "operator"]);
 });
 
@@ -43,6 +45,9 @@ test("unsupported and cross-wired routes refuse without fallback; clear is footh
     [{ id: "request-drain", endpoint: "/api/vllm/attack" }, "voice"],
     [{ id: "reset", endpoint: "/api/vllm/attack" }, "vllm"],
     [{ id: "ai2-agent-memory-contamination", endpoint: "/api/workload/attack" }, "voice"],
+    [{ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/live/fire" }, "voice"],
+    [{ id: "ai2-agent-memory-contamination", endpoint: "/api/voice/agency/live/fire" }, "voice"],
+    [{ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/agency/live/fire" }, "vllm"],
     [{ id: "foothold", endpoint: "/api/voice/live/fire" }, "voice"],
     [{ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "vllm"],
     [{ id: "unknown", endpoint: "/api/workload/attack" }, "nats"],
@@ -58,6 +63,7 @@ test("unsupported and cross-wired routes refuse without fallback; clear is footh
 test("typed observation budgets cover 900-second runs and stay finite", () => {
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "litellm")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-agent-memory-contamination", endpoint: "/api/voice/live/fire" }, "voice")), 960_000);
+  assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/agency/live/fire" }, "voice")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm")), 150_000);
 });
 
