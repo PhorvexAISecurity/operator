@@ -209,7 +209,7 @@ index c12fe24..6d788fd 100644
 +                self._phorvex_admission_open = True
 +            return response
 diff --git a/vllm/engine/multiprocessing/engine.py b/vllm/engine/multiprocessing/engine.py
-index ce24aa2..c9d4501 100644
+index ce24aa2..bf06ddf 100644
 --- a/vllm/engine/multiprocessing/engine.py
 +++ b/vllm/engine/multiprocessing/engine.py
 @@ -3,0 +4 @@ import pickle
@@ -259,7 +259,7 @@ index ce24aa2..c9d4501 100644
 +                         exception=RuntimeError("engine admission is closed")))
 +            return
 +
-@@ -313,0 +353,179 @@ class MQLLMEngine:
+@@ -313,0 +353,187 @@ class MQLLMEngine:
 +    def _handle_reset_prefix_cache_request(
 +            self, request: RPCResetPrefixCacheRequest):
 +        try:
@@ -378,18 +378,26 @@ index ce24aa2..c9d4501 100644
 +        self._phorvex_admission_generation = generation
 +        snapshot = self._phorvex_queue_snapshot()
 +        request_ids = self._phorvex_ids(snapshot)
-+        cached_ids = {
-+            request_id
-+            for queue in snapshot.values()
-+            for request_id in queue["cached"]
++        # Aborting a scheduler-owned group frees its unfinished sequences
++        # before any queued step output is processed, and output processing
++        # skips finished groups. A running request that also has queued async
++        # output is therefore aborted; only work that had already finished, or
++        # that survives solely as queued output, completes before the abort.
++        aborted_ids = {
++            group.request_id
++            for scheduler in self.engine.scheduler
++            for queue in (scheduler.waiting, scheduler.running,
++                          scheduler.swapped)
++            for group in queue
++            if not group.is_finished()
 +        }
 +        self._phorvex_operation = {
 +            "operation_id": request.operation_id,
 +            "operation_generation": request.operation_generation,
 +            "snapshot": snapshot,
 +            "terminal_dispositions": {
-+                request_id: ("completed-before-abort"
-+                             if request_id in cached_ids else "aborted")
++                request_id: ("aborted" if request_id in aborted_ids
++                             else "completed-before-abort")
 +                for request_id in request_ids
 +            },
 +            "zero_observations": 0,

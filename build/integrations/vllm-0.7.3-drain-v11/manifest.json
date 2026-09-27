@@ -18,7 +18,7 @@
       "before": "2e666aaf21c414163d55bd8205e06afa50740a325e46e76b995875b2feee17c6"
     },
     "vllm/engine/multiprocessing/engine.py": {
-      "after": "320397e1b8544064fab169367a14fbd881966b2bb560484ec29c3ab4ed0dc308",
+      "after": "9c8a826328953a5b9a9407c8385c6cac7219ef7278f2fd89d8fb16a5453f0ade",
       "before": "8e2ad1a4d25685aa09323d285c095df7e8a143f60671e7dd26906e03c885d3de"
     },
     "vllm/engine/protocol.py": {
@@ -31,7 +31,7 @@
     }
   },
   "patch_id": "phorvex-vllm-0.7.3-drain-v11",
-  "patch_sha256": "a9f9f9cd155b566a55fbc78443328e2ea74c3609937e83eeab3efab50c1306e6",
+  "patch_sha256": "f895863f920e7154c394dfee2f7e2725667fe51ed73a209626372389c283cc6e",
   "schema_version": 1,
   "upstream": {
     "commit": "ed6e9075d31e32c8548b480a47d1ffb77da1f54c",
