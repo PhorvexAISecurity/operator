@@ -63,6 +63,8 @@ type EnactCtx struct {
 	ServingRequest               Request
 	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
 	VoiceMemoryTransport         http.RoundTripper // private fixed-Pod-IP readback seam
+	LiteLLMStatusTransport       http.RoundTripper // test-only exact PodIP status-readback seam
+	LiteLLMStatusToken           string            // test-only; runtime reads the fixed mounted Secret path
 	OutputPolicyReadbackTimeout  time.Duration
 	OutputPolicyReadbackInterval time.Duration
 	// Request-drain observation bounds default to production constants. Tests that

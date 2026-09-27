@@ -123,6 +123,9 @@ type availabilityWorker struct {
 	postAt   time.Time
 	selfName string
 	selfUID  string
+	// Empty preserves the historical vLLM guardrail projection. A separately
+	// pinned LiteLLM Live worker uses the same authenticated audit transport.
+	auditNamespace string
 }
 
 func availabilityHash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }

@@ -465,6 +465,7 @@ const (
 	ActionGuardrailRotate               ActionType = "guardrail-rotate"
 	ActionSensitiveOutputPolicyActivate ActionType = "sensitive-output-policy-activate"
 	ActionVoiceMemoryNoteRevoke         ActionType = "voice-memory-note-revoke"
+	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
 	ActionDisable                       ActionType = "disable"
 )

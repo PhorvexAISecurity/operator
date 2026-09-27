@@ -150,6 +150,23 @@
 {{- $journal := required "console.guardrailOutput.outputPolicyJournalName is required" .Values.phorvex.console.guardrailOutput.outputPolicyJournalName }}
 {{- if not (regexMatch "^phorvex-output-[0-9a-f]{32}$" $journal) }}{{- fail "console.guardrailOutput.outputPolicyJournalName is invalid" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.litellmLive.enabled }}
+{{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.litellmLive.enabled requires catalogueV1.enabled" }}{{- end }}
+{{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system release namespace" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
+{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}
+{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.litellmLive requires the exact console creator in trustedDetectors" }}{{- end }}
+{{- $sha := required "console.litellmLive.profileSHA256 required" .Values.phorvex.console.litellmLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.litellmLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- range list "configMapName" "seedSecret" "statusSecret" }}
+{{- $name := required (printf "console.litellmLive.%s required" .) (index $.Values.phorvex.console.litellmLive .) }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail (printf "console.litellmLive.%s invalid" .) }}{{- end }}
+{{- end }}
+{{- if ne .Values.phorvex.console.litellmLive.journalName "phorvex-litellm-revoke-journal" }}{{- fail "console.litellmLive.journalName invalid" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -276,6 +293,12 @@ spec:
         {{- if .Values.phorvex.console.guardrailOutput.enabled }}
         - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.guardrailOutput.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.litellmLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.litellmLive.enabled }}
+        - name: PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.litellmLive.profileSHA256 | quote }}
         {{- end }}
         {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
@@ -643,6 +666,14 @@ spec:
           subPath: config.guardrail-output-response.yaml
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.litellmLive.enabled }}
+        - name: litellm-live-reviewed-inputs
+          mountPath: /etc/phorvex-litellm-live
+          readOnly: true
+        - name: litellm-live-status-token
+          mountPath: /etc/phorvex-litellm-status
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -782,6 +813,29 @@ spec:
           items:
           - key: config.guardrail-output-response.yaml
             path: config.guardrail-output-response.yaml
+      {{- end }}
+      {{- if .Values.phorvex.console.litellmLive.enabled }}
+      - name: litellm-live-reviewed-inputs
+        projected:
+          defaultMode: 0440
+          sources:
+          - configMap:
+              name: {{ .Values.phorvex.console.litellmLive.configMapName | quote }}
+              items:
+              - key: profile.json
+                path: profile.json
+          - secret:
+              name: {{ .Values.phorvex.console.litellmLive.seedSecret | quote }}
+              items:
+              - key: seed
+                path: seed
+      - name: litellm-live-status-token
+        secret:
+          secretName: {{ .Values.phorvex.console.litellmLive.statusSecret | quote }}
+          defaultMode: 0440
+          items:
+          - key: token
+            path: token
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

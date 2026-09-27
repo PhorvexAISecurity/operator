@@ -258,6 +258,12 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
         setAttackMsg(r.message + (r.attackId ? "" : " No exact result ID was returned."));
         setActionFilter("");
         if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
+      } else if (entry.endpoint === "/api/litellm/live/fire" && (action === "ai2-unbounded-consumption" || action === "ai2-query-extraction")) {
+        const r = await api.litellmLiveFire(action, lens);
+        if (request !== mutationGeneration.current || workload !== selWl) return;
+        setAttackMsg(r.message + (r.attackId ? "" : " No exact result ID was returned."));
+        setActionFilter("");
+        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
       } else {
         // foothold | clear — a REAL detector signal on the selected reactiveOnly-armed workload.
         const ns = (workload.split("/")[0] || "").trim();

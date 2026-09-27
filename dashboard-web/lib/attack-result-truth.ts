@@ -60,5 +60,5 @@ export function catalogueSignalState(result: AttackResult): {
 }
 
 export function showSecurityOutcomeSections(result: AttackResult): boolean {
-  return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live";
+  return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" && result.evidenceKind !== "litellm-live-client-policy";
 }

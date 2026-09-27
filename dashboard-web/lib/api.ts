@@ -279,6 +279,8 @@ export const api = {
   vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string; attackId?: string }>("/api/vllm/attack", { action }, lens),
   voiceMemoryFire: (scenario: "ai2-agent-memory-contamination", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/live/fire", { scenario }, lens),
+  litellmLiveFire: (scenario: "ai2-unbounded-consumption" | "ai2-query-extraction", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/live/fire", { scenario }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens, includeObservations = false) => get<{ attacks: AttackResult[] }>(`/api/attack-results${includeObservations ? "?includeObservations=true" : ""}`, lens),
   attackResultsPage: (lens: Lens, limit: number, filters: { q?: string; id?: string; includeObservations?: string } = {}, cursor?: string, signal?: AbortSignal) =>
@@ -492,6 +494,7 @@ export interface AttackResult {
   guardrailEffectProbe?: GuardrailEffectProbeResult;
   guardrailOutputProbe?: GuardrailOutputProbeResult;
   voiceMemoryProbe?: VoiceMemoryProbeResult;
+  litellmLiveProbe?: LiteLLMLiveProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
   decisionTraceEvidence?: AttackDecisionEvidence[];
   temporalDecisionEvidence?: AttackDecisionEvidence;
@@ -505,6 +508,13 @@ export interface AttackResult {
   dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "flushed" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
+}
+export interface LiteLLMLiveProbeResult {
+  status: string; accepted: boolean; scenario: string;
+  initialAcceptedWork: boolean; initialUsageTokens: number; signalMode: string;
+  eventUID?: string; selectedAction?: string; selectionDecisionID?: string; dispatchPath?: string;
+  terminalJournal: boolean; bothGatewaysActive: boolean;
+  replayBlockedBeforeUpstream: boolean; benignContinuity: boolean; issues: string[];
 }
 export interface VoiceMemoryProbeResult {
   schema: "voice-memory-live-v1";
