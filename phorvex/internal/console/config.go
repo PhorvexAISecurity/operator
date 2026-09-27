@@ -71,6 +71,11 @@ type Config struct {
 	VoiceOutputLiveEnabled       bool
 	VoiceOutputLiveProfileSHA256 string
 	VoiceOutputLiveProfilePath   string
+	// The separately reviewed Voice MCP descriptor trial requires an exact
+	// source, policy, Service and real model-behavior preflight at Fire time.
+	VoiceMCPLiveEnabled       bool
+	VoiceMCPLiveProfileSHA256 string
+	VoiceMCPLiveProfilePath   string
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
 	LiteLLMLiveEnabled       bool

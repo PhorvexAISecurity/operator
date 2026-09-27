@@ -448,6 +448,17 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.VoiceOutputLiveProfileSHA256 = voiceOutputProfileSHA256
 	cfg.VoiceOutputLiveProfilePath = "/etc/phorvex-voice-output/profile.json"
+	voiceMCPLiveEnabled, err := readBool("PHORVEX_CONSOLE_VOICE_MCP_LIVE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.VoiceMCPLiveEnabled = voiceMCPLiveEnabled
+	voiceMCPProfileSHA256, _ := lookup("PHORVEX_CONSOLE_VOICE_MCP_LIVE_PROFILE_SHA256")
+	if voiceMCPLiveEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(voiceMCPProfileSHA256) {
+		return errors.New("PHORVEX_CONSOLE_VOICE_MCP_LIVE_PROFILE_SHA256 must be lowercase SHA-256 when enabled")
+	}
+	cfg.VoiceMCPLiveProfileSHA256 = voiceMCPProfileSHA256
+	cfg.VoiceMCPLiveProfilePath = "/etc/phorvex-voice-mcp/profile.json"
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err

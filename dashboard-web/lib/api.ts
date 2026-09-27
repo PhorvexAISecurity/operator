@@ -283,6 +283,8 @@ export const api = {
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/agency/live/fire", { scenario }, lens),
   voiceOutputFire: (scenario: "ai2-system-prompt-leakage", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/output/live/fire", { scenario }, lens),
+  voiceMCPFire: (scenario: "ai2-mcp-tool-poisoning", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/mcp/live/fire", { scenario }, lens),
   litellmLiveFire: (scenario: "ai2-unbounded-consumption" | "ai2-query-extraction", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/live/fire", { scenario }, lens),
   litellmOutputFire: (scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage", lens: Lens) =>
@@ -502,6 +504,7 @@ export interface AttackResult {
   voiceMemoryProbe?: VoiceMemoryProbeResult;
   voiceAgencyProbe?: VoiceAgencyProbeResult;
   voiceOutputProbe?: VoiceOutputProbeResult;
+  voiceMCPProbe?: VoiceMCPProbeResult;
   litellmLiveProbe?: LiteLLMLiveProbeResult;
   litellmOutputProbe?: LiteLLMOutputProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
@@ -575,6 +578,21 @@ export interface VoiceOutputProbeResult {
   outputCandidateStatus?: string; outputCandidateExclusion?: string; outputCandidateReason?: string;
   protectedJournalTerminal: boolean; everyServingPodEffective: boolean; recoveredAfterPending: boolean;
   repeatRawModelMarker: boolean; repeatOutputBlocked: boolean; benignSpeechMaintained: boolean;
+  cleanup: string; issues: string[];
+}
+export interface VoiceMCPProbeResult {
+  schema: "voice-mcp-live-v1";
+  status: "UNKNOWN" | "NOT_LANDED" | "LANDED" | "DEFENDED";
+  scenarioId: "ai2-mcp-tool-poisoning"; caseId: string;
+  signalMode: string; defenseScope: string; runSHA256: string;
+  targetPodUID?: string; deploymentUID?: string; policyUID?: string;
+  sourceSHA256?: string; mcpSourceSHA256?: string; mcpServiceUID?: string;
+  firstDescriptorFetched: boolean; firstModelNonceInTranscript: boolean; firstLanded: boolean;
+  eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  noopReason?: string; actionExclusion?: string;
+  protectedJournalTerminal: boolean; everyServingPodEffective: boolean; recoveredAfterPending: boolean;
+  replayFetchedPoisonedDescriptor: boolean; replayEffectiveGoodDescriptor: boolean;
+  replayOrdinaryHoursAnswer: boolean; benignPromotionsToolCall: boolean; benignPromotionAnswer: boolean;
   cleanup: string; issues: string[];
 }
 export interface GuardrailEffectProbeResult {

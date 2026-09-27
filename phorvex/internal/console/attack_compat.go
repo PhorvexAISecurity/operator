@@ -70,6 +70,8 @@ var liveAttackCatalogue = []LiveAttack{
 		"voice-agency", "Measures one model-triggered refund of a run-owned other order, then a labeled test signal, normal brain choice, blocked exact-pair replay and own-order/status controls."},
 	{voiceOutputScenario, "Voice synthetic internal marker disclosure", voiceOutputRoute, "AML.T0051 / T1539", voiceOutputAction,
 		"voice-output", "Measures an actual real-Voice model output containing one noncredential run marker, then an explicitly injected signal, normal brain choice, complete-response containment, blocked repeat and benign speech."},
+	{voiceMCPScenario, "Voice MCP tool-description poisoning", voiceMCPRoute, "OWASP LLM01 / AML.T0054", voiceMCPAction,
+		"voice-mcp", "Measures whether a real signed MCP tools/list descriptor induces a run-owned reference in the Voice assistant transcript. Only after that does a test signal enter the normal brain; Fire checks the selected pin, identical audio-request replay, a real store-directory callback and a genuine promotions tool control."},
 	{"ai2-unbounded-consumption", "LiteLLM abusive client containment", "/api/litellm/live/fire", "OWASP LLM10", "litellm-client-revoke",
 		"litellm-live", "Measures bounded accepted requests, injects a labeled test event, then checks whether the brain revokes that client while legitimate requests continue. It does not measure unlimited spending."},
 	{"ai2-query-extraction", "LiteLLM repeated-query client containment", "/api/litellm/live/fire", "AML.T0024", "litellm-client-revoke",
@@ -92,6 +94,7 @@ type appStack struct {
 	VoiceMemoryHook bool   `json:"voiceMemoryHook"` // declared source and owner-bound rule are installed
 	VoiceAgencyLive bool   `json:"voiceAgencyLive"` // reviewed profile and matching Voice source are installed
 	VoiceOutputLive bool   `json:"voiceOutputLive"` // reviewed output profile and matching Voice source are installed
+	VoiceMCPLive    bool   `json:"voiceMCPLive"`    // reviewed combined Voice/MCP profile is installed
 	LiteLLMLive     bool   `json:"litellmLive"`     // reviewed configuration is present; Fire verifies runtime
 	LiteLLMOutput   bool   `json:"litellmOutput"`   // reviewed private-context output configuration is present
 }
@@ -126,6 +129,11 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 				st.VoiceMemoryHook = true
 			}
 			if ns == "voice" && deps.Items[i].Name == "voice-bot" {
+				if p, e := loadVoiceMCPProfile(s.cfg); e == nil &&
+					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-mcp-source-sha256"] == p.SourceSHA256 &&
+					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-mcp-policy-configmap"] == voiceMCPRuleCM {
+					st.VoiceMCPLive = true
+				}
 				if p, e := loadVoiceAgencyProfile(s.cfg); e == nil &&
 					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-refund-source-sha256"] == p.SourceSHA256 &&
 					deps.Items[i].Spec.Template.Annotations["phorvex.ai/voice-refund-policy-configmap"] == voiceAgencyConfigMapName {
@@ -178,6 +186,10 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-output-policy", metav1.GetOptions{})
 		st.VoiceOutputLive = err == nil
 	}
+	if st.VoiceMCPLive {
+		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, voiceMCPRuleCM, metav1.GetOptions{})
+		st.VoiceMCPLive = err == nil
+	}
 	return st, nil
 }
 
@@ -228,6 +240,9 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.VoiceOutputLive {
 		out = append(out, voiceOutputAction)
 	}
+	if st.VoiceMCPLive {
+		out = append(out, voiceMCPAction)
+	}
 	if st.LiteLLMLive {
 		out = append(out, "litellm-client-revoke")
 	}
@@ -250,6 +265,14 @@ func compatibleLive(st appStack) []compatEntry {
 				e.Reason = "Reviewed Voice output profile and source are present; Fire verifies current owner, Pods, protected journal and rule"
 			} else {
 				e.Reason = "Voice output profile, source, owned rule or governance is unavailable"
+			}
+		case "voice-mcp":
+			e.Compatible = st.Namespace == "voice" && st.Workload
+			e.Armed = e.Compatible && st.Armed && st.VoiceMCPLive
+			if e.Armed {
+				e.Reason = "Reviewed Voice/MCP profile is present; Fire verifies current sources, routing, policy, real model behavior and protected effect"
+			} else {
+				e.Reason = "Voice/MCP profile, source, policy or governance unavailable"
 			}
 		case "voice-agency":
 			e.Compatible = st.Namespace == "voice" && st.Workload
@@ -370,6 +393,12 @@ func scenarioFitsStack(it CatalogItem, st appStack) (bool, string) {
 			return true, "reviewed Voice output source and rule are declared; Live Fire verifies current ownership and all serving Pods"
 		}
 		return false, "Voice output profile, source or owned rule rollout is unavailable"
+	}
+	if it.Name == voiceMCPScenario && st.Namespace == "voice" {
+		if st.VoiceMCPLive {
+			return true, "reviewed Voice/MCP source and rule are declared; Live Fire verifies real behavior and current identities"
+		}
+		return false, "Voice/MCP profile, source or owned rule unavailable"
 	}
 	if it.Name == voiceAgencyScenario && st.Namespace == "voice" {
 		if st.VoiceAgencyLive {
