@@ -404,6 +404,17 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.DrainLiveProfileSHA256 = drainLiveSHA
 	cfg.DrainLiveProfilePath = "/etc/phorvex-drain-live/profile.json"
+	endpointLeaseEnabled, err := readBool("PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.EndpointLeaseEnabled = endpointLeaseEnabled
+	endpointLeaseSHA, _ := lookup("PHORVEX_CONSOLE_ENDPOINT_LEASE_PROFILE_SHA256")
+	if endpointLeaseEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(endpointLeaseSHA) {
+		return errors.New("PHORVEX_CONSOLE_ENDPOINT_LEASE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")
+	}
+	cfg.EndpointLeaseProfileSHA256 = endpointLeaseSHA
+	cfg.EndpointLeaseProfilePath = "/etc/phorvex-endpoint-lease/profile.json"
 	guardrailOutputEnabled, err := readBool("PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED")
 	if err != nil {
 		return err

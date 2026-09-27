@@ -52,6 +52,8 @@ var liveAttackCatalogue = []LiveAttack{
 		"vllm-serving", "Sends a bounded repeated-prefix precursor and reports exact reset metadata; no timing leak or eviction verdict is implied."},
 	{"endpoint-rotate", "Endpoint route-effect observation", "/api/vllm/attack", "SSRF / model-extraction", "endpoint-rotate",
 		"vllm-serving", "Stages an exact route signal and observes route-key/Service effects; SSRF and model-extraction mitigation are not established."},
+	{endpointLeaseAction, "Stolen inference credential reuse", endpointLeaseRoute, "ai2-endpoint-security", endpointLeaseAction,
+		"vllm-endpoint-lease", "Measures one owned credential A accepted by the real public inference Service, then a test-generated signal and normal brain response. Only an exact protected revocation, fresh A-401 and legitimate B-200 can earn narrow defense credit; the first accepted request remains a loss."},
 	{"guardrail-rotate", "Guardrail runtime-effect observation", "/api/vllm/attack", "OWASP LLM01 / ASI01", "guardrail-rotate",
 		"vllm-serving", "Stages an exact guardrail signal and observes a runtime variant transition; jailbreak execution or mitigation is not established."},
 	{"request-drain", "Request-drain response observation", "/api/vllm/attack", "OWASP LLM10", "request-drain",
@@ -97,6 +99,7 @@ type appStack struct {
 	VoiceMCPLive    bool   `json:"voiceMCPLive"`    // reviewed combined Voice/MCP profile is installed
 	LiteLLMLive     bool   `json:"litellmLive"`     // reviewed configuration is present; Fire verifies runtime
 	LiteLLMOutput   bool   `json:"litellmOutput"`   // reviewed private-context output configuration is present
+	EndpointLease   bool   `json:"endpointLease"`   // reviewed caller lease profile is installed
 }
 
 // servedModelImage matches the serving stacks the AI attacks are meaningful against. Substring
@@ -168,6 +171,10 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 		}
 	}
 	st.Armed = ns == vllmAttackNS || armedWorkloads[ns] || s.namespaceHasPolicy(ns)
+	if ns == vllmAttackNS {
+		_, err := loadEndpointLeaseProfile(s.cfg)
+		st.EndpointLease = err == nil
+	}
 	if ns == "litellm" {
 		_, _, err := loadLiteLiveProfile(s.cfg)
 		st.LiteLLMLive = err == nil
@@ -249,6 +256,9 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.LiteLLMOutput {
 		out = append(out, "sensitive-output-policy-activate")
 	}
+	if st.EndpointLease {
+		out = append(out, endpointLeaseAction)
+	}
 	return out
 }
 
@@ -258,6 +268,14 @@ func compatibleLive(st appStack) []compatEntry {
 	for _, a := range liveAttackCatalogue {
 		e := compatEntry{LiveAttack: a}
 		switch a.StackLabel {
+		case "vllm-endpoint-lease":
+			e.Compatible = st.Namespace == vllmAttackNS && st.VLLM
+			e.Armed = e.Compatible && st.EndpointLease
+			if e.Armed {
+				e.Reason = "Reviewed caller lease profile is present; Fire verifies the current Secret, source, Service, proxy Pods, policy and protected journal"
+			} else {
+				e.Reason = "Caller lease fixture or reviewed console profile is unavailable"
+			}
 		case "voice-output":
 			e.Compatible = st.Namespace == "voice" && st.Workload
 			e.Armed = e.Compatible && st.Armed && st.VoiceOutputLive

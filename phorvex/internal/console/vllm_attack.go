@@ -130,6 +130,30 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 			"message": "A fixed synthetic support application-output disclosure is measuring. An event is injected only after the original guarded response and legitimate controls prove a landed baseline. The first disclosure remains landed; the reader requires a selected protected activation and intact repeated service for a narrow defended result."})
 		return
 	}
+	if body.Action == endpointLeaseAction {
+		profile, profileErr := loadEndpointLeaseProfile(s.cfg)
+		if profileErr != nil {
+			writeJSON(w, 503, map[string]string{"error": "reviewed endpoint lease profile unavailable"})
+			return
+		}
+		if !endpointLeaseInFlight.CompareAndSwap(false, true) {
+			writeJSON(w, 409, map[string]string{"error": "one endpoint lease observation is already active"})
+			return
+		}
+		if err := s.persistEffectIntent(endpointLeaseRoute, actorOf(r), vllmAttackNS, body.Action); err != nil {
+			endpointLeaseInFlight.Store(false)
+			writeJSON(w, 503, map[string]string{"error": "endpoint lease launch evidence unavailable"})
+			return
+		}
+		attackID, startErr := s.startEndpointLease(profile)
+		if startErr != nil {
+			writeJSON(w, 503, map[string]string{"error": "endpoint lease run identity unavailable"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "action": body.Action, "attackId": attackID,
+			"message": "A fixed owned caller-credential trial is measuring real public Service admission and normal brain response. The initial accepted request is retained; no SSRF or extraction defense is implied."})
+		return
+	}
 	if body.Action == "request-drain" && s.cfg.DrainLiveEnabled {
 		profile, raw, profileErr := loadDrainLiveProfile(s.cfg)
 		if profileErr != nil {

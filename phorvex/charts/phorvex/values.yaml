@@ -217,6 +217,13 @@ phorvex:
   voiceMCP:
     enabled: false
     approvedImage: ""
+  # Default-off endpoint lease revocation requires an independently reviewed
+  # combined proxy source digest; never derive this authority from an event.
+  endpointLease:
+    enabled: false
+    approvedSourceSHA256: ""
+    approvedProxyImage: ""
+    approvedEngineImage: ""
   voiceOutput:
     enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update
@@ -433,6 +440,14 @@ phorvex:
       configMapName: ""
       profileSHA256: ""
       journalName: ""
+    # Distinct reviewed caller-credential revocation trial; endpoint-rotate
+    # remains a route-effect observation. Off until owner migration is complete.
+    endpointLease:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      callerSecretName: ""
+      sourceConfigMapName: ""
     # Reviewed real LiteLLM Service-path client policy trial. Off until the
     # owner has installed the gateway and pinned a complete runtime profile.
     litellmLive:

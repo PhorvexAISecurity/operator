@@ -198,6 +198,7 @@ func TestNoDeadFactKinds(t *testing.T) {
 				SeedSHA256: "seed-hash", ServiceUID: "service-uid",
 				GatewaySourceSHA256: "source-hash", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
 		boundVoiceMCPView(),
+		endpointLeaseView(),
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

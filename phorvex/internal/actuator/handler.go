@@ -47,30 +47,35 @@ type Rollbacker interface {
 // implementations when nil (production); tests inject mocks so the handler logic is exercised
 // without GPU hardware (see gpu_stack.go).
 type EnactCtx struct {
-	Reader                       client.Reader // authoritative boundary reader
-	Client                       client.Client
-	JournalNamespace             string // protected operator namespace; empty refuses recoverable writes
-	DryRun                       bool
-	VLLM                         vLLMClient           // serving-stack control plane; nil => real httpVLLM default
-	MIG                          migController        // GPU MIG control plane; nil => real nvidia-smi default
-	Guardrail                    guardrailController  // safety/guardrail-tier control plane; nil => real default
-	KVXfer                       kvTransferController // disaggregated KV-transfer control plane; nil => real default
-	AdapterSources               AdapterSources
-	MIGProfiles                  *MIGProfiles
-	ServingSecurity              *ServingSecurityConfig
-	ServingAttempt               *servingCredentialSnapshot
-	ServingTarget                *corev1.Pod
-	ServingRequest               Request
-	OutputPolicyTransport        http.RoundTripper // test-only fixed-Pod-IP readback transport seam
-	VoiceMemoryTransport         http.RoundTripper // private fixed-Pod-IP readback seam
-	VoiceRefundTransport         http.RoundTripper // private fixed-Pod-IP readback seam
-	VoiceMCPTransport            http.RoundTripper // private fixed-Pod-IP readback seam
-	VoiceMCPApprovedImage        string            // operator-configured reviewed MCP repo@sha256; never event-derived
-	VoiceOutputTransport         http.RoundTripper // private fixed-Pod-IP readback seam
-	LiteLLMStatusTransport       http.RoundTripper // test-only exact PodIP status-readback seam
-	LiteLLMStatusToken           string            // test-only; runtime reads the fixed mounted Secret path
-	OutputPolicyReadbackTimeout  time.Duration
-	OutputPolicyReadbackInterval time.Duration
+	Reader                            client.Reader // authoritative boundary reader
+	Client                            client.Client
+	JournalNamespace                  string // protected operator namespace; empty refuses recoverable writes
+	DryRun                            bool
+	VLLM                              vLLMClient           // serving-stack control plane; nil => real httpVLLM default
+	MIG                               migController        // GPU MIG control plane; nil => real nvidia-smi default
+	Guardrail                         guardrailController  // safety/guardrail-tier control plane; nil => real default
+	KVXfer                            kvTransferController // disaggregated KV-transfer control plane; nil => real default
+	AdapterSources                    AdapterSources
+	MIGProfiles                       *MIGProfiles
+	ServingSecurity                   *ServingSecurityConfig
+	ServingAttempt                    *servingCredentialSnapshot
+	ServingTarget                     *corev1.Pod
+	ServingRequest                    Request
+	OutputPolicyTransport             http.RoundTripper // test-only fixed-Pod-IP readback transport seam
+	VoiceMemoryTransport              http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceRefundTransport              http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPTransport                 http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceMCPApprovedImage             string            // operator-configured reviewed MCP repo@sha256; never event-derived
+	VoiceOutputTransport              http.RoundTripper // private fixed-Pod-IP readback seam
+	LiteLLMStatusTransport            http.RoundTripper // test-only exact PodIP status-readback seam
+	LiteLLMStatusToken                string            // test-only; runtime reads the fixed mounted Secret path
+	EndpointLeaseApprovedSourceSHA256 string            // reviewed five-file proxy source, never event-derived
+	EndpointLeaseApprovedProxyImage   string            // reviewed immutable proxy image, never event-derived
+	EndpointLeaseApprovedEngineImage  string            // reviewed immutable loopback engine image
+	EndpointLeaseStatusTransport      http.RoundTripper // test-only exact Pod-IP TLS status seam
+	EndpointLeaseStatusToken          string            // test-only; production uses serving-security admin binding
+	OutputPolicyReadbackTimeout       time.Duration
+	OutputPolicyReadbackInterval      time.Duration
 	// Request-drain observation bounds default to production constants. Tests that
 	// emulate an EndpointSlice controller may shorten them without changing behavior.
 	DrainObservationTimeout    time.Duration
@@ -137,6 +142,15 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 				return Result{}, fmt.Errorf("native actuator: exact Voice Pod output journal unavailable: %w", err)
 			}
 			return Result{}, fmt.Errorf("native actuator: exact Voice Pod has unresolved output operation")
+		}
+	}
+	if req.Action != model.ActionEndpointLeaseRevoke && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
+		pending, err := PendingEndpointLeaseOperation(ctx, ec.Reader, ec.JournalNamespace, req.Namespace, req.TargetUID)
+		if err != nil || pending {
+			if err != nil {
+				return Result{}, fmt.Errorf("native actuator: exact endpoint lease journal unavailable: %w", err)
+			}
+			return Result{}, fmt.Errorf("native actuator: exact Pod has unresolved endpoint lease operation")
 		}
 	}
 	if err := prepareServingAttempt(ctx, &ec, req); err != nil {

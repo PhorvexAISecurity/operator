@@ -64,6 +64,9 @@ func (s *Server) runMeasuredGuardrailEffect(r *attackRecord, p guardrailAvailabi
 			err = w.saveJSON("self-identity.json", map[string]string{"name": w.selfName, "uid": w.selfUID})
 		}
 		if err == nil {
+			err = w.initRetainedCaller()
+		}
+		if err == nil {
 			err = s.executeMeasuredGuardrailEffect(w, r)
 		}
 	}

@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import types
 import unittest
 from unittest import mock
 import urllib.error
@@ -172,6 +173,36 @@ class GuardrailHTTPTest(unittest.TestCase):
         self.assertEqual(config.initial_variant, "pgv2")
         self.assertEqual(config.mode, "enforce")
         self.assertEqual(config.thresholds, {"pgv1": 0.5, "pgv2": 0.5})
+
+    def test_load_all_pins_and_verifies_both_classifier_revisions(self):
+        calls = []
+        def pipeline(_task, *, model, revision, **kwargs):
+            calls.append((model, revision, kwargs))
+            return types.SimpleNamespace(model=types.SimpleNamespace(
+                config=types.SimpleNamespace(_commit_hash=revision)))
+        modules = {"torch": types.SimpleNamespace(set_num_threads=lambda _: None),
+                   "transformers": types.SimpleNamespace(pipeline=pipeline)}
+        with mock.patch.dict("sys.modules", modules), mock.patch("builtins.print"):
+            runtime = guardrail.GuardrailRuntime(guardrail.load_config({}))
+            runtime.load_all()
+        self.assertTrue(runtime.ready)
+        self.assertEqual({(model, revision) for model, revision, _ in calls},
+                         {(guardrail.VARIANT_MODELS[name], guardrail.VARIANT_REVISIONS[name])
+                          for name in guardrail.VARIANT_MODELS})
+        self.assertTrue(all(opts == {"truncation": True, "max_length": 512}
+                            for _, _, opts in calls))
+        self.assertEqual({name: item["revision"] for name, item in
+                          runtime.model_provenance.items()}, guardrail.VARIANT_REVISIONS)
+
+        def wrong_pipeline(_task, **_kwargs):
+            return types.SimpleNamespace(model=types.SimpleNamespace(
+                config=types.SimpleNamespace(_commit_hash="wrong")))
+        modules["transformers"] = types.SimpleNamespace(pipeline=wrong_pipeline)
+        with mock.patch.dict("sys.modules", modules), mock.patch("builtins.print"):
+            wrong = guardrail.GuardrailRuntime(guardrail.load_config({}))
+            wrong.load_all()
+        self.assertFalse(wrong.ready)
+        self.assertIn("revision differs", wrong.load_error)
 
     def test_invalid_startup_configuration_is_rejected(self):
         bad = (

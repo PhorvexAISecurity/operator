@@ -161,6 +161,21 @@
 {{- if ne $name (printf "phorvex-catalogue-drain-live-%s" (trunc 12 $sha)) }}{{- fail "console.drainLive profile name/hash mismatch" }}{{- end }}
 {{- if not (regexMatch "^phorvex-operation-[0-9a-f]{40}$" .Values.phorvex.console.drainLive.journalName) }}{{- fail "console.drainLive.journalName must be exact protected journal" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.endpointLease.enabled }}
+{{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.endpointLease requires phorvex-system" }}{{- end }}
+{{- if not .Values.phorvex.endpointLease.enabled }}{{- fail "console.endpointLease requires native endpointLease.enabled" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.endpointLease requires reviewed console creator" }}{{- end }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.endpointLease requires exact trusted creator" }}{{- end }}
+{{- $name := required "console.endpointLease.configMapName required" .Values.phorvex.console.endpointLease.configMapName }}
+{{- $sha := required "console.endpointLease.profileSHA256 required" .Values.phorvex.console.endpointLease.profileSHA256 }}
+{{- if or (not (regexMatch "^[0-9a-f]{64}$" $sha)) (ne $name (printf "phorvex-catalogue-endpoint-lease-%s" (trunc 12 $sha))) }}{{- fail "console.endpointLease profile name/hash mismatch" }}{{- end }}
+{{- if ne .Values.phorvex.console.endpointLease.callerSecretName "vllm-endpoint-lease-callers" }}{{- fail "console.endpointLease requires exact owner-provisioned caller Secret" }}{{- end }}
+{{- $source := required "console.endpointLease.sourceConfigMapName required" .Values.phorvex.console.endpointLease.sourceConfigMapName }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $source) }}{{- fail "console.endpointLease source ConfigMap name invalid" }}{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.litellmLive.enabled }}
 {{- if ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system effective operator namespace for protected journals" }}{{- end }}
 {{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.litellmLive.enabled requires catalogueV1.enabled" }}{{- end }}
@@ -373,6 +388,12 @@ spec:
         {{- if .Values.phorvex.console.drainLive.enabled }}
         - name: PHORVEX_CONSOLE_DRAIN_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.drainLive.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED
+          value: {{ .Values.phorvex.console.endpointLease.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.endpointLease.enabled }}
+        - name: PHORVEX_CONSOLE_ENDPOINT_LEASE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.endpointLease.profileSHA256 | quote }}
         {{- end }}
         - name: PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED
           value: {{ .Values.phorvex.console.litellmLive.enabled | default false | quote }}
@@ -776,6 +797,15 @@ spec:
           subPath: profile.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.endpointLease.enabled }}
+        - name: endpoint-lease-reviewed-profile
+          mountPath: /etc/phorvex-endpoint-lease/profile.json
+          subPath: profile.json
+          readOnly: true
+        - name: endpoint-lease-owned-callers
+          mountPath: /etc/phorvex-endpoint-lease-callers
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
         - name: litellm-live-reviewed-inputs
           mountPath: /etc/phorvex-litellm-live
@@ -955,6 +985,24 @@ spec:
           items:
           - key: profile.json
             path: profile.json
+      {{- end }}
+      {{- if .Values.phorvex.console.endpointLease.enabled }}
+      - name: endpoint-lease-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.endpointLease.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
+      - name: endpoint-lease-owned-callers
+        secret:
+          secretName: {{ .Values.phorvex.console.endpointLease.callerSecretName | quote }}
+          defaultMode: 0440
+          items:
+          - key: client-a
+            path: client-a
+          - key: client-b
+            path: client-b
       {{- end }}
       {{- if .Values.phorvex.console.litellmLive.enabled }}
       - name: litellm-live-reviewed-inputs

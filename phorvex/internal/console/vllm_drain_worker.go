@@ -27,9 +27,16 @@ import (
 var drainLiveInFlight atomic.Bool
 
 func (s *Server) drainReadKube(ctx context.Context, out, label string, allowEmpty bool, args ...string) ([]byte, error) {
+	return s.drainReadKubeInput(ctx, out, label, allowEmpty, nil, args...)
+}
+
+func (s *Server) drainReadKubeInput(ctx context.Context, out, label string, allowEmpty bool, input []byte, args ...string) ([]byte, error) {
 	c, stop := context.WithTimeout(ctx, 20*time.Second)
 	defer stop()
 	cmd := exec.CommandContext(c, "kubectl", args...)
+	if input != nil {
+		cmd.Stdin = bytes.NewReader(input)
+	}
 	stdout, stderr := &availabilityCappedWriter{max: 1 << 20}, &availabilityCappedWriter{max: 4096}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if err := cmd.Run(); err != nil || stdout.overflow || stderr.overflow {
@@ -105,6 +112,22 @@ with urllib.request.urlopen("http://vllm.vllm.svc.cluster.local:8000/v1/models",
  ids=[row.get("id") for row in rows if isinstance(row,dict)]
  print(json.dumps({"exact":ids.count(expected)==1,"count":len(rows)}))`
 
+const drainRetainedModelPython = `import http.client,json,signal,sys
+signal.alarm(12)
+key=sys.stdin.buffer.read(257)
+if len(key)<32 or len(key)>256 or any(c<33 or c>126 for c in key):raise RuntimeError("caller_bound")
+conn=http.client.HTTPConnection("vllm.vllm.svc.cluster.local",8000,timeout=8)
+try:
+ conn.request("GET","/v1/models",headers={"Authorization":"Bearer "+key.decode("ascii")})
+ response=conn.getresponse();raw=response.read(8193)
+ if response.status!=200 or len(raw)>8192:raise RuntimeError("authenticated_model_inventory")
+ rows=json.loads(raw).get("data")
+ if not isinstance(rows,list) or len(rows)<1 or len(rows)>16:raise RuntimeError("model_rows")
+ ids=[row.get("id") for row in rows if isinstance(row,dict)]
+ print(json.dumps({"exact":ids.count("Qwen/Qwen2.5-7B-Instruct-AWQ")==1,"count":len(rows)}))
+finally:conn.close()
+`
+
 func (s *Server) drainInstalledSource(ctx context.Context, out, phase string, p drainLiveProfile) error {
 	args := []string{"--context=" + p.Context, "-n", "vllm", "exec", p.PodName, "-c", "vllm", "--", "python3", "-B", "-c", drainInstalledSourcePython}
 	raw, err := s.drainReadKube(ctx, out, phase+"-installed-source", false, args...)
@@ -119,7 +142,11 @@ func (s *Server) drainInstalledSource(ctx context.Context, out, phase string, p 
 }
 
 func (s *Server) drainModelInventory(ctx context.Context, out, phase string, p drainLiveProfile) error {
-	raw, err := s.drainReadKube(ctx, out, phase+"-model-inventory", false, "--context="+p.Context, "-n", "vllm", "exec", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainModelPython)
+	code := drainModelPython
+	if p.retainedCaller != nil {
+		code = drainRetainedModelPython
+	}
+	raw, err := s.drainReadKubeInput(ctx, out, phase+"-model-inventory", false, p.retainedCaller.bearer(), "--context="+p.Context, "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", code)
 	if err != nil {
 		return err
 	}
@@ -134,6 +161,9 @@ func (s *Server) drainModelInventory(ctx context.Context, out, phase string, p d
 }
 
 func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLiveProfile, phase string) error {
+	if err := p.retainedCaller.check(ctx); err != nil {
+		return err
+	}
 	read := func(label string, allowEmpty bool, args ...string) ([]byte, error) {
 		return s.drainReadKube(ctx, out, phase+"-"+label, allowEmpty, append([]string{"--context=" + p.Context}, args...)...)
 	}
@@ -159,6 +189,10 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		(*pod.Metadata.Annotations)["phorvex.ai/drain-proxy-source"] != p.DrainProxySourceSHA256 ||
 		(*pod.Metadata.Annotations)["phorvex.ai/drain-engine-source"] != p.DrainEngineSourceSHA256 {
 		return errors.New("target Pod/source drift")
+	}
+	_, leaseSource := (*pod.Metadata.Annotations)["phorvex.ai/endpoint-lease-source-sha256"]
+	if leaseSource != (p.retainedCaller != nil) {
+		return errors.New("drain source and retained caller authority differ")
 	}
 	exactImage, exactProxy := false, false
 	for _, c := range pod.Status.ContainerStatuses {
@@ -365,7 +399,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	if len(raw) != 0 {
 		return errors.New("protected request-drain journal occupied")
 	}
-	return nil
+	return p.retainedCaller.check(ctx)
 }
 
 func soleControllerOwner(refs []struct {
@@ -425,10 +459,17 @@ func drainJournalName(policyUID, podUID string) string {
 }
 
 func (s *Server) drainBenign(ctx context.Context, p drainLiveProfile, body []byte) (int, bool, error) {
+	if err := p.retainedCaller.check(ctx); err != nil {
+		return 0, false, err
+	}
 	c, stop := context.WithTimeout(ctx, 25*time.Second)
 	defer stop()
 	cmd := exec.CommandContext(c, "kubectl", "--context="+p.Context, "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainBenignPython)
-	cmd.Stdin = strings.NewReader(base64Body(body))
+	input := []byte(base64Body(body))
+	if p.retainedCaller != nil {
+		input, _ = json.Marshal(map[string]string{"body": base64Body(body), "bearer": base64Body(p.retainedCaller.bearer())})
+	}
+	cmd.Stdin = bytes.NewReader(input)
 	stdout, stderr := &availabilityCappedWriter{max: 4096}, &availabilityCappedWriter{max: 4096}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if err := cmd.Run(); err != nil || stdout.overflow || stderr.overflow {
@@ -443,6 +484,9 @@ func (s *Server) drainBenign(ctx context.Context, p drainLiveProfile, body []byt
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&row) != nil || decoder.Decode(&struct{}{}) != io.EOF || !staticSHA256.MatchString(row.BodySHA256) {
 		return 0, false, errors.New("benign completion projection malformed")
+	}
+	if err := p.retainedCaller.check(ctx); err != nil {
+		return 0, false, err
 	}
 	return row.Status, row.Valid, nil
 }
@@ -468,14 +512,18 @@ type drainLiveProbeResult struct {
 
 const drainStreamPython = `import base64,hashlib,http.client,json,signal,sys,time
 signal.alarm(215)
-v=json.loads(sys.stdin.buffer.read(8193))
+v=json.loads(sys.stdin.buffer.read(9217))
 body=base64.b64decode(v["body"],validate=True)
 if len(body)>8192 or len(v["nonce"])!=32 or any(c not in "0123456789abcdef" for c in v["nonce"]):raise RuntimeError("input")
+key=base64.b64decode(v.get("bearer",""),validate=True)
+if len(key)>256 or any(c<33 or c>126 for c in key):raise RuntimeError("caller_bound")
 expected="cmpl-"+v["nonce"]
 conn=http.client.HTTPConnection("vllm.vllm.svc.cluster.local",8000,timeout=210)
 frames=0; complete=False; status=0; first=False; digest=hashlib.sha256()
 try:
- conn.request("POST","/v1/completions",body=body,headers={"Content-Type":"application/json","Accept":"text/event-stream","X-Request-Id":v["nonce"]})
+ headers={"Content-Type":"application/json","Accept":"text/event-stream","X-Request-Id":v["nonce"]}
+ if key:headers["Authorization"]="Bearer "+key.decode("ascii")
+ conn.request("POST","/v1/completions",body=body,headers=headers)
  response=conn.getresponse();status=response.status
  if status!=200:raise RuntimeError("http")
  while frames<512:
@@ -500,11 +548,17 @@ finally:conn.close()
 
 const drainBenignPython = `import base64,hashlib,http.client,json,signal,sys
 signal.alarm(20)
-body=base64.b64decode(sys.stdin.buffer.read(4097),validate=True)
+input=sys.stdin.buffer.read(6145)
+v=json.loads(input) if input.startswith(b"{") else {"body":input.decode("ascii")}
+body=base64.b64decode(v["body"],validate=True)
+key=base64.b64decode(v.get("bearer",""),validate=True)
+if len(key)>256 or any(c<33 or c>126 for c in key):raise RuntimeError("caller_bound")
 if len(body)>4096:raise RuntimeError("body")
 conn=http.client.HTTPConnection("vllm.vllm.svc.cluster.local",8000,timeout=15)
 try:
- conn.request("POST","/v1/completions",body=body,headers={"Content-Type":"application/json"})
+ headers={"Content-Type":"application/json"}
+ if key:headers["Authorization"]="Bearer "+key.decode("ascii")
+ conn.request("POST","/v1/completions",body=body,headers=headers)
  response=conn.getresponse();raw=response.read(8193)
  if len(raw)>8192:raise RuntimeError("reply_bound")
  valid=False
@@ -552,8 +606,15 @@ func drainNonce() (string, error) {
 // startDrainStream keeps kubectl exec attached. Its only stdout is a bounded
 // typed projection; the Python process never prints model text or credentials.
 func startDrainStream(parent context.Context, p drainLiveProfile, body []byte, nonce string) (*drainStreamRun, error) {
+	if err := p.retainedCaller.check(parent); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(parent)
 	input, _ := json.Marshal(map[string]string{"body": base64Body(body), "nonce": nonce})
+	if p.retainedCaller != nil {
+		input, _ = json.Marshal(map[string]string{"body": base64Body(body), "nonce": nonce,
+			"bearer": base64Body(p.retainedCaller.bearer())})
+	}
 	cmd := exec.CommandContext(ctx, "kubectl", "--context="+p.Context, "-n", "vllm", "exec", "-i", p.PodName, "-c", "guardrail", "--", "python3", "-B", "-c", drainStreamPython)
 	cmd.Stdin = bytes.NewReader(input)
 	stdout, err := cmd.StdoutPipe()
@@ -884,6 +945,10 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	} else if err = os.MkdirAll(out, 0700); err == nil {
 		err = publishMongoAuditFile(out, "profile-original.json", raw, 16<<10)
 		if err == nil {
+			p.retainedCaller, err = newRetainedCallerAuthority(s.cfg, p.RetainedCallerLeaseProfileSHA256,
+				p.ServiceUID, p.PolicyUID, "", p.PodUID)
+		}
+		if err == nil {
 			err = s.executeDrainLive(ctx, out, r, p)
 		}
 	}
@@ -911,6 +976,18 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackRecord, p drainLiveProfile) error {
 	if err := s.drainLivePreflight(ctx, out, p, "before"); err != nil {
 		return err
+	}
+	if p.retainedCaller != nil {
+		body := drainRequestBody(p.ModelID, 8, false)
+		status, valid, err := s.drainBenign(ctx, p, body)
+		if err != nil || status != 200 || !valid {
+			return errors.New("authenticated retained-B benign baseline unavailable; no event")
+		}
+		if err := publishMongoAuditFile(out, "retained-b-before-benign.json", drainJSON(map[string]any{
+			"status": status, "valid": valid, "requestSHA256": availabilityHash(body),
+			"callerSHA256": p.retainedCaller.profile.ClientBSHA256}), 4096); err != nil {
+			return err
+		}
 	}
 	nonce, err := drainNonce()
 	if err != nil {
@@ -942,6 +1019,12 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 	}
 	r.DrainLiveProbe.FirstFrameAt = time.Unix(0, first.At).UTC().Format(time.RFC3339Nano)
 	if err = publishMongoAuditFile(out, "stream-first-original.json", first.Original, 4096); err != nil {
+		return err
+	}
+	if first.Status != 200 {
+		return errors.New("retained caller stream was not authenticated by model")
+	}
+	if err = p.retainedCaller.check(ctx); err != nil {
 		return err
 	}
 	// A completed stream before the event has no discriminating overlap.

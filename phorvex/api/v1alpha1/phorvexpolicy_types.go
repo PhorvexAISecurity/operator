@@ -436,7 +436,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;disable
 type ActionType string
 
 const (
@@ -459,6 +459,7 @@ const (
 	ActionMIGRebind                     ActionType = "mig-rebind"
 	ActionKVReset                       ActionType = "kv-reset"
 	ActionEndpointRotate                ActionType = "endpoint-rotate"
+	ActionEndpointLeaseRevoke           ActionType = "endpoint-lease-revoke"
 	ActionModelShardReplace             ActionType = "model-shard-replace"
 	ActionAdapterRotate                 ActionType = "adapter-rotate"
 	ActionRequestDrain                  ActionType = "request-drain"

@@ -35,11 +35,17 @@ def fixture():
             "args": ["--model", renderer.MODEL, "--port", "8001", "--host", "127.0.0.1"],
             "env": [{"name": "VLLM_API_KEY", "valueFrom": {"secretKeyRef": {"name": "vllm-control", "key": "api-key"}}}]}
     guard = {"name": "guardrail", "image": "example/guard@sha256:" + "2" * 64,
-             "command": ["sh", "-c", "exec python /src/dual_server.py"],
+             "command": renderer.LEGACY_COMMAND.copy(),
              "env": [{"name": name, "valueFrom": {"secretKeyRef": {"name": "vllm-control", "key": key}}}
                      for name, key in (("VLLM_API_KEY", "api-key"), ("PHORVEX_GUARDRAIL_ADMIN_KEY", "admin-bearer"))],
-             "volumeMounts": [{"name": "source", "mountPath": "/src"}]}
-    pod["spec"] = {"containers": [vllm, guard], "volumes": [{"name": "source", "configMap": {"name": "guardrail-proxy"}}]}
+             "volumeMounts": [{"name": "source", "mountPath": "/src"},
+                              {"name": "admin-tls", "mountPath": "/etc/phorvex/admin-tls", "readOnly": True}]}
+    guard["env"].extend(({"name": "PHORVEX_ADMIN_TLS_CERT_FILE", "value": "/etc/phorvex/admin-tls/tls.crt"},
+                         {"name": "PHORVEX_ADMIN_TLS_KEY_FILE", "value": "/etc/phorvex/admin-tls/tls.key"}))
+    pod["spec"] = {"containers": [vllm, guard], "volumes": [
+        {"name": "source", "configMap": {"name": "guardrail-proxy"}},
+        {"name": "admin-tls", "secret": {"secretName": "vllm-control", "items": [
+            {"key": "tls.crt", "path": "tls.crt"}, {"key": "tls.key", "path": "tls.key"}]}}]}
     pod["status"] = {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}],
                      "containerStatuses": [{"name": c["name"], "image": c["image"],
                                             "imageID": c["image"], "containerID": "containerd://" + c["name"],
@@ -84,7 +90,7 @@ def fixture():
     console = obj("Pod", "console-abc", "phorvex-system", 8,
                   labels={"app.kubernetes.io/component": "console"},
                   ownerReferences=[{"controller": True, "kind": "ReplicaSet", "name": "console-rs", "uid": uid(9)}])
-    console["spec"] = {"serviceAccountName": "phorvex-console", "containers": [console_c],
+    console["spec"] = {"serviceAccountName": "phorvex-phorvex-console", "containers": [console_c],
                        "volumes": [{"name": "audit", "secret": {"secretName": "audit-client"}},
                                    {"name": "token", "secret": {"secretName": "scoped-token"}}]}
     console["status"] = {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}],
@@ -93,17 +99,88 @@ def fixture():
                                                 "containerID": "containerd://console", "ready": True, "restartCount": 0}]}
     rs = obj("ReplicaSet", "console-rs", "phorvex-system", 9,
              ownerReferences=[{"controller": True, "kind": "Deployment", "name": "console", "uid": uid(10)}])
-    rs["spec"] = {"template": {"spec": {"serviceAccountName": "phorvex-console", "containers": [copy.deepcopy(console_c)]}}}
+    rs["spec"] = {"template": {"spec": {"serviceAccountName": "phorvex-phorvex-console", "containers": [copy.deepcopy(console_c)]}}}
     deployment = obj("Deployment", "console", "phorvex-system", 10, generation=3)
     deployment["spec"] = {"selector": {"matchLabels": {"app.kubernetes.io/component": "console"}},
-                          "template": {"spec": {"serviceAccountName": "phorvex-console", "containers": [copy.deepcopy(console_c)]}}}
+                          "template": {"spec": {"serviceAccountName": "phorvex-phorvex-console", "containers": [copy.deepcopy(console_c)]}}}
     deployment["status"] = {"observedGeneration": 3, "availableReplicas": 1}
     return dict(zip(renderer.ROLES, (cluster, pod, service, slices, source, policy, manager, console, rs, deployment)))
+
+
+def lease_fixture():
+    objects = fixture()
+    pod, source, service, policy = (objects[k] for k in ("pod", "source", "service", "policy"))
+    guard = pod["spec"]["containers"][1]
+    source["immutable"] = True
+    source["data"]["endpoint_lease.py"] = renderer.LEASE.read_text()
+    guard["command"] = ["python3", "-B", "/src/dual_server.py"]
+    guard["volumeMounts"] = [{"name": "admin-tls", "mountPath": "/etc/phorvex/admin-tls", "readOnly": True}]
+    guard["volumeMounts"].extend({"name": "source", "mountPath": "/src/" + name,
+                                  "subPath": name, "readOnly": True} for name in renderer.LEASE_SOURCE_FILES)
+    guard["volumeMounts"].append({"name": "lease-keys", "mountPath": "/etc/phorvex/endpoint-lease-keys",
+                                  "readOnly": True})
+    pod["spec"]["volumes"].append({"name": "lease-keys", "secret": {"secretName": "phorvex-endpoint-lease-keys"}})
+    composite = renderer.digest(b"\0".join(source["data"][name].encode() for name in renderer.LEASE_SOURCE_FILES))
+    policy_uid, secret_uid = uid(21), uid(22)
+    pod["metadata"]["annotations"].update({
+        "phorvex.ai/endpoint-lease-source-configmap": "guardrail-proxy",
+        "phorvex.ai/endpoint-lease-source-sha256": composite,
+        "phorvex.ai/endpoint-lease-policy-configmap-uid": policy_uid})
+    for name, value in (("PHORVEX_ENDPOINT_LEASE_REQUIRED", "true"),
+                        ("PHORVEX_ENDPOINT_LEASE_SECRET_DIR", "/etc/phorvex/endpoint-lease-keys"),
+                        ("PHORVEX_ENDPOINT_LEASE_POLICY_CONFIGMAP_UID", policy_uid),
+                        ("PHORVEX_ENDPOINT_LEASE_SECRET_UID", secret_uid),
+                        ("PHORVEX_ENDPOINT_LEASE_SERVICE_UID", service["metadata"]["uid"]),
+                        ("PHORVEX_ENDPOINT_LEASE_SOURCE_SHA256", composite)):
+        guard["env"].append({"name": name, "value": value})
+    guard["env"].append({"name": "POD_UID", "valueFrom": {"fieldRef": {"fieldPath": "metadata.uid"}}})
+    state = {"version": 1, "revision": 0, "serviceUID": service["metadata"]["uid"],
+             "proxySourceSHA256": composite, "secretUID": secret_uid, "seedSHA256": "a" * 64,
+             "allowedClientHMACs": ["b" * 64, "c" * 64], "revokedClientHMACs": [],
+             "lastOperationID": ""}
+    lease_policy = obj("ConfigMap", "phorvex-endpoint-lease-policy", "vllm", 21,
+                       resourceVersion="7")
+    lease_policy["data"] = {"state.json": json.dumps(state, sort_keys=True, separators=(",", ":"))}
+    objects["lease_policy"] = lease_policy
+    audit = objects["console"]["spec"]["containers"][0]["args"][0].split("=", 1)[1]
+    profile = {"version": 1, "serviceName": "vllm", "serviceUID": service["metadata"]["uid"],
+               "policyName": "vllm-defense", "policyUID": policy["metadata"]["uid"],
+               "policyGeneration": policy["metadata"]["generation"], "policyConfigMapUID": policy_uid,
+               "journalUID": uid(23), "tenantSecretUID": secret_uid, "consoleSecretUID": uid(24),
+               "sourceConfigMapName": "guardrail-proxy", "sourceConfigMapUID": source["metadata"]["uid"],
+               "proxySourceSHA256": composite, "proxyImage": guard["image"],
+               "approvedEngineImage": pod["spec"]["containers"][0]["image"],
+               "seedSHA256": "a" * 64, "clientASHA256": "d" * 64, "clientBSHA256": "e" * 64,
+               "clientAHMAC": "b" * 64, "clientBHMAC": "c" * 64,
+               "eventCreator": "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+               "auditSourceIdentity": audit + "|phorvex-phorvex-audit-source.phorvex-system.svc",
+               "modelId": renderer.MODEL, "maxRunSeconds": 900}
+    raw = json.dumps(profile, sort_keys=True, separators=(",", ":")).encode()
+    profile_name = "phorvex-catalogue-endpoint-lease-" + renderer.digest(raw)[:12]
+    for item in (objects["console"], objects["console_replicaset"]["spec"]["template"],
+                 objects["console_deployment"]["spec"]["template"]):
+        spec = item["spec"]
+        c = next(x for x in spec["containers"] if x["name"] == "console")
+        c.setdefault("env", []).extend((
+            {"name": "PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED", "value": "true"},
+            {"name": "PHORVEX_CONSOLE_ENDPOINT_LEASE_PROFILE_SHA256", "value": renderer.digest(raw)}))
+        c["volumeMounts"].extend((
+            {"name": "lease-profile", "mountPath": "/etc/phorvex-endpoint-lease/profile.json",
+             "subPath": "profile.json", "readOnly": True},
+            {"name": "lease-callers", "mountPath": "/etc/phorvex-endpoint-lease-callers", "readOnly": True}))
+        spec.setdefault("volumes", []).extend((
+            {"name": "lease-profile", "configMap": {"name": profile_name}},
+            {"name": "lease-callers", "secret": {"secretName": "vllm-endpoint-lease-callers"}}))
+    return objects, raw
 
 
 class RenderGuardrailProfileTest(unittest.TestCase):
     def setUp(self):
         self.reviewed_drain_hashes = renderer.DRAIN_SOURCE_SHA256
+        self.reviewed_legacy_hashes = renderer.LEGACY_SOURCE_SHA256
+        renderer.LEGACY_SOURCE_SHA256 = {
+            "guardrail_proxy.py": renderer.digest(renderer.PROXY.read_bytes()),
+            "dual_server.py": renderer.digest(renderer.DUAL.read_bytes())}
         renderer.DRAIN_SOURCE_SHA256 = {
             key: renderer.digest(((renderer.PROXY.parent / key).read_bytes() if (renderer.PROXY.parent / key).exists()
                                   else ("fixture-" + key).encode()))
@@ -111,6 +188,7 @@ class RenderGuardrailProfileTest(unittest.TestCase):
 
     def tearDown(self):
         renderer.DRAIN_SOURCE_SHA256 = self.reviewed_drain_hashes
+        renderer.LEGACY_SOURCE_SHA256 = self.reviewed_legacy_hashes
 
     def test_exact_profile_and_native_journal(self):
         raw, cm, values = renderer.render(fixture(), "arn:aws:eks:us-east-2:123456789012:cluster/test")
@@ -125,6 +203,56 @@ class RenderGuardrailProfileTest(unittest.TestCase):
                          f["guardrailJournalName"])
         self.assertEqual(renderer.journal_name("fdb92f85-c98d-40c8-83db-7881041b1f8b"),
                          "phorvex-serving-effect-a63da83e4ffcd99478d7dc594d61a12cf1753f26")
+
+    def test_exact_five_file_lease_closure_requires_retained_b_authority(self):
+        objects, retained = lease_fixture()
+        raw, _, _ = renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained)
+        fixture_data = json.loads(raw)["guardrailAvailabilityFixture"]
+        self.assertEqual(fixture_data["retainedCallerLeaseProfileSHA256"], renderer.digest(retained))
+        self.assertEqual(fixture_data["sourceSHA256"], renderer.digest(renderer.PROXY.read_bytes()))
+        with self.assertRaises(ValueError):
+            renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        after, retained_after = lease_fixture()
+        state = json.loads(after["lease_policy"]["data"]["state.json"])
+        state.update(revision=1, allowedClientHMACs=["c" * 64],
+                     revokedClientHMACs=["b" * 64], lastOperationID="d" * 32)
+        after["lease_policy"]["data"]["state.json"] = json.dumps(state, sort_keys=True, separators=(",", ":"))
+        renderer.render(after, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained_after)
+        for change in (
+            lambda o, p: o["source"]["data"].pop("endpoint_lease.py"),
+            lambda o, p: o["source"]["data"].update({"endpoint_lease.py": "wrong"}),
+            lambda o, p: o["source"].update(immutable=False),
+            lambda o, p: o["pod"]["status"]["containerStatuses"][1].update(imageID="example/guard@sha256:" + "9" * 64),
+            lambda o, p: o["pod"]["spec"]["containers"][1].update(command=["sh", "-c", "exec python /src/dual_server.py"]),
+            lambda o, p: o["pod"]["spec"]["containers"][1]["volumeMounts"][1].update(readOnly=False),
+            lambda o, p: o["pod"]["spec"]["containers"][1]["env"].append({"name": "PYTHONPATH", "value": "/tmp"}),
+            lambda o, p: o["pod"]["metadata"]["annotations"].update({"phorvex.ai/endpoint-lease-source-sha256": "0" * 64}),
+            lambda o, p: o["lease_policy"]["data"].update({"state.json": o["lease_policy"]["data"]["state.json"] + " "}),
+            lambda o, p: o["lease_policy"]["metadata"].update(uid=uid(99)),
+            lambda o, p: p.update({"clientBHMAC": "f" * 64}),
+            lambda o, p: p.update({"consoleSecretUID": ""}),
+            lambda o, p: p.update({"auditSourceIdentity": "untrusted"}),
+            lambda o, p: o["console"]["spec"]["containers"][0]["env"][0].update(value="false"),
+            lambda o, p: o["console_deployment"]["spec"]["template"]["spec"]["volumes"][1]["secret"].update(secretName="other"),
+        ):
+            with self.subTest(change=change.__code__.co_firstlineno):
+                changed, profile = lease_fixture()
+                decoded = json.loads(profile)
+                change(changed, decoded)
+                with self.assertRaises(ValueError):
+                    renderer.render(changed, "arn:aws:eks:us-east-2:123456789012:cluster/test",
+                                    json.dumps(decoded, sort_keys=True, separators=(",", ":")).encode())
+
+    def test_four_file_closure_rejects_lease_requirement_or_extra_policy(self):
+        objects = fixture()
+        objects["pod"]["spec"]["containers"][1]["env"].append(
+            {"name": "PHORVEX_ENDPOINT_LEASE_REQUIRED", "value": "true"})
+        with self.assertRaises(ValueError):
+            renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        objects = fixture()
+        objects["lease_policy"] = lease_fixture()[0]["lease_policy"]
+        with self.assertRaises(ValueError):
+            renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
 
     def test_current_stock_runtime_and_authority_drift_refuse(self):
         changes = (
@@ -171,6 +299,31 @@ class RenderGuardrailProfileTest(unittest.TestCase):
                 renderer.read_manifest(path, renderer.digest(raw))
             with self.assertRaisesRegex(ValueError, "manifest byte/hash drift"):
                 renderer.read_manifest(path, "0" * 64)
+
+    def test_eleven_get_manifest_adds_only_lease_policy_configmap(self):
+        inputs, retained = lease_fixture()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = {"schema": "guardrail-effect-inputs-v1", "inputs": {}}
+            for role, value in inputs.items():
+                receipt = {"args": ["get", role, "-o", "json"], "rc": 0, "dispatch_count": 1,
+                           "finished_at": dt.datetime.now(dt.timezone.utc).isoformat(), "stdout": json.dumps(value)}
+                raw = json.dumps(receipt).encode()
+                (root / (role + ".json")).write_bytes(raw)
+                manifest["inputs"][role] = {"path": role + ".json", "sha256": renderer.digest(raw)}
+            raw = json.dumps(manifest).encode()
+            path = root / "manifest.json"
+            path.write_bytes(raw)
+            loaded, hashes = renderer.read_manifest(path, renderer.digest(raw))
+            self.assertIn("lease_policy", hashes)
+            profile, _, _ = renderer.render(loaded, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained)
+            self.assertEqual(json.loads(profile)["guardrailAvailabilityFixture"]["retainedCallerLeaseProfileSHA256"],
+                             renderer.digest(retained))
+            manifest["inputs"]["secret"] = manifest["inputs"]["lease_policy"]
+            raw = json.dumps(manifest).encode()
+            path.write_bytes(raw)
+            with self.assertRaisesRegex(ValueError, "manifest role set"):
+                renderer.read_manifest(path, renderer.digest(raw))
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 HERE = Path(__file__).resolve().parent
 PROXY = HERE.parents[1] / "test-harness/guardrail/guardrail_proxy.py"
 DUAL = HERE / "dual_server.py"
+LEASE = HERE / "endpoint_lease.py"
 # The owner's reviewed four-key drain candidate is staged on a separate
 # branch. Keep its exact source hashes here until the branches are integrated;
 # when source files exist locally, compare their full bytes too.
@@ -28,8 +29,24 @@ DRAIN_SOURCE_SHA256 = {
     "drain_v11.py": "c117bfe2928a6b43146fce7aed9fa3df9b1c746d74c9855d3eafb7ba5f6de857",
     "drain_v11_init.py": "4e1a7a00550e8ce980b95114305027729dd5e3dddfdcbb2bca3026cb16b5dd5d",
 }
+LEGACY_SOURCE_SHA256 = {
+    "guardrail_proxy.py": "7659d44ef8e637fd74db754e393f65c3e58289cc3be347c716e10e83127076f2",
+    "dual_server.py": "c89135124108e7f613f029a0b4bde5c9a6201f73b1b0f0041d2d4379140d2dfd",
+}
+LEASE_SOURCE_FILES = ("guardrail_proxy.py", "dual_server.py", "endpoint_lease.py",
+                      "drain_v11.py", "drain_v11_init.py")
+LEGACY_COMMAND = ["sh", "-c", "pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir fastapi 'uvicorn[standard]' httpx transformers && exec python /src/dual_server.py"]
+LEASE_POLICY_KEYS = {"version", "revision", "serviceUID", "proxySourceSHA256", "secretUID",
+                     "seedSHA256", "allowedClientHMACs", "revokedClientHMACs", "lastOperationID"}
+LEASE_PROFILE_KEYS = {"version", "serviceName", "serviceUID", "policyName", "policyUID",
+                      "policyGeneration", "policyConfigMapUID", "journalUID", "tenantSecretUID",
+                      "consoleSecretUID", "sourceConfigMapName", "sourceConfigMapUID",
+                      "proxySourceSHA256", "proxyImage", "approvedEngineImage", "seedSHA256",
+                      "clientASHA256", "clientBSHA256", "clientAHMAC", "clientBHMAC",
+                      "eventCreator", "auditSourceIdentity", "modelId", "maxRunSeconds"}
 ROLES = ("cluster", "pod", "service", "endpointslices", "source", "policy", "manager",
          "console", "console_replicaset", "console_deployment")
+LEASE_ROLE = "lease_policy"
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 UID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 DNS = re.compile(r"[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?\Z")
@@ -104,6 +121,92 @@ def one_env(spec: dict, name: str) -> dict:
     return rows[0]
 
 
+def literal_env(spec: dict, name: str, expected: str) -> None:
+    row = one_env(spec, name)
+    require(row.get("value") == expected and "valueFrom" not in row,
+            name + " literal authority differs")
+
+
+def unique_json(raw: bytes) -> dict:
+    def pairs(rows):
+        value = {}
+        for key, item in rows:
+            require(key not in value, "duplicate lease policy key")
+            value[key] = item
+        return value
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=pairs)
+    except (UnicodeError, ValueError, TypeError) as error:
+        raise ValueError("lease policy JSON invalid") from error
+    require(isinstance(value, dict) and
+            json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() == raw,
+            "lease policy is not canonical")
+    return value
+
+
+def lease_policy_state(obj: dict, service_uid: str, source_sha: str, policy_uid: str, secret_uid: str) -> dict:
+    m = meta(obj, "ConfigMap", "phorvex-endpoint-lease-policy", "vllm")
+    require(m["uid"] == policy_uid and bool(m.get("resourceVersion")) and
+            set(obj.get("data", {})) == {"state.json"} and not obj.get("binaryData"),
+            "lease policy object authority differs")
+    raw = obj["data"]["state.json"].encode()
+    require(0 < len(raw) <= 16384, "lease policy exceeds bound")
+    state = unique_json(raw)
+    require(set(state) == LEASE_POLICY_KEYS and type(state["version"]) is int and state["version"] == 1 and
+            type(state["revision"]) is int and 0 <= state["revision"] <= (1 << 53) - 1 and
+            state["serviceUID"] == service_uid and state["proxySourceSHA256"] == source_sha and
+            state["secretUID"] == secret_uid and isinstance(state["seedSHA256"], str) and
+            bool(SHA.fullmatch(state["seedSHA256"])), "lease policy source/identity differs")
+    allowed, revoked = state["allowedClientHMACs"], state["revokedClientHMACs"]
+    require(all(isinstance(rows, list) and all(isinstance(x, str) and SHA.fullmatch(x) for x in rows) and
+                rows == sorted(set(rows)) for rows in (allowed, revoked)) and
+            bool(allowed) and len(allowed) + len(revoked) == 2 and not set(allowed) & set(revoked),
+            "lease policy roster differs")
+    op = state["lastOperationID"]
+    require(isinstance(op, str) and ((state["revision"] == 0 and not op and not revoked) or
+            (state["revision"] > 0 and bool(re.fullmatch(r"[0-9a-f]{32,64}", op)))),
+            "lease policy operation differs")
+    return state
+
+
+def retained_lease_profile(raw: bytes, service_uid: str, source_uid: str, source_sha: str,
+                           policy_uid: str, policy_generation: int, lease_policy_uid: str,
+                           state: dict, guard: dict, vllm: dict) -> dict:
+    require(0 < len(raw) <= 8192, "retained caller profile size differs")
+    value = unique_json(raw)
+    require(set(value) == LEASE_PROFILE_KEYS and type(value["version"]) is int and value["version"] == 1 and
+            type(value["policyGeneration"]) is int and value["policyGeneration"] == policy_generation and
+            type(value["maxRunSeconds"]) is int and value["maxRunSeconds"] == 900 and
+            value["serviceName"] == "vllm" and value["serviceUID"] == service_uid and
+            value["policyName"] == "vllm-defense" and value["policyUID"] == policy_uid and
+            value["policyConfigMapUID"] == lease_policy_uid and
+            value["tenantSecretUID"] == state["secretUID"] and
+            value["sourceConfigMapName"] == "guardrail-proxy" and
+            value["sourceConfigMapUID"] == source_uid and
+            value["proxySourceSHA256"] == source_sha and
+            value["seedSHA256"] == state["seedSHA256"] and
+            value["modelId"] == MODEL and
+            value["eventCreator"] == "system:serviceaccount:phorvex-system:phorvex-phorvex-console" and
+            value["proxyImage"] == guard.get("image") and
+            value["approvedEngineImage"] == vllm.get("image"),
+            "retained caller profile source/target differs")
+    for key in ("journalUID", "consoleSecretUID"):
+        require(isinstance(value[key], str) and bool(UID.fullmatch(value[key])),
+                key + " retained caller authority invalid")
+    for key in ("clientASHA256", "clientBSHA256", "clientAHMAC", "clientBHMAC"):
+        require(isinstance(value[key], str) and bool(SHA.fullmatch(value[key])),
+                key + " retained caller digest invalid")
+    require(value["clientASHA256"] != value["clientBSHA256"] and
+            value["clientAHMAC"] != value["clientBHMAC"] and
+            sorted(state["allowedClientHMACs"] + state["revokedClientHMACs"]) ==
+            sorted([value["clientAHMAC"], value["clientBHMAC"]]) and
+            value["clientBHMAC"] in state["allowedClientHMACs"] and
+            isinstance(value["eventCreator"], str) and
+            isinstance(value["auditSourceIdentity"], str),
+            "retained B is not admitted by current lease policy")
+    return value
+
+
 def secret_ref(spec: dict, name: str, key: str) -> str:
     row = one_env(spec, name)
     ref = row.get("valueFrom", {}).get("secretKeyRef", {})
@@ -135,8 +238,65 @@ def mount(spec: dict, volumes: list[dict], path: str, kind: str, source: str | N
                 path + " source differs")
 
 
+def lease_mounts(spec: dict, volumes: list[dict]) -> None:
+    source_volumes = [v for v in volumes if v.get("configMap", {}).get("name") == "guardrail-proxy"]
+    require(len(source_volumes) == 1 and source_volumes[0]["configMap"].get("optional") is not True,
+            "lease source volume differs")
+    source_name = source_volumes[0]["name"]
+    for filename in LEASE_SOURCE_FILES:
+        rows = [m for m in spec.get("volumeMounts", []) if m.get("mountPath") == "/src/" + filename]
+        require(len(rows) == 1 and rows[0].get("name") == source_name and
+                rows[0].get("subPath") == filename and rows[0].get("readOnly") is True and
+                not rows[0].get("subPathExpr"), "lease source file mount differs")
+    require(not any(m.get("mountPath") == "/src" or
+                    m.get("mountPath", "").startswith("/src/") and
+                    m.get("mountPath") not in {"/src/" + f for f in LEASE_SOURCE_FILES}
+                    for m in spec.get("volumeMounts", [])), "mixed lease source mounts")
+    mount(spec, volumes, "/etc/phorvex/endpoint-lease-keys", "secret", "phorvex-endpoint-lease-keys")
+    secret_volumes = [v for v in volumes if v.get("secret", {}).get("secretName") == "phorvex-endpoint-lease-keys"]
+    require(len(secret_volumes) == 1 and secret_volumes[0]["secret"].get("optional") is not True,
+            "lease Secret projection differs")
+
+
+def console_lease_projection(console: dict, rs: dict, deployment: dict, profile_sha: str) -> None:
+    name = "phorvex-catalogue-endpoint-lease-" + profile_sha[:12]
+    for obj in (console, rs["spec"]["template"], deployment["spec"]["template"]):
+        spec = obj["spec"]
+        matches = [c for c in spec.get("containers", []) if c.get("name") == "console"]
+        require(len(matches) == 1, "lease console container differs")
+        c = matches[0]
+        literal_env(c, "PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED", "true")
+        literal_env(c, "PHORVEX_CONSOLE_ENDPOINT_LEASE_PROFILE_SHA256", profile_sha)
+        mounts = c.get("volumeMounts", [])
+        profile_mounts = [m for m in mounts if m.get("mountPath") == "/etc/phorvex-endpoint-lease/profile.json"]
+        caller_mounts = [m for m in mounts if m.get("mountPath") == "/etc/phorvex-endpoint-lease-callers"]
+        require(len(profile_mounts) == len(caller_mounts) == 1 and
+                profile_mounts[0].get("subPath") == "profile.json" and
+                profile_mounts[0].get("readOnly") is True and
+                caller_mounts[0].get("readOnly") is True and not caller_mounts[0].get("subPath") and
+                not caller_mounts[0].get("subPathExpr"), "lease console profile/caller mounts differ")
+        profile_volumes = [v for v in spec.get("volumes", []) if v.get("name") == profile_mounts[0].get("name")]
+        caller_volumes = [v for v in spec.get("volumes", []) if v.get("name") == caller_mounts[0].get("name")]
+        require(len(profile_volumes) == len(caller_volumes) == 1 and
+                profile_volumes[0].get("configMap", {}).get("name") == name and
+                profile_volumes[0]["configMap"].get("optional") is not True and
+                caller_volumes[0].get("secret", {}).get("secretName") == "vllm-endpoint-lease-callers" and
+                caller_volumes[0]["secret"].get("optional") is not True,
+                "lease console projected authority differs")
+
+
 def image_id(pod: dict, name: str) -> str:
     return container(pod, name)[1]["imageID"]
+
+
+def immutable_runtime_image(spec: dict, status: dict) -> bool:
+    image = spec.get("image", "")
+    runtime = status.get("imageID", "")
+    for prefix in ("docker-pullable://", "docker://", "containerd://"):
+        if runtime.startswith(prefix):
+            runtime = runtime[len(prefix):]
+            break
+    return bool(IMAGE_ID.fullmatch(image)) and runtime in (image, image[image.rfind("@") + 1:])
 
 
 def journal_name(pod_uid: str) -> str:
@@ -144,8 +304,8 @@ def journal_name(pod_uid: str) -> str:
     return "phorvex-serving-effect-" + digest(("serving-effect/" + DOMAIN + "/" + pod_uid).encode())[:40]
 
 
-def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes] | None = None) -> tuple[bytes, dict, dict]:
-    require(set(objects) == set(ROLES), "exact original set required")
+def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes: bytes | None = None) -> tuple[bytes, dict, dict]:
+    require(set(objects) in (set(ROLES), set(ROLES) | {LEASE_ROLE}), "exact original set required")
     require(context != "in-cluster" and bool(context) and "__SET_" not in context and len(context) <= 256,
             "logical cluster context missing")
     cluster, pod, service, slices, source, policy, manager, console, rs, deployment = (objects[k] for k in ROLES)
@@ -188,7 +348,7 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
             all(co.get("labels", {}).get(k) == v for k, v in deployment.get("spec", {}).get("selector", {}).get("matchLabels", {}).items()),
             "console Deployment is not the current one-Ready owner")
     vllm, vllm_status = container(pod, "vllm")
-    guard, _ = container(pod, "guardrail")
+    guard, guard_status = container(pod, "guardrail")
     manager_spec, manager_status = container(manager, "manager")
     require(manager_spec.get("image", "").startswith(PHORVEX_IMAGE_REPO + ":") or
             manager_spec.get("image", "").startswith(PHORVEX_IMAGE_REPO + "@sha256:"),
@@ -207,22 +367,79 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
             "console audit arguments differ from owner template")
     require(option(vllm.get("args", []), "--model") == MODEL and option(vllm["args"], "--port") == "8001" and
             option(vllm["args"], "--host") == "127.0.0.1", "reviewed raw model/loopback route differs")
-    require(guard.get("command", [])[:2] == ["sh", "-c"] and len(guard.get("command", [])) == 3 and
-            guard["command"][2].endswith("exec python /src/dual_server.py"), "dual-listener process not installed")
     shared_secret = secret_ref(vllm, "VLLM_API_KEY", "api-key")
     require(secret_ref(guard, "VLLM_API_KEY", "api-key") == shared_secret and
             secret_ref(guard, "PHORVEX_GUARDRAIL_ADMIN_KEY", "admin-bearer") == shared_secret,
             "reviewed private upstream/admin authority differs")
-    mount(guard, pod["spec"].get("volumes", []), "/src", "configMap", "guardrail-proxy")
-    files = source_files or {"guardrail_proxy.py": PROXY.read_bytes(), "dual_server.py": DUAL.read_bytes()}
-    require(set(files) == {"guardrail_proxy.py", "dual_server.py"} and
-            set(source.get("data", {})) == set(files) | set(DRAIN_SOURCE_SHA256),
-            "complete four-file dual-listener source keys differ")
-    for key, raw in files.items():
-        require(len(raw) <= 1 << 20 and source["data"][key].encode() == raw,
-                key + " installed bytes differ from reviewed source")
+    literal_env(guard, "PHORVEX_ADMIN_TLS_CERT_FILE", "/etc/phorvex/admin-tls/tls.crt")
+    literal_env(guard, "PHORVEX_ADMIN_TLS_KEY_FILE", "/etc/phorvex/admin-tls/tls.key")
+    mount(guard, pod["spec"].get("volumes", []), "/etc/phorvex/admin-tls", "secret", shared_secret)
+    tls_volumes = [v for v in pod["spec"].get("volumes", []) if v.get("secret", {}).get("secretName") == shared_secret]
+    require(len(tls_volumes) == 1 and tls_volumes[0]["secret"].get("optional") is not True and
+            {r.get("key"): r.get("path") for r in tls_volumes[0]["secret"].get("items", [])} ==
+            {"tls.crt": "tls.crt", "tls.key": "tls.key"} and
+            len(tls_volumes[0]["secret"].get("items", [])) == 2,
+            "private TLS Secret projection differs")
+    keys = set(source.get("data", {}))
+    legacy = keys == set(LEGACY_SOURCE_SHA256) | set(DRAIN_SOURCE_SHA256)
+    lease = keys == set(LEASE_SOURCE_FILES)
+    require((legacy or lease) and not source.get("binaryData"),
+            "complete reviewed four- or five-file source keys differ")
+    files = {key: source["data"][key].encode() for key in keys}
+    require(all(0 < len(raw) <= 1 << 20 for raw in files.values()), "source file size differs")
+    lease_data = None
+    if legacy:
+        require(set(objects) == set(ROLES) and retained_lease_profile_bytes is None and
+                guard.get("command") == LEGACY_COMMAND and
+                not guard.get("args") and source.get("immutable") is not True,
+                "legacy dual-listener closure differs")
+        require(not any(e.get("name", "").startswith("PHORVEX_ENDPOINT_LEASE_")
+                        for e in guard.get("env", [])) and
+                not any(k.startswith("phorvex.ai/endpoint-lease-") for k in pm.get("annotations", {})) and
+                not any(v.get("secret", {}).get("secretName") == "phorvex-endpoint-lease-keys"
+                        for v in pod["spec"].get("volumes", [])),
+                "legacy source carries lease-only authority")
+        mount(guard, pod["spec"].get("volumes", []), "/src", "configMap", "guardrail-proxy")
+        for key, expected in LEGACY_SOURCE_SHA256.items():
+            require(digest(files[key]) == expected, key + " legacy source bytes differ")
+    else:
+        require(set(objects) == set(ROLES) | {LEASE_ROLE} and retained_lease_profile_bytes is not None and
+                guard.get("command") == ["python3", "-B", "/src/dual_server.py"] and
+                not guard.get("args") and source.get("immutable") is True and
+                immutable_runtime_image(guard, guard_status) and
+                immutable_runtime_image(vllm, vllm_status),
+                "lease dual-listener closure or retained credential profile differs")
+        reviewed = {"guardrail_proxy.py": PROXY, "dual_server.py": DUAL, "endpoint_lease.py": LEASE}
+        for key, path in reviewed.items():
+            require(files[key] == read_regular_bounded(path, 1 << 20),
+                    key + " installed bytes differ from reviewed lease source")
+        lease_mounts(guard, pod["spec"].get("volumes", []))
+        require(not any(e.get("name") in {"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP",
+                                             "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL"}
+                        for e in guard.get("env", [])), "lease Python source override present")
+        composite = digest(b"\0".join(files[key] for key in LEASE_SOURCE_FILES))
+        annotations = pm.get("annotations", {})
+        policy_uid = annotations.get("phorvex.ai/endpoint-lease-policy-configmap-uid", "")
+        secret_uid = one_env(guard, "PHORVEX_ENDPOINT_LEASE_SECRET_UID").get("value", "")
+        require(bool(UID.fullmatch(policy_uid)) and bool(UID.fullmatch(secret_uid)) and
+                annotations.get("phorvex.ai/endpoint-lease-source-configmap") == "guardrail-proxy" and
+                annotations.get("phorvex.ai/endpoint-lease-source-sha256") == composite,
+                "lease Pod annotations differ")
+        for name, expected in (("PHORVEX_ENDPOINT_LEASE_REQUIRED", "true"),
+                               ("PHORVEX_ENDPOINT_LEASE_SECRET_DIR", "/etc/phorvex/endpoint-lease-keys"),
+                               ("PHORVEX_ENDPOINT_LEASE_POLICY_CONFIGMAP_UID", policy_uid),
+                               ("PHORVEX_ENDPOINT_LEASE_SECRET_UID", secret_uid),
+                               ("PHORVEX_ENDPOINT_LEASE_SERVICE_UID", sm["uid"]),
+                               ("PHORVEX_ENDPOINT_LEASE_SOURCE_SHA256", composite)):
+            literal_env(guard, name, expected)
+        require(one_env(guard, "POD_UID").get("valueFrom", {}).get("fieldRef", {}).get("fieldPath") == "metadata.uid" and
+                "value" not in one_env(guard, "POD_UID"), "lease Pod UID Downward API differs")
+        state = lease_policy_state(objects[LEASE_ROLE], sm["uid"], composite, policy_uid, secret_uid)
+        lease_data = retained_lease_profile(retained_lease_profile_bytes, sm["uid"], cm["uid"], composite,
+                                            policy_m["uid"], policy_m["generation"], policy_uid,
+                                            state, guard, vllm)
     for key, expected in DRAIN_SOURCE_SHA256.items():
-        encoded = source["data"][key].encode()
+        encoded = files[key]
         require(len(encoded) <= 1 << 20 and digest(encoded) == expected,
                 key + " installed bytes differ from reviewed drain source")
         checked_in = PROXY.parent / key
@@ -270,6 +487,12 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
     require(u.scheme == "https" and u.hostname == audit_dns and u.port == 8445 and not u.username and
             not u.password and not u.path and not u.query and not u.fragment and
             audit_dns == AUDIT_DNS, "authenticated audit source route differs")
+    if lease_data is not None:
+        require(lease_data["eventCreator"] == "system:serviceaccount:phorvex-system:" +
+                console["spec"].get("serviceAccountName", "") and
+                lease_data["auditSourceIdentity"] == audit_url + "|" + audit_dns,
+                "retained caller console/audit identity differs")
+        console_lease_projection(console, rs, deployment, digest(retained_lease_profile_bytes))
     for arg, expected in (("-audit-source-client-cert", "/etc/audit-client/tls.crt"),
                           ("-audit-source-client-key", "/etc/audit-client/tls.key"),
                           ("-audit-source-ca", "/etc/audit-client/ca.crt")):
@@ -297,6 +520,8 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
         "auditCAFile": "/etc/audit-client/ca.crt", "auditClientCertFile": "/etc/audit-client/tls.crt",
         "auditClientKeyFile": "/etc/audit-client/tls.key", "maxRunSeconds": 600, "cleanupSeconds": 90,
     }
+    if lease:
+        fixture["retainedCallerLeaseProfileSHA256"] = digest(retained_lease_profile_bytes)
     profile = {"kubeconfig": "", "context": context, "namespace": "vllm", "ownedAck": True,
                "trialsPerArm": 1, "masterSeed": 1337, "outDir": "out-guardrail-effect",
                "defenderFilter": [], "scenarioFilter": [], "guardrailAvailabilityFixture": fixture}
@@ -320,10 +545,11 @@ def read_manifest(path: Path, expected_sha: str) -> tuple[dict[str, dict], dict[
     require(digest(raw) == expected_sha, "manifest byte/hash drift")
     manifest = json.loads(raw)
     require(isinstance(manifest, dict) and manifest.get("schema") == "guardrail-effect-inputs-v1" and
-            isinstance(manifest.get("inputs"), dict) and set(manifest["inputs"]) == set(ROLES),
+            isinstance(manifest.get("inputs"), dict) and
+            set(manifest["inputs"]) in (set(ROLES), set(ROLES) | {LEASE_ROLE}),
             "manifest role set differs")
     objects, hashes, times = {}, {}, []
-    for role in ROLES:
+    for role in (*ROLES, *((LEASE_ROLE,) if LEASE_ROLE in manifest["inputs"] else ())):
         row = manifest["inputs"][role]
         require(isinstance(row, dict) and set(row) == {"path", "sha256"} and
                 isinstance(row["sha256"], str) and bool(SHA.fullmatch(row["sha256"])) and
@@ -358,9 +584,20 @@ def main() -> None:
     parser.add_argument("--input-manifest-sha256", required=True)
     parser.add_argument("--context", required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--retained-caller-lease-profile", type=Path)
+    parser.add_argument("--retained-caller-lease-profile-sha256")
     args = parser.parse_args()
     inputs, hashes = read_manifest(args.input_manifest, args.input_manifest_sha256)
-    raw, cm, values = render(inputs, args.context)
+    lease_profile = None
+    if args.retained_caller_lease_profile is not None or args.retained_caller_lease_profile_sha256 is not None:
+        require(args.retained_caller_lease_profile is not None and
+                isinstance(args.retained_caller_lease_profile_sha256, str) and
+                bool(SHA.fullmatch(args.retained_caller_lease_profile_sha256)),
+                "retained caller lease profile pin incomplete")
+        lease_profile = read_regular_bounded(args.retained_caller_lease_profile, 8192)
+        require(digest(lease_profile) == args.retained_caller_lease_profile_sha256,
+                "retained caller lease profile byte/hash drift")
+    raw, cm, values = render(inputs, args.context, lease_profile)
     args.out.mkdir(mode=0o700, parents=False, exist_ok=False)
     os.chmod(args.out, 0o700)
     files = {"config.guardrail-effect.yaml": raw,

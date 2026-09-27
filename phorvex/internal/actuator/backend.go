@@ -354,6 +354,9 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionLiteLLMClientRevoke {
 					e.Prerequisite = "reviewed LiteLLM gateway on two Ready Service Pods, one owned-client observation, policy ConfigMap and protected journal"
 				}
+				if a == model.ActionEndpointLeaseRevoke {
+					e.Prerequisite = "reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal"
+				}
 				if a == model.ActionModelShardReplace {
 					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
 					e.UnverifiedEffect = "registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable"
@@ -369,6 +372,8 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression"
 				} else if a == model.ActionLiteLLMClientRevoke {
 					e.UnverifiedEffect = "support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks"
+				} else if a == model.ActionEndpointLeaseRevoke {
+					e.UnverifiedEffect = "support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior"
 				} else {
 					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
 				}

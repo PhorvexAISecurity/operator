@@ -67,6 +67,10 @@ const (
 	// route-rotate also retains the Pod and stable Service locators, so selector membership
 	// changes do not grant it endpointPath or networkIdentity cover.
 	FactEndpointPath = "endpointPath"
+	// FactEndpointLeaseReuse is one observed, source-bound caller lease used
+	// against the protected public inference route. Revoking that exact lease
+	// invalidates this credential fact; endpointPath remains audit-only.
+	FactEndpointLeaseReuse = "endpointLeaseReuse"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
 	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap

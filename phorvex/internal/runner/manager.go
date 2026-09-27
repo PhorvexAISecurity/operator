@@ -43,6 +43,7 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/endpointlease"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -203,6 +204,10 @@ type Manager struct {
 	// Production wires it independently of the chosen actuator backend so a
 	// pending output operation fences any later same-Pod move.
 	OperatorNamespace string
+	// EndpointLeaseAuthorityEnabled means the reviewed source, proxy image and
+	// engine image pins were configured at startup. A missing journal reader or
+	// namespace then fences every selected move on the same vLLM Pod.
+	EndpointLeaseAuthorityEnabled bool
 	// LossHistory is the bounded immutable completed-disclosure ledger. Nil
 	// leaves representation history honestly unavailable.
 	LossHistory losshistory.Ledger
@@ -3012,7 +3017,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			return actuated, &preparation, attempted
 		}
 		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMCPToolPin ||
-			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
+			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionEndpointLeaseRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
 			reason := "sensitive-output-selection-id-unavailable"
@@ -3028,11 +3033,29 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "adapter-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionLiteLLMClientRevoke {
 				reason = "litellm-client-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionEndpointLeaseRevoke {
+				reason = "endpoint-lease-selection-id-unavailable"
 			}
 			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
 		}
+		if m.EndpointLeaseAuthorityEnabled && decisions[i].Namespace == endpointlease.Namespace &&
+			(m.OperatorNamespace == "" || m.BoundaryReader == nil || v.Pod.UID == "") {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-journal-authority-unavailable")
+			continue
+		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
+			pendingLease, leaseFenceErr := actuator.PendingEndpointLeaseOperation(ctx, m.BoundaryReader,
+				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			if leaseFenceErr != nil || pendingLease {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-operation-unresolved")
+				m.Log.Info("same-Pod protected endpoint lease operation fences dispatch",
+					"namespace", decisions[i].Namespace, "pod", decisions[i].Pod,
+					"action", decisions[i].Action, "error", leaseFenceErr)
+				continue
+			}
 			pendingClient, clientFenceErr := actuator.PendingLiteLLMClientOperation(ctx, m.BoundaryReader,
 				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
 			if clientFenceErr != nil || pendingClient {
@@ -3060,6 +3083,10 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					"action", decisions[i].Action, "error", fenceErr)
 				continue
 			}
+		} else if decisions[i].Action == model.ActionEndpointLeaseRevoke {
+			recordExistentialEffect(&decisions[i], false)
+			stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-journal-authority-unavailable")
+			continue
 		} else if decisions[i].Action == model.ActionSensitiveOutputPolicyActivate {
 			recordExistentialEffect(&decisions[i], false)
 			stampDispatch(model.DispatchNotAttempted, "protected-output-policy-journal-authority-unavailable")
@@ -3128,6 +3155,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			VoiceMCPObservation:      v.Pod.VoiceMCPObservation,
 			VoiceOutputObservation:   v.Pod.VoiceOutputObservation,
 			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
+			EndpointLeaseObservation: v.Pod.EndpointLeaseObservation,
 			PolicyName:               pol.PolicyName,
 			PolicyUID:                pol.PolicyUID,
 			PolicyGeneration:         pol.PolicyGeneration,
@@ -3152,7 +3180,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionVoiceRefundPairDeny ||
 			decisions[i].Action == model.ActionVoiceOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMCPToolPin ||
-			decisions[i].Action == model.ActionLiteLLMClientRevoke {
+			decisions[i].Action == model.ActionLiteLLMClientRevoke ||
+			decisions[i].Action == model.ActionEndpointLeaseRevoke {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}

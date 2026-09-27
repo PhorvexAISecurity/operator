@@ -229,6 +229,17 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionLiteLLMClientRevoke] = append(af.CoverByAction[model.ActionLiteLLMClientRevoke], f.Key())
 	}
+	if view.Pod.HasBoundEndpointLeaseObservation() {
+		o := view.Pod.EndpointLeaseObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointLeaseReuse, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorEndpointLeaseReuse,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorEndpointLeaseReuse, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionEndpointLeaseRevoke] = append(af.CoverByAction[model.ActionEndpointLeaseRevoke], f.Key())
+	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
 	if view.Pod.ServingEndpointReady {

@@ -26,31 +26,32 @@ type guardrailAvailabilityProfile struct {
 	ScenarioFilter       []string `json:"scenarioFilter"`
 	DefenderFilter       []string `json:"defenderFilter"`
 	Fixture              struct {
-		RunID                  string `json:"runID"`
-		Transport              string `json:"transport"`
-		ClusterUID             string `json:"clusterUID"`
-		PodName                string `json:"podName"`
-		PodUID                 string `json:"podUID"`
-		PodImageID             string `json:"podImageID"`
-		ServiceUID             string `json:"serviceUID"`
-		SourceConfigMapName    string `json:"sourceConfigMapName"`
-		SourceUID              string `json:"sourceUID"`
-		SourceSHA256           string `json:"sourceSHA256"`
-		BoundarySourceSHA256   string `json:"boundarySourceSHA256,omitempty"`
-		GuardrailJournalName   string `json:"guardrailJournalName"`
-		GuardrailJournalUID    string `json:"guardrailJournalUID"`
-		JournalInitiallyAbsent bool   `json:"journalInitiallyAbsent,omitempty"`
-		CaptureCurrentJournal  bool   `json:"captureCurrentJournal,omitempty"`
-		ManagerPodName         string `json:"managerPodName"`
-		ManagerPodUID          string `json:"managerPodUID"`
-		ManagerImageID         string `json:"managerImageID"`
-		ConsoleDeploymentName  string `json:"consoleDeploymentName"`
-		ConsoleDeploymentUID   string `json:"consoleDeploymentUID"`
-		ConsoleImageID         string `json:"consoleImageID"`
-		PolicyName             string `json:"policyName"`
-		PolicyUID              string `json:"policyUID"`
-		PolicyGeneration       int64  `json:"policyGeneration"`
-		ModelID                string `json:"modelID"`
+		RunID                            string `json:"runID"`
+		Transport                        string `json:"transport"`
+		ClusterUID                       string `json:"clusterUID"`
+		PodName                          string `json:"podName"`
+		PodUID                           string `json:"podUID"`
+		PodImageID                       string `json:"podImageID"`
+		ServiceUID                       string `json:"serviceUID"`
+		SourceConfigMapName              string `json:"sourceConfigMapName"`
+		SourceUID                        string `json:"sourceUID"`
+		SourceSHA256                     string `json:"sourceSHA256"`
+		BoundarySourceSHA256             string `json:"boundarySourceSHA256,omitempty"`
+		RetainedCallerLeaseProfileSHA256 string `json:"retainedCallerLeaseProfileSHA256,omitempty"`
+		GuardrailJournalName             string `json:"guardrailJournalName"`
+		GuardrailJournalUID              string `json:"guardrailJournalUID"`
+		JournalInitiallyAbsent           bool   `json:"journalInitiallyAbsent,omitempty"`
+		CaptureCurrentJournal            bool   `json:"captureCurrentJournal,omitempty"`
+		ManagerPodName                   string `json:"managerPodName"`
+		ManagerPodUID                    string `json:"managerPodUID"`
+		ManagerImageID                   string `json:"managerImageID"`
+		ConsoleDeploymentName            string `json:"consoleDeploymentName"`
+		ConsoleDeploymentUID             string `json:"consoleDeploymentUID"`
+		ConsoleImageID                   string `json:"consoleImageID"`
+		PolicyName                       string `json:"policyName"`
+		PolicyUID                        string `json:"policyUID"`
+		PolicyGeneration                 int64  `json:"policyGeneration"`
+		ModelID                          string `json:"modelID"`
 		// The effect action requires this explicit active baseline pin. The
 		// availability recovery suite retains its own pgv1-only gate.
 		ActiveVariant       string `json:"activeVariant,omitempty"`
@@ -90,6 +91,7 @@ func parseGuardrailAvailabilityProfile(raw []byte) (guardrailAvailabilityProfile
 		!staticUID.MatchString(f.ConsoleDeploymentUID) || !staticUID.MatchString(f.PolicyUID) ||
 		!mongoPinnedImage.MatchString(f.PodImageID) || !mongoPinnedImage.MatchString(f.ManagerImageID) ||
 		!mongoPinnedImage.MatchString(f.ConsoleImageID) || !staticSHA256.MatchString(f.SourceSHA256) ||
+		(f.RetainedCallerLeaseProfileSHA256 != "" && !staticSHA256.MatchString(f.RetainedCallerLeaseProfileSHA256)) ||
 		f.SourceConfigMapName != "guardrail-proxy" || f.PolicyName != "vllm-defense" || f.PolicyGeneration < 1 ||
 		f.ModelID != "Qwen/Qwen2.5-7B-Instruct-AWQ" ||
 		!strings.HasPrefix(f.EventCreator, "system:serviceaccount:phorvex-system:") ||

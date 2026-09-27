@@ -129,6 +129,7 @@ type Request struct {
 	VoiceMCPObservation      *model.VoiceMCPObservation        // selection-time installed Voice/MCP source authority
 	VoiceOutputObservation   *model.VoiceOutputObservation     // selection-time observed synthetic output marker
 	LiteLLMClientObservation *model.LiteLLMClientObservation   // selection-time owned-client gateway authority
+	EndpointLeaseObservation *model.EndpointLeaseObservation   // selection-time accepted caller lease reuse authority
 	TargetUID                string                            // Bound identity from the selecting snapshot.
 	TargetNamespaceUID       string                            // Bound by the protected quarantine-capacity reservation.
 	OperationID              string                            // Stable decision identity for protected quarantine and route operations.

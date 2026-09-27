@@ -212,7 +212,7 @@ export function CostPanel({ lens }: { lens: Lens }) {
 // move (rotate, quarantine, debugger, custom-inject, identity-rotate, route-rotate). guardrail-rotate,
 // adapter-rotate and request-drain are part of the AI P4 set — they were missing here and mis-rendered
 // as "K8s live".
-const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace", "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate"]);
+const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "endpoint-lease-revoke", "model-shard-replace", "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate"]);
 export function ActuatorPanel({ lens }: { lens: Lens }) {
   const audit = useAudit(lens);
   const recs = audit.data;

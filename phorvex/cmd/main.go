@@ -167,6 +167,9 @@ func main() {
 		servingSecurityFile              string
 		servingSecurityMode              string
 		voiceMCPApprovedImage            string
+		endpointLeaseApprovedSource      string
+		endpointLeaseApprovedProxyImage  string
+		endpointLeaseApprovedEngineImage string
 		migNodeExec                      bool
 		migAgentNamespace                string
 		migAgentServiceAccounts          string
@@ -210,6 +213,9 @@ func main() {
 	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "Operator-owned versioned exact policy/workload binding configuration for serving TLS credentials.")
 	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "Serving control mode: secure-required (default) or explicit legacy-plaintext migration compatibility.")
 	flag.StringVar(&voiceMCPApprovedImage, "voice-mcp-approved-image", os.Getenv("PHORVEX_VOICE_MCP_APPROVED_IMAGE"), "Reviewed immutable MCP repo@sha256 required for Voice MCP pinning; empty disables that action.")
+	flag.StringVar(&endpointLeaseApprovedSource, "endpoint-lease-approved-source-sha256", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_SOURCE_SHA256"), "Reviewed endpoint lease proxy source SHA-256; empty disables lease-revoke.")
+	flag.StringVar(&endpointLeaseApprovedProxyImage, "endpoint-lease-approved-proxy-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_PROXY_IMAGE"), "Reviewed immutable endpoint lease proxy repo@sha256; empty disables lease-revoke.")
+	flag.StringVar(&endpointLeaseApprovedEngineImage, "endpoint-lease-approved-engine-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_ENGINE_IMAGE"), "Reviewed immutable endpoint lease engine repo@sha256; empty disables lease-revoke.")
 	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
 	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
 	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
@@ -282,6 +288,10 @@ func main() {
 	flag.Parse()
 	if voiceMCPApprovedImage != "" && !voicemcppolicy.ValidApprovedImage(voiceMCPApprovedImage) {
 		setupLog.Error(fmt.Errorf("invalid reviewed MCP image reference"), "voice MCP image configuration invalid")
+		os.Exit(1)
+	}
+	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(endpointLeaseApprovedSource, endpointLeaseApprovedProxyImage, endpointLeaseApprovedEngineImage); err != nil {
+		setupLog.Error(err, "endpoint lease source configuration invalid")
 		os.Exit(1)
 	}
 	if parsed, err := ingest.ParsePCIeClassTable(pcieClassTableRaw); err != nil {
@@ -494,6 +504,9 @@ func main() {
 		native.SetMIGProfiles(migProfiles)
 		native.SetServingSecurity(servingSecurity)
 		native.VoiceMCPApprovedImage = voiceMCPApprovedImage
+		native.SetEndpointLeaseApprovedSourceSHA256(endpointLeaseApprovedSource)
+		native.SetEndpointLeaseApprovedProxyImage(endpointLeaseApprovedProxyImage)
+		native.SetEndpointLeaseApprovedEngineImage(endpointLeaseApprovedEngineImage)
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
@@ -501,9 +514,13 @@ func main() {
 		hybrid.SetMIGProfiles(migProfiles)
 		hybrid.SetServingSecurity(servingSecurity)
 		hybrid.SetVoiceMCPApprovedImage(voiceMCPApprovedImage)
+		hybrid.SetEndpointLeaseApprovedSourceSHA256(endpointLeaseApprovedSource)
+		hybrid.SetEndpointLeaseApprovedProxyImage(endpointLeaseApprovedProxyImage)
+		hybrid.SetEndpointLeaseApprovedEngineImage(endpointLeaseApprovedEngineImage)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.OperatorNamespace = operatorNS
+	rmgr.EndpointLeaseAuthorityEnabled = endpointLeaseApprovedSource != ""
 	rmgr.LossHistoryReader = mgr.GetAPIReader()
 	if lossHistoryDir != "" {
 		lossStore, storeErr := losshistory.New(lossHistoryDir)

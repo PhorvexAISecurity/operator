@@ -250,6 +250,23 @@ spec:
         - name: PHORVEX_VOICE_MCP_APPROVED_IMAGE
           value: {{ required "voiceMCP.approvedImage must be a reviewed immutable repo@sha256" .Values.phorvex.voiceMCP.approvedImage | quote }}
         {{- end }}
+        {{- if .Values.phorvex.endpointLease.enabled }}
+        {{- if not (regexMatch "^[0-9a-f]{64}$" .Values.phorvex.endpointLease.approvedSourceSHA256) }}
+        {{- fail "endpointLease.approvedSourceSHA256 requires lowercase SHA-256" }}
+        {{- end }}
+        {{- if not (regexMatch "^[^[:space:]@]+@sha256:[0-9a-f]{64}$" .Values.phorvex.endpointLease.approvedProxyImage) }}
+        {{- fail "endpointLease.approvedProxyImage requires immutable repo@sha256" }}
+        {{- end }}
+        {{- if not (regexMatch "^[^[:space:]@]+@sha256:[0-9a-f]{64}$" .Values.phorvex.endpointLease.approvedEngineImage) }}
+        {{- fail "endpointLease.approvedEngineImage requires immutable repo@sha256" }}
+        {{- end }}
+        - name: PHORVEX_ENDPOINT_LEASE_APPROVED_SOURCE_SHA256
+          value: {{ required "endpointLease.approvedSourceSHA256 requires reviewed source SHA-256" .Values.phorvex.endpointLease.approvedSourceSHA256 | quote }}
+        - name: PHORVEX_ENDPOINT_LEASE_APPROVED_PROXY_IMAGE
+          value: {{ required "endpointLease.approvedProxyImage requires reviewed repo@sha256" .Values.phorvex.endpointLease.approvedProxyImage | quote }}
+        - name: PHORVEX_ENDPOINT_LEASE_APPROVED_ENGINE_IMAGE
+          value: {{ required "endpointLease.approvedEngineImage requires reviewed repo@sha256" .Values.phorvex.endpointLease.approvedEngineImage | quote }}
+        {{- end }}
         {{- if .Values.phorvex.actuator }}
         - name: PHORVEX_ACTUATOR
           value: {{ .Values.phorvex.actuator | quote }}

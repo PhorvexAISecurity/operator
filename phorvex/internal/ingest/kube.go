@@ -312,6 +312,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 			bindVoiceMCPObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindVoiceOutputObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindLiteLLMClientObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+			bindEndpointLeaseObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 		}
 	}
 

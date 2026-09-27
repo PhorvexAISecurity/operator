@@ -28,6 +28,7 @@ const { liveAttackRoute, dispatchLiveAttack, liveAttackPollBudgetMs, liveAttackV
 test("only exact advertised endpoint, ID and namespace pairs dispatch", async () => {
   const positives = [
     [{ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm", "vllm"],
+    [{ id: "endpoint-lease-revoke", endpoint: "/api/vllm/attack" }, "vllm", "vllm"],
     [{ id: "ai2-agent-memory-contamination", endpoint: "/api/voice/live/fire" }, "voice", "voice"],
     [{ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/agency/live/fire" }, "voice", "voice-agency"],
     [{ id: "ai2-system-prompt-leakage", endpoint: "/api/voice/output/live/fire" }, "voice", "voice-output"],
@@ -43,13 +44,14 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
     assert.equal(route.kind, kind);
     assert.equal((await dispatchLiveAttack(route, "operator")).attackId, "exact-1");
   }
-  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "voice", "voice-agency", "voice-output", "voice-mcp", "litellm", "litellm", "litellm-output", "litellm-output", "workload"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "vllm", "voice", "voice-agency", "voice-output", "voice-mcp", "litellm", "litellm", "litellm-output", "litellm-output", "workload"]);
   assert.deepEqual(calls.at(-1), ["workload", "nats", "foothold", "operator"]);
 });
 
 test("unsupported and cross-wired routes refuse without fallback; clear is foothold-only", () => {
   const bad = [
     [{ id: "request-drain", endpoint: "/api/vllm/attack" }, "voice"],
+    [{ id: "endpoint-lease-revoke", endpoint: "/api/vllm/attack" }, "voice"],
     [{ id: "reset", endpoint: "/api/vllm/attack" }, "vllm"],
     [{ id: "ai2-agent-memory-contamination", endpoint: "/api/workload/attack" }, "voice"],
     [{ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/live/fire" }, "voice"],
@@ -85,6 +87,7 @@ test("typed observation budgets cover 900-second runs and stay finite", () => {
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-system-prompt-leakage", endpoint: "/api/voice/output/live/fire" }, "voice")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "ai2-mcp-tool-poisoning", endpoint: "/api/voice/mcp/live/fire" }, "voice")), 960_000);
   assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "request-drain", endpoint: "/api/vllm/attack" }, "vllm")), 270_000);
+  assert.equal(liveAttackPollBudgetMs(liveAttackRoute({ id: "endpoint-lease-revoke", endpoint: "/api/vllm/attack" }, "vllm")), 960_000);
 });
 
 test("completed exact NOOP shows reason and blocked candidate without inventing defense", () => {
