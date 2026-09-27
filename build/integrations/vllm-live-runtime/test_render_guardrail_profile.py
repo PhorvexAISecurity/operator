@@ -204,6 +204,24 @@ class RenderGuardrailProfileTest(unittest.TestCase):
         self.assertEqual(renderer.journal_name("fdb92f85-c98d-40c8-83db-7881041b1f8b"),
                          "phorvex-serving-effect-a63da83e4ffcd99478d7dc594d61a12cf1753f26")
 
+    def test_historical_restart_accepts_current_pinned_container_only(self):
+        objects = fixture()
+        statuses = objects["pod"]["status"]["containerStatuses"]
+        guard = next(row for row in statuses if row["name"] == "guardrail")
+        guard["restartCount"] = 1
+        raw, _, _ = renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        self.assertEqual(json.loads(raw)["guardrailAvailabilityFixture"]["podUID"],
+                         objects["pod"]["metadata"]["uid"])
+        for invalid in (-1, True, None, "1"):
+            with self.subTest(restart_count=invalid):
+                guard["restartCount"] = invalid
+                with self.assertRaises(ValueError):
+                    renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        guard["restartCount"] = 1
+        guard["containerID"] = ""
+        with self.assertRaises(ValueError):
+            renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+
     def test_exact_five_file_lease_closure_requires_retained_b_authority(self):
         objects, retained = lease_fixture()
         raw, _, _ = renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained)

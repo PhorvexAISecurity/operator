@@ -29,7 +29,9 @@ def read(path: str) -> tuple[dict, str]:
 
 def selected_container(pod: dict, name: str) -> dict:
     rows = [x for x in pod["status"]["containerStatuses"] if x["name"] == name]
-    if len(rows) != 1 or rows[0].get("ready") is not True or rows[0].get("restartCount") != 0:
+    if (len(rows) != 1 or rows[0].get("ready") is not True
+            or type(rows[0].get("restartCount")) is not int
+            or rows[0]["restartCount"] < 0):
         raise ValueError("container is not one stable Ready incarnation")
     row = rows[0]
     if not row.get("imageID") or not row.get("containerID"):

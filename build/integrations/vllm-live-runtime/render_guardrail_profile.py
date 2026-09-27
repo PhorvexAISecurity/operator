@@ -108,7 +108,8 @@ def container(pod: dict, name: str) -> tuple[dict, dict]:
     image_matches = status.get("image") == spec.get("image") or (
         bool(IMAGE_ID.fullmatch(spec.get("image", ""))) and
         bool(BARE_SHA.fullmatch(status.get("image", ""))))
-    require(status.get("ready") is True and status.get("restartCount") == 0 and
+    require(status.get("ready") is True and type(status.get("restartCount")) is int and
+            status["restartCount"] >= 0 and
             image_matches and
             bool(IMAGE_ID.fullmatch(status.get("imageID", ""))) and status.get("containerID"),
             name + " runtime incarnation is not stable")
