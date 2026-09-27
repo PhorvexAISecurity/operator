@@ -58,6 +58,8 @@ def render(inputs: dict[str, dict], context: str, audit_identity: str) -> tuple[
     labels = pod["metadata"].get("labels", {})
     annotations = pod["metadata"].get("annotations", {})
     selector = svc.get("spec", {}).get("selector", {})
+    if svc.get("metadata", {}).get("name") != "vllm" or svc.get("spec", {}).get("ports") != [{"port": 8000, "protocol": "TCP", "targetPort": 8000}]:
+        raise ValueError("reviewed public Service route or port drift")
     if labels.get("phorvex.ai/serving") != "true" or not selector or not all(labels.get(k) == v for k, v in selector.items()):
         raise ValueError("Service no longer selects the serving Pod")
     if not all(labels.get(k) == v for k, v in spec.get("selector", {}).get("matchLabels", {}).items()):

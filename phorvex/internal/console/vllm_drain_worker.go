@@ -96,7 +96,7 @@ print(json.dumps({name:hashlib.sha256((base/name).read_bytes()).hexdigest() for 
 
 const drainModelPython = `import json,urllib.request
 expected="Qwen/Qwen2.5-7B-Instruct-AWQ"
-with urllib.request.urlopen("http://127.0.0.1:8000/v1/models",timeout=8) as response:
+with urllib.request.urlopen("http://vllm.vllm.svc.cluster.local:8000/v1/models",timeout=8) as response:
  raw=response.read(8193)
  if len(raw)>8192 or response.status!=200:raise RuntimeError("model_inventory")
  value=json.loads(raw)
@@ -185,7 +185,8 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		return err
 	}
 	var svc vllmServiceState
-	if json.Unmarshal(raw, &svc) != nil || svc.Metadata.UID != p.ServiceUID || svc.Metadata.Name != p.ServiceName || svc.Spec.Selector == nil || !maps.Equal(*svc.Spec.Selector, p.ServiceSelector) {
+	if json.Unmarshal(raw, &svc) != nil || svc.Metadata.UID != p.ServiceUID || svc.Metadata.Name != p.ServiceName || svc.Spec.Selector == nil || !maps.Equal(*svc.Spec.Selector, p.ServiceSelector) ||
+		len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0].Port != 8000 || svc.Spec.Ports[0].Protocol != "TCP" || string(svc.Spec.Ports[0].TargetPort) != "8000" {
 		return errors.New("route Service identity drift")
 	}
 	for key, value := range *svc.Spec.Selector {
@@ -471,7 +472,7 @@ v=json.loads(sys.stdin.buffer.read(8193))
 body=base64.b64decode(v["body"],validate=True)
 if len(body)>8192 or len(v["nonce"])!=32 or any(c not in "0123456789abcdef" for c in v["nonce"]):raise RuntimeError("input")
 expected="cmpl-"+v["nonce"]
-conn=http.client.HTTPConnection("127.0.0.1",8000,timeout=210)
+conn=http.client.HTTPConnection("vllm.vllm.svc.cluster.local",8000,timeout=210)
 frames=0; complete=False; status=0; first=False; digest=hashlib.sha256()
 try:
  conn.request("POST","/v1/completions",body=body,headers={"Content-Type":"application/json","Accept":"text/event-stream","X-Request-Id":v["nonce"]})
@@ -501,7 +502,7 @@ const drainBenignPython = `import base64,hashlib,http.client,json,signal,sys
 signal.alarm(20)
 body=base64.b64decode(sys.stdin.buffer.read(4097),validate=True)
 if len(body)>4096:raise RuntimeError("body")
-conn=http.client.HTTPConnection("127.0.0.1",8000,timeout=15)
+conn=http.client.HTTPConnection("vllm.vllm.svc.cluster.local",8000,timeout=15)
 try:
  conn.request("POST","/v1/completions",body=body,headers={"Content-Type":"application/json"})
  response=conn.getresponse();raw=response.read(8193)

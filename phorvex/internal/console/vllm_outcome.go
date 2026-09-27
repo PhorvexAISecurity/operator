@@ -457,6 +457,11 @@ type vllmServiceState struct {
 	} `json:"metadata"`
 	Spec struct {
 		Selector *map[string]string `json:"selector"`
+		Ports    []struct {
+			Port       int             `json:"port"`
+			Protocol   string          `json:"protocol"`
+			TargetPort json.RawMessage `json:"targetPort"`
+		} `json:"ports"`
 	} `json:"spec"`
 }
 

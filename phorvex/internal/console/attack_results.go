@@ -1284,7 +1284,8 @@ func boundedDecisionMatches(all []exactDecisionMatch, summary exactDecisionMatch
 }
 
 func exactDecisionEvidence(r *attackRecord, d *audit.Record, collectedAt time.Time) (decisionEvidence, bool) {
-	if r.AttackID == "poison" && r.EvidenceKind == "vllm-in-place-effect" {
+	if (r.AttackID == "poison" && r.EvidenceKind == "vllm-in-place-effect") ||
+		(r.AttackID == "request-drain" && r.EvidenceKind == "vllm-drain-owned-observation" && d.Selected) {
 		trace := d.DecisionTrace
 		if trace == nil || trace.Validate() != nil || trace.SelectedAction != d.Action ||
 			trace.DispatchOutcome != d.DispatchOutcome || trace.DecisionID == "" || trace.TickID == "" {

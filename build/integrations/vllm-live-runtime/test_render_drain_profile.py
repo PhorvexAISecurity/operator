@@ -24,7 +24,7 @@ def inputs():
     return {"cluster": {"metadata": {"name": "kube-system", "uid": UID}},
             "pod": pod("vllm-0", "vllm", ["vllm", "guardrail"]),
             "service": {"metadata": {"name": "vllm", "namespace": "vllm", "uid": UID},
-                        "spec": {"selector": {"app": "vllm"}}},
+                        "spec": {"selector": {"app": "vllm"}, "ports": [{"port": 8000, "protocol": "TCP", "targetPort": 8000}]}},
             "policy": {"metadata": {"name": "vllm-defense", "namespace": "vllm", "uid": UID, "generation": 4},
                        "spec": {"mode": "active", "selector": {"matchLabels": {"app": "vllm"}},
                                 "actions": {"enabled": ["request-drain"]}}},
@@ -47,6 +47,9 @@ class DrainProfileRender(unittest.TestCase):
     def test_route_or_source_drift_refused(self):
         bad = inputs()
         bad["service"]["spec"]["selector"] = {"missing": "label"}
+        with self.assertRaises(ValueError): render(bad, "dev-test", "reviewed-audit")
+        bad = inputs()
+        bad["service"]["spec"]["ports"][0]["targetPort"] = 8001
         with self.assertRaises(ValueError): render(bad, "dev-test", "reviewed-audit")
         bad = inputs()
         bad["sources"]["serving_engine.py"] = "e" * 64

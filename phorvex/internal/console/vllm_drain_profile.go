@@ -70,7 +70,7 @@ func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
 		p.ServingEngineSHA256 != "35e4419aeb3ca2c1c0153254ac0a179db454cae4a33f7d37b3b9020ebdcfa73e" ||
 		!staticSHA256.MatchString(p.DrainProxySourceSHA256) ||
 		!staticSHA256.MatchString(p.DrainEngineSourceSHA256) ||
-		p.PolicyName != "vllm-defense" || p.PolicyGeneration < 1 || len(p.ServiceSelector) == 0 || len(p.ServiceSelector) > 8 ||
+		p.PolicyName != "vllm-defense" || p.ServiceName != "vllm" || p.PolicyGeneration < 1 || len(p.ServiceSelector) == 0 || len(p.ServiceSelector) > 8 ||
 		p.AuditSourceIdentity == "" || strings.Contains(p.AuditSourceIdentity, "__SET_") ||
 		p.ModelID != "Qwen/Qwen2.5-7B-Instruct-AWQ" ||
 		p.MaxRunSeconds != 240 {

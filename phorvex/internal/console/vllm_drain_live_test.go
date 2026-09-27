@@ -115,7 +115,7 @@ func TestDrainTerminalAuditJoinsExactOwnedOperation(t *testing.T) {
 	hash := sha256.Sum256([]byte("cmpl-" + nonce + "-0"))
 	ownedID := hex.EncodeToString(hash[:])
 	created := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
-	r := &attackRecord{Namespace: "vllm", Pod: p.PodName, TargetUID: p.PodUID, AttackID: "request-drain",
+	r := &attackRecord{Namespace: "vllm", Pod: p.PodName, TargetUID: p.PodUID, AttackID: "request-drain", EvidenceKind: "vllm-drain-owned-observation",
 		ObservationStart: created.Add(-time.Second).Format(time.RFC3339Nano), ObservationEnd: created.Add(time.Minute).Format(time.RFC3339Nano),
 		StimulusEvidence: &attackStimulusEvidence{Observed: true, TargetUID: p.PodUID, EventName: "owned-drain", EventUID: "event-uid",
 			EventRule: model.AttackVectorInflight, EventCreatedAt: created.Format(time.RFC3339Nano)}}
@@ -142,11 +142,16 @@ func TestDrainTerminalAuditJoinsExactOwnedOperation(t *testing.T) {
 		t.Fatalf("exact source-bound operation rejected: %+v %v", selected, err)
 	}
 	for name, mutate := range map[string]func(*audit.Record){
-		"event":    func(v *audit.Record) { v.Events[0].EventUID = "other" },
-		"policy":   func(v *audit.Record) { v.DecisionTrace.PolicyUID = "other" },
-		"target":   func(v *audit.Record) { v.DrainOperation.TargetUID = "other" },
-		"receipt":  func(v *audit.Record) { v.DrainOperation.ReceiptSHA256 = "" },
-		"dispatch": func(v *audit.Record) { v.DispatchOutcome = model.DispatchError },
+		"event":        func(v *audit.Record) { v.Events[0].EventUID = "other" },
+		"policy":       func(v *audit.Record) { v.DecisionTrace.PolicyUID = "other" },
+		"target":       func(v *audit.Record) { v.DrainOperation.TargetUID = "other" },
+		"receipt":      func(v *audit.Record) { v.DrainOperation.ReceiptSHA256 = "" },
+		"dispatch":     func(v *audit.Record) { v.DispatchOutcome = model.DispatchError },
+		"trace-action": func(v *audit.Record) { v.DecisionTrace.SelectedAction = string(model.ActionNoop) },
+		"trace-dispatch": func(v *audit.Record) {
+			v.DecisionTrace.DispatchOutcome = model.DispatchError
+			v.DecisionTrace.DispatchReason = "bounded dispatch error"
+		},
 		"terminal": func(v *audit.Record) { v.DrainOperation.Dispositions[0].Disposition = "completed-before-abort" },
 	} {
 		t.Run(name, func(t *testing.T) {
