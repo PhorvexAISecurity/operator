@@ -42,11 +42,17 @@ func liteOutputPodHook(p *corev1.Pod, policyUID, serviceUID, depUID, documentUID
 	}
 	volumes := map[string]corev1.VolumeSource{}
 	for _, v := range p.Spec.Volumes {
+		if _, duplicate := volumes[v.Name]; duplicate {
+			return false
+		}
 		volumes[v.Name] = v.VolumeSource
 	}
 	if volumes["litellm-output-policy"].ConfigMap == nil || volumes["litellm-output-policy"].ConfigMap.Name != outputpolicy.LitePolicyConfigMap ||
 		volumes["litellm-output-document"].Secret == nil || volumes["litellm-output-document"].Secret.SecretName != outputpolicy.LiteDocumentSecret ||
-		volumes["litellm-output-prompt"].Secret == nil || volumes["litellm-output-prompt"].Secret.SecretName != outputpolicy.LitePromptSecret {
+		volumes["litellm-output-prompt"].Secret == nil || volumes["litellm-output-prompt"].Secret.SecretName != outputpolicy.LitePromptSecret ||
+		(volumes["litellm-output-policy"].ConfigMap.Optional != nil && *volumes["litellm-output-policy"].ConfigMap.Optional) ||
+		(volumes["litellm-output-document"].Secret.Optional != nil && *volumes["litellm-output-document"].Secret.Optional) ||
+		(volumes["litellm-output-prompt"].Secret.Optional != nil && *volumes["litellm-output-prompt"].Secret.Optional) {
 		return false
 	}
 	for _, container := range p.Spec.Containers {
@@ -72,7 +78,12 @@ func liteOutputPodHook(p *corev1.Pod, policyUID, serviceUID, depUID, documentUID
 			}
 		}
 		mounts := map[string]bool{}
+		mountPaths := map[string]bool{}
 		for _, m := range container.VolumeMounts {
+			if mountPaths[m.MountPath] {
+				return false
+			}
+			mountPaths[m.MountPath] = true
 			if m.ReadOnly && m.SubPath == "" && m.SubPathExpr == "" {
 				mounts[m.Name+"="+m.MountPath] = true
 			}

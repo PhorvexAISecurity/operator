@@ -328,6 +328,9 @@ func liteOutputReadJournal(ctx context.Context, ec EnactCtx, nonce string) (*cor
 }
 
 func liteOutputCreateJournal(ctx context.Context, ec EnactCtx, r liteOutputReceipt) (*corev1.ConfigMap, error) {
+	if !r.valid() || r.Phase != "prepared" {
+		return nil, errors.New("LiteLLM output prepared journal intent invalid")
+	}
 	cm, doc, err := liteOutputReadJournalDocument(ctx, ec)
 	if err != nil {
 		return nil, err

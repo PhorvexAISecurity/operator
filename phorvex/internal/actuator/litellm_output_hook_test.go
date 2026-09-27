@@ -43,4 +43,16 @@ func TestLiteOutputPodHookRequiresAllPrivateMountsAndSourcePins(t *testing.T) {
 	if check() {
 		t.Fatal("stale private document Secret UID accepted")
 	}
+	pod.Spec.Containers[0].Env[3].Value = "doc-uid"
+	optional := true
+	pod.Spec.Volumes[0].ConfigMap.Optional = &optional
+	if check() {
+		t.Fatal("optional output-policy projection accepted")
+	}
+	pod.Spec.Volumes[0].ConfigMap.Optional = nil
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{Name: "shadow", MountPath: "/etc/phorvex-litellm-output", ReadOnly: false})
+	if check() {
+		t.Fatal("shadowing policy mount accepted")
+	}
 }
