@@ -22,8 +22,9 @@ func loadGuardrailEffectProfile(cfg Config) (guardrailAvailabilityProfile, []byt
 		return p, nil, errors.New("reviewed guardrail effect profile bytes unavailable")
 	}
 	p, err = parseGuardrailAvailabilityProfile(raw)
-	if err != nil || (p.Fixture.ActiveVariant != "pgv1" && p.Fixture.ActiveVariant != "pgv2") {
-		return p, nil, errors.New("guardrail effect fixture lacks an exact known active variant")
+	if err != nil || (p.Fixture.ActiveVariant != "pgv1" && p.Fixture.ActiveVariant != "pgv2") ||
+		!staticSHA256.MatchString(p.Fixture.BoundarySourceSHA256) {
+		return p, nil, errors.New("guardrail effect fixture lacks an exact known active variant or dual-listener source")
 	}
 	if cfg.AuditSource == nil || cfg.AuditSourceIdentity != p.Fixture.AuditURL+"|"+p.Fixture.AuditServerName {
 		return p, nil, errors.New("reviewed guardrail effect audit transport unavailable")
@@ -45,6 +46,16 @@ func guardrailEffectCatalogueReason(cfg Config) string {
 
 func guardrailEffectProtected(s availabilitySnapshot, p guardrailAvailabilityProfile) error {
 	f := p.Fixture
+	if f.JournalInitiallyAbsent {
+		var absence map[string]any
+		if !s.JournalAbsent || s.JournalUID != "" || s.JournalResourceVersion != "" ||
+			s.ActiveVariant != f.ActiveVariant || s.PodVariant != f.ActiveVariant ||
+			s.GuardrailEpoch != "" || availabilityDecode(s.Receipt, &absence) != nil ||
+			!availabilityIsJournalAbsence(absence, p.Context, f.GuardrailJournalName) {
+			return errors.New("reviewed first-operation guardrail absence or baseline differs")
+		}
+		return nil
+	}
 	n, phase, prior, next, op, tick, err := availabilityReceiptFields(s.Receipt)
 	if err != nil {
 		return err
@@ -75,9 +86,18 @@ func guardrailEffectTransition(before, after availabilitySnapshot, selected avai
 	if !availabilitySameSource(before, after, true) {
 		return "", errors.New("guardrail source or target drift across operation")
 	}
-	bn, _, _, _, bop, _, err := availabilityReceiptFields(before.Receipt)
-	if err != nil {
-		return "", err
+	var bn int64
+	var bop string
+	if before.JournalAbsent {
+		if !p.Fixture.JournalInitiallyAbsent || guardrailEffectProtected(before, p) != nil {
+			return "", errors.New("first-operation source lacks reviewed absence")
+		}
+	} else {
+		var err error
+		bn, _, _, _, bop, _, err = availabilityReceiptFields(before.Receipt)
+		if err != nil {
+			return "", err
+		}
 	}
 	an, phase, prior, next, op, tick, err := availabilityReceiptFields(after.Receipt)
 	if err != nil {
@@ -87,7 +107,7 @@ func guardrailEffectTransition(before, after availabilitySnapshot, selected avai
 	if err = availabilityDecode(after.Receipt, &receipt); err != nil {
 		return "", err
 	}
-	if an != bn+1 || phase != "terminal-full" || prior != before.ActiveVariant ||
+	if after.JournalAbsent || after.JournalUID == "" || an != bn+1 || phase != "terminal-full" || prior != before.ActiveVariant ||
 		next == prior || (next != "pgv1" && next != "pgv2") || next != after.ActiveVariant ||
 		next != after.PodVariant || op == bop || tick == "" || tick != selected.TickID ||
 		op != availabilityOperationID(selected.TickID, before.PolicyUID, "vllm", before.TargetPodUID) ||

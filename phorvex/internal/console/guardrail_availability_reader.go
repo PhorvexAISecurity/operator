@@ -83,8 +83,8 @@ func readGuardrailAvailabilityResult(out, id, admittedSHA string) (*GuardrailAva
 		return nil, errors.New("reviewed guardrail availability profile receipt differs")
 	}
 	e.p, err = parseGuardrailAvailabilityProfile(profileRaw)
-	if err != nil {
-		return nil, err
+	if err != nil || e.p.Fixture.JournalInitiallyAbsent {
+		return nil, errors.New("guardrail availability original cannot use first-operation journal mode")
 	}
 	if err = e.decode("self-identity.json", &e.self); err != nil || e.self["name"] == "" || !staticUID.MatchString(e.self["uid"]) {
 		return nil, errors.New("downward API self identity receipt differs")
@@ -119,14 +119,19 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 	if err = e.findKube(name+"-journal", &journal); err != nil {
 		return s, err
 	}
+	expectedAbsent := availabilityJournalShouldBeAbsent(e.p, name)
+	journalRaw, journalUID, journalRV, journalAbsent, journalErr := availabilityJournalReceipt(journal, e.p.Context, e.p.Fixture.GuardrailJournalName, expectedAbsent)
+	if journalErr != nil {
+		return s, journalErr
+	}
 	var journalReceipt any
 	var snapshotReceipt any
-	if availabilityDecode([]byte(availabilityString(availabilityMap(journal["data"]), "receipt")), &journalReceipt) != nil || availabilityDecode(s.Receipt, &snapshotReceipt) != nil {
+	if availabilityDecode(journalRaw, &journalReceipt) != nil || availabilityDecode(s.Receipt, &snapshotReceipt) != nil {
 		return s, errors.New("original protected receipt malformed")
 	}
 	jr, _ := json.Marshal(journalReceipt)
 	sr, _ := json.Marshal(snapshotReceipt)
-	if s.TargetPodUID != availabilityUID(pod) || s.SourceUID != availabilityUID(source) || s.JournalUID != availabilityUID(journal) || s.JournalResourceVersion != availabilityString(availabilityMeta(journal), "resourceVersion") || s.SourceSHA256 != availabilityHash([]byte(availabilityString(availabilityMap(source["data"]), "guardrail_proxy.py"))) || !bytes.Equal(sr, jr) {
+	if s.TargetPodUID != availabilityUID(pod) || s.SourceUID != availabilityUID(source) || s.JournalUID != journalUID || s.JournalResourceVersion != journalRV || s.JournalAbsent != journalAbsent || s.SourceSHA256 != availabilityHash([]byte(availabilityString(availabilityMap(source["data"]), "guardrail_proxy.py"))) || !bytes.Equal(sr, jr) {
 		return s, errors.New("snapshot differs from original Kubernetes source")
 	}
 	targetID, targetImage, targetErr := availabilityStatus(pod, "guardrail")
@@ -139,6 +144,10 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 	}
 	if runtime["_mountedSourceSHA256"] != s.SourceSHA256 {
 		return s, errors.New("original mounted guardrail source bytes differ")
+	}
+	boundarySHA, err := availabilityBoundarySource(source, runtime, e.p.Fixture.BoundarySourceSHA256)
+	if err != nil || s.BoundarySourceSHA256 != boundarySHA {
+		return s, errors.New("original mounted dual-listener source bytes differ")
 	}
 	state := availabilityMap(runtime["8000/v1/guardrail/state"])
 	stateBody := availabilityMap(state["body"])
@@ -163,7 +172,7 @@ func (e *availabilityEvidence) snapshot(name string) (availabilitySnapshot, erro
 		}
 		rsName, rsUID, re := availabilityController(console, "ReplicaSet")
 		depName, depUID, de := availabilityController(rs, "Deployment")
-		if re != nil || de != nil || availabilityString(availabilityMeta(rs), "name") != rsName || availabilityUID(rs) != rsUID || availabilityString(availabilityMeta(dep), "name") != depName || availabilityUID(dep) != depUID || depName != e.p.Fixture.ConsoleDeploymentName || depUID != e.p.Fixture.ConsoleDeploymentUID || availabilityString(availabilityMeta(console), "name") != e.self["name"] || availabilityUID(console) != e.self["uid"] || s.ConsolePodUID != e.self["uid"] || s.ConsoleReplicaSetUID != rsUID || s.ConsoleDeploymentUID != depUID || s.ClusterUID != availabilityUID(cluster) || s.ClusterUID != e.p.Fixture.ClusterUID || s.ManagerPodUID != availabilityUID(manager) || s.ManagerPodUID != e.p.Fixture.ManagerPodUID || s.ManagerImageID != e.p.Fixture.ManagerImageID || s.ConsoleImageID != e.p.Fixture.ConsoleImageID || s.ServiceUID != availabilityUID(service) || s.ServiceUID != e.p.Fixture.ServiceUID || s.PolicyUID != availabilityUID(policy) || s.PolicyUID != e.p.Fixture.PolicyUID || s.TargetPodUID != e.p.Fixture.PodUID || s.SourceUID != e.p.Fixture.SourceUID || s.SourceSHA256 != e.p.Fixture.SourceSHA256 || s.JournalUID != e.p.Fixture.GuardrailJournalUID || e.p.Fixture.EventCreator != "system:serviceaccount:phorvex-system:"+availabilityString(availabilityMap(console["spec"]), "serviceAccountName") {
+		if re != nil || de != nil || availabilityString(availabilityMeta(rs), "name") != rsName || availabilityUID(rs) != rsUID || availabilityString(availabilityMeta(dep), "name") != depName || availabilityUID(dep) != depUID || depName != e.p.Fixture.ConsoleDeploymentName || depUID != e.p.Fixture.ConsoleDeploymentUID || availabilityString(availabilityMeta(console), "name") != e.self["name"] || availabilityUID(console) != e.self["uid"] || s.ConsolePodUID != e.self["uid"] || s.ConsoleReplicaSetUID != rsUID || s.ConsoleDeploymentUID != depUID || s.ClusterUID != availabilityUID(cluster) || s.ClusterUID != e.p.Fixture.ClusterUID || s.ManagerPodUID != availabilityUID(manager) || s.ManagerPodUID != e.p.Fixture.ManagerPodUID || s.ManagerImageID != e.p.Fixture.ManagerImageID || s.ConsoleImageID != e.p.Fixture.ConsoleImageID || s.ServiceUID != availabilityUID(service) || s.ServiceUID != e.p.Fixture.ServiceUID || s.PolicyUID != availabilityUID(policy) || s.PolicyUID != e.p.Fixture.PolicyUID || s.TargetPodUID != e.p.Fixture.PodUID || s.SourceUID != e.p.Fixture.SourceUID || s.SourceSHA256 != e.p.Fixture.SourceSHA256 || s.BoundarySourceSHA256 != e.p.Fixture.BoundarySourceSHA256 || (!e.p.Fixture.JournalInitiallyAbsent && s.JournalUID != e.p.Fixture.GuardrailJournalUID) || e.p.Fixture.EventCreator != "system:serviceaccount:phorvex-system:"+availabilityString(availabilityMap(console["spec"]), "serviceAccountName") {
 			return s, errors.New("original installed identity or console owner chain differs")
 		}
 		generation, _ := availabilityMeta(policy)["generation"].(float64)

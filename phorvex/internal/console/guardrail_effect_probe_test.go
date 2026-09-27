@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -176,7 +177,7 @@ print(json.dumps({'status':200,'bodyBase64':base64.b64encode(body).decode()}))
 
 func TestGuardrailEffectSeparateReviewedProfileAndKnownVariant(t *testing.T) {
 	raw := guardrailAvailabilityPinnedProfile(t)
-	raw = []byte(strings.Replace(string(raw), "  eventCreator:", "  activeVariant: pgv2\n  eventCreator:", 1))
+	raw = []byte(strings.Replace(string(raw), "  eventCreator:", "  activeVariant: pgv2\n  boundarySourceSHA256: "+strings.Repeat("b", 64)+"\n  eventCreator:", 1))
 	path := filepath.Join(t.TempDir(), "config.guardrail-effect.yaml")
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -214,6 +215,34 @@ func TestGuardrailEffectSeparateReviewedProfileAndKnownVariant(t *testing.T) {
 	cfg.GuardrailEffectProfileSHA256 = availabilityHash(unknown)
 	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
 		t.Fatal("unknown active variant admitted")
+	}
+	missingBoundary := []byte(strings.Replace(string(raw), "  boundarySourceSHA256: "+strings.Repeat("b", 64)+"\n", "", 1))
+	if err := os.WriteFile(path, missingBoundary, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(missingBoundary)
+	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
+		t.Fatal("effect profile without dual-listener source pin admitted")
+	}
+	first := []byte(strings.Replace(string(raw), "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", "  journalInitiallyAbsent: true\n  guardrailJournalUID: \"\"", 1))
+	if bytes.Equal(first, raw) {
+		t.Fatal("first-operation profile test failed to replace exact journal UID")
+	}
+	if err := os.WriteFile(path, first, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(first)
+	parsed, _, err := loadGuardrailEffectProfile(cfg)
+	if err != nil || !parsed.Fixture.JournalInitiallyAbsent || parsed.Fixture.GuardrailJournalUID != "" {
+		t.Fatalf("explicit first-operation effect profile refused: %v", err)
+	}
+	stale := []byte(strings.Replace(string(first), "  guardrailJournalUID: \"\"", "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", 1))
+	if err := os.WriteFile(path, stale, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(stale)
+	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
+		t.Fatal("first-operation profile with preexisting UID admitted")
 	}
 }
 
@@ -370,6 +399,8 @@ func TestGuardrailEffectExactAuditJoinAndCounterexamples(t *testing.T) {
 func TestGuardrailEffectTransitionRejectsVariantOnlyAndWrongTick(t *testing.T) {
 	e, before, after := measuredEffectJoinFixture(t)
 	e.p.Fixture.ActiveVariant = "pgv1"
+	before.JournalUID, after.JournalUID = "journal-uid", "journal-uid"
+	before.JournalResourceVersion, after.JournalResourceVersion = "7", "8"
 	before.Receipt = json.RawMessage(`{"version":9,"kind":"guardrail-rotate","effectDomain":"guardrail-variant-v1","phase":"terminal-full","generation":7,"priorVariant":"pgv2","nextVariant":"pgv1","operationID":"old","tickID":"old-tick","policyNamespace":"vllm","policyName":"vllm-defense","policyUID":"policy-uid","targetName":"target-pod","targetUID":"target-uid","expectedGuardrail":{"present":true,"value":"old-epoch"}}`)
 	selected := availabilityDecision{TickID: "t09"}
 	if op, err := guardrailEffectTransition(before, after, selected, e.p); err != nil || op == "" {
@@ -383,5 +414,127 @@ func TestGuardrailEffectTransitionRejectsVariantOnlyAndWrongTick(t *testing.T) {
 	after.ActiveVariant, after.PodVariant = "pgv1", "pgv1"
 	if _, err := guardrailEffectTransition(before, after, selected, e.p); err == nil {
 		t.Fatal("wrong live variant earned operation credit")
+	}
+}
+
+func TestGuardrailEffectFirstOperationRequiresOriginalAbsenceAndFreshGenerationOne(t *testing.T) {
+	p := guardrailAvailabilityProfile{Context: "reviewed-cluster"}
+	f := &p.Fixture
+	f.JournalInitiallyAbsent = true
+	f.GuardrailJournalName = "exact-slot"
+	f.ActiveVariant = "pgv1"
+	f.PolicyName, f.PolicyUID = "vllm-defense", "policy-uid"
+	f.PodName, f.PodUID = "target-pod", "target-uid"
+	absence := availabilityJournalAbsence(p.Context, f.GuardrailJournalName)
+	before := availabilitySnapshot{JournalAbsent: true, Receipt: mustAvailabilityJSON(absence),
+		ActiveVariant: "pgv1", PodVariant: "pgv1", PolicyUID: f.PolicyUID, TargetPodUID: f.PodUID}
+	if err := guardrailEffectProtected(before, p); err != nil {
+		t.Fatalf("original successful exact-name absence refused: %v", err)
+	}
+	selected := availabilityDecision{TickID: "selected-tick"}
+	op := availabilityOperationID(selected.TickID, f.PolicyUID, "vllm", f.PodUID)
+	after := before
+	after.JournalAbsent = false
+	after.JournalUID, after.JournalResourceVersion = "fresh-uid", "7"
+	after.ActiveVariant, after.PodVariant = "pgv2", "pgv2"
+	after.GuardrailEpoch = availabilityEpoch(op)
+	after.Receipt = mustAvailabilityJSON(map[string]any{
+		"version": 9, "kind": "guardrail-rotate", "effectDomain": "guardrail-variant-v1",
+		"phase": "terminal-full", "generation": 1, "priorVariant": "pgv1", "nextVariant": "pgv2",
+		"operationID": op, "tickID": selected.TickID, "policyNamespace": "vllm", "policyName": f.PolicyName,
+		"policyUID": f.PolicyUID, "targetName": f.PodName, "targetUID": f.PodUID,
+		"expectedGuardrail": map[string]any{"present": true, "value": after.GuardrailEpoch},
+	})
+	if got, err := guardrailEffectTransition(before, after, selected, p); err != nil || got != op {
+		t.Fatalf("fresh selected generation-one operation refused: %s %v", got, err)
+	}
+	if availabilityAdmissionMatches(before, after, before) == nil {
+		t.Fatal("journal created before event admission was accepted")
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*availabilitySnapshot)
+	}{
+		{"missing new UID", func(s *availabilitySnapshot) { s.JournalUID = "" }},
+		{"stale generation", func(s *availabilitySnapshot) {
+			var r map[string]any
+			_ = availabilityDecode(s.Receipt, &r)
+			r["generation"] = float64(9)
+			s.Receipt = mustAvailabilityJSON(r)
+		}},
+		{"wrong selected operation", func(s *availabilitySnapshot) {
+			var r map[string]any
+			_ = availabilityDecode(s.Receipt, &r)
+			r["operationID"] = "other"
+			s.Receipt = mustAvailabilityJSON(r)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := after
+			tc.edit(&changed)
+			if _, err := guardrailEffectTransition(before, changed, selected, p); err == nil {
+				t.Fatal("unreviewed first protected operation accepted")
+			}
+		})
+	}
+	wrongOriginal := before
+	wrongOriginal.JournalAbsent = false
+	wrongOriginal.JournalUID = "stale-uid"
+	if err := guardrailEffectProtected(wrongOriginal, p); err == nil {
+		t.Fatal("preexisting journal accepted as initial absence")
+	}
+}
+
+func TestGuardrailEffectOriginalReaderReplaysAbsenceAndDualSource(t *testing.T) {
+	const label = "before-canary-pre"
+	e := availabilityEvidence{files: map[string][]byte{}}
+	e.p.Context = "reviewed-cluster"
+	e.p.Fixture.JournalInitiallyAbsent = true
+	e.p.Fixture.GuardrailJournalName = "exact-slot"
+	proxy, dual := "reviewed proxy", "reviewed dual server"
+	e.p.Fixture.BoundarySourceSHA256 = availabilityHash([]byte(dual))
+	absence := availabilityJournalAbsence(e.p.Context, e.p.Fixture.GuardrailJournalName)
+	modelRow := map[string]any{"id": "Qwen/Qwen2.5-7B-Instruct-AWQ", "object": "model", "root": "reviewed-root", "parent": nil, "owned_by": "reviewed", "max_model_len": 4096}
+	s := availabilitySnapshot{TargetPodUID: "target-uid", TargetContainerID: "containerd://target", TargetImageID: "reviewed@sha256:" + strings.Repeat("a", 64),
+		SourceUID: "source-uid", SourceSHA256: availabilityHash([]byte(proxy)), BoundarySourceSHA256: e.p.Fixture.BoundarySourceSHA256,
+		JournalAbsent: true, Receipt: mustAvailabilityJSON(absence), ActiveVariant: "pgv1", PodVariant: "pgv1", ModelIdentity: mustAvailabilityJSON(modelRow)}
+	put := func(name string, row any) { e.files[name] = mustAvailabilityJSON(row) }
+	put(label+"-snapshot.json", s)
+	put("kube-001-"+label+"-target.json", map[string]any{"metadata": map[string]any{"uid": s.TargetPodUID, "annotations": map[string]any{"phorvex.ai/guardrail-variant": "pgv1"}},
+		"status": map[string]any{"containerStatuses": []any{map[string]any{"name": "guardrail", "containerID": s.TargetContainerID, "imageID": s.TargetImageID, "ready": true, "restartCount": 0}}}})
+	put("kube-002-"+label+"-source.json", map[string]any{"metadata": map[string]any{"uid": s.SourceUID}, "data": map[string]any{"guardrail_proxy.py": proxy, "dual_server.py": dual}})
+	put("kube-003-"+label+"-journal.json", absence)
+	runtime := map[string]any{"_mountedSourceSHA256": s.SourceSHA256, "_mountedBoundarySHA256": s.BoundarySourceSHA256,
+		"8000/v1/guardrail/state": map[string]any{"status": 200, "body": map[string]any{"mode": "enforce", "ready": true, "active": "pgv1", "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]any{"pgv1": 0.5, "pgv2": 0.5}}},
+		"8000/v1/models":          map[string]any{"status": 200, "body": map[string]any{"data": []any{modelRow}}},
+		"8001/v1/models":          map[string]any{"status": 200, "body": map[string]any{"data": []any{modelRow}}}}
+	put(label+"-runtime.json", runtime)
+	if _, err := e.snapshot(label); err != nil {
+		t.Fatalf("exact original absence and mounted source refused: %v", err)
+	}
+	for _, tc := range []struct {
+		name string
+		file string
+		row  any
+	}{
+		{"preexisting journal", "kube-003-" + label + "-journal.json", map[string]any{"kind": "ConfigMap", "metadata": map[string]any{"name": "exact-slot", "namespace": "phorvex-system", "uid": "stale-uid", "resourceVersion": "2"}, "data": map[string]any{"receipt": `{"generation":1}`}}},
+		{"wrong absence name", "kube-003-" + label + "-journal.json", availabilityJournalAbsence(e.p.Context, "other-slot")},
+		{"changed mounted dual source", label + "-runtime.json", func() map[string]any {
+			copy := map[string]any{}
+			for k, v := range runtime {
+				copy[k] = v
+			}
+			copy["_mountedBoundarySHA256"] = strings.Repeat("b", 64)
+			return copy
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := e.files[tc.file]
+			put(tc.file, tc.row)
+			if _, err := e.snapshot(label); err == nil {
+				t.Fatal("contradictory original accepted")
+			}
+			e.files[tc.file] = original
+		})
 	}
 }
