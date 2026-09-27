@@ -56,7 +56,7 @@ func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
 		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: litellmclient.PolicyConfigMapName, UID: "policy-cm-uid", ResourceVersion: "1"},
 			Data: map[string]string{litellmclient.PolicyKey: `{"entries":[],"revision":0,"version":2}`}},
 		&v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: "litellm-defense", UID: types.UID(policyUID), Generation: 1},
-			Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "litellm"}},
+			Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"r6th.io/rotation-target": "true"}},
 				Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionRotate, v1alpha1.ActionQuarantine, v1alpha1.ActionType(model.ActionLiteLLMClientRevoke)}}}},
 	}
 	ready := true
@@ -66,7 +66,7 @@ func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
 		uid := types.UID("pod-" + string(rune('a'+i)))
 		ip := "10.1.0." + string(rune('1'+i))
 		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: name, UID: uid,
-			CreationTimestamp: metav1.NewTime(now.Add(-20 * time.Minute)), Labels: map[string]string{"app": "litellm"},
+			CreationTimestamp: metav1.NewTime(now.Add(-20 * time.Minute)), Labels: map[string]string{"app": "litellm", "r6th.io/rotation-target": "true"},
 			Annotations: map[string]string{litellmclient.SourceSHAAnnotation: sourceSHA,
 				litellmclient.GatewayImageAnnotation: litellmclient.ApprovedGatewayImage,
 				litellmclient.PolicyUIDAnnotation:    "policy-cm-uid", litellmclient.ServiceUIDAnnotation: "service-uid",
