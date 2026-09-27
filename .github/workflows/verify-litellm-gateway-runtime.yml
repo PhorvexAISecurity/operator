@@ -43,7 +43,7 @@ jobs:
           test "$(sha256sum build/test-harness/fixtures/litellm-live/gateway.py | cut -d' ' -f1)" = "$EXPECTED_SOURCE_SHA"
           python3 build/integrations/litellm-gateway-runtime/verify_reuse.py
           python3 -m unittest discover -s build/test-harness/fixtures/litellm-live -p 'test_*gateway.py' -v
-          python3 -m unittest -v build/integrations/litellm-gateway-runtime/test_entrypoint.py
+          python3 -B build/integrations/litellm-gateway-runtime/test_entrypoint.py -v
           test "$(git status --porcelain --untracked-files=no)" = ''
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -74,8 +74,8 @@ jobs:
             --entrypoint python3)
           docker run "${common[@]}" "$IMAGE" -B -m unittest discover \
             -s /workspace/build/test-harness/fixtures/litellm-live -p 'test_*gateway.py' -v
-          docker run "${common[@]}" "$IMAGE" -B -m unittest -v \
-            /workspace/build/integrations/litellm-gateway-runtime/test_entrypoint.py
+          docker run "${common[@]}" "$IMAGE" -B \
+            /workspace/build/integrations/litellm-gateway-runtime/test_entrypoint.py -v
 
       - name: Record immutable image and source verification
         env:
