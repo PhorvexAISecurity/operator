@@ -110,12 +110,17 @@ and adds `phorvex.ai/serving=true`. Other mismatches still refuse.
    source ConfigMap is mutable and directory-mounted: applying new source while
    the old Pod runs creates a mixed-source interval. Stage the image and Secrets,
    stop the old replica, verify its serving endpoint is absent, then install and
-   verify the reviewed ConfigMap before starting the candidate Deployment at one
-   replica. Keep the original ConfigMap and Deployment for rollback during the
+   verify the reviewed ConfigMap. Complete and verify the manager's
+   secure-binding rollout **before starting the replacement TLS-only Pod**.
+   Read back the running manager's mode, exact vLLM policy UID,
+   ServiceAccount binding, Secret/CA authority and new manager Pod identity;
+   a values change or accepted Deployment update alone does not establish that
+   the manager is using the binding. Keep the workload stopped if this
+   verification fails. Then start the candidate Deployment at one replica.
+   Keep the original ConfigMap and Deployment for rollback during the
    same stopped-workload transition. The PDB's zero allowed evictions does not
-   make a Deployment replacement disruption-free. Install the secure operator
-   binding through its normal configuration path. The
-   derivative runs vLLM on loopback `8001` with `VLLM_API_KEY`; one guardrail
+   make a Deployment replacement disruption-free. The derivative runs vLLM on
+   loopback `8001` with `VLLM_API_KEY`; one guardrail
    process serves public inference on `8000` and private TLS control on `8443`.
    An init container writes `origin.json` and `ledger.json` once into a
    Pod-scoped `emptyDir`, bound to the downward Pod UID. The guardrail uses the
@@ -133,6 +138,19 @@ and adds `phorvex.ai/serving=true`. Other mismatches still refuse.
    A new Pod creates a separate Pod-scoped operation ledger. A first request
    drain remains subject to the actuator's fresh capability, policy, route,
    cost and source gates.
+
+The September 27 transition exposed why the manager-first order matters. The
+new Pod's private listener was TLS on port 8443 before the secure manager
+binding was running. At 13:45:20 UTC the old manager wrote a `dispatching`
+KV-reset receipt with `servingLegacy:true`; the secure manager Pod started at
+13:46:15. Legacy dispatch constructs an HTTP endpoint even for that Pod's
+declared TLS control port. No trustworthy reset acknowledgement or terminal
+effect was retained. The later secure manager cannot resume this legacy
+receipt under its new binding, and recovery does not replay a `dispatching`
+operation. Preserve the receipt as UNKNOWN and use a new Pod UID for a future
+attempt. The current recovery log says the target left policy scope after it
+discards the legacy binding error; that wording is a diagnostic follow-up,
+not evidence that the reset failed or succeeded.
 
 The current vLLM Deployment and proxy ConfigMap have no checked-in GitOps owner
 in this repository; prior managed fields show direct workload patches. These
