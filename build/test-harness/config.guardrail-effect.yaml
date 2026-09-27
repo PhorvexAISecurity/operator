@@ -23,7 +23,15 @@ guardrailAvailabilityFixture:
   sourceConfigMapName: guardrail-proxy
   sourceUID: "__SET_REVIEWED_GUARDRAIL_SOURCE_CONFIGMAP_UID__"
   sourceSHA256: "__SET_REVIEWED_GUARDRAIL_SOURCE_SHA256__"
+  boundarySourceSHA256: "__SET_REVIEWED_DUAL_SERVER_SHA256__"
   guardrailJournalName: "__SET_REVIEWED_GUARDRAIL_JOURNAL_NAME__"
+  # Set true only when exact-name successful-empty GETs are reviewed before
+  # dispatch. In that mode guardrailJournalUID must be empty and the selected
+  # native operation must create generation one with a fresh UID.
+  journalInitiallyAbsent: false
+  # Reusable mode: set true with empty guardrailJournalUID and activeVariant.
+  # Each Fire freezes the current protected journal/variant in original reads.
+  captureCurrentJournal: false
   guardrailJournalUID: "__SET_REVIEWED_GUARDRAIL_JOURNAL_UID__"
   managerPodName: "__SET_REVIEWED_MANAGER_POD_NAME__"
   managerPodUID: "__SET_REVIEWED_MANAGER_POD_UID__"

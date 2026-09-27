@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -176,7 +177,7 @@ print(json.dumps({'status':200,'bodyBase64':base64.b64encode(body).decode()}))
 
 func TestGuardrailEffectSeparateReviewedProfileAndKnownVariant(t *testing.T) {
 	raw := guardrailAvailabilityPinnedProfile(t)
-	raw = []byte(strings.Replace(string(raw), "  eventCreator:", "  activeVariant: pgv2\n  eventCreator:", 1))
+	raw = []byte(strings.Replace(string(raw), "  eventCreator:", "  activeVariant: pgv2\n  boundarySourceSHA256: "+strings.Repeat("b", 64)+"\n  eventCreator:", 1))
 	path := filepath.Join(t.TempDir(), "config.guardrail-effect.yaml")
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -214,6 +215,52 @@ func TestGuardrailEffectSeparateReviewedProfileAndKnownVariant(t *testing.T) {
 	cfg.GuardrailEffectProfileSHA256 = availabilityHash(unknown)
 	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
 		t.Fatal("unknown active variant admitted")
+	}
+	missingBoundary := []byte(strings.Replace(string(raw), "  boundarySourceSHA256: "+strings.Repeat("b", 64)+"\n", "", 1))
+	if err := os.WriteFile(path, missingBoundary, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(missingBoundary)
+	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
+		t.Fatal("effect profile without dual-listener source pin admitted")
+	}
+	first := []byte(strings.Replace(string(raw), "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", "  journalInitiallyAbsent: true\n  guardrailJournalUID: \"\"", 1))
+	if bytes.Equal(first, raw) {
+		t.Fatal("first-operation profile test failed to replace exact journal UID")
+	}
+	if err := os.WriteFile(path, first, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(first)
+	parsed, _, err := loadGuardrailEffectProfile(cfg)
+	if err != nil || !parsed.Fixture.JournalInitiallyAbsent || parsed.Fixture.GuardrailJournalUID != "" {
+		t.Fatalf("explicit first-operation effect profile refused: %v", err)
+	}
+	stale := []byte(strings.Replace(string(first), "  guardrailJournalUID: \"\"", "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", 1))
+	if err := os.WriteFile(path, stale, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(stale)
+	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
+		t.Fatal("first-operation profile with preexisting UID admitted")
+	}
+	reusable := strings.Replace(string(raw), "  activeVariant: pgv2", "  activeVariant: \"\"\n  captureCurrentJournal: true", 1)
+	reusable = strings.Replace(reusable, "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", "  guardrailJournalUID: \"\"", 1)
+	if err := os.WriteFile(path, []byte(reusable), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash([]byte(reusable))
+	parsed, _, err = loadGuardrailEffectProfile(cfg)
+	if err != nil || !parsed.Fixture.CaptureCurrentJournal || parsed.Fixture.ActiveVariant != "" || parsed.Fixture.GuardrailJournalUID != "" {
+		t.Fatalf("reusable exact-target effect profile refused: %v", err)
+	}
+	badReusable := []byte(strings.Replace(reusable, "  guardrailJournalUID: \"\"", "  guardrailJournalUID: \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"", 1))
+	if err := os.WriteFile(path, badReusable, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.GuardrailEffectProfileSHA256 = availabilityHash(badReusable)
+	if _, _, err := loadGuardrailEffectProfile(cfg); err == nil {
+		t.Fatal("reusable current-state profile with preauthorized journal UID admitted")
 	}
 }
 
@@ -370,6 +417,8 @@ func TestGuardrailEffectExactAuditJoinAndCounterexamples(t *testing.T) {
 func TestGuardrailEffectTransitionRejectsVariantOnlyAndWrongTick(t *testing.T) {
 	e, before, after := measuredEffectJoinFixture(t)
 	e.p.Fixture.ActiveVariant = "pgv1"
+	before.JournalUID, after.JournalUID = "journal-uid", "journal-uid"
+	before.JournalResourceVersion, after.JournalResourceVersion = "7", "8"
 	before.Receipt = json.RawMessage(`{"version":9,"kind":"guardrail-rotate","effectDomain":"guardrail-variant-v1","phase":"terminal-full","generation":7,"priorVariant":"pgv2","nextVariant":"pgv1","operationID":"old","tickID":"old-tick","policyNamespace":"vllm","policyName":"vllm-defense","policyUID":"policy-uid","targetName":"target-pod","targetUID":"target-uid","expectedGuardrail":{"present":true,"value":"old-epoch"}}`)
 	selected := availabilityDecision{TickID: "t09"}
 	if op, err := guardrailEffectTransition(before, after, selected, e.p); err != nil || op == "" {
@@ -383,5 +432,213 @@ func TestGuardrailEffectTransitionRejectsVariantOnlyAndWrongTick(t *testing.T) {
 	after.ActiveVariant, after.PodVariant = "pgv1", "pgv1"
 	if _, err := guardrailEffectTransition(before, after, selected, e.p); err == nil {
 		t.Fatal("wrong live variant earned operation credit")
+	}
+}
+
+func TestGuardrailEffectFirstOperationRequiresOriginalAbsenceAndFreshGenerationOne(t *testing.T) {
+	p := guardrailAvailabilityProfile{Context: "reviewed-cluster"}
+	f := &p.Fixture
+	f.JournalInitiallyAbsent = true
+	f.GuardrailJournalName = "exact-slot"
+	f.ActiveVariant = "pgv1"
+	f.PolicyName, f.PolicyUID = "vllm-defense", "policy-uid"
+	f.PodName, f.PodUID = "target-pod", "target-uid"
+	absence := availabilityJournalAbsence(p.Context, f.GuardrailJournalName)
+	before := availabilitySnapshot{JournalAbsent: true, Receipt: mustAvailabilityJSON(absence),
+		ActiveVariant: "pgv1", PodVariant: "pgv1", PolicyUID: f.PolicyUID, TargetPodUID: f.PodUID}
+	if err := guardrailEffectProtected(before, p); err != nil {
+		t.Fatalf("original successful exact-name absence refused: %v", err)
+	}
+	selected := availabilityDecision{TickID: "selected-tick"}
+	op := availabilityOperationID(selected.TickID, f.PolicyUID, "vllm", f.PodUID)
+	after := before
+	after.JournalAbsent = false
+	after.JournalUID, after.JournalResourceVersion = "fresh-uid", "7"
+	after.ActiveVariant, after.PodVariant = "pgv2", "pgv2"
+	after.GuardrailEpoch = availabilityEpoch(op)
+	after.Receipt = mustAvailabilityJSON(map[string]any{
+		"version": 9, "kind": "guardrail-rotate", "effectDomain": "guardrail-variant-v1",
+		"phase": "terminal-full", "generation": 1, "priorVariant": "pgv1", "nextVariant": "pgv2",
+		"operationID": op, "tickID": selected.TickID, "policyNamespace": "vllm", "policyName": f.PolicyName,
+		"policyUID": f.PolicyUID, "targetName": f.PodName, "targetUID": f.PodUID,
+		"expectedGuardrail": map[string]any{"present": true, "value": after.GuardrailEpoch},
+	})
+	if got, err := guardrailEffectTransition(before, after, selected, p); err != nil || got != op {
+		t.Fatalf("fresh selected generation-one operation refused: %s %v", got, err)
+	}
+	if availabilityAdmissionMatches(before, after, before) == nil {
+		t.Fatal("journal created before event admission was accepted")
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*availabilitySnapshot)
+	}{
+		{"missing new UID", func(s *availabilitySnapshot) { s.JournalUID = "" }},
+		{"stale generation", func(s *availabilitySnapshot) {
+			var r map[string]any
+			_ = availabilityDecode(s.Receipt, &r)
+			r["generation"] = float64(9)
+			s.Receipt = mustAvailabilityJSON(r)
+		}},
+		{"wrong selected operation", func(s *availabilitySnapshot) {
+			var r map[string]any
+			_ = availabilityDecode(s.Receipt, &r)
+			r["operationID"] = "other"
+			s.Receipt = mustAvailabilityJSON(r)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := after
+			tc.edit(&changed)
+			if _, err := guardrailEffectTransition(before, changed, selected, p); err == nil {
+				t.Fatal("unreviewed first protected operation accepted")
+			}
+		})
+	}
+	wrongOriginal := before
+	wrongOriginal.JournalAbsent = false
+	wrongOriginal.JournalUID = "stale-uid"
+	if err := guardrailEffectProtected(wrongOriginal, p); err == nil {
+		t.Fatal("preexisting journal accepted as initial absence")
+	}
+}
+
+func TestGuardrailEffectOriginalReaderReplaysAbsenceAndDualSource(t *testing.T) {
+	const label = "before-canary-pre"
+	e := availabilityEvidence{files: map[string][]byte{}}
+	e.p.Context = "reviewed-cluster"
+	e.p.Fixture.JournalInitiallyAbsent = true
+	e.p.Fixture.GuardrailJournalName = "exact-slot"
+	proxy, dual := "reviewed proxy", "reviewed dual server"
+	e.p.Fixture.BoundarySourceSHA256 = availabilityHash([]byte(dual))
+	absence := availabilityJournalAbsence(e.p.Context, e.p.Fixture.GuardrailJournalName)
+	modelRow := map[string]any{"id": "Qwen/Qwen2.5-7B-Instruct-AWQ", "object": "model", "root": "reviewed-root", "parent": nil, "owned_by": "reviewed", "max_model_len": 4096}
+	s := availabilitySnapshot{TargetPodUID: "target-uid", TargetContainerID: "containerd://target", TargetImageID: "reviewed@sha256:" + strings.Repeat("a", 64),
+		SourceUID: "source-uid", SourceSHA256: availabilityHash([]byte(proxy)), BoundarySourceSHA256: e.p.Fixture.BoundarySourceSHA256,
+		JournalAbsent: true, Receipt: mustAvailabilityJSON(absence), ActiveVariant: "pgv1", PodVariant: "pgv1", ModelIdentity: mustAvailabilityJSON(modelRow)}
+	put := func(name string, row any) { e.files[name] = mustAvailabilityJSON(row) }
+	put(label+"-snapshot.json", s)
+	put("kube-001-"+label+"-target.json", map[string]any{"metadata": map[string]any{"uid": s.TargetPodUID, "annotations": map[string]any{"phorvex.ai/guardrail-variant": "pgv1"}},
+		"status": map[string]any{"containerStatuses": []any{map[string]any{"name": "guardrail", "containerID": s.TargetContainerID, "imageID": s.TargetImageID, "ready": true, "restartCount": 0}}}})
+	put("kube-002-"+label+"-source.json", map[string]any{"metadata": map[string]any{"uid": s.SourceUID}, "data": map[string]any{"guardrail_proxy.py": proxy, "dual_server.py": dual}})
+	put("kube-003-"+label+"-journal.json", absence)
+	runtime := map[string]any{"_mountedSourceSHA256": s.SourceSHA256, "_mountedBoundarySHA256": s.BoundarySourceSHA256, "_rawAuthConfigured": true,
+		"8000/v1/guardrail/state": map[string]any{"status": 200, "body": map[string]any{"mode": "enforce", "ready": true, "active": "pgv1", "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]any{"pgv1": 0.5, "pgv2": 0.5}}},
+		"8000/v1/models":          map[string]any{"status": 200, "body": map[string]any{"data": []any{modelRow}}},
+		"8001/v1/models":          map[string]any{"status": 200, "body": map[string]any{"data": []any{modelRow}}}}
+	put(label+"-runtime.json", runtime)
+	if _, err := e.snapshot(label); err != nil {
+		t.Fatalf("exact original absence and mounted source refused: %v", err)
+	}
+	// No selected action is a valid observation. Continued exact-name absence
+	// after the event stays uncredited as an actuator effect, but remains
+	// readable for the brain/no-selection verdict.
+	const afterLabel = "after-canary-pre"
+	for _, suffix := range []string{"-snapshot.json", "-runtime.json"} {
+		e.files[afterLabel+suffix] = append([]byte(nil), e.files[label+suffix]...)
+	}
+	for _, suffix := range []string{"-target.json", "-source.json", "-journal.json"} {
+		var original []byte
+		for file, raw := range e.files {
+			if strings.HasSuffix(file, label+suffix) {
+				original = raw
+				break
+			}
+		}
+		if original == nil {
+			t.Fatal("original Kubernetes receipt missing")
+		}
+		e.files["kube-004-"+afterLabel+suffix] = append([]byte(nil), original...)
+	}
+	if _, err := e.snapshot(afterLabel); err != nil {
+		t.Fatalf("stable post-event absence should remain readable: %v", err)
+	}
+	for _, tc := range []struct {
+		name string
+		file string
+		row  any
+	}{
+		{"preexisting journal", "kube-003-" + label + "-journal.json", map[string]any{"kind": "ConfigMap", "metadata": map[string]any{"name": "exact-slot", "namespace": "phorvex-system", "uid": "stale-uid", "resourceVersion": "2"}, "data": map[string]any{"receipt": `{"generation":1}`}}},
+		{"wrong absence name", "kube-003-" + label + "-journal.json", availabilityJournalAbsence(e.p.Context, "other-slot")},
+		{"changed mounted dual source", label + "-runtime.json", func() map[string]any {
+			copy := map[string]any{}
+			for k, v := range runtime {
+				copy[k] = v
+			}
+			copy["_mountedBoundarySHA256"] = strings.Repeat("b", 64)
+			return copy
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := e.files[tc.file]
+			put(tc.file, tc.row)
+			if _, err := e.snapshot(label); err == nil {
+				t.Fatal("contradictory original accepted")
+			}
+			e.files[tc.file] = original
+		})
+	}
+}
+
+func TestGuardrailEffectReusableProfileFreezesTwoSequentialFires(t *testing.T) {
+	p := guardrailAvailabilityProfile{Context: "reviewed-cluster"}
+	f := &p.Fixture
+	f.CaptureCurrentJournal = true
+	f.GuardrailJournalName = "exact-slot"
+	f.PolicyName, f.PolicyUID = "vllm-defense", "policy-uid"
+	f.PodName, f.PodUID = "target-pod", "target-uid"
+	first := availabilitySnapshot{JournalAbsent: true, Receipt: mustAvailabilityJSON(availabilityJournalAbsence(p.Context, f.GuardrailJournalName)),
+		ActiveVariant: "pgv1", PodVariant: "pgv1", PolicyUID: f.PolicyUID, TargetPodUID: f.PodUID}
+	if err := guardrailEffectProtected(first, p); err != nil {
+		t.Fatalf("first Fire absent baseline refused: %v", err)
+	}
+	makeNext := func(before availabilitySnapshot, generation int64, next, tick string) (availabilitySnapshot, availabilityDecision) {
+		selected := availabilityDecision{TickID: tick}
+		op := availabilityOperationID(tick, f.PolicyUID, "vllm", f.PodUID)
+		after := before
+		after.JournalAbsent = false
+		after.JournalUID = "fresh-slot-uid"
+		after.JournalResourceVersion = fmt.Sprintf("%d", generation)
+		after.ActiveVariant, after.PodVariant = next, next
+		after.GuardrailEpoch = availabilityEpoch(op)
+		after.Receipt = mustAvailabilityJSON(map[string]any{
+			"version": 9, "kind": "guardrail-rotate", "effectDomain": "guardrail-variant-v1",
+			"phase": "terminal-full", "generation": generation,
+			"priorVariant": before.ActiveVariant, "nextVariant": next,
+			"operationID": op, "tickID": tick, "policyNamespace": "vllm", "policyName": f.PolicyName,
+			"policyUID": f.PolicyUID, "targetName": f.PodName, "targetUID": f.PodUID,
+			"expectedGuardrail": map[string]any{"present": true, "value": after.GuardrailEpoch},
+		})
+		return after, selected
+	}
+	second, selected1 := makeNext(first, 1, "pgv2", "selected-first")
+	if _, err := guardrailEffectTransition(first, second, selected1, p); err != nil {
+		t.Fatalf("first Fire did not join generation one: %v", err)
+	}
+	if err := guardrailEffectProtected(second, p); err != nil {
+		t.Fatalf("same immutable profile refused current terminal baseline on second Fire: %v", err)
+	}
+	if err := availabilityAdmissionMatches(second, second, second); err != nil {
+		t.Fatalf("second run could not freeze its original current baseline: %v", err)
+	}
+	drift := second
+	drift.JournalResourceVersion = "changed-before-event"
+	if availabilityAdmissionMatches(second, second, drift) == nil {
+		t.Fatal("second Fire admitted changed journal before event")
+	}
+	third, selected2 := makeNext(second, 2, "pgv1", "selected-second")
+	if third.JournalUID != second.JournalUID {
+		t.Fatal("native journal UID did not stay bound across second Fire")
+	}
+	if _, err := guardrailEffectTransition(second, third, selected2, p); err != nil {
+		t.Fatalf("second Fire did not join generation two: %v", err)
+	}
+	prepared := second
+	var receipt map[string]any
+	_ = availabilityDecode(prepared.Receipt, &receipt)
+	receipt["phase"] = "prepared"
+	prepared.Receipt = mustAvailabilityJSON(receipt)
+	if err := guardrailEffectProtected(prepared, p); err == nil {
+		t.Fatal("unresolved protected journal admitted to a new Fire")
 	}
 }

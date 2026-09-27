@@ -153,7 +153,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	// Snapshot the baseline before any producer or detector stimulus. The exact UID comes from
 	// the strict Pod JSON read above; the legacy convenience probes supply only optional context.
-	base := s.snapshotBaseline(vllmAttackNS, pod)
+	base := s.snapshotVLLMBaseline(target)
 	base.uid = targetUID
 	base.epoch = stringMapValue(target.Metadata.Annotations, "phorvex.ai/adapter-epoch")
 	base.kvEpoch = stringMapValue(target.Metadata.Annotations, "phorvex.ai/kv-reset-epoch")
@@ -321,7 +321,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		stimulus.Limitation = "synthetic route signal; no SSRF, model-extraction, locator-revocation or session-revocation attack was executed"
 		base.stimulus = stimulus
-		base.vllmEffect = &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceUID: authority.serviceUID}
+		base.vllmEffect = &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceName: authority.serviceName, serviceUID: authority.serviceUID}
 		base.outcomeClass = "behavioral-oracle-unsupported"
 		attackID := s.startVLLMEffectRecord(vllmAttackNS, pod, "Endpoint route-effect observation", "endpoint-rotate", "route-effect-only", "endpoint-rotate", base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "endpoint-rotate",

@@ -85,11 +85,13 @@ type availabilitySnapshot struct {
 	ServiceUID               string          `json:"serviceUID"`
 	SourceUID                string          `json:"sourceUID"`
 	SourceSHA256             string          `json:"sourceSHA256"`
+	BoundarySourceSHA256     string          `json:"boundarySourceSHA256,omitempty"`
 	PolicyUID                string          `json:"policyUID"`
 	PolicyGeneration         int64           `json:"policyGeneration"`
 	PolicyObservedGeneration int64           `json:"policyObservedGeneration"`
 	PolicySpecSHA256         string          `json:"policySpecSHA256"`
 	JournalUID               string          `json:"journalUID"`
+	JournalAbsent            bool            `json:"journalAbsent,omitempty"`
 	JournalResourceVersion   string          `json:"journalResourceVersion"`
 	Receipt                  json.RawMessage `json:"receipt"`
 	ActiveVariant            string          `json:"activeVariant"`
@@ -198,15 +200,84 @@ func (w *availabilityWorker) kube(label string, args ...string) (map[string]any,
 	if e = cmd.Run(); e != nil || stdout.overflow || stderr.overflow {
 		return nil, fmt.Errorf("bounded Kubernetes read failed: %s", label)
 	}
+	raw := stdout.Bytes()
+	journalAbsenceAllowed := len(args) == 8 && args[0] == "-n" && args[1] == "phorvex-system" &&
+		args[2] == "get" && args[3] == "configmap" && args[4] == w.p.Fixture.GuardrailJournalName &&
+		args[5] == "-o" && args[6] == "json" && args[7] == "--ignore-not-found=true"
+	if len(raw) == 0 {
+		if !journalAbsenceAllowed {
+			return nil, errors.New("empty Kubernetes original refused")
+		}
+		raw, e = json.Marshal(availabilityJournalAbsence(w.p.Context, w.p.Fixture.GuardrailJournalName))
+		if e != nil {
+			return nil, e
+		}
+	}
 	name := fmt.Sprintf("kube-%03d-%s.json", w.t.KubeReadsAttempted, label)
-	if e = w.save(name, stdout.Bytes()); e != nil {
+	if e = w.save(name, raw); e != nil {
 		return nil, e
 	}
 	var row map[string]any
-	if e = availabilityDecode(stdout.Bytes(), &row); e != nil {
+	if e = availabilityDecode(raw, &row); e != nil {
 		return nil, e
 	}
+	if journalAbsenceAllowed && !availabilityIsJournalAbsence(row, w.p.Context, w.p.Fixture.GuardrailJournalName) &&
+		(availabilityString(row, "kind") != "ConfigMap" || availabilityUID(row) == "") {
+		return nil, errors.New("journal GET returned neither absence nor exact ConfigMap")
+	}
 	return row, nil
+}
+
+func availabilityJournalAbsence(context, name string) map[string]any {
+	return map[string]any{"schema": "guardrail-journal-absence-v1", "context": context,
+		"namespace": "phorvex-system", "name": name, "exitCode": float64(0),
+		"stdoutBytes": float64(0), "stdoutSHA256": availabilityHash(nil)}
+}
+
+func availabilityIsJournalAbsence(row map[string]any, context, name string) bool {
+	return len(row) == 7 && row["schema"] == "guardrail-journal-absence-v1" && row["context"] == context &&
+		row["namespace"] == "phorvex-system" && row["name"] == name && row["exitCode"] == float64(0) &&
+		row["stdoutBytes"] == float64(0) && row["stdoutSHA256"] == availabilityHash(nil)
+}
+
+func (w *availabilityWorker) journal(label string, allowAbsence bool) (map[string]any, error) {
+	args := []string{"-n", "phorvex-system", "get", "configmap", w.p.Fixture.GuardrailJournalName, "-o", "json"}
+	if allowAbsence {
+		args = append(args, "--ignore-not-found=true")
+	}
+	return w.kube(label, args...)
+}
+
+func availabilityJournalShouldBeAbsent(f guardrailAvailabilityProfile, label string) bool {
+	return f.Fixture.JournalInitiallyAbsent &&
+		(label == "before" || label == "prepost" || label == "immediate-pre-event" || strings.HasPrefix(label, "before-"))
+}
+
+// A zero-byte successful exact-name GET is retained as a typed private original.
+// A ConfigMap at that name, including one created between two reads, cannot
+// satisfy the expected-absence branch. Continued absence after dispatch is
+// readable as no-effect evidence; selected-effect credit separately requires
+// a fresh UID, resource version, and parsed native receipt.
+func availabilityJournalReceipt(journal map[string]any, context, name string, expectedAbsent bool) (json.RawMessage, string, string, bool, error) {
+	if expectedAbsent {
+		if !availabilityIsJournalAbsence(journal, context, name) {
+			return nil, "", "", false, errors.New("first-operation journal already exists or absence proof differs")
+		}
+		raw, err := json.Marshal(journal)
+		return raw, "", "", true, err
+	}
+	meta := availabilityMeta(journal)
+	uid, rv := availabilityUID(journal), availabilityString(meta, "resourceVersion")
+	if journal["kind"] != "ConfigMap" || availabilityString(meta, "namespace") != "phorvex-system" ||
+		availabilityString(meta, "name") != name || uid == "" || rv == "" {
+		return nil, "", "", false, errors.New("protected journal ConfigMap identity differs")
+	}
+	text := availabilityString(availabilityMap(journal["data"]), "receipt")
+	var receipt map[string]any
+	if text == "" || availabilityDecode([]byte(text), &receipt) != nil || len(receipt) == 0 {
+		return nil, "", "", false, errors.New("protected journal receipt absent or malformed")
+	}
+	return json.RawMessage(text), uid, rv, false, nil
 }
 
 // execGuardrail runs only the fixed local Python transport inside the pinned
@@ -243,7 +314,25 @@ func (w *availabilityWorker) execGuardrail(label, code string, stdin []byte, bou
 	return stdout.Bytes(), nil
 }
 
-const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8001:\n   key=os.environ.get('VLLM_API_KEY','')\n   if key:headers['Authorization']='Bearer '+key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
+const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\no['_rawAuthConfigured']=bool(os.environ.get('VLLM_API_KEY',''))\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8001:\n   key=os.environ.get('VLLM_API_KEY','')\n   if key:headers['Authorization']='Bearer '+key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
+
+func availabilityBoundarySource(source, runtime map[string]any, pin string) (string, error) {
+	if pin == "" {
+		return "", nil
+	}
+	if !staticSHA256.MatchString(pin) {
+		return "", errors.New("reviewed dual-listener source hash invalid")
+	}
+	text := availabilityString(availabilityMap(source["data"]), "dual_server.py")
+	if text == "" || len(text) > 1<<20 || availabilityHash([]byte(text)) != pin || runtime["_mountedBoundarySHA256"] != pin {
+		return "", errors.New("mounted dual-listener source differs from reviewed ConfigMap")
+	}
+	if runtime["_rawAuthConfigured"] != true {
+		return "", errors.New("reviewed dual-listener requires configured raw vLLM authentication")
+	}
+	return pin, nil
+}
+
 const availabilityChatCode = "import base64,http.client,json,signal,sys\nsignal.alarm(35)\nb=sys.stdin.buffer.read(4097)\nif len(b)>4096:raise RuntimeError('request bound')\nc=http.client.HTTPConnection('127.0.0.1',8000,timeout=35)\ntry:\n c.request('POST','/v1/chat/completions',body=b,headers={'Content-Type':'application/json'})\n r=c.getresponse();v=r.read(8193)\n if len(v)>8192:raise RuntimeError('reply bound')\n print(json.dumps({'status':r.status,'bodyBase64':base64.b64encode(v).decode()}))\nfinally:c.close()\n"
 
 func availabilityRequest(model, marker, which string) []byte {
@@ -531,7 +620,7 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if e != nil {
 		return out, e
 	}
-	journal, e := read("journal", "-n", "phorvex-system", "get", "configmap", f.GuardrailJournalName, "-o", "json")
+	journal, e := w.journal(label+"-journal", f.JournalInitiallyAbsent || f.CaptureCurrentJournal)
 	if e != nil {
 		return out, e
 	}
@@ -577,15 +666,21 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 		return out, e
 	}
 	sourceText := availabilityString(availabilityMap(source["data"]), "guardrail_proxy.py")
-	receiptText := availabilityString(availabilityMap(journal["data"]), "receipt")
-	if sourceText == "" || receiptText == "" {
-		return out, errors.New("mounted source or protected journal absent")
+	if sourceText == "" {
+		return out, errors.New("mounted guardrail source absent")
 	}
 	if runtime["_mountedSourceSHA256"] != availabilityHash([]byte(sourceText)) {
 		return out, errors.New("mounted guardrail source bytes differ from reviewed ConfigMap")
 	}
-	if e = availabilityDecode([]byte(receiptText), &out.Receipt); e != nil {
-		return out, errors.New("protected journal receipt malformed")
+	boundarySHA, e := availabilityBoundarySource(source, runtime, f.BoundarySourceSHA256)
+	if e != nil {
+		return out, e
+	}
+	requireAbsent := availabilityJournalShouldBeAbsent(w.p, label)
+	out.Receipt, out.JournalUID, out.JournalResourceVersion, out.JournalAbsent, e = availabilityJournalReceipt(journal, w.p.Context, f.GuardrailJournalName,
+		requireAbsent || ((f.JournalInitiallyAbsent || f.CaptureCurrentJournal) && availabilityIsJournalAbsence(journal, w.p.Context, f.GuardrailJournalName)))
+	if e != nil {
+		return out, e
 	}
 	var readyEndpoints int
 	for _, slice := range func() []any { v, _ := endpoints["items"].([]any); return v }() {
@@ -646,6 +741,7 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	out.ServiceUID = availabilityUID(service)
 	out.SourceUID = availabilityUID(source)
 	out.SourceSHA256 = availabilityHash([]byte(sourceText))
+	out.BoundarySourceSHA256 = boundarySHA
 	out.PolicyUID = availabilityUID(policy)
 	if n, ok := availabilityMeta(policy)["generation"].(float64); ok {
 		out.PolicyGeneration = int64(n)
@@ -655,13 +751,11 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	}
 	policySpec, _ := json.Marshal(policy["spec"])
 	out.PolicySpecSHA256 = availabilityHash(policySpec)
-	out.JournalUID = availabilityUID(journal)
-	out.JournalResourceVersion = availabilityString(availabilityMeta(journal), "resourceVersion")
 	out.ActiveVariant = availabilityString(body, "active")
 	out.PodVariant = availabilityString(availabilityMap(availabilityMeta(pod)["annotations"]), "phorvex.ai/guardrail-variant")
 	out.GuardrailEpoch = availabilityString(availabilityMap(availabilityMeta(pod)["labels"]), "phorvex.ai/guardrail-epoch")
 	out.ModelIdentity = model
-	if out.ClusterUID != f.ClusterUID || out.ManagerPodUID != f.ManagerPodUID || out.ManagerImageID != f.ManagerImageID || out.ConsolePodUID != w.selfUID || out.ConsoleDeploymentUID != f.ConsoleDeploymentUID || out.ConsoleImageID != f.ConsoleImageID || out.TargetPodUID != f.PodUID || out.TargetImageID != f.PodImageID || out.ServiceUID != f.ServiceUID || out.SourceUID != f.SourceUID || out.SourceSHA256 != f.SourceSHA256 || out.PolicyUID != f.PolicyUID || out.PolicyGeneration != f.PolicyGeneration || out.PolicyObservedGeneration != out.PolicyGeneration || out.JournalUID != f.GuardrailJournalUID {
+	if out.ClusterUID != f.ClusterUID || out.ManagerPodUID != f.ManagerPodUID || out.ManagerImageID != f.ManagerImageID || out.ConsolePodUID != w.selfUID || out.ConsoleDeploymentUID != f.ConsoleDeploymentUID || out.ConsoleImageID != f.ConsoleImageID || out.TargetPodUID != f.PodUID || out.TargetImageID != f.PodImageID || out.ServiceUID != f.ServiceUID || out.SourceUID != f.SourceUID || out.SourceSHA256 != f.SourceSHA256 || out.BoundarySourceSHA256 != f.BoundarySourceSHA256 || out.PolicyUID != f.PolicyUID || out.PolicyGeneration != f.PolicyGeneration || out.PolicyObservedGeneration != out.PolicyGeneration || (!f.JournalInitiallyAbsent && !f.CaptureCurrentJournal && out.JournalUID != f.GuardrailJournalUID) {
 		return out, errors.New("reviewed source or installed identity changed")
 	}
 	if e = w.saveJSON(label+"-snapshot.json", out); e != nil {
@@ -682,8 +776,19 @@ func availabilityReceiptFields(raw json.RawMessage) (generation int64, phase, pr
 	return int64(n), availabilityString(m, "phase"), availabilityString(m, "priorVariant"), availabilityString(m, "nextVariant"), availabilityString(m, "operationID"), availabilityString(m, "tickID"), nil
 }
 
+func availabilityJournalIdentityMatches(a, b availabilitySnapshot, allowOperation bool) bool {
+	if a.JournalAbsent == b.JournalAbsent && a.JournalUID == b.JournalUID {
+		return true
+	}
+	// Only the selected effect operation may create generation one after
+	// repeated exact-name absence proofs. Receipt semantics are checked
+	// separately against the selected decision, not inferred from this join.
+	return allowOperation && a.JournalAbsent && !b.JournalAbsent &&
+		a.JournalUID == "" && b.JournalUID != "" && b.JournalResourceVersion != ""
+}
+
 func availabilitySameSource(a, b availabilitySnapshot, allowOperation bool) bool {
-	if a.ClusterUID != b.ClusterUID || a.ManagerPodUID != b.ManagerPodUID || a.ManagerContainerID != b.ManagerContainerID || a.ManagerImageID != b.ManagerImageID || a.ConsolePodUID != b.ConsolePodUID || a.ConsoleReplicaSetUID != b.ConsoleReplicaSetUID || a.ConsoleDeploymentUID != b.ConsoleDeploymentUID || a.ConsoleContainerID != b.ConsoleContainerID || a.ConsoleImageID != b.ConsoleImageID || a.TargetPodUID != b.TargetPodUID || a.TargetContainerID != b.TargetContainerID || a.TargetImageID != b.TargetImageID || a.ServiceUID != b.ServiceUID || a.SourceUID != b.SourceUID || a.SourceSHA256 != b.SourceSHA256 || a.PolicyUID != b.PolicyUID || a.PolicyGeneration != b.PolicyGeneration || a.PolicyObservedGeneration != b.PolicyObservedGeneration || a.PolicySpecSHA256 != b.PolicySpecSHA256 || a.JournalUID != b.JournalUID || !bytes.Equal(a.ModelIdentity, b.ModelIdentity) {
+	if a.ClusterUID != b.ClusterUID || a.ManagerPodUID != b.ManagerPodUID || a.ManagerContainerID != b.ManagerContainerID || a.ManagerImageID != b.ManagerImageID || a.ConsolePodUID != b.ConsolePodUID || a.ConsoleReplicaSetUID != b.ConsoleReplicaSetUID || a.ConsoleDeploymentUID != b.ConsoleDeploymentUID || a.ConsoleContainerID != b.ConsoleContainerID || a.ConsoleImageID != b.ConsoleImageID || a.TargetPodUID != b.TargetPodUID || a.TargetContainerID != b.TargetContainerID || a.TargetImageID != b.TargetImageID || a.ServiceUID != b.ServiceUID || a.SourceUID != b.SourceUID || a.SourceSHA256 != b.SourceSHA256 || a.BoundarySourceSHA256 != b.BoundarySourceSHA256 || a.PolicyUID != b.PolicyUID || a.PolicyGeneration != b.PolicyGeneration || a.PolicyObservedGeneration != b.PolicyObservedGeneration || a.PolicySpecSHA256 != b.PolicySpecSHA256 || !availabilityJournalIdentityMatches(a, b, allowOperation) || !bytes.Equal(a.ModelIdentity, b.ModelIdentity) {
 		return false
 	}
 	if !allowOperation && (a.JournalResourceVersion != b.JournalResourceVersion || !bytes.Equal(a.Receipt, b.Receipt) || a.ActiveVariant != b.ActiveVariant || a.PodVariant != b.PodVariant || a.GuardrailEpoch != b.GuardrailEpoch) {
@@ -758,7 +863,7 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	if e != nil {
 		return out, e
 	}
-	journal, e := w.kube(label+"-journal", "-n", "phorvex-system", "get", "configmap", w.p.Fixture.GuardrailJournalName, "-o", "json")
+	journal, e := w.journal(label+"-journal", w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal)
 	if e != nil {
 		return out, e
 	}
@@ -789,12 +894,21 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 		return out, e
 	}
 	text := availabilityString(availabilityMap(source["data"]), "guardrail_proxy.py")
-	receipt := availabilityString(availabilityMap(journal["data"]), "receipt")
-	if text == "" || receipt == "" {
-		return out, errors.New("compact source or journal missing")
+	if text == "" {
+		return out, errors.New("compact source missing")
 	}
 	if runtime["_mountedSourceSHA256"] != availabilityHash([]byte(text)) {
 		return out, errors.New("compact mounted source bytes differ")
+	}
+	boundarySHA, e := availabilityBoundarySource(source, runtime, w.p.Fixture.BoundarySourceSHA256)
+	if e != nil {
+		return out, e
+	}
+	requireAbsent := availabilityJournalShouldBeAbsent(w.p, label)
+	receipt, journalUID, journalRV, absent, e := availabilityJournalReceipt(journal, w.p.Context, w.p.Fixture.GuardrailJournalName,
+		requireAbsent || ((w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal) && availabilityIsJournalAbsence(journal, w.p.Context, w.p.Fixture.GuardrailJournalName)))
+	if e != nil {
+		return out, e
 	}
 	out = ref
 	out.TargetPodUID = availabilityUID(pod)
@@ -802,9 +916,9 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	out.TargetImageID = img
 	out.SourceUID = availabilityUID(source)
 	out.SourceSHA256 = availabilityHash([]byte(text))
-	out.JournalUID = availabilityUID(journal)
-	out.JournalResourceVersion = availabilityString(availabilityMeta(journal), "resourceVersion")
-	out.Receipt = json.RawMessage(receipt)
+	out.BoundarySourceSHA256 = boundarySHA
+	out.JournalUID, out.JournalResourceVersion, out.JournalAbsent = journalUID, journalRV, absent
+	out.Receipt = receipt
 	out.ActiveVariant = availabilityString(body, "active")
 	out.PodVariant = availabilityString(availabilityMap(availabilityMeta(pod)["annotations"]), "phorvex.ai/guardrail-variant")
 	out.GuardrailEpoch = availabilityString(availabilityMap(availabilityMeta(pod)["labels"]), "phorvex.ai/guardrail-epoch")
@@ -826,6 +940,9 @@ func (rm *RunManager) runGuardrailAvailability(ctx context.Context, id string, s
 	var p guardrailAvailabilityProfile
 	if e == nil {
 		p, e = parseGuardrailAvailabilityProfile(raw)
+		if e == nil && (p.Fixture.JournalInitiallyAbsent || p.Fixture.CaptureCurrentJournal) {
+			e = errors.New("guardrail availability cannot use effect journal modes")
+		}
 	}
 	p.Fixture.RunID = id
 	w := &availabilityWorker{rm: rm, ctx: ctx, out: rm.cfg.runOutputPath(id), p: p, deadline: time.Now().Add(600 * time.Second), selfName: os.Getenv("PHORVEX_CONSOLE_POD_NAME"), selfUID: os.Getenv("PHORVEX_CONSOLE_POD_UID"), t: availabilityTerminal{Schema: "guardrail-availability-terminal-v1", RunID: id, ProfileSHA256: rm.cfg.GuardrailAvailabilityProfileSHA256, Status: "UNKNOWN", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}}

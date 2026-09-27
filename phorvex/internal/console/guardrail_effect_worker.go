@@ -245,17 +245,21 @@ func (s *Server) executeMeasuredGuardrailEffect(w *availabilityWorker, record *a
 	if err = w.saveJSON("created-event.json", w.event); err != nil {
 		return err
 	}
-	baseGen, _, _, _, _, _, err := availabilityReceiptFields(w.before.Receipt)
-	if err != nil {
-		return err
+	baseGen := int64(0)
+	if !w.before.JournalAbsent {
+		baseGen, _, _, _, _, _, err = availabilityReceiptFields(w.before.Receipt)
+		if err != nil {
+			return err
+		}
 	}
 	for i := 0; i < 6; i++ {
-		j, e := w.kube(fmt.Sprintf("journal-poll-%d", i), "-n", "phorvex-system", "get", "configmap", w.p.Fixture.GuardrailJournalName, "-o", "json")
+		j, e := w.journal(fmt.Sprintf("journal-poll-%d", i), w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal)
 		if e != nil {
 			return e
 		}
 		var receipt map[string]any
-		if availabilityDecode([]byte(availabilityString(availabilityMap(j["data"]), "receipt")), &receipt) == nil && receipt["generation"] != float64(baseGen) {
+		if !availabilityIsJournalAbsence(j, w.p.Context, w.p.Fixture.GuardrailJournalName) &&
+			availabilityDecode([]byte(availabilityString(availabilityMap(j["data"]), "receipt")), &receipt) == nil && receipt["generation"] != float64(baseGen) {
 			break
 		}
 		select {

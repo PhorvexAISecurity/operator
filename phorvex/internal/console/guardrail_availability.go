@@ -26,28 +26,31 @@ type guardrailAvailabilityProfile struct {
 	ScenarioFilter       []string `json:"scenarioFilter"`
 	DefenderFilter       []string `json:"defenderFilter"`
 	Fixture              struct {
-		RunID                 string `json:"runID"`
-		Transport             string `json:"transport"`
-		ClusterUID            string `json:"clusterUID"`
-		PodName               string `json:"podName"`
-		PodUID                string `json:"podUID"`
-		PodImageID            string `json:"podImageID"`
-		ServiceUID            string `json:"serviceUID"`
-		SourceConfigMapName   string `json:"sourceConfigMapName"`
-		SourceUID             string `json:"sourceUID"`
-		SourceSHA256          string `json:"sourceSHA256"`
-		GuardrailJournalName  string `json:"guardrailJournalName"`
-		GuardrailJournalUID   string `json:"guardrailJournalUID"`
-		ManagerPodName        string `json:"managerPodName"`
-		ManagerPodUID         string `json:"managerPodUID"`
-		ManagerImageID        string `json:"managerImageID"`
-		ConsoleDeploymentName string `json:"consoleDeploymentName"`
-		ConsoleDeploymentUID  string `json:"consoleDeploymentUID"`
-		ConsoleImageID        string `json:"consoleImageID"`
-		PolicyName            string `json:"policyName"`
-		PolicyUID             string `json:"policyUID"`
-		PolicyGeneration      int64  `json:"policyGeneration"`
-		ModelID               string `json:"modelID"`
+		RunID                  string `json:"runID"`
+		Transport              string `json:"transport"`
+		ClusterUID             string `json:"clusterUID"`
+		PodName                string `json:"podName"`
+		PodUID                 string `json:"podUID"`
+		PodImageID             string `json:"podImageID"`
+		ServiceUID             string `json:"serviceUID"`
+		SourceConfigMapName    string `json:"sourceConfigMapName"`
+		SourceUID              string `json:"sourceUID"`
+		SourceSHA256           string `json:"sourceSHA256"`
+		BoundarySourceSHA256   string `json:"boundarySourceSHA256,omitempty"`
+		GuardrailJournalName   string `json:"guardrailJournalName"`
+		GuardrailJournalUID    string `json:"guardrailJournalUID"`
+		JournalInitiallyAbsent bool   `json:"journalInitiallyAbsent,omitempty"`
+		CaptureCurrentJournal  bool   `json:"captureCurrentJournal,omitempty"`
+		ManagerPodName         string `json:"managerPodName"`
+		ManagerPodUID          string `json:"managerPodUID"`
+		ManagerImageID         string `json:"managerImageID"`
+		ConsoleDeploymentName  string `json:"consoleDeploymentName"`
+		ConsoleDeploymentUID   string `json:"consoleDeploymentUID"`
+		ConsoleImageID         string `json:"consoleImageID"`
+		PolicyName             string `json:"policyName"`
+		PolicyUID              string `json:"policyUID"`
+		PolicyGeneration       int64  `json:"policyGeneration"`
+		ModelID                string `json:"modelID"`
 		// The effect action requires this explicit active baseline pin. The
 		// availability recovery suite retains its own pgv1-only gate.
 		ActiveVariant       string `json:"activeVariant,omitempty"`
@@ -80,7 +83,10 @@ func parseGuardrailAvailabilityProfile(raw []byte) (guardrailAvailabilityProfile
 		len(p.ScenarioFilter) != 0 || len(p.DefenderFilter) != 0 || !staticRunID.MatchString(f.RunID) ||
 		f.Transport != "in-cluster" || !staticUID.MatchString(f.ClusterUID) || !staticUID.MatchString(f.PodUID) ||
 		!staticUID.MatchString(f.ServiceUID) || !staticUID.MatchString(f.SourceUID) ||
-		!staticUID.MatchString(f.GuardrailJournalUID) || !staticUID.MatchString(f.ManagerPodUID) ||
+		(f.JournalInitiallyAbsent && f.CaptureCurrentJournal) ||
+		(((f.JournalInitiallyAbsent || f.CaptureCurrentJournal) && f.GuardrailJournalUID != "") ||
+			(!f.JournalInitiallyAbsent && !f.CaptureCurrentJournal && !staticUID.MatchString(f.GuardrailJournalUID))) ||
+		!staticUID.MatchString(f.ManagerPodUID) ||
 		!staticUID.MatchString(f.ConsoleDeploymentUID) || !staticUID.MatchString(f.PolicyUID) ||
 		!mongoPinnedImage.MatchString(f.PodImageID) || !mongoPinnedImage.MatchString(f.ManagerImageID) ||
 		!mongoPinnedImage.MatchString(f.ConsoleImageID) || !staticSHA256.MatchString(f.SourceSHA256) ||

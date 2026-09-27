@@ -47,7 +47,13 @@ func readGuardrailEffectProbeResult(out, id, admittedSHA string) (*guardrailEffe
 		return nil, errors.New("guardrail effect original reviewed profile differs")
 	}
 	e.p, err = parseGuardrailAvailabilityProfile(profileRaw)
-	if err != nil || (e.p.Fixture.ActiveVariant != "pgv1" && e.p.Fixture.ActiveVariant != "pgv2") {
+	// Historical effect runs retain their original one-file source contract.
+	// New admission requires a dual-listener pin, and snapshot replay enforces
+	// it when that field exists in the exact original profile bytes.
+	validVariant := (e.p.Fixture.CaptureCurrentJournal && e.p.Fixture.ActiveVariant == "") ||
+		(!e.p.Fixture.CaptureCurrentJournal && (e.p.Fixture.ActiveVariant == "pgv1" || e.p.Fixture.ActiveVariant == "pgv2"))
+	if err != nil || !validVariant ||
+		(e.p.Fixture.CaptureCurrentJournal && !staticSHA256.MatchString(e.p.Fixture.BoundarySourceSHA256)) {
 		return nil, errors.New("guardrail effect original active variant unpinned")
 	}
 	if err = e.decode("self-identity.json", &e.self); err != nil || e.self["name"] == "" || !staticUID.MatchString(e.self["uid"]) {

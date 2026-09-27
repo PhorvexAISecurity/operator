@@ -22,8 +22,11 @@ func loadGuardrailEffectProfile(cfg Config) (guardrailAvailabilityProfile, []byt
 		return p, nil, errors.New("reviewed guardrail effect profile bytes unavailable")
 	}
 	p, err = parseGuardrailAvailabilityProfile(raw)
-	if err != nil || (p.Fixture.ActiveVariant != "pgv1" && p.Fixture.ActiveVariant != "pgv2") {
-		return p, nil, errors.New("guardrail effect fixture lacks an exact known active variant")
+	validVariant := (p.Fixture.CaptureCurrentJournal && p.Fixture.ActiveVariant == "") ||
+		(!p.Fixture.CaptureCurrentJournal && (p.Fixture.ActiveVariant == "pgv1" || p.Fixture.ActiveVariant == "pgv2"))
+	if err != nil || !validVariant ||
+		!staticSHA256.MatchString(p.Fixture.BoundarySourceSHA256) {
+		return p, nil, errors.New("guardrail effect fixture lacks an exact known active variant or dual-listener source")
 	}
 	if cfg.AuditSource == nil || cfg.AuditSourceIdentity != p.Fixture.AuditURL+"|"+p.Fixture.AuditServerName {
 		return p, nil, errors.New("reviewed guardrail effect audit transport unavailable")
@@ -45,6 +48,26 @@ func guardrailEffectCatalogueReason(cfg Config) string {
 
 func guardrailEffectProtected(s availabilitySnapshot, p guardrailAvailabilityProfile) error {
 	f := p.Fixture
+	expectedVariant := f.ActiveVariant
+	if f.CaptureCurrentJournal {
+		expectedVariant = s.ActiveVariant
+	}
+	if expectedVariant != "pgv1" && expectedVariant != "pgv2" {
+		return errors.New("current guardrail variant is not in the reviewed roster")
+	}
+	if s.JournalAbsent {
+		var absence map[string]any
+		if (!f.JournalInitiallyAbsent && !f.CaptureCurrentJournal) || s.JournalUID != "" || s.JournalResourceVersion != "" ||
+			s.ActiveVariant != expectedVariant || s.PodVariant != expectedVariant ||
+			s.GuardrailEpoch != "" || availabilityDecode(s.Receipt, &absence) != nil ||
+			!availabilityIsJournalAbsence(absence, p.Context, f.GuardrailJournalName) {
+			return errors.New("reviewed first-operation guardrail absence or baseline differs")
+		}
+		return nil
+	}
+	if f.JournalInitiallyAbsent {
+		return errors.New("explicit first-operation profile encountered a preexisting journal")
+	}
 	n, phase, prior, next, op, tick, err := availabilityReceiptFields(s.Receipt)
 	if err != nil {
 		return err
@@ -53,7 +76,7 @@ func guardrailEffectProtected(s availabilitySnapshot, p guardrailAvailabilityPro
 	if err = availabilityDecode(s.Receipt, &r); err != nil {
 		return err
 	}
-	if s.ActiveVariant != f.ActiveVariant || s.PodVariant != f.ActiveVariant ||
+	if s.ActiveVariant != expectedVariant || s.PodVariant != expectedVariant ||
 		(s.ActiveVariant != "pgv1" && s.ActiveVariant != "pgv2") ||
 		n < 1 || phase != "terminal-full" || (prior != "pgv1" && prior != "pgv2") || prior == next || next != s.ActiveVariant ||
 		r["version"] != float64(9) || r["kind"] != "guardrail-rotate" ||
@@ -75,9 +98,18 @@ func guardrailEffectTransition(before, after availabilitySnapshot, selected avai
 	if !availabilitySameSource(before, after, true) {
 		return "", errors.New("guardrail source or target drift across operation")
 	}
-	bn, _, _, _, bop, _, err := availabilityReceiptFields(before.Receipt)
-	if err != nil {
-		return "", err
+	var bn int64
+	var bop string
+	if before.JournalAbsent {
+		if (!p.Fixture.JournalInitiallyAbsent && !p.Fixture.CaptureCurrentJournal) || guardrailEffectProtected(before, p) != nil {
+			return "", errors.New("first-operation source lacks reviewed absence")
+		}
+	} else {
+		var err error
+		bn, _, _, _, bop, _, err = availabilityReceiptFields(before.Receipt)
+		if err != nil {
+			return "", err
+		}
 	}
 	an, phase, prior, next, op, tick, err := availabilityReceiptFields(after.Receipt)
 	if err != nil {
@@ -87,7 +119,7 @@ func guardrailEffectTransition(before, after availabilitySnapshot, selected avai
 	if err = availabilityDecode(after.Receipt, &receipt); err != nil {
 		return "", err
 	}
-	if an != bn+1 || phase != "terminal-full" || prior != before.ActiveVariant ||
+	if after.JournalAbsent || after.JournalUID == "" || an != bn+1 || phase != "terminal-full" || prior != before.ActiveVariant ||
 		next == prior || (next != "pgv1" && next != "pgv2") || next != after.ActiveVariant ||
 		next != after.PodVariant || op == bop || tick == "" || tick != selected.TickID ||
 		op != availabilityOperationID(selected.TickID, before.PolicyUID, "vllm", before.TargetPodUID) ||

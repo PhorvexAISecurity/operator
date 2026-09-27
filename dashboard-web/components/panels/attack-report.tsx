@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, readLiveSelection } from "@/lib/live-selection";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { useExactRecord } from "@/lib/query";
-import { attackCSVRow, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
+import { attackCSVRow, hasAvailabilityCostEvidence, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
@@ -130,6 +130,7 @@ function containmentInfo(r: AttackResult): { tone: "good" | "warn" | "bad"; cls:
 function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boolean }) {
   const signal = isCatalogueSignalResult(r);
   const showSecurity = showSecurityOutcomeSections(r);
+  const hasAvailabilityCost = hasAvailabilityCostEvidence(r);
   const unversioned = isUnversionedResult(r);
   const running = r.status === "running";
   const partial = r.status === "partial";
@@ -205,7 +206,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {!signal && !!(r.decisionTraceEvidence?.length || r.temporalDecisionEvidence || r.decisionEvidence) && <DecisionEvidencePanel exact={r.decisionTraceEvidence} temporal={r.temporalDecisionEvidence} legacy={r.decisionEvidence} observationStartedAt={r.observationStartedAt} observationDeadline={r.observationDeadline} />}
 
         {/* uptime before / dip / after */}
-        {showSecurity && <div>
+        {showSecurity && hasAvailabilityCost && <div>
           <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70"><Activity className="h-3 w-3" /> availability</div>
           <div className="flex items-center gap-2 text-[12px]">
             <UpCell label="before" v={r.uptimeBefore} />
@@ -218,7 +219,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         </div>}
 
         {/* three-way cost */}
-        {showSecurity && <div>
+        {showSecurity && hasAvailabilityCost && <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">annual cost exposure (real AWS $/yr) · <span className="text-muted-foreground/50">modelled from measured prevention rates — not this attack&apos;s outcome</span></div>
           <div className="grid grid-cols-3 gap-2">
             <CostCell label="Without any defense" v={r.cost?.without} tone="bad" max={r.cost?.without} />
@@ -227,6 +228,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
           </div>
           <CostBreakdown c={r.cost} />
         </div>}
+        {showSecurity && !hasAvailabilityCost && <div className="text-[11px] text-muted-foreground">Availability and cost were not measured for this observation.</div>}
 
         {/* reasoning */}
         {showSecurity && (r.why || r.r6Note) && (

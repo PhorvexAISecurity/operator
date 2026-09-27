@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -35,6 +37,17 @@ func m007Expected(codeexec bool) map[string]bool {
 	if codeexec {
 		add("", "pods/ephemeralcontainers", "update")
 	}
+	return out
+}
+
+// The installed Helm routine Role deliberately omits blanket tenant ConfigMap
+// writes. Feature-specific policy activation uses an exact resourceNames Role;
+// the generated marker and standalone reference manifest remain broader review
+// artifacts and retain their own contract above.
+func m007RenderedRoutineExpected() map[string]bool {
+	out := m007Expected(false)
+	delete(out, "/configmaps/get")
+	delete(out, "/configmaps/update")
 	return out
 }
 func m007Grants(role rbacv1.Role) (map[string]bool, error) {
@@ -79,6 +92,126 @@ func m007ReadRoles(t *testing.T, path string) []rbacv1.Role {
 	}
 	return roles
 }
+func m007ReadBindings(t *testing.T, path string) []rbacv1.RoleBinding {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec := kyaml.NewYAMLOrJSONDecoder(bytes.NewReader(raw), 4096)
+	var bindings []rbacv1.RoleBinding
+	for {
+		var b rbacv1.RoleBinding
+		err := dec.Decode(&b)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b.Kind == "RoleBinding" {
+			bindings = append(bindings, b)
+		}
+	}
+	return bindings
+}
+
+func m007RoleAllows(role rbacv1.Role, resource, name, verb string) bool {
+	for _, rule := range role.Rules {
+		if !containsM007(rule.APIGroups, "") || !containsM007(rule.Resources, resource) || !containsM007(rule.Verbs, verb) {
+			continue
+		}
+		if len(rule.ResourceNames) == 0 || containsM007(rule.ResourceNames, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsM007(values []string, want string) bool {
+	for _, value := range values {
+		if value == want || value == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestM007LiteLLMExactOptInGrant(t *testing.T) {
+	disabled, enabled := os.Getenv("M007_RENDERED_RBAC"), os.Getenv("M007_LITELLM_RENDERED_RBAC")
+	if disabled == "" {
+		disabled = m007RenderForTest(t, false)
+	}
+	if enabled == "" {
+		enabled = m007RenderForTest(t, true)
+	}
+	const name = "m007-phorvex-litellm-client-revoke"
+	for _, role := range m007ReadRoles(t, disabled) {
+		if role.Name == name {
+			t.Fatal("disabled profile granted LiteLLM policy mutation")
+		}
+	}
+	for _, binding := range m007ReadBindings(t, disabled) {
+		if binding.Name == name {
+			t.Fatal("disabled profile bound LiteLLM policy mutation")
+		}
+	}
+	var matches int
+	for _, role := range m007ReadRoles(t, enabled) {
+		if role.Name != name {
+			continue
+		}
+		matches++
+		want := []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"},
+			ResourceNames: []string{"phorvex-litellm-client-policy"}, Verbs: []string{"get", "update"}}}
+		if role.Namespace != "litellm" || !reflect.DeepEqual(role.Rules, want) {
+			t.Fatalf("exact owned policy grant differs or authorizes wrong ConfigMap/Secret: %+v", role)
+		}
+		if !m007RoleAllows(role, "configmaps", "phorvex-litellm-client-policy", "get") ||
+			!m007RoleAllows(role, "configmaps", "phorvex-litellm-client-policy", "update") ||
+			m007RoleAllows(role, "configmaps", "other-policy", "update") ||
+			m007RoleAllows(role, "secrets", "exact-status-token", "update") {
+			t.Fatal("LiteLLM policy role allowed wrong ConfigMap/Secret or denied exact policy")
+		}
+	}
+	if matches != 1 {
+		t.Fatalf("expected one exact LiteLLM policy Role, got %d", matches)
+	}
+	matches = 0
+	for _, binding := range m007ReadBindings(t, enabled) {
+		if binding.Name != name {
+			continue
+		}
+		matches++
+		wantSubject := []rbacv1.Subject{{Kind: "ServiceAccount", Name: "m007-phorvex-manager", Namespace: "phorvex-system"}}
+		if binding.Namespace != "litellm" || binding.RoleRef != (rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}) ||
+			!reflect.DeepEqual(binding.Subjects, wantSubject) {
+			t.Fatalf("exact owned policy binding differs: %+v", binding)
+		}
+	}
+	if matches != 1 {
+		t.Fatalf("expected one exact LiteLLM policy binding, got %d", matches)
+	}
+}
+
+func m007RenderForTest(t *testing.T, litellmEnabled bool) string {
+	t.Helper()
+	args := []string{"template", "m007", "../../charts/phorvex", "-n", "phorvex-system",
+		"--set", "phorvex.actuatorNamespaces[0]=phorvex-tenant"}
+	if litellmEnabled {
+		args = append(args, "--set", "phorvex.actuator=native", "--set", "phorvex.litellmClientRevoke.enabled=true",
+			"--set", "phorvex.litellmClientRevoke.statusSecret=exact-status-token")
+	}
+	raw, err := exec.Command("helm", args...).Output()
+	if err != nil {
+		t.Fatalf("render M007 RBAC fixture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "rendered.yaml")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 func TestM007GeneratedAndRoutineContracts(t *testing.T) {
 	roles := m007ReadRoles(t, "../../config/rbac/generated-native/role.yaml")
 	if len(roles) != 1 {
@@ -103,7 +236,11 @@ func TestM007GeneratedAndRoutineContracts(t *testing.T) {
 			}
 			found = true
 			got, err := m007Grants(r)
-			if err != nil || !reflect.DeepEqual(got, m007Expected(false)) {
+			want := m007Expected(false)
+			if path == os.Getenv("M007_RENDERED_RBAC") {
+				want = m007RenderedRoutineExpected()
+			}
+			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatalf("%s routine contract: %v %v", path, got, err)
 			}
 		}

@@ -1,14 +1,15 @@
 "use client";
 import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
-import { api, Lens, LiveHistoryPage, RunStatus, VllmAttackAction } from "@/lib/api";
+import { api, Lens, LiveHistoryPage, RunStatus, AttackResult } from "@/lib/api";
+import { dispatchLiveAttack, liveAttackFollowMessage, liveAttackPollBudgetMs, liveAttackRoute, liveAttackVerdict } from "@/lib/live-attack-dispatch";
 import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { useOwnerTenant } from "@/lib/owner";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { cn } from "@/lib/utils";
-import { useApiRead, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
+import { useApiRead, useExactRecord, useQueryScope, useTargets, useWorkloads } from "@/lib/query";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, clearLiveSelection, readLiveSelection, selectLiveRecord } from "@/lib/live-selection";
 import { Radio, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2, BarChart3 } from "lucide-react";
 import { useLocalPage } from "@/lib/use-local-page";
@@ -231,6 +232,31 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   // LIVE vLLM ATTACK: fire a real attack on the live vLLM; the operator's actuator choice streams below.
   const [attacking, setAttacking] = React.useState("");
   const [attackMsg, setAttackMsg] = React.useState("");
+  const [attackRecordId, setAttackRecordId] = React.useState("");
+  const [attackFollowUntil, setAttackFollowUntil] = React.useState(0);
+  const [completedAttackRecord, setCompletedAttackRecord] = React.useState<AttackResult | null>(null);
+  const [lastAttackRecord, setLastAttackRecord] = React.useState<AttackResult | null>(null);
+  React.useEffect(() => {
+    if (!attackFollowUntil) return;
+    const timer = setTimeout(() => setAttackFollowUntil(0), Math.max(0, attackFollowUntil - Date.now()));
+    return () => clearTimeout(timer);
+  }, [attackFollowUntil]);
+  const attackRecordQuery = useExactRecord<AttackResult>({ resource: "attack-results", context: sel.context,
+    id: attackRecordId, lens, enabled: !!attackFollowUntil,
+    fetcher: (signal) => api.attackResultsPage(lens, 1, { id: attackRecordId, includeObservations: "true" }, undefined, signal)
+      .then((page) => (page.attacks || []).find((row) => row.id === attackRecordId) || null),
+    active: (row) => row.status === "running" });
+  React.useEffect(() => {
+    const row = attackRecordQuery.data;
+    if (row && row.id === attackRecordId) setLastAttackRecord(row);
+    if (row && row.id === attackRecordId && (row.status === "done" || row.status === "partial")) {
+      setCompletedAttackRecord(row);
+      setAttackFollowUntil(0);
+    }
+  }, [attackRecordId, attackRecordQuery.data]);
+  const attackRecord = completedAttackRecord || attackRecordQuery.data || lastAttackRecord;
+  const attackVerdict = attackRecord ? liveAttackVerdict(attackRecord) : null;
+  const attackFollowMessage = liveAttackFollowMessage(attackRecordId, attackFollowUntil > 0, attackRecord);
   const fireAttack = async (action: string) => {
     const workload = selWl;
     if (!queryScope.ready || targetQuery.error || workloadQuery.error || lens !== "operator" || !mutatesDefaultContext || !workload || !wls.some((item) => `${item.ns}/${item.name}` === workload)) {
@@ -242,36 +268,23 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       setAttackMsg("Attack compatibility is unavailable or this action is not armed for the selected app.");
       return;
     }
+    const route = liveAttackRoute(entry, curWl?.ns || "", action === "clear");
+    if (!route) {
+      setAttackMsg(`Attack refused: unsupported endpoint or ID for ${entry.id}.`);
+      return;
+    }
     const request = mutationGeneration.current;
-    setAttacking(action); setAttackMsg("");
+    setAttacking(action); setAttackMsg(""); setAttackRecordId(""); setAttackFollowUntil(0); setCompletedAttackRecord(null); setLastAttackRecord(null);
     clearLiveSelection(lens, sel.context);
     try {
-      if (entry.endpoint === "/api/vllm/attack") {
-        const r = await api.vllmAttack(action as VllmAttackAction, lens);
-        if (request !== mutationGeneration.current || workload !== selWl) return;
-        setAttackMsg(r.message + (r.attackId ? "" : " No attack record ID was returned; no exact result can be selected."));
-        setActionFilter("");
-        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
-      } else if (entry.endpoint === "/api/voice/live/fire" && action === "ai2-agent-memory-contamination") {
-        const r = await api.voiceMemoryFire(action, lens);
-        if (request !== mutationGeneration.current || workload !== selWl) return;
-        setAttackMsg(r.message + (r.attackId ? "" : " No exact result ID was returned."));
-        setActionFilter("");
-        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
-      } else if (entry.endpoint === "/api/litellm/live/fire" && (action === "ai2-unbounded-consumption" || action === "ai2-query-extraction")) {
-        const r = await api.litellmLiveFire(action, lens);
-        if (request !== mutationGeneration.current || workload !== selWl) return;
-        setAttackMsg(r.message + (r.attackId ? "" : " No exact result ID was returned."));
-        setActionFilter("");
-        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
-      } else {
-        // foothold | clear — a REAL detector signal on the selected reactiveOnly-armed workload.
-        const ns = (workload.split("/")[0] || "").trim();
-        const r = await api.workloadAttack(ns, action as any, lens);
-        if (request !== mutationGeneration.current || workload !== selWl) return;
-        setAttackMsg(r.message + (r.expect ? "  (expected actuator: " + r.expect + ")" : "") + (r.attackId ? "" : " No attack record ID was returned; no exact result can be selected."));
-        setActionFilter("");
-        if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
+      const r = await dispatchLiveAttack(route, lens);
+      if (request !== mutationGeneration.current || workload !== selWl) return;
+      setAttackMsg(r.message + ("expect" in r && r.expect ? "  (expected actuator: " + r.expect + ")" : "") + (r.attackId ? "" : " No exact result ID was returned."));
+      setActionFilter("");
+      if (r.attackId) {
+        setAttackRecordId(r.attackId);
+        setAttackFollowUntil(Date.now() + liveAttackPollBudgetMs(route));
+        selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
       }
     } catch (e: any) { if (request === mutationGeneration.current && workload === selWl) setAttackMsg("error: " + String(e.message || e)); }
     finally { if (request === mutationGeneration.current && workload === selWl) setAttacking(""); }
@@ -310,7 +323,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   }, [lens, owner, sel.context]);
   React.useEffect(() => {
     mutationGeneration.current++;
-    setAttacking(""); setAttackMsg(""); setComparing(""); setCompareMsg("");
+    setAttacking(""); setAttackMsg(""); setComparing(""); setCompareMsg(""); setAttackRecordId(""); setAttackFollowUntil(0); setCompletedAttackRecord(null); setLastAttackRecord(null);
   }, [lens, sel.context, sel.provider, selWl]);
   React.useEffect(() => {
     const def = wls.find((w) => w.images.join(" ").toLowerCase().includes("vllm")) || wls[0];
@@ -390,7 +403,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                     <Lock className="h-3 w-3" /> Reset unavailable
                   </span>
                 ) : (
-                  <Button size="sm" variant="ghost" disabled={attackControlsDisabled || !compatibleAttacks.some((a) => a.id === "foothold" && a.armed)} onClick={() => fireAttack("clear")} className="gap-1.5 text-muted-foreground">
+                  <Button size="sm" variant="ghost" disabled={attackControlsDisabled || !compatibleAttacks.some((a) => a.armed && !!liveAttackRoute(a, curWl?.ns || "", true))} onClick={() => fireAttack("clear")} className="gap-1.5 text-muted-foreground">
                     {attacking === "clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Clear attack
                   </Button>
                 )}
@@ -426,6 +439,14 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             </div>
           )}
           {attackMsg && <div className="text-[11px] text-primary">{attackMsg}</div>}
+          {attackRecord && (attackRecord.status === "done" || attackRecord.status === "partial") && (
+            <div className="text-[11px] text-muted-foreground">Exact result {attackRecord.id}: {attackRecord.outcome || attackRecord.status}; observed {attackVerdict?.action}.
+              {attackVerdict?.reason && <div>Reason: {attackVerdict.reason}</div>}
+              {attackVerdict?.blocked.map((candidate) => <div key={candidate}>Candidate: {candidate}</div>)}
+            </div>
+          )}
+          {attackFollowMessage && !attackRecordQuery.error && <div className={`text-[11px] ${attackFollowUntil ? "text-muted-foreground" : "text-warning"}`}>{attackFollowMessage}</div>}
+          {attackRecordQuery.error && attackFollowUntil > 0 && <div className="text-[11px] text-warning">Could not read exact result {attackRecordId}: {String((attackRecordQuery.error as Error).message || attackRecordQuery.error)}</div>}
         </details>
       )}
       {!owner && <div aria-label="Selected attack receipt"><AttackResultsPanel lens={lens} compact /></div>}

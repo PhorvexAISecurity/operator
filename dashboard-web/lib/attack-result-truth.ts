@@ -63,6 +63,10 @@ export function showSecurityOutcomeSections(result: AttackResult): boolean {
   return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" && result.evidenceKind !== "litellm-live-client-policy";
 }
 
+export function hasAvailabilityCostEvidence(result: AttackResult): boolean {
+  return result.evidenceKind !== "vllm-in-place-effect" && result.evidenceKind !== "vllm-unsupported-stimulus";
+}
+
 export function attackCSVRow(r: AttackResult): (string | number)[] {
   return attackCSVCells(r).map((value) => value ?? "");
 }
@@ -77,6 +81,10 @@ function attackCSVCells(r: AttackResult): (string | number | undefined)[] {
       ? "Exact caller/note context containment; model obedience and generic dwell, availability and cost were not measured."
       : "Owned client containment; generic dwell, availability, cost and model replication were not measured.";
     return [...identity, r.outcome || r.status, r.actuated ? attackCSVActuator(r) : "", r.containment || "", ...Array(10).fill(""), scope];
+  }
+  if (!hasAvailabilityCostEvidence(r)) {
+    return [...identity, r.outcome || r.status, attackCSVActuator(r), r.containment, r.timeToDefendSec, r.dwellSec,
+      r.dwellOngoing ? "ongoing" : "bounded", ...Array(7).fill(""), r.why];
   }
   return [...identity, r.outcome || r.status, attackCSVActuator(r), r.containment, r.timeToDefendSec, r.dwellSec,
     r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why];

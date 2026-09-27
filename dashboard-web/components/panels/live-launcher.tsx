@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
-import { api, Lens, WorkloadAttacks, CompatEntry, CatalogCompat, VllmAttackAction, AttackResult, ClusterTarget, RunStatus } from "@/lib/api";
+import { api, Lens, WorkloadAttacks, CompatEntry, CatalogCompat, AttackResult, ClusterTarget, RunStatus } from "@/lib/api";
+import { dispatchLiveAttack, liveAttackPollBudgetMs, liveAttackRoute, liveAttackVerdict } from "@/lib/live-attack-dispatch";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Empty } from "@/components/ui/more";
 import { useSelectedTarget } from "@/lib/provider-store";
@@ -36,6 +37,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
   runsRef.current = runs;
   const generation = React.useRef(0);
   const timers = React.useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const reads = React.useRef<Set<AbortController>>(new Set());
   const targetQuery = useTargets(lens);
   const workloadQuery = useWorkloads(sel.context, lens, !!sel.context);
   const queryScope = useQueryScope(lens);
@@ -49,6 +51,8 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     generation.current++;
     timers.current.forEach(clearTimeout);
     timers.current.clear();
+    reads.current.forEach((controller) => controller.abort());
+    reads.current.clear();
     if (markVerdicts) {
       setVerdictNotes((notes) => Object.fromEntries(Object.entries(notes).map(([key, note]) => [key,
         note.startsWith("Waiting for exact result") ? "Polling cancelled; this exact result is no longer being followed in this view." : note])));
@@ -83,46 +87,60 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     cancelPending(false); setFiring(""); setApp(ns); setMsg(""); setErr(mutatesDefaultContext ? "" : mutationScopeMessage); setVerdicts({}); setVerdictNotes({}); setRuns({}); setRunNotes({});
   };
 
-  // After a live fire, poll attack-results for ~120s (the backend observation window is 95s) to surface the actuator + outcome for THIS app.
-  const pollVerdict = React.useCallback((key: string, recordId?: string) => {
+  // Follow this record alone. Voice and LiteLLM can observe for 900s; every read and the full follow-up remain bounded.
+  const pollVerdict = React.useCallback((key: string, recordId: string | undefined, budgetMs = 150_000) => {
     const request = generation.current;
     if (!recordId) {
       setVerdictNotes((v) => ({ ...v, [key]: "Attack accepted, but this response did not include a record ID. Outcome remains uncorrelated; no namespace/time result will be attributed to this fire." }));
       return;
     }
     setVerdictNotes((v) => ({ ...v, [key]: `Waiting for exact result ${recordId}…` }));
-    let tries = 0;
+    const deadline = Date.now() + budgetMs;
+    let readErrors = 0;
     const tick = () => {
       if (request !== generation.current) return;
-      tries++;
-      api.attackResultsPage(lens, 1, { id: recordId, includeObservations: "true" }).then((d) => {
+      if (Date.now() >= deadline) {
+        setVerdictNotes((v) => ({ ...v, [key]: `No completed exact result was confirmed for ${recordId} within the bounded follow-up. Open the record to check its later status.` }));
+        return;
+      }
+      const controller = new AbortController();
+      reads.current.add(controller);
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      api.attackResultsPage(lens, 1, { id: recordId, includeObservations: "true" }, undefined, controller.signal).then((d) => {
         if (request !== generation.current) return;
         const mine = (d.attacks || []).find((a) => a.id === recordId);
-        if (mine && (mine.outcome || mine.status === "done" || mine.status === "partial")) {
+        if (mine && (mine.status === "done" || mine.status === "partial")) {
           setVerdicts((v) => ({ ...v, [key]: mine }));
           setVerdictNotes((v) => { const next = { ...v }; delete next[key]; return next; });
           return; // resolved
         }
-        if (tries < 40) schedule();
-        else setVerdictNotes((v) => ({ ...v, [key]: `No completed result was recorded for ${recordId} within the polling window.` }));
+        readErrors = 0;
+        schedule();
       }).catch(() => {
         if (request !== generation.current) return;
-        if (tries < 40) schedule();
-        else setVerdictNotes((v) => ({ ...v, [key]: `Could not confirm result ${recordId} within the polling window.` }));
+        readErrors++;
+        if (readErrors >= 3) {
+          setVerdictNotes((v) => ({ ...v, [key]: `Could not read exact result ${recordId} after three bounded attempts. Check the record directly; no outcome is inferred.` }));
+        } else schedule();
+      }).finally(() => {
+        clearTimeout(timeout);
+        reads.current.delete(controller);
       });
     };
     const schedule = (delay = 3000) => {
-      const timer = setTimeout(() => { timers.current.delete(timer); tick(); }, delay);
+      const timer = setTimeout(() => { timers.current.delete(timer); tick(); }, Math.min(delay, Math.max(0, deadline - Date.now())));
       timers.current.add(timer);
     };
     schedule(2500);
   }, [lens]);
 
   const fire = async (a: CompatEntry) => {
-    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.compatible && entry.armed)) {
+    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.endpoint === a.endpoint && entry.compatible && entry.armed)) {
       setErr("Live attack refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
       return;
     }
+    const route = liveAttackRoute(a, app);
+    if (!route) { setErr(`Live attack refused: unsupported endpoint or ID for ${a.id}.`); return; }
     cancelPending();
     const request = generation.current;
     setFiring(a.id); setMsg(""); setErr("");
@@ -130,23 +148,19 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     setVerdicts((v) => { const n = { ...v }; delete n[a.id]; return n; });
     setVerdictNotes((v) => { const n = { ...v }; delete n[a.id]; return n; });
     try {
-      const r = a.endpoint === "/api/vllm/attack"
-        ? await api.vllmAttack(a.id as VllmAttackAction, lens)
-        : await api.workloadAttack(app, "foothold", lens);
+      const r = await dispatchLiveAttack(route, lens);
       if (request !== generation.current) return;
       setMsg(r.message || `Fired ${a.name}.`);
       if (r.attackId) selectLiveRecord({ kind: "attack", id: r.attackId, lens, context: sel.context });
-      pollVerdict(a.id, r.attackId);
+      pollVerdict(a.id, r.attackId, liveAttackPollBudgetMs(route));
     } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
     finally { if (request === generation.current) setFiring(""); }
   };
 
   const clearAttack = async (a: CompatEntry) => {
-    if (a.endpoint === "/api/vllm/attack") {
-      setErr("Reset is unavailable because this console does not retain durable per-run restoration authority.");
-      return;
-    }
-    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.compatible && entry.armed)) {
+    const route = liveAttackRoute(a, app, true);
+    if (!route) { setErr("Clear is available only for the foothold workload attack."); return; }
+    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.endpoint === a.endpoint && entry.compatible && entry.armed)) {
       setErr("Clear refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
       return;
     }
@@ -155,7 +169,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     const request = generation.current;
     setFiring(a.id + ":clear"); setMsg(""); setErr("");
     try {
-      const r = await api.workloadAttack(app, "clear", lens);
+      const r = await dispatchLiveAttack(route, lens);
       if (request !== generation.current) return;
       setMsg(r.message || "Cleared.");
     } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
@@ -290,6 +304,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
               {liveCompatible.map((a) => {
                 const v = verdicts[a.id];
                 const verdictNote = verdictNotes[a.id];
+                const verdict = v ? liveAttackVerdict(v) : null;
                 const matches = !!(v?.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator);
                 return (
                   <div key={a.id} className={cn("rounded-md border p-3", a.armed ? "border-border" : "border-border/50 opacity-70")}>
@@ -301,7 +316,7 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                         <Button size="sm" variant={a.armed ? "primary" : "outline"} disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => fire(a)}>
                           {firing === a.id ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> firing…</> : <>Fire</>}
                         </Button>
-                        {a.endpoint === "/api/vllm/attack" ? (
+                        {!liveAttackRoute(a, app, true) ? (
                           <span className="inline-flex items-center rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title="Reset is unavailable without durable per-run restoration authority">Reset unavailable</span>
                         ) : (
                           <Button size="sm" variant="ghost" disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => clearAttack(a)}>
@@ -316,10 +331,12 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                     {a.armed && (verdicts[a.id] !== undefined || firing === a.id) && (
                       v ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
-                          <span>{v.outcome || (v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
-                          <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
+                          <span>{v.outcome || (verdict?.noop ? "NOOP" : v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
+                          <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{verdict?.action}</span></span>
                           <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || a.expectedActuator || "—"}</span></span>
-                          <span className="ml-auto font-medium text-muted-foreground">{v.phorvexAction ? (matches ? "matches expected" : "differs from expected") : "no actuation recorded"}</span>
+                          <span className="ml-auto font-medium text-muted-foreground">{verdict?.noop ? "no actuation recorded" : (matches ? "matches expected" : "differs from expected")}</span>
+                          {verdict?.reason && <span className="basis-full text-muted-foreground">reason: {verdict.reason}</span>}
+                          {verdict?.blocked.map((candidate) => <span key={candidate} className="basis-full text-muted-foreground">candidate: {candidate}</span>)}
                         </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> measuring the outcome…</div>

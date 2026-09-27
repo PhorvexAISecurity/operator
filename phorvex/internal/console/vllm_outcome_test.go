@@ -318,7 +318,7 @@ func TestEndpointRouteEffectRetainsUnsupportedBehavioralVerdict(t *testing.T) {
 	s := &Server{cfg: Config{Exec: execFn, Now: func() time.Time { return time.Date(2026, 9, 22, 14, 0, 1, 0, time.UTC) }}}
 	stimulus := testStimulus()
 	stimulus.EventRule = "EndpointPinning"
-	r := &attackRecord{Namespace: "vllm", Pod: "vllm-0", TargetUID: "pod-uid", StimulusEvidence: stimulus, vllmEffect: &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceUID: "service-uid"}}
+	r := &attackRecord{Namespace: "vllm", Pod: "vllm-0", TargetUID: "pod-uid", StimulusEvidence: stimulus, vllmEffect: &vllmEffectBaseline{kind: "endpoint-route-state", before: "ep-old", serviceName: "vllm-infer", serviceUID: "service-uid"}}
 	effect, err := s.observeVLLMInPlaceEffect(r)
 	if err != nil || effect == nil || !effect.Observed || effect.After != "ep-new" || effect.ServiceUID != "service-uid" {
 		t.Fatalf("effect=%+v err=%v", effect, err)
@@ -353,12 +353,63 @@ func TestEndpointSetupRestorationRefusesConcurrentMetadataChange(t *testing.T) {
 	stagedLabels := map[string]string{"app": "vllm", "phorvex.ai/route-key": "ep-old"}
 	annotations := map[string]string{"phorvex.ai/route-service": "vllm-infer"}
 	selector := map[string]string{"app": "vllm", "phorvex.ai/route-key": "ep-old"}
-	authority := &endpointSetupAuthority{pod: "vllm-0", targetUID: "pod-uid", serviceUID: "service-uid", originalLabels: &originalLabels, stagedLabels: &stagedLabels, originalAnnotations: &annotations, stagedAnnotations: &annotations, originalSelector: &selector, stagedSelector: &selector, podStaged: true, serviceStaged: true}
+	authority := &endpointSetupAuthority{pod: "vllm-0", targetUID: "pod-uid", serviceName: "vllm-infer", serviceUID: "service-uid", originalLabels: &originalLabels, stagedLabels: &stagedLabels, originalAnnotations: &annotations, stagedAnnotations: &annotations, originalSelector: &selector, stagedSelector: &selector, podStaged: true, serviceStaged: true}
 	if err := s.restoreEndpointSetup(authority); err == nil || !strings.Contains(err.Error(), "metadata changed") {
 		t.Fatalf("concurrent metadata change accepted: %v", err)
 	}
 	if writes != 0 {
 		t.Fatalf("restoration wrote after authority conflict: %d", writes)
+	}
+}
+
+func TestEndpointRouteResolvesInstalledSelectingServiceWithoutObsoleteName(t *testing.T) {
+	var pod vllmPodState
+	if err := json.Unmarshal([]byte(`{"metadata":{"name":"vllm-0","uid":"pod-uid","labels":{"app":"vllm"}}}`), &pod); err != nil {
+		t.Fatal(err)
+	}
+	const installed = `{"metadata":{"name":"vllm","uid":"service-uid","resourceVersion":"19"},"spec":{"selector":{"app":"vllm"}}}`
+	for _, tc := range []struct {
+		name, listed, exact string
+		podLabels           map[string]string
+		wantError           bool
+	}{
+		{"installed vllm; obsolete vllm-infer absent", `{"items":[` + installed + `]}`, installed, nil, false},
+		{"ambiguous selecting Services", `{"items":[` + installed + `,{"metadata":{"name":"other","uid":"other-uid"},"spec":{"selector":{"app":"vllm"}}}]}`, installed, nil, true},
+		{"mismatched selector on exact re-read", `{"items":[` + installed + `]}`, `{"metadata":{"name":"vllm","uid":"service-uid","resourceVersion":"20"},"spec":{"selector":{"app":"other"}}}`, nil, true},
+		{"missing selecting Service", `{"items":[{"metadata":{"name":"other","uid":"other-uid"},"spec":{"selector":{"app":"other"}}}]}`, installed, nil, true},
+		{"missing empty-valued Pod label is not selected", `{"items":[{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}]}`, `{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}`, nil, true},
+		{"present empty-valued Pod label is selected", `{"items":[{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}]}`, `{"metadata":{"name":"vllm","uid":"service-uid"},"spec":{"selector":{"phorvex.ai/route-key":""}}}`, map[string]string{"app": "vllm", "phorvex.ai/route-key": ""}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			selectedPod := pod
+			if tc.podLabels != nil {
+				selectedPod.Metadata.Labels = &tc.podLabels
+			}
+			calls := 0
+			s := &Server{cfg: Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
+				calls++
+				joined := strings.Join(args, " ")
+				if bin != "kubectl" {
+					return "", errors.New("unexpected binary")
+				}
+				switch {
+				case strings.Contains(joined, "get services -o json"):
+					return tc.listed, nil
+				case strings.Contains(joined, "get service vllm -o json"):
+					return tc.exact, nil
+				default:
+					return "", errors.New("obsolete or unexpected service lookup: " + joined)
+				}
+			}}}
+			service, err := s.resolveVLLMService(selectedPod)
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("unsafe Service resolution accepted: %+v", service)
+				}
+			} else if err != nil || service.Metadata.Name != "vllm" || service.Metadata.UID != "service-uid" || calls != 2 {
+				t.Fatalf("installed Service resolution=%+v calls=%d err=%v", service, calls, err)
+			}
+		})
 	}
 }
 

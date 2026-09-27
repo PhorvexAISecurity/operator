@@ -297,12 +297,13 @@ func TestGuardrailAvailabilityRotatedAuditAlias(t *testing.T) {
 func TestGuardrailAvailabilityObserveModeCannotEarnBlockedCredit(t *testing.T) {
 	put := func(files map[string][]byte, name string, v any) { raw, _ := json.Marshal(v); files[name] = raw }
 	e := availabilityEvidence{files: map[string][]byte{}}
+	e.p.Fixture.GuardrailJournalName = "journal"
 	s := availabilitySnapshot{TargetPodUID: "target-uid", TargetContainerID: "containerd://target", TargetImageID: "image@sha256:" + strings.Repeat("a", 64), SourceUID: "source-uid", JournalUID: "journal-uid", JournalResourceVersion: "44", SourceSHA256: availabilityHash([]byte("source")), Receipt: json.RawMessage(`{"generation":1}`), ActiveVariant: "pgv1", PodVariant: "pgv1", GuardrailEpoch: "epoch"}
 	name := "before-canary-pre"
 	put(e.files, name+"-snapshot.json", s)
 	put(e.files, "kube-001-"+name+"-target.json", map[string]any{"metadata": map[string]any{"uid": "target-uid", "annotations": map[string]any{"phorvex.ai/guardrail-variant": "pgv1"}, "labels": map[string]any{"phorvex.ai/guardrail-epoch": "epoch"}}, "status": map[string]any{"containerStatuses": []any{map[string]any{"name": "guardrail", "containerID": s.TargetContainerID, "imageID": s.TargetImageID, "ready": true, "restartCount": float64(0)}}}})
 	put(e.files, "kube-002-"+name+"-source.json", map[string]any{"metadata": map[string]any{"uid": "source-uid"}, "data": map[string]any{"guardrail_proxy.py": "source"}})
-	put(e.files, "kube-003-"+name+"-journal.json", map[string]any{"metadata": map[string]any{"uid": "journal-uid", "resourceVersion": "44"}, "data": map[string]any{"receipt": `{"generation":1}`}})
+	put(e.files, "kube-003-"+name+"-journal.json", map[string]any{"kind": "ConfigMap", "metadata": map[string]any{"name": "journal", "namespace": "phorvex-system", "uid": "journal-uid", "resourceVersion": "44"}, "data": map[string]any{"receipt": `{"generation":1}`}})
 	put(e.files, name+"-runtime.json", map[string]any{"_mountedSourceSHA256": s.SourceSHA256, "8000/v1/guardrail/state": map[string]any{"status": 200, "body": map[string]any{"mode": "observe", "ready": true, "active": "pgv1", "loaded": []string{"pgv1", "pgv2"}, "thresholds": map[string]float64{"pgv1": 0.5, "pgv2": 0.5}}}})
 	if _, err := e.snapshot(name); err == nil || !strings.Contains(err.Error(), "guardrail state") {
 		t.Fatalf("observe mode accepted as enforcing: %v", err)
