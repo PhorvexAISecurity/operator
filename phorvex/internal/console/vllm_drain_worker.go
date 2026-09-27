@@ -961,6 +961,22 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	if err != nil {
 		r.DrainLiveProbe.Issue = drainLiveSafeIssue(err)
 	}
+	applyDrainLiveVerdict(r)
+	// Persist before the one terminal publish: followers stop at the first
+	// terminal record, so credit must never be visible before it is durable.
+	if e := s.persistAttack(r); e != nil {
+		r.Status, r.OutcomeClass = "partial", "drain-observation-unknown"
+		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
+		r.Actuated, r.TimeToDefendSec = false, 0
+		r.PersistenceError = "request-drain evidence persistence unavailable; unsafe to retry"
+	}
+	publishAttack(r)
+}
+
+// applyDrainLiveVerdict grants credit only for the complete owned chain: the
+// exact event's selected request-drain natively aborted the owned in-flight
+// completion, and the same audited operation reopened to a benign completion.
+func applyDrainLiveVerdict(r *attackRecord) {
 	if r.DrainLiveProbe.Status == "UNKNOWN" {
 		r.Status = "partial"
 		r.OutcomeClass = "drain-observation-unknown"
@@ -971,12 +987,24 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	r.Outcome, r.DefendedPod, r.Containment = "", "", ""
 	r.Actuated, r.DwellOngoing = false, false
 	r.TimeToDefendSec, r.DwellSec = 0, 0
-	publishAttack(r)
-	if e := s.persistAttack(r); e != nil {
-		r.Status = "partial"
-		r.PersistenceError = "request-drain evidence persistence unavailable; unsafe to retry"
-		publishAttack(r)
+	d, stimulus := r.DecisionEvidence, r.StimulusEvidence
+	if r.DrainLiveProbe.Status != "OWNED_ABORT_AND_CONTINUITY_OBSERVED" || d == nil || stimulus == nil ||
+		!d.Selected || d.Correlation != "exact-event-uid" || d.EventUID == "" || d.EventUID != stimulus.EventUID ||
+		d.Action != "request-drain" || d.DrainOperation == nil {
+		if r.DrainLiveProbe.Status == "OWNED_ABORT_AND_CONTINUITY_OBSERVED" {
+			r.OutcomeClass = "drain-decision-evidence-inconsistent"
+		}
+		return
 	}
+	created, createdErr := time.Parse(time.RFC3339Nano, stimulus.EventCreatedAt)
+	decided, decidedErr := time.Parse(time.RFC3339Nano, d.Time)
+	if createdErr != nil || decidedErr != nil || decided.Before(created) {
+		r.OutcomeClass = "drain-decision-evidence-inconsistent"
+		return
+	}
+	r.Outcome, r.DefendedPod, r.Containment = "DEFENDED", r.Pod, "owned-inflight-request-aborted-service-reopened"
+	r.Action, r.Actuated = d.Action, true
+	r.TimeToDefendSec = round2(decided.Sub(created).Seconds())
 }
 
 func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackRecord, p drainLiveProfile) error {

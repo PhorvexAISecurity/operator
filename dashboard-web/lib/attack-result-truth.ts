@@ -65,8 +65,11 @@ export function showSecurityOutcomeSections(result: AttackResult): boolean {
     result.evidenceKind !== "litellm-real-provider-output";
 }
 
+// These Live workers prove continuity with their own owned controls, not the
+// sampled uptime/cost model, so empty uptime cells would contradict the result.
 export function hasAvailabilityCostEvidence(result: AttackResult): boolean {
-  return result.evidenceKind !== "vllm-in-place-effect" && result.evidenceKind !== "vllm-unsupported-stimulus";
+  return result.evidenceKind !== "vllm-in-place-effect" && result.evidenceKind !== "vllm-unsupported-stimulus" &&
+    result.evidenceKind !== "vllm-drain-owned-observation" && result.evidenceKind !== "vllm-endpoint-lease-live";
 }
 
 export function attackCSVRow(r: AttackResult): (string | number)[] {

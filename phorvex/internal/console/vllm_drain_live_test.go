@@ -230,3 +230,53 @@ func TestDrainSelfIncarnationBracketsProfileRollout(t *testing.T) {
 		t.Fatal("same Pod UID container restart accepted")
 	}
 }
+
+func TestDrainLiveVerdictCreditsOnlyCompleteOwnedChain(t *testing.T) {
+	record := func(status string) *attackRecord {
+		return &attackRecord{Pod: "vllm-0", DrainLiveProbe: &drainLiveProbeResult{Status: status},
+			StimulusEvidence: &attackStimulusEvidence{EventUID: "event-1", EventCreatedAt: "2026-09-27T19:00:00Z"},
+			DecisionEvidence: &decisionEvidence{Action: "request-drain", Time: "2026-09-27T19:00:07.5Z", Selected: true,
+				Correlation: "exact-event-uid", EventUID: "event-1", DrainOperation: &model.DrainOperationEvidence{OperationID: "op-1"}}}
+	}
+	r := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+	applyDrainLiveVerdict(r)
+	if r.Status != "done" || r.Outcome != "DEFENDED" || !r.Actuated || r.Action != "request-drain" ||
+		r.DefendedPod != "vllm-0" || r.Containment != "owned-inflight-request-aborted-service-reopened" ||
+		r.OutcomeClass != "drain-owned_abort_and_continuity_observed" || r.TimeToDefendSec != 7.5 {
+		t.Fatalf("complete owned chain was not credited: %+v", r)
+	}
+	for _, status := range []string{"MECHANISM_ONLY", "NO_DISCRIMINATING_OVERLAP", "UNKNOWN"} {
+		r := record(status)
+		applyDrainLiveVerdict(r)
+		if r.Outcome != "" || r.Actuated || r.Containment != "" || r.DefendedPod != "" || r.TimeToDefendSec != 0 {
+			t.Fatalf("%s earned credit: %+v", status, r)
+		}
+	}
+	unknown := record("UNKNOWN")
+	applyDrainLiveVerdict(unknown)
+	if unknown.Status != "partial" || unknown.OutcomeClass != "drain-observation-unknown" {
+		t.Fatalf("unknown drain was not partial: %+v", unknown)
+	}
+	missingDecision := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+	missingDecision.DecisionEvidence = nil
+	applyDrainLiveVerdict(missingDecision)
+	if missingDecision.Outcome != "" || missingDecision.Actuated {
+		t.Fatalf("credit without exact decision evidence: %+v", missingDecision)
+	}
+	for name, mutate := range map[string]func(*attackRecord){
+		"decision before event": func(r *attackRecord) { r.DecisionEvidence.Time = "2026-09-27T18:59:59Z" },
+		"unparseable decision":  func(r *attackRecord) { r.DecisionEvidence.Time = "later" },
+		"candidate only":        func(r *attackRecord) { r.DecisionEvidence.Selected = false },
+		"temporal correlation":  func(r *attackRecord) { r.DecisionEvidence.Correlation = "temporal" },
+		"other event":           func(r *attackRecord) { r.DecisionEvidence.EventUID = "event-2" },
+		"other action":          func(r *attackRecord) { r.DecisionEvidence.Action = "kv-reset" },
+		"no drain operation":    func(r *attackRecord) { r.DecisionEvidence.DrainOperation = nil },
+	} {
+		r := record("OWNED_ABORT_AND_CONTINUITY_OBSERVED")
+		mutate(r)
+		applyDrainLiveVerdict(r)
+		if r.Outcome != "" || r.Actuated || r.TimeToDefendSec != 0 || r.OutcomeClass != "drain-decision-evidence-inconsistent" {
+			t.Fatalf("%s earned credit or kept the proved class: %+v", name, r)
+		}
+	}
+}

@@ -12,7 +12,7 @@ const compiled = ts.transpileModule(source, {
 const moduleUnderTest = { exports: {} };
 new Function("require", "module", "exports", compiled)(require, moduleUnderTest, moduleUnderTest.exports);
 const { attackCSVActuator, catalogueSignalState, exactCatalogueDecision, canSendCatalogueSignal, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } = moduleUnderTest.exports;
-const { attackCSVRow } = moduleUnderTest.exports;
+const { attackCSVRow, hasAvailabilityCostEvidence } = moduleUnderTest.exports;
 
 const base = {
   id: "atk-signal-1",
@@ -138,4 +138,11 @@ test("scoped Live CSV leaves unmeasured dwell, availability and economics blank"
     assert.equal(showSecurityOutcomeSections(r), false);
   }
   assert.equal(attackCSVRow(base).length, 18);
+});
+
+test("Live workers with owned continuity controls do not render sampled uptime or cost", () => {
+  for (const evidenceKind of ["vllm-in-place-effect", "vllm-unsupported-stimulus", "vllm-drain-owned-observation", "vllm-endpoint-lease-live"]) {
+    assert.equal(hasAvailabilityCostEvidence({ evidenceKind }), false, evidenceKind);
+  }
+  assert.equal(hasAvailabilityCostEvidence({ evidenceKind: "" }), true);
 });

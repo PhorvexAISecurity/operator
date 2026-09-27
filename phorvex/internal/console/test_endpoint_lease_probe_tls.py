@@ -106,7 +106,9 @@ class EndpointLeaseProbeTLS(unittest.TestCase):
     def test_ca_issued_mounted_leaf_is_trusted(self):
         result = self.run_probe("expected", "expected")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"ready": True})
+        # endpointLeaseStrictJSON rejects anything but Go's canonical bytes,
+        # including a trailing newline.
+        self.assertEqual(result.stdout, '{"ready":true}')
         without_fix = self.run_probe("expected", "expected", omit_partial_chain=True)
         self.assertNotEqual(without_fix.returncode, 0)
         self.assertIn("CERTIFICATE_VERIFY_FAILED", without_fix.stderr)
