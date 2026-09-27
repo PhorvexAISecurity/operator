@@ -204,6 +204,90 @@ class RenderGuardrailProfileTest(unittest.TestCase):
         self.assertEqual(renderer.journal_name("fdb92f85-c98d-40c8-83db-7881041b1f8b"),
                          "phorvex-serving-effect-a63da83e4ffcd99478d7dc594d61a12cf1753f26")
 
+    def test_historical_restart_accepts_current_pinned_container_only(self):
+        objects = fixture()
+        statuses = objects["pod"]["status"]["containerStatuses"]
+        guard = next(row for row in statuses if row["name"] == "guardrail")
+        guard["restartCount"] = 1
+        raw, _, _ = renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        self.assertEqual(json.loads(raw)["guardrailAvailabilityFixture"]["podUID"],
+                         objects["pod"]["metadata"]["uid"])
+        for invalid in (-1, True, None, "1"):
+            with self.subTest(restart_count=invalid):
+                guard["restartCount"] = invalid
+                with self.assertRaises(ValueError):
+                    renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+        guard["restartCount"] = 1
+        guard["containerID"] = ""
+        with self.assertRaises(ValueError):
+            renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test")
+
+    def test_exact_docker_hub_library_projection_from_current_cri(self):
+        pod = fixture()["pod"]
+        spec = next(row for row in pod["spec"]["containers"] if row["name"] == "guardrail")
+        status = next(row for row in pod["status"]["containerStatuses"] if row["name"] == "guardrail")
+        spec["image"] = "python:3.11-slim"
+        status.update(image="docker.io/library/python:3.11-slim",
+                      imageID="docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff",
+                      containerID="containerd://3293a4eb83094300ece30db88920ad428c390b789650f4a02714e8bb6ba8b596",
+                      restartCount=1)
+        selected_spec, selected_status = renderer.container(pod, "guardrail")
+        self.assertEqual((selected_spec["image"], selected_status["containerID"]),
+                         (spec["image"], status["containerID"]))
+        for altered in ("docker.io/library/python:3.12-slim",
+                        "docker.io/library/node:3.11-slim",
+                        "ghcr.io/library/python:3.11-slim",
+                        "docker.io/other/python:3.11-slim"):
+            with self.subTest(status_image=altered):
+                status["image"] = altered
+                with self.assertRaises(ValueError):
+                    renderer.container(pod, "guardrail")
+        status["image"] = "docker.io/library/python:3.11-slim"
+        status["containerID"] = ""
+        with self.assertRaises(ValueError):
+            renderer.container(pod, "guardrail")
+
+    def test_historical_and_startup_repaired_source_closures_do_not_mix(self):
+        context = "arn:aws:eks:us-east-2:123456789012:cluster/test"
+        objects = fixture()
+        current_proxy = renderer.digest(renderer.PROXY.read_bytes())
+        current_dual = objects["source"]["data"]["dual_server.py"]
+        current_drain = objects["source"]["data"]["drain_v11.py"]
+        old_dual = current_dual + "\n# synthetic historical listener"
+        old_drain = current_drain + "\n# synthetic historical drain"
+        repaired = renderer.STARTUP_REPAIRED_LEGACY_SOURCE_SHA256
+        historical = renderer.LEGACY_SOURCE_SHA256
+        historical_drain = renderer.DRAIN_SOURCE_SHA256
+        try:
+            # Synthetic bytes test the closure join without requiring git
+            # history in a shallow checkout. Production pins remain literal.
+            renderer.LEGACY_SOURCE_SHA256 = {
+                "guardrail_proxy.py": current_proxy,
+                "dual_server.py": renderer.digest(old_dual.encode()),
+            }
+            renderer.DRAIN_SOURCE_SHA256 = {
+                "drain_v11.py": renderer.digest(old_drain.encode()),
+                "drain_v11_init.py": self.reviewed_drain_hashes["drain_v11_init.py"],
+            }
+            renderer.STARTUP_REPAIRED_LEGACY_SOURCE_SHA256 = {
+                "guardrail_proxy.py": current_proxy,
+                "dual_server.py": renderer.digest(renderer.DUAL.read_bytes()),
+            }
+            renderer.render(objects, context)
+            objects["source"]["data"]["dual_server.py"] = old_dual
+            with self.assertRaises(ValueError):
+                renderer.render(objects, context)
+            objects["source"]["data"]["dual_server.py"] = current_dual
+            objects["source"]["data"]["drain_v11.py"] = old_drain
+            with self.assertRaises(ValueError):
+                renderer.render(objects, context)
+            objects["source"]["data"]["dual_server.py"] = old_dual
+            renderer.render(objects, context)
+        finally:
+            renderer.STARTUP_REPAIRED_LEGACY_SOURCE_SHA256 = repaired
+            renderer.LEGACY_SOURCE_SHA256 = historical
+            renderer.DRAIN_SOURCE_SHA256 = historical_drain
+
     def test_exact_five_file_lease_closure_requires_retained_b_authority(self):
         objects, retained = lease_fixture()
         raw, _, _ = renderer.render(objects, "arn:aws:eks:us-east-2:123456789012:cluster/test", retained)

@@ -18,6 +18,10 @@ spec:
     - request-drain
     - guardrail-rotate
     - kv-migrate-invalidate
+    - voice-memory-note-revoke
+    - voice-refund-pair-deny
+    - voice-output-policy-activate
+    - voice-mcp-tool-pin
   assetValue:
     blastRadiusFromGraph: true
     fromLabels:

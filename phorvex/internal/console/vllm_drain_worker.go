@@ -194,16 +194,8 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	if leaseSource != (p.retainedCaller != nil) {
 		return errors.New("drain source and retained caller authority differ")
 	}
-	exactImage, exactProxy := false, false
-	for _, c := range pod.Status.ContainerStatuses {
-		if c.Name == "vllm" && c.Ready && c.ImageID == p.PodImageID && c.ContainerID == p.PodContainerID && c.RestartCount == 0 {
-			exactImage = true
-		}
-		if c.Name == "guardrail" && c.Ready && c.ImageID == p.ProxyImageID && c.ContainerID == p.ProxyContainerID && c.RestartCount == 0 {
-			exactProxy = true
-		}
-	}
-	if !exactImage || !exactProxy {
+	if !drainPinnedContainer(pod, "vllm", p.PodImageID, p.PodContainerID) ||
+		!drainPinnedContainer(pod, "guardrail", p.ProxyImageID, p.ProxyContainerID) {
 		return errors.New("target vLLM container identity drift")
 	}
 	if err = s.drainInstalledSource(ctx, out, phase, p); err != nil {
@@ -400,6 +392,20 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		return errors.New("protected request-drain journal occupied")
 	}
 	return p.retainedCaller.check(ctx)
+}
+
+func drainPinnedContainer(pod vllmPodState, name, imageID, containerID string) bool {
+	if imageID == "" || containerID == "" {
+		return false
+	}
+	matches := 0
+	for _, c := range pod.Status.ContainerStatuses {
+		if c.Name == name && c.Ready && c.RestartCount >= 0 &&
+			c.ImageID == imageID && c.ContainerID == containerID {
+			matches++
+		}
+	}
+	return matches == 1
 }
 
 func soleControllerOwner(refs []struct {

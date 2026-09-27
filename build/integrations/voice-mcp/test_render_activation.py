@@ -3,7 +3,7 @@
 from pathlib import Path
 import unittest
 
-from render_activation import SOURCE_CONFIGMAP, SOURCE_SHA256, render
+from render_activation import LEGACY_ARGS, LEGACY_COMMAND, SOURCE_CONFIGMAP, SOURCE_SHA256, render
 
 
 DEPLOYMENT = "11111111-1111-4111-8111-111111111111"
@@ -26,7 +26,7 @@ def deployment():
         "spec": {"volumes": [{"name": "mcp-code", "configMap": {"name": "mcp-code"}}],
                  "containers": [{"name": "mcp-server", "image": IMAGE,
                                  "workingDir": "/app", "ports": [{"containerPort": 8000, "protocol": "TCP"}],
-                                 "command": ["/bin/sh", "-c", "pip install fastmcp && python server.py"],
+                                 "command": LEGACY_COMMAND, "args": LEGACY_ARGS,
                                  "volumeMounts": [{"name": "mcp-code", "mountPath": "/app"}]}]}}}
     return value
 
@@ -57,6 +57,11 @@ class RenderMCPActivationTest(unittest.TestCase):
         self.assertEqual(service()["spec"]["ports"][0]["targetPort"], 8000)
         patch = objects["deployment-patch.json"]
         self.assertIn({"op": "test", "path": "/metadata/resourceVersion", "value": "19"}, patch)
+        self.assertIn({"op": "test", "path": "/spec/template/spec/containers/0/command",
+                       "value": LEGACY_COMMAND}, patch)
+        self.assertIn({"op": "test", "path": "/spec/template/spec/containers/0/args",
+                       "value": LEGACY_ARGS}, patch)
+        self.assertIn({"op": "replace", "path": "/spec/template/spec/containers/0/args", "value": []}, patch)
         self.assertTrue(any(op.get("value") == ["python3", "-B", "/app/server.py"] for op in patch))
         self.assertTrue(any(op.get("value", {}).get("configMap", {}).get("name") == SOURCE_CONFIGMAP
                             for op in patch if isinstance(op.get("value"), dict)))
@@ -76,6 +81,16 @@ class RenderMCPActivationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             render(deployment(), changed_service, legacy(), b"m" * 48,
                    DEPLOYMENT, SERVICE, SOURCE, IMAGE, IMAGE_ID, APPROVED, [IMAGE_ID])
+
+    def test_unknown_or_partially_changed_startup_refused(self):
+        for field, value in (("command", ["python3", "server.py"]),
+                             ("args", ["pip install fastmcp && exec python server.py"]),
+                             ("args", [])):
+            changed = deployment()
+            changed["spec"]["template"]["spec"]["containers"][0][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                render(changed, service(), legacy(), b"m" * 48,
+                       DEPLOYMENT, SERVICE, SOURCE, IMAGE, IMAGE_ID, APPROVED, [IMAGE_ID])
 
 
 if __name__ == "__main__":

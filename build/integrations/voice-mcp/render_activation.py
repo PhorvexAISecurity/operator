@@ -22,6 +22,8 @@ SOURCE_SHA256 = "85cbd0f201b9b65e3b7cc770aed28884fc9835130cc61154499b87353788325
 LEGACY_SOURCE_SHA256 = "483009cd01640e9f604a21f16aa890539566f53a25fd7dc478bc43c1831212c5"
 SOURCE_CONFIGMAP = "voice-mcp-source-" + SOURCE_SHA256[:12]
 TOKEN_SECRET = "voice-mcp-test-token"
+LEGACY_COMMAND = ["/bin/sh", "-c"]
+LEGACY_ARGS = ["pip install --no-cache-dir fastmcp " + "\\\n" + "  && exec python server.py\n"]
 UID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 IMAGE = re.compile(r".+@sha256:[0-9a-f]{64}\Z")
 
@@ -73,7 +75,8 @@ def render(deployment: dict, service: dict, legacy_source: dict, token: bytes,
             all(image_id == expected_image_id for image_id in image_ids),
             "serving MCP image IDs differ from current pinned image")
     require(container.get("workingDir") == "/app", "MCP working directory changed")
-    require(not container.get("args"), "unexpected MCP container arguments")
+    require(container.get("command") == LEGACY_COMMAND and container.get("args") == LEGACY_ARGS,
+            "legacy MCP startup command changed")
     require(any(port.get("containerPort") == 8000 and port.get("protocol", "TCP") == "TCP"
                 for port in container.get("ports", [])), "MCP container TCP 8000 missing")
     mounts, volumes, env = container.get("volumeMounts", []), spec.get("volumes", []), container.get("env", [])
@@ -109,10 +112,13 @@ def render(deployment: dict, service: dict, legacy_source: dict, token: bytes,
         {"op": "test", "path": "/metadata/resourceVersion", "value": dep["resourceVersion"]},
         {"op": "test", "path": base + "/name", "value": "mcp-server"},
         {"op": "test", "path": base + "/image", "value": expected_image},
+        {"op": "test", "path": base + "/command", "value": LEGACY_COMMAND},
+        {"op": "test", "path": base + "/args", "value": LEGACY_ARGS},
         {"op": "test", "path": f"{base}/volumeMounts/{mount_index}", "value": old_mount},
         {"op": "test", "path": f"/spec/template/spec/volumes/{volume_index}", "value": old_volume},
         {"op": "replace", "path": base + "/image", "value": approved_image},
         {"op": "replace", "path": base + "/command", "value": ["python3", "-B", "/app/server.py"]},
+        {"op": "replace", "path": base + "/args", "value": []},
         {"op": "replace", "path": f"{base}/volumeMounts/{mount_index}",
          "value": {"name": old_mount["name"], "mountPath": "/app/server.py",
                    "subPath": "server.py", "readOnly": True}},

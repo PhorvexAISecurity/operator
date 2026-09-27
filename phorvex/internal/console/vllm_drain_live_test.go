@@ -33,6 +33,24 @@ func drainTestProfile() drainLiveProfile {
 		DrainProxySourceSHA256:  h, DrainEngineSourceSHA256: h, MaxRunSeconds: 240}
 }
 
+func TestDrainPinnedContainerAllowsHistoricalRestartButRejectsCurrentDrift(t *testing.T) {
+	var pod vllmPodState
+	if err := json.Unmarshal([]byte(`{"status":{"containerStatuses":[{"name":"guardrail","ready":true,"restartCount":1,"imageID":"proxy@sha256:abc","containerID":"containerd://current"}]}}`), &pod); err != nil {
+		t.Fatal(err)
+	}
+	if !drainPinnedContainer(pod, "guardrail", "proxy@sha256:abc", "containerd://current") {
+		t.Fatal("current ready container refused only because it restarted earlier")
+	}
+	if drainPinnedContainer(pod, "guardrail", "proxy@sha256:abc", "containerd://old") ||
+		drainPinnedContainer(pod, "guardrail", "proxy@sha256:other", "containerd://current") {
+		t.Fatal("stale image or container incarnation accepted")
+	}
+	pod.Status.ContainerStatuses[0].RestartCount = -1
+	if drainPinnedContainer(pod, "guardrail", "proxy@sha256:abc", "containerd://current") {
+		t.Fatal("invalid negative restart count accepted")
+	}
+}
+
 func TestDrainLiveProfilePinsRouteAndSource(t *testing.T) {
 	p := drainTestProfile()
 	encode := func(v drainLiveProfile) []byte { b, _ := json.Marshal(v); return b }

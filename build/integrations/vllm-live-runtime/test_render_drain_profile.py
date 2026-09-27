@@ -36,6 +36,23 @@ def inputs():
 
 
 class DrainProfileRender(unittest.TestCase):
+    def test_historical_restart_requires_current_container_identity(self):
+        objects = inputs()
+        guard = next(row for row in objects["pod"]["status"]["containerStatuses"]
+                     if row["name"] == "guardrail")
+        guard["restartCount"] = 1
+        raw, _ = render(objects, "dev-test", "https://audit.invalid|audit.invalid")
+        self.assertEqual(json.loads(raw)["proxyContainerID"], guard["containerID"])
+        for invalid in (-1, True, None, "1"):
+            with self.subTest(restart_count=invalid):
+                guard["restartCount"] = invalid
+                with self.assertRaises(ValueError):
+                    render(objects, "dev-test", "reviewed-audit")
+        guard["restartCount"] = 1
+        guard["containerID"] = ""
+        with self.assertRaises(ValueError):
+            render(objects, "dev-test", "reviewed-audit")
+
     def test_self_rollout_has_no_future_pod_pin(self):
         raw, values = render(inputs(), "dev-test", "https://audit.invalid|audit.invalid")
         profile = json.loads(raw)

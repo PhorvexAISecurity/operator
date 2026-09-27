@@ -26,7 +26,9 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // LiveAttack is one attack the console can fire directly at a live workload. The ID is the exact
@@ -114,15 +116,41 @@ func servedModelImage(img string) (served, vllm bool) {
 	return served, vllm
 }
 
+// Immutable private image names need not contain "vllm". Recognize the
+// installed serving shape from one container and its own template declaration.
+func servedModelContainer(c corev1.Container, annotations map[string]string) (served, vllm bool) {
+	served, vllm = servedModelImage(c.Image)
+	if vllm || c.Name != "vllm" || annotations["phorvex.ai/model-id"] == "" ||
+		annotations["phorvex.ai/route-service"] == "" || annotations["phorvex.ai/serving-port"] == "" {
+		return served, vllm
+	}
+	values := map[string]string{}
+	for i := 0; i+1 < len(c.Args); i++ {
+		if c.Args[i] == "--model" || c.Args[i] == "--max-model-len" || c.Args[i] == "--gpu-memory-utilization" ||
+			c.Args[i] == "--host" || c.Args[i] == "--port" {
+			values[c.Args[i]] = c.Args[i+1]
+		}
+	}
+	if values["--model"] != "" && values["--max-model-len"] != "" && values["--gpu-memory-utilization"] != "" &&
+		values["--host"] == "127.0.0.1" && values["--port"] == "8001" {
+		return true, true
+	}
+	return served, vllm
+}
+
 // stackOf reads one namespace and folds its workloads into the signals the rules need. gpu is a
 // cluster-wide fact (the fire path schedules onto whatever GPU node pool exists), so it is passed
 // in from the same nodes list /api/capabilities uses rather than re-listed here.
 func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, error) {
-	st := appStack{Namespace: ns, GPU: gpu}
 	cs, err := clientForContext("")
 	if err != nil {
-		return st, err
+		return appStack{Namespace: ns, GPU: gpu}, err
 	}
+	return s.stackOfClient(ctx, ns, gpu, cs)
+}
+
+func (s *Server) stackOfClient(ctx context.Context, ns string, gpu bool, cs kubernetes.Interface) (appStack, error) {
+	st := appStack{Namespace: ns, GPU: gpu}
 	if deps, e := cs.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{}); e == nil {
 		for i := range deps.Items {
 			st.Workload = true
@@ -148,8 +176,8 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 					st.VoiceOutputLive = true
 				}
 			}
-			for _, img := range containerImages(deps.Items[i].Spec.Template.Spec.Containers) {
-				if served, vllm := servedModelImage(img); served {
+			for _, container := range deps.Items[i].Spec.Template.Spec.Containers {
+				if served, vllm := servedModelContainer(container, deps.Items[i].Spec.Template.Annotations); served {
 					st.ServedModel = true
 					st.VLLM = st.VLLM || vllm
 				}
@@ -162,8 +190,8 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 		for i := range sts.Items {
 			st.Workload = true
 			st.Stateful = true
-			for _, img := range containerImages(sts.Items[i].Spec.Template.Spec.Containers) {
-				if served, vllm := servedModelImage(img); served {
+			for _, container := range sts.Items[i].Spec.Template.Spec.Containers {
+				if served, vllm := servedModelContainer(container, sts.Items[i].Spec.Template.Annotations); served {
 					st.ServedModel = true
 					st.VLLM = st.VLLM || vllm
 				}
