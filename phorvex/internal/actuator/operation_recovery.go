@@ -27,7 +27,7 @@ func (n *NativeActuator) RecoverOperations(ctx context.Context, globalKill bool)
 }
 
 func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool, allow func(model.Action) bool) ([]RecoveryEvent, error) {
-	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}
+	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport}
 	if globalKill || n.DryRun {
 		return nil, nil
 	}
@@ -39,12 +39,17 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 	if err != nil {
 		return nil, err
 	}
+	voiceEvents, err := recoverVoiceMemoryOperations(ctx, ec, allow)
+	if err != nil {
+		return nil, err
+	}
 	entries, err := journalList(ctx, ec)
 	if err != nil {
 		return nil, err
 	}
-	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(entries)), guardEvents...)
+	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(voiceEvents)+len(entries)), guardEvents...)
 	events = append(events, outputEvents...)
+	events = append(events, voiceEvents...)
 	for i := range entries {
 		entry := &entries[i]
 		r := entry.Receipt

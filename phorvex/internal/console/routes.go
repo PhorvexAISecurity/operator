@@ -147,6 +147,7 @@ func (s *Server) apiRoutes() []route {
 		// ── controls: live cluster writes ─────────────────────────────────────────────────
 		control("/api/policy/edit", s.policyEdit, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTarget: defaultTargetID, fixedTenant: vllmAttackNS}),
+		control("/api/voice/live/fire", s.voiceMemoryLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/workload/attack", s.workloadAttack, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),

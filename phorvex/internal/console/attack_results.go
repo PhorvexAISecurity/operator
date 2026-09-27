@@ -76,6 +76,7 @@ type attackRecord struct {
 	EffectEvidence       *attackEffectEvidence       `json:"effectEvidence,omitempty"`
 	GuardrailEffectProbe *guardrailEffectProbeResult `json:"guardrailEffectProbe,omitempty"`
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
+	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	ProducerRoute        string                      `json:"producerRoute,omitempty"`
 	ResultSchema         string                      `json:"resultSchemaVersion,omitempty"`
@@ -320,6 +321,10 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe.Issues = append([]string(nil), r.GuardrailOutputProbe.Issues...)
 		c.GuardrailOutputProbe = &probe
 	}
+	if r.VoiceMemoryProbe != nil {
+		probe := *r.VoiceMemoryProbe
+		c.VoiceMemoryProbe = &probe
+	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect
 		c.vllmEffect = &baseline
@@ -391,7 +396,7 @@ func attackSnapshots(p *Principal) []*attackRecord {
 // Live views opt into the two console observation kinds. Experiment-only signals
 // and unknown evidence kinds remain excluded, as do observations in default reports.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
-	return rec.EvidenceKind == "" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
+	return rec.EvidenceKind == "" || rec.EvidenceKind == "voice-memory-live" || (observations && (rec.EvidenceKind == "vllm-in-place-effect" || rec.EvidenceKind == "vllm-unsupported-stimulus" || rec.EvidenceKind == "catalogue-signal"))
 }
 
 func realAttackSnapshots(p *Principal, includeObservations ...bool) []*attackRecord {

@@ -173,6 +173,12 @@ func TestNoDeadFactKinds(t *testing.T) {
 				PolicyName: "guardrail-output-fixture", PolicyUID: "policy-uid", PolicyGeneration: 1,
 				RuleSHA256: "rule-hash", ProxySourceSHA256: "proxy-hash", SupportSourceSHA256: "support-hash",
 				ProxyImageID: "proxy-image", SupportImageID: "support-image"}}},
+		{Pod: model.Pod{Namespace: "voice", Name: "voice", UID: "voice-uid", VoiceMemoryConfigMap: "voice-memory-policy",
+			VoiceMemorySourceSHA256: "source-sha", VoiceMemoryDeploymentUID: "deployment-uid", VoiceMemoryEventCreator: "console-creator",
+			VoiceMemoryObservation: &model.VoiceMemoryObservation{EventName: "observed", EventUID: "voice-event-uid", CreatorIdentity: "console-creator",
+				ScenarioID: "voice-live", CaseID: "owned-memory",
+				TargetPodUID: "voice-uid", DeploymentUID: "deployment-uid", ConfigMapUID: "voice-cm-uid", SourceSHA256: "source-sha",
+				CallerID: "+15551234567", NoteSHA256: "note-sha", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

@@ -201,6 +201,10 @@ phorvex:
   # endpoint-rotate can restitch selectors; Secrets and EndpointSlice mutation remain denied.
   # request-drain receives namespaced EndpointSlice list only to confirm withdrawal/return.
   actuatorNamespaces: []
+  # Opt-in exact Voice memory note quarantine. Requires the reviewed Voice
+  # policy ConfigMap and private state-token Secret in namespace voice.
+  voiceMemory:
+    enabled: false
   # Opt-in exact response-field policy mutation; Kubernetes RBAC grants update
   # only to this one preinstalled ConfigMap in the named fixture namespace.
   outputPolicy:
