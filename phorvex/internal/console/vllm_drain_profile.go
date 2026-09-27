@@ -14,35 +14,37 @@ import (
 // The caller supplies no destination or model. Every value is reviewable in a
 // digest-pinned mounted profile and must be rechecked against current source.
 type drainLiveProfile struct {
-	Schema                  string            `json:"schema"`
-	Context                 string            `json:"context"`
-	ClusterUID              string            `json:"clusterUID"`
-	PodName                 string            `json:"podName"`
-	PodUID                  string            `json:"podUID"`
-	PodImageID              string            `json:"podImageID"`
-	PodContainerID          string            `json:"podContainerID"`
-	ProxyImageID            string            `json:"proxyImageID"`
-	ProxyContainerID        string            `json:"proxyContainerID"`
-	ServiceName             string            `json:"serviceName"`
-	ServiceUID              string            `json:"serviceUID"`
-	ServiceSelector         map[string]string `json:"serviceSelector"`
-	PolicyName              string            `json:"policyName"`
-	PolicyUID               string            `json:"policyUID"`
-	PolicyGeneration        int64             `json:"policyGeneration"`
-	ManagerPodName          string            `json:"managerPodName"`
-	ManagerPodUID           string            `json:"managerPodUID"`
-	ManagerImageID          string            `json:"managerImageID"`
-	ManagerContainerID      string            `json:"managerContainerID"`
-	ConsoleDeploymentName   string            `json:"consoleDeploymentName"`
-	ConsoleDeploymentUID    string            `json:"consoleDeploymentUID"`
-	ConsoleImageID          string            `json:"consoleImageID"`
-	ModelID                 string            `json:"modelID"`
-	AuditSourceIdentity     string            `json:"auditSourceIdentity"`
-	ServingCompletionSHA256 string            `json:"servingCompletionSHA256"`
-	ServingEngineSHA256     string            `json:"servingEngineSHA256"`
-	DrainProxySourceSHA256  string            `json:"drainProxySourceSHA256"`
-	DrainEngineSourceSHA256 string            `json:"drainEngineSourceSHA256"`
-	MaxRunSeconds           int               `json:"maxRunSeconds"`
+	Schema                           string            `json:"schema"`
+	Context                          string            `json:"context"`
+	ClusterUID                       string            `json:"clusterUID"`
+	PodName                          string            `json:"podName"`
+	PodUID                           string            `json:"podUID"`
+	PodImageID                       string            `json:"podImageID"`
+	PodContainerID                   string            `json:"podContainerID"`
+	ProxyImageID                     string            `json:"proxyImageID"`
+	ProxyContainerID                 string            `json:"proxyContainerID"`
+	ServiceName                      string            `json:"serviceName"`
+	ServiceUID                       string            `json:"serviceUID"`
+	ServiceSelector                  map[string]string `json:"serviceSelector"`
+	PolicyName                       string            `json:"policyName"`
+	PolicyUID                        string            `json:"policyUID"`
+	PolicyGeneration                 int64             `json:"policyGeneration"`
+	ManagerPodName                   string            `json:"managerPodName"`
+	ManagerPodUID                    string            `json:"managerPodUID"`
+	ManagerImageID                   string            `json:"managerImageID"`
+	ManagerContainerID               string            `json:"managerContainerID"`
+	ConsoleDeploymentName            string            `json:"consoleDeploymentName"`
+	ConsoleDeploymentUID             string            `json:"consoleDeploymentUID"`
+	ConsoleImageID                   string            `json:"consoleImageID"`
+	ModelID                          string            `json:"modelID"`
+	AuditSourceIdentity              string            `json:"auditSourceIdentity"`
+	ServingCompletionSHA256          string            `json:"servingCompletionSHA256"`
+	ServingEngineSHA256              string            `json:"servingEngineSHA256"`
+	DrainProxySourceSHA256           string            `json:"drainProxySourceSHA256"`
+	DrainEngineSourceSHA256          string            `json:"drainEngineSourceSHA256"`
+	RetainedCallerLeaseProfileSHA256 string            `json:"retainedCallerLeaseProfileSHA256,omitempty"`
+	MaxRunSeconds                    int               `json:"maxRunSeconds"`
+	retainedCaller                   *retainedCallerAuthority
 }
 
 func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
@@ -70,6 +72,7 @@ func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
 		p.ServingEngineSHA256 != "35e4419aeb3ca2c1c0153254ac0a179db454cae4a33f7d37b3b9020ebdcfa73e" ||
 		!staticSHA256.MatchString(p.DrainProxySourceSHA256) ||
 		!staticSHA256.MatchString(p.DrainEngineSourceSHA256) ||
+		(p.RetainedCallerLeaseProfileSHA256 != "" && !staticSHA256.MatchString(p.RetainedCallerLeaseProfileSHA256)) ||
 		p.PolicyName != "vllm-defense" || p.ServiceName != "vllm" || p.PolicyGeneration < 1 || len(p.ServiceSelector) == 0 || len(p.ServiceSelector) > 8 ||
 		p.AuditSourceIdentity == "" || strings.Contains(p.AuditSourceIdentity, "__SET_") ||
 		p.ModelID != "Qwen/Qwen2.5-7B-Instruct-AWQ" ||

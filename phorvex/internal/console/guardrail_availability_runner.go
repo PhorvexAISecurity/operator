@@ -111,20 +111,21 @@ type availabilityEvent struct {
 }
 
 type availabilityWorker struct {
-	rm       *RunManager
-	ctx      context.Context
-	out      string
-	p        guardrailAvailabilityProfile
-	t        availabilityTerminal
-	deadline time.Time
-	event    *availabilityEvent
-	before   availabilitySnapshot
-	after    availabilitySnapshot
-	request  map[string][]byte
-	marker   string
-	postAt   time.Time
-	selfName string
-	selfUID  string
+	rm             *RunManager
+	ctx            context.Context
+	out            string
+	p              guardrailAvailabilityProfile
+	t              availabilityTerminal
+	deadline       time.Time
+	event          *availabilityEvent
+	before         availabilitySnapshot
+	after          availabilitySnapshot
+	request        map[string][]byte
+	marker         string
+	postAt         time.Time
+	selfName       string
+	selfUID        string
+	retainedCaller *retainedCallerAuthority
 	// Empty preserves the historical vLLM guardrail projection. A separately
 	// pinned LiteLLM Live worker uses the same authenticated audit transport.
 	auditNamespace string
@@ -283,6 +284,9 @@ func availabilityJournalReceipt(journal map[string]any, context, name string, ex
 // execGuardrail runs only the fixed local Python transport inside the pinned
 // container. The request travels on stdin, never kubectl argv or a public log.
 func (w *availabilityWorker) execGuardrail(label, code string, stdin []byte, bound int, timeout time.Duration) ([]byte, error) {
+	if err := w.retainedCaller.check(w.ctx); err != nil {
+		return nil, err
+	}
 	left, e := w.remaining(time.Second)
 	if e != nil {
 		return nil, e
@@ -311,10 +315,33 @@ func (w *availabilityWorker) execGuardrail(label, code string, stdin []byte, bou
 	if e != nil || stdout.overflow || stderr.overflow {
 		return nil, fmt.Errorf("one-shot guardrail exec unresolved: %s", label)
 	}
+	if err := w.retainedCaller.check(w.ctx); err != nil {
+		return nil, err
+	}
 	return stdout.Bytes(), nil
 }
 
-const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\no['_rawAuthConfigured']=bool(os.environ.get('VLLM_API_KEY',''))\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8001:\n   key=os.environ.get('VLLM_API_KEY','')\n   if key:headers['Authorization']='Bearer '+key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
+func (w *availabilityWorker) initRetainedCaller() error {
+	f := w.p.Fixture
+	a, err := newRetainedCallerAuthority(w.rm.cfg, f.RetainedCallerLeaseProfileSHA256,
+		f.ServiceUID, f.PolicyUID, f.SourceUID, f.PodUID)
+	if err != nil {
+		return err
+	}
+	w.retainedCaller = a
+	return nil
+}
+
+func (w *availabilityWorker) retainedSourceMode(source map[string]any) error {
+	data := availabilityMap(source["data"])
+	_, leaseModule := data["endpoint_lease.py"]
+	if leaseModule != (w.retainedCaller != nil) {
+		return errors.New("guardrail source and retained caller authority differ")
+	}
+	return nil
+}
+
+const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal,sys\nkey=sys.stdin.buffer.read(257)\nif len(key)>256 or any(c<33 or c>126 for c in key):raise RuntimeError('caller_bound')\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\no['_rawAuthConfigured']=bool(os.environ.get('VLLM_API_KEY',''))\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8000 and key:headers['Authorization']='Bearer '+key.decode('ascii')\n  if port==8001:\n   raw_key=os.environ.get('VLLM_API_KEY','')\n   if raw_key:headers['Authorization']='Bearer '+raw_key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
 
 func availabilityBoundarySource(source, runtime map[string]any, pin string) (string, error) {
 	if pin == "" {
@@ -334,6 +361,22 @@ func availabilityBoundarySource(source, runtime map[string]any, pin string) (str
 }
 
 const availabilityChatCode = "import base64,http.client,json,signal,sys\nsignal.alarm(35)\nb=sys.stdin.buffer.read(4097)\nif len(b)>4096:raise RuntimeError('request bound')\nc=http.client.HTTPConnection('127.0.0.1',8000,timeout=35)\ntry:\n c.request('POST','/v1/chat/completions',body=b,headers={'Content-Type':'application/json'})\n r=c.getresponse();v=r.read(8193)\n if len(v)>8192:raise RuntimeError('reply bound')\n print(json.dumps({'status':r.status,'bodyBase64':base64.b64encode(v).decode()}))\nfinally:c.close()\n"
+
+const availabilityRetainedChatCode = `import base64,http.client,json,signal,sys
+signal.alarm(35)
+v=json.loads(sys.stdin.buffer.read(6145))
+if set(v)!={"body","bearer"}:raise RuntimeError("input")
+b=base64.b64decode(v["body"],validate=True)
+key=base64.b64decode(v["bearer"],validate=True)
+if len(b)>4096 or len(key)<32 or len(key)>256 or any(c<33 or c>126 for c in key):raise RuntimeError("input_bound")
+c=http.client.HTTPConnection("127.0.0.1",8000,timeout=35)
+try:
+ c.request("POST","/v1/chat/completions",body=b,headers={"Content-Type":"application/json","Authorization":"Bearer "+key.decode("ascii")})
+ r=c.getresponse();reply=r.read(8193)
+ if len(reply)>8192:raise RuntimeError("reply_bound")
+ print(json.dumps({"status":r.status,"bodyBase64":base64.b64encode(reply).decode()}))
+finally:c.close()
+`
 
 func availabilityRequest(model, marker, which string) []byte {
 	var messages []map[string]string
@@ -448,7 +491,13 @@ func (w *availabilityWorker) chat(phase, which string) (string, error) {
 		return "", e
 	}
 	w.t.GuardedChatsAttempted++
-	stdout, e := w.execGuardrail(name, availabilityChatCode, req, 12000, 45*time.Second)
+	code, input := availabilityChatCode, req
+	if w.retainedCaller != nil {
+		code = availabilityRetainedChatCode
+		input, _ = json.Marshal(map[string]string{"body": base64.StdEncoding.EncodeToString(req),
+			"bearer": base64.StdEncoding.EncodeToString(w.retainedCaller.bearer())})
+	}
+	stdout, e := w.execGuardrail(name, code, input, 12000, 45*time.Second)
 	if e != nil {
 		return "", e
 	}
@@ -628,7 +677,10 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if e != nil {
 		return out, e
 	}
-	raw, e := w.execGuardrail(label+"-runtime", availabilityRuntimeCode, nil, 12000, 35*time.Second)
+	if e = w.retainedSourceMode(source); e != nil {
+		return out, e
+	}
+	raw, e := w.execGuardrail(label+"-runtime", availabilityRuntimeCode, w.retainedCaller.bearer(), 12000, 35*time.Second)
 	if e != nil {
 		return out, e
 	}
@@ -863,11 +915,14 @@ func (w *availabilityWorker) compactSnapshot(label string, ref availabilitySnaps
 	if e != nil {
 		return out, e
 	}
+	if e = w.retainedSourceMode(source); e != nil {
+		return out, e
+	}
 	journal, e := w.journal(label+"-journal", w.p.Fixture.JournalInitiallyAbsent || w.p.Fixture.CaptureCurrentJournal)
 	if e != nil {
 		return out, e
 	}
-	raw, e := w.execGuardrail(label+"-runtime", availabilityRuntimeCode, nil, 12000, 35*time.Second)
+	raw, e := w.execGuardrail(label+"-runtime", availabilityRuntimeCode, w.retainedCaller.bearer(), 12000, 35*time.Second)
 	if e != nil {
 		return out, e
 	}
@@ -957,6 +1012,9 @@ func (rm *RunManager) runGuardrailAvailability(ctx context.Context, id string, s
 	}
 	if e == nil {
 		e = w.saveJSON("self-identity.json", map[string]string{"name": w.selfName, "uid": w.selfUID})
+	}
+	if e == nil {
+		e = w.initRetainedCaller()
 	}
 	if e == nil {
 		e = w.execute()
