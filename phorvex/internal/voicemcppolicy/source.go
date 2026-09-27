@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	MCPNamespace        = "mcp"
-	MCPServiceName      = "mcp-server"
-	InstalledMCPURL     = "http://mcp-server.mcp.svc.cluster.local:8000/mcp/"
-	MCPSourceAnnotation = "phorvex.ai/voice-mcp-source-configmap"
+	MCPNamespace            = "mcp"
+	MCPServiceName          = "mcp-server"
+	InstalledMCPURL         = "http://mcp-server.mcp.svc.cluster.local:8000/mcp/"
+	MCPSourceAnnotation     = "phorvex.ai/voice-mcp-source-configmap"
+	ReviewedMCPSourceSHA256 = "85cbd0f201b9b65e3b7cc770aed28884fc9835130cc61154499b873537883252"
 )
 
 type SourcePins struct {
@@ -83,6 +84,7 @@ func BundleSourceSHA(cm *corev1.ConfigMap) (string, error) {
 
 func sourceMount(spec corev1.PodSpec, name string) bool {
 	var volumeName string
+	var testTokenVolume string
 	for _, volume := range spec.Volumes {
 		if volume.ConfigMap != nil && volume.ConfigMap.Name == name && (volume.ConfigMap.Optional == nil || !*volume.ConfigMap.Optional) {
 			if volumeName != "" {
@@ -90,25 +92,35 @@ func sourceMount(spec corev1.PodSpec, name string) bool {
 			}
 			volumeName = volume.Name
 		}
+		if volume.Secret != nil && volume.Secret.SecretName == "voice-mcp-test-token" {
+			if testTokenVolume != "" {
+				return false
+			}
+			testTokenVolume = volume.Name
+		}
 	}
-	if volumeName == "" {
+	if volumeName == "" || testTokenVolume == "" {
 		return false
 	}
 	for _, container := range spec.Containers {
 		if container.Name != "mcp-server" {
 			continue
 		}
-		if container.WorkingDir != "/app" || len(container.Command) != 3 || container.Command[0] != "python" ||
+		if container.WorkingDir != "/app" || len(container.Command) != 3 || container.Command[0] != "python3" ||
 			container.Command[1] != "-B" || container.Command[2] != "/app/server.py" || len(container.Args) != 0 {
 			return false
 		}
 		count := 0
+		tokenCount := 0
 		for _, mount := range container.VolumeMounts {
 			if mount.Name == volumeName && mount.MountPath == "/app/server.py" && mount.ReadOnly && mount.SubPath == "server.py" {
 				count++
 			}
+			if mount.Name == testTokenVolume && mount.MountPath == "/etc/phorvex/voice-mcp-test-token" && mount.ReadOnly && mount.SubPath == "" {
+				tokenCount++
+			}
 		}
-		return count == 1
+		return count == 1 && tokenCount == 1
 	}
 	return false
 }
@@ -148,7 +160,7 @@ func CurrentSourceForObservation(ctx context.Context, reader client.Reader, want
 func currentSource(ctx context.Context, reader client.Reader, want SourcePins, requireImage bool) (Source, error) {
 	var out Source
 	if reader == nil || !ValidUID(want.DeploymentUID) || !ValidUID(want.PodUID) || !ValidUID(want.ServiceUID) ||
-		!ValidUID(want.ConfigMapUID) || !ValidSHA(want.SourceSHA256) {
+		!ValidUID(want.ConfigMapUID) || want.SourceSHA256 != ReviewedMCPSourceSHA256 {
 		return out, fmt.Errorf("voice MCP source pins incomplete")
 	}
 	service := &corev1.Service{}

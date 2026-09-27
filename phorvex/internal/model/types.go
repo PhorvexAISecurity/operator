@@ -520,6 +520,11 @@ type Pod struct {
 	VoiceOutputDeploymentUID  string
 	VoiceOutputEventCreator   string
 	VoiceOutputObservation    *VoiceOutputObservation
+	VoiceMCPConfigMap         string
+	VoiceMCPSourceSHA256      string
+	VoiceMCPDeploymentUID     string
+	VoiceMCPEventCreator      string
+	VoiceMCPObservation       *VoiceMCPObservation
 	LiteLLMClientObservation  *LiteLLMClientObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
@@ -607,6 +612,19 @@ func (p Pod) HasBoundVoiceOutputObservation() bool {
 		o.EvidenceSource == "TEST_INJECTED" && o.RawModelMarkerObserved && o.AssistantOutputMarkerObserved
 }
 
+func (p Pod) HasBoundVoiceMCPObservation() bool {
+	o := p.VoiceMCPObservation
+	return o != nil && p.Namespace == "voice" && p.UID != "" && p.VoiceMCPConfigMap == "voice-mcp-tool-policy" &&
+		o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceMCPDeploymentUID &&
+		o.SourceSHA256 == p.VoiceMCPSourceSHA256 && o.ConfigMapUID != "" &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.CreatorIdentity == p.VoiceMCPEventCreator && o.ScenarioID == "ai2-mcp-tool-poisoning" && o.RunSHA256 != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 && o.ToolName == "store_directory" &&
+		o.GoodDescriptorSHA256 != "" && o.ObservedDescriptorSHA256 != "" &&
+		o.MCPServiceUID != "" && o.MCPPodUID != "" && o.MCPDeploymentUID != "" &&
+		o.MCPConfigMapUID != "" && o.MCPSourceSHA256 != ""
+}
+
 // HasBoundLiteLLMClientObservation licenses only the installed, synthetic
 // gateway credential channel. A generic copied credential never satisfies it.
 func (p Pod) HasBoundLiteLLMClientObservation() bool {
@@ -638,6 +656,7 @@ const (
 	AttackVectorVoiceMemory        = "phorvex.attack.voice-memory-note"
 	AttackVectorVoiceRefund        = "phorvex.attack.voice-refund-pair"
 	AttackVectorVoiceOutput        = "phorvex.attack.voice-output-leak"
+	AttackVectorVoiceMCP           = "phorvex.attack.voice-mcp-descriptor"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 )
 
@@ -711,6 +730,7 @@ type SecurityEventInfo struct {
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
 	VoiceOutputRaw                    string // synthetic hidden-context marker hash assertion; never marker bytes
+	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
@@ -824,6 +844,27 @@ type VoiceOutputObservation struct {
 	SelectedRevision                       uint64
 	RawModelMarkerObserved                 bool
 	AssistantOutputMarkerObserved          bool
+	ObservedAt                             time.Time
+}
+
+// VoiceMCPObservation binds the first observed descriptor steering to exact
+// Voice and MCP source lifetimes. It carries no event-controlled replacement.
+type VoiceMCPObservation struct {
+	EventName, EventUID, CreatorIdentity   string
+	ScenarioID, RunSHA256                  string
+	TargetPodUID, DeploymentUID            string
+	ConfigMapUID, ConfigMapResourceVersion string
+	SourceConfigMapUID                     string
+	RuleSHA256, SourceSHA256               string
+	ToolName, GoodDescriptorSHA256         string
+	ObservedDescriptorSHA256               string
+	MCPServiceName, MCPServiceUID          string
+	MCPPodName, MCPPodUID                  string
+	MCPDeploymentUID, MCPConfigMapUID      string
+	MCPSourceSHA256                        string
+	PolicyName, PolicyUID                  string
+	PolicyGeneration                       int64
+	SelectedRevision                       uint64
 	ObservedAt                             time.Time
 }
 
@@ -1098,6 +1139,7 @@ type Decision struct {
 	VoiceMemoryObservation  *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
 	VoiceRefundObservation  *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
 	VoiceOutputObservation  *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
+	VoiceMCPObservation     *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
 	Existential             *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`

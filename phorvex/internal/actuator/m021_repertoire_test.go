@@ -172,6 +172,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 				}
 				continue
 			}
+			if e.Action == model.ActionVoiceMCPToolPin && e.Accepted {
+				if ok || why != "voice-mcp-approved-image-unavailable" || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reviewed MCP image must be explicit: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
 			if e.Action == model.ActionLiteLLMClientRevoke && e.Accepted {
 				if ok || !strings.Contains(why, "litellm-client-revoke:") || e.Prerequisite == "" {
 					t.Fatalf("%s/%s: missing owned-client gateway authority must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)

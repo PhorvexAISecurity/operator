@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -122,17 +123,25 @@ func makeVoiceMCPFixture(t *testing.T) *voiceMCPFixture {
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "voice", Name: voiceMCPSecretName}, Data: map[string][]byte{"token": []byte(strings.Repeat("s", 32))}}
 	mcpDep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "mcp", Name: "mcp-server", UID: ids[6]}, Spec: appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mcp-server"}}}}
 	mcpRS := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "mcp", Name: "mcp-rs", UID: ids[7], OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(mcpDep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}}
-	mcpServer := "reviewed server source"
+	mcpServerBytes, readErr := os.ReadFile("testdata/voice-mcp/server.py")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	mcpServer := string(mcpServerBytes)
 	mh := sha256.Sum256([]byte(mcpServer))
 	mcpSHA := hex.EncodeToString(mh[:])
+	if mcpSHA != voicemcppolicy.ReviewedMCPSourceSHA256 {
+		t.Fatalf("reviewed MCP source test fixture drifted: %s", mcpSHA)
+	}
 	mcpSourceName := "voice-mcp-source-" + mcpSHA[:12]
 	mcpVolume := corev1.Volume{Name: "source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: mcpSourceName}}}}
-	mcpContainer := corev1.Container{Name: "mcp-server", Image: approvedImage, WorkingDir: "/app", Command: []string{"python", "-B", "/app/server.py"}, VolumeMounts: []corev1.VolumeMount{{Name: "source", MountPath: "/app/server.py", SubPath: "server.py", ReadOnly: true}}}
+	mcpContainer := corev1.Container{Name: "mcp-server", Image: approvedImage, WorkingDir: "/app", Command: []string{"python3", "-B", "/app/server.py"}, VolumeMounts: []corev1.VolumeMount{{Name: "source", MountPath: "/app/server.py", SubPath: "server.py", ReadOnly: true}, {Name: "test-token", MountPath: "/etc/phorvex/voice-mcp-test-token", ReadOnly: true}}}
+	mcpTestTokenVolume := corev1.Volume{Name: "test-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "voice-mcp-test-token"}}}
 	mcpPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "mcp", Name: "mcp-1", UID: ids[8], Labels: map[string]string{"app": "mcp-server"}, Annotations: map[string]string{voicemcppolicy.MCPSourceAnnotation: mcpSourceName}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(mcpRS, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}},
-		Spec: corev1.PodSpec{Containers: []corev1.Container{mcpContainer}, Volumes: []corev1.Volume{mcpVolume}}, Status: corev1.PodStatus{PodIP: "127.0.0.2", Conditions: ready,
+		Spec: corev1.PodSpec{Containers: []corev1.Container{mcpContainer}, Volumes: []corev1.Volume{mcpVolume, mcpTestTokenVolume}}, Status: corev1.PodStatus{PodIP: "127.0.0.2", Conditions: ready,
 			ContainerStatuses: []corev1.ContainerStatus{{Name: "mcp-server", Ready: true, ContainerID: "containerd://mcp", ImageID: approvedImage}}}}
 	mcpDep.Spec.Template.Annotations = map[string]string{voicemcppolicy.MCPSourceAnnotation: mcpSourceName}
-	mcpDep.Spec.Template.Spec = corev1.PodSpec{Containers: []corev1.Container{mcpContainer}, Volumes: []corev1.Volume{mcpVolume}}
+	mcpDep.Spec.Template.Spec = corev1.PodSpec{Containers: []corev1.Container{mcpContainer}, Volumes: []corev1.Volume{mcpVolume, mcpTestTokenVolume}}
 	mcpCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "mcp", Name: mcpSourceName, UID: ids[9]}, Immutable: &immutable, Data: map[string]string{"server.py": mcpServer}}
 	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "mcp", Name: voicemcppolicy.MCPServiceName, UID: ids[10]}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "mcp-server"}, Ports: []corev1.ServicePort{{Protocol: corev1.ProtocolTCP, Port: 8000, TargetPort: intstr.FromInt32(8000)}}}}
 	port := int32(8000)
