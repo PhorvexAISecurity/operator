@@ -214,7 +214,8 @@ func liteOutputAuthority(ctx context.Context, ec EnactCtx, r liteOutputReceipt) 
 	ruleCM := &corev1.ConfigMap{}
 	if err = ec.Reader.Get(ctx, client.ObjectKey{Namespace: outputpolicy.LiteNamespace, Name: r.RuleConfigMapName}, ruleCM); err != nil ||
 		!outputpolicy.LiteOwner(ruleCM, r.Rule.DeploymentUID) || ruleCM.Immutable == nil || !*ruleCM.Immutable ||
-		string(ruleCM.UID) != r.RuleConfigMapUID || len(ruleCM.Data) != 1 || ruleCM.Data[outputpolicy.LiteRuleKey] != string(r.Rule.Bytes()) {
+		string(ruleCM.UID) != r.RuleConfigMapUID ||
+		outputpolicy.ValidateLiteAllocation(ruleCM.Data, r.Rule, r.OriginalCompletionSHA256, r.ObservedAt) != nil {
 		return live, nil, outputpolicy.LiteState{}, errors.New("LiteLLM output immutable rule changed")
 	}
 	cm := &corev1.ConfigMap{}
@@ -619,7 +620,7 @@ func enactLiteOutputPolicy(ctx context.Context, ec EnactCtx, req Request) (Handl
 		rule.ServiceUID != v.ServiceUID || rule.DeploymentUID != v.DeploymentUID ||
 		rule.ContextSecretUID != v.ContextSecretUID || rule.ContextSeedSHA256 != v.ContextSeedSHA256 ||
 		string(ruleCM.UID) != v.RuleConfigMapUID || !outputpolicy.LiteOwner(ruleCM, rule.DeploymentUID) || ruleCM.Immutable == nil || !*ruleCM.Immutable ||
-		len(ruleCM.Data) != 1 || ruleCM.Data[outputpolicy.LiteRuleKey] != string(rule.Bytes()) {
+		outputpolicy.ValidateLiteAllocation(ruleCM.Data, rule, v.OriginalCompletionSHA256, o.ObservedAt) != nil {
 		return HandlerResult{}, errors.New("LiteLLM output selected immutable rule differs")
 	}
 	cm := &corev1.ConfigMap{}

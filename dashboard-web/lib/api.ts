@@ -526,6 +526,7 @@ export interface LiteLLMOutputProbeResult {
   terminalJournal: boolean; bothGatewaysActive: boolean;
   replayRedacted: boolean; benignContinuity: boolean;
   ruleSlotStatus: string; ruleSlotName?: string;
+  reservedRuleSlots: string[]; remainingRuleSlots: number;
   defenseScope: string; issues: string[];
 }
 export interface VoiceMemoryProbeResult {

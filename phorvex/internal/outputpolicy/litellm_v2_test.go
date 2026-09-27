@@ -55,6 +55,33 @@ func TestLiteOutputRuleSlotsAreExactlyBounded(t *testing.T) {
 	}
 }
 
+func TestLiteOutputImmutableAllocationBindsOriginalAndRule(t *testing.T) {
+	rule := testLiteRule(strings.Repeat("1", 32), LiteDocumentObjective)
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	allocation := LiteAllocation{Version: 1, RunID: "atk-abc123", ObjectiveID: rule.ObjectiveID,
+		RunNonce: rule.RunNonce, RuleSHA256: rule.SHA256(),
+		OriginalCompletionSHA256: strings.Repeat("e", 64), ObservedAt: at}
+	data := map[string]string{LiteRuleKey: string(rule.Bytes()), LiteAllocationKey: string(allocation.Bytes())}
+	if err := ValidateLiteAllocation(data, rule, allocation.OriginalCompletionSHA256, at); err != nil {
+		t.Fatal(err)
+	}
+	for name, changed := range map[string]map[string]string{
+		"missing-allocation": {LiteRuleKey: data[LiteRuleKey]},
+		"changed-rule":       {LiteRuleKey: data[LiteRuleKey] + " ", LiteAllocationKey: data[LiteAllocationKey]},
+		"extra-data":         {LiteRuleKey: data[LiteRuleKey], LiteAllocationKey: data[LiteAllocationKey], "extra": "x"},
+	} {
+		if err := ValidateLiteAllocation(changed, rule, allocation.OriginalCompletionSHA256, at); err == nil {
+			t.Fatalf("accepted %s", name)
+		}
+	}
+	if err := ValidateLiteAllocation(data, rule, strings.Repeat("f", 64), at); err == nil {
+		t.Fatal("accepted different original completion")
+	}
+	if err := ValidateLiteAllocation(data, rule, allocation.OriginalCompletionSHA256, at.Add(time.Second)); err == nil {
+		t.Fatal("accepted different observation time")
+	}
+}
+
 func TestLiteOutputV2RuleCanonicalAndDistinctObjectives(t *testing.T) {
 	for _, objective := range []string{LiteDocumentObjective, LitePromptObjective} {
 		rule := testLiteRule(strings.Repeat("1", 32), objective)

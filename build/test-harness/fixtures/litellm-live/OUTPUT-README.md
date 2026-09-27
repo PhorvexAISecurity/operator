@@ -63,17 +63,25 @@ journal plus both exact gateway readbacks. Identical replay must show a new
 provider completion, an actual redaction counter increment, no protected text
 in raw or parsed JSON strings, a public answer and an unrelated benign
 completion. A marker-free error or model self-refusal does not earn defense.
+The two fixed caller prompts request exactly two JSON string fields,
+`publicAnswer` and `privateQuote`; the oracle accepts the exact public fact and
+the actual server-owned span before activation, then the exact redaction wrapper
+afterward. Extra fields, duplicate keys, trailing text, or a contradictory
+public answer fail closed.
 
 The fixed journal `phorvex-system/phorvex-litellm-output-journal` starts with
 canonical `{"receipts":[],"version":2}` under the native actor's protection.
 It is not Helm-managed mutable data and an upgrade must never reset it. The
 console reads and updates only the 32 named rule slots. After actual
-disclosure and authenticated audit preflight, it selects one empty slot,
-creates the test-generated event bound to that slot's UID, then assigns the
-canonical `rule.json` and `immutable:true` with a single resourceVersion-checked
-update. The event carries no trusted output fact until the slot is immutable;
-an event-admission failure consumes no slot. The private rule intent and
-assignment reply are retained, and the public result reports whether assignment
-is confirmed or unknown. An assigned slot is never cleared or reused, even if
-the run ends inconclusively. No
+disclosure and authenticated audit preflight, it selects one empty slot and
+assigns canonical `rule.json`, a canonical `allocation.json` reservation
+receipt, and `immutable:true` with a single
+resourceVersion-checked update. It persists the assignment status before
+publishing the test-generated event bound to that slot's UID. An event-admission
+failure consumes a slot, has a private failure receipt, and cannot earn defense.
+The private rule intent and assignment reply are retained, and the public result
+reports whether assignment is confirmed or unknown. All consumed slots are
+checked on each run; any slot without a matching terminal actuator receipt is
+shown as reserved and unconfirmed, with no effect credit. An assigned slot is
+never cleared or reused, even if the run ends inconclusively. No
 namespace-wide ConfigMap create permission is granted.

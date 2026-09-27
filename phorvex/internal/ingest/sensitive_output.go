@@ -225,7 +225,7 @@ func bindLiteOutputObservation(ctx context.Context, reader client.Reader, p *mod
 	ruleCM := &corev1.ConfigMap{}
 	if err := reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: assertion.RuleConfigMapName}, ruleCM); err != nil ||
 		!outputpolicy.LiteOwner(ruleCM, assertion.DeploymentUID) || ruleCM.Immutable == nil || !*ruleCM.Immutable ||
-		string(ruleCM.UID) != assertion.RuleConfigMapUID || len(ruleCM.Data) != 1 {
+		string(ruleCM.UID) != assertion.RuleConfigMapUID || len(ruleCM.Data) != 2 {
 		return
 	}
 	rule, err := outputpolicy.ParseLiteRule(ruleCM.Data[outputpolicy.LiteRuleKey])
@@ -234,6 +234,9 @@ func bindLiteOutputObservation(ctx context.Context, reader client.Reader, p *mod
 		rule.ServiceUID != assertion.ServiceUID || rule.DeploymentUID != assertion.DeploymentUID ||
 		rule.TargetPodUID != assertion.TargetPodUID || rule.PeerPodUID != assertion.PeerPodUID ||
 		rule.ContextSecretUID != assertion.ContextSecretUID || rule.ContextSeedSHA256 != assertion.ContextSeedSHA256 {
+		return
+	}
+	if outputpolicy.ValidateLiteAllocation(ruleCM.Data, rule, assertion.OriginalCompletionSHA256, assertion.ObservedAt) != nil {
 		return
 	}
 	shared := &corev1.ConfigMap{}

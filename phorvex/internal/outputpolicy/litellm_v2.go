@@ -19,6 +19,7 @@ const (
 	LitePolicyConfigMap       = "litellm-output-policy"
 	LitePolicyKey             = "policy.json"
 	LiteRuleKey               = "rule.json"
+	LiteAllocationKey         = "allocation.json"
 	LiteRulePrefix            = "litellm-output-rule-"
 	LiteDocumentObjective     = "ai2-sensitive-info-disclosure"
 	LitePromptObjective       = "ai2-system-prompt-leakage"
@@ -34,6 +35,7 @@ const (
 
 var liteNonce = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var liteRuleSlot = regexp.MustCompile(`^litellm-output-rule-(0[0-9]|[12][0-9]|3[01])$`)
+var liteRunID = regexp.MustCompile(`^atk-[a-z0-9]{1,80}$`)
 
 func LiteObjectiveSecret(id string) string {
 	switch id {
@@ -101,6 +103,47 @@ func ParseLiteRule(raw string) (LiteRule, error) {
 		return LiteRule{}, errors.New("LiteLLM output rule invalid or noncanonical")
 	}
 	return r, nil
+}
+
+// LiteAllocation is a one-use reservation, not an actuator or effect receipt.
+// It is written alongside rule.json in the same immutable ConfigMap update.
+type LiteAllocation struct {
+	Version                  int       `json:"version"`
+	RunID                    string    `json:"runId"`
+	ObjectiveID              string    `json:"objectiveId"`
+	RunNonce                 string    `json:"runNonce"`
+	RuleSHA256               string    `json:"ruleSHA256"`
+	OriginalCompletionSHA256 string    `json:"originalCompletionSHA256"`
+	ObservedAt               time.Time `json:"observedAt"`
+}
+
+func (a LiteAllocation) Bytes() []byte { return LiteCanonicalJSON(a) }
+
+func ParseLiteAllocation(raw string) (LiteAllocation, error) {
+	var a LiteAllocation
+	if len(raw) == 0 || len(raw) > 1024 || json.Unmarshal([]byte(raw), &a) != nil ||
+		!bytes.Equal([]byte(raw), a.Bytes()) || a.Version != 1 || !liteRunID.MatchString(a.RunID) ||
+		LiteObjectiveSecret(a.ObjectiveID) == "" || !liteNonce.MatchString(a.RunNonce) ||
+		!ValidSHA(a.RuleSHA256) || !ValidSHA(a.OriginalCompletionSHA256) || a.ObservedAt.IsZero() {
+		return LiteAllocation{}, errors.New("LiteLLM output allocation invalid or noncanonical")
+	}
+	return a, nil
+}
+
+func (a LiteAllocation) Matches(rule LiteRule, originalSHA string, observedAt time.Time) bool {
+	return a.ObjectiveID == rule.ObjectiveID && a.RunNonce == rule.RunNonce && a.RuleSHA256 == rule.SHA256() &&
+		a.OriginalCompletionSHA256 == originalSHA && a.ObservedAt.Equal(observedAt)
+}
+
+func ValidateLiteAllocation(data map[string]string, rule LiteRule, originalSHA string, observedAt time.Time) error {
+	if len(data) != 2 || data[LiteRuleKey] != string(rule.Bytes()) {
+		return errors.New("LiteLLM output immutable allocation data differs")
+	}
+	allocation, err := ParseLiteAllocation(data[LiteAllocationKey])
+	if err != nil || !allocation.Matches(rule, originalSHA, observedAt) {
+		return errors.New("LiteLLM output immutable allocation provenance differs")
+	}
+	return nil
 }
 
 type LiteEntry struct {

@@ -6,6 +6,7 @@ export function LiteLLMOutputProbe({ result }: { result: LiteLLMOutputProbeResul
     <div>Original server-owned text: {result.initialDisclosure ? `disclosed in model completion ${result.originalCompletionId || "unknown"}` : "no verified disclosure"}.</div>
     <div>Signal: {result.signalMode}{result.eventUID ? ` (${result.eventUID})` : ""}. This test-generated signal does not establish natural detection.</div>
     <div>One-use rule slot: {result.ruleSlotStatus}{result.ruleSlotName ? ` (${result.ruleSlotName})` : ""}. An assigned slot remains consumed even if this run ends inconclusively.</div>
+    <div>Rule capacity: {result.remainingRuleSlots >= 0 ? `${result.remainingRuleSlots} remaining` : "not yet verified"}; reserved without a terminal action: {result.reservedRuleSlots.length ? result.reservedRuleSlots.join(", ") : "none observed"}. A reservation is not a defensive effect.</div>
     <div>Brain choice: {result.selectedAction || "unverified"}{result.selectionDecisionId ? ` · ${result.selectionDecisionId}` : ""}.</div>
     <div>Protected operation: {result.terminalJournal ? "terminal" : "unverified"}; both gateways: {result.bothGatewaysActive ? "active" : "unverified"}.</div>
     <div>Identical replay: {result.replayRedacted ? "exact private span removed with public answer" : "not verified"}; unrelated completion: {result.benignContinuity ? "preserved" : "unverified"}.</div>
