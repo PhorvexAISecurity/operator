@@ -63,13 +63,15 @@ def fixture():
     policy["spec"] = {"mode": "active", "actions": {"enabled": ["rotate", "guardrail-rotate"]},
                       "triggers": {"eventDriven": True}, "selector": {"matchLabels": {"app": "vllm"}}}
     policy["status"] = {"observedGeneration": 12}
-    manager = obj("Pod", "operator-manager-abc", "phorvex-system", 7,
-                  labels={"control-plane": "controller-manager"},
-                  ownerReferences=[{"controller": True, "kind": "ReplicaSet", "name": "operator-manager-rs", "uid": uid(11)}])
-    manager["spec"] = {"containers": [{"name": "manager", "image": "example/manager@sha256:" + "3" * 64}]}
+    manager = obj("Pod", "phorvex-phorvex-abc", "phorvex-system", 7,
+                  labels={"app.kubernetes.io/component": "manager", "app.kubernetes.io/name": "phorvex",
+                          "app.kubernetes.io/instance": "phorvex"},
+                  ownerReferences=[{"controller": True, "kind": "ReplicaSet", "name": "phorvex-phorvex-rs", "uid": uid(11)}])
+    manager["spec"] = {"serviceAccountName": "phorvex-phorvex-manager", "containers": [
+        {"name": "manager", "image": renderer.PHORVEX_IMAGE_REPO + "@sha256:" + "3" * 64}]}
     manager["status"] = {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}],
                          "containerStatuses": [{"name": "manager", "image": "sha256:" + "5" * 64,
-                                                "imageID": "example/manager@sha256:" + "3" * 64,
+                                                "imageID": renderer.PHORVEX_IMAGE_REPO + "@sha256:" + "3" * 64,
                                                 "containerID": "containerd://manager", "ready": True, "restartCount": 0}]}
     audit_args = ["-audit-source-url=https://phorvex-phorvex-audit-source.phorvex-system.svc:8445",
                   "-audit-source-server-dns=phorvex-phorvex-audit-source.phorvex-system.svc",
@@ -135,6 +137,8 @@ class RenderGuardrailProfileTest(unittest.TestCase):
             lambda x: x["service"]["spec"]["selector"].update({"phorvex.ai/route-key": "old"}),
             lambda x: x["endpointslices"]["items"][0]["endpoints"][0]["targetRef"].update(uid=uid(99)),
             lambda x: x["console"]["metadata"]["ownerReferences"][0].update(uid=uid(98)),
+            lambda x: x["manager"]["metadata"]["labels"].update({"app.kubernetes.io/name": "phoenix"}),
+            lambda x: x["manager"]["spec"].update(serviceAccountName="operator-controller-manager"),
             lambda x: x["policy"]["status"].update(observedGeneration=11),
             lambda x: x["source"]["data"].update({"dual_server.py": "unreviewed"}),
         )

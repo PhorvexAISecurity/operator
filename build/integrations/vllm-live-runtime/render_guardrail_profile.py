@@ -37,6 +37,8 @@ IMAGE_ID = re.compile(r"[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}\Z")
 BARE_SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 MODEL = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 DOMAIN = "guardrail-variant-v1"
+PHORVEX_IMAGE_REPO = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex"
+AUDIT_DNS = "phorvex-phorvex-audit-source.phorvex-system.svc"
 
 
 def digest(raw: bytes) -> str:
@@ -159,10 +161,16 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
     require(manager.get("kind") == "Pod" and mm.get("namespace") == "phorvex-system" and
             bool(UID.fullmatch(mm.get("uid", ""))) and not mm.get("deletionTimestamp"), "manager identity differs")
     manager_owners = [x for x in mm.get("ownerReferences", []) if x.get("controller") is True]
-    require(mm.get("labels", {}).get("control-plane") == "controller-manager" and
+    manager_labels = mm.get("labels", {})
+    require(manager_labels.get("app.kubernetes.io/component") == "manager" and
+            manager_labels.get("app.kubernetes.io/name") == "phorvex" and
+            manager_labels.get("app.kubernetes.io/instance") == "phorvex" and
+            manager.get("spec", {}).get("serviceAccountName") == "phorvex-phorvex-manager" and
+            mm.get("name", "").startswith("phorvex-phorvex-") and
             len(manager_owners) == 1 and manager_owners[0].get("kind") == "ReplicaSet" and
+            manager_owners[0].get("name", "").startswith("phorvex-phorvex-") and
             bool(UID.fullmatch(manager_owners[0].get("uid", ""))),
-            "manager controller authority differs")
+            "Phorvex manager controller authority differs")
     co = console.get("metadata", {})
     require(console.get("kind") == "Pod" and co.get("namespace") == "phorvex-system" and
             bool(UID.fullmatch(co.get("uid", ""))) and not co.get("deletionTimestamp"), "console identity differs")
@@ -181,7 +189,12 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
             "console Deployment is not the current one-Ready owner")
     vllm, vllm_status = container(pod, "vllm")
     guard, _ = container(pod, "guardrail")
-    manager_status = container(manager, "manager")[1]
+    manager_spec, manager_status = container(manager, "manager")
+    require(manager_spec.get("image", "").startswith(PHORVEX_IMAGE_REPO + ":") or
+            manager_spec.get("image", "").startswith(PHORVEX_IMAGE_REPO + "@sha256:"),
+            "Phorvex manager image repository differs")
+    require(manager_status["imageID"].startswith(PHORVEX_IMAGE_REPO + "@sha256:"),
+            "Phorvex manager runtime image differs")
     console_spec, console_status = container(console, "console")
     dep_containers = [x for x in deployment["spec"]["template"]["spec"].get("containers", []) if x.get("name") == "console"]
     rs_containers = [x for x in rs["spec"]["template"]["spec"].get("containers", []) if x.get("name") == "console"]
@@ -256,7 +269,7 @@ def render(objects: dict[str, dict], context: str, source_files: dict[str, bytes
     u = urlsplit(audit_url)
     require(u.scheme == "https" and u.hostname == audit_dns and u.port == 8445 and not u.username and
             not u.password and not u.path and not u.query and not u.fragment and
-            audit_dns.endswith(".phorvex-system.svc"), "authenticated audit source route differs")
+            audit_dns == AUDIT_DNS, "authenticated audit source route differs")
     for arg, expected in (("-audit-source-client-cert", "/etc/audit-client/tls.crt"),
                           ("-audit-source-client-key", "/etc/audit-client/tls.key"),
                           ("-audit-source-ca", "/etc/audit-client/ca.crt")):
