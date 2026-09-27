@@ -19,6 +19,9 @@
 {{- if and .Values.phorvex.console.litellmOutput.enabled (not .Values.phorvex.console.enabled) }}
 {{- fail "litellmOutput.enabled requires console.enabled" }}
 {{- end }}
+{{- if and .Values.phorvex.console.voiceOutputLive.enabled (not .Values.phorvex.console.enabled) }}
+{{- fail "voiceOutputLive.enabled requires console.enabled" }}
+{{- end }}
 {{- if .Values.phorvex.console.enabled }}
 apiVersion: v1
 kind: ServiceAccount

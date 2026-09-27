@@ -281,6 +281,8 @@ export const api = {
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/live/fire", { scenario }, lens),
   voiceAgencyFire: (scenario: "ai2-agent-excessive-agency", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/agency/live/fire", { scenario }, lens),
+  voiceOutputFire: (scenario: "ai2-system-prompt-leakage", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/output/live/fire", { scenario }, lens),
   litellmLiveFire: (scenario: "ai2-unbounded-consumption" | "ai2-query-extraction", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/live/fire", { scenario }, lens),
   litellmOutputFire: (scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage", lens: Lens) =>
@@ -499,6 +501,7 @@ export interface AttackResult {
   guardrailOutputProbe?: GuardrailOutputProbeResult;
   voiceMemoryProbe?: VoiceMemoryProbeResult;
   voiceAgencyProbe?: VoiceAgencyProbeResult;
+  voiceOutputProbe?: VoiceOutputProbeResult;
   litellmLiveProbe?: LiteLLMLiveProbeResult;
   litellmOutputProbe?: LiteLLMOutputProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
@@ -557,6 +560,21 @@ export interface VoiceAgencyProbeResult {
   protectedJournalTerminal: boolean; everyServingPodEffective: boolean; recoveredAfterPending: boolean;
   repeatCallbackDenied: boolean; repeatCRMRefundAbsent: boolean;
   ownOrderControlMaintained: boolean; benignStatusMaintained: boolean;
+  cleanup: string; issues: string[];
+}
+export interface VoiceOutputProbeResult {
+  schema: "voice-output-live-v1";
+  status: "UNKNOWN" | "NOT_LANDED" | "LANDED" | "DEFENDED";
+  scenarioId: "ai2-system-prompt-leakage"; caseId: string;
+  signalMode: "NONE" | "TEST_INJECTED_AFTER_FIRST_LOSS";
+  defenseScope: string; runIdSHA256: string; markerSHA256: string;
+  targetPodUID?: string; deploymentUID?: string; policyUID?: string; sourceSHA256?: string;
+  firstRawModelMarker: boolean; firstAssistantDisclosure: boolean; firstAudioEmitted: boolean; firstLanded: boolean;
+  eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  noopDecisionId?: string; noopTickId?: string; noopReason?: string;
+  outputCandidateStatus?: string; outputCandidateExclusion?: string; outputCandidateReason?: string;
+  protectedJournalTerminal: boolean; everyServingPodEffective: boolean; recoveredAfterPending: boolean;
+  repeatRawModelMarker: boolean; repeatOutputBlocked: boolean; benignSpeechMaintained: boolean;
   cleanup: string; issues: string[];
 }
 export interface GuardrailEffectProbeResult {

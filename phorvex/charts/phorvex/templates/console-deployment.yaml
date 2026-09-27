@@ -198,6 +198,20 @@
 {{- $uid := required "console.voiceAgencyLive.deploymentUID required" .Values.phorvex.console.voiceAgencyLive.deploymentUID }}
 {{- if not (regexMatch "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" $uid) }}{{- fail "console.voiceAgencyLive.deploymentUID must be lowercase UUID" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+{{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.voiceOutputLive requires phorvex-system release namespace" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceOutputLive requires the profile-bound console service account" }}{{- end }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
+{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}
+{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.voiceOutputLive requires exact console creator in trustedDetectors" }}{{- end }}
+{{- $name := required "console.voiceOutputLive.configMapName required" .Values.phorvex.console.voiceOutputLive.configMapName }}
+{{- if or (gt (len $name) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name)) }}{{- fail "console.voiceOutputLive.configMapName invalid" }}{{- end }}
+{{- $sha := required "console.voiceOutputLive.profileSHA256 required" .Values.phorvex.console.voiceOutputLive.profileSHA256 }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.voiceOutputLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -342,6 +356,12 @@ spec:
         {{- if .Values.phorvex.console.litellmOutput.enabled }}
         - name: PHORVEX_CONSOLE_LITELLM_OUTPUT_PROFILE_SHA256
           value: {{ .Values.phorvex.console.litellmOutput.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.voiceOutputLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+        - name: PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.voiceOutputLive.profileSHA256 | quote }}
         {{- end }}
         {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
@@ -728,6 +748,12 @@ spec:
           mountPath: /etc/phorvex-litellm-output
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+        - name: voice-output-reviewed-profile
+          mountPath: /etc/phorvex-voice-output/profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
         {{- with .Values.phorvex.console.catalogueV1 }}
         {{- if .enabled }}
         {{- with .scopedToken }}
@@ -920,6 +946,15 @@ spec:
               items:
               - key: seed
                 path: prompt-seed
+      {{- end }}
+      {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
+      - name: voice-output-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.voiceOutputLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
       {{- end }}
       {{- with .Values.phorvex.console.catalogueV1 }}
       {{- if .enabled }}

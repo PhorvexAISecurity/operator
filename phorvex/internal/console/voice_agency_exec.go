@@ -21,16 +21,21 @@ import (
 type voiceAgencyPodPin struct {
 	Name, UID, ContainerID, ImageID, SourceSHA256 string
 	RestartCount                                  int32
+	SourceAnnotation                              string
 }
 
 type voiceAgencyPodGet func(context.Context, string) (*corev1.Pod, error)
 type voiceAgencyPodInvoke func(context.Context, string, string, []byte) ([]byte, error)
 
 func voiceAgencyExactPod(p *corev1.Pod, pin voiceAgencyPodPin) bool {
+	annotation := pin.SourceAnnotation
+	if annotation == "" {
+		annotation = "phorvex.ai/voice-refund-source-sha256"
+	}
 	if p == nil || p.Namespace != "voice" || p.Name != pin.Name || string(p.UID) != pin.UID ||
 		p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning ||
 		pin.Name == "" || pin.UID == "" || pin.ContainerID == "" || pin.ImageID == "" ||
-		pin.SourceSHA256 == "" || p.Annotations["phorvex.ai/voice-refund-source-sha256"] != pin.SourceSHA256 {
+		pin.SourceSHA256 == "" || p.Annotations[annotation] != pin.SourceSHA256 {
 		return false
 	}
 	ready := false

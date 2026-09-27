@@ -78,6 +78,7 @@ type attackRecord struct {
 	GuardrailOutputProbe *guardrailOutputProbeResult `json:"guardrailOutputProbe,omitempty"`
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
+	VoiceOutputProbe     *voiceOutputProbeResult     `json:"voiceOutputProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	LiteLLMOutputProbe   *liteLLMOutputProbeResult   `json:"litellmOutputProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
@@ -368,6 +369,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe := *r.VoiceAgencyProbe
 		probe.Issues = append([]string(nil), r.VoiceAgencyProbe.Issues...)
 		c.VoiceAgencyProbe = &probe
+	}
+	if r.VoiceOutputProbe != nil {
+		probe := *r.VoiceOutputProbe
+		probe.Issues = append([]string(nil), r.VoiceOutputProbe.Issues...)
+		c.VoiceOutputProbe = &probe
 	}
 	if r.vllmEffect != nil {
 		baseline := *r.vllmEffect
