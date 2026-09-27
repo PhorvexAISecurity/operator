@@ -63,6 +63,13 @@ func TestEndpointLeaseProfileAndPolicyCanonical(t *testing.T) {
 	if _, err := parseEndpointLeaseState(append(stateRaw, '\n'), p); err == nil {
 		t.Fatal("noncanonical policy accepted")
 	}
+	withNullRevocations := bytes.Replace(stateRaw, []byte(`"revokedClientHMACs":[]`), []byte(`"revokedClientHMACs":null`), 1)
+	if bytes.Equal(withNullRevocations, stateRaw) {
+		t.Fatal("revocation list fixture absent")
+	}
+	if _, err := parseEndpointLeaseState(withNullRevocations, p); err == nil {
+		t.Fatal("null revocation list accepted as empty array")
+	}
 	if accepted, err := parseEndpointLeaseState(endpointLeaseStateBytes(after), p); err != nil || accepted.LastOperationID != decisionID {
 		t.Fatalf("real 32-hex selected operation rejected: %v", err)
 	}

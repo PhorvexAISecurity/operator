@@ -74,7 +74,8 @@ func parseEndpointLeaseState(raw []byte, p endpointLeaseProfile) (endpointLeaseS
 	}
 	if state.Version != 1 || state.Revision > 1<<53-1 || state.ServiceUID != p.ServiceUID ||
 		state.ProxySourceSHA256 != p.ProxySourceSHA256 || state.SecretUID != p.TenantSecretUID ||
-		state.SeedSHA256 != p.SeedSHA256 || len(state.AllowedClientHMACs) == 0 ||
+		state.SeedSHA256 != p.SeedSHA256 || state.AllowedClientHMACs == nil || state.RevokedClientHMACs == nil ||
+		len(state.AllowedClientHMACs) == 0 ||
 		len(state.AllowedClientHMACs) > 256 || len(state.RevokedClientHMACs) > 256 ||
 		!endpointLeaseSortedIDs(state.AllowedClientHMACs) || !endpointLeaseSortedIDs(state.RevokedClientHMACs) ||
 		(state.Revision == 0 && state.LastOperationID != "") ||
