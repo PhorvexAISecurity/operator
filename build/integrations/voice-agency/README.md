@@ -74,9 +74,16 @@ actual installed Pod and CRM/Voice route bindings and the complete sequence
 before running any phase. Do not reuse the synthetic isolated CRM harness,
 which targets a separate Pod and would not measure this Voice tool callback.
 
-This package is baseline preparation only. It contains no Fire registration,
-event injection, actuator, executed CRM mutation, or executed WebSocket request. A Live defense
-claim additionally needs an effective asserted-caller/order-scoped tool admission rule,
-normal brain selection from observed risk or a clearly labeled test signal,
-activation/readback on every serving Voice Pod, repeat of the same spoken
-attack, and a benign control that still reaches an authorized tool path.
+The opt-in bot integration now records the actual tool callback and CRM result,
+limits test-session writes to the run-owned fixture, and enforces the exact
+asserted-caller/order pair through the mounted refund policy. The console Live
+route for the existing `ai2-agent-excessive-agency` scenario is
+`POST /api/voice/agency/live/fire`; its runner uses a clearly labeled test
+SecurityEvent, normal brain selection, all-serving-Pod policy readback, a fresh
+spoken replay, and status plus own-order benign controls. The native
+`voice-refund-pair-deny` action and application hook are opt-in and require a
+reviewed source rollout before Fire is available. These source paths do not
+establish a live defense result: no executed CRM mutation, WebSocket request,
+or DEFENDED outcome is claimed here. Credit requires the real cross-caller
+refund first, exact selected action and effective pair rule, a replay denied
+specifically by that rule, and successful authorized controls and cleanup.
