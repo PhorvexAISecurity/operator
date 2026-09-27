@@ -244,6 +244,79 @@ subjects:
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- if .Values.phorvex.endpointLease.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "endpointLease requires native or hybrid actuator" }}{{- end }}
+---
+# The lease action may CAS only its named tenant policy. Its graph reads are
+# additive to the existing read-only Pod and EndpointSlice inventory grants.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-endpoint-lease
+  namespace: vllm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-endpoint-lease-policy"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["guardrail-proxy"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: ["vllm"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  resourceNames: ["vllm"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  # ReplicaSet names vary by rollout; ownership validation only uses GET.
+  resources: ["replicasets"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-endpoint-lease
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-endpoint-lease
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The protected journal is preinstalled and may only be CAS-updated here.
+# The legacy operation-journal role remains unchanged for other actions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-endpoint-lease-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-endpoint-lease-journal"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-endpoint-lease-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-endpoint-lease-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- if .Values.phorvex.voiceMemory.enabled }}
 {{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "voiceMemory requires native or hybrid actuator" }}{{- end }}
 ---
