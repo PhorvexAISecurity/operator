@@ -109,24 +109,31 @@ type operationReceipt struct {
 	BeforeServiceBridge     routeOwnedValue   `json:"beforeServiceBridge,omitempty,omitzero"`
 	// Protected serving-effect v9 fields. One stable ConfigMap name is shared by
 	// all policies/actions in an exact target/effect domain.
-	EffectDomain      string          `json:"effectDomain,omitempty"`
-	OperationID       string          `json:"operationID,omitempty"`
-	TickID            string          `json:"tickID,omitempty"`
-	Generation        uint64          `json:"generation,omitempty"`
-	SelectedReset     routeOwnedValue `json:"selectedReset,omitempty,omitzero"`
-	SelectedMigrate   routeOwnedValue `json:"selectedMigrate,omitempty,omitzero"`
-	SelectedLocal     routeOwnedValue `json:"selectedLocal,omitempty,omitzero"`
-	SelectedGuardrail routeOwnedValue `json:"selectedGuardrail,omitempty,omitzero"`
-	ExpectedReset     routeOwnedValue `json:"expectedReset,omitempty,omitzero"`
-	ExpectedMigrate   routeOwnedValue `json:"expectedMigrate,omitempty,omitzero"`
-	ExpectedLocal     routeOwnedValue `json:"expectedLocal,omitempty,omitzero"`
-	ExpectedGuardrail routeOwnedValue `json:"expectedGuardrail,omitempty,omitzero"`
-	PriorVariant      string          `json:"priorVariant,omitempty"`
-	NextVariant       string          `json:"nextVariant,omitempty"`
-	PriorSnapshot     routeOwnedValue `json:"priorSnapshot,omitempty,omitzero"`
-	PeerOutcomes      []kvPeerOutcome `json:"peerOutcomes,omitempty"`
-	DeclaredPeers     []string        `json:"declaredPeers,omitempty"`
-	RemoteExpected    int             `json:"remoteExpected,omitempty"`
+	EffectDomain       string                   `json:"effectDomain,omitempty"`
+	OperationID        string                   `json:"operationID,omitempty"`
+	TickID             string                   `json:"tickID,omitempty"`
+	Generation         uint64                   `json:"generation,omitempty"`
+	SelectedReset      routeOwnedValue          `json:"selectedReset,omitempty,omitzero"`
+	SelectedMigrate    routeOwnedValue          `json:"selectedMigrate,omitempty,omitzero"`
+	SelectedLocal      routeOwnedValue          `json:"selectedLocal,omitempty,omitzero"`
+	SelectedGuardrail  routeOwnedValue          `json:"selectedGuardrail,omitempty,omitzero"`
+	ExpectedReset      routeOwnedValue          `json:"expectedReset,omitempty,omitzero"`
+	ExpectedMigrate    routeOwnedValue          `json:"expectedMigrate,omitempty,omitzero"`
+	ExpectedLocal      routeOwnedValue          `json:"expectedLocal,omitempty,omitzero"`
+	ExpectedGuardrail  routeOwnedValue          `json:"expectedGuardrail,omitempty,omitzero"`
+	PriorVariant       string                   `json:"priorVariant,omitempty"`
+	NextVariant        string                   `json:"nextVariant,omitempty"`
+	PriorSnapshot      routeOwnedValue          `json:"priorSnapshot,omitempty,omitzero"`
+	PeerOutcomes       []kvPeerOutcome          `json:"peerOutcomes,omitempty"`
+	DeclaredPeers      []string                 `json:"declaredPeers,omitempty"`
+	RemoteExpected     int                      `json:"remoteExpected,omitempty"`
+	KVResetNegativeACK *kvResetNegativeACKProof `json:"kvResetNegativeACK,omitempty"`
+}
+
+type kvResetNegativeACKProof struct {
+	HTTPStatus     int    `json:"httpStatus"`
+	Success        *bool  `json:"success"`
+	ResponseSHA256 string `json:"responseSHA256"`
 }
 
 type routeOwnedValue struct {
@@ -161,13 +168,16 @@ func validServingEffectReceipt(r operationReceipt) bool {
 	unchangedGuard := r.ExpectedGuardrail == r.SelectedGuardrail
 	switch model.Action(r.Kind) {
 	case model.ActionKVReset:
-		if r.EffectDomain != kvEffectDomain || r.ExpectedReset != apply || r.ExpectedMigrate != r.SelectedMigrate || r.ExpectedLocal != r.SelectedLocal ||
+		if r.EffectDomain != kvEffectDomain || r.ExpectedMigrate != r.SelectedMigrate || r.ExpectedLocal != r.SelectedLocal ||
 			!unchangedGuard || r.RemoteExpected != 0 || len(r.DeclaredPeers) != 0 || len(r.PeerOutcomes) != 0 || r.PriorVariant != "" || r.NextVariant != "" {
 			return false
 		}
 		switch r.Phase {
 		case "prepared", "dispatching", "effect-confirmed", "metadata-ready-full", "terminal-full":
-			return true
+			return r.KVResetNegativeACK == nil && r.ExpectedReset == apply
+		case "terminal-partial":
+			return !r.ServingLegacy && r.KVResetNegativeACK != nil && r.KVResetNegativeACK.HTTPStatus == 200 &&
+				r.KVResetNegativeACK.Success != nil && !*r.KVResetNegativeACK.Success && validDigest(r.KVResetNegativeACK.ResponseSHA256) && r.ExpectedReset == r.SelectedReset
 		default:
 			return false
 		}
@@ -318,6 +328,9 @@ func operationRequestDrainPhase(phase string) bool {
 }
 
 func (r operationReceipt) valid() bool {
+	if r.KVResetNegativeACK != nil && (r.Version != servingEffectReceiptVersion || r.Kind != string(model.ActionKVReset) || r.Phase != "terminal-partial") {
+		return false
+	}
 	if r.DrainV11 != nil && r.DrainV11.CreateRejection != nil &&
 		(r.Kind != "request-drain" || (r.Phase != "drain-rejected-v11" && r.Phase != "restored")) {
 		return false

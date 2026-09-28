@@ -75,6 +75,13 @@ func TestM178ResetPrefixCacheRequiresExplicitTrueAcknowledgement(t *testing.T) {
 				}
 				return
 			}
+			if tc.name == "explicit-false" {
+				var negative *kvResetNegativeAcknowledgement
+				if !errors.As(err, &negative) || !validDigest(negative.responseSHA256) || errors.Is(err, errServingOutcomeUnknown) || errors.Is(err, errStackUnreachable) {
+					t.Fatalf("complete explicit false was not a typed negative acknowledgement: %v", err)
+				}
+				return
+			}
 			if err == nil || !errors.Is(err, errServingOutcomeUnknown) || errors.Is(err, errStackUnreachable) {
 				t.Fatalf("nonconfirming response was not retained as unknown: %v", err)
 			}

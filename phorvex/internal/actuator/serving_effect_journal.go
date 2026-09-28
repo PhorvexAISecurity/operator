@@ -451,7 +451,7 @@ func prepareServingReceipt(ctx context.Context, ec EnactCtx, req Request, pod *c
 			}
 			note := "protected serving operation already reached a terminal state; no new effect credited"
 			if old.Phase == "terminal-partial" {
-				note = "protected serving operation already retained a confirmed local-only partial effect; no full-scope success or new effect credited"
+				note = servingTerminalPartialNote(old)
 			}
 			return cm, old, false, servingReconciled(cm, old, note), nil
 		}
@@ -713,6 +713,10 @@ func enactProtectedKVReset(ctx context.Context, ec EnactCtx, req Request) (Handl
 	}
 	callErr := ec.vllm().ResetPrefixCache(ctx, ep)
 	if callErr != nil {
+		var negative *kvResetNegativeAcknowledgement
+		if errors.As(callErr, &negative) {
+			return retainKVResetNegativeACK(ctx, ec, req, cm, &r, negative)
+		}
 		if errors.Is(callErr, errStackUnreachable) {
 			if err := journalFinish(ctx, ec, cm); err == nil {
 				return HandlerResult{NoEffect: NoEffectRefused, MutationKind: "none", Note: "kv-reset refused before the serving request was sent"}, nil
@@ -724,6 +728,40 @@ func enactProtectedKVReset(ctx context.Context, ec EnactCtx, req Request) (Handl
 		return servingPartial(cm, r, true, err)
 	}
 	return finishServingEffect(ctx, ec, cm, &r, "terminal-full", true, "kv-reset confirmed; protected epoch converged", nil)
+}
+
+func servingTerminalPartialNote(r operationReceipt) string {
+	if r.Kind == string(model.ActionKVReset) && r.KVResetNegativeACK != nil {
+		return "protected kv-reset explicit negative acknowledgement retained; cache may have partially changed; no complete reset or new mitigation credited"
+	}
+	return "protected serving operation already retained a confirmed local-only partial effect; no full-scope success or new effect credited"
+}
+
+func retainKVResetNegativeACK(ctx context.Context, ec EnactCtx, req Request, cm *corev1.ConfigMap, r *operationReceipt, negative *kvResetNegativeAcknowledgement) (HandlerResult, error) {
+	if r == nil {
+		return HandlerResult{MutationKind: "partial"}, fmt.Errorf("%w: kv-reset dispatch receipt unavailable", errServingOutcomeUnknown)
+	}
+	if r.Kind != string(model.ActionKVReset) || r.Phase != "dispatching" || r.ServingLegacy ||
+		ec.ServingSecurity == nil || ec.ServingSecurity.Mode() != ServingSecuritySecureRequired || negative == nil || !validDigest(negative.responseSHA256) {
+		return servingPartial(cm, *r, false, fmt.Errorf("%w: authenticated kv-reset negative acknowledgement proof unavailable", errServingOutcomeUnknown))
+	}
+	if _, _, err := revalidateServingDispatch(ctx, ec, req, *r, true); err != nil {
+		return servingPartial(cm, *r, false, fmt.Errorf("kv-reset negative acknowledgement authority changed: %w", err))
+	}
+	terminal := *r
+	terminal.Phase = "terminal-partial"
+	terminal.ExpectedReset = terminal.SelectedReset
+	falseValue := false
+	terminal.KVResetNegativeACK = &kvResetNegativeACKProof{HTTPStatus: 200, Success: &falseValue, ResponseSHA256: negative.responseSHA256}
+	if err := journalAdvance(ctx, ec, cm, terminal); err != nil {
+		// Keep the original dispatching view until a protected durable read proves
+		// the CAS landed. Neither acknowledgement loss nor refusal resends the POST.
+		return servingPartial(cm, *r, false, fmt.Errorf("kv-reset negative acknowledgement receipt unconfirmed: %w", err))
+	}
+	*r = terminal
+	result, _ := servingPartial(cm, *r, false, negative)
+	result.Note = servingTerminalPartialNote(*r)
+	return result, negative
 }
 
 func enactProtectedGuardrail(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
@@ -914,6 +952,9 @@ func recoverProtectedServingEffect(ctx context.Context, ec EnactCtx, cm *corev1.
 		return "", fmt.Errorf("protected serving recovery receipt unavailable")
 	}
 	if terminalServingPhase(r.Phase) {
+		if r.KVResetNegativeACK != nil {
+			return servingTerminalPartialNote(*r), nil
+		}
 		return fmt.Sprintf("terminal protected %s receipt retained without a new effect", r.Kind), nil
 	}
 	current, currentErr := currentServingPod(ctx, ec, *r)
@@ -997,6 +1038,11 @@ func recoverProtectedServingEffect(ctx context.Context, ec EnactCtx, cm *corev1.
 		err = ec.guardrail().ApplyVariant(ctx, ep, r.NextVariant)
 	}
 	if err != nil {
+		var negative *kvResetNegativeAcknowledgement
+		if r.Kind == string(model.ActionKVReset) && errors.As(err, &negative) {
+			result, retainErr := retainKVResetNegativeACK(ctx, ec, req, cm, r, negative)
+			return result.Note, retainErr
+		}
 		return "", fmt.Errorf("protected %s recovery dispatch unresolved: %w", r.Kind, err)
 	}
 	if err := confirmServingEffect(ctx, ec, cm, r); err != nil {

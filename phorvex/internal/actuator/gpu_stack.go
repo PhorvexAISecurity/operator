@@ -25,6 +25,8 @@ package actuator
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -484,10 +486,23 @@ func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) err
 	if code != http.StatusOK {
 		return fmt.Errorf("%w: vLLM reset_prefix_cache acknowledgement unavailable after HTTP %d", errServingOutcomeUnknown, code)
 	}
-	if err := parseResetPrefixCacheAcknowledgement(body); err != nil {
+	success, parseErr := parseResetPrefixCacheResult(body)
+	if parseErr != nil {
 		return fmt.Errorf("%w: vLLM reset_prefix_cache acknowledgement is invalid", errServingOutcomeUnknown)
 	}
+	if !success {
+		hash := sha256.Sum256([]byte(body))
+		return &kvResetNegativeAcknowledgement{responseSHA256: hex.EncodeToString(hash[:])}
+	}
 	return nil
+}
+
+// Minted only after the reset transport reads an entire strict HTTP 200 result.
+// False does not establish no effect: an allocator may already have been reset.
+type kvResetNegativeAcknowledgement struct{ responseSHA256 string }
+
+func (*kvResetNegativeAcknowledgement) Error() string {
+	return "vLLM reset_prefix_cache explicitly did not confirm a complete reset"
 }
 
 // parseResetPrefixCacheAcknowledgement accepts only one complete bounded JSON object
@@ -496,35 +511,46 @@ func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) err
 // failure as an unknown post-send outcome rather than a clean refusal. Extension fields
 // are allowed, but case aliases and duplicate keys cannot override the required field.
 func parseResetPrefixCacheAcknowledgement(body string) error {
+	success, err := parseResetPrefixCacheResult(body)
+	if err != nil {
+		return err
+	}
+	if !success {
+		return fmt.Errorf("success must be boolean true")
+	}
+	return nil
+}
+
+func parseResetPrefixCacheResult(body string) (bool, error) {
 	data := []byte(body)
 	if len(data) == 0 || len(data) > servingResponseMaxBytes {
-		return fmt.Errorf("response size must be 1..%d bytes", servingResponseMaxBytes)
+		return false, fmt.Errorf("response size must be 1..%d bytes", servingResponseMaxBytes)
 	}
 	if err := rejectDuplicateJSONFields(data); err != nil {
-		return err
+		return false, err
 	}
 	var envelope map[string]json.RawMessage
 	dec := json.NewDecoder(bytes.NewReader(data))
 	if err := dec.Decode(&envelope); err != nil || envelope == nil {
-		return fmt.Errorf("expected one JSON object")
+		return false, fmt.Errorf("expected one JSON object")
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("trailing reset acknowledgement data")
+		return false, fmt.Errorf("trailing reset acknowledgement data")
 	}
 	for key := range envelope {
 		if strings.EqualFold(key, "success") && key != "success" {
-			return fmt.Errorf("ambiguous success field alias")
+			return false, fmt.Errorf("ambiguous success field alias")
 		}
 	}
 	raw, present := envelope["success"]
 	if !present || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return fmt.Errorf("success:true is required")
+		return false, fmt.Errorf("success boolean is required")
 	}
 	var success bool
-	if err := json.Unmarshal(raw, &success); err != nil || !success {
-		return fmt.Errorf("success must be boolean true")
+	if err := json.Unmarshal(raw, &success); err != nil {
+		return false, fmt.Errorf("success must be boolean")
 	}
-	return nil
+	return success, nil
 }
 
 // ---- GPU MIG control plane (NVML/nvidia-smi behind a node runner) ----
