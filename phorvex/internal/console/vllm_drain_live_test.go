@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,147 @@ func TestDrainLiveProfilePinsRouteAndSource(t *testing.T) {
 	bad.AuditSourceIdentity = ""
 	if _, err := parseDrainLiveProfile(encode(bad)); err == nil {
 		t.Fatal("unbound audit source accepted")
+	}
+}
+
+func TestDrainLiveSafeIssueStaticGates(t *testing.T) {
+	// Each recognized local gate must remain specific while a plain error with
+	// identical text remains untrusted. No string matching grants disclosure.
+	cases := map[drainLiveStaticIssue]string{
+		"target Pod read unavailable":                                              "refresh reviewed Pod pins",
+		"manager Pod read unavailable":                                             "refresh reviewed manager pins",
+		"console source read unavailable":                                          "inspect Console ownership",
+		"installed source read unavailable":                                        "refresh reviewed source pins",
+		"retained caller authority unavailable":                                    "refresh matching drain and retained caller profiles",
+		"Pod source JSON malformed":                                                "Pod source is malformed",
+		"console owner JSON malformed":                                             "Console owner source is malformed",
+		"journal metadata malformed":                                               "preserve and inspect the journal",
+		"installed serving source drift":                                           "refresh reviewed source pins",
+		"fixed model identity unavailable":                                         "model inventory",
+		"cluster UID drift":                                                        "cluster UID differs",
+		"target Pod/source drift":                                                  "serving label or source pins",
+		"drain source and retained caller authority differ":                        "mounted caller profile",
+		"target vLLM container identity drift":                                     "refresh reviewed target pins",
+		"route Service identity drift":                                             "review the current Service",
+		"route Service no longer selects exact target":                             "serving label and selector",
+		"route Service inventory malformed":                                        "inspect current routing",
+		"alternate selecting Service present":                                      "alternate selecting Service",
+		"route Service cardinality drift":                                          "exactly one selecting Service",
+		"route EndpointSlice inventory drift":                                      "inspect Service endpoints",
+		"route EndpointSlice label drift":                                          "Service label differs",
+		"route EndpointSlice owner drift":                                          "owner differs",
+		"route has alternate Ready target":                                         "alternate Ready target",
+		"route Ready target cardinality drift":                                     "exactly one Ready reviewed target",
+		"policy identity drift":                                                    "refresh reviewed policy pins",
+		"policy no longer selects target":                                          "review the policy selector",
+		"policy does not enable request-drain":                                     "policy action configuration",
+		"manager Pod identity drift":                                               "refresh reviewed manager pins",
+		"manager image drift":                                                      "inspect the manager",
+		"console self identity unavailable":                                        "Console Pod identity configuration",
+		"console Pod identity drift":                                               "configured incarnation",
+		"console image drift":                                                      "refresh reviewed Console pins",
+		"console ReplicaSet owner unavailable":                                     "inspect Console ownership",
+		"console ReplicaSet identity drift":                                        "inspect Console ownership",
+		"console Deployment owner drift":                                           "refresh reviewed Console ownership pins",
+		"console Deployment identity drift":                                        "refresh reviewed Console ownership pins",
+		"protected request-drain journal occupied":                                 "without deleting its proof",
+		"request-drain profile lacks reviewed exact source or fixed limits":        "prepare a reviewed profile",
+		"reviewed request-drain profile or authenticated audit source unavailable": "inspect Console configuration",
+		"request-drain profile bytes unavailable":                                  "profile mount and digest",
+		"authenticated audit source identity drift":                                "configured audit source",
+	}
+	for issue, action := range cases {
+		t.Run(string(issue), func(t *testing.T) {
+			got := drainLiveSafeIssue(issue)
+			if !strings.Contains(got, action) {
+				t.Fatalf("static gate lost actionable context: %q", got)
+			}
+			if got := drainLiveSafeIssue(errors.New(string(issue))); got != "bounded request-drain step unavailable" {
+				t.Fatalf("untrusted error text disclosed as static gate: %q", got)
+			}
+		})
+	}
+	if len(cases) != len(drainLiveStaticMessages) {
+		t.Fatal("new static gate needs a disclosure/redaction regression")
+	}
+}
+
+func TestDrainLiveSafeIssueRedactsTransportAndUnknownCodes(t *testing.T) {
+	for _, err := range []error{
+		errors.New("stderr: Authorization: Bearer private-token"),
+		errors.New(`model output {"secret":"private-token"}`),
+		errors.New("target Pod/source drift: private-token"),
+		drainLiveStaticIssue("unknown private-token"),
+		fmt.Errorf("transport private-token: %w", errors.New("manager image drift")),
+	} {
+		if got := drainLiveSafeIssue(err); got != "bounded request-drain step unavailable" {
+			t.Fatalf("arbitrary error was disclosed: %q", got)
+		}
+	}
+	// Even a wrapped trusted code renders only the fixed allowlisted message.
+	wrapped := fmt.Errorf("stderr private-token: %w", drainLiveStaticIssue("manager image drift"))
+	if got := drainLiveSafeIssue(wrapped); strings.Contains(got, "private-token") || !strings.Contains(got, "inspect the manager") {
+		t.Fatalf("trusted code wrapper was echoed or lost: %q", got)
+	}
+	if drainLiveSafeIssue(nil) != "" {
+		t.Fatal("nil error became an issue")
+	}
+}
+
+func TestDrainLiveProfileFailuresProduceSafeStructuredIssue(t *testing.T) {
+	p := drainTestProfile()
+	p.ServingEngineSHA256 = strings.Repeat("b", 64)
+	raw, _ := json.Marshal(p)
+	_, err := parseDrainLiveProfile(raw)
+	if err == nil || !strings.Contains(drainLiveSafeIssue(err), "prepare a reviewed profile") {
+		t.Fatal("actual rejected source pin did not produce a specific safe issue")
+	}
+	_, _, err = loadDrainLiveProfile(Config{})
+	if err == nil || !strings.Contains(drainLiveSafeIssue(err), "inspect Console configuration") {
+		t.Fatal("actual unavailable profile configuration lost safe context")
+	}
+}
+
+func TestDrainLiveUnavailablePinnedPodProducerRedactsStderr(t *testing.T) {
+	root := t.TempDir()
+	script := "#!/bin/sh\nprintf '%s\\n' 'Error from server (NotFound): stale Pod; Authorization: Bearer private-token' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(root, "kubectl"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
+	s := &Server{}
+	for label, want := range map[string]string{
+		"before-target": "refresh reviewed Pod pins", "after-target": "refresh reviewed Pod pins",
+		"before-manager": "refresh reviewed manager pins", "after-manager": "refresh reviewed manager pins",
+		"before-console": "inspect Console ownership", "after-console": "inspect Console ownership",
+		"before-console-replicaset": "inspect Console ownership", "after-console-replicaset": "inspect Console ownership",
+		"before-console-deployment": "inspect Console ownership", "after-console-deployment": "inspect Console ownership",
+		"before-installed-source": "refresh reviewed source pins", "after-installed-source": "refresh reviewed source pins",
+		"arbitrary-private-token-target": "bounded request-drain step unavailable",
+	} {
+		t.Run(label, func(t *testing.T) {
+			_, err := s.drainReadKube(context.Background(), root, label, false, "get", "pod", "stale-pinned-pod")
+			got := drainLiveSafeIssue(err)
+			if err == nil || !strings.Contains(got, want) || strings.Contains(got, "private-token") {
+				t.Fatalf("failed exact pinned Pod read lost safe context: %q", got)
+			}
+		})
+	}
+}
+
+func TestDrainLiveStaleRetainedProfileProducerIsActionable(t *testing.T) {
+	p := drainTestProfile()
+	p.RetainedCallerLeaseProfileSHA256 = strings.Repeat("b", 64)
+	cfg := Config{EndpointLeaseEnabled: true, EndpointLeaseProfileSHA256: strings.Repeat("c", 64)}
+	authority, err := newDrainRetainedCallerAuthority(cfg, p)
+	if authority != nil || err == nil || !strings.Contains(drainLiveSafeIssue(err), "refresh matching drain and retained caller profiles") {
+		t.Fatal("actual stale referenced retained profile was not actionable")
+	}
+	if got := drainLiveSafeIssue(drainRetainedCallerIssue(errors.New("private-token stale source"))); strings.Contains(got, "private-token") || !strings.Contains(got, "refresh matching") {
+		t.Fatalf("retained source wrapper exposed transport details: %q", got)
+	}
+	if drainRetainedCallerIssue(nil) != nil {
+		t.Fatal("successful retained authority became a failure")
 	}
 }
 

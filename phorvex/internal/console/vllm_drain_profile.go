@@ -3,7 +3,6 @@ package console
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"path/filepath"
 	"strings"
@@ -49,7 +48,7 @@ type drainLiveProfile struct {
 
 func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
 	var p drainLiveProfile
-	bad := errors.New("request-drain profile lacks reviewed exact source or fixed limits")
+	bad := drainLiveStaticIssue("request-drain profile lacks reviewed exact source or fixed limits")
 	if len(raw) == 0 || len(raw) > 16<<10 {
 		return p, bad
 	}
@@ -97,18 +96,18 @@ func loadDrainLiveProfile(cfg Config) (drainLiveProfile, []byte, error) {
 	if !cfg.DrainLiveEnabled || !staticSHA256.MatchString(cfg.DrainLiveProfileSHA256) ||
 		cfg.DrainLiveProfilePath == "" || !filepath.IsAbs(cfg.DrainLiveProfilePath) ||
 		filepath.Clean(cfg.DrainLiveProfilePath) != cfg.DrainLiveProfilePath || cfg.AuditSource == nil {
-		return p, nil, errors.New("reviewed request-drain profile or authenticated audit source unavailable")
+		return p, nil, drainLiveStaticIssue("reviewed request-drain profile or authenticated audit source unavailable")
 	}
 	raw, err := readPinnedNamedProfile(cfg.DrainLiveProfilePath, cfg.DrainLiveProfileSHA256)
 	if err != nil {
-		return p, nil, errors.New("request-drain profile bytes unavailable")
+		return p, nil, drainLiveStaticIssue("request-drain profile bytes unavailable")
 	}
 	p, err = parseDrainLiveProfile(raw)
 	if err != nil {
 		return p, nil, err
 	}
 	if cfg.AuditSourceIdentity != p.AuditSourceIdentity {
-		return p, nil, errors.New("authenticated audit source identity drift")
+		return p, nil, drainLiveStaticIssue("authenticated audit source identity drift")
 	}
 	return p, raw, nil
 }
