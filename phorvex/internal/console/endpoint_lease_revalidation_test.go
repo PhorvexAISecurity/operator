@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -77,7 +78,7 @@ func TestEndpointLeaseRevalidationUsesActualHTTPAndPreservesAccounting(t *testin
 				_, _ = w.Write([]byte(`{"id":"real-http-fixture-completion","model":"Qwen/Qwen2.5-7B-Instruct-AWQ","choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}`))
 			}))
 			defer server.Close()
-			record := &attackRecord{ID: "endpoint-revalidation-" + strings.ReplaceAll(mode, " ", "-"), EvidenceKind: "vllm-endpoint-lease-live", Namespace: "vllm", Service: "vllm", EndpointLeaseProbe: &endpointLeaseProbeResult{Schema: "vllm-endpoint-lease-live-v1", ScenarioID: endpointLeaseScenario, Status: "UNKNOWN", Issues: []string{}, Cleanup: "NOT_NEEDED"}}
+			record := &attackRecord{ID: "endpoint-revalidation-" + strings.ReplaceAll(mode, " ", "-"), EvidenceKind: "vllm-endpoint-lease-live", Namespace: "vllm", Service: "vllm", EndpointLeaseProbe: &endpointLeaseProbeResult{Schema: "vllm-endpoint-lease-live-v1", ScenarioID: endpointLeaseScenario, Status: "UNKNOWN", Cleanup: "NOT_NEEDED"}}
 			reads := endpointLeaseRevalidationReads{
 				public: func(ctx context.Context, bearer []byte) (endpointLeaseHTTPReceipt, error) {
 					return endpointLeasePublicCallURL(ctx, bearer, server.URL+"/v1/chat/completions")
@@ -155,6 +156,21 @@ func TestEndpointLeaseRevalidationUsesActualHTTPAndPreservesAccounting(t *testin
 				}
 				if record.Status != "done" || record.Outcome != "PROTECTION_REVALIDATED" || record.Actuated || record.Action != "" || record.TimeToDefendSec != 0 || probe.FirstAccepted || probe.EventUID != "" || probe.SelectedDecisionID != "" || probe.SelectedTickID != "" {
 					t.Fatal("revalidation received new response/selection credit")
+				}
+				// Exercise the actual GET clone/serialization boundary as well as
+				// the producer: an empty issues slice must survive as [] rather than null.
+				raw, err := json.Marshal(cloneAttackRecord(record))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var serialized struct {
+					Probe struct {
+						Issues json.RawMessage `json:"issues"`
+						Status string          `json:"status"`
+					} `json:"endpointLeaseProbe"`
+				}
+				if json.Unmarshal(raw, &serialized) != nil || string(serialized.Probe.Issues) != "[]" || serialized.Probe.Status != "PROTECTION_REVALIDATED" {
+					t.Fatalf("successful producer GET lost empty array: %s", raw)
 				}
 			} else if mode == "A lands" {
 				if record.Outcome != "LANDED" || probe.Status != "LANDED" || probe.ProtectionRevalidated {
