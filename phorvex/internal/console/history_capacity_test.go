@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
 	bolt "go.etcd.io/bbolt"
@@ -221,12 +222,14 @@ func TestHistoryCapacityExistingArchiveReadableAndMetadataFailClosed(t *testing.
 	if len(page.Events) != 1 || !page.Partial {
 		t.Fatalf("over-budget archive unreadable: %+v", page)
 	}
-	databaseSize, err := os.Stat(s.history.db.Path())
+	inUse, databaseSize, err := s.history.archiveBytesInUse()
 	if err != nil {
 		t.Fatal(err)
 	}
 	page, body := getHistory(t, s, url.Values{"lens": {"operator"}}, 200)
-	wantCapacity := fmt.Sprintf("archive byte ceiling reached (database=%d maximum=%d transaction-reserve=%d)", databaseSize.Size(), s.history.archiveMaxBytes, s.history.transactionReserve)
+	// in-use is reported alongside the file size: it is the number the ceiling bounds, and the
+	// gap between the two is the space expiry can still reclaim.
+	wantCapacity := fmt.Sprintf("archive byte ceiling reached (database=%d in-use=%d maximum=%d transaction-reserve=%d)", databaseSize, inUse, s.history.archiveMaxBytes, s.history.transactionReserve)
 	if len(page.Events) != 1 || !strings.Contains(body, wantCapacity) {
 		t.Fatalf("capacity diagnostics omitted bounded sizes: %s", body)
 	}
@@ -354,5 +357,68 @@ func TestHistoryCapacityConfigurationValidation(t *testing.T) {
 	cfg = capacityTestConfig(t.TempDir(), "unused")
 	if err := cfg.ValidateHistoryCapacity(); err != nil {
 		t.Fatalf("bounded test limits rejected: %v", err)
+	}
+}
+
+// A bbolt archive never shrinks on disk: expired records return pages to the freelist, where later
+// writes reuse them, but the file keeps its high-water mark forever. Gating the ceiling on that
+// high-water mark made the pause permanent -- retention could free every page in the archive and
+// ingestion would still refuse, because os.Stat could not fall. This is the live failure seen on
+// phorvex-dev-eks, where the archive sat 8.6 MiB past a 6 GiB ceiling with import stopped.
+// Accounting for the freelist is what lets expiry restore headroom and ingestion resume.
+func TestHistoryCapacityFreedPagesRestoreHeadroomWithoutShrinkingTheFile(t *testing.T) {
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.jsonl")
+	cfg := capacityTestConfig(dir, auditPath)
+	s := testHistoryStore(t, cfg)
+	s.history.filesystemUsage = func(string) (historyFilesystemUsage, error) {
+		return historyFilesystemUsage{availableBytes: 1 << 30}, nil
+	}
+	for i := 1; i <= 40; i++ {
+		writeHistory(t, auditPath, testDurableRecord(i))
+	}
+	importHistoryNow(s)
+	if historyRecordCount(t, s.history) == 0 {
+		t.Fatal("fixture stored no records")
+	}
+
+	// Retention is enabled only after ingestion, so the fixture records are stored first.
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	s.history.cfg.HistoryRetentionDays = 30
+	s.history.cfg.Now = func() time.Time { return now }
+
+	// Pin the ceiling one byte under current usage: the archive is now "full".
+	inUse, sizeBefore, err := s.history.archiveBytesInUse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.history.archiveMaxBytes = inUse + s.history.transactionReserve - 1
+	if err := s.history.checkCapacity(); err == nil {
+		t.Fatal("a full archive must refuse ingestion")
+	}
+
+	// Age every record out and let retention run. It reclaims pages; the FILE does not shrink.
+	now = now.Add(365 * 24 * time.Hour)
+	for i := 0; i < 20; i++ {
+		if err := s.history.pruneExpiredHistory(); err != nil {
+			t.Fatalf("retention refused on a full archive: %v", err)
+		}
+	}
+	if got := historyRecordCount(t, s.history); got != 0 {
+		t.Fatalf("retention left %d expired records", got)
+	}
+	freed, sizeAfter, err := s.history.archiveBytesInUse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sizeAfter < sizeBefore {
+		t.Fatalf("fixture invalid: bbolt is expected not to shrink (%d -> %d)", sizeBefore, sizeAfter)
+	}
+	if freed >= inUse {
+		t.Fatalf("expiry reclaimed nothing: in-use %d -> %d (file %d)", inUse, freed, sizeAfter)
+	}
+	// The decisive assertion: the guard clears even though the file is as large as ever.
+	if err := s.history.checkCapacity(); err != nil {
+		t.Fatalf("ingestion still paused after expiry freed %d bytes (file=%d): %v", inUse-freed, sizeAfter, err)
 	}
 }

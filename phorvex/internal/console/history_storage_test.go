@@ -133,11 +133,27 @@ func TestHistoryRetentionHonorsCapacityBeforeDeleting(t *testing.T) {
 	before := historyDatabaseSnapshot(t, s.history)
 	s.history.cfg.HistoryRetentionDays = 30
 	s.history.cfg.Now = func() time.Time { return time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC) }
-	info, err := os.Stat(s.history.db.Path())
+	inUse, _, err := s.history.archiveBytesInUse()
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.history.archiveMaxBytes = info.Size() + s.history.transactionReserve - 1
+	// At the INGESTION line -- one byte under the soft ceiling -- expiry must still run: it is the
+	// only operation that can give the archive its headroom back, and the transaction reserve it
+	// spends exists for exactly this.
+	s.history.archiveMaxBytes = inUse + s.history.transactionReserve - 1
+	if err := s.history.checkCapacity(); err == nil {
+		t.Fatal("ingestion accepted past the soft ceiling")
+	}
+	if err := s.history.pruneExpiredHistory(); err != nil {
+		t.Fatalf("expiry refused at the ingestion line, which deadlocks a full archive: %v", err)
+	}
+	s.history.pruneAfter = nil
+
+	// Past the HARD maximum there is no reserve left to spend, so expiry must refuse and must
+	// leave records, offsets and its scan cursor untouched. Re-read the baseline first: the
+	// successful pass above legitimately removed the expired record.
+	before = historyDatabaseSnapshot(t, s.history)
+	s.history.archiveMaxBytes = inUse - 1
 	if err := s.history.pruneExpiredHistory(); err == nil {
 		t.Fatal("retention bypassed archive headroom")
 	}
