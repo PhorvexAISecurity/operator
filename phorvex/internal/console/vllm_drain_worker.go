@@ -568,6 +568,7 @@ type drainLiveProbeResult struct {
 	Aborted                 int    `json:"aborted,omitempty"`
 	BenignStatus            int    `json:"benignStatus,omitempty"`
 	Issue                   string `json:"issue,omitempty"`
+	IssueStage              string `json:"issueStage,omitempty"`
 }
 
 const drainStreamPython = `import base64,hashlib,http.client,json,signal,sys,time
@@ -586,8 +587,8 @@ try:
  conn.request("POST","/v1/completions",body=body,headers=headers)
  response=conn.getresponse();status=response.status
  if status!=200:raise RuntimeError("http")
- while frames<512:
-  line=response.fp.readline(4097)
+ while frames<2048:
+  line=response.readline(4097)
   if len(line)>4096:raise RuntimeError("frame_bound")
   if not line:break
   digest.update(line)
@@ -600,9 +601,9 @@ try:
   if not first:
    print(json.dumps({"stage":"first","status":status,"id":expected,"at":time.time_ns()}),flush=True)
    first=True
- print(json.dumps({"stage":"final","status":status,"frames":frames,"done":complete,"bodySHA256":digest.hexdigest()}),flush=True)
+ print(json.dumps({"stage":"final","status":status,"frames":frames,"done":complete,"capReached":frames>=2048 and not complete,"bodySHA256":digest.hexdigest()}),flush=True)
 except Exception as exc:
- print(json.dumps({"stage":"final","status":status,"frames":frames,"done":False,"errorClass":type(exc).__name__,"bodySHA256":digest.hexdigest()}),flush=True)
+ print(json.dumps({"stage":"final","status":status,"frames":frames,"done":False,"capReached":frames>=2048,"errorClass":type(exc).__name__,"bodySHA256":digest.hexdigest()}),flush=True)
 finally:conn.close()
 `
 
@@ -639,6 +640,7 @@ type drainStreamRow struct {
 	Done       bool   `json:"done,omitempty"`
 	ErrorClass string `json:"errorClass,omitempty"`
 	BodySHA256 string `json:"bodySHA256,omitempty"`
+	CapReached bool   `json:"capReached,omitempty"`
 }
 type drainStreamRun struct {
 	first  chan drainStreamRow
@@ -656,7 +658,10 @@ func drainNoOverlapIfCompleted(out string, r *attackRecord, stream *drainStreamR
 				return true, err
 			}
 		}
-		if streamErr != nil || final.ErrorClass != "" || len(final.Original) == 0 {
+		if final.CapReached {
+			return true, drainAuditFailure("owned-stream-frame-cap", false)
+		}
+		if streamErr != nil || final.ErrorClass != "" || final.CapReached || len(final.Original) == 0 {
 			return true, errors.New("owned stream failed before event")
 		}
 		r.DrainLiveProbe.Status = "NO_DISCRIMINATING_OVERLAP"
@@ -664,6 +669,10 @@ func drainNoOverlapIfCompleted(out string, r *attackRecord, stream *drainStreamR
 	default:
 		return false, nil
 	}
+}
+
+func drainAbortCompatible(final drainStreamRow) bool {
+	return final.ErrorClass == "" && final.Status == 200 && !final.Done && !final.CapReached && final.Frames > 0
 }
 
 func drainRequestBody(modelID string, maxTokens int, stream bool) []byte {
@@ -741,7 +750,7 @@ func startDrainStream(parent context.Context, p drainLiveProfile, body []byte, n
 				firstSeen = true
 				run.first <- row
 			case "final":
-				if finalSeen || row.Frames < 0 || row.Frames > 512 || !staticSHA256.MatchString(row.BodySHA256) || row.Status < 0 || row.Status > 599 {
+				if finalSeen || row.Frames < 0 || row.Frames > 2048 || !staticSHA256.MatchString(row.BodySHA256) || row.Status < 0 || row.Status > 599 {
 					parseErr = errors.New("stream final malformed")
 					break
 				}
@@ -856,14 +865,25 @@ type drainAuditWindow struct {
 	WindowSHA256 string
 }
 
-func (s *Server) drainTerminalAudit(ctx context.Context, out, phase string, r *attackRecord, nonce string) (*decisionEvidence, error) {
-	window, err := s.readStrictDrainAudit(ctx)
+func (s *Server) drainTerminalAudit(ctx context.Context, out, phase string, r *attackRecord, nonce string, cursor *drainAuditCursor) (*decisionEvidence, error) {
+	var window drainAuditWindow
+	var err error
+	if cursor != nil {
+		if err = cursor.updateWithRetry(ctx); err == nil {
+			window = cursor.window()
+		}
+	} else {
+		window, err = s.readStrictDrainAudit(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
 	selected, err := drainTerminalFromRecords(r, window.Records, s.cfg.now(), nonce)
-	if err != nil || selected == nil {
-		return selected, err
+	if err != nil {
+		return nil, drainAuditFailure("terminal-selection", false)
+	}
+	if selected == nil {
+		return nil, nil
 	}
 	var original []byte
 	for i := range window.Records {
@@ -885,7 +905,15 @@ func (s *Server) drainTerminalAudit(ctx context.Context, out, phase string, r *a
 		"generation": window.Generation, "start": window.Start, "end": window.End, "windowSHA256": window.WindowSHA256,
 		"terminalOriginalSHA256": availabilityHash(original), "selectedDecisionID": selected.DecisionID,
 		"operationID": selected.DrainOperation.OperationID, "operationGeneration": selected.DrainOperation.Generation}
-	if err = publishMongoAuditFile(out, phase+"-audit-source-commitment.json", drainJSON(commit), 4096); err != nil {
+	if cursor != nil {
+		commit["schema"] = "authenticated-drain-audit-cursor-v1"
+		commit["cursorSourceIdentity"] = cursor.identity
+		commit["managerUID"] = cursor.managerUID
+		commit["cursorSpans"] = cursor.spans
+		delete(commit, "windowSHA256")
+		commit["cursorSpansSHA256"] = window.WindowSHA256
+	}
+	if err = publishMongoAuditFile(out, phase+"-audit-source-commitment.json", drainJSON(commit), 64<<10); err != nil {
 		return nil, err
 	}
 	return selected, nil
@@ -1077,6 +1105,13 @@ func drainLiveSafeIssue(err error) string {
 		return ""
 	}
 	// Never echo transport stderr, model output or remote response details.
+	var auditIssue *drainAuditIssue
+	if errors.As(err, &auditIssue) {
+		if auditIssue.Stage == "cooldown-active" || auditIssue.Stage == "failure-cooldown-active" {
+			return "request-drain cooldown active; wait before retry"
+		}
+		return "request-drain " + auditIssue.Stage + "; preserve the run evidence and inspect the current authenticated audit or cooldown before retrying"
+	}
 	var issue drainLiveStaticIssue
 	if errors.As(err, &issue) {
 		if message, ok := drainLiveStaticMessages[issue]; ok {
@@ -1120,6 +1155,13 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	}
 	if err != nil {
 		r.DrainLiveProbe.Issue = drainLiveSafeIssue(err)
+		var auditIssue *drainAuditIssue
+		if errors.As(err, &auditIssue) {
+			r.DrainLiveProbe.IssueStage = auditIssue.Stage
+		}
+		if out != "" {
+			_ = publishMongoAuditFile(out, "safe-step-diagnostic.json", drainJSON(map[string]any{"schema": "request-drain-safe-step-v1", "stage": r.DrainLiveProbe.IssueStage, "issue": r.DrainLiveProbe.Issue, "errorClass": fmt.Sprintf("%T", err)}), 4096)
+		}
 	}
 	applyDrainLiveVerdict(r)
 	// Persist before the one terminal publish: followers stop at the first
@@ -1194,6 +1236,13 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 			return err
 		}
 	}
+	cursor, err := s.newDrainAuditCursor(ctx, out, p)
+	if err != nil {
+		return err
+	}
+	if err = s.drainLaunchCooldown(ctx, out, "before-stream", p, cursor); err != nil {
+		return err
+	}
 	nonce, err := drainNonce()
 	if err != nil {
 		return err
@@ -1243,6 +1292,15 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 	if ended, err := drainNoOverlapIfCompleted(out, r, stream); ended || err != nil {
 		return err
 	}
+	if err = cursor.updateWithRetry(ctx); err != nil {
+		return err
+	}
+	if err = s.drainLaunchCooldown(ctx, out, "pre-event", p, cursor); err != nil {
+		return err
+	}
+	if ended, err := drainNoOverlapIfCompleted(out, r, stream); ended || err != nil {
+		return err
+	}
 	stimulus, eventErr := s.createCorrelatedVLLMEventWithAdapterContext(p.Context, p.PodName, p.PodUID, "DenialOfWallet", "one owned fixed completion admitted before synthetic request-drain signal", "0.9", "", func(raw []byte) error { return publishMongoAuditFile(out, "event-manifest.yaml", raw, 4096) })
 	if stimulus != nil {
 		r.StimulusEvidence = stimulus
@@ -1258,8 +1316,16 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 	}
 	publishAttack(r)
 	for time.Until(r.started.Add(240*time.Second)) > 10*time.Second {
-		d, auditErr := s.drainTerminalAudit(ctx, out, "terminal", r, nonce)
+		d, auditErr := s.drainTerminalAudit(ctx, out, "terminal", r, nonce, cursor)
 		if auditErr != nil {
+			if drainAuditRetry(auditErr) {
+				select {
+				case <-ctx.Done():
+					return drainAuditFailure("deadline", false)
+				case <-time.After(2 * time.Second):
+					continue
+				}
+			}
 			return auditErr
 		}
 		if d != nil && d.Correlation == "exact-event-uid" && d.EventUID == stimulus.EventUID && d.DrainOperation != nil {
@@ -1297,7 +1363,10 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 				return errors.New("owned stream transport failed after dispatch")
 			}
 			r.DrainLiveProbe.StreamFrames = final.Frames
-			if final.ErrorClass != "" || final.Status != 200 || final.Done || final.Frames < 1 {
+			if final.CapReached {
+				return drainAuditFailure("owned-stream-frame-cap", false)
+			}
+			if !drainAbortCompatible(final) {
 				return errors.New("owned stream ended inconsistently with native abort")
 			}
 			r.DrainLiveProbe.StreamEnded = "aborted-compatible"
@@ -1318,8 +1387,11 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 			if status != 200 || !valid {
 				return errors.New("benign completion after reopen unconfirmed")
 			}
-			closing, closeErr := s.drainTerminalAudit(ctx, out, "closing", r, nonce)
-			if closeErr != nil || closing == nil || closing.DecisionID != d.DecisionID || closing.DrainOperation == nil ||
+			closing, closeErr := s.drainTerminalAudit(ctx, out, "closing", r, nonce, cursor)
+			if closeErr != nil {
+				return closeErr
+			}
+			if closing == nil || closing.DecisionID != d.DecisionID || closing.DrainOperation == nil ||
 				closing.DrainOperation.OperationID != e.OperationID || closing.DrainOperation.ReceiptSHA256 != e.ReceiptSHA256 {
 				return errors.New("closing audit interval or native receipt changed")
 			}
@@ -1341,7 +1413,7 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 		case <-time.After(2 * time.Second):
 		}
 	}
-	return errors.New("exact selected terminal drain audit unavailable")
+	return drainAuditFailure("terminal-audit-not-observed", false)
 }
 
 func drainJSON(v any) []byte { b, _ := json.Marshal(v); return b }
