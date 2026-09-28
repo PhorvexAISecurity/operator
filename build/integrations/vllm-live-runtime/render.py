@@ -137,12 +137,30 @@ def render(deployment: dict, configmap: dict, policy: dict, image: str,
     binding = {"namespace": "vllm", "policyName": "vllm-defense", "policyUID": policy["metadata"]["uid"],
                "serviceAccount": "default", "profileID": "vllm-reset-ack-v1", "secretName": operator_secret,
                "bearerKey": "bearer", "caKey": "ca.crt", "serverName": server_name}
+    # The guardrail listens for admin TLS on 8443, the serving binding dials server_name, and the
+    # certificate is issued for that exact SAN -- but nothing ever routed the name to the port, so
+    # every kv-reset/kv-migrate-invalidate opened a receipt, failed to reach the endpoint, and was
+    # left non-terminal in "dispatching". A non-terminal receipt then blocks the next operation on
+    # that domain, so one unreachable endpoint wedged the action permanently and left another stuck
+    # receipt behind on every rollout. Emit the Service alongside the workload it belongs to.
+    admin_host, admin_ns = (server_name.split(".") + ["", ""])[:2]
+    if admin_ns != "vllm" or not DNS.fullmatch(admin_host):
+        raise ValueError("admin server name must address a Service in the vllm namespace")
+    selector = dep["spec"].get("selector", {}).get("matchLabels")
+    if not selector:
+        raise ValueError("workload selector unavailable; refusing to publish an unbound admin Service")
+    admin_service = {"apiVersion": "v1", "kind": "Service",
+        "metadata": {"name": admin_host, "namespace": "vllm",
+                     "labels": {"app.kubernetes.io/part-of": "phorvex", "phorvex.ai/admin-surface": "true"}},
+        "spec": {"type": "ClusterIP", "selector": selector,
+                 "ports": [{"name": "admin-tls", "port": 8443, "targetPort": "admin-tls", "protocol": "TCP"}]}}
     # phorvex-stack is an umbrella chart: its dependency values live under
     # phorvex.phorvex, not the dependency's internal phorvex root alone.
     values = {"phorvex": {"phorvex": {"servingSecurity": {"mode": "secure-required", "bindings": [binding]}}}}
     # JSON is valid YAML and preserves exact key/string spelling for Helm overlays.
     return {"deployment.candidate.json": json.dumps(dep, sort_keys=True, separators=(",", ":")).encode(),
             "configmap.candidate.json": json.dumps(cm, sort_keys=True, separators=(",", ":")).encode(),
+            "service.candidate.json": json.dumps(admin_service, sort_keys=True, separators=(",", ":")).encode(),
             "values.overlay.yaml": json.dumps(values, indent=2, sort_keys=True).encode() + b"\n",
             "secret-contract.json": json.dumps({"workloadNamespace": "vllm", "workloadSecret": workload_secret,
                "workloadKeys": SECRET_KEYS, "operatorNamespace": "phorvex-system", "operatorSecret": operator_secret,

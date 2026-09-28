@@ -80,7 +80,8 @@ class BoundaryTest(unittest.TestCase):
 class RendererTest(unittest.TestCase):
     def fixture(self):
         dep = {"kind": "Deployment", "metadata": {"name": "vllm", "namespace": "vllm", "uid": "old"},
-               "spec": {"template": {"metadata": {"labels": {}, "annotations": {}}, "spec": {
+               "spec": {"selector": {"matchLabels": {"app": "vllm"}},
+                        "template": {"metadata": {"labels": {"app": "vllm"}, "annotations": {}}, "spec": {
                    "containers": [{"name": "vllm", "image": renderer.LIVE_BASE_IMAGE,
                        "args": ["--model", "m", "--enable-lora", "--port", "8001"],
                        "env": [{"name": "VLLM_SERVER_DEV_MODE", "value": "1"},
@@ -130,3 +131,53 @@ class RendererTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AdminServiceTest(RendererTest):
+    """The admin surface is only reachable if something routes its DNS name to its port.
+
+    Without the Service, every serving-effect operation opened a receipt, failed to dial
+    server_name, and stayed non-terminal in "dispatching" -- which then blocked the next
+    operation on that domain for good and left one more stuck receipt per rollout.
+    """
+
+    def render_ok(self, dep, cm, pol, server="vllm-admin.vllm.svc"):
+        with mock.patch.multiple(renderer, ORIGINAL_PROXY_SHA256=hashlib.sha256(b"old").hexdigest(),
+                                 LEGACY_PROXY_SHA256=renderer.sha(renderer.PROXY.read_bytes()),
+                                 LEGACY_DUAL_SHA256=renderer.sha(renderer.DUAL.read_bytes())):
+            return renderer.render(dep, cm, pol, renderer.PUBLISHED_IMAGE,
+                                   "vllm-control", "vllm-serving-admin", server)
+
+    def test_publishes_an_admin_service_that_reaches_the_guardrail_port(self):
+        import json
+        dep, cm, pol = self.fixture()
+        output = self.render_ok(dep, cm, pol)
+        self.assertIn("service.candidate.json", output)
+        svc = json.loads(output["service.candidate.json"])
+        self.assertEqual(svc["kind"], "Service")
+        # the name the serving binding dials and the certificate is issued for
+        self.assertEqual(svc["metadata"]["name"], "vllm-admin")
+        self.assertEqual(svc["metadata"]["namespace"], "vllm")
+        contract = json.loads(output["secret-contract.json"])
+        self.assertEqual(contract["certificateSAN"],
+                         "%s.%s.svc" % (svc["metadata"]["name"], svc["metadata"]["namespace"]))
+        # and it must land on the admin port the guardrail actually opened
+        port = svc["spec"]["ports"][0]
+        self.assertEqual(port["port"], 8443)
+        self.assertEqual(port["targetPort"], "admin-tls")
+        candidate = json.loads(output["deployment.candidate.json"])
+        guard = candidate["spec"]["template"]["spec"]["containers"][1]
+        self.assertIn({"name": "admin-tls", "containerPort": 8443, "protocol": "TCP"}, guard["ports"])
+        # selecting exactly the pods this Deployment owns
+        self.assertEqual(svc["spec"]["selector"], dep["spec"]["selector"]["matchLabels"])
+
+    def test_refuses_a_server_name_outside_the_workload_namespace(self):
+        dep, cm, pol = self.fixture()
+        with self.assertRaises(ValueError):
+            self.render_ok(dep, cm, pol, server="vllm-admin.other.svc")
+
+    def test_refuses_to_publish_an_unbound_service(self):
+        dep, cm, pol = self.fixture()
+        dep["spec"].pop("selector", None)
+        with self.assertRaises(ValueError):
+            self.render_ok(dep, cm, pol)
