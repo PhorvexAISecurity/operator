@@ -3,6 +3,7 @@ package defenders
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -254,6 +255,11 @@ func (p *phorvexArm) Start(ctx context.Context, env *core.Env) error {
 		outDir = "out"
 	}
 	p.auditPath = filepath.Join(outDir, "phorvex-audit-"+p.name()+".jsonl")
+	metricsAddr, healthAddr, portErr := freeLoopbackPorts()
+	if portErr != nil {
+		env.Log.Logf("PX: no free port for the brain's bind addresses: %v", portErr)
+		return nil
+	}
 	if cmd, lf, pin, err := startPinnedProc(ctx, env, phorvexBin, pxDir,
 		// base-interval 1s (was 4s): the in-request/dwell attacks land in ~2-3s, so a 4s tick + 3s
 		// warm-up meant the first actuation fired ~10s in — after the attacker already won. A 1s tick
@@ -262,10 +268,13 @@ func (p *phorvexArm) Start(ctx context.Context, env *core.Env) error {
 		[]string{"--engine=p1", "--base-interval=1s",
 			"--operator-namespace=" + env.Config.Namespace,
 			"--audit-json=" + p.auditPath,
-			// ports :18090/:18091 (was :18080/:18081) — a live jump-server phorvex-operator now binds
-			// :18080/:18081, so the arm's brain collided and CRASHED on startup ("address already in
-			// use") → it never decided/actuated → 0 disruption. Distinct ports fix it.
-			"--metrics-bind-address=:18090", "--health-probe-bind-address=:18091"},
+			// Ports are claimed from the OS per arm, never hardcoded. A fixed pair (:18080/:18081,
+			// then :18090/:18091) collided with whatever already held it — a live jump-server
+			// operator, or simply a second concurrent run — and the brain CRASHED on startup
+			// ("address already in use"). A dead brain never decides or actuates, so the arm
+			// scored 0 disruption and the suite reported a FALSE "attack landed". Asking the OS
+			// for a free port removes the collision instead of relocating it.
+			"--metrics-bind-address=" + metricsAddr, "--health-probe-bind-address=" + healthAddr},
 		"phorvex", "px-phorvex"); err == nil {
 		p.phorvexProc, p.phorvexLog, p.phorvexPin = cmd, lf, pin
 	} else {
@@ -364,4 +373,29 @@ func removeFile(p *string) {
 		_ = os.Remove(*p)
 		*p = ""
 	}
+}
+
+
+// freeLoopbackPorts asks the OS for two currently-free loopback ports and returns them as
+// bind addresses. The listeners are closed before the child starts, so this is advisory: a
+// racing process could still take one. That race is rare and self-reporting (the child logs
+// "address already in use"), whereas a hardcoded pair collided deterministically with every
+// concurrent run and with anything already holding the port.
+func freeLoopbackPorts() (string, string, error) {
+	addrs := make([]string, 0, 2)
+	listeners := make([]net.Listener, 0, 2)
+	defer func() {
+		for _, l := range listeners {
+			_ = l.Close()
+		}
+	}()
+	for len(addrs) < 2 {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return "", "", err
+		}
+		listeners = append(listeners, l)
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port))
+	}
+	return addrs[0], addrs[1], nil
 }
