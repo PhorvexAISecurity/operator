@@ -26,6 +26,15 @@ native operations, but runtime reads and Kubernetes routing writes are not atomi
 against an independent privileged backend client. A changed post-restoration
 read retains the receipt and reports an unknown outcome without completion credit.
 
+Capability also withholds a new generation for an idle OPEN backend with no
+current operation when both the actual proxy inflight count and all live engine
+queues are empty. It reads scheduler queues, including cached outputs, rather
+than the historical drain snapshot. STALE supersession remains available. An
+arrival after this observation waits for a later tick, and work can finish after
+an active observation; this reduces stable idle drains without promising that
+every accepted operation will abort work. Create, recovery, and defense credit
+semantics remain unchanged, and capacity remains the hard ledger safety bound.
+
 ## Current evidence and remaining authority
 
 The 2026-09-27 09:40 UTC read retained in the private campaign runtime shows the

@@ -92,7 +92,7 @@ func parseEndpointLeaseState(raw []byte, p endpointLeaseProfile) (endpointLeaseS
 }
 
 func endpointLeaseBefore(state endpointLeaseState, p endpointLeaseProfile) bool {
-	return state.Revision == 0 && len(state.AllowedClientHMACs) == 2 && len(state.RevokedClientHMACs) == 0 &&
+	return p.SourceUpgrade == nil && state.Revision == 0 && len(state.AllowedClientHMACs) == 2 && len(state.RevokedClientHMACs) == 0 &&
 		state.AllowedClientHMACs[0] != state.AllowedClientHMACs[1] &&
 		sort.SearchStrings(state.AllowedClientHMACs, p.ClientAHMAC) < 2 &&
 		sort.SearchStrings(state.AllowedClientHMACs, p.ClientBHMAC) < 2 &&

@@ -202,6 +202,20 @@ class DrainProducerTest(unittest.IsolatedAsyncioTestCase):
             self.RPCProcessRequest(prompt="p", params=object(), request_id="after"))
         self.assertEqual(llm.add_calls, ["pre", "after"])
 
+    def test_actual_open_capability_reports_live_work_without_historical_snapshot(self):
+        for name in ("waiting", "running", "swapped", "cached"):
+            with self.subTest(queue=name):
+                engine = self.engine(FakeLLMEngine(**{name: ("actual-work",)}))
+                engine._handle_drain_capability_request(self.RPCDrainCapabilityRequest())
+                response = engine.outputs[-1]
+                self.assertEqual(response.admission, "OPEN")
+                self.assertIsNone(response.operation_id)
+                self.assertEqual(response.snapshot, {})
+                self.assertEqual(response.queues[0][name], ["actual-work"])
+        engine = self.engine(FakeLLMEngine())
+        engine._handle_drain_capability_request(self.RPCDrainCapabilityRequest())
+        self.assertTrue(all(not ids for ids in engine.outputs[-1].queues[0].values()))
+
     def test_cached_work_blocks_quiescence_and_duplicate_begin_is_read_only(self):
         llm = FakeLLMEngine(cached=("gpu-output",))
         engine = self.engine(llm)

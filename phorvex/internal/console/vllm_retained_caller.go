@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 
@@ -44,6 +45,9 @@ func newRetainedCallerAuthority(cfg Config, profileSHA, serviceUID, policyUID, s
 }
 
 func retainedCallerAllowed(state endpointLeaseState, journal endpointLeaseJournal, p endpointLeaseProfile) bool {
+	if p.SourceUpgrade != nil {
+		return retainedCallerUpgradeAllowed(state, journal, p)
+	}
 	if !endpointLeasePreflightJournal(journal, state) {
 		return false
 	}
@@ -91,10 +95,19 @@ func (a *retainedCallerAuthority) check(ctx context.Context) error {
 		return errors.New("retained caller protected journal unavailable")
 	}
 	journal, err := parseEndpointLeaseJournal([]byte(cm.Data["receipts.json"]))
-	if err != nil || !retainedCallerAllowed(snap.State, journal, a.profile) {
+	if err != nil || a.profile.SourceUpgrade != nil && endpointLeaseSHA([]byte(cm.Data["receipts.json"])) != a.profile.SourceUpgrade.PriorJournalSHA256 ||
+		!retainedCallerAllowed(snap.State, journal, a.profile) {
 		return errors.New("retained caller B or terminal lease state unavailable")
 	}
 	return nil
+}
+
+func endpointLeaseJournalBytes(j endpointLeaseJournal) []byte {
+	b, _ := json.Marshal(j)
+	var canonical any
+	_ = json.Unmarshal(b, &canonical)
+	b, _ = json.Marshal(canonical)
+	return b
 }
 
 func (a *retainedCallerAuthority) bearer() []byte {

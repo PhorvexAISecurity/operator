@@ -113,6 +113,9 @@ def lease_fixture():
     guard = pod["spec"]["containers"][1]
     source["immutable"] = True
     source["data"]["endpoint_lease.py"] = renderer.LEASE.read_text()
+    # Preserve the actual historical lease closure after newer drain code lands.
+    prior_drain = HERE.parents[2] / "phorvex/internal/console/testdata/endpoint-lease-source-upgrade/prior-drain-v11.py"
+    source["data"]["drain_v11.py"] = prior_drain.read_text()
     guard["command"] = ["python3", "-B", "/src/dual_server.py"]
     guard["volumeMounts"] = [{"name": "admin-tls", "mountPath": "/etc/phorvex/admin-tls", "readOnly": True}]
     guard["volumeMounts"].extend({"name": "source", "mountPath": "/src/" + name,
@@ -250,6 +253,8 @@ class RenderGuardrailProfileTest(unittest.TestCase):
     def test_historical_and_startup_repaired_source_closures_do_not_mix(self):
         context = "arn:aws:eks:us-east-2:123456789012:cluster/test"
         objects = fixture()
+        prior_drain = HERE.parents[2] / "phorvex/internal/console/testdata/endpoint-lease-source-upgrade/prior-drain-v11.py"
+        objects["source"]["data"]["drain_v11.py"] = prior_drain.read_text()
         current_proxy = renderer.digest(renderer.PROXY.read_bytes())
         current_dual = objects["source"]["data"]["dual_server.py"]
         current_drain = objects["source"]["data"]["drain_v11.py"]
@@ -274,6 +279,12 @@ class RenderGuardrailProfileTest(unittest.TestCase):
                 "dual_server.py": renderer.digest(renderer.DUAL.read_bytes()),
             }
             renderer.render(objects, context)
+            capacity_drain = (renderer.PROXY.parent / "drain_v11.py").read_bytes()
+            self.assertEqual(renderer.digest(capacity_drain), renderer.CAPACITY_REPAIRED_DRAIN_SOURCE_SHA256["drain_v11.py"])
+            objects["source"]["data"]["drain_v11.py"] = capacity_drain.decode()
+            with self.assertRaises(ValueError):
+                renderer.render(objects, context)
+            objects["source"]["data"]["drain_v11.py"] = current_drain
             objects["source"]["data"]["dual_server.py"] = old_dual
             with self.assertRaises(ValueError):
                 renderer.render(objects, context)

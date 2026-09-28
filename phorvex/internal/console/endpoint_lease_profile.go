@@ -50,6 +50,8 @@ type endpointLeaseProfile struct {
 	AuditSourceIdentity string `json:"auditSourceIdentity"`
 	ModelID             string `json:"modelId"`
 	MaxRunSeconds       int    `json:"maxRunSeconds"`
+
+	SourceUpgrade *endpointLeaseSourceUpgrade `json:"sourceUpgrade,omitempty"`
 }
 
 func parseEndpointLeaseProfile(raw []byte) (endpointLeaseProfile, error) {
@@ -68,6 +70,11 @@ func parseEndpointLeaseProfile(raw []byte) (endpointLeaseProfile, error) {
 		return p, bad
 	}
 	encoded, _ := json.Marshal(canonical)
+	if obj, ok := canonical.(map[string]any); ok {
+		if value, present := obj["sourceUpgrade"]; present && value == nil {
+			return p, bad
+		}
+	}
 	if !bytes.Equal(raw, encoded) || p.Version != 1 || p.ServiceName != "vllm" ||
 		p.PolicyName != "vllm-defense" || p.SourceConfigMapName != "guardrail-proxy" ||
 		p.ModelID != endpointLeaseModel || p.MaxRunSeconds != 900 ||
@@ -87,6 +94,11 @@ func parseEndpointLeaseProfile(raw []byte) (endpointLeaseProfile, error) {
 	for _, value := range []string{p.ProxySourceSHA256, p.SeedSHA256, p.ClientASHA256,
 		p.ClientBSHA256, p.ClientAHMAC, p.ClientBHMAC} {
 		if !staticSHA256.MatchString(value) {
+			return p, bad
+		}
+	}
+	if p.SourceUpgrade != nil {
+		if _, _, err := endpointLeaseUpgradePrior(p); err != nil {
 			return p, bad
 		}
 	}

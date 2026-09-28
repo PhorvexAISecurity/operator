@@ -33,6 +33,10 @@ STARTUP_REPAIRED_DRAIN_SOURCE_SHA256 = {
     "drain_v11.py": "73555b7b8226f66c3d2823ba94edbb41bcda8a40f52f61c7869d054f570841f0",
     "drain_v11_init.py": DRAIN_SOURCE_SHA256["drain_v11_init.py"],
 }
+CAPACITY_REPAIRED_DRAIN_SOURCE_SHA256 = {
+    "drain_v11.py": "4ffe402960d3c368d95b137e313a69818b9b33a162fcb76d09585b4d75b9c397",
+    "drain_v11_init.py": DRAIN_SOURCE_SHA256["drain_v11_init.py"],
+}
 LEGACY_SOURCE_SHA256 = {
     "guardrail_proxy.py": "7659d44ef8e637fd74db754e393f65c3e58289cc3be347c716e10e83127076f2",
     "dual_server.py": "c89135124108e7f613f029a0b4bde5c9a6201f73b1b0f0041d2d4379140d2dfd",
@@ -187,7 +191,7 @@ def retained_lease_profile(raw: bytes, service_uid: str, source_uid: str, source
                            state: dict, guard: dict, vllm: dict) -> dict:
     require(0 < len(raw) <= 8192, "retained caller profile size differs")
     value = unique_json(raw)
-    require(set(value) == LEASE_PROFILE_KEYS and type(value["version"]) is int and value["version"] == 1 and
+    require(set(value) in (LEASE_PROFILE_KEYS, LEASE_PROFILE_KEYS | {"sourceUpgrade"}) and type(value["version"]) is int and value["version"] == 1 and
             type(value["policyGeneration"]) is int and value["policyGeneration"] == policy_generation and
             type(value["maxRunSeconds"]) is int and value["maxRunSeconds"] == 900 and
             value["serviceName"] == "vllm" and value["serviceUID"] == service_uid and
@@ -217,6 +221,9 @@ def retained_lease_profile(raw: bytes, service_uid: str, source_uid: str, source
             isinstance(value["eventCreator"], str) and
             isinstance(value["auditSourceIdentity"], str),
             "retained B is not admitted by current lease policy")
+    if "sourceUpgrade" in value:
+        from endpoint_lease_source_upgrade import validate_upgrade
+        validate_upgrade(value, state)
     return value
 
 
@@ -460,12 +467,23 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
                                             policy_m["uid"], policy_m["generation"], policy_uid,
                                             state, guard, vllm)
     drain_pins = DRAIN_SOURCE_SHA256 if historical_four else STARTUP_REPAIRED_DRAIN_SOURCE_SHA256
+    if lease_data is not None and "sourceUpgrade" in lease_data:
+        require(composite == "322595a608b2384f2ed6994886416838fc4e1d1c45c9dadbf1c00f04a5f52691",
+                "source upgrade differs from reviewed drain capacity closure")
+        drain_pins = CAPACITY_REPAIRED_DRAIN_SOURCE_SHA256
+    elif lease_data is not None:
+        require(composite == "c031693170c1d21d0a23405af255f83319efa240ce84d9c25d2436388528a3ff",
+                "unwitnessed lease source differs from reviewed historical closure")
     for key, expected in drain_pins.items():
         encoded = files[key]
         require(len(encoded) <= 1 << 20 and digest(encoded) == expected,
                 key + " installed bytes differ from reviewed drain source")
         checked_in = PROXY.parent / key
-        if not historical_four and checked_in.exists():
+        historical_lease = lease_data is not None and "sourceUpgrade" not in lease_data
+        # Both four-file historical closures have already matched every exact
+        # reviewed file pin. Newer integrated drain bytes must not invalidate
+        # those archives; witnessed capacity bytes still require local equality.
+        if not historical_four and not repaired_four and not historical_lease and checked_in.exists():
             require(read_regular_bounded(checked_in, 1 << 20) == encoded,
                     key + " installed bytes differ from integrated source")
     annotations = pm.get("annotations", {})

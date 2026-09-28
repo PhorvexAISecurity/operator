@@ -456,11 +456,35 @@ class Coordinator:
             # A STALE current operation keeps admission closed but advertises
             # the one exact next generation needed for authenticated attempt-2
             # supersession. Other active states remain non-creatable.
+            new_work = False
+            if current is None and self.admission_open:
+                proxy = await self.snapshot_proxy()
+                new_work = self._live_work_present(engine, proxy)
             if (high < MAX_U64 and self._capacity_evictions(current) is not None and
-                    (self.ledger.data["current"] is None or
-                     self.ledger.data["current"].get("state") == "STALE")):
+                    ((current is None and new_work) or
+                     (current is not None and current.get("state") == "STALE"))):
                 body["next_operation_generation"] = str(high + 1)
             return body
+
+    @staticmethod
+    def _live_work_present(engine, proxy):
+        # Capability's snapshot is historical and is empty outside a drain.
+        # Its queues describe current scheduler work, including cached outputs.
+        queues = engine["queues"]
+        names = {"waiting", "running", "swapped", "cached"}
+        if (engine["admission"] != "OPEN" or engine["operation_id"] is not None
+                or engine["operation_generation"] is not None
+                or type(queues) is not dict or set(queues) != {"0"}
+                or type(queues["0"]) is not dict or set(queues["0"]) != names
+                or any(type(queues["0"][name]) is not list for name in names)
+                or any(type(request_id) is not str or not request_id
+                       or len(request_id.encode("utf-8")) > 256
+                       for name in names for request_id in queues["0"][name])
+                or type(proxy) is not dict or set(proxy) != {"active"}
+                or type(proxy["active"]) is not int
+                or not 0 <= proxy["active"] <= MAX_SAFE_JSON_INTEGER):
+            raise DrainError(503, "invalid_live_work_observation")
+        return proxy["active"] > 0 or any(queues["0"][name] for name in names)
 
     def _capacity_evictions(self, current):
         """Read-only admission check using the existing 64-entry/24h retention.

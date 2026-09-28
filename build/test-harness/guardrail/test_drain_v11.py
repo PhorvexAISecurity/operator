@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import copy
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -160,7 +161,7 @@ class DrainLedgerTest(unittest.IsolatedAsyncioTestCase):
         value.update(extra); return value
     async def test_ordered_create_observe_reopen_and_new_tuple(self):
         events=[]; c,e=await self.coordinator(events=events); payload=await self.payload(c)
-        code,created=await c.create(payload); self.assertEqual((code,created["state"]),(201,"DRAINING")); self.assertEqual(events,["proxy-snapshot","proxy-terminate"]); self.assertIsNone(created["query_nonce"])
+        code,created=await c.create(payload); self.assertEqual((code,created["state"]),(201,"DRAINING")); self.assertEqual(events,["proxy-snapshot","proxy-snapshot","proxy-terminate"]); self.assertIsNone(created["query_nonce"])
         with self.assertRaisesRegex(drain.DrainError,"admission_closed"): c.admit_generation()
         code,duplicate=await c.create(payload); self.assertEqual(code,200); self.assertEqual(duplicate["receipt_sha256"],created["receipt_sha256"])
         self.assertEqual(sum(isinstance(x,tuple) and x[0]=="begin" for x in e.calls),1)
@@ -355,6 +356,87 @@ class DrainLedgerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((len(c.ledger.data["history"]),c.ledger.data["current"],e.admission,e.generation),
                          (64,None,"OPEN",64))
 
+    async def test_idle_preflight_live_queues_proxy_arrivals_and_completed_work(self):
+        e=FakeEngine(); proxy={"active":0}
+        async def snapshot(): return dict(proxy)
+        async def terminate(): return {"cancelled":0,"remaining":0}
+        c=drain.Coordinator(self.ledger(),e,pod_uid=self.pod_uid,
+            proxy_source="proxy-source",model_digest="model-digest",
+            snapshot_proxy=snapshot,terminate_proxy=terminate)
+        await c.initialize()
+        before=(self.root/"ledger.json").read_bytes()
+        for _ in range(3):
+            self.assertNotIn("next_operation_generation",await c.capability())
+        # Historical begin snapshots are not evidence of currently queued work.
+        self.assertTrue(e.snapshot["0"]["running"])
+        for queue in ("waiting","running","swapped","cached"):
+            with self.subTest(queue=queue):
+                e.queues["0"][queue]=["real-queued-request"]
+                self.assertEqual((await c.capability())["next_operation_generation"],"1")
+                e.queues["0"][queue]=[]
+        # A request arriving after the idle observation becomes eligible on the
+        # next read; completion after a positive read cannot reserve that work.
+        proxy["active"]=1
+        self.assertEqual((await c.capability())["next_operation_generation"],"1")
+        payload=await self.payload(c)
+        proxy["active"]=0
+        self.assertNotIn("next_operation_generation",await c.capability())
+        self.assertEqual((self.root/"ledger.json").read_bytes(),before)
+        self.assertEqual((e.admission,e.generation,c.ledger.data["current"]),("OPEN",0,None))
+        # No new create-time idle rejection: the observation is deliberately
+        # not an atomic reservation and the established protocol remains valid.
+        code,created=await c.create(payload)
+        self.assertEqual((code,created["state"]),(201,"DRAINING"))
+
+    async def test_idle_preflight_invalid_observation_fails_without_ledger_changes(self):
+        e=FakeEngine(); proxy={"active":0}
+        async def snapshot(): return copy.deepcopy(proxy)
+        async def terminate(): raise AssertionError("capability must not terminate")
+        c=drain.Coordinator(self.ledger(),e,pod_uid=self.pod_uid,
+            proxy_source="proxy-source",model_digest="model-digest",
+            snapshot_proxy=snapshot,terminate_proxy=terminate)
+        await c.initialize(); before=(self.root/"ledger.json").read_bytes()
+        empty=copy.deepcopy(e.queues)
+        invalid_queues=[{}, {"1":empty["0"]}, {"0":{"waiting":[],"running":[],"swapped":[]}},
+            {"0":dict(empty["0"],cached="request")},
+            {"0":dict(empty["0"],running=[True])},
+            {"0":dict(empty["0"],running=[""])},
+            {"0":dict(empty["0"],running=["x"*257])}]
+        for queues in invalid_queues:
+            with self.subTest(queues=queues):
+                e.queues=queues
+                with self.assertRaisesRegex(drain.DrainError,"invalid_live_work_observation"):
+                    await c.capability()
+                self.assertEqual((self.root/"ledger.json").read_bytes(),before)
+        e.queues=empty
+        for value in ({},{"active":True},{"active":-1},
+                      {"active":drain.MAX_SAFE_JSON_INTEGER+1},{"active":0,"extra":0}):
+            with self.subTest(proxy=value):
+                proxy=value
+                with self.assertRaisesRegex(drain.DrainError,"invalid_live_work_observation"):
+                    await c.capability()
+                self.assertEqual((self.root/"ledger.json").read_bytes(),before)
+        self.assertEqual((e.admission,e.generation,c.ledger.data["current"]),("OPEN",0,None))
+
+    async def test_idle_preflight_does_not_block_stale_supersession(self):
+        first,_=await self.coordinator(FakeEngine("d"*32))
+        await first.create(await self.payload(first))
+        e=FakeEngine("e"*32); e.admission="CLOSED"; e.generation=1
+        async def snapshot(): raise AssertionError("STALE recovery must bypass idle reads")
+        async def terminate(): return {"cancelled":0,"remaining":0}
+        c=drain.Coordinator(self.ledger(),e,pod_uid=self.pod_uid,
+            proxy_source="proxy-source",model_digest="model-digest",
+            snapshot_proxy=snapshot,terminate_proxy=terminate)
+        await c.initialize()
+        self.assertEqual((await c.capability())["next_operation_generation"],"2")
+        stale=c.ledger.data["current"]
+        sup={key:stale[key] for key in ("operation_generation","operation_id","revision")}
+        # Create still snapshots the proxy; only the idle capability read skips it.
+        async def create_snapshot(): return {"active":0}
+        c.snapshot_proxy=create_snapshot
+        code,result=await c.create(await self.payload(c,"2","4"*32,attempt=2,supersedes=sup))
+        self.assertEqual((code,result["state"]),(201,"DRAINING"))
+
     async def test_capacity_admission_slot_and_exact_retention_boundary(self):
         c,_=await self.coordinator()
         fixed=datetime(2026,9,28,12,tzinfo=timezone.utc)
@@ -408,6 +490,75 @@ class DrainLedgerTest(unittest.IsolatedAsyncioTestCase):
 import json
 import httpx
 import guardrail_proxy
+
+class DrainActualProxyIdleTest(unittest.IsolatedAsyncioTestCase):
+    async def test_blocked_real_upstream_request_advertises_then_completion_is_idle(self):
+        entered=asyncio.Event(); release=asyncio.Event(); handlers=[]
+        async def upstream(reader,writer):
+            handlers.append(asyncio.current_task())
+            try:
+                headers=await reader.readuntil(b"\r\n\r\n")
+                length=next(int(line.split(b":",1)[1]) for line in headers.split(b"\r\n")
+                            if line.lower().startswith(b"content-length:"))
+                await reader.readexactly(length)
+                entered.set(); await release.wait()
+                body=b'{"choices":[{"text":"legitimate completion"}]}'
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                             +str(len(body)).encode()+b"\r\nConnection: close\r\n\r\n"+body)
+                await writer.drain()
+            finally:
+                writer.close(); await writer.wait_closed()
+        class ReadyRuntime:
+            def snapshot(self): return "pgv2","enforce",0.5,True,0
+            def score(self,_variant,_text): return 0.1
+            def public_state(self): return {"ready":True}
+        captured=[]; engine=FakeEngine()
+        def coordinator(*args,**kwargs):
+            actual=drain.Coordinator(*args,**kwargs); captured.append(actual); return actual
+        server=await asyncio.start_server(upstream,"127.0.0.1",0)
+        pending=None
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)/"ledger"; drain.initialize_ledger(root,"pod-uid","a"*32)
+                env={"PHORVEX_DRAIN_V11":"1","PHORVEX_DRAIN_LEDGER_DIR":str(root),
+                    "POD_UID":"pod-uid","PHORVEX_PROXY_SOURCE":"proxy-source",
+                    "PHORVEX_ENGINE_SOURCE":"engine-source","PHORVEX_MODEL_DIGEST":"model-digest"}
+                # Only the GPU RPC transport is substituted. The app constructs
+                # the real coordinator with its private inflight-set callbacks.
+                with patch.dict(guardrail_proxy.os.environ,env), \
+                     patch.object(guardrail_proxy,"EngineHTTPClient",return_value=engine), \
+                     patch.object(guardrail_proxy,"Coordinator",side_effect=coordinator):
+                    app=guardrail_proxy.create_app(runtime=ReadyRuntime(),load_models=False,
+                        upstream=f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}",
+                        upstream_api_key="engine-token",admin_api_key="admin",
+                        support_fixture_enabled=False)
+                await captured[0].initialize()
+                before=(root/"ledger.json").read_bytes(); auth={"Authorization":"Bearer admin"}
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url="http://test") as client:
+                    idle=await client.get("/v1/drain/capability",headers=auth)
+                    self.assertEqual(idle.status_code,200)
+                    self.assertNotIn("next_operation_generation",idle.json())
+                    pending=asyncio.create_task(client.post("/v1/completions",json={"prompt":"benign"}))
+                    await asyncio.wait_for(entered.wait(),3)
+                    self.assertFalse(pending.done())
+                    self.assertFalse(any(engine.queues["0"].values()))
+                    active=await client.get("/v1/drain/capability",headers=auth)
+                    self.assertEqual((active.status_code,active.json()["next_operation_generation"]),(200,"1"))
+                    release.set()
+                    completed=await asyncio.wait_for(pending,3)
+                    self.assertEqual(completed.status_code,200)
+                    self.assertEqual(completed.json()["choices"][0]["text"],"legitimate completion")
+                    final=await client.get("/v1/drain/capability",headers=auth)
+                    self.assertNotIn("next_operation_generation",final.json())
+                self.assertEqual((root/"ledger.json").read_bytes(),before)
+                self.assertEqual((engine.admission,engine.generation),("OPEN",0))
+                self.assertFalse(any(isinstance(call,tuple) for call in engine.calls))
+        finally:
+            release.set()
+            if pending is not None and not pending.done():
+                pending.cancel(); await asyncio.gather(pending,return_exceptions=True)
+            server.close(); await server.wait_closed()
+            await asyncio.gather(*handlers,return_exceptions=True)
 
 class FakeCoordinator:
     def __init__(self): self.calls=[]; self.open=True

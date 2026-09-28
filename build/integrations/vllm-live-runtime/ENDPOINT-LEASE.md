@@ -65,3 +65,34 @@ against a bounded fake upstream, fake named Kubernetes reads, a real local
 HTTP API read, restart, stale Secret, API outage, duplicate Authorization,
 all public model routes, and streaming completion/cancellation. They do not
 prove a live caller migration, model behavior or selected native action.
+# Preserving a reviewed source upgrade
+
+The optional immutable profile `sourceUpgrade` witness keeps retained caller B
+usable after the reviewed drain-only source maintenance. Its six fields are
+`version`, `priorStateJSON`, `priorStateSHA256`, `priorJournalSHA256`,
+`currentStateSHA256`, and `priorSourceConfigMapUID`. The prior source UID records
+archival provenance; current source authority still comes from the normal live
+ConfigMap UID/full source hash, serving Pods, route, and unchanged Secrets.
+
+Only the completed revision 1 A revocation qualifies. Current state must equal
+the exact canonical prior state except for revision 2 and the reviewed new source
+SHA. The protected journal UID and its entire canonical bytes must remain
+unchanged, including the historical terminal receipt. A remains revoked, B
+remains allowed, and the seed, Secret, Service, roster and last operation remain
+identical. The witness never rearms endpoint first-loss trials. Profiles without
+the field keep their existing behavior.
+
+Prepare a review-only profile from bounded nonsecret originals:
+
+```sh
+python3 render_endpoint_lease_source_upgrade.py \
+  --profile prior-profile.json --prior-policy prior-policy-configmap.json \
+  --current-policy current-policy-configmap.json --journal protected-journal.json \
+  --source current-source-configmap.json --output candidate-profile.json
+```
+
+Use the actual newly created source ConfigMap UID in a deployable candidate.
+Offline test UIDs are explicitly synthetic and must not be activated. The helper
+does not read credentials or Secrets, call Kubernetes, modify captured objects,
+or activate a profile. Guardrail and request-drain profile recapture accept the
+same witness, preserving their ordinary current-incarnation checks.
