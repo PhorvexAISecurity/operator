@@ -24,9 +24,13 @@ export function auditTimeAtLeast(candidate: unknown, previous: unknown): boolean
   return current === null || (next !== null && next >= current);
 }
 
+// Shared default retention. Aggregate panels summarise a handful of hot workloads, so 80
+// rows is ample there; Discovered needs one row per scanned Pod and overrides it.
+export const DEFAULT_SNAPSHOT_LIMIT = 80;
+
 // The default keeps one newest row per workload, preserving existing aggregate views.
 // Discovered opts into Pod-epoch keys so a reused name cannot hide a valid UID match.
-export function recordAuditSnapshot<T extends SnapshotDecision>(records: Map<string, T>, event: T, lens: Lens, preserveEpochs = false, limit = 80): void {
+export function recordAuditSnapshot<T extends SnapshotDecision>(records: Map<string, T>, event: T, lens: Lens, preserveEpochs = false, limit: number = DEFAULT_SNAPSHOT_LIMIT): void {
   if (!event.namespace || !event.pod || (lens !== "owner" && event.kind !== "phorvex.decision")) return;
   const uid = preserveEpochs && lens !== "owner" ? event.decisionTrace?.assetUID || "" : "";
   const key = JSON.stringify([event.namespace, event.pod, uid]);
@@ -47,13 +51,16 @@ const browserClock: AuditSampleClock = { set: (callback, ms) => setTimeout(callb
 // Remote replay can take longer than 2.5s to yield a current-Pod decision.
 // Discovered settles 2.5s after its first scan-epoch match, with a 15s absolute
 // bound when that match never arrives. Other consumers keep their 2.5s bound.
-export function sampleAuditSnapshot<T extends SnapshotDecision>({ lens, signal, preserveEpochs, eligible, subscribe, clock = browserClock }: {
+export function sampleAuditSnapshot<T extends SnapshotDecision>({ lens, signal, preserveEpochs, eligible, subscribe, clock = browserClock, limit }: {
   lens: Lens;
   signal: AbortSignal;
   preserveEpochs: boolean;
   eligible?: (event: T) => boolean;
   subscribe: (onEvent: (event: T) => void, onError: (error: unknown) => void) => () => void;
   clock?: AuditSampleClock;
+  // How many distinct workloads the sample retains. Discovered must hold one row per
+  // scanned Pod, so it raises this above the shared default.
+  limit?: number;
 }): Promise<T[]> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
@@ -70,7 +77,7 @@ export function sampleAuditSnapshot<T extends SnapshotDecision>({ lens, signal, 
     try {
       stop = subscribe((event) => {
         if (settled) return;
-        recordAuditSnapshot(records, event, lens, preserveEpochs);
+        recordAuditSnapshot(records, event, lens, preserveEpochs, limit);
         if (preserveEpochs && settleTimer === undefined && eligible?.(event)) settleTimer = clock.set(finish, 2_500);
       }, fail);
       if (settled) stop(); // A test or transport may settle synchronously while subscribing.

@@ -223,3 +223,78 @@ test("shared non-Discovered snapshot keeps its 2.5s bound", async () => {
   assert.deepEqual(await sample, []);
   assert.equal(stopped, 1);
 });
+
+// --- Fleet-wide sampling -----------------------------------------------------
+// Discovered must hold one row per scanned Pod. The shared default retains 80, which silently
+// drops every workload past that on a larger fleet and renders it as "stage not sampled".
+
+test("retention default keeps the shared 80-row bound", () => {
+  const records = new Map();
+  for (let i = 0; i < 120; i++) {
+    recordAuditSnapshot(records, {
+      kind: "phorvex.decision", namespace: "ns", pod: `pod-${i}`,
+      decisionTrace: { assetUID: `uid-${i}` }, time: "2026-09-28T10:00:00Z",
+    }, "operator", true);
+  }
+  assert.equal(records.size, 80);
+  assert.equal(snapshot.DEFAULT_SNAPSHOT_LIMIT, 80);
+});
+
+test("a caller can retain one row per Pod on a fleet larger than the default", () => {
+  const records = new Map();
+  for (let i = 0; i < 120; i++) {
+    recordAuditSnapshot(records, {
+      kind: "phorvex.decision", namespace: "ns", pod: `pod-${i}`,
+      decisionTrace: { assetUID: `uid-${i}` }, time: "2026-09-28T10:00:00Z",
+    }, "operator", true, 120);
+  }
+  assert.equal(records.size, 120);
+  // every scanned Pod is still addressable, so none projects as "stage not sampled"
+  assert.ok(records.has(JSON.stringify(["ns", "pod-0", "uid-0"])));
+  assert.ok(records.has(JSON.stringify(["ns", "pod-119", "uid-119"])));
+});
+
+test("sampleAuditSnapshot honours the caller's retention limit", async () => {
+  const clock = fakeClock();
+  const controller = new AbortController();
+  const events = Array.from({ length: 150 }, (_, i) => ({
+    kind: "phorvex.decision", namespace: "ns", pod: `pod-${i}`,
+    decisionTrace: { assetUID: `uid-${i}` }, time: "2026-09-28T10:00:00Z",
+  }));
+  const pending = sampleAuditSnapshot({
+    lens: "operator", signal: controller.signal, preserveEpochs: true, limit: 150, clock,
+    subscribe: (onEvent) => { events.forEach(onEvent); return () => {}; },
+  });
+  clock.advance(15_000);
+  const rows = await pending;
+  assert.equal(rows.length, 150, "a busy tenant must not evict the quiet ones");
+});
+
+test("a quiet workload survives a replay dominated by a busy tenant", async () => {
+  const clock = fakeClock();
+  const controller = new AbortController();
+  // 200 decisions from one hot policy, then a single decision for the quiet Pod.
+  const events = Array.from({ length: 200 }, (_, i) => ({
+    kind: "phorvex.decision", namespace: "litellm", pod: `litellm-${i}`,
+    decisionTrace: { assetUID: `hot-${i}` }, time: "2026-09-28T10:00:00Z",
+  }));
+  events.push({
+    kind: "phorvex.decision", namespace: "voice", pod: "voice-bot-1",
+    decisionTrace: { assetUID: "quiet-1" }, stage: "recon", assetValue: 0.42,
+    time: "2026-09-28T10:00:01Z",
+  });
+  const pending = sampleAuditSnapshot({
+    lens: "operator", signal: controller.signal, preserveEpochs: true, limit: 250, clock,
+    subscribe: (onEvent) => { events.forEach(onEvent); return () => {}; },
+  });
+  clock.advance(15_000);
+  const rows = await pending;
+  const quiet = rows.find((r) => r.pod === "voice-bot-1");
+  assert.ok(quiet, "the quiet workload must be retained");
+  // and it must project with a real stage and asset, not as "stage not sampled"
+  const projected = projectDiscoveredPods(
+    [{ key: "voice/voice-bot-1", uid: "quiet-1", blast: 0.5, ai: false }], rows);
+  assert.equal(projected[0].stage, "recon");
+  assert.equal(projected[0].asset, 0.42);
+  assert.equal(stageGroup(projected[0].stage), "recon");
+});
