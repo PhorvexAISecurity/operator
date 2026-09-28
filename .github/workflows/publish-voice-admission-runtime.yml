@@ -42,6 +42,19 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Provision pinned job-local publisher tools
+        run: |
+          set -euo pipefail
+          publisher_env="$RUNNER_TEMP/voice-admission-publisher-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$publisher_env"
+          python3 -m venv "$publisher_env"
+          "$publisher_env/bin/python" -m pip install --disable-pip-version-check \
+            --require-hashes --only-binary=:all: --index-url https://pypi.org/simple \
+            --requirement "$RECIPE/publisher-requirements.lock"
+          PATH="$publisher_env/bin:$PATH" "$publisher_env/bin/python" \
+            -m unittest discover -s "$RECIPE" -p test_publisher_tools.py -v
+          echo "$publisher_env/bin" >> "$GITHUB_PATH"
+
       - name: Verify pinned recipe and prepare exact wheel closure
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -121,3 +134,9 @@ jobs:
           name: voice-admission-runtime-publish-${{ github.sha }}
           path: voice-admission-publish-receipt.json
           if-no-files-found: error
+
+      - name: Remove job-local publisher tools
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf -- "$RUNNER_TEMP/voice-admission-publisher-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
