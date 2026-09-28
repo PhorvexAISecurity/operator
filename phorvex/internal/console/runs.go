@@ -113,7 +113,7 @@ type ArmResult struct {
 }
 
 // pendingRun holds what's needed to start a QUEUED run once a slot frees up (the harness shares
-// one sandbox ns + fixed operator ports, so only maxConcurrentRuns execute at once; the rest wait).
+// real operator processes per run, so only maxConcurrentRuns execute at once; the rest wait).
 type pendingRun struct {
 	su     suite
 	native bool
@@ -214,7 +214,14 @@ func (rm *RunManager) loadStatuses() error {
 }
 
 const (
-	maxConcurrentRuns = 1               // serialize: runs share one sandbox ns + fixed operator ports (:18090/:18091), so concurrent runs collide (port-bind fail -> dead brain -> false "attack landed")
+	// Real attacks arrive concurrently, so the rig has to be able to reproduce that. It was
+	// pinned to 1 because runs shared one sandbox namespace and one hardcoded operator port
+	// pair: the second run failed to bind (dead brain -> false "attack landed") and teardown of
+	// either destroyed the other's fixtures. Both are now per-run -- the sandbox namespace is
+	// derived from a generated token, and the arm's bind addresses are claimed from the OS -- so
+	// runs no longer share the state that forced serialization. The cap remains bounded because
+	// each run still spawns real operator processes on this host.
+	maxConcurrentRuns = 4
 	minStartInterval  = 3 * time.Second // rate limit between launches
 	// scenarioSandboxNamespace and scenarioFallbackContext are StartScenario's OWN substitutions.
 	// They are named so the destination the auth boundary authorizes and the destination the
@@ -222,6 +229,27 @@ const (
 	scenarioSandboxNamespace = "amtd-attack-test"
 	scenarioFallbackContext  = "kind-amtd-test"
 )
+
+// scenarioSandboxNamespaceFor derives this run's disposable sandbox from a generated token.
+// Runs must not share one: the harness deletes its namespace at teardown, so a shared name let a
+// finishing run destroy a running one's fixtures. The result stays inside the generated prefix
+// (never caller input) and inside the 63-character RFC-1123 label limit. The namespace a run
+// actually used is recorded on its RunStatus, so the mapping stays traceable.
+func scenarioSandboxNamespaceFor(token string) string {
+	suffix := strings.ToLower(strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return -1
+	}, token))
+	if suffix == "" {
+		return scenarioSandboxNamespace
+	}
+	if len(suffix) > 16 {
+		suffix = suffix[len(suffix)-16:]
+	}
+	return scenarioSandboxNamespace + "-" + suffix
+}
 
 // guard enforces the concurrency cap + rate limit on exec endpoints (DoS hardening; the lens
 // is demo-trust until real authn [PENDING-P-VCLUSTER]). Caller must hold rm.mu.
@@ -738,10 +766,19 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	// SAFETY (load-bearing): the harness DELETES its run namespace at final teardown
 	// (core.Env.CleanupOwned deleteNamespace=true). So an attack MUST run only in a dedicated,
 	// disposable sandbox — NEVER a real workload namespace, or that namespace + its app get
-	// destroyed. We therefore IGNORE any caller-supplied namespace and always use the sandbox.
+	// destroyed. We therefore IGNORE any caller-supplied namespace and always generate one.
 	// ScenarioDestination mirrors both of these substitutions so the auth boundary authorizes
 	// the destination this function actually uses.
-	namespace = scenarioSandboxNamespace
+	//
+	// The sandbox is derived PER RUN. A single shared name meant two runs tore down each
+	// other's namespace mid-flight, which is why concurrent runs had to be serialized; a
+	// per-run name makes each run own exactly what it deletes. The prefix is still generated
+	// here, never taken from the caller, so the "never a real namespace" guarantee holds.
+	sandboxToken := make([]byte, 6)
+	if _, err := rand.Read(sandboxToken); err != nil {
+		return "", fmt.Errorf("generate sandbox namespace: %w", err)
+	}
+	namespace = scenarioSandboxNamespaceFor(hex.EncodeToString(sandboxToken))
 	target := scenarioFallbackContext
 	provider, targetLabel := "Kubernetes", target
 	for _, t := range rm.ClusterTargets() {
@@ -797,8 +834,9 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	// sandbox victim (direct client-go pod delete) — reliable + fast, so it visibly disrupts the attack.
 	su := suite{File: cfgPath, OutDir: outDir}
 	rm.mu.Lock()
-	// QUEUE rather than reject: when a slot is busy the run waits in FIFO and auto-starts on completion
-	// (the harness shares one sandbox ns + fixed operator ports, so concurrent runs would collide).
+	// QUEUE rather than reject: past maxConcurrentRuns a run waits in FIFO and auto-starts on
+	// completion. The cap now bounds host load (each run spawns real operator processes), not a
+	// shared-state collision -- sandbox namespace and bind ports are per-run.
 	queued := rm.active >= maxConcurrentRuns
 	state := "running"
 	if queued {
