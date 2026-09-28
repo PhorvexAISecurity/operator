@@ -1,0 +1,123 @@
+name: Publish Voice admission SDK overlay
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: voice-admission-runtime-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      AWS_REGION: us-east-2
+      RECIPE: build/integrations/voice-admission
+    steps:
+      - name: Require reviewed main source
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_REF" = refs/heads/main || {
+            echo '::error::Dispatch this workflow from main only.' >&2
+            exit 1
+          }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::Expected a full source commit SHA.' >&2
+            exit 1
+          }
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify pinned recipe and prepare exact wheel closure
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 "$RECIPE/prepare_wheelhouse.py"
+          (cd "$RECIPE" && python3 -m unittest -v test_recipe.py)
+          test "$(git status --porcelain --untracked-files=no)" = ''
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Refuse an existing source tag
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/phorvex:voice-admission-$SOURCE_SHA"
+          result_file="$(mktemp)"
+          trap 'rm -f "$result_file"' EXIT
+          aws ecr batch-get-image --repository-name phorvex \
+            --image-ids "imageTag=voice-admission-$SOURCE_SHA" --output json > "$result_file"
+          python3 "$RECIPE/verify_tag_absent.py" "$result_file" "voice-admission-$SOURCE_SHA"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Build offline and publish one immutable image
+        id: build
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          metadata="$(mktemp)"
+          trap 'rm -f "$metadata"' EXIT
+          docker buildx build --platform linux/amd64 --network=none --pull \
+            --push --tag "$IMAGE" --metadata-file "$metadata" \
+            --file "$RECIPE/Dockerfile" "$RECIPE"
+          METADATA="$metadata" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          metadata = json.loads(Path(os.environ['METADATA']).read_text())
+          digest = metadata.get('containerimage.digest')
+          if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+              raise SystemExit('buildx did not return a valid published digest')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write('digest=' + digest + '\n')
+          PY
+
+      - name: Verify remote tag and record source-bound receipt
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMAGE" | \
+            grep -Eq "^Digest:[[:space:]]+$DIGEST$"
+          python3 "$RECIPE/prepare_wheelhouse.py"
+          python3 "$RECIPE/write_publish_receipt.py"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-admission-runtime-publish-${{ github.sha }}
+          path: voice-admission-publish-receipt.json
+          if-no-files-found: error

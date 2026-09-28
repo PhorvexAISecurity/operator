@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!requirements.lock
+!overlay_install.py
+!wheelhouse/
+!wheelhouse/*.whl
