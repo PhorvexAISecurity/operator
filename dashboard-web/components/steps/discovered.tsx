@@ -11,6 +11,7 @@ import { PhysicsPanel } from "@/components/subsystems/panels";
 import { Gem, Network, GitBranch, ArrowRight, Loader2 } from "lucide-react";
 import { useLocalPage } from "@/lib/use-local-page";
 import { PaginationBar } from "@/components/ui/pagination";
+import { DEFAULT_SNAPSHOT_LIMIT } from "@/lib/audit-snapshot";
 import { useAuditSnapshot, useScanSnapshot } from "@/lib/query";
 import { useScopedUIState } from "@/lib/use-scoped-ui-state";
 import { DiscoveredPod, StageGroup, projectDiscoveredPods, stageGroup } from "@/lib/discovered-projection";
@@ -26,7 +27,16 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   const scanQuery = useScanSnapshot(lens, sel.context, "", lens !== "owner");
   const scan = scanQuery.data;
   const expectedPods = React.useMemo(() => (scan?.graphNodes ?? []).filter((node) => !!node.uid).map((node) => ({ key: node.key, uid: node.uid! })), [scan?.graphNodes]);
-  const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant, lens !== "owner", expectedPods);
+  // Discovered is the one fleet-wide view: it needs a decision for EVERY scanned Pod, not for the
+  // handful of workloads that dominate the audit. Policies tick independently, so a busy tenant can
+  // emit thousands of decisions while a quiet one emits a few — a fixed 80-record replay reaches
+  // only the busy ones and leaves the rest with no stage and no asset value. Scale the replay with
+  // the fleet and retain one row per scanned Pod, with a ceiling so a large cluster still loads.
+  const auditSample = React.useMemo(() => ({
+    tail: Math.min(4000, Math.max(DEFAULT_SNAPSHOT_LIMIT, expectedPods.length * 12)),
+    limit: Math.max(DEFAULT_SNAPSHOT_LIMIT, expectedPods.length),
+  }), [expectedPods.length]);
+  const auditQuery = useAuditSnapshot(lens, sel.context, lens === "owner" ? tenant : "", 2500, lens !== "owner" || !!tenant, lens !== "owner", expectedPods, auditSample);
   const edges = scan?.graphEdges ?? [];
   const nodes = scan?.nodeList ?? [];
   const reportedNodeCount = typeof scan?.nodes === "number" ? scan.nodes : null;

@@ -7,7 +7,7 @@ import {
 } from "@/lib/api";
 import { clearQueryEventProvider, QueryChange, setQueryEventProvider } from "@/lib/query-events";
 import { createScopedUIStore, ScopedUIProvider } from "@/lib/use-scoped-ui-state";
-import { sampleAuditSnapshot } from "@/lib/audit-snapshot";
+import { DEFAULT_SNAPSHOT_LIMIT, sampleAuditSnapshot } from "@/lib/audit-snapshot";
 
 const QUERY_GC = 5 * 60_000;
 const sessionContext = React.createContext<{ identity: string; providerToken: string; ready: boolean; session: Session } | null>(null);
@@ -110,15 +110,22 @@ export function useScanSnapshot(lens: Lens, context: string, namespace: string, 
 // One bounded sample is shared by exact identity+lens+context+tenant+epoch mode for 30s.
 // `_settleMs` remains accepted for source compatibility; varying callers cannot race one key
 // with different sampling semantics.
-export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _settleMs = 2500, enabled = true, preserveEpochs = false, expectedPods: { key: string; uid: string }[] = []) {
+// `sample.tail` is how many raw decisions the server replays on connect; `sample.limit` is how
+// many distinct workloads the client then retains. They are separate because one busy tenant can
+// fill the replay window on its own: the operator ticks every few seconds per policy, so a fleet-
+// wide view needs a replay deep enough to reach the quiet workloads, and retention wide enough to
+// keep every one it finds. The shared default stays 80/80 for the aggregate panels.
+export function useAuditSnapshot(lens: Lens, context: string, tenant = "", _settleMs = 2500, enabled = true, preserveEpochs = false, expectedPods: { key: string; uid: string }[] = [], sample: { tail?: number; limit?: number } = {}) {
+  const tail = sample.tail ?? DEFAULT_SNAPSHOT_LIMIT;
+  const limit = sample.limit ?? DEFAULT_SNAPSHOT_LIMIT;
   const epochs = expectedPods.map((pod) => `${pod.key}\u0000${pod.uid}`).sort();
   const currentEpochs = new Set(epochs);
   const query = useApiRead<any[]>({
-    lens, resource: "audit-snapshot", parameters: { context, tenant, tail: 80, preserveEpochs, epochs }, staleTime: 30_000, enabled,
+    lens, resource: "audit-snapshot", parameters: { context, tenant, tail, limit, preserveEpochs, epochs }, staleTime: 30_000, enabled,
     fetcher: (signal) => sampleAuditSnapshot({
-      lens, signal, preserveEpochs,
+      lens, signal, preserveEpochs, limit,
       eligible: (event) => event.kind === "phorvex.decision" && currentEpochs.has(`${event.namespace}/${event.pod}\u0000${event.decisionTrace?.assetUID}`),
-      subscribe: (onEvent, onError) => liveStream(lens, onEvent, tenant || undefined, 80, context, onError),
+      subscribe: (onEvent, onError) => liveStream(lens, onEvent, tenant || undefined, tail, context, onError),
     }),
   });
   // EventSource does not expose its HTTP status. A failed sample could be a denial, so never
