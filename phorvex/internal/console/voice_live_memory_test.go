@@ -256,9 +256,45 @@ func TestVoiceMemoryEventInventoryUsesClusterScope(t *testing.T) {
 			"spec":     map[string]any{"targets": []string{"voice/voice-bot-a"}, "rule": map[string]any{"type": model.AttackVectorVoiceMemory}},
 		}}})), nil
 	}})
-	recent, err := s.voiceMemoryRecentEvent("voice-bot-a")
-	if err != nil || !recent {
-		t.Fatalf("recent cluster-scoped Voice event not found: recent=%t err=%v", recent, err)
+	prior, err := s.voiceMemoryPriorEvent("voice-bot-a")
+	if err != nil || !prior {
+		t.Fatalf("cluster-scoped Voice event not found: prior=%t err=%v", prior, err)
+	}
+}
+
+// A leftover event is still weighted by the brain, so the next run's decision
+// row would carry two trusted events and could never be attributed.
+func TestVoiceMemoryPriorEventRefusesAnyPresentEventOnPod(t *testing.T) {
+	event := func(created time.Time, target, rule string) map[string]any {
+		return map[string]any{"metadata": map[string]any{"creationTimestamp": created.UTC().Format(time.RFC3339Nano)},
+			"spec": map[string]any{"targets": []string{target}, "rule": map[string]any{"type": rule}}}
+	}
+	for _, tc := range []struct {
+		name   string
+		items  []any
+		prior  bool
+		broken bool
+	}{
+		{"five minute old memory event", []any{event(time.Now().Add(-5*time.Minute), "voice/voice-bot-a", model.AttackVectorVoiceMemory)}, true, false},
+		{"other rule type on same Pod", []any{event(time.Now().Add(-10*time.Minute), "voice/voice-bot-a", "phorvex.attack.voice-refund-pair")}, true, false},
+		{"event on another Pod", []any{event(time.Now(), "voice/voice-bot-b", model.AttackVectorVoiceMemory)}, false, false},
+		{"no events", []any{}, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewServer(Config{StateDir: t.TempDir(), Exec: func(time.Duration, string, ...string) (string, error) {
+				return string(mustJSON(t, map[string]any{"items": tc.items})), nil
+			}})
+			prior, err := s.voiceMemoryPriorEvent("voice-bot-a")
+			if err != nil || prior != tc.prior {
+				t.Fatalf("prior=%t err=%v, want prior=%t", prior, err, tc.prior)
+			}
+		})
+	}
+	s := NewServer(Config{StateDir: t.TempDir(), Exec: func(time.Duration, string, ...string) (string, error) {
+		return "not json", nil
+	}})
+	if _, err := s.voiceMemoryPriorEvent("voice-bot-a"); err == nil {
+		t.Fatal("malformed inventory accepted")
 	}
 }
 

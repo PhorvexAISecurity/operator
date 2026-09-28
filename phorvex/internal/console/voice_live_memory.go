@@ -343,8 +343,8 @@ func (s *Server) runVoiceMemoryLive(record *attackRecord, id string) {
 		return
 	}
 	target := snap.Pods[0]
-	if recent, checkErr := s.voiceMemoryRecentEvent(target.Name); checkErr != nil || recent {
-		failure = errors.New("a recent Voice memory event or event inventory uncertainty prevents a distinct Fire run")
+	if prior, checkErr := s.voiceMemoryPriorEvent(target.Name); checkErr != nil || prior {
+		failure = errors.New("a prior SecurityEvent still targets the Voice Pod or event inventory is uncertain; a distinct Fire run needs it removed first")
 		return
 	}
 	probe.TargetPodUID, probe.DeploymentUID, probe.PolicyUID, probe.SourceSHA256 = string(target.UID), snap.DeploymentUID, snap.PolicyUID, voiceMemorySourceSHA256
@@ -623,21 +623,20 @@ func voiceMemorySavePrivate(dir, name string, value any) error {
 	return file.Sync()
 }
 
-func (s *Server) voiceMemoryRecentEvent(podName string) (bool, error) {
+// voiceMemoryPriorEvent reports whether any SecurityEvent still targets the Pod.
+// The brain keeps weighting a present event until it ages past the policy
+// horizon, and voiceMemorySelectedDecision credits a decision only when its row
+// carries exactly one trusted event. A leftover event of any age or rule type
+// therefore makes the new run's decision unattributable, so refuse up front.
+func (s *Server) voiceMemoryPriorEvent(podName string) (bool, error) {
 	text, err := s.cfg.execText(8*time.Second, "kubectl", "get", "securityevents", "-o", "json")
 	if err != nil || len(text) > 1<<20 {
 		return false, errors.New("Voice event inventory unavailable")
 	}
 	var list struct {
 		Items []struct {
-			Metadata struct {
-				CreationTimestamp time.Time `json:"creationTimestamp"`
-			} `json:"metadata"`
 			Spec struct {
 				Targets []string `json:"targets"`
-				Rule    struct {
-					Type string `json:"type"`
-				} `json:"rule"`
 			} `json:"spec"`
 		} `json:"items"`
 	}
@@ -645,15 +644,6 @@ func (s *Server) voiceMemoryRecentEvent(podName string) (bool, error) {
 		return false, errors.New("Voice event inventory malformed")
 	}
 	for _, event := range list.Items {
-		if event.Spec.Rule.Type != model.AttackVectorVoiceMemory {
-			continue
-		}
-		if event.Metadata.CreationTimestamp.IsZero() {
-			return false, errors.New("Voice event timestamp unavailable")
-		}
-		if time.Since(event.Metadata.CreationTimestamp) >= 60*time.Second {
-			continue
-		}
 		for _, target := range event.Spec.Targets {
 			if target == "voice/"+podName {
 				return true, nil
