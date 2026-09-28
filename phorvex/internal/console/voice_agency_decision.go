@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -146,27 +145,26 @@ func (s *Server) waitVoiceAgencyEffect(ctx context.Context, p voiceAgencyProfile
 	if decision.Action != voiceAgencyAction || !decision.Selected {
 		return voiceAgencySnapshot{}, receipt, errors.New("brain selected another action")
 	}
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	timer := time.NewTimer(90 * time.Second)
-	defer timer.Stop()
-	for {
+	var after voiceAgencySnapshot
+	err := waitVoicePolicyEffect(ctx, voicePolicyEffectWait, voicePolicyEffectPoll, func(ctx context.Context) bool {
 		journal, e := s.voiceAgencyJournal(ctx, before, decision, event, target, callerSHA, orderSHA)
 		if e == nil {
-			after, readErr := s.voiceAgencySnapshot(ctx, p)
-			if readErr == nil && after.DeploymentUID == before.DeploymentUID && after.PolicyUID == before.PolicyUID &&
-				after.PolicyGeneration == before.PolicyGeneration && after.ConfigMapUID == before.ConfigMapUID &&
-				after.RuleSHA256 == voiceAgencyStringDigest(voiceAgencyRuleBytes(journal.Desired)) &&
-				after.Rule.Revision == journal.Desired.Revision && voiceAgencySnapshotHasPod(after, target.Name, string(target.UID)) {
-				return after, journal, nil
+			current, readErr := s.voiceAgencySnapshot(ctx, p)
+			if readErr == nil && current.DeploymentUID == before.DeploymentUID && current.PolicyUID == before.PolicyUID &&
+				current.PolicyGeneration == before.PolicyGeneration && current.ConfigMapUID == before.ConfigMapUID &&
+				current.RuleSHA256 == voiceAgencyStringDigest(voiceAgencyRuleBytes(journal.Desired)) &&
+				current.Rule.Revision == journal.Desired.Revision && voiceAgencySnapshotHasPod(current, target.Name, string(target.UID)) {
+				after, receipt = current, journal
+				return true
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return voiceAgencySnapshot{}, receipt, ctx.Err()
-		case <-timer.C:
-			return voiceAgencySnapshot{}, receipt, fmt.Errorf("Voice refund protected effect/readback unavailable")
-		case <-ticker.C:
-		}
+		return false
+	})
+	if errors.Is(err, errVoicePolicyEffectTimeout) {
+		err = errors.New("Voice refund protected effect/readback unavailable")
 	}
+	if err != nil {
+		return voiceAgencySnapshot{}, voiceAgencyJournalReceipt{}, err
+	}
+	return after, receipt, nil
 }

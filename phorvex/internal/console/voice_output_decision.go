@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -232,36 +231,36 @@ func (s *Server) waitVoiceOutputEffect(ctx context.Context, p voiceOutputProfile
 	if decision.Action != voiceOutputAction || !decision.Selected {
 		return voiceOutputSnapshot{}, empty, errors.New("brain selected another action")
 	}
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	timer := time.NewTimer(90 * time.Second)
-	defer timer.Stop()
-	for {
+	var after voiceOutputSnapshot
+	var receipt voiceOutputJournalReceipt
+	err := waitVoicePolicyEffect(ctx, voicePolicyEffectWait, voicePolicyEffectPoll, func(ctx context.Context) bool {
 		kube, e := clientForContext("")
 		if e == nil {
 			cm, getErr := kube.CoreV1().ConfigMaps("phorvex-system").Get(ctx, voiceOutputJournalName, metav1.GetOptions{})
 			if getErr == nil {
 				j, readErr := voiceOutputJournalRead(cm)
 				if readErr == nil {
-					receipt, want, joinErr := voiceOutputSelectedReceipt(j, before, decision, event, target, markerSHA)
+					matched, want, joinErr := voiceOutputSelectedReceipt(j, before, decision, event, target, markerSHA)
 					if joinErr == nil {
-						after, snapErr := s.voiceOutputSnapshot(ctx, p, markerSHA)
-						if snapErr == nil && after.DeploymentUID == before.DeploymentUID && after.PolicyUID == before.PolicyUID &&
-							after.PolicyGeneration == before.PolicyGeneration && after.ConfigMapUID == before.ConfigMapUID &&
-							after.RuleSHA256 == want.SHA256() && after.Rule.Revision == want.Revision &&
-							voiceOutputSnapshotHasPod(after, target.Name, string(target.UID)) {
-							return after, receipt, nil
+						current, snapErr := s.voiceOutputSnapshot(ctx, p, markerSHA)
+						if snapErr == nil && current.DeploymentUID == before.DeploymentUID && current.PolicyUID == before.PolicyUID &&
+							current.PolicyGeneration == before.PolicyGeneration && current.ConfigMapUID == before.ConfigMapUID &&
+							current.RuleSHA256 == want.SHA256() && current.Rule.Revision == want.Revision &&
+							voiceOutputSnapshotHasPod(current, target.Name, string(target.UID)) {
+							after, receipt = current, matched
+							return true
 						}
 					}
 				}
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return voiceOutputSnapshot{}, empty, ctx.Err()
-		case <-timer.C:
-			return voiceOutputSnapshot{}, empty, fmt.Errorf("Voice output protected effect or all-Pod state unavailable")
-		case <-ticker.C:
-		}
+		return false
+	})
+	if errors.Is(err, errVoicePolicyEffectTimeout) {
+		err = errors.New("Voice output protected effect or all-Pod state unavailable")
 	}
+	if err != nil {
+		return voiceOutputSnapshot{}, empty, err
+	}
+	return after, receipt, nil
 }

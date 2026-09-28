@@ -1,0 +1,9 @@
+# Exact reviewed Voice refund profile; no workload rule mutation.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phorvex-voice-agency-profile-a6561653be19
+  namespace: {{ .Release.Namespace }}
+immutable: true
+data:
+  profile.json: "{\"attackClipSHA256\":\"501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227\",\"auditSourceIdentity\":\"https://phorvex-phorvex-audit-source.phorvex-system.svc:8445|phorvex-phorvex-audit-source.phorvex-system.svc\",\"benignClipSHA256\":\"99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630\",\"eventCreator\":\"system:serviceaccount:phorvex-system:phorvex-phorvex-console\",\"maxRunSeconds\":900,\"policyName\":\"voice-defense\",\"probeSHA256\":\"41cea9063bbb9c769336c49d3a2a48def7242ddc88821010abcd57126d024b6c\",\"sourceSHA256\":\"25fd02b6710f1d687a1c71ba4caf142afcbf57d86c662aef66cf39e7ff370f95\",\"version\":1}"

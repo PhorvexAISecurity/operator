@@ -67,6 +67,13 @@ class RenderMCPActivationTest(unittest.TestCase):
                             for op in patch if isinstance(op.get("value"), dict)))
         self.assertTrue(any(op.get("value", {}).get("subPath") == "server.py" and
                             op["value"].get("readOnly") for op in patch if isinstance(op.get("value"), dict)))
+        # The console's voiceMCPServerMounts admission requires this exact
+        # source name, independently of the legacy Deployment volume name.
+        self.assertIn({"op": "replace", "path": "/spec/template/spec/containers/0/volumeMounts/0",
+                       "value": {"name": "voice-mcp-source", "mountPath": "/app/server.py",
+                                 "subPath": "server.py", "readOnly": True}}, patch)
+        self.assertIn({"op": "replace", "path": "/spec/template/spec/volumes/0",
+                       "value": {"name": "voice-mcp-source", "configMap": {"name": SOURCE_CONFIGMAP}}}, patch)
         self.assertEqual(SOURCE_SHA256, __import__("hashlib").sha256(
             (Path(__file__).with_name("server.py")).read_bytes()).hexdigest())
 
@@ -91,6 +98,14 @@ class RenderMCPActivationTest(unittest.TestCase):
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                 render(changed, service(), legacy(), b"m" * 48,
                        DEPLOYMENT, SERVICE, SOURCE, IMAGE, IMAGE_ID, APPROVED, [IMAGE_ID])
+
+    def test_existing_source_volume_collision_refused(self):
+        changed = deployment()
+        changed["spec"]["template"]["spec"]["volumes"].append(
+            {"name": "voice-mcp-source", "emptyDir": {}})
+        with self.assertRaises(ValueError):
+            render(changed, service(), legacy(), b"m" * 48,
+                   DEPLOYMENT, SERVICE, SOURCE, IMAGE, IMAGE_ID, APPROVED, [IMAGE_ID])
 
 
 if __name__ == "__main__":

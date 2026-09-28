@@ -21,6 +21,7 @@ HERE = Path(__file__).resolve().parent
 SOURCE_SHA256 = "85cbd0f201b9b65e3b7cc770aed28884fc9835130cc61154499b873537883252"
 LEGACY_SOURCE_SHA256 = "483009cd01640e9f604a21f16aa890539566f53a25fd7dc478bc43c1831212c5"
 SOURCE_CONFIGMAP = "voice-mcp-source-" + SOURCE_SHA256[:12]
+SOURCE_VOLUME = "voice-mcp-source"
 TOKEN_SECRET = "voice-mcp-test-token"
 LEGACY_COMMAND = ["/bin/sh", "-c"]
 LEGACY_ARGS = ["pip install --no-cache-dir fastmcp " + "\\\n" + "  && exec python server.py\n"]
@@ -88,7 +89,7 @@ def render(deployment: dict, service: dict, legacy_source: dict, token: bytes,
             "legacy MCP source volume changed")
     volume_index, old_volume = old_volumes[0]
     require(not any(m.get("mountPath") in ("/app/server.py", "/etc/phorvex/voice-mcp-test-token")
-                    for m in mounts) and not any(v.get("name") == TOKEN_SECRET for v in volumes) and
+                    for m in mounts) and not any(v.get("name") in (SOURCE_VOLUME, TOKEN_SECRET) for v in volumes) and
             not any(e.get("name") in ("VOICE_MCP_TEST_ENABLED", "VOICE_MCP_TEST_TOKEN_FILE") for e in env),
             "MCP test source already configured")
     annotations = template.get("metadata", {}).get("annotations", {})
@@ -120,10 +121,10 @@ def render(deployment: dict, service: dict, legacy_source: dict, token: bytes,
         {"op": "replace", "path": base + "/command", "value": ["python3", "-B", "/app/server.py"]},
         {"op": "replace", "path": base + "/args", "value": []},
         {"op": "replace", "path": f"{base}/volumeMounts/{mount_index}",
-         "value": {"name": old_mount["name"], "mountPath": "/app/server.py",
+         "value": {"name": SOURCE_VOLUME, "mountPath": "/app/server.py",
                    "subPath": "server.py", "readOnly": True}},
         {"op": "replace", "path": f"/spec/template/spec/volumes/{volume_index}",
-         "value": {"name": old_volume["name"], "configMap": {"name": SOURCE_CONFIGMAP}}},
+         "value": {"name": SOURCE_VOLUME, "configMap": {"name": SOURCE_CONFIGMAP}}},
     ]
     annotation_path = "/spec/template/metadata/annotations"
     new_annotations = {"phorvex.ai/voice-mcp-source-configmap": SOURCE_CONFIGMAP,
