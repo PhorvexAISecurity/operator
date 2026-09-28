@@ -155,9 +155,16 @@ class ReleaseValues(unittest.TestCase):
         configured = yaml.safe_load((ROOT/"deploy/helm/phorvex-stack/values-eks.yaml").read_text())["phorvex"]["phorvex"]
         manager_template = configured["image"]["repository"] + ":" + configured["image"]["tag"]
         console_template = configured["console"]["image"]["repository"] + ":" + configured["console"]["image"]["tag"]
-        default = envs([])
+        # Published EKS values carry reviewed authority. Model the unset case
+        # explicitly so an ordinary release does not invalidate this control.
+        default = envs(["--set-string", "phorvex.phorvex.image.releaseDigest=",
+                        "--set-string", "phorvex.phorvex.image.releaseSourceSHA=",
+                        "--set-string", "phorvex.phorvex.console.image.releaseDigest=",
+                        "--set-string", "phorvex.phorvex.console.image.releaseSourceSHA="])
         self.assertEqual(default["PHORVEX_CONSOLE_DRAIN_MANAGER_IMAGE"], "")
         self.assertEqual(default["PHORVEX_CONSOLE_DRAIN_CONSOLE_IMAGE"], "")
+        self.assertEqual(default["PHORVEX_CONSOLE_DRAIN_MANAGER_SOURCE_SHA"], "")
+        self.assertEqual(default["PHORVEX_CONSOLE_DRAIN_CONSOLE_SOURCE_SHA"], "")
         values = envs(["--set", "phorvex.phorvex.image.releaseDigest="+A,
                        "--set", "phorvex.phorvex.image.releaseSourceSHA="+S,
                        "--set", "phorvex.phorvex.console.image.releaseDigest="+B,

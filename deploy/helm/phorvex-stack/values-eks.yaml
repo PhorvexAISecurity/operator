@@ -122,6 +122,10 @@ phorvex:
     # through the mutually authenticated transport below. Before the first rollout,
     # provision these exact identities with deploy/eks/provision-audit-mtls.sh.
     console:
+      # DEV live audit/probe workloads: preserve CPU and avoid observed 256Mi OOMs.
+      resources:
+        limits: { cpu: 500m, memory: 1Gi }
+        requests: { cpu: 10m, memory: 256Mi }
       voiceAgencyLive:
         enabled: true
         configMapName: phorvex-voice-agency-profile-a518c389310b
