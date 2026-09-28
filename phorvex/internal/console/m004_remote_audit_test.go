@@ -92,7 +92,7 @@ func TestRemoteLiveReportsMultiRotationGap(t *testing.T) {
 	s := NewServer(Config{AuditSource: client})
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	w := httptest.NewRecorder()
+	w := newLiveTestRecorder()
 	done := make(chan struct{})
 	go func() {
 		s.live(w, withTestPrincipal(httptest.NewRequest(http.MethodGet, "/api/live?lens=operator&tail=all", nil).WithContext(ctx), testOperatorPrincipal()))

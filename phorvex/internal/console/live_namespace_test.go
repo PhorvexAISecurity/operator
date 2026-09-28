@@ -16,7 +16,7 @@ func liveBody(t *testing.T, path, query string, p *Principal) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
-	w := httptest.NewRecorder()
+	w := newLiveTestRecorder()
 	NewServer(Config{AuditPath: path}).live(w, withTestPrincipal(httptest.NewRequest("GET", "/api/live?"+query, nil).WithContext(ctx), p))
 	return w.Body.String()
 }

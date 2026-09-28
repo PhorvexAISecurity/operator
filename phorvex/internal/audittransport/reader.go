@@ -62,6 +62,9 @@ func (r *Reader) Stat() (os.FileInfo, error) {
 }
 
 func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
+	if err := r.Ctx.Err(); err != nil {
+		return 0, err
+	}
 	if off < 0 {
 		return 0, errors.New("negative audit read offset")
 	}
@@ -70,6 +73,9 @@ func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
 	}
 	read := 0
 	for read < len(p) && off+int64(read) < r.Segment.Size {
+		if err := r.Ctx.Err(); err != nil {
+			return read, err
+		}
 		start := ((off + int64(read)) / ChunkBytes) * ChunkBytes
 		r.mu.Lock()
 		if r.cacheStart != start {

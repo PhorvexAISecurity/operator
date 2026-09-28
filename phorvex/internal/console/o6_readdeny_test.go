@@ -42,7 +42,7 @@ func TestO6_OwnerStreamCrossTenantReadDenied(t *testing.T) {
 	// [M-136] The ?tenant= is now BOUND to a verified grant: this principal is granted acme and
 	// nothing else, so the residual R3 this test disclosed (a self-asserted ?tenant=B) is closed.
 	req := withTestPrincipal(httptest.NewRequest("GET", "/live?lens=owner&tenant=acme", nil).WithContext(ctx), testOwnerPrincipal("acme"))
-	w := httptest.NewRecorder()
+	w := newLiveTestRecorder()
 	go func() { time.Sleep(250 * time.Millisecond); cancel() }()
 	s.live(w, req)
 

@@ -378,6 +378,8 @@ type historyFlushRecorder struct {
 	onFlush func()
 }
 
+func (w *historyFlushRecorder) SetWriteDeadline(time.Time) error { return nil }
+
 func (w *historyFlushRecorder) Flush() {
 	w.ResponseRecorder.Flush()
 	if w.onFlush != nil {

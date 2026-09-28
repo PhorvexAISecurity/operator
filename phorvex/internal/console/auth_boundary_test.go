@@ -58,7 +58,7 @@ func TestIncident_UnauthenticatedLiveStreamIsRefused(t *testing.T) {
 	//     another tenant's records never appear.
 	ctx, cancel := context.WithCancel(context.Background())
 	req := f.albReqAs(t, http.MethodGet, "/api/live?lens=investor&tenant=acme&tail=all", "", "own").WithContext(ctx)
-	rec := httptest.NewRecorder()
+	rec := newLiveTestRecorder()
 	go func() { time.Sleep(200 * time.Millisecond); cancel() }()
 	f.h.ServeHTTP(rec, req)
 	body := rec.Body.String()

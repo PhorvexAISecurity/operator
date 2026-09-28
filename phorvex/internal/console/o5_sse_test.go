@@ -46,7 +46,7 @@ func TestO5_OwnerSSEStreamBytesRedacted(t *testing.T) {
 	// The owner projection now follows the verified grant, so the stream is driven as a real
 	// owner principal scoped to acme rather than a self-asserted lens header.
 	req := withTestPrincipal(httptest.NewRequest("GET", "/live?lens=owner&tenant=acme", nil).WithContext(ctx), testOwnerPrincipal("acme"))
-	w := httptest.NewRecorder()
+	w := newLiveTestRecorder()
 	go func() { time.Sleep(250 * time.Millisecond); cancel() }()
 	s.live(w, req) // blocks until ctx cancelled; emits the record on the first streamNew
 
