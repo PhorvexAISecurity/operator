@@ -113,6 +113,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if ok, why := protectedServingCapability(ctx, n.Reader, n.JournalNamespace, t, a, n.servingSecurity); !ok {
 		return false, why
 	}
+	if a == model.ActionRequestDrain {
+		return requestDrainCapability(ctx, n.Reader, t, n.servingSecurity)
+	}
 	if a == model.ActionSensitiveOutputPolicyActivate {
 		return outputPolicyCapability(ctx, n.Reader, n.JournalNamespace, t)
 	}

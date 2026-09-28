@@ -79,6 +79,8 @@ func TestDrainLiveSafeIssueStaticGates(t *testing.T) {
 	// Each recognized local gate must remain specific while a plain error with
 	// identical text remains untrusted. No string matching grants disclosure.
 	cases := map[drainLiveStaticIssue]string{
+		"component release authority unavailable":                                  "immutable manager/Console release authority",
+		"component incarnation drift":                                              "start a new run",
 		"target Pod read unavailable":                                              "refresh reviewed Pod pins",
 		"manager Pod read unavailable":                                             "refresh reviewed manager pins",
 		"console source read unavailable":                                          "inspect Console ownership",

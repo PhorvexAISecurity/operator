@@ -81,6 +81,9 @@ func (s *Server) revalidateEndpointLease(ctx context.Context, record *attackReco
 func runEndpointLeaseRevalidation(ctx context.Context, record *attackRecord, p endpointLeaseProfile,
 	snap endpointLeaseSnapshot, journal *corev1.ConfigMap, tokens endpointLeaseTokens, reads endpointLeaseRevalidationReads) {
 	probe := record.EndpointLeaseProbe
+	if probe.Issues == nil {
+		probe.Issues = []string{}
+	}
 	probe.SignalMode = "EXISTING_PROTECTION_REVALIDATION"
 	probe.DefenseScope = "existing brain-issued revocation of this same owned caller A; current denial and legitimate B completion rechecked; no new selection or response credit"
 	fail := func(reason string) { probe.Issues = append(probe.Issues, reason) }

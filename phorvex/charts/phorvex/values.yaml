@@ -8,6 +8,9 @@ phorvex:
     repository: phorvex/phorvex
     pullPolicy: IfNotPresent
     tag: "0.1.0-p0"
+    # CI-maintained published immutable release authority; never derived from a live tag.
+    releaseDigest: ""
+    releaseSourceSHA: ""
   litellmClientRevoke:
     enabled: false
     statusSecret: ""
@@ -660,6 +663,8 @@ phorvex:
     image:
       repository: ""
       tag: ""
+      releaseDigest: ""
+      releaseSourceSHA: ""
       pullPolicy: IfNotPresent
     port: 8090
     # Matches the console image's own CMD (deploy/docker/console.Dockerfile).

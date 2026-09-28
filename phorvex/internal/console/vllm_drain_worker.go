@@ -73,7 +73,48 @@ func (s *Server) drainReadKubeInput(ctx context.Context, out, label string, allo
 			}
 			saved = drainJSON(map[string]any{"rawSHA256": availabilityHash(raw), "metadata": map[string]any{"name": pod.Metadata.Name, "uid": pod.Metadata.UID, "labels": labels, "annotations": annotations, "ownerReferences": pod.Metadata.OwnerReferences},
 				"status": map[string]any{"containerStatuses": pod.Status.ContainerStatuses}})
-		} else if strings.HasSuffix(label, "-console-replicaset") || strings.HasSuffix(label, "-console-deployment") {
+		} else if strings.HasSuffix(label, "-component-pods") || strings.HasSuffix(label, "-component-replicasets") {
+			var list struct {
+				Items []json.RawMessage `json:"items"`
+			}
+			if json.Unmarshal(raw, &list) != nil {
+				return nil, drainLiveStaticIssue("component incarnation drift")
+			}
+			items := make([]any, 0, len(list.Items))
+			for _, item := range list.Items {
+				var v map[string]json.RawMessage
+				if json.Unmarshal(item, &v) != nil {
+					return nil, drainLiveStaticIssue("component incarnation drift")
+				}
+				var meta map[string]json.RawMessage
+				if json.Unmarshal(v["metadata"], &meta) != nil {
+					return nil, drainLiveStaticIssue("component incarnation drift")
+				}
+				projected := map[string]any{}
+				for _, key := range []string{"name", "namespace", "uid", "generation", "ownerReferences"} {
+					projected[key] = meta[key]
+				}
+				var status map[string]json.RawMessage
+				if json.Unmarshal(v["status"], &status) != nil {
+					return nil, drainLiveStaticIssue("component incarnation drift")
+				}
+				projectedStatus := map[string]any{}
+				for _, key := range []string{"observedGeneration", "replicas", "readyReplicas", "availableReplicas", "phase"} {
+					if value, ok := status[key]; ok {
+						projectedStatus[key] = value
+					}
+				}
+				var identity vllmPodState
+				if json.Unmarshal(item, &identity) != nil {
+					return nil, drainLiveStaticIssue("component incarnation drift")
+				}
+				if strings.HasSuffix(label, "-component-pods") {
+					projectedStatus["containerStatuses"] = identity.Status.ContainerStatuses
+				}
+				items = append(items, map[string]any{"metadata": projected, "status": projectedStatus, "specSHA256": availabilityHash(v["spec"])})
+			}
+			saved = drainJSON(map[string]any{"rawSHA256": availabilityHash(raw), "items": items})
+		} else if strings.HasSuffix(label, "-console-replicaset") || strings.HasSuffix(label, "-console-deployment") || strings.HasSuffix(label, "-manager-deployment") {
 			var owner vllmPodState
 			if json.Unmarshal(raw, &owner) != nil {
 				return nil, drainLiveStaticIssue("console owner JSON malformed")
@@ -327,67 +368,73 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	if !allowed {
 		return drainLiveStaticIssue("policy does not enable request-drain")
 	}
-	raw, err = read("manager", false, "-n", "phorvex-system", "get", "pod", p.ManagerPodName, "-o", "json")
-	if err != nil {
-		return err
-	}
-	var manager vllmPodState
-	if json.Unmarshal(raw, &manager) != nil || manager.Metadata.UID != p.ManagerPodUID {
-		return drainLiveStaticIssue("manager Pod identity drift")
-	}
-	managerReady := false
-	for _, c := range manager.Status.ContainerStatuses {
-		if c.Name == "manager" && c.Ready && c.ImageID == p.ManagerImageID && c.ContainerID == p.ManagerContainerID {
-			managerReady = true
+	if p.Schema == "live-request-drain-v2" {
+		if err = s.drainComponentBarrier(ctx, out, p, phase); err != nil {
+			return err
 		}
-	}
-	if !managerReady {
-		return drainLiveStaticIssue("manager image drift")
-	}
-	consoleName := os.Getenv("PHORVEX_CONSOLE_POD_NAME")
-	if consoleName == "" {
-		return drainLiveStaticIssue("console self identity unavailable")
-	}
-	raw, err = read("console", false, "-n", "phorvex-system", "get", "pod", consoleName, "-o", "json")
-	if err != nil {
-		return err
-	}
-	var self vllmPodState
-	if json.Unmarshal(raw, &self) != nil || self.Metadata.UID == "" || self.Metadata.UID != os.Getenv("PHORVEX_CONSOLE_POD_UID") || self.Metadata.Name != consoleName {
-		return drainLiveStaticIssue("console Pod identity drift")
-	}
-	consoleReady := false
-	for _, c := range self.Status.ContainerStatuses {
-		if c.Name == "console" && c.Ready && c.ImageID == p.ConsoleImageID && c.ContainerID != "" {
-			consoleReady = true
+	} else {
+		raw, err = read("manager", false, "-n", "phorvex-system", "get", "pod", p.ManagerPodName, "-o", "json")
+		if err != nil {
+			return err
 		}
-	}
-	if !consoleReady {
-		return drainLiveStaticIssue("console image drift")
-	}
-	rsName, rsUID, ownerOK := soleControllerOwner(self.Metadata.OwnerReferences, "ReplicaSet")
-	if !ownerOK {
-		return drainLiveStaticIssue("console ReplicaSet owner unavailable")
-	}
-	raw, err = read("console-replicaset", false, "-n", "phorvex-system", "get", "replicaset", rsName, "-o", "json")
-	if err != nil {
-		return err
-	}
-	var rs vllmPodState
-	if json.Unmarshal(raw, &rs) != nil || rs.Metadata.UID != rsUID {
-		return drainLiveStaticIssue("console ReplicaSet identity drift")
-	}
-	depName, depUID, ownerOK := soleControllerOwner(rs.Metadata.OwnerReferences, "Deployment")
-	if !ownerOK || depName != p.ConsoleDeploymentName || depUID != p.ConsoleDeploymentUID {
-		return drainLiveStaticIssue("console Deployment owner drift")
-	}
-	raw, err = read("console-deployment", false, "-n", "phorvex-system", "get", "deployment", depName, "-o", "json")
-	if err != nil {
-		return err
-	}
-	var dep vllmPodState
-	if json.Unmarshal(raw, &dep) != nil || dep.Metadata.UID != p.ConsoleDeploymentUID {
-		return drainLiveStaticIssue("console Deployment identity drift")
+		var manager vllmPodState
+		if json.Unmarshal(raw, &manager) != nil || manager.Metadata.UID != p.ManagerPodUID {
+			return drainLiveStaticIssue("manager Pod identity drift")
+		}
+		managerReady := false
+		for _, c := range manager.Status.ContainerStatuses {
+			if c.Name == "manager" && c.Ready && c.ImageID == p.ManagerImageID && c.ContainerID == p.ManagerContainerID {
+				managerReady = true
+			}
+		}
+		if !managerReady {
+			return drainLiveStaticIssue("manager image drift")
+		}
+		consoleName := os.Getenv("PHORVEX_CONSOLE_POD_NAME")
+		if consoleName == "" {
+			return drainLiveStaticIssue("console self identity unavailable")
+		}
+		raw, err = read("console", false, "-n", "phorvex-system", "get", "pod", consoleName, "-o", "json")
+		if err != nil {
+			return err
+		}
+		var self vllmPodState
+		if json.Unmarshal(raw, &self) != nil || self.Metadata.UID == "" || self.Metadata.UID != os.Getenv("PHORVEX_CONSOLE_POD_UID") || self.Metadata.Name != consoleName {
+			return drainLiveStaticIssue("console Pod identity drift")
+		}
+		consoleReady := false
+		for _, c := range self.Status.ContainerStatuses {
+			if c.Name == "console" && c.Ready && c.ImageID == p.ConsoleImageID && c.ContainerID != "" {
+				consoleReady = true
+			}
+		}
+		if !consoleReady {
+			return drainLiveStaticIssue("console image drift")
+		}
+		rsName, rsUID, ownerOK := soleControllerOwner(self.Metadata.OwnerReferences, "ReplicaSet")
+		if !ownerOK {
+			return drainLiveStaticIssue("console ReplicaSet owner unavailable")
+		}
+		raw, err = read("console-replicaset", false, "-n", "phorvex-system", "get", "replicaset", rsName, "-o", "json")
+		if err != nil {
+			return err
+		}
+		var rs vllmPodState
+		if json.Unmarshal(raw, &rs) != nil || rs.Metadata.UID != rsUID {
+			return drainLiveStaticIssue("console ReplicaSet identity drift")
+		}
+		depName, depUID, ownerOK := soleControllerOwner(rs.Metadata.OwnerReferences, "Deployment")
+		if !ownerOK || depName != p.ConsoleDeploymentName || depUID != p.ConsoleDeploymentUID {
+			return drainLiveStaticIssue("console Deployment owner drift")
+		}
+		raw, err = read("console-deployment", false, "-n", "phorvex-system", "get", "deployment", depName, "-o", "json")
+		if err != nil {
+			return err
+		}
+		var dep vllmPodState
+		if json.Unmarshal(raw, &dep) != nil || dep.Metadata.UID != p.ConsoleDeploymentUID {
+			return drainLiveStaticIssue("console Deployment identity drift")
+		}
 	}
 	journalName := drainJournalName(p.PolicyUID, p.PodUID)
 	raw, err = read("journal", true, "-n", "phorvex-system", "get", "configmap", journalName, "-o", "json", "--ignore-not-found=true")
@@ -506,20 +553,21 @@ func (s *Server) drainBenign(ctx context.Context, p drainLiveProfile, body []byt
 // This case measures one owned generation, one synthetic event, the native
 // operation and one benign completion. It does not measure wallet depletion.
 type drainLiveProbeResult struct {
-	Schema          string `json:"schema"`
-	Status          string `json:"status"`
-	ProfileSHA256   string `json:"profileSHA256"`
-	RequestSHA256   string `json:"requestSHA256,omitempty"`
-	SchedulerIDHash string `json:"schedulerIDHash,omitempty"`
-	FirstFrameAt    string `json:"firstFrameAt,omitempty"`
-	StreamFrames    int    `json:"streamFrames,omitempty"`
-	StreamEnded     string `json:"streamEnded,omitempty"`
-	EventUID        string `json:"eventUID,omitempty"`
-	DecisionID      string `json:"decisionID,omitempty"`
-	OperationID     string `json:"operationID,omitempty"`
-	Aborted         int    `json:"aborted,omitempty"`
-	BenignStatus    int    `json:"benignStatus,omitempty"`
-	Issue           string `json:"issue,omitempty"`
+	Schema                  string `json:"schema"`
+	Status                  string `json:"status"`
+	ProfileSHA256           string `json:"profileSHA256"`
+	ComponentSnapshotSHA256 string `json:"componentSnapshotSHA256,omitempty"`
+	RequestSHA256           string `json:"requestSHA256,omitempty"`
+	SchedulerIDHash         string `json:"schedulerIDHash,omitempty"`
+	FirstFrameAt            string `json:"firstFrameAt,omitempty"`
+	StreamFrames            int    `json:"streamFrames,omitempty"`
+	StreamEnded             string `json:"streamEnded,omitempty"`
+	EventUID                string `json:"eventUID,omitempty"`
+	DecisionID              string `json:"decisionID,omitempty"`
+	OperationID             string `json:"operationID,omitempty"`
+	Aborted                 int    `json:"aborted,omitempty"`
+	BenignStatus            int    `json:"benignStatus,omitempty"`
+	Issue                   string `json:"issue,omitempty"`
 }
 
 const drainStreamPython = `import base64,hashlib,http.client,json,signal,sys,time
@@ -597,6 +645,25 @@ type drainStreamRun struct {
 	done   chan error
 	final  chan drainStreamRow
 	cancel context.CancelFunc
+}
+
+func drainNoOverlapIfCompleted(out string, r *attackRecord, stream *drainStreamRun) (bool, error) {
+	select {
+	case streamErr := <-stream.done:
+		final := <-stream.final
+		if len(final.Original) > 0 {
+			if err := publishMongoAuditFile(out, "stream-final-original.json", final.Original, 4096); err != nil {
+				return true, err
+			}
+		}
+		if streamErr != nil || final.ErrorClass != "" || len(final.Original) == 0 {
+			return true, errors.New("owned stream failed before event")
+		}
+		r.DrainLiveProbe.Status = "NO_DISCRIMINATING_OVERLAP"
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func drainRequestBody(modelID string, maxTokens int, stream bool) []byte {
@@ -930,6 +997,8 @@ type drainLiveStaticIssue string
 func (issue drainLiveStaticIssue) Error() string { return string(issue) }
 
 var drainLiveStaticMessages = map[drainLiveStaticIssue]string{
+	"component release authority unavailable":                                  "request-drain reviewed immutable manager/Console release authority is unavailable; verify the deployed release digest configuration",
+	"component incarnation drift":                                              "request-drain manager/Console owner, release image or incarnation changed or is rolling; wait for a settled reviewed release and start a new run",
 	"target Pod read unavailable":                                              "request-drain reviewed target Pod is unavailable; inspect the target and refresh reviewed Pod pins",
 	"manager Pod read unavailable":                                             "request-drain reviewed manager Pod is unavailable; refresh reviewed manager pins",
 	"console source read unavailable":                                          "request-drain Console Pod or owner source is unavailable; inspect Console ownership and refresh reviewed pins",
@@ -1099,6 +1168,17 @@ func applyDrainLiveVerdict(r *attackRecord) {
 }
 
 func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackRecord, p drainLiveProfile) error {
+	if p.Schema == "live-request-drain-v2" {
+		snapshot, err := s.drainComponents(ctx, out, p, "captured")
+		if err != nil {
+			return err
+		}
+		p.components = &snapshot
+		r.DrainLiveProbe.ComponentSnapshotSHA256 = availabilityHash(drainJSON(snapshot))
+		if err = publishMongoAuditFile(out, "captured-component-snapshot.json", drainJSON(snapshot), 16<<10); err != nil {
+			return err
+		}
+	}
 	if err := s.drainLivePreflight(ctx, out, p, "before"); err != nil {
 		return err
 	}
@@ -1152,21 +1232,16 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 	if err = drainRetainedCallerIssue(p.retainedCaller.check(ctx)); err != nil {
 		return err
 	}
-	// A completed stream before the event has no discriminating overlap.
-	select {
-	case streamErr := <-stream.done:
-		final := <-stream.final
-		if len(final.Original) > 0 {
-			if err = publishMongoAuditFile(out, "stream-final-original.json", final.Original, 4096); err != nil {
-				return err
-			}
-		}
-		if streamErr != nil || final.ErrorClass != "" || len(final.Original) == 0 {
-			return errors.New("owned stream failed before event")
-		}
-		r.DrainLiveProbe.Status = "NO_DISCRIMINATING_OVERLAP"
-		return nil
-	default:
+	// Both checks consume real producer completion, including completion during
+	// the fresh component reads. Never emit a signal for an already-ended stream.
+	if ended, err := drainNoOverlapIfCompleted(out, r, stream); ended || err != nil {
+		return err
+	}
+	if err = s.drainComponentBarrier(ctx, out, p, "pre-event"); err != nil {
+		return err
+	}
+	if ended, err := drainNoOverlapIfCompleted(out, r, stream); ended || err != nil {
+		return err
 	}
 	stimulus, eventErr := s.createCorrelatedVLLMEventWithAdapterContext(p.Context, p.PodName, p.PodUID, "DenialOfWallet", "one owned fixed completion admitted before synthetic request-drain signal", "0.9", "", func(raw []byte) error { return publishMongoAuditFile(out, "event-manifest.yaml", raw, 4096) })
 	if stimulus != nil {
@@ -1193,6 +1268,9 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 				return err
 			}
 			e := d.DrainOperation
+			if !drainDecisionReleaseMatches(d, p) {
+				return drainLiveStaticIssue("component incarnation drift")
+			}
 			if !drainTerminalMatchesProfile(d, p) {
 				return errors.New("drain operation identity mismatch")
 			}
@@ -1226,8 +1304,10 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 			if err = s.drainLivePreflight(ctx, out, p, "after"); err != nil {
 				return err
 			}
-			if err = drainConsoleIncarnationStable(out); err != nil {
-				return err
+			if p.Schema == "live-request-drain-v1" {
+				if err = drainConsoleIncarnationStable(out); err != nil {
+					return err
+				}
 			}
 			benign := drainRequestBody(p.ModelID, 8, false)
 			status, valid, benignErr := s.drainBenign(ctx, p, benign)
@@ -1243,7 +1323,13 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 				closing.DrainOperation.OperationID != e.OperationID || closing.DrainOperation.ReceiptSHA256 != e.ReceiptSHA256 {
 				return errors.New("closing audit interval or native receipt changed")
 			}
+			if !drainDecisionReleaseMatches(closing, p) {
+				return drainLiveStaticIssue("component incarnation drift")
+			}
 			if err = publishMongoAuditFile(out, "closing-audit-projection.json", drainJSON(closing), 64<<10); err != nil {
+				return err
+			}
+			if err = s.drainComponentBarrier(ctx, out, p, "closing"); err != nil {
 				return err
 			}
 			r.DrainLiveProbe.Status = "OWNED_ABORT_AND_CONTINUITY_OBSERVED"

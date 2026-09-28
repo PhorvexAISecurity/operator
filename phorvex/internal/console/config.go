@@ -59,6 +59,7 @@ type Config struct {
 	// DrainLive admits only the reviewed, exact-source vLLM request-drain arm.
 	DrainLiveEnabled       bool
 	DrainLiveProfileSHA256 string
+	DrainReleaseAuthority  DrainReleaseAuthority
 	DrainLiveProfilePath   string
 	// EndpointLease is a separate, default-off real public-Service caller
 	// revocation objective. It never changes endpoint-rotate's route-only scope.

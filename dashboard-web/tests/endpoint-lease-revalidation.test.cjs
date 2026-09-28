@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const crypto = require("node:crypto");
 const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
@@ -51,6 +52,45 @@ test("complete revalidation renders separately without new defense or latency cr
   const countExpression = report.match(/const defended = (typedBehavioralRows\.filter\([^\n]+\)\.length);/);
   assert.ok(countExpression, "typed defense count changed; review accounting");
   assert.equal(new Function("typedBehavioralRows", `return ${countExpression[1]}`)([r]), 0);
+});
+test("exact release-400 API row with legacy null issues renders existing protection without new credit", () => {
+  const raw = fs.readFileSync(path.join(__dirname, "fixtures/endpoint-revalidation-release400-api.json"));
+  assert.equal(crypto.createHash("sha256").update(raw).digest("hex"), "0ded2f90b9f171b82031d4e51a0524cc71e6eb0c174eef87dcda39ebd6dde7d1");
+  const rows = JSON.parse(raw).attacks;
+  assert.equal(rows.length, 1);
+  const r = rows[0];
+  assert.equal(r.id, "endpoint-lease-6982f1adacd1862a67f61aef2eb3ef29");
+  assert.equal(r.endpointLeaseProbe.issues, null);
+  assert.equal(truth.isEndpointProtectionRevalidated(r), true);
+  assert.match(render(r), /data-endpoint-lease="revalidated"/);
+  assert.match(render(r), /Existing protection verified/);
+  assert.match(render(r), /No new security event, brain selection, actuation, or response-time credit/);
+  assert.equal(dispatch.liveAttackVerdict(r).action, "existing protection");
+  assert.equal(truth.showSecurityOutcomeSections(r), false);
+  assert.equal(truth.hasAvailabilityCostEvidence(r), false);
+  assert.equal(truth.attackCSVActuator(r), "");
+  assert.equal(r.actuated, false);
+  assert.equal(r.timeToDefendSec, 0);
+  for (const [name, mutate] of [
+    ["missing issues", r => { delete r.endpointLeaseProbe.issues; }],
+    ["nonempty issues", r => { r.endpointLeaseProbe.issues = ["unverified"]; }],
+    ["string issues", r => { r.endpointLeaseProbe.issues = "[]"; }],
+    ["object issues", r => { r.endpointLeaseProbe.issues = { length: 0 }; }],
+    ["boolean issues", r => { r.endpointLeaseProbe.issues = false; }],
+    ["numeric issues", r => { r.endpointLeaseProbe.issues = 0; }],
+    ["missing proxy proof with null issues", r => { delete r.endpointLeaseProbe.everyServingPodEffective; }],
+    ["untyped journal proof with null issues", r => { r.endpointLeaseProbe.protectedJournalTerminal = "true"; }],
+    ["untyped A denial with null issues", r => { r.endpointLeaseProbe.postAExactDenial = "true"; }],
+    ["B incomplete with null issues", r => { r.endpointLeaseProbe.postBValidCompletion = false; }],
+    ["missing historical SHA with null issues", r => { delete r.endpointLeaseProbe.historicalJournalSHA256; }],
+    ["actuation with null issues", r => { r.actuated = true; }],
+  ]) {
+    const bad = structuredClone(r); mutate(bad);
+    assert.equal(truth.isEndpointProtectionRevalidated(bad), false, name);
+    assert.equal(dispatch.liveAttackVerdict(bad).revalidated, false, name);
+    assert.match(render(bad), /data-endpoint-lease="incomplete"/, name);
+    assert.doesNotMatch(render(bad), /Existing protection verified/, name);
+  }
 });
 test("incomplete or cross-wired outer results cannot label a valid nested probe as verified", () => {
   for (const [name, mutate] of [

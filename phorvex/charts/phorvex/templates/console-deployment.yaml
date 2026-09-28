@@ -403,6 +403,20 @@ spec:
         {{- if .Values.phorvex.console.drainLive.enabled }}
         - name: PHORVEX_CONSOLE_DRAIN_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.drainLive.profileSHA256 | quote }}
+        # V2 consumes independently published per-component authority. V1 ignores
+        # these optional values and retains its original exact captured pins.
+        - name: PHORVEX_CONSOLE_DRAIN_MANAGER_TEMPLATE_IMAGE
+          value: {{ printf "%s:%s" .Values.phorvex.image.repository .Values.phorvex.image.tag | quote }}
+        - name: PHORVEX_CONSOLE_DRAIN_MANAGER_IMAGE
+          value: {{ if .Values.phorvex.image.releaseDigest }}{{ printf "%s@%s" .Values.phorvex.image.repository .Values.phorvex.image.releaseDigest | quote }}{{ else }}""{{ end }}
+        - name: PHORVEX_CONSOLE_DRAIN_MANAGER_SOURCE_SHA
+          value: {{ .Values.phorvex.image.releaseSourceSHA | quote }}
+        - name: PHORVEX_CONSOLE_DRAIN_CONSOLE_TEMPLATE_IMAGE
+          value: {{ printf "%s:%s" .Values.phorvex.console.image.repository .Values.phorvex.console.image.tag | quote }}
+        - name: PHORVEX_CONSOLE_DRAIN_CONSOLE_IMAGE
+          value: {{ if .Values.phorvex.console.image.releaseDigest }}{{ printf "%s@%s" .Values.phorvex.console.image.repository .Values.phorvex.console.image.releaseDigest | quote }}{{ else }}""{{ end }}
+        - name: PHORVEX_CONSOLE_DRAIN_CONSOLE_SOURCE_SHA
+          value: {{ .Values.phorvex.console.image.releaseSourceSHA | quote }}
         {{- end }}
         - name: PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED
           value: {{ .Values.phorvex.console.endpointLease.enabled | default false | quote }}

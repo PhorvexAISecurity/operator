@@ -12,7 +12,8 @@ export function isEndpointLeaseRevalidationProbe(p: EndpointLeaseProbeResult | u
     sha(p.currentStateSHA256) && Number.isSafeInteger(p.currentRevision) && (p.currentRevision ?? 0) > 0 &&
     !!p.historicalOperationId && /^[0-9a-f]{32,64}$/.test(p.historicalOperationId) &&
     !!p.historicalEventName && !!p.historicalEventUID && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.historicalEventUID) &&
-    !!p.historicalTickId && Array.isArray(p.issues) && p.issues.length === 0;
+    // Earlier Go record clones serialized an empty issues slice as null.
+    !!p.historicalTickId && (p.issues === null || (Array.isArray(p.issues) && p.issues.length === 0));
 }
 
 export function isEndpointProtectionRevalidated(r: AttackResult): boolean {

@@ -422,7 +422,7 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 	}
 	if r.EndpointLeaseProbe != nil {
 		probe := *r.EndpointLeaseProbe
-		probe.Issues = append([]string(nil), r.EndpointLeaseProbe.Issues...)
+		probe.Issues = append([]string{}, r.EndpointLeaseProbe.Issues...)
 		c.EndpointLeaseProbe = &probe
 	}
 	if r.LiteLLMLiveProbe != nil {

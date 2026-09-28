@@ -28,13 +28,15 @@ type drainLiveProfile struct {
 	PolicyName                       string            `json:"policyName"`
 	PolicyUID                        string            `json:"policyUID"`
 	PolicyGeneration                 int64             `json:"policyGeneration"`
-	ManagerPodName                   string            `json:"managerPodName"`
-	ManagerPodUID                    string            `json:"managerPodUID"`
-	ManagerImageID                   string            `json:"managerImageID"`
-	ManagerContainerID               string            `json:"managerContainerID"`
+	ManagerDeploymentName            string            `json:"managerDeploymentName,omitempty"`
+	ManagerDeploymentUID             string            `json:"managerDeploymentUID,omitempty"`
+	ManagerPodName                   string            `json:"managerPodName,omitempty"`
+	ManagerPodUID                    string            `json:"managerPodUID,omitempty"`
+	ManagerImageID                   string            `json:"managerImageID,omitempty"`
+	ManagerContainerID               string            `json:"managerContainerID,omitempty"`
 	ConsoleDeploymentName            string            `json:"consoleDeploymentName"`
 	ConsoleDeploymentUID             string            `json:"consoleDeploymentUID"`
-	ConsoleImageID                   string            `json:"consoleImageID"`
+	ConsoleImageID                   string            `json:"consoleImageID,omitempty"`
 	ModelID                          string            `json:"modelID"`
 	AuditSourceIdentity              string            `json:"auditSourceIdentity"`
 	ServingCompletionSHA256          string            `json:"servingCompletionSHA256"`
@@ -44,6 +46,8 @@ type drainLiveProfile struct {
 	RetainedCallerLeaseProfileSHA256 string            `json:"retainedCallerLeaseProfileSHA256,omitempty"`
 	MaxRunSeconds                    int               `json:"maxRunSeconds"`
 	retainedCaller                   *retainedCallerAuthority
+	components                       *drainComponentSnapshot
+	release                          drainReleaseAuthority
 }
 
 func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
@@ -57,14 +61,13 @@ func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
 	if d.Decode(&p) != nil || d.Decode(&struct{}{}) != io.EOF {
 		return p, bad
 	}
-	if p.Schema != "live-request-drain-v1" || p.Context == "" || p.Context == "in-cluster" ||
+	if (p.Schema != "live-request-drain-v1" && p.Schema != "live-request-drain-v2") || p.Context == "" || p.Context == "in-cluster" ||
 		strings.Contains(p.Context, "__SET_") || !staticUID.MatchString(p.ClusterUID) ||
 		!staticUID.MatchString(p.PodUID) || !staticUID.MatchString(p.ServiceUID) ||
-		!staticUID.MatchString(p.PolicyUID) || !staticUID.MatchString(p.ManagerPodUID) ||
+		!staticUID.MatchString(p.PolicyUID) ||
 		!staticUID.MatchString(p.ConsoleDeploymentUID) ||
-		!mongoPinnedImage.MatchString(p.PodImageID) || !mongoPinnedImage.MatchString(p.ManagerImageID) ||
-		p.PodContainerID == "" || p.ProxyContainerID == "" || p.ManagerContainerID == "" || !mongoPinnedImage.MatchString(p.ProxyImageID) ||
-		!mongoPinnedImage.MatchString(p.ConsoleImageID) ||
+		!mongoPinnedImage.MatchString(p.PodImageID) ||
+		p.PodContainerID == "" || p.ProxyContainerID == "" || !mongoPinnedImage.MatchString(p.ProxyImageID) ||
 		!staticSHA256.MatchString(p.ServingCompletionSHA256) ||
 		!staticSHA256.MatchString(p.ServingEngineSHA256) ||
 		p.ServingCompletionSHA256 != "30ed34497113131c2749b7091bc4a49b5dd374b23b15bc5c7981c3e90ede804a" ||
@@ -78,7 +81,19 @@ func parseDrainLiveProfile(raw []byte) (drainLiveProfile, error) {
 		p.MaxRunSeconds != 240 {
 		return p, bad
 	}
-	for _, name := range []string{p.PodName, p.ServiceName, p.ManagerPodName, p.ConsoleDeploymentName} {
+	names := []string{p.PodName, p.ServiceName, p.ConsoleDeploymentName}
+	if p.Schema == "live-request-drain-v1" {
+		if !staticUID.MatchString(p.ManagerPodUID) || p.ManagerContainerID == "" || !mongoPinnedImage.MatchString(p.ManagerImageID) || !mongoPinnedImage.MatchString(p.ConsoleImageID) || p.ManagerDeploymentName != "" || p.ManagerDeploymentUID != "" {
+			return p, bad
+		}
+		names = append(names, p.ManagerPodName)
+	} else {
+		if !staticUID.MatchString(p.ManagerDeploymentUID) || p.ManagerPodName != "" || p.ManagerPodUID != "" || p.ManagerContainerID != "" || p.ManagerImageID != "" || p.ConsoleImageID != "" {
+			return p, bad
+		}
+		names = append(names, p.ManagerDeploymentName)
+	}
+	for _, name := range names {
 		if name == "" || len(validation.IsDNS1123Subdomain(name)) != 0 {
 			return p, bad
 		}
@@ -108,6 +123,12 @@ func loadDrainLiveProfile(cfg Config) (drainLiveProfile, []byte, error) {
 	}
 	if cfg.AuditSourceIdentity != p.AuditSourceIdentity {
 		return p, nil, drainLiveStaticIssue("authenticated audit source identity drift")
+	}
+	if p.Schema == "live-request-drain-v2" {
+		p.release = cfg.DrainReleaseAuthority
+		if !p.release.valid() {
+			return p, nil, drainLiveStaticIssue("component release authority unavailable")
+		}
 	}
 	return p, raw, nil
 }

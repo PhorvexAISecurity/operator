@@ -78,6 +78,6 @@ done
 # All inputs are validated before the first registry mutation. A bad second image can
 # therefore never leave a release half-tagged.
 for index in "${!sources[@]}"; do
-  docker buildx imagetools create -t "${targets[$index]}" "${sources[$index]}"
+  docker buildx imagetools create --prefer-index=false -t "${targets[$index]}" "${sources[$index]}"
   echo "tagged ${sources[$index]} -> ${targets[$index]}"
 done

@@ -108,3 +108,34 @@ The real-app tests exercise the existing FastAPI proxy and lifespan, a local
 upstream, public inference and control refusal, and both actual Uvicorn HTTP
 and TLS listeners. They use synthetic in-process keys and a one-day localhost
 test certificate. No model weights, live Pod, or cluster control were called.
+
+## Request-drain component release authority
+
+`render_drain_profile.py` now emits `live-request-drain-v2` by default. Supply
+original manager Deployment and ReplicaSet JSON through `--manager-deployment`
+and `--manager-replicaset`. The immutable profile keeps stable manager and
+Console Deployment UIDs while preserving every target Pod, proxy, Service,
+policy, source, and retained caller binding. `--legacy-v1` explicitly emits the
+historical exact manager Pod/container/image pins; existing v1 profiles retain
+those checks.
+
+The normal image publication writes each built component's `releaseDigest`
+and `releaseSourceSHA` alongside its tag in EKS values. It resolves image
+configuration through the immutable published manifest before checking the OCI
+build-source label. An unbuilt component keeps its prior authority bytes; an
+explicit retag preserves each artifact's original build source. A v2 Fire
+refuses missing immutable authority and never discovers authority from a tag.
+An installation adopting v2 must publish or separately review the initial
+manager and Console authority and install the reviewed target profile once.
+Subsequent component releases need no target profile refresh. Target/runtime
+replacement still requires its own reviewed capture.
+
+Each v2 run captures settled Deployment/ReplicaSet/Ready Pod ownership, exact
+container incarnations, the approved runtime index image IDs, and template
+hashes. It rechecks the frozen identities before event creation and at closing;
+a component rollout during a run refuses confirmation. Namespace-wide raw Pod
+specifications and environment values are not persisted in product evidence.
+Only identity projections and source hashes are retained. The existing native
+request-drain chooser, operation receipts, occupied journal fences, and retained
+caller validation are unchanged. This source change performs no live Fire or
+journal reset, and it does not authorize unreviewed platform digest aliases.

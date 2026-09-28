@@ -630,7 +630,7 @@ export interface EndpointLeaseProbeResult {
   cleanup?: string;
   postAStatus?: number; postBStatus?: number;
   postAExactDenial: boolean; postBValidCompletion: boolean;
-  issues: string[];
+  issues: string[] | null;
 }
 export interface GuardrailOutputProbeResult {
   schema: "guardrail-output-probe-result-v2";
