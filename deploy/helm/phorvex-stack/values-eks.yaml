@@ -39,6 +39,8 @@ phorvex:
       # registry has to be spelled out in the repository here.
       repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
       tag: "0.4.194"    # ci:phorvex-tag
+      releaseDigest: "" # ci:phorvex-digest
+      releaseSourceSHA: "" # ci:phorvex-source
       pullPolicy: IfNotPresent
     baseInterval: 10s
     leaderElect: true
@@ -296,6 +298,8 @@ phorvex:
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
         tag: "0.4.194" # ci:console-tag
+        releaseDigest: "" # ci:console-digest
+        releaseSourceSHA: "" # ci:console-source
         pullPolicy: IfNotPresent
       port: 8090
       # Retention is activated atomically with the compatible console image at release time.

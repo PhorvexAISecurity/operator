@@ -60,10 +60,10 @@ class DeployImageManifestTests(unittest.TestCase):
         self.assertEqual(
             calls,
             [
-                ["buildx", "imagetools", "create", "-t",
+                ["buildx", "imagetools", "create", "--prefer-index=false", "-t",
                  f"{REGISTRY}/phorvex:0.4.106",
                  f"{REGISTRY}/phorvex@{OPERATOR_DIGEST}"],
-                ["buildx", "imagetools", "create", "-t",
+                ["buildx", "imagetools", "create", "--prefer-index=false", "-t",
                  f"{REGISTRY}/phorvex-console:0.4.106",
                  f"{REGISTRY}/phorvex-console@{CONSOLE_DIGEST}"],
             ],

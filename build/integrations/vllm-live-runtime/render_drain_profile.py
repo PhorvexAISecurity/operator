@@ -42,7 +42,7 @@ def selected_container(pod: dict, name: str) -> dict:
 
 
 def render(inputs: dict[str, dict], context: str, audit_identity: str,
-           retained_lease_profile: bytes | None = None) -> tuple[bytes, dict]:
+           retained_lease_profile: bytes | None = None, *, legacy_v1: bool = False) -> tuple[bytes, dict]:
     cluster, pod, svc, policy = (inputs[key] for key in ("cluster", "pod", "service", "policy"))
     manager, console, console_deployment, sources = (inputs[key] for key in ("manager", "console", "console_deployment", "sources"))
     if not context or context == "in-cluster" or "__SET_" in context or not audit_identity or "__SET_" in audit_identity:
@@ -65,6 +65,8 @@ def render(inputs: dict[str, dict], context: str, audit_identity: str,
     leased = "phorvex.ai/endpoint-lease-source-sha256" in annotations
     base_inputs = {"cluster", "pod", "service", "policy", "manager", "console",
                    "console_deployment", "sources"}
+    if not legacy_v1:
+        base_inputs |= {"manager_deployment", "manager_replicaset"}
     if leased:
         if retained_lease_profile is None or set(inputs) != base_inputs | {
                 "endpointslices", "source", "lease_policy", "console_replicaset"}:
@@ -90,8 +92,28 @@ def render(inputs: dict[str, dict], context: str, audit_identity: str,
             raise ValueError("reviewed derivative source annotation absent")
     vllm, proxy = selected_container(pod, "vllm"), selected_container(pod, "guardrail")
     manager_runtime, console_runtime = selected_container(manager, "manager"), selected_container(console, "console")
+    owner_fields = {}
+    if not legacy_v1:
+        dep, rs = inputs["manager_deployment"], inputs["manager_replicaset"]
+        dm, rm = dep.get("metadata", {}), rs.get("metadata", {})
+        if (dep.get("kind") != "Deployment" or rs.get("kind") != "ReplicaSet"
+                or dm.get("namespace") != "phorvex-system" or rm.get("namespace") != "phorvex-system"
+                or not guardrail_profile.UID.fullmatch(dm.get("uid", "")) or not guardrail_profile.UID.fullmatch(rm.get("uid", "")) or dm.get("deletionTimestamp")
+                or rm.get("deletionTimestamp")):
+            raise ValueError("manager stable owner originals missing")
+        def owner(obj, kind, name, uid):
+            refs = [x for x in obj["metadata"].get("ownerReferences", []) if x.get("controller") is True]
+            return len(refs) == 1 and refs[0].get("kind") == kind and refs[0].get("name") == name and refs[0].get("uid") == uid
+        if (not owner(manager, "ReplicaSet", rm["name"], rm["uid"])
+                or not owner(rs, "Deployment", dm["name"], dm["uid"])
+                or dep.get("spec", {}).get("replicas") != 1
+                or dep.get("status", {}).get("observedGeneration") != dm.get("generation")
+                or any(dep.get("status", {}).get(k) != 1 for k in
+                       ("replicas", "updatedReplicas", "readyReplicas", "availableReplicas"))):
+            raise ValueError("manager stable owner is not settled and Ready")
+        owner_fields = {"managerDeploymentName": dm["name"], "managerDeploymentUID": dm["uid"]}
     profile = {
-        "schema": "live-request-drain-v1", "context": context, "clusterUID": cluster["metadata"]["uid"],
+        "schema": "live-request-drain-v1" if legacy_v1 else "live-request-drain-v2", "context": context, "clusterUID": cluster["metadata"]["uid"],
         "podName": pod["metadata"]["name"], "podUID": pod["metadata"]["uid"],
         "podImageID": vllm["imageID"], "podContainerID": vllm["containerID"],
         "proxyImageID": proxy["imageID"], "proxyContainerID": proxy["containerID"],
@@ -108,6 +130,10 @@ def render(inputs: dict[str, dict], context: str, audit_identity: str,
         "drainProxySourceSHA256": annotations["phorvex.ai/drain-proxy-source"],
         "drainEngineSourceSHA256": annotations["phorvex.ai/drain-engine-source"], "maxRunSeconds": 240,
     }
+    if not legacy_v1:
+        for key in ("managerPodName", "managerPodUID", "managerImageID", "managerContainerID", "consoleImageID"):
+            del profile[key]
+        profile.update(owner_fields)
     if leased:
         profile["retainedCallerLeaseProfileSHA256"] = hashlib.sha256(retained_lease_profile).hexdigest()
     raw = (json.dumps(profile, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -128,10 +154,18 @@ def main() -> None:
         parser.add_argument("--" + name, required=True)
     for name in ("endpointslices", "source", "lease-policy", "console-replicaset", "retained-caller-lease-profile", "retained-caller-lease-profile-sha256"):
         parser.add_argument("--" + name)
+    parser.add_argument("--legacy-v1", action="store_true", help="explicit historical exact-incarnation schema")
+    parser.add_argument("--manager-deployment")
+    parser.add_argument("--manager-replicaset")
     args = parser.parse_args()
     inputs, hashes = {}, {}
     for name in ("cluster", "pod", "service", "policy", "manager", "console", "console_deployment", "sources"):
         inputs[name], hashes[name] = read(getattr(args, name))
+    if not args.legacy_v1:
+        if not args.manager_deployment or not args.manager_replicaset:
+            raise ValueError("v2 needs stable manager Deployment and ReplicaSet originals")
+        for name in ("manager_deployment", "manager_replicaset"):
+            inputs[name], hashes[name] = read(getattr(args,name))
     retained = None
     optional = ("endpointslices", "source", "lease_policy", "console_replicaset")
     if any(getattr(args, name) is not None for name in optional) or args.retained_caller_lease_profile is not None or args.retained_caller_lease_profile_sha256 is not None:
@@ -143,7 +177,7 @@ def main() -> None:
         if hashlib.sha256(retained).hexdigest() != args.retained_caller_lease_profile_sha256:
             raise ValueError("retained caller lease profile byte/hash drift")
         hashes["retained_caller_lease_profile"] = args.retained_caller_lease_profile_sha256
-    raw, values = render(inputs, args.context, args.audit_source_identity, retained)
+    raw, values = render(inputs, args.context, args.audit_source_identity, retained, legacy_v1=args.legacy_v1)
     output = Path(args.out)
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     os.chmod(output, 0o700)

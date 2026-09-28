@@ -203,6 +203,7 @@ jobs:
 
       - name: Release image provenance regressions
         run: |
+          python3 tools/test_drain_release_values.py
           bash -n deploy/ci/retag-images.sh
           bash -n deploy/ci/check-release-head.sh
           bash -n deploy/ci/publish-release.sh
@@ -735,26 +736,15 @@ jobs:
         env:
           V:       ${{ steps.version.outputs.version }}
           MARKERS: ${{ steps.built.outputs.markers }}
+          REG: ${{ steps.ecr.outputs.registry }}
+          SOURCE_MODE: ${{ inputs.force_release && 'tag' || 'digest' }}
+          SOURCE_SHA: ${{ github.sha }}
+          RELEASE_FROM: ${{ inputs.release_from }}
+          OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+          CONSOLE_DIGEST: ${{ needs.build-console.outputs.digest }}
         run: |
           F=deploy/helm/phorvex-stack/values-eks.yaml
-          # Done in Python rather than sed: the `-i` flag differs between GNU and BSD, and
-          # a rewrite rule that silently no-ops is the worst possible failure here — CI
-          # would tag and push a release whose values file still pins the previous image.
-          python3 - "$F" "$V" $MARKERS <<'PY'
-          import re, sys
-          path, version, markers = sys.argv[1], sys.argv[2], sys.argv[3:]
-          src = open(path, encoding="utf-8").read()
-          for marker in markers:
-              # Anchored on the `# ci:` comment, not on `tag:` alone, so an unrelated tag
-              # key elsewhere in the file can never be rewritten by accident.
-              pat = re.compile(rf'^(\s*tag:\s*)"[^"]*"(\s*#\s*{re.escape(marker)})',
-                               re.MULTILINE)
-              src, n = pat.subn(rf'\g<1>"{version}"\g<2>', src)
-              if n != 1:
-                  sys.exit(f"marker '{marker}' matched {n} times in {path} — expected 1")
-              print(f"  {marker} -> {version}")
-          open(path, "w", encoding="utf-8").write(src)
-          PY
+          python3 deploy/ci/update-release-values.py "$F" $MARKERS
           git diff --stat "$F"
           if git diff --quiet "$F"; then
             # An image was built, so the file MUST have moved. Unchanged means the markers

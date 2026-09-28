@@ -9,7 +9,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from render_drain_profile import COMPLETION_SHA, ENGINE_SHA, main, render
+from render_drain_profile import COMPLETION_SHA, ENGINE_SHA, main, render as render_current
+
+def render(*args, **kwargs):
+    return render_current(*args, **kwargs, legacy_v1=True)
 from test_render_guardrail_profile import lease_fixture
 
 
@@ -135,7 +138,7 @@ class DrainProfileRender(unittest.TestCase):
         audit = json.loads(retained)["auditSourceIdentity"]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            arguments = ["render_drain_profile.py"]
+            arguments = ["render_drain_profile.py", "--legacy-v1"]
             for key, value in objects.items():
                 path = root / (key + ".json")
                 path.write_text(json.dumps(value))
@@ -153,6 +156,42 @@ class DrainProfileRender(unittest.TestCase):
                 main()
             rendered = json.loads((root / "output" / "profile.json").read_bytes())
             self.assertEqual(rendered["retainedCallerLeaseProfileSHA256"], arguments[-3])
+
+
+class DrainProfileV2(unittest.TestCase):
+    def objects(self):
+        value = inputs()
+        value["manager"]["metadata"]["ownerReferences"] = [{"kind": "ReplicaSet", "name": "manager-rs", "uid": UID, "controller": True}]
+        value["manager_replicaset"] = {"kind": "ReplicaSet", "metadata": {"name": "manager-rs", "uid": UID, "namespace": "phorvex-system", "ownerReferences": [{"kind": "Deployment", "name": "phorvex-phorvex", "uid": UID, "controller": True}]}}
+        value["manager_deployment"] = {"kind": "Deployment", "metadata": {"name": "phorvex-phorvex", "uid": UID, "namespace": "phorvex-system", "generation": 1}, "spec": {"replicas": 1}, "status": {"observedGeneration": 1, "replicas": 1, "updatedReplicas": 1, "readyReplicas": 1, "availableReplicas": 1}}
+        return value
+
+    def test_component_releases_leave_target_profile_bytes_unchanged(self):
+        objects = self.objects()
+        before, _ = render_current(objects, "dev-test", "reviewed-audit")
+        objects["manager"]["metadata"]["uid"] = "22222222-2222-4222-8222-222222222222"
+        objects["manager"]["metadata"]["name"] = "replacement-manager"
+        for component in ("manager", "console"):
+            objects[component]["status"]["containerStatuses"][0]["imageID"] = "repo.invalid/next@sha256:" + "e" * 64
+            objects[component]["status"]["containerStatuses"][0]["containerID"] = "containerd://replacement"
+        after, _ = render_current(objects, "dev-test", "reviewed-audit")
+        self.assertEqual(before, after)
+        profile = json.loads(after)
+        self.assertEqual(profile["schema"], "live-request-drain-v2")
+        self.assertEqual(profile["managerDeploymentUID"], UID)
+        for name in ("managerPodUID", "managerContainerID", "managerImageID", "consoleImageID"):
+            self.assertNotIn(name, profile)
+        self.assertEqual(profile["podUID"], UID)
+        self.assertEqual(profile["drainEngineSourceSHA256"], "c" * 64)
+
+    def test_unsettled_wrong_owner_or_missing_originals_refuse(self):
+        for change in (lambda o: o.pop("manager_deployment"),
+                       lambda o: o["manager_deployment"]["status"].update(observedGeneration=0),
+                       lambda o: o["manager_replicaset"]["metadata"]["ownerReferences"][0].update(uid="foreign")):
+            objects = self.objects()
+            change(objects)
+            with self.assertRaises((ValueError, KeyError)):
+                render_current(objects, "dev-test", "reviewed-audit")
 
 
 if __name__ == "__main__":

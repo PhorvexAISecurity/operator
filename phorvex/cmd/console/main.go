@@ -402,6 +402,17 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.DrainLiveProfileSHA256 = drainLiveSHA
 	cfg.DrainLiveProfilePath = "/etc/phorvex-drain-live/profile.json"
+	cfg.DrainReleaseAuthority = console.DrainReleaseAuthority{}
+	for name, target := range map[string]*string{
+		"PHORVEX_CONSOLE_DRAIN_MANAGER_TEMPLATE_IMAGE": &cfg.DrainReleaseAuthority.Manager.TemplateImage,
+		"PHORVEX_CONSOLE_DRAIN_MANAGER_IMAGE":          &cfg.DrainReleaseAuthority.Manager.Image,
+		"PHORVEX_CONSOLE_DRAIN_MANAGER_SOURCE_SHA":     &cfg.DrainReleaseAuthority.Manager.SourceSHA,
+		"PHORVEX_CONSOLE_DRAIN_CONSOLE_TEMPLATE_IMAGE": &cfg.DrainReleaseAuthority.Console.TemplateImage,
+		"PHORVEX_CONSOLE_DRAIN_CONSOLE_IMAGE":          &cfg.DrainReleaseAuthority.Console.Image,
+		"PHORVEX_CONSOLE_DRAIN_CONSOLE_SOURCE_SHA":     &cfg.DrainReleaseAuthority.Console.SourceSHA,
+	} {
+		*target, _ = lookup(name)
+	}
 	endpointLeaseEnabled, err := readBool("PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED")
 	if err != nil {
 		return err
