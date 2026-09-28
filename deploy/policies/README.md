@@ -47,7 +47,7 @@ intentional live edit is overwritten.
 | chroma, mongo | 1 | 11 | lambda 0.4 |
 | nats | 2 | 11 | lambda 0.4 |
 | voice | 1 | 10 (no quarantine: isolating a serving pod makes it return 503) | lambda 0.4 |
-| litellm | 1 | 10 (no quarantine) | lambda 0.5 |
+| litellm | 1 | 11 (no quarantine; `litellm-client-revoke` added 2026-09-28 for the Live gateway) | lambda 0.5 |
 | vllm | 0 | 8 (no quarantine; no warm-swap or model-shard-replace, because a second model copy never loads on the single time-sliced T4) | lambda 0.5 |
 
 None of the nine sets `spec.objective.disruptionAversion` (a persistent preference against

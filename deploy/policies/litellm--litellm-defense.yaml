@@ -18,6 +18,7 @@ spec:
     - request-drain
     - guardrail-rotate
     - kv-migrate-invalidate
+    - litellm-client-revoke
   assetValue:
     blastRadiusFromGraph: true
     fromLabels:
