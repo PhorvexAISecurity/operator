@@ -205,13 +205,51 @@ func openHistoryStore(cfg Config) (*historyStore, error) {
 	return h, nil
 }
 
-func (h *historyStore) checkCapacity() error {
+// archiveBytesInUse is what the archive actually holds, not what it has ever held. bbolt grows its
+// file and never returns pages to the filesystem: expired records free pages onto the freelist,
+// where later writes reuse them, but os.Stat never falls. Measuring the raw file size therefore
+// made the ceiling a one-way door -- once crossed, retention could delete every record in the
+// archive and the guard would still refuse forever, because the only number it looked at cannot go
+// down. Subtracting the freelist measures the live bytes the ceiling is meant to bound, so expiry
+// actually restores headroom and ingestion resumes on its own.
+func (h *historyStore) archiveBytesInUse() (inUse int64, size int64, err error) {
 	info, err := os.Stat(h.db.Path())
+	if err != nil {
+		return 0, 0, err
+	}
+	free := int64(h.db.Stats().FreeAlloc)
+	if free < 0 || free > info.Size() {
+		free = 0 // a nonsensical freelist reading must never understate usage
+	}
+	return info.Size() - free, info.Size(), nil
+}
+
+// capacityScope selects which ceiling a write is held to. Ingestion stops a full transaction
+// short of the maximum so a write always has somewhere to go. Expiry is the only operation that
+// can give that room back, so holding it to the same line deadlocks a full archive against
+// itself: no headroom, therefore no deletes, therefore no headroom. Expiry may spend the
+// transaction reserve -- that is what the reserve is for -- but still may not cross the maximum,
+// and each pass is bounded by historyBatchRecords/historyBatchBytes.
+type capacityScope int
+
+const (
+	capacityIngest capacityScope = iota
+	capacityReclaim
+)
+
+func (h *historyStore) checkCapacity() error { return h.checkCapacityFor(capacityIngest) }
+
+func (h *historyStore) checkCapacityFor(scope capacityScope) error {
+	inUse, size, err := h.archiveBytesInUse()
 	if err != nil {
 		return &historyCapacityError{reason: "database size unavailable", detail: err.Error()}
 	}
-	if info.Size() > h.archiveMaxBytes-h.transactionReserve {
-		return &historyCapacityError{reason: "archive byte ceiling reached", detail: fmt.Sprintf("database=%d maximum=%d transaction-reserve=%d", info.Size(), h.archiveMaxBytes, h.transactionReserve)}
+	ceiling := h.archiveMaxBytes - h.transactionReserve
+	if scope == capacityReclaim {
+		ceiling = h.archiveMaxBytes
+	}
+	if inUse > ceiling {
+		return &historyCapacityError{reason: "archive byte ceiling reached", detail: fmt.Sprintf("database=%d in-use=%d maximum=%d transaction-reserve=%d", size, inUse, h.archiveMaxBytes, h.transactionReserve)}
 	}
 	usage, err := h.filesystemUsage(h.db.Path())
 	if err != nil {
@@ -224,7 +262,12 @@ func (h *historyStore) checkCapacity() error {
 }
 
 func (h *historyStore) update(fn func(*bolt.Tx) error) error {
-	if err := h.checkCapacity(); err != nil {
+	return h.updateWithin(capacityIngest, fn)
+}
+
+// updateWithin runs a write under the ceiling its scope is held to.
+func (h *historyStore) updateWithin(scope capacityScope, fn func(*bolt.Tx) error) error {
+	if err := h.checkCapacityFor(scope); err != nil {
 		return err
 	}
 	return h.db.Update(fn)

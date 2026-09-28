@@ -333,7 +333,8 @@ func (h *historyStore) pruneExpiredHistory() error {
 	var next []byte
 	// Deletion also allocates copy-on-write pages. Never bypass the importer's
 	// archive and free-space reserves, even when removing expired records.
-	err := h.update(func(tx *bolt.Tx) error {
+	// Expiry is the operation that restores headroom, so it runs under the reclaim ceiling.
+	err := h.updateWithin(capacityReclaim, func(tx *bolt.Tx) error {
 		rows, seen, index := tx.Bucket(historyRecords), tx.Bucket(historySeen), tx.Bucket(historyIndex)
 		cursor := rows.Cursor()
 		k, v := cursor.First()
