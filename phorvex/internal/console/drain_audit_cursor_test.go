@@ -275,3 +275,136 @@ func TestDrainCursorValidatesFleetRowsWithoutRetainingFleet(t *testing.T) {
 		t.Fatal("non-target malformed complete row skipped")
 	}
 }
+
+// A tail beginning five bytes before a 1MiB boundary has no delimiter in its
+// first authenticated suffix. Valid large rows continue into the next chunk.
+func TestDrainCursorInitialTinySuffixCrossesAlignedChunk(t *testing.T) {
+	c, path := drainCursorFixture(t)
+	makeRow := func(size int) []byte {
+		row := audit.Record{Kind: "phorvex.decision", Time: time.Now().UTC(), Reason: ""}
+		row.Reason = strings.Repeat("r", size-len(drainJSON(row))-1)
+		return append(drainJSON(row), '\n')
+	}
+	desired := 17*audittransport.ChunkBytes - 5
+	raw := append(makeRow(500000), makeRow(700000)...)
+	for desired-len(raw) > audittransport.ChunkBytes {
+		raw = append(raw, makeRow(600000)...)
+	}
+	raw = append(raw, makeRow(desired-len(raw))...)
+	if bytes.IndexByte(raw[audittransport.ChunkBytes-5:audittransport.ChunkBytes], '\n') >= 0 {
+		t.Fatal("fixture lacks tiny partial suffix")
+	}
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := drainTestProfile()
+	s := NewServer(Config{AuditSource: c.source, AuditSourceIdentity: c.identity})
+	got, err := s.newDrainAuditCursor(context.Background(), t.TempDir(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.skipLeading || len(got.records) != 1 || got.offset != int64(desired) || got.skippedLeadingBytes <= 5 {
+		t.Fatal("initial partial row lost or complete coverage missing")
+	}
+	var captured []byte
+	for _, span := range got.spans {
+		b, err := os.ReadFile(filepath.Join(got.out, span["file"].(string)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		captured = append(captured, b...)
+	}
+	if !bytes.Equal(captured, raw[audittransport.ChunkBytes-5:]) {
+		t.Fatal("initial raw bytes skipped from source proof")
+	}
+}
+
+func TestDrainCursorLeadingSkipPersistsAcrossTransientAndRejectsLaterMalformed(t *testing.T) {
+	c, path := drainCursorFixture(t)
+	row := audit.Record{Kind: "phorvex.decision", Time: time.Now().UTC(), Reason: strings.Repeat("r", 800000)}
+	raw := append(drainJSON(row), '\n')
+	raw = append(raw, raw...)
+	raw = append(raw, []byte("{invalid-complete-row}\n")...)
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := c.source.Manifest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.segment = manifest.Segments[0]
+	c.offset = audittransport.ChunkBytes - 5
+	c.records = nil
+	c.originals = nil
+	c.spans = nil
+	c.sequence = 0
+	c.out = t.TempDir()
+	c.pending = nil
+	first := c.segment
+	first.Size = audittransport.ChunkBytes
+	if err = c.consume(context.Background(), first, true); err != nil {
+		t.Fatal(err)
+	}
+	if !c.skipLeading || c.skippedLeadingBytes != 5 || c.offset != audittransport.ChunkBytes {
+		t.Fatal("partial first suffix not committed")
+	}
+	if err = os.Rename(path, path+".hidden"); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.update(context.Background()); !drainAuditRetry(err) || !c.skipLeading {
+		t.Fatalf("transient lost skip state: %v", err)
+	}
+	if err = os.Rename(path+".hidden", path); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.update(context.Background()); err == nil || drainAuditRetry(err) {
+		t.Fatalf("later malformed row skipped: %v", err)
+	}
+	if c.offset != audittransport.ChunkBytes || !c.skipLeading {
+		t.Fatal("failed later row committed incomplete state")
+	}
+}
+
+func TestDrainCursorOversizedLeadingSuffixAndRotationRemainClosed(t *testing.T) {
+	for _, rotate := range []bool{false, true} {
+		t.Run(fmt.Sprint(rotate), func(t *testing.T) {
+			c, path := drainCursorFixture(t)
+			raw := bytes.Repeat([]byte{'r'}, 2*audittransport.ChunkBytes+100)
+			if err := os.WriteFile(path, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			m, err := c.source.Manifest(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.segment = m.Segments[0]
+			c.offset = audittransport.ChunkBytes - 5
+			c.records = nil
+			c.originals = nil
+			c.spans = nil
+			c.sequence = 0
+			c.out = t.TempDir()
+			c.pending = nil
+			first := c.segment
+			first.Size = audittransport.ChunkBytes
+			if err = c.consume(context.Background(), first, true); err != nil {
+				t.Fatal(err)
+			}
+			if rotate {
+				if err := os.Truncate(path, int64(audittransport.ChunkBytes)); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Rename(path, path+".1"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, append(drainJSON(audit.Record{Kind: "phorvex.decision", Time: time.Now().UTC()}), '\n'), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err = c.update(context.Background())
+			if err == nil || (rotate && !drainAuditRetry(err)) || (!rotate && drainAuditRetry(err)) || !c.skipLeading {
+				t.Fatalf("unbounded leading suffix/rotation accepted: %v", err)
+			}
+		})
+	}
+}

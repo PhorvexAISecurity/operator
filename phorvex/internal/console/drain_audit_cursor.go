@@ -32,6 +32,8 @@ type drainAuditCursor struct {
 	segment              audittransport.Segment
 	offset, fetched      int64
 	pending              []byte
+	skipLeading          bool
+	skippedLeadingBytes  int
 	records              []audit.Record
 	originals            [][]byte
 	spans                []map[string]any
@@ -71,6 +73,9 @@ func (c *drainAuditCursor) consume(ctx context.Context, seg audittransport.Segme
 	if seg.Generation != c.segment.Generation || seg.Anchor != c.segment.Anchor || seg.Size < c.offset {
 		return drainAuditFailure("segment-identity", false)
 	}
+	if leading && c.sequence == 0 && c.offset > 0 {
+		c.skipLeading = true
+	}
 	// Commit each authenticated chunk transactionally. A failed next chunk retains
 	// the original generation/offset and all preceding proof; no whole fleet window
 	// is buffered or retained as parsed records.
@@ -92,12 +97,20 @@ func (c *drainAuditCursor) consume(ctx context.Context, seg audittransport.Segme
 		data := raw[start-aligned:]
 		endOffset := aligned + int64(len(raw))
 		combined := append(append([]byte(nil), c.pending...), data...)
-		if leading && start > 0 {
+		skipLeading, skippedLeadingBytes := c.skipLeading, c.skippedLeadingBytes
+		if skipLeading {
 			cut := bytes.IndexByte(combined, '\n')
 			if cut < 0 {
-				return drainAuditFailure("leading-row-unavailable", true)
+				skippedLeadingBytes += len(combined)
+				combined = nil
+			} else {
+				skippedLeadingBytes += cut + 1
+				combined = combined[cut+1:]
+				skipLeading = false
 			}
-			combined = combined[cut+1:]
+			if skippedLeadingBytes > liveRecordBytes+1 {
+				return drainAuditFailure("leading-row-size", false)
+			}
 		}
 		end := bytes.LastIndexByte(combined, '\n')
 		complete := combined[:max(0, end+1)]
@@ -122,6 +135,7 @@ func (c *drainAuditCursor) consume(ctx context.Context, seg audittransport.Segme
 		c.records = append(c.records, rows...)
 		c.originals = append(c.originals, originals...)
 		c.pending = append([]byte(nil), rest...)
+		c.skipLeading, c.skippedLeadingBytes = skipLeading, skippedLeadingBytes
 		c.offset = endOffset
 		c.segment = seg
 		leading = false
@@ -184,7 +198,7 @@ func (c *drainAuditCursor) update(ctx context.Context) error {
 	}
 	// The old generation may move from live to backup; consume it before the next generation.
 	for index > 0 {
-		if len(c.pending) > 0 {
+		if len(c.pending) > 0 || c.skipLeading {
 			return drainAuditFailure("rotated-incomplete-row", true)
 		}
 		index--
