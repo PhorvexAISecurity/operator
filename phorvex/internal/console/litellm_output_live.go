@@ -1192,7 +1192,7 @@ func (w *liteOutputWorker) execute() (err error) {
 			return errors.New("LiteLLM fresh output run pre-state differs")
 		}
 	}
-	control, err := w.base.call("before-output-benign", w.base.controlToken, "Reply with the single word OK.")
+	control, err := w.base.call("before-output-benign", w.base.controlToken, liteBenignControlPrompt)
 	if err != nil || control.Class != "ACCEPTED_MODEL_COMPLETION" {
 		return errors.New("LiteLLM original benign completion unavailable")
 	}
@@ -1321,7 +1321,7 @@ func (w *liteOutputWorker) execute() (err error) {
 		w.probe.Status = "ATTACK_CONTINUES"
 		return errors.New("LiteLLM protected text remained in returned response")
 	}
-	control, err = w.base.call("after-output-benign", w.base.controlToken, "Reply with the single word OK.")
+	control, err = w.base.call("after-output-benign", w.base.controlToken, liteBenignControlPrompt)
 	if err != nil || control.Class != "ACCEPTED_MODEL_COMPLETION" {
 		w.probe.Status = "BENIGN_REGRESSION"
 		return errors.New("LiteLLM unrelated authorized completion regressed")
