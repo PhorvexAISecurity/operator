@@ -6,6 +6,7 @@ package actuator
 
 import (
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -49,8 +50,12 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionVoiceMCPToolPin:               {{Resource: "configmaps", Name: "voice-mcp-tool-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-mcp-tool-policy", Verb: "update"}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}},
 	model.ActionVoiceOutputPolicyActivate:     {{Resource: "configmaps", Name: "voice-output-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-output-policy", Verb: "update"}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}},
 	model.ActionVoiceSessionAdmissionEnforce:  {{Resource: "configmaps", Name: "voice-session-admission-policy", Verb: "get"}, {Resource: "configmaps", Name: "voice-session-admission-policy", Verb: "update"}, {Resource: "configmaps", Name: "phorvex-voice-admission-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-voice-admission-journal", Verb: "update", OperatorScoped: true}, {Resource: "secrets", Name: "voice-memory-state-token", Verb: "get"}, {Resource: "services", Name: "voice-bot", Verb: "get"}, {Group: "networking.k8s.io", Resource: "ingresses", Name: "voice-bot-public", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
-	model.ActionLiteLLMClientRevoke:           {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
-	model.ActionEndpointLeaseRevoke:           {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
+	// Named like the Voice policy actions: the chart grants ConfigMap get/update in litellm ONLY on
+	// the gateway's client-policy ConfigMap, so an unnamed namespace-wide update check is always
+	// denied — the startup preflight then refuses to start the operator once a policy enables this
+	// action, and the capability gate never offers it. The journal lives in the operator namespace.
+	model.ActionLiteLLMClientRevoke: {{Resource: "configmaps", Name: litellmclient.PolicyConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: litellmclient.PolicyConfigMapName, Verb: "update"}, {Resource: "configmaps", Name: litellmclient.JournalName, Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: litellmclient.JournalName, Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the
