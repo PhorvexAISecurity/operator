@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/phorvex/phorvex/internal/model"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -277,5 +278,45 @@ func TestM007GeneratedAndRoutineContracts(t *testing.T) {
 				t.Fatal("bad mutation accepted")
 			}
 		})
+	}
+}
+
+// The startup preflight and the capability gate both check actionVerbs with SelfSubjectAccessReview.
+// The chart grants the LiteLLM revoke action ConfigMap access in litellm ONLY on the exact
+// client-policy ConfigMap, so every namespaced ConfigMap verb of that action must carry that name;
+// an unnamed update check is denied and would stop the operator from starting.
+func TestM007LiteLLMRevokeVerbsMatchExactGrant(t *testing.T) {
+	enabled := os.Getenv("M007_LITELLM_RENDERED_RBAC")
+	if enabled == "" {
+		enabled = m007RenderForTest(t, true)
+	}
+	var role *rbacv1.Role
+	for _, r := range m007ReadRoles(t, enabled) {
+		if r.Name == "m007-phorvex-litellm-client-revoke" {
+			r := r
+			role = &r
+		}
+	}
+	if role == nil {
+		t.Fatal("enabled profile rendered no LiteLLM revoke Role")
+	}
+	var named int
+	for _, v := range actionVerbs[model.ActionLiteLLMClientRevoke] {
+		if v.Resource != "configmaps" {
+			continue
+		}
+		if v.Name == "" {
+			t.Fatalf("LiteLLM revoke ConfigMap verb %q is unnamed; the chart grants only exact names", v.Verb)
+		}
+		if v.OperatorScoped {
+			continue
+		}
+		named++
+		if !m007RoleAllows(*role, "configmaps", v.Name, v.Verb) {
+			t.Fatalf("chart does not grant LiteLLM revoke %s on %s", v.Verb, v.Name)
+		}
+	}
+	if named == 0 {
+		t.Fatal("LiteLLM revoke declares no namespaced ConfigMap authority")
 	}
 }
