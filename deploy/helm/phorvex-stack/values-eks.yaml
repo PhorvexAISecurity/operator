@@ -38,9 +38,9 @@ phorvex:
       # The phorvex subchart has no global-registry helper (unlike the dashboard), so the
       # registry has to be spelled out in the repository here.
       repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
-      tag: "0.4.198"    # ci:phorvex-tag
-      releaseDigest: "sha256:285b3d0e7c0b158cf8f6297cc456138bd88488d92527927a017066bad6748d7c" # ci:phorvex-digest
-      releaseSourceSHA: "802a68a65cd0c306f9f012fcd31dc247f233fe0b" # ci:phorvex-source
+      tag: "0.4.199"    # ci:phorvex-tag
+      releaseDigest: "sha256:a61923a4fa0cb0c739d44114873251435a2fe46e6e3f2875462540fd276acf96" # ci:phorvex-digest
+      releaseSourceSHA: "b4abe693cc7cc6110837f9d52ccb05855b081245" # ci:phorvex-source
       pullPolicy: IfNotPresent
     baseInterval: 10s
     leaderElect: true
@@ -301,9 +301,9 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.198" # ci:console-tag
-        releaseDigest: "sha256:06b10b87595c3d479cebffe4f92fe6cc88c6a280d3995420bcdc9b0459b10809" # ci:console-digest
-        releaseSourceSHA: "802a68a65cd0c306f9f012fcd31dc247f233fe0b" # ci:console-source
+        tag: "0.4.199" # ci:console-tag
+        releaseDigest: "sha256:774c789e0391d93c88dc06ce38e3f73ef4b9f7fd68a093ab4f8e7d5fd4f9c1d0" # ci:console-digest
+        releaseSourceSHA: "b4abe693cc7cc6110837f9d52ccb05855b081245" # ci:console-source
         pullPolicy: IfNotPresent
       port: 8090
       # Retention is activated atomically with the compatible console image at release time.
