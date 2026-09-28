@@ -3017,7 +3017,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMCPToolPin ||
+		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceSessionAdmissionEnforce || decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionEndpointLeaseRevoke || decisions[i].Action == model.ActionAdapterRotate) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
@@ -3028,6 +3028,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "voice-refund-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionVoiceMCPToolPin {
 				reason = "voice-mcp-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionVoiceSessionAdmissionEnforce {
+				reason = "voice-admission-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionVoiceOutputPolicyActivate {
 				reason = "voice-output-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionAdapterRotate {
@@ -3067,6 +3069,13 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					"action", decisions[i].Action, "error", clientFenceErr)
 				continue
 			}
+			pendingAdmission, admissionFenceErr := actuator.PendingVoiceAdmissionOperation(ctx, m.BoundaryReader, m.OperatorNamespace, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+			if admissionFenceErr != nil || pendingAdmission {
+				recordExistentialEffect(&decisions[i], false)
+				stampDispatch(model.DispatchNotAttempted, "protected-voice-admission-operation-unresolved")
+				continue
+			}
+
 			pendingVoiceOutput, voiceOutputFenceErr := actuator.PendingVoiceOutputOperation(ctx, m.BoundaryReader,
 				m.OperatorNamespace, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
 			if voiceOutputFenceErr != nil || pendingVoiceOutput {
@@ -3149,27 +3158,28 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
-			AdapterObservation:       v.Pod.AdapterObservation,
-			OutputPolicyObservation:  v.Pod.OutputPolicyObservation,
-			VoiceMemoryObservation:   v.Pod.VoiceMemoryObservation,
-			VoiceRefundObservation:   v.Pod.VoiceRefundObservation,
-			VoiceMCPObservation:      v.Pod.VoiceMCPObservation,
-			VoiceOutputObservation:   v.Pod.VoiceOutputObservation,
-			LiteLLMClientObservation: v.Pod.LiteLLMClientObservation,
-			EndpointLeaseObservation: v.Pod.EndpointLeaseObservation,
-			PolicyName:               pol.PolicyName,
-			PolicyUID:                pol.PolicyUID,
-			PolicyGeneration:         pol.PolicyGeneration,
-			MaxGracePeriodSeconds:    pol.MaxGracePeriodSeconds,
-			Tenant:                   pol.Tenant,
-			Namespace:                decisions[i].Namespace,
-			Pod:                      decisions[i].Pod,
-			Action:                   decisions[i].Action,
-			Reason:                   decisions[i].Reason,
-			Score:                    score,
-			CoverageValue:            coverageValue,
-			TargetUID:                v.Pod.UID,
-			TickID:                   pol.TickID,
+			AdapterObservation:        v.Pod.AdapterObservation,
+			OutputPolicyObservation:   v.Pod.OutputPolicyObservation,
+			VoiceMemoryObservation:    v.Pod.VoiceMemoryObservation,
+			VoiceRefundObservation:    v.Pod.VoiceRefundObservation,
+			VoiceMCPObservation:       v.Pod.VoiceMCPObservation,
+			VoiceOutputObservation:    v.Pod.VoiceOutputObservation,
+			VoiceAdmissionObservation: v.Pod.VoiceAdmissionObservation,
+			LiteLLMClientObservation:  v.Pod.LiteLLMClientObservation,
+			EndpointLeaseObservation:  v.Pod.EndpointLeaseObservation,
+			PolicyName:                pol.PolicyName,
+			PolicyUID:                 pol.PolicyUID,
+			PolicyGeneration:          pol.PolicyGeneration,
+			MaxGracePeriodSeconds:     pol.MaxGracePeriodSeconds,
+			Tenant:                    pol.Tenant,
+			Namespace:                 decisions[i].Namespace,
+			Pod:                       decisions[i].Pod,
+			Action:                    decisions[i].Action,
+			Reason:                    decisions[i].Reason,
+			Score:                     score,
+			CoverageValue:             coverageValue,
+			TargetUID:                 v.Pod.UID,
+			TickID:                    pol.TickID,
 			ServingObservation: &actuator.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
@@ -3179,7 +3189,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionSensitiveOutputPolicyActivate ||
 			decisions[i].Action == model.ActionVoiceMemoryNoteRevoke ||
 			decisions[i].Action == model.ActionVoiceRefundPairDeny ||
-			decisions[i].Action == model.ActionVoiceOutputPolicyActivate ||
+			decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceSessionAdmissionEnforce ||
 			decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke ||
 			decisions[i].Action == model.ActionEndpointLeaseRevoke {

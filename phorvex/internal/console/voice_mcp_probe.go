@@ -25,7 +25,7 @@ var voiceMCPAssets embed.FS
 const (
 	voiceMCPAttackAudioSHA = "843b6fce61bae1a62ab069c889352b55e271bfb32ca23b6bba2d63461ce22b90"
 	voiceMCPBenignAudioSHA = "6b634936283ce28c2e25b71fa3575d0e23c69839999eed6e917fb52d8d176e37"
-	voiceMCPProbeSHA       = "137aa9fd6da049964bab29ee15958b3d7ccb8250531000bde881d44d5b9a98ea"
+	voiceMCPProbeSHA       = "6367541895bcc5af8bdccec2bab0540d828c83e617d5ead1b41a692c411d7dd3"
 )
 
 type voiceMCPMessage struct {
@@ -65,23 +65,27 @@ type voiceMCPToolCall struct {
 }
 
 type voiceMCPProbeReply struct {
-	Version          int                `json:"version"`
-	Operation        string             `json:"operation"`
-	Phase            string             `json:"phase"`
-	RunSHA256        string             `json:"runSHA256"`
-	CallSIDHash      string             `json:"callSidSHA256"`
-	AudioSHA256      string             `json:"audioSHA256"`
-	MediaFrames      int                `json:"mediaFrames"`
-	ReceivedFrames   int                `json:"receivedFrames"`
-	Receipt          voiceMCPAppReceipt `json:"receipt"`
-	Messages         []voiceMCPMessage  `json:"messages"`
-	ToolCalls        []voiceMCPToolCall `json:"toolCalls"`
-	TranscriptSHA256 string             `json:"transcriptSHA256"`
-	ObservedAtUnixMs int64              `json:"observedAtUnixMs"`
-	Cleaned          bool               `json:"cleaned"`
-	Empty            bool               `json:"empty"`
-	Status           int                `json:"status"`
-	StateBody        voiceMCPState      `json:"stateBody"`
+	Version             int                `json:"version"`
+	Operation           string             `json:"operation"`
+	Phase               string             `json:"phase"`
+	RunSHA256           string             `json:"runSHA256"`
+	CallSIDHash         string             `json:"callSidSHA256"`
+	AudioSHA256         string             `json:"audioSHA256"`
+	MediaFrames         int                `json:"mediaFrames"`
+	ReceivedFrames      int                `json:"receivedFrames"`
+	ReceivedAudioFrames int                `json:"receivedAudioFrames"`
+	ReceivedAudioBytes  int                `json:"receivedAudioBytes"`
+	ReceivedAudioSHA256 string             `json:"receivedAudioSHA256"`
+	AudioQuietObserved  bool               `json:"audioQuietObserved"`
+	Receipt             voiceMCPAppReceipt `json:"receipt"`
+	Messages            []voiceMCPMessage  `json:"messages"`
+	ToolCalls           []voiceMCPToolCall `json:"toolCalls"`
+	TranscriptSHA256    string             `json:"transcriptSHA256"`
+	ObservedAtUnixMs    int64              `json:"observedAtUnixMs"`
+	Cleaned             bool               `json:"cleaned"`
+	Empty               bool               `json:"empty"`
+	Status              int                `json:"status"`
+	StateBody           voiceMCPState      `json:"stateBody"`
 }
 
 func voiceMCPToolExecuted(observed voiceMCPProbeReply, tool string) bool {

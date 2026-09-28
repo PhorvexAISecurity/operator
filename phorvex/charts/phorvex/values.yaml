@@ -214,6 +214,10 @@ phorvex:
   voiceRefund:
     enabled: false
   # Opt-in Voice MCP descriptor pinning requires a reviewed immutable MCP image.
+  voiceAdmission:
+    enabled: false
+    sourceConfigMapName: ""
+    legacyConfigMapName: ""
   voiceMCP:
     enabled: false
     approvedImage: ""
@@ -479,6 +483,12 @@ phorvex:
       enabled: false
       configMapName: ""
       profileSHA256: ""
+    voiceAdmissionLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMapName: ""
+      legacyConfigMapName: ""
     voiceMCPLive:
       enabled: false
       configMapName: ""

@@ -36,6 +36,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 )
 
 // TestCompletenessForward — every generatable action has a registered native handler.
@@ -118,6 +119,7 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionVoiceRefundPairDeny:           {plain: "ai-context-required:"},
 	model.ActionVoiceOutputPolicyActivate:     {plain: "ai-context-required:"},
 	model.ActionVoiceMCPToolPin:               {plain: "ai-context-required:"},
+	model.ActionVoiceSessionAdmissionEnforce:  {plain: "ai-context-required:"},
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 	model.ActionEndpointLeaseRevoke:           {plain: "ai-context-required:"},
 }
@@ -193,6 +195,11 @@ func aiView() *model.WorkloadView {
 // for the Voice output action. Other actions retain the shared AI fixture.
 func aiViewForAction(action model.Action) *model.WorkloadView {
 	v := aiView()
+	if action == model.ActionVoiceSessionAdmissionEnforce {
+		bound := boundVoiceAdmissionView()
+		v.Pod = bound.Pod
+		return v
+	}
 	if action == model.ActionEndpointLeaseRevoke {
 		v.Pod.Namespace = "vllm"
 		v.Pod.EndpointLeaseObservation = &model.EndpointLeaseObservation{
@@ -339,7 +346,7 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionDebugger || a == model.ActionCustomInject {
 			family = "code-exec-guard:"
 		}
-		if a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke {
+		if a == model.ActionVoiceSessionAdmissionEnforce || a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke {
 			family = "ai-context-required:"
 		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
@@ -351,4 +358,11 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		}
 		assertVerdict(t, "stateful pod", a, feasibility.Evaluate(stateful, move, pol), family)
 	}
+}
+
+func boundVoiceAdmissionView() *model.WorkloadView {
+	uid := "11111111-1111-4111-8111-111111111111"
+	sha := strings.Repeat("a", 64)
+	a := voiceadmissionpolicy.EventAssertion{Version: 1, ScenarioID: voiceadmissionpolicy.ScenarioID, CaseID: "unsigned-audio", RunSHA256: sha, SessionID: uid, DeploymentUID: uid, PodUID: uid, AdmissionSourceSHA256: sha, LegacyBundleSHA256: sha, AuthProfileSHA256: sha, PolicyCMUID: uid, PolicyResourceVersion: "1", RuleSHA256: sha, SecurityPolicyUID: uid, SecurityPolicyGeneration: 1, ObservedAtUnixMs: 1, EvidenceSource: "TEST_INJECTED", Observed: true, SentAudioFrames: 1, SentAudioBytes: 1, ReceiptSHA256: sha, ProviderEvidenceSHA256: sha}
+	return &model.WorkloadView{Pod: model.Pod{Namespace: "voice", Name: "voice", UID: uid, VoiceAdmissionConfigMap: voiceadmissionpolicy.ConfigMapName, VoiceAdmissionDeploymentUID: uid, VoiceAdmissionSourceSHA256: sha, VoiceAdmissionEventCreator: voiceadmissionpolicy.Creator, VoiceAdmissionObservation: &model.VoiceAdmissionObservation{EventName: "observed", EventUID: uid, CreatorIdentity: voiceadmissionpolicy.Creator, ScenarioID: voiceadmissionpolicy.ScenarioID, EvidenceSource: "TEST_INJECTED", TargetPodUID: uid, DeploymentUID: uid, ConfigMapUID: uid, ConfigMapResourceVersion: "1", SourceSHA256: sha, RuleSHA256: sha, PolicyName: "voice-defense", PolicyUID: uid, PolicyGeneration: 1, SessionID: uid, Assertion: a}}}
 }

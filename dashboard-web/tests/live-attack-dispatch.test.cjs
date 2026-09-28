@@ -11,6 +11,7 @@ const api = {
   voiceMemoryFire: async (...args) => { calls.push(["voice", ...args]); return response; },
   voiceAgencyFire: async (...args) => { calls.push(["voice-agency", ...args]); return response; },
   voiceOutputFire: async (...args) => { calls.push(["voice-output", ...args]); return response; },
+  voiceAdmissionFire: async (...args) => { calls.push(["voice-admission", ...args]); return response; },
   voiceMCPFire: async (...args) => { calls.push(["voice-mcp", ...args]); return response; },
   litellmLiveFire: async (...args) => { calls.push(["litellm", ...args]); return response; },
   litellmOutputFire: async (...args) => { calls.push(["litellm-output", ...args]); return response; },
@@ -33,6 +34,7 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
     [{ id: "ai2-agent-excessive-agency", endpoint: "/api/voice/agency/live/fire" }, "voice", "voice-agency"],
     [{ id: "ai2-system-prompt-leakage", endpoint: "/api/voice/output/live/fire" }, "voice", "voice-output"],
     [{ id: "ai2-mcp-tool-poisoning", endpoint: "/api/voice/mcp/live/fire" }, "voice", "voice-mcp"],
+    [{ id: "voice-unauthenticated-media-admission", endpoint: "/api/voice/admission/live/fire" }, "voice", "voice-admission"],
     [{ id: "ai2-unbounded-consumption", endpoint: "/api/litellm/live/fire" }, "litellm", "litellm"],
     [{ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "litellm", "litellm"],
     [{ id: "ai2-sensitive-info-disclosure", endpoint: "/api/litellm/output/fire" }, "litellm", "litellm-output"],
@@ -44,7 +46,7 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
     assert.equal(route.kind, kind);
     assert.equal((await dispatchLiveAttack(route, "operator")).attackId, "exact-1");
   }
-  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "vllm", "voice", "voice-agency", "voice-output", "voice-mcp", "litellm", "litellm", "litellm-output", "litellm-output", "workload"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "vllm", "voice", "voice-agency", "voice-output", "voice-mcp", "voice-admission", "litellm", "litellm", "litellm-output", "litellm-output", "workload"]);
   assert.deepEqual(calls.at(-1), ["workload", "nats", "foothold", "operator"]);
 });
 
@@ -62,6 +64,8 @@ test("unsupported and cross-wired routes refuse without fallback; clear is footh
     [{ id: "ai2-system-prompt-leakage", endpoint: "/api/voice/output/live/fire" }, "vllm"],
     [{ id: "ai2-mcp-tool-poisoning", endpoint: "/api/voice/live/fire" }, "voice"],
     [{ id: "ai2-mcp-tool-poisoning", endpoint: "/api/voice/mcp/live/fire" }, "vllm"],
+    [{ id: "voice-unauthenticated-media-admission", endpoint: "/api/voice/admission/live/fire" }, "vllm"],
+    [{ id: "voice-unauthenticated-media-admission", endpoint: "/api/voice/live/fire" }, "voice"],
     [{ id: "foothold", endpoint: "/api/voice/live/fire" }, "voice"],
     [{ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "vllm"],
     [{ id: "ai2-sensitive-info-disclosure", endpoint: "/api/litellm/live/fire" }, "litellm"],

@@ -24,7 +24,7 @@ func voiceMCPAssistantSaid(messages []voiceMCPMessage, needle string) bool {
 }
 
 func voiceMCPFirstLoss(session, evidence voiceMCPProbeReply, run string, snap voiceMCPSnapshot, pod corev1.Pod) (time.Time, bool) {
-	if session.Operation != "session" || session.Phase != "attack" || session.MediaFrames < 1 ||
+	if session.Operation != "session" || session.Phase != "attack" || session.MediaFrames < 1 || !voiceMCPAudioSettled(session) ||
 		evidence.Operation != "observe" || evidence.Phase != "attack" ||
 		session.CallSIDHash != voiceMCPStringSHA(voiceMCPCallSID(run, "attack")) ||
 		evidence.CallSIDHash != session.CallSIDHash || evidence.RunSHA256 != voiceMCPStringSHA(run) ||
@@ -45,12 +45,12 @@ func voiceMCPFirstLoss(session, evidence voiceMCPProbeReply, run string, snap vo
 }
 
 func voiceMCPFirstObservationComplete(session, evidence voiceMCPProbeReply, run string, snap voiceMCPSnapshot, pod corev1.Pod) bool {
-	if session.Operation != "session" || session.Phase != "attack" || session.MediaFrames < 1 ||
+	if session.Operation != "session" || session.Phase != "attack" || session.MediaFrames < 1 || !voiceMCPAudioSettled(session) ||
 		evidence.Operation != "observe" || evidence.Phase != "attack" ||
 		session.CallSIDHash != voiceMCPStringSHA(voiceMCPCallSID(run, "attack")) ||
 		evidence.CallSIDHash != session.CallSIDHash || evidence.RunSHA256 != voiceMCPStringSHA(run) ||
 		evidence.Receipt.PodUID != string(pod.UID) || evidence.Receipt.SourceSHA256 != snap.SourceSHA256 ||
-		evidence.Receipt.MCPSourceSHA256 != snap.MCPSourceSHA256 || !evidence.Receipt.FetchObserved ||
+		evidence.Receipt.MCPSourceSHA256 != snap.MCPSourceSHA256 || !evidence.Receipt.FetchObserved || !voiceMCPHasAssistant(evidence.Messages) ||
 		!staticSHA256.MatchString(evidence.TranscriptSHA256) || evidence.ObservedAtUnixMs <= 0 {
 		return false
 	}
@@ -76,7 +76,7 @@ func voiceMCPFirstVerdict(session, evidence voiceMCPProbeReply, run string, snap
 }
 
 func voiceMCPReplayProtected(session, evidence voiceMCPProbeReply, run string, before, after voiceMCPSnapshot, pod corev1.Pod, op string) bool {
-	if session.Operation != "session" || session.Phase != "replay" || session.MediaFrames < 1 ||
+	if session.Operation != "session" || session.Phase != "replay" || session.MediaFrames < 1 || !voiceMCPAudioSettled(session) ||
 		evidence.Operation != "observe" || evidence.Phase != "replay" || evidence.CallSIDHash != session.CallSIDHash ||
 		session.CallSIDHash != voiceMCPStringSHA(voiceMCPCallSID(run, "replay")) ||
 		evidence.Receipt.PodUID != string(pod.UID) || evidence.Receipt.SourceSHA256 != before.SourceSHA256 ||
@@ -93,7 +93,7 @@ func voiceMCPReplayProtected(session, evidence voiceMCPProbeReply, run string, b
 }
 
 func voiceMCPBenignMaintained(session, evidence voiceMCPProbeReply, run string, after voiceMCPSnapshot, pod corev1.Pod) bool {
-	if session.Operation != "session" || session.Phase != "benign" || session.MediaFrames < 1 ||
+	if session.Operation != "session" || session.Phase != "benign" || session.MediaFrames < 1 || !voiceMCPAudioSettled(session) ||
 		evidence.Operation != "observe" || evidence.Phase != "benign" || evidence.CallSIDHash != session.CallSIDHash ||
 		session.CallSIDHash != voiceMCPStringSHA(voiceMCPCallSID(run, "benign")) ||
 		evidence.Receipt.PodUID != string(pod.UID) || evidence.Receipt.SourceSHA256 != after.SourceSHA256 ||

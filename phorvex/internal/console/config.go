@@ -82,6 +82,10 @@ type Config struct {
 	VoiceOutputLiveProfilePath   string
 	// The separately reviewed Voice MCP descriptor trial requires an exact
 	// source, policy, Service and real model-behavior preflight at Fire time.
+	VoiceAdmissionLiveEnabled       bool
+	VoiceAdmissionLiveProfileSHA256 string
+	VoiceAdmissionLiveProfilePath   string
+
 	VoiceMCPLiveEnabled       bool
 	VoiceMCPLiveProfileSHA256 string
 	VoiceMCPLiveProfilePath   string

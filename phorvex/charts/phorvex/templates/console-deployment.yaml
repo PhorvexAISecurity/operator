@@ -237,6 +237,21 @@
 {{- $sha := required "console.voiceOutputLive.profileSHA256 required" .Values.phorvex.console.voiceOutputLive.profileSHA256 }}
 {{- if not (regexMatch "^[0-9a-f]{64}$" $sha) }}{{- fail "console.voiceOutputLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
 {{- end }}
+{{- if .Values.phorvex.console.voiceAdmissionLive.enabled }}
+{{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceAdmissionLive requires phorvex-system release and operator namespaces" }}{{- end }}
+{{- if not .Values.phorvex.voiceAdmission.enabled }}{{- fail "console.voiceAdmissionLive requires native voiceAdmission.enabled" }}{{- end }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceAdmissionLive requires profile-bound console service account" }}{{- end }}
+{{- $trusted := false }}
+{{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail "console.voiceAdmissionLive requires exact console creator in trustedDetectors" }}{{- end }}
+{{- range list "configMapName" "sourceConfigMapName" "legacyConfigMapName" }}
+{{- $name := required (printf "console.voiceAdmissionLive.%s required" .) (index $.Values.phorvex.console.voiceAdmissionLive .) }}
+{{- if or (gt (len $name) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name)) }}{{- fail "console.voiceAdmissionLive ConfigMap name invalid" }}{{- end }}
+{{- end }}
+{{- if not (regexMatch "^[0-9a-f]{64}$" .Values.phorvex.console.voiceAdmissionLive.profileSHA256) }}{{- fail "console.voiceAdmissionLive.profileSHA256 must be lowercase SHA256" }}{{- end }}
+{{- if or (ne .Values.phorvex.console.voiceAdmissionLive.sourceConfigMapName .Values.phorvex.voiceAdmission.sourceConfigMapName) (ne .Values.phorvex.console.voiceAdmissionLive.legacyConfigMapName .Values.phorvex.voiceAdmission.legacyConfigMapName) }}{{- fail "Console/native admission source pins differ" }}{{- end }}
+{{- end }}
 {{- if .Values.phorvex.console.voiceMCPLive.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceMCPLive requires phorvex-system release and effective operator namespaces" }}{{- end }}
 {{- if not .Values.phorvex.voiceMCP.enabled }}{{- fail "console.voiceMCPLive requires native voiceMCP.enabled" }}{{- end }}
@@ -418,6 +433,12 @@ spec:
         {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
         - name: PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.voiceOutputLive.profileSHA256 | quote }}
+        {{- end }}
+        - name: PHORVEX_CONSOLE_VOICE_ADMISSION_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.voiceAdmissionLive.enabled | default false | quote }}
+        {{- if .Values.phorvex.console.voiceAdmissionLive.enabled }}
+        - name: PHORVEX_CONSOLE_VOICE_ADMISSION_LIVE_PROFILE_SHA256
+          value: {{ .Values.phorvex.console.voiceAdmissionLive.profileSHA256 | quote }}
         {{- end }}
         - name: PHORVEX_CONSOLE_VOICE_MCP_LIVE_ENABLED
           value: {{ .Values.phorvex.console.voiceMCPLive.enabled | default false | quote }}
@@ -831,6 +852,12 @@ spec:
           subPath: profile.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.console.voiceAdmissionLive.enabled }}
+        - name: voice-admission-reviewed-profile
+          mountPath: /etc/phorvex-voice-admission/profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.voiceMCPLive.enabled }}
         - name: voice-mcp-reviewed-profile
           mountPath: /etc/phorvex-voice-mcp/profile.json
@@ -1061,6 +1088,15 @@ spec:
       - name: voice-output-reviewed-profile
         configMap:
           name: {{ .Values.phorvex.console.voiceOutputLive.configMapName | quote }}
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
+      {{- end }}
+      {{- if .Values.phorvex.console.voiceAdmissionLive.enabled }}
+      - name: voice-admission-reviewed-profile
+        configMap:
+          name: {{ .Values.phorvex.console.voiceAdmissionLive.configMapName | quote }}
           defaultMode: 0440
           items:
           - key: profile.json

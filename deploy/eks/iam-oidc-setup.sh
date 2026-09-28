@@ -26,6 +26,9 @@ aws iam create-role \
   --description "Assumed by GitHub Actions CI for ECR push (PhorvexSecurity/operator)" \
   2>/dev/null || echo "    Role already exists — skipping"
 
+# The Voice admission SDK overlay pulls the immutable pipecat-voice base by
+# digest. Its repository receives only layer/image read permissions; it remains
+# outside the ECRReadWrite destination set.
 echo "==> Attaching inline ECR policy"
 aws iam put-role-policy \
   --role-name "$ROLE_NAME" \

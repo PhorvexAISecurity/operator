@@ -113,20 +113,10 @@ func voiceMCPPrivateDir(cfg Config, caseID string) (string, error) {
 }
 
 func voiceMCPObserve(ctx context.Context, pin voiceAgencyPodPin, run, phase, sourceSHA string) (voiceMCPProbeReply, error) {
-	var reply voiceMCPProbeReply
-	var err error
-	for attempt := 0; attempt < 5; attempt++ {
-		reply, err = voiceMCPProbe(ctx, pin, "observe", run, phase, sourceSHA)
-		if err == nil {
-			return reply, nil
-		}
-		select {
-		case <-ctx.Done():
-			return reply, ctx.Err()
-		case <-time.After(2 * time.Second):
-		}
-	}
-	return reply, err
+	return voiceMCPWaitObservation(ctx, 20*time.Second, 500*time.Millisecond, run, phase, pin.UID, sourceSHA,
+		func(probeCtx context.Context) (voiceMCPProbeReply, error) {
+			return voiceMCPProbe(probeCtx, pin, "observe", run, phase, sourceSHA)
+		})
 }
 
 func (s *Server) runVoiceMCPLive(record *attackRecord, p voiceMCPProfile, run string) {

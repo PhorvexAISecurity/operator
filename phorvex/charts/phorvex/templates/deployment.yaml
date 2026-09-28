@@ -246,6 +246,8 @@ spec:
               fieldPath: metadata.namespace
         - name: PHORVEX_BRAIN_IMAGE
           value: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+        - name: PHORVEX_VOICE_ADMISSION_ENABLED
+          value: {{ .Values.phorvex.voiceAdmission.enabled | default false | quote }}
         {{- if .Values.phorvex.voiceMCP.enabled }}
         - name: PHORVEX_VOICE_MCP_APPROVED_IMAGE
           value: {{ required "voiceMCP.approvedImage must be a reviewed immutable repo@sha256" .Values.phorvex.voiceMCP.approvedImage | quote }}

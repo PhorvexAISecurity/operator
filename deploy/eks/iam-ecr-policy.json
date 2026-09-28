@@ -26,6 +26,16 @@
       ]
     },
     {
+      "Sid": "ECRReadVoiceBase",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": "arn:aws:ecr:us-east-2:753556437180:repository/pipecat-voice"
+    },
+    {
       "Sid": "ECRCreateRepo",
       "Effect": "Allow",
       "Action": [

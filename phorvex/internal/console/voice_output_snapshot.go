@@ -238,9 +238,15 @@ func (s *Server) voiceOutputSnapshot(ctx context.Context, p voiceOutputProfile, 
 		if !voiceOutputServingPod(pod, p.SourceSHA256) {
 			return voiceOutputSnapshot{}, errors.New("Voice output serving Pod differs")
 		}
-		source, sourceErr := voiceoutputpolicy.VerifySourceObjects(pod, dep, sourceCM)
-		if sourceErr != nil || source.SourceSHA256 != p.SourceSHA256 {
-			return voiceOutputSnapshot{}, errors.New("Voice output mounted source graph differs")
+		if voiceConsoleUsesWrapper(pod) {
+			if err := voiceConsoleWrapperSource(ctx, pod, dep); err != nil {
+				return voiceOutputSnapshot{}, err
+			}
+		} else {
+			source, sourceErr := voiceoutputpolicy.VerifySourceObjects(pod, dep, sourceCM)
+			if sourceErr != nil || source.SourceSHA256 != p.SourceSHA256 {
+				return voiceOutputSnapshot{}, errors.New("Voice output mounted source graph differs")
+			}
 		}
 		rs, getErr := kube.AppsV1().ReplicaSets("voice").Get(ctx, pod.OwnerReferences[0].Name, metav1.GetOptions{})
 		if getErr != nil || rs.UID != pod.OwnerReferences[0].UID || len(rs.OwnerReferences) != 1 ||

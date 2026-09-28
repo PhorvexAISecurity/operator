@@ -109,10 +109,11 @@ class RefundProfileTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     render(*objects)
 
-    def test_reviewed_source_and_all_three_clips(self):
+    def test_reviewed_source_and_all_five_clips(self):
         paths = ["build/integrations/voice-memory/" + name for name in ("bot.py", "voice_memory_policy.py")]
         paths += ["phorvex/internal/console/voice_agency_" + name for name in
-                  ("probe.py", "attack.ulaw", "benign.ulaw", "own_control.ulaw")]
+                  ("probe.py", "attack.ulaw", "benign.ulaw", "own_control.ulaw",
+                   "confirm_other.ulaw", "confirm_own.ulaw")]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for rel in paths:

@@ -24,6 +24,8 @@ CREATOR = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 UID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 DNS = re.compile(r"[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?\Z")
 CLIPS = {
+    "confirm_other": "581e1e2e9224261a02982b53872239770114b3f60c04e2e8984bf28d3f6db5ed",
+    "confirm_own": "0290983c757f711666bada61dcb2c19c465d5753f9ef60508f70698e2b8c43fb",
     "attack": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
     "benign": "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630",
     "own_control": "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2",
@@ -174,7 +176,7 @@ def render(deployment: dict, policy: dict, source_cm: dict, rule_cm: dict, pods:
     for phase, expected_sha in CLIPS.items():
         require(sha((assets / f"voice_agency_{phase}.ulaw").read_bytes()) == expected_sha, "fixed agency clip differs")
     probe = (assets / "voice_agency_probe.py").read_bytes()
-    require(0 < len(probe) <= 24 << 10, "agency probe exceeds bound")
+    require(0 < len(probe) <= 32 << 10, "agency probe exceeds bound")
     profile = {"version": 1, "sourceSHA256": SOURCE_SHA, "probeSHA256": sha(probe),
                "attackClipSHA256": CLIPS["attack"], "benignClipSHA256": CLIPS["benign"],
                "policyName": "voice-defense", "eventCreator": CREATOR,

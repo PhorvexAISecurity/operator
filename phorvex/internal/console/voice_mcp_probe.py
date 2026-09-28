@@ -19,6 +19,11 @@ import sys
 import time
 from urllib.parse import urlsplit
 
+RESPONSE_WAIT_SECONDS = 24
+AUDIO_QUIET_SECONDS = 1
+FINAL_TRANSCRIPT_WAIT_SECONDS = 20
+FINAL_TRANSCRIPT_POLL_SECONDS = 0.25
+
 signal.alarm(45)
 request = json.load(sys.stdin)
 if not isinstance(request, dict) or set(request) not in (
@@ -31,6 +36,17 @@ if operation not in ("session", "observe", "cleanup", "state", "baseline") or no
     raise RuntimeError("invalid MCP run or phase")
 if (operation == "session") != ("audio" in request):
     raise RuntimeError("audio belongs only to fixed session")
+
+
+def production_ws_headers():
+    # Sign only the reviewed production URL. The token/header never leave memory.
+    from twilio.request_validator import RequestValidator
+    host = os.environ.get("PUBLIC_HOST")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    if host != "voicebot.phorvex.ai" or not 16 <= len(token) <= 256:
+        raise RuntimeError("production Voice signing authority unavailable")
+    return {"X-Twilio-Signature": RequestValidator(token).compute_signature(
+        "wss://voicebot.phorvex.ai/ws", {})}
 
 
 def sha(value):
@@ -48,6 +64,44 @@ def unique(pairs):
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def media_audio(text):
+    value = json.loads(text, object_pairs_hook=unique)
+    if not isinstance(value, dict):
+        raise RuntimeError("Voice output frame shape differs")
+    if value.get("event") != "media":
+        return None
+    if value.get("streamSid") != stream or not isinstance(value.get("media"), dict) or \
+            not isinstance(value["media"].get("payload"), str):
+        raise RuntimeError("Voice output media identity differs")
+    audio = base64.b64decode(value["media"]["payload"], validate=True)
+    if not audio:
+        raise RuntimeError("Voice output media is empty")
+    return audio
+
+
+def wait_cleanup_transcript():
+    # The unchanged bot inserts this exact row only in run_bot's finally,
+    # after PipelineRunner has completed its local cleanup. Never delete an
+    # early absent row while that producer can still create it.
+    deadline = time.monotonic() + FINAL_TRANSCRIPT_WAIT_SECONDS
+    previous = None
+    while time.monotonic() < deadline:
+        object_id, messages = transcript()
+        if time.monotonic() >= deadline:
+            break
+        if object_id is not None:
+            current = (object_id, canonical(messages))
+            if previous is not None:
+                if current != previous:
+                    raise RuntimeError("completed Voice transcript changed before cleanup")
+                return object_id
+            previous = current
+        elif previous is not None:
+            raise RuntimeError("completed Voice transcript disappeared before cleanup")
+        time.sleep(FINAL_TRANSCRIPT_POLL_SECONDS)
+    raise RuntimeError("exact final Voice transcript unavailable for cleanup")
 
 
 def emit(value):
@@ -136,7 +190,10 @@ def transcript():
     client = MongoClient(uri, serverSelectionTimeoutMS=3000, connectTimeoutMS=3000,
                          socketTimeoutMS=3000, retryWrites=False)
     collection = client[os.environ.get("MONGO_DB", "voice")][os.environ.get("MONGO_COLLECTION", "transcripts")]
-    rows = list(collection.find({"call_sid": sid}).limit(2))
+    try:
+        rows = list(collection.find({"call_sid": sid}).limit(2))
+    finally:
+        client.close()
     if len(rows) > 1 or any(row.get("call_sid") != sid for row in rows):
         raise RuntimeError("Voice transcript call identity ambiguous")
     if not rows:
@@ -154,6 +211,7 @@ def transcript():
 
 
 if operation == "baseline":
+    production_ws_headers()  # Fail before a fixture write if signer/SDK is unavailable.
     row, _ = transcript()
     names = ["mcp-call-" + sid + ".json"] + [
         "mcp-tool-" + sid + "-" + tool + ".json" for tool in ("store_directory", "check_promotions")]
@@ -195,10 +253,14 @@ elif operation == "session":
     account = "AC" + sha("voice-mcp-account:" + run)[:32].upper()
 
     async def session():
-        received = 0
+        received = audio_frames = audio_bytes = 0
+        audio_digest = hashlib.sha256()
+        last_audio = None
+        audio_quiet = False
         timeout = aiohttp.ClientTimeout(total=38)
         async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as client:
             async with client.ws_connect("http://127.0.0.1:8080/ws", timeout=5, max_msg_size=65536,
+                                         headers=production_ws_headers(),
                                          autoclose=True, autoping=True) as ws:
                 await ws.send_json({"event": "connected", "protocol": "Call", "version": "1.0.0"})
                 await ws.send_json({"event": "start", "sequenceNumber": "1", "streamSid": stream,
@@ -210,7 +272,7 @@ elif operation == "session":
                                                               "channels": 1}}})
 
                 async def drain():
-                    nonlocal received
+                    nonlocal received, audio_frames, audio_bytes, last_audio
                     while True:
                         try:
                             frame = await ws.receive(timeout=0.5)
@@ -221,6 +283,17 @@ elif operation == "session":
                         received += 1
                         if received > 1024 or len(str(frame.data)) > 65536:
                             raise RuntimeError("Voice output exceeds frame bound")
+                        if frame.type == aiohttp.WSMsgType.TEXT:
+                            audio = media_audio(frame.data)
+                            if audio is not None:
+                                audio_frames += 1
+                                audio_bytes += len(audio)
+                                if audio_bytes > 1 << 20:
+                                    raise RuntimeError("Voice output audio exceeds bound")
+                                audio_digest.update(audio)
+                                last_audio = time.monotonic()
+                        elif frame.type == aiohttp.WSMsgType.BINARY:
+                            raise RuntimeError("Voice output must be Twilio JSON media")
 
                 reader = asyncio.create_task(drain())
                 try:
@@ -231,22 +304,37 @@ elif operation == "session":
                                                       "timestamp": str((index - 2) * 20),
                                                       "payload": base64.b64encode(chunk).decode("ascii")}})
                         await asyncio.sleep(0.02)
-                    await asyncio.sleep(8)
+                    # A fixed eight-second disconnect can cancel the output
+                    # queue before the actual assistant transcript aggregates.
+                    # Audio quiet is a bounded transport observation, not a
+                    # model-completion flag; durable transcript reads follow.
+                    waiting = time.monotonic()
+                    while time.monotonic() - waiting < RESPONSE_WAIT_SECONDS:
+                        if reader.done():
+                            await reader
+                            break
+                        await asyncio.sleep(0.1)
+                    # Do not end early on a first-phrase/greeting gap. The full
+                    # bounded window is retained before checking final quiet.
                     await ws.send_json({"event": "stop", "sequenceNumber": str(index + 1), "streamSid": stream,
                                         "stop": {"accountSid": account, "callSid": sid}})
                     await asyncio.sleep(0.2)
+                    audio_quiet = (not reader.done() and last_audio is not None and
+                                   time.monotonic() - last_audio >= AUDIO_QUIET_SECONDS)
                 finally:
                     reader.cancel()
                     try:
                         await reader
                     except asyncio.CancelledError:
                         pass
-        return received
+        return received, audio_frames, audio_bytes, audio_digest.hexdigest(), audio_quiet
 
-    frames = asyncio.run(session())
+    frames, audio_frames, audio_bytes, audio_sha, audio_quiet = asyncio.run(session())
     emit({"version": 1, "operation": operation, "phase": phase, "runSHA256": run_sha,
           "callSidSHA256": sha(sid), "audioSHA256": hashlib.sha256(raw).hexdigest(),
-          "mediaFrames": (len(raw) + 159) // 160, "receivedFrames": frames})
+          "mediaFrames": (len(raw) + 159) // 160, "receivedFrames": frames,
+          "receivedAudioFrames": audio_frames, "receivedAudioBytes": audio_bytes,
+          "receivedAudioSHA256": audio_sha, "audioQuietObserved": audio_quiet})
 
 elif operation == "observe":
     receipt = sdk_receipt()
@@ -261,7 +349,7 @@ elif operation == "observe":
           "observedAtUnixMs": int(time.time() * 1000)})
 
 else:
-    object_id, _ = transcript()
+    object_id = wait_cleanup_transcript()
     from pymongo import MongoClient
     client = MongoClient(os.environ["MONGO_URI"], serverSelectionTimeoutMS=3000,
                          connectTimeoutMS=3000, socketTimeoutMS=3000, retryWrites=False)

@@ -497,6 +497,12 @@ func main() {
 	rmgr.QuarantineCapacity = quarantineCapacity
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
+	voiceAdmissionMode := os.Getenv("PHORVEX_VOICE_ADMISSION_ENABLED")
+	if voiceAdmissionMode != "" && voiceAdmissionMode != "true" && voiceAdmissionMode != "false" {
+		setupLog.Error(fmt.Errorf("invalid PHORVEX_VOICE_ADMISSION_ENABLED"), "invalid Voice admission feature flag")
+		os.Exit(1)
+	}
+	voiceAdmissionEnabled := voiceAdmissionMode == "true"
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
 		native.JournalNamespace = operatorNS
@@ -504,6 +510,7 @@ func main() {
 		native.SetMIGProfiles(migProfiles)
 		native.SetServingSecurity(servingSecurity)
 		native.VoiceMCPApprovedImage = voiceMCPApprovedImage
+		native.VoiceAdmissionEnabled = voiceAdmissionEnabled
 		native.SetEndpointLeaseApprovedSourceSHA256(endpointLeaseApprovedSource)
 		native.SetEndpointLeaseApprovedProxyImage(endpointLeaseApprovedProxyImage)
 		native.SetEndpointLeaseApprovedEngineImage(endpointLeaseApprovedEngineImage)
@@ -514,6 +521,7 @@ func main() {
 		hybrid.SetMIGProfiles(migProfiles)
 		hybrid.SetServingSecurity(servingSecurity)
 		hybrid.SetVoiceMCPApprovedImage(voiceMCPApprovedImage)
+		hybrid.SetVoiceAdmissionEnabled(voiceAdmissionEnabled)
 		hybrid.SetEndpointLeaseApprovedSourceSHA256(endpointLeaseApprovedSource)
 		hybrid.SetEndpointLeaseApprovedProxyImage(endpointLeaseApprovedProxyImage)
 		hybrid.SetEndpointLeaseApprovedEngineImage(endpointLeaseApprovedEngineImage)

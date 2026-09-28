@@ -1,6 +1,6 @@
 import { api, AttackResult, CompatEntry, Lens, VllmAttackAction } from "@/lib/api";
 
-type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } | { kind: "voice-agency" } | { kind: "voice-output" } | { kind: "voice-mcp" } |
+type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } | { kind: "voice-agency" } | { kind: "voice-output" } | { kind: "voice-mcp" } | { kind: "voice-admission" } |
   { kind: "litellm"; scenario: "ai2-unbounded-consumption" | "ai2-query-extraction" } |
   { kind: "litellm-output"; scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage" } |
   { kind: "foothold"; namespace: string; action: "foothold" | "clear" };
@@ -23,6 +23,8 @@ export function liveAttackRoute(entry: Pick<CompatEntry, "id" | "endpoint">, nam
     return { kind: "voice-agency" };
   if (entry.endpoint === "/api/voice/output/live/fire" && namespace === "voice" && entry.id === "ai2-system-prompt-leakage")
     return { kind: "voice-output" };
+  if (entry.endpoint === "/api/voice/admission/live/fire" && namespace === "voice" && entry.id === "voice-unauthenticated-media-admission")
+    return { kind: "voice-admission" };
   if (entry.endpoint === "/api/voice/mcp/live/fire" && namespace === "voice" && entry.id === "ai2-mcp-tool-poisoning")
     return { kind: "voice-mcp" };
   if (entry.endpoint === "/api/litellm/live/fire" && namespace === "litellm" &&
@@ -40,6 +42,7 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
     case "voice": return api.voiceMemoryFire("ai2-agent-memory-contamination", lens);
     case "voice-agency": return api.voiceAgencyFire("ai2-agent-excessive-agency", lens);
     case "voice-output": return api.voiceOutputFire("ai2-system-prompt-leakage", lens);
+    case "voice-admission": return api.voiceAdmissionFire("voice-unauthenticated-media-admission", lens);
     case "voice-mcp": return api.voiceMCPFire("ai2-mcp-tool-poisoning", lens);
     case "litellm": return api.litellmLiveFire(route.scenario, lens);
     case "litellm-output": return api.litellmOutputFire(route.scenario, lens);
@@ -53,7 +56,7 @@ export function liveAttackPollBudgetMs(route: LiveRoute): number {
   if (route.kind === "vllm" && route.action === "endpoint-lease-revoke") return 960_000;
   if (route.kind === "vllm" && route.action === "guardrail-rotate") return 630_000;
   if (route.kind === "vllm" && route.action === "guardrail-output-v2") return 960_000;
-  return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "voice-output" || route.kind === "voice-mcp" || route.kind === "litellm" || route.kind === "litellm-output" ? 960_000 : 150_000;
+  return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "voice-output" || route.kind === "voice-mcp" || route.kind === "voice-admission" || route.kind === "litellm" || route.kind === "litellm-output" ? 960_000 : 150_000;
 }
 
 export function liveAttackVerdict(result: AttackResult) {

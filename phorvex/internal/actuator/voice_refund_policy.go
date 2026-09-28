@@ -23,6 +23,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicerefundpolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -157,6 +158,11 @@ func voiceRefundScopeAt(ctx context.Context, reader client.Reader, target Target
 	if err != nil {
 		return s, err
 	}
+	if voiceadmissionpolicy.HasWrapperAuthority(pod) {
+		if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, pod, dep); err != nil {
+			return s, err
+		}
+	}
 	pol, err := receiptAuthority(ctx, reader, operationReceipt{PolicyNamespace: target.Namespace, PolicyName: target.PolicyName, PolicyUID: target.PolicyUID,
 		TargetName: target.Pod, TargetUID: target.UID, TargetLabels: pod.Labels}, model.ActionVoiceRefundPairDeny)
 	if err != nil {
@@ -225,6 +231,11 @@ func voiceRefundScopeAt(ctx context.Context, reader client.Reader, target Target
 			candidate.Annotations["phorvex.ai/voice-refund-source-sha256"] != rule.SourceSHA256 ||
 			candidate.Annotations["phorvex.ai/voice-refund-event-creator"] != pod.Annotations["phorvex.ai/voice-refund-event-creator"] {
 			return s, fmt.Errorf("voice refund serving Pod scope incomplete")
+		}
+		if voiceadmissionpolicy.HasWrapperAuthority(pod) || voiceadmissionpolicy.HasWrapperAuthority(&candidate) {
+			if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, &candidate, dep); err != nil {
+				return s, err
+			}
 		}
 		if candidate.UID == pod.UID {
 			found = true

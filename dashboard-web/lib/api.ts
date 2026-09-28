@@ -283,6 +283,8 @@ export const api = {
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/agency/live/fire", { scenario }, lens),
   voiceOutputFire: (scenario: "ai2-system-prompt-leakage", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/output/live/fire", { scenario }, lens),
+  voiceAdmissionFire: (scenario: "voice-unauthenticated-media-admission", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/admission/live/fire", { scenario }, lens),
   voiceMCPFire: (scenario: "ai2-mcp-tool-poisoning", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/voice/mcp/live/fire", { scenario }, lens),
   litellmLiveFire: (scenario: "ai2-unbounded-consumption" | "ai2-query-extraction", lens: Lens) =>
@@ -506,6 +508,7 @@ export interface AttackResult {
   voiceAgencyProbe?: VoiceAgencyProbeResult;
   voiceOutputProbe?: VoiceOutputProbeResult;
   voiceMCPProbe?: VoiceMCPProbeResult;
+  voiceAdmissionProbe?: VoiceAdmissionProbeResult;
   litellmLiveProbe?: LiteLLMLiveProbeResult;
   litellmOutputProbe?: LiteLLMOutputProbeResult;
   decisionEvidence?: AttackDecisionEvidence;
@@ -930,4 +933,16 @@ export interface ArmsJob {
 }
 export interface AvailabilityArms {
   running: ArmsJob[]; runs: ArmRun[]; available: boolean; note: string; howItRan: string; whyNoDrop: string;
+}
+
+export interface VoiceAdmissionProbeResult {
+  schema: "voice-admission-live-v1"; status: string; scenarioId: string; caseId: string; runSHA256: string;
+  defenseScope: string; signalMode: string; targetPodUID?: string; deploymentUID?: string;
+  firstLanded: boolean; firstSTTFrames: number; firstModelCompletions: number; firstTTSAudioBytes: number;
+  firstSentAudioFrames: number; firstSentAudioBytes: number; receiptSHA256?: string; providerEvidenceSHA256?: string;
+  eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  noopReason?: string; actionExclusion?: string; operationId?: string; protectedJournalTerminal: boolean;
+  everyServingPodSettled: boolean; unsignedSessionsEnded: boolean; everyPodReplayRejected: boolean;
+  serviceReplayRejected: boolean; malformedReplayRejected: boolean; signedSurvivorAudio: boolean; newSignedAudio: boolean;
+  cleanup: string; issues: string[];
 }

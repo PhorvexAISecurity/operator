@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 )
 
 // taxonomy_test.go — PHVX-77 / PHORVEXSEC-133.
@@ -198,6 +199,7 @@ func TestNoDeadFactKinds(t *testing.T) {
 				SeedSHA256: "seed-hash", ServiceUID: "service-uid",
 				GatewaySourceSHA256: "source-hash", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1}}},
 		boundVoiceMCPView(),
+		boundVoiceAdmissionView(),
 		endpointLeaseView(),
 	}
 	detectorAdapter(&views[3].Pod, "evil")
@@ -267,4 +269,27 @@ func declaredFactKinds(t *testing.T) map[string]string {
 		return true
 	})
 	return out
+}
+
+func boundVoiceAdmissionView() *model.WorkloadView {
+	uid := "11111111-1111-4111-8111-111111111111"
+	sha := strings.Repeat("a", 64)
+	a := voiceadmissionpolicy.EventAssertion{Version: 1, ScenarioID: voiceadmissionpolicy.ScenarioID, CaseID: "unsigned-audio", RunSHA256: sha, SessionID: uid, DeploymentUID: uid, PodUID: uid, AdmissionSourceSHA256: sha, LegacyBundleSHA256: sha, AuthProfileSHA256: sha, PolicyCMUID: uid, PolicyResourceVersion: "1", RuleSHA256: sha, SecurityPolicyUID: uid, SecurityPolicyGeneration: 1, ObservedAtUnixMs: 1, EvidenceSource: "TEST_INJECTED", Observed: true, SentAudioFrames: 1, SentAudioBytes: 1, ReceiptSHA256: sha, ProviderEvidenceSHA256: sha}
+	return &model.WorkloadView{Pod: model.Pod{Namespace: "voice", Name: "voice", UID: uid, VoiceAdmissionConfigMap: voiceadmissionpolicy.ConfigMapName, VoiceAdmissionDeploymentUID: uid, VoiceAdmissionSourceSHA256: sha, VoiceAdmissionEventCreator: voiceadmissionpolicy.Creator, VoiceAdmissionObservation: &model.VoiceAdmissionObservation{EventName: "observed", EventUID: uid, CreatorIdentity: voiceadmissionpolicy.Creator, ScenarioID: voiceadmissionpolicy.ScenarioID, EvidenceSource: "TEST_INJECTED", TargetPodUID: uid, DeploymentUID: uid, ConfigMapUID: uid, ConfigMapResourceVersion: "1", SourceSHA256: sha, RuleSHA256: sha, PolicyName: "voice-defense", PolicyUID: uid, PolicyGeneration: 1, SessionID: uid, Assertion: a}}}
+}
+
+func TestVoiceAdmissionActualAccessHasDedicatedCover(t *testing.T) {
+	v := boundVoiceAdmissionView()
+	if !v.Pod.HasBoundVoiceAdmissionObservation() {
+		t.Fatal("bound admission fixture incomplete")
+	}
+	facts := ucwRecon{}.AssetFacts(v, FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1})
+	if len(facts.CoverByAction[model.ActionVoiceSessionAdmissionEnforce]) == 0 {
+		t.Fatal("actual unauthorized admission has no enforce cover")
+	}
+	v.Pod.VoiceAdmissionObservation.Assertion.SentAudioBytes = 0
+	facts = ucwRecon{}.AssetFacts(v, FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1})
+	if len(facts.CoverByAction[model.ActionVoiceSessionAdmissionEnforce]) != 0 {
+		t.Fatal("handshake-only observation creates admission cover")
+	}
 }

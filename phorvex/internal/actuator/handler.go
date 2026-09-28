@@ -67,6 +67,8 @@ type EnactCtx struct {
 	VoiceMCPTransport                 http.RoundTripper // private fixed-Pod-IP readback seam
 	VoiceMCPApprovedImage             string            // operator-configured reviewed MCP repo@sha256; never event-derived
 	VoiceOutputTransport              http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceAdmissionTransport           http.RoundTripper // private fixed-Pod-IP readback seam
+	VoiceAdmissionEnabled             bool
 	LiteLLMStatusTransport            http.RoundTripper // test-only exact PodIP status-readback seam
 	LiteLLMStatusToken                string            // test-only; runtime reads the fixed mounted Secret path
 	EndpointLeaseApprovedSourceSHA256 string            // reviewed five-file proxy source, never event-derived
@@ -135,6 +137,16 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 			return Result{}, fenceErr
 		}
 	}
+	if req.Action != model.ActionVoiceSessionAdmissionEnforce && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
+		pending, err := PendingVoiceAdmissionOperation(ctx, ec.Reader, ec.JournalNamespace, req.Namespace, req.Pod, req.TargetUID)
+		if err != nil {
+			return Result{}, fmt.Errorf("native actuator: Voice admission protected history unavailable: %w", err)
+		}
+		if pending {
+			return Result{}, fmt.Errorf("native actuator: exact Voice Deployment has unresolved admission operation")
+		}
+	}
+
 	if req.Action != model.ActionVoiceOutputPolicyActivate && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
 		pending, err := PendingVoiceOutputOperation(ctx, ec.Reader, ec.JournalNamespace, req.Namespace, req.Pod, req.TargetUID)
 		if err != nil || pending {

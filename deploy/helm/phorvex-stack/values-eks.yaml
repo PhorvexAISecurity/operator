@@ -122,20 +122,20 @@ phorvex:
     console:
       voiceAgencyLive:
         enabled: true
-        configMapName: phorvex-voice-agency-profile-d8ac604980a0
-        profileSHA256: d8ac604980a0b263eb20dd0ea81d6b5c0982177ee618ab45da97e0ef9773329c
+        configMapName: phorvex-voice-agency-profile-a518c389310b
+        profileSHA256: a518c389310bfae62ca35fe81a2c522d2a48fa819c544a07e3a32a0e2f99be8a
         deploymentUID: 9212e1a8-c21d-49cd-9854-85a1b306a8f4
       voiceMCPLive:
-        configMapName: phorvex-catalogue-voice-mcp-e140fd23c7be
+        configMapName: phorvex-catalogue-voice-mcp-fc0bccec4d9a
         deploymentUID: 9212e1a8-c21d-49cd-9854-85a1b306a8f4
         enabled: true
         mcpSourceConfigMapName: voice-mcp-source-85cbd0f201b9
-        profileSHA256: e140fd23c7be14fab5dda76151d1b0599769b8819f9053c45d0e4359fe8c93eb
+        profileSHA256: fc0bccec4d9a11a17ee8cfe2aa4d84f6f2346d0c9735add931bf6cc25760c2d2
         sourceConfigMapName: voice-memory-source-e3cfcb87456b
       voiceOutputLive:
         enabled: true
-        configMapName: phorvex-voice-output-profile-f5ea67a56067
-        profileSHA256: f5ea67a56067f3ba9570fcd9d0a6e22a29db7a7c283bb230bcb504adbbe0edd1
+        configMapName: phorvex-voice-output-profile-742557bfdee0
+        profileSHA256: 742557bfdee0973e96174c9aa4078d6f1cc03ed971aa4c7ae953c4b22fef800a
       endpointLease:
         callerSecretName: vllm-endpoint-lease-callers
         configMapName: phorvex-catalogue-endpoint-lease-69efe329171e

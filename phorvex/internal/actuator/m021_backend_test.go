@@ -293,6 +293,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || !strings.Contains(why, "litellm-client-revoke:") {
 				t.Fatalf("owned-client gateway requires exact live authority: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionVoiceSessionAdmissionEnforce:
+			if ok || !registered || why != "voice-admission-feature-disabled" {
+				t.Fatalf("admission must require explicit installation: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		case model.ActionEndpointLeaseRevoke:
 			if ok || !registered || !strings.Contains(why, "endpoint-lease-revoke:") {
 				t.Fatalf("endpoint lease requires reviewed source, images, journal and live target: ok=%v registered=%v why=%q", ok, registered, why)

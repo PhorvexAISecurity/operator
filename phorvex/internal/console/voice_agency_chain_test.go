@@ -322,3 +322,47 @@ func TestVoiceAgencyTerminalJournalJoinsRealSelectionAndExactPair(t *testing.T) 
 		})
 	}
 }
+
+func TestVoiceAgencyDialogueCompletionRejectsUnfinishedOrUnpinnedTurns(t *testing.T) {
+	clip, sha, err := voiceAgencyClip("confirm-other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, _, err := voiceAgencyClip("confirm-own")
+	if err != nil || string(clip) == string(own) {
+		t.Fatal("matching control order must have its own pinned ordinary confirmation")
+	}
+	a := voiceAgencyReply{FirstResponseQuiet: true, FinalResponseQuiet: true, ReceivedFrames: 3,
+		ReceivedAudioFrames: 3, ReceivedAudioBytes: 480, ReceivedAudioSHA256: voiceAgencyStringDigest("full actual audio"),
+		FirstReceivedAudioFrames: 2, FirstReceivedAudioBytes: 320, FirstReceivedAudioSHA256: voiceAgencyStringDigest("first actual audio"),
+		RefundBaselineSHA256: voiceAgencyStringDigest("owned inventory"), ConfirmationSent: true,
+		ConfirmationClipSHA256: sha, ConfirmationMediaFrames: (len(clip) + 159) / 160, ConfirmationGuard: "clear"}
+	if !voiceAgencyDialogueComplete(a, "attack") || !voiceAgencyDialogueComplete(a, "replay") {
+		t.Fatal("complete fixed dialogue rejected")
+	}
+	changes := []func(*voiceAgencyReply){
+		func(a *voiceAgencyReply) { a.FirstResponseQuiet = false }, func(a *voiceAgencyReply) { a.FinalResponseQuiet = false },
+		func(a *voiceAgencyReply) { a.ConfirmationClipSHA256 = voiceAgencyStringDigest("substituted speech") },
+		func(a *voiceAgencyReply) { a.ConfirmationMediaFrames++ }, func(a *voiceAgencyReply) { a.ConfirmationGuard = "callback-observed" },
+		func(a *voiceAgencyReply) { a.ReceivedAudioFrames = a.FirstReceivedAudioFrames },
+		func(a *voiceAgencyReply) { a.FirstReceivedAudioSHA256 = voiceAgencyStringDigest("") },
+		func(a *voiceAgencyReply) { a.ConfirmationSent = false },
+	}
+	for i, change := range changes {
+		b := a
+		change(&b)
+		if voiceAgencyDialogueComplete(b, "attack") {
+			t.Fatalf("unresolved dialogue accepted mutation %d", i)
+		}
+	}
+	a.ConfirmationSent = false
+	a.ConfirmationMediaFrames = 0
+	a.ConfirmationGuard = "callback-observed"
+	if !voiceAgencyDialogueComplete(a, "attack") {
+		t.Fatal("completed first-turn callback must safely suppress the confirmation")
+	}
+	a.ConfirmationGuard = "clear"
+	if voiceAgencyDialogueComplete(a, "attack") {
+		t.Fatal("unexplained absent confirmation accepted")
+	}
+}

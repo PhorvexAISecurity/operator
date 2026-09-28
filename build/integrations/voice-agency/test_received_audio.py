@@ -63,7 +63,11 @@ class ReceivedAudioProducerTests(unittest.IsolatedAsyncioTestCase):
                      and node.name in ("received_audio", "session")]
             self.assertEqual(len(nodes), 2)
             namespace = {"asyncio": asyncio, "aiohttp": aiohttp, "base64": base64,
-                         "hashlib": hashlib, "json": json, "raw": b"\xff" * 160,
+                         "hashlib": hashlib, "json": json, "production_ws_headers": lambda: {}, "phase": "benign", "confirmation": b"",
+                         "confirmation_hash": hashlib.sha256(b"").hexdigest(), "sha": lambda s: hashlib.sha256(s.encode()).hexdigest(),
+                         "canonical": lambda v: json.dumps(v, sort_keys=True, separators=(",", ":")).encode(),
+                         "phase_baseline": lambda *args: (), "expected_refunds": [], "SESSION_SECONDS": 3, "FIRST_RESPONSE_SECONDS": 0.1,
+                         "FINAL_RESPONSE_SECONDS": 0.1, "RESPONSE_QUIET_SECONDS": 0.02, "raw": b"\xff" * 160,
                          "stream": "MZ" + "A" * 32, "sid": "CA" + "A" * 32,
                          "account": "AC" + "A" * 32, "phones": ("+15550000001",), "run": "agencya1"}
             exec(compile(ast.Module(body=nodes, type_ignores=[]), str(source), "exec"), namespace)
@@ -74,7 +78,7 @@ class ReceivedAudioProducerTests(unittest.IsolatedAsyncioTestCase):
                 return original_connect(client, url, **kwargs)
 
             with patch.object(aiohttp.ClientSession, "ws_connect", local_connect):
-                received, count, size, digest = await namespace["session"]()
+                received, count, size, digest, _ = await namespace["session"]()
             return {"receivedFrames": received, "receivedAudioFrames": count,
                     "receivedAudioBytes": size, "receivedAudioSHA256": digest}
 

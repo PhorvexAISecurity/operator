@@ -184,6 +184,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 				}
 				continue
 			}
+			if e.Action == model.ActionVoiceSessionAdmissionEnforce && e.Accepted {
+				if ok || why != "voice-admission-feature-disabled" || e.Prerequisite == "" {
+					t.Fatalf("admission explicit installation gate absent: ok=%v why=%q", ok, why)
+				}
+				continue
+			}
 			if e.Action == model.ActionEndpointLeaseRevoke && e.Accepted {
 				if ok || !strings.Contains(why, "endpoint-lease-revoke:") || e.Prerequisite == "" {
 					t.Fatalf("%s/%s: missing reviewed lease source, image, journal or target authority must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)

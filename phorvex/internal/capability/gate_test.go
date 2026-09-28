@@ -18,6 +18,7 @@ import (
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 )
 
@@ -121,7 +122,7 @@ func TestCapable_AllPredicatesGreen(t *testing.T) {
 			}
 			continue
 		}
-		if action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionVoiceRefundPairDeny || action == model.ActionVoiceOutputPolicyActivate || action == model.ActionLiteLLMClientRevoke {
+		if action == model.ActionVoiceSessionAdmissionEnforce || action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionVoiceRefundPairDeny || action == model.ActionVoiceOutputPolicyActivate || action == model.ActionLiteLLMClientRevoke {
 			continue // unlike generic AI actions, this requires an exact trusted event
 		}
 		if ok, why := wit.Capable(views[0], action); !ok {
@@ -783,5 +784,26 @@ func TestEndpointLeaseMissingOperatorNamespaceExcludesBeforeAuthorization(t *tes
 	}
 	if len(reviews.attributes) != 0 {
 		t.Fatalf("missing operator namespace triggered SSAR: %+v", reviews.attributes)
+	}
+}
+
+func boundVoiceAdmissionView() *model.WorkloadView {
+	uid := "11111111-1111-4111-8111-111111111111"
+	sha := strings.Repeat("a", 64)
+	a := voiceadmissionpolicy.EventAssertion{Version: 1, ScenarioID: voiceadmissionpolicy.ScenarioID, CaseID: "unsigned-audio", RunSHA256: sha, SessionID: uid, DeploymentUID: uid, PodUID: uid, AdmissionSourceSHA256: sha, LegacyBundleSHA256: sha, AuthProfileSHA256: sha, PolicyCMUID: uid, PolicyResourceVersion: "1", RuleSHA256: sha, SecurityPolicyUID: uid, SecurityPolicyGeneration: 1, ObservedAtUnixMs: 1, EvidenceSource: "TEST_INJECTED", Observed: true, SentAudioFrames: 1, SentAudioBytes: 1, ReceiptSHA256: sha, ProviderEvidenceSHA256: sha}
+	return &model.WorkloadView{Pod: model.Pod{Namespace: "voice", Name: "voice", UID: uid, VoiceAdmissionConfigMap: voiceadmissionpolicy.ConfigMapName, VoiceAdmissionDeploymentUID: uid, VoiceAdmissionSourceSHA256: sha, VoiceAdmissionEventCreator: voiceadmissionpolicy.Creator, VoiceAdmissionObservation: &model.VoiceAdmissionObservation{EventName: "observed", EventUID: uid, CreatorIdentity: voiceadmissionpolicy.Creator, ScenarioID: voiceadmissionpolicy.ScenarioID, EvidenceSource: "TEST_INJECTED", TargetPodUID: uid, DeploymentUID: uid, ConfigMapUID: uid, ConfigMapResourceVersion: "1", SourceSHA256: sha, RuleSHA256: sha, PolicyName: "voice-defense", PolicyUID: uid, PolicyGeneration: 1, SessionID: uid, Assertion: a}}}
+}
+
+func TestVoiceAdmissionCapabilityRequiresActualSourceBoundObservation(t *testing.T) {
+	views, wit := capFleet()
+	v := boundVoiceAdmissionView()
+	v.Pod.Node = views[0].Pod.Node
+	wit = wit.WithPolicyIdentity("voice-defense", v.Pod.VoiceAdmissionObservation.PolicyUID)
+	if ok, why := wit.Capable(v, model.ActionVoiceSessionAdmissionEnforce); !ok {
+		t.Fatalf("actual source-bound admission excluded: %s", why)
+	}
+	v.Pod.VoiceAdmissionObservation.Assertion.Authenticated = true
+	if ok, _ := wit.Capable(v, model.ActionVoiceSessionAdmissionEnforce); ok {
+		t.Fatal("signed session accepted as unsigned loss")
 	}
 }

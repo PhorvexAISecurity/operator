@@ -131,6 +131,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			SensitiveOutputV2Raw:                 se.Annotations["phorvex.ai/sensitive-output-observation-v2"],
 			VoiceMCPRaw:                          se.Annotations["phorvex.ai/voice-mcp-observation-v1"],
 			VoiceOutputRaw:                       se.Annotations["phorvex.ai/voice-output-observation-v1"],
+			VoiceAdmissionRaw:                    se.Annotations["phorvex.ai/voice-admission-observation-v1"],
 			LiteLLMClientRaw:                     se.Annotations["phorvex.ai/litellm-client-observation-v1"],
 			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
 		}

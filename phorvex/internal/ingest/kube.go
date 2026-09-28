@@ -311,6 +311,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 			bindVoiceRefundObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindVoiceMCPObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindVoiceOutputObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+			bindVoiceAdmissionObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindLiteLLMClientObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindEndpointLeaseObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 		}
@@ -748,8 +749,11 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out.VoiceMCPSourceSHA256 = p.Annotations["phorvex.ai/voice-mcp-source-sha256"]
 	out.VoiceMCPEventCreator = p.Annotations["phorvex.ai/voice-mcp-event-creator"]
 	out.VoiceOutputConfigMap = p.Annotations["phorvex.ai/voice-output-policy-configmap"]
+	out.VoiceAdmissionConfigMap = p.Annotations["phorvex.ai/voice-admission-policy-configmap"]
 	out.VoiceOutputSourceSHA256 = p.Annotations["phorvex.ai/voice-output-source-sha256"]
+	out.VoiceAdmissionSourceSHA256 = p.Annotations["phorvex.ai/voice-admission-source-sha256"]
 	out.VoiceOutputEventCreator = p.Annotations["phorvex.ai/voice-output-event-creator"]
+	out.VoiceAdmissionEventCreator = p.Annotations["phorvex.ai/voice-admission-event-creator"]
 	// Serving is an explicit workload declaration, never inferred from a GPU allocation.
 	// A model-id is itself a serving declaration; otherwise serving-port must be a valid
 	// TCP port. Readiness and PodIP are separate structural prerequisites and do not prove

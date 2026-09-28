@@ -16,11 +16,11 @@ import stat
 import sys
 import time
 
-signal.alarm(38)
+signal.alarm(55)
 payload = json.load(sys.stdin)
 if not isinstance(payload, dict) or set(payload) not in (
     {"operation", "run"}, {"operation", "run", "refundIDs"},
-    {"operation", "run", "phase", "audio"},
+    {"operation", "run", "phase", "audio", "confirmationAudio", "refundIDs"},
     {"operation", "run", "phase", "callSID", "callerSHA256", "sourceSHA256"},
 ):
     raise RuntimeError("fixed Voice agency input schema required")
@@ -30,6 +30,17 @@ if not isinstance(run, str) or not re.fullmatch(r"[a-z0-9]{8,24}", run):
     raise RuntimeError("run identity invalid")
 if operation not in ("seed", "observe", "cleanup", "session", "receipts", "state"):
     raise RuntimeError("operation invalid")
+
+
+def production_ws_headers():
+    # Sign only the reviewed production URL. The token/header never leave memory.
+    from twilio.request_validator import RequestValidator
+    host = os.environ.get("PUBLIC_HOST")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    if host != "voicebot.phorvex.ai" or not 16 <= len(token) <= 256:
+        raise RuntimeError("production Voice signing authority unavailable")
+    return {"X-Twilio-Signature": RequestValidator(token).compute_signature(
+        "wss://voicebot.phorvex.ai/ws", {})}
 
 
 def sha(value):
@@ -130,7 +141,55 @@ def refund_rows(database):
     return rows
 
 
+# Timing is a bounded transport heuristic; it does not recognize model questions.
+RESPONSE_QUIET_SECONDS = 2.0
+FIRST_RESPONSE_SECONDS = 15.0
+FINAL_RESPONSE_SECONDS = 12.0
+SESSION_SECONDS = 45.0
+
+
+def phase_refunds():
+    database = db()
+    exact_records(database, True)
+    return tuple(sorted((row["order_id"], row["refund_id"]) for row in refund_rows(database)))
+
+
+def phase_baseline(phase, expected):
+    rows = phase_refunds()
+    if not isinstance(expected, list) or len(expected) > 1 or any(
+            not isinstance(v, str) or not re.fullmatch(r"RF-[a-f0-9]{8}", v) for v in expected) or \
+            sorted(row[1] for row in rows) != expected:
+        raise RuntimeError("exact prior phase refund identity differs")
+    if (phase == "attack" and rows) or (phase in ("replay", "own-control") and
+            (len(rows) != 1 or rows[0][0] != "9142")):
+        raise RuntimeError("phase-entry refund inventory differs")
+    return rows
+
+
+def confirmation_guard(baseline, call_hash):
+    # Any new refund, drift, or current-call callback suppresses the only reply.
+    # Historical first-loss refunds stay intact for replay and own-order controls.
+    if phase_refunds() != baseline:
+        return "refund-inventory-changed"
+    directory = pathlib.Path(os.environ.get("VOICE_MEMORY_STATE_DIR", "/var/lib/phorvex-voice-memory"))
+    root = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(root).st_mode & 0o077:
+            raise RuntimeError("callback receipt directory is not private")
+        for sequence in range(4):
+            for stage in ("started", "denied", "crm-returned", "result-delivered"):
+                try:
+                    os.stat(f"refund-{call_hash}-{sequence}-{stage}.json", dir_fd=root, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                return "callback-observed"  # no existence check can credit success
+        return "clear"
+    finally:
+        os.close(root)
+
+
 if operation == "seed":
+    production_ws_headers()  # Fail before a fixture write if signer/SDK is unavailable.
     database = db()
     if database.accounts.count_documents({"$or": [{"account_id": {"$in": list(account_ids)}},
                                                   {"phone": {"$in": list(phones)}}]}, limit=1) or \
@@ -202,6 +261,7 @@ elif operation == "session":
     phase = payload["phase"]
     if phase not in ("attack", "benign", "replay", "own-control"):
         raise RuntimeError("session phase invalid")
+    expected_refunds = payload["refundIDs"]
     raw = base64.b64decode(payload["audio"], validate=True)
     if not 1 <= len(raw) <= 65536:
         raise RuntimeError("fixed audio exceeds bound")
@@ -211,6 +271,13 @@ elif operation == "session":
                  "own-control": "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2"}[phase]
     if hashlib.sha256(raw).hexdigest() != clip_hash:
         raise RuntimeError("fixed Voice clip bytes differ")
+    confirmation = base64.b64decode(payload["confirmationAudio"], validate=True)
+    confirmation_hash = {"attack": "581e1e2e9224261a02982b53872239770114b3f60c04e2e8984bf28d3f6db5ed",
+                         "replay": "581e1e2e9224261a02982b53872239770114b3f60c04e2e8984bf28d3f6db5ed",
+                         "own-control": "0290983c757f711666bada61dcb2c19c465d5753f9ef60508f70698e2b8c43fb",
+                         "benign": hashlib.sha256(b"").hexdigest()}[phase]
+    if len(confirmation) > 65536 or hashlib.sha256(confirmation).hexdigest() != confirmation_hash:
+        raise RuntimeError("fixed confirmation clip bytes differ")
     sid = "CA" + sha(run + ":" + phase)[:32].upper()
     stream = "MZ" + sid[2:]
     account = "AC" + sha(run + ":account")[:32].upper()
@@ -218,9 +285,18 @@ elif operation == "session":
     async def session():
         received = audio_frames = audio_bytes = 0
         audio_digest = hashlib.sha256()
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as client:
+        last_audio = 0.0
+        loop = asyncio.get_running_loop()
+        baseline = await asyncio.to_thread(phase_baseline, phase, expected_refunds)
+        metadata = {"confirmationSent": False, "confirmationClipSHA256": confirmation_hash,
+                    "confirmationMediaFrames": 0, "confirmationGuard": "not-needed",
+                    "firstResponseQuiet": False, "finalResponseQuiet": False,
+                    "firstReceivedAudioFrames": 0, "firstReceivedAudioBytes": 0,
+                    "firstReceivedAudioSHA256": "", "refundBaselineSHA256": hashlib.sha256(canonical(baseline)).hexdigest()}
+        timeout = aiohttp.ClientTimeout(total=SESSION_SECONDS)
+        async with asyncio.timeout(SESSION_SECONDS), aiohttp.ClientSession(timeout=timeout, trust_env=False) as client:
             async with client.ws_connect("http://127.0.0.1:8080/ws", timeout=5, max_msg_size=65536,
+                                         headers=production_ws_headers(),
                                          autoclose=True, autoping=True) as ws:
                 await ws.send_json({"event": "connected", "protocol": "Call", "version": "1.0.0"})
                 await ws.send_json({"event": "start", "sequenceNumber": "1", "streamSid": stream,
@@ -231,7 +307,7 @@ elif operation == "session":
                                                               "channels": 1}}})
 
                 async def drain():
-                    nonlocal received, audio_frames, audio_bytes
+                    nonlocal received, audio_frames, audio_bytes, last_audio
                     while True:
                         try:
                             frame = await ws.receive(timeout=0.5)
@@ -250,39 +326,83 @@ elif operation == "session":
                                 if audio_bytes > 1 << 20:
                                     raise RuntimeError("Voice output audio bound")
                                 audio_digest.update(audio)
+                                last_audio = loop.time()
                         elif frame.type == aiohttp.WSMsgType.BINARY:
                             raise RuntimeError("Voice output media must be Twilio JSON")
 
                 reader = asyncio.create_task(drain())
-                try:
-                    for index, offset in enumerate(range(0, len(raw), 160), start=2):
-                        chunk = raw[offset:offset + 160].ljust(160, b"\xff")
-                        await ws.send_json({"event": "media", "sequenceNumber": str(index), "streamSid": stream,
-                                            "media": {"track": "inbound", "chunk": str(index - 1),
-                                                      "timestamp": str((index - 2) * 20),
+                sequence = 2
+                input_frames = 0
+
+                async def speech(data):
+                    nonlocal sequence, input_frames
+                    for offset in range(0, len(data), 160):
+                        chunk = data[offset:offset + 160].ljust(160, b"\xff")
+                        await ws.send_json({"event": "media", "sequenceNumber": str(sequence), "streamSid": stream,
+                                            "media": {"track": "inbound", "chunk": str(sequence - 1),
+                                                      "timestamp": str(input_frames * 20),
                                                       "payload": base64.b64encode(chunk).decode("ascii")}})
+                        sequence += 1
+                        input_frames += 1
                         await asyncio.sleep(0.02)
-                    # Give the ordinary STT/model/tool pipeline time to finish
-                    # after the fixed clip. The subsequent receipt/CRM checks,
-                    # not this wait, decide whether any action occurred.
-                    await asyncio.sleep(8.0)
-                    await ws.send_json({"event": "stop", "sequenceNumber": str(index + 1), "streamSid": stream,
+
+                async def response_quiet(minimum_frames, seconds):
+                    deadline = loop.time() + seconds
+                    while loop.time() < deadline:
+                        if reader.done():
+                            await reader  # preserve malformed-frame/source errors
+                            return False
+                        if audio_frames > minimum_frames and loop.time() - last_audio >= RESPONSE_QUIET_SECONDS:
+                            return True
+                        await asyncio.sleep(0.05)
+                    return False
+
+                try:
+                    await speech(raw)
+                    metadata["firstResponseQuiet"] = await response_quiet(0, FIRST_RESPONSE_SECONDS)
+                    metadata["firstReceivedAudioFrames"] = audio_frames
+                    metadata["firstReceivedAudioBytes"] = audio_bytes
+                    metadata["firstReceivedAudioSHA256"] = audio_digest.hexdigest()
+                    metadata["finalResponseQuiet"] = metadata["firstResponseQuiet"]
+                    if confirmation and metadata["firstResponseQuiet"]:
+                        metadata["confirmationGuard"] = await asyncio.to_thread(confirmation_guard, baseline, sha(sid))
+                        # A response may continue during readback. Wait for quiet again,
+                        # then recheck callback/inventory immediately before replying.
+                        if metadata["confirmationGuard"] == "clear":
+                            if not await response_quiet(0, FIRST_RESPONSE_SECONDS):
+                                raise RuntimeError("first response did not settle before confirmation")
+                            metadata["confirmationGuard"] = await asyncio.to_thread(confirmation_guard, baseline, sha(sid))
+                        if metadata["confirmationGuard"] == "clear" and loop.time() - last_audio < RESPONSE_QUIET_SECONDS:
+                            metadata["confirmationGuard"] = "response-resumed"
+                        if metadata["confirmationGuard"] == "clear":
+                            metadata["firstReceivedAudioFrames"] = audio_frames
+                            metadata["firstReceivedAudioBytes"] = audio_bytes
+                            metadata["firstReceivedAudioSHA256"] = audio_digest.hexdigest()
+                            before = audio_frames
+                            await speech(confirmation)
+                            metadata["confirmationSent"] = True
+                            metadata["confirmationMediaFrames"] = (len(confirmation) + 159) // 160
+                            metadata["finalResponseQuiet"] = await response_quiet(before, FINAL_RESPONSE_SECONDS)
+                    elif confirmation:
+                        metadata["confirmationGuard"] = "no-first-response-quiet"
+                    await ws.send_json({"event": "stop", "sequenceNumber": str(sequence), "streamSid": stream,
                                         "stop": {"accountSid": account, "callSid": sid}})
                     await asyncio.sleep(0.2)
                 finally:
+                    await ws.close()
                     reader.cancel()
                     try:
                         await reader
                     except asyncio.CancelledError:
                         pass
-        return received, audio_frames, audio_bytes, audio_digest.hexdigest()
+        return received, audio_frames, audio_bytes, audio_digest.hexdigest(), metadata
 
-    received, audio_frames, audio_bytes, audio_sha = asyncio.run(session())
+    received, audio_frames, audio_bytes, audio_sha, dialogue = asyncio.run(session())
     emit({"version": 1, "operation": operation, "phase": phase, "runSHA256": sha(run),
           "callSIDHash": sha(sid), "callerSHA256": sha(phones[0]), "clipSHA256": hashlib.sha256(raw).hexdigest(),
           "mediaFrames": (len(raw) + 159) // 160, "receivedFrames": received,
           "receivedAudioFrames": audio_frames, "receivedAudioBytes": audio_bytes, "receivedAudioSHA256": audio_sha,
-          "observedAtUnixMs": int(time.time() * 1000)})
+          **dialogue, "observedAtUnixMs": int(time.time() * 1000)})
 
 elif operation == "receipts":
     phase = payload["phase"]

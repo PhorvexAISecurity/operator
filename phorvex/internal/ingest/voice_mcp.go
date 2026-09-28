@@ -15,6 +15,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 )
 
@@ -101,8 +102,7 @@ func voiceMCPRequiredMode(pod *corev1.Pod, sourceName string) bool {
 			botCount++
 		}
 	}
-	if bot == nil || botCount != 1 || len(bot.Command) != 3 || bot.Command[0] != "python3" || bot.Command[1] != "-B" ||
-		bot.Command[2] != "/app/bot.py" || len(bot.Args) != 0 || bot.Image == "" {
+	if bot == nil || botCount != 1 || (!voiceadmissionpolicy.LegacyCommand(*bot) && !voiceadmissionpolicy.WrapperCommand(*bot)) || bot.Image == "" {
 		return false
 	}
 	required := 0
@@ -261,6 +261,11 @@ func bindVoiceMCPObservation(ctx context.Context, reader client.Reader, pod *mod
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-source-sha256"] != payload.SourceSHA256 ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-event-creator"] != chosen.CreatorIdentity {
 		return
+	}
+	if voiceadmissionpolicy.HasWrapperAuthority(live) {
+		if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, live, dep); err != nil {
+			return
+		}
 	}
 	sourceCM := &corev1.ConfigMap{}
 	if reader.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: sourceName}, sourceCM) != nil {

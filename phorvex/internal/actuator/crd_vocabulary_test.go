@@ -21,7 +21,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-const requiredActionVocabularySize = 24
+const requiredActionVocabularySize = 25
 
 // TestCRDActionVocabularyCompleteness prevents the API marker, generated CRDs,
 // ActionType constants, and the optimizer's canonical action vocabulary from

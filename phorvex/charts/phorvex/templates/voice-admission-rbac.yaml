@@ -1,0 +1,70 @@
+{{- if .Values.phorvex.voiceAdmission.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "voiceAdmission requires native or hybrid actuator" }}{{- end }}
+{{- range list "sourceConfigMapName" "legacyConfigMapName" }}
+{{- $name := required (printf "voiceAdmission.%s required" .) (index $.Values.phorvex.voiceAdmission .) }}
+{{- if or (gt (len $name) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name)) }}{{- fail "voiceAdmission source ConfigMap name invalid" }}{{- end }}
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-admission
+  namespace: voice
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["voice-session-admission-policy"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .Values.phorvex.voiceAdmission.sourceConfigMapName | quote }}, {{ .Values.phorvex.voiceAdmission.legacyConfigMapName | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["voice-memory-state-token"]
+  verbs: ["get"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  resourceNames: ["voice-bot-public"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-admission
+  namespace: voice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-voice-admission
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# Preinstalled journal ownership is enforced by the native actuator. No journal
+# create/delete/reset grant; initial empty journal is created by activation.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-admission-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-voice-admission-journal"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-voice-admission-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-voice-admission-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

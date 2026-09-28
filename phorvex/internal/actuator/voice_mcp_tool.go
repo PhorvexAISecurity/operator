@@ -24,6 +24,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -82,8 +83,7 @@ func voiceMCPMounts(pod *corev1.Pod) (string, bool) {
 			botCount++
 		}
 	}
-	if bot == nil || botCount != 1 || len(bot.Command) != 3 || bot.Command[0] != "python3" || bot.Command[1] != "-B" ||
-		bot.Command[2] != "/app/bot.py" || len(bot.Args) != 0 || bot.Image == "" {
+	if bot == nil || botCount != 1 || (!voiceadmissionpolicy.LegacyCommand(*bot) && !voiceadmissionpolicy.WrapperCommand(*bot)) || bot.Image == "" {
 		return "", false
 	}
 	required := 0
@@ -236,6 +236,11 @@ func voiceMCPScopeAt(ctx context.Context, reader client.Reader, target Target) (
 	if err != nil {
 		return scope, err
 	}
+	if voiceadmissionpolicy.HasWrapperAuthority(pod) {
+		if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, pod, dep); err != nil {
+			return scope, err
+		}
+	}
 	templateSource, templateOK := voiceMCPMounts(&corev1.Pod{Spec: dep.Spec.Template.Spec})
 	if !templateOK || templateSource == "" || voiceMCPBotImage(dep.Spec.Template.Spec) != voiceMCPBotImage(pod.Spec) ||
 		dep.Spec.Template.Annotations["phorvex.ai/voice-mcp-policy-configmap"] != voicemcppolicy.ConfigMapName ||
@@ -304,6 +309,11 @@ func voiceMCPScopeAt(ctx context.Context, reader client.Reader, target Target) (
 		}
 		if owner.UID != dep.UID {
 			continue
+		}
+		if voiceadmissionpolicy.HasWrapperAuthority(&candidate) {
+			if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, &candidate, dep); err != nil {
+				return scope, err
+			}
 		}
 		sourceName, mounted := voiceMCPMounts(&candidate)
 		if !mounted || sourceName != templateSource || !voiceMCPReady(&candidate) || !depSel.Matches(labels.Set(candidate.Labels)) || !sel.Matches(labels.Set(candidate.Labels)) ||

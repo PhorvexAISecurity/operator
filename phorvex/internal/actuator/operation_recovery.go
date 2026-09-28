@@ -27,7 +27,7 @@ func (n *NativeActuator) RecoverOperations(ctx context.Context, globalKill bool)
 }
 
 func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool, allow func(model.Action) bool) ([]RecoveryEvent, error) {
-	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}
+	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, VoiceAdmissionTransport: n.VoiceAdmissionTransport, VoiceAdmissionEnabled: n.VoiceAdmissionEnabled, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}
 	if globalKill || n.DryRun {
 		return nil, nil
 	}
@@ -51,6 +51,10 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 	if err != nil {
 		return nil, err
 	}
+	admissionEvents, err := recoverVoiceAdmissionOperations(ctx, ec, allow)
+	if err != nil {
+		return nil, err
+	}
 	outputVoiceEvents, err := recoverVoiceOutputOperations(ctx, ec, allow)
 	if err != nil {
 		return nil, err
@@ -71,11 +75,12 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 	if err != nil {
 		return nil, err
 	}
-	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(voiceEvents)+len(refundEvents)+len(mcpEvents)+len(outputVoiceEvents)+len(litellmEvents)+len(leaseEvents)+len(liteOutputEvents)+len(entries)), guardEvents...)
+	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(outputEvents)+len(voiceEvents)+len(refundEvents)+len(mcpEvents)+len(admissionEvents)+len(outputVoiceEvents)+len(litellmEvents)+len(leaseEvents)+len(liteOutputEvents)+len(entries)), guardEvents...)
 	events = append(events, outputEvents...)
 	events = append(events, voiceEvents...)
 	events = append(events, refundEvents...)
 	events = append(events, mcpEvents...)
+	events = append(events, admissionEvents...)
 	events = append(events, outputVoiceEvents...)
 	events = append(events, litellmEvents...)
 	events = append(events, leaseEvents...)

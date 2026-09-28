@@ -44,6 +44,8 @@ type NativeActuator struct {
 	VoiceMCPTransport                 http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
 	VoiceMCPApprovedImage             string            // reviewed immutable MCP image from manager configuration
 	VoiceOutputTransport              http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	VoiceAdmissionTransport           http.RoundTripper // fixed Pod-IP readback seam; nil uses network transport
+	VoiceAdmissionEnabled             bool
 	EndpointLeaseApprovedSourceSHA256 string            // reviewed five-file proxy source digest
 	EndpointLeaseApprovedProxyImage   string            // reviewed immutable proxy runtime image
 	EndpointLeaseApprovedEngineImage  string            // reviewed immutable loopback engine image
@@ -125,6 +127,12 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	}
 	if a == model.ActionVoiceOutputPolicyActivate {
 		return voiceOutputCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceOutputTransport)
+	}
+	if a == model.ActionVoiceSessionAdmissionEnforce {
+		if !n.VoiceAdmissionEnabled {
+			return false, "voice-admission-feature-disabled"
+		}
+		return voiceAdmissionCapability(ctx, n.Reader, n.JournalNamespace, t, n.VoiceAdmissionTransport)
 	}
 	if a == model.ActionLiteLLMClientRevoke {
 		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
@@ -316,7 +324,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if req.Action == model.ActionKVMigrateInvalidate && !kvMigrationConnectorReady(n.KVXfer) {
 		return Result{Actuator: "native", Handler: string(req.Action), NoEffect: NoEffectRefused, MutationKind: "none", Note: ReasonKVMigrationConnectorUnavailable}, RefusedWithoutEffect(fmt.Errorf("%s", ReasonKVMigrationConnectorUnavailable))
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, KVXfer: n.KVXfer, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, KVXfer: n.KVXfer, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, VoiceAdmissionTransport: n.VoiceAdmissionTransport, VoiceAdmissionEnabled: n.VoiceAdmissionEnabled, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future

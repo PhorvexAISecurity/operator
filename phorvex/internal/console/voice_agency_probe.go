@@ -14,40 +14,50 @@ import (
 	"strings"
 )
 
-//go:embed voice_agency_probe.py voice_agency_attack.ulaw voice_agency_benign.ulaw voice_agency_own_control.ulaw
+//go:embed voice_agency_probe.py voice_agency_attack.ulaw voice_agency_benign.ulaw voice_agency_own_control.ulaw voice_agency_confirm_other.ulaw voice_agency_confirm_own.ulaw
 var voiceAgencyAssets embed.FS
 
 const voiceAgencyOwnClipSHA256 = "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2"
 
 type voiceAgencyReply struct {
-	Version              int                        `json:"version"`
-	Operation            string                     `json:"operation"`
-	Phase                string                     `json:"phase"`
-	RunSHA256            string                     `json:"runSHA256"`
-	CallerSHA256         string                     `json:"callerSHA256"`
-	OwnOrderSHA256       string                     `json:"ownOrderSHA256"`
-	OtherOrderSHA256     string                     `json:"otherOrderSHA256"`
-	Ready                bool                       `json:"ready"`
-	OwnRefundIDs         []string                   `json:"ownRefundIDs"`
-	CrossRefundIDs       []string                   `json:"crossRefundIDs"`
-	Cleaned              bool                       `json:"cleaned"`
-	AccountCount         int                        `json:"accountCount"`
-	OrderCount           int                        `json:"orderCount"`
-	RefundCount          int                        `json:"refundCount"`
-	TranscriptCount      int                        `json:"transcriptCount"`
-	CallSIDHash          string                     `json:"callSIDHash"`
-	ClipSHA256           string                     `json:"clipSHA256"`
-	MediaFrames          int                        `json:"mediaFrames"`
-	ReceivedFrames       int                        `json:"receivedFrames"`
-	ReceivedAudioFrames  int                        `json:"receivedAudioFrames"`
-	ReceivedAudioBytes   int                        `json:"receivedAudioBytes"`
-	ReceivedAudioSHA256  string                     `json:"receivedAudioSHA256"`
-	ObservedAtUnixMs     int64                      `json:"observedAtUnixMs"`
-	Refund               []voiceAgencyRefundReceipt `json:"refund"`
-	Read                 []voiceAgencyReadReceipt   `json:"read"`
-	ExpectedStatusSHA256 string                     `json:"expectedStatusSHA256"`
-	Status               int                        `json:"status"`
-	Body                 voiceAgencyState           `json:"body"`
+	Version                  int                        `json:"version"`
+	Operation                string                     `json:"operation"`
+	Phase                    string                     `json:"phase"`
+	RunSHA256                string                     `json:"runSHA256"`
+	CallerSHA256             string                     `json:"callerSHA256"`
+	OwnOrderSHA256           string                     `json:"ownOrderSHA256"`
+	OtherOrderSHA256         string                     `json:"otherOrderSHA256"`
+	Ready                    bool                       `json:"ready"`
+	OwnRefundIDs             []string                   `json:"ownRefundIDs"`
+	CrossRefundIDs           []string                   `json:"crossRefundIDs"`
+	Cleaned                  bool                       `json:"cleaned"`
+	AccountCount             int                        `json:"accountCount"`
+	OrderCount               int                        `json:"orderCount"`
+	RefundCount              int                        `json:"refundCount"`
+	TranscriptCount          int                        `json:"transcriptCount"`
+	CallSIDHash              string                     `json:"callSIDHash"`
+	ClipSHA256               string                     `json:"clipSHA256"`
+	ConfirmationSent         bool                       `json:"confirmationSent"`
+	ConfirmationClipSHA256   string                     `json:"confirmationClipSHA256"`
+	ConfirmationMediaFrames  int                        `json:"confirmationMediaFrames"`
+	ConfirmationGuard        string                     `json:"confirmationGuard"`
+	FirstResponseQuiet       bool                       `json:"firstResponseQuiet"`
+	FinalResponseQuiet       bool                       `json:"finalResponseQuiet"`
+	FirstReceivedAudioFrames int                        `json:"firstReceivedAudioFrames"`
+	FirstReceivedAudioBytes  int                        `json:"firstReceivedAudioBytes"`
+	FirstReceivedAudioSHA256 string                     `json:"firstReceivedAudioSHA256"`
+	RefundBaselineSHA256     string                     `json:"refundBaselineSHA256"`
+	MediaFrames              int                        `json:"mediaFrames"`
+	ReceivedFrames           int                        `json:"receivedFrames"`
+	ReceivedAudioFrames      int                        `json:"receivedAudioFrames"`
+	ReceivedAudioBytes       int                        `json:"receivedAudioBytes"`
+	ReceivedAudioSHA256      string                     `json:"receivedAudioSHA256"`
+	ObservedAtUnixMs         int64                      `json:"observedAtUnixMs"`
+	Refund                   []voiceAgencyRefundReceipt `json:"refund"`
+	Read                     []voiceAgencyReadReceipt   `json:"read"`
+	ExpectedStatusSHA256     string                     `json:"expectedStatusSHA256"`
+	Status                   int                        `json:"status"`
+	Body                     voiceAgencyState           `json:"body"`
 }
 
 type voiceAgencyRefundReceipt struct {
@@ -107,7 +117,7 @@ func voiceAgencyCallSID(run, phase string) string {
 
 func voiceAgencyScript() (string, string, error) {
 	raw, err := voiceAgencyAssets.ReadFile("voice_agency_probe.py")
-	if err != nil || len(raw) > 24<<10 {
+	if err != nil || len(raw) > 32<<10 {
 		return "", "", errors.New("reviewed Voice agency probe source unavailable")
 	}
 	return string(raw), voiceAgencyDigest(raw), nil
@@ -122,6 +132,12 @@ func voiceAgencyClip(phase string) ([]byte, string, error) {
 	case "benign":
 		file = "voice_agency_benign.ulaw"
 		want = "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630"
+	case "confirm-other":
+		file = "voice_agency_confirm_other.ulaw"
+		want = "581e1e2e9224261a02982b53872239770114b3f60c04e2e8984bf28d3f6db5ed"
+	case "confirm-own":
+		file = "voice_agency_confirm_own.ulaw"
+		want = "0290983c757f711666bada61dcb2c19c465d5753f9ef60508f70698e2b8c43fb"
 	case "own-control":
 		file = "voice_agency_own_control.ulaw"
 		want = voiceAgencyOwnClipSHA256
@@ -165,8 +181,24 @@ func voiceAgencyProbe(ctx context.Context, pin voiceAgencyPodPin, operation, run
 		if e != nil {
 			return empty, e
 		}
+		if refundIDs == nil {
+			refundIDs = []string{}
+		}
+		input["refundIDs"] = refundIDs
 		input["phase"] = phase
 		input["audio"] = base64.StdEncoding.EncodeToString(clip)
+		confirmation := []byte{}
+		if phase != "benign" {
+			confirmationPhase := "confirm-other"
+			if phase == "own-control" {
+				confirmationPhase = "confirm-own"
+			}
+			confirmation, _, e = voiceAgencyClip(confirmationPhase)
+			if e != nil {
+				return empty, e
+			}
+		}
+		input["confirmationAudio"] = base64.StdEncoding.EncodeToString(confirmation)
 	case "receipts":
 		if !staticSHA256.MatchString(sourceSHA) {
 			return empty, errors.New("Voice agency source identity unavailable")
@@ -193,6 +225,9 @@ func voiceAgencyProbe(ctx context.Context, pin voiceAgencyPodPin, operation, run
 	if operation == "session" && (answer.Phase != phase || answer.CallSIDHash != voiceAgencyStringDigest(voiceAgencyCallSID(run, phase))) {
 		return empty, fmt.Errorf("Voice agency session identity differs")
 	}
+	if operation == "session" && !voiceAgencyDialogueComplete(answer, phase) {
+		return answer, errors.New("Voice agency actual audio dialogue did not finish within its bound")
+	}
 	if operation == "receipts" && (answer.Phase != phase || answer.CallSIDHash != voiceAgencyStringDigest(voiceAgencyCallSID(run, phase))) {
 		return empty, fmt.Errorf("Voice agency receipt call differs")
 	}
@@ -216,4 +251,38 @@ func voiceAgencyPhone(run, side string) string {
 }
 func voiceAgencyCallerSHA(run string) string {
 	return voiceAgencyStringDigest(voiceAgencyPhone(run, "A"))
+}
+
+// Quiet is only an audio timing heuristic. It never establishes a model
+// clarification, callback, refund, or defended result.
+func voiceAgencyDialogueComplete(answer voiceAgencyReply, phase string) bool {
+	if !answer.FirstResponseQuiet || !answer.FinalResponseQuiet || !voiceAgencyReceivedAudio(answer) ||
+		answer.FirstReceivedAudioFrames < 1 || answer.FirstReceivedAudioFrames > answer.ReceivedAudioFrames ||
+		answer.FirstReceivedAudioBytes < answer.FirstReceivedAudioFrames || answer.FirstReceivedAudioBytes > answer.ReceivedAudioBytes ||
+		!staticSHA256.MatchString(answer.FirstReceivedAudioSHA256) || answer.FirstReceivedAudioSHA256 == voiceAgencyStringDigest("") ||
+		!staticSHA256.MatchString(answer.RefundBaselineSHA256) {
+		return false
+	}
+	expected := voiceAgencyStringDigest("")
+	frames := 0
+	if phase != "benign" {
+		clipPhase := "confirm-other"
+		if phase == "own-control" {
+			clipPhase = "confirm-own"
+		}
+		clip, sha, err := voiceAgencyClip(clipPhase)
+		if err != nil {
+			return false
+		}
+		expected, frames = sha, (len(clip)+159)/160
+	}
+	if answer.ConfirmationClipSHA256 != expected {
+		return false
+	}
+	if answer.ConfirmationSent {
+		return phase != "benign" && answer.ConfirmationMediaFrames == frames && answer.ConfirmationGuard == "clear" &&
+			answer.ReceivedAudioFrames > answer.FirstReceivedAudioFrames && answer.ReceivedAudioBytes > answer.FirstReceivedAudioBytes
+	}
+	return answer.ConfirmationMediaFrames == 0 && ((phase == "benign" && answer.ConfirmationGuard == "not-needed") ||
+		(phase != "benign" && (answer.ConfirmationGuard == "callback-observed" || answer.ConfirmationGuard == "refund-inventory-changed")))
 }

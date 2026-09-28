@@ -64,8 +64,8 @@ func voiceAgencyExactPod(p *corev1.Pod, pin voiceAgencyPodPin) bool {
 // stdin, while pre/post API reads keep a name-reused or restarted Pod ambiguous.
 func voiceAgencyRunExactPod(ctx context.Context, pin voiceAgencyPodPin, script string, input []byte,
 	get voiceAgencyPodGet, invoke voiceAgencyPodInvoke) ([]byte, error) {
-	if get == nil || invoke == nil || len(script) == 0 || len(script) > 24<<10 ||
-		len(input) == 0 || len(input) > 128<<10 {
+	if get == nil || invoke == nil || len(script) == 0 || len(script) > 32<<10 ||
+		len(input) == 0 || len(input) > 192<<10 {
 		return nil, errors.New("Voice agency probe source or input exceeds fixed bound")
 	}
 	before, err := get(ctx, pin.Name)
@@ -112,7 +112,7 @@ func voiceAgencyPodTransport(ctx context.Context, pin voiceAgencyPodPin, script 
 	if err != nil {
 		return nil, err
 	}
-	bounded, cancel := context.WithTimeout(ctx, 40*time.Second)
+	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	get := func(ctx context.Context, name string) (*corev1.Pod, error) {
 		return kube.CoreV1().Pods("voice").Get(ctx, name, metav1.GetOptions{})

@@ -81,6 +81,7 @@ type attackRecord struct {
 	VoiceMemoryProbe     *voiceMemoryProbeResult     `json:"voiceMemoryProbe,omitempty"`
 	VoiceAgencyProbe     *voiceAgencyProbeResult     `json:"voiceAgencyProbe,omitempty"`
 	VoiceOutputProbe     *voiceOutputProbeResult     `json:"voiceOutputProbe,omitempty"`
+	VoiceAdmissionProbe  *voiceAdmissionProbeResult  `json:"voiceAdmissionProbe,omitempty"`
 	VoiceMCPProbe        *voiceMCPLiveProbeResult    `json:"voiceMCPProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	LiteLLMOutputProbe   *liteLLMOutputProbeResult   `json:"litellmOutputProbe,omitempty"`
@@ -381,6 +382,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe.Issues = append([]string(nil), r.VoiceOutputProbe.Issues...)
 		c.VoiceOutputProbe = &probe
 	}
+	if r.VoiceAdmissionProbe != nil {
+		probe := *r.VoiceAdmissionProbe
+		probe.Issues = append([]string(nil), r.VoiceAdmissionProbe.Issues...)
+		c.VoiceAdmissionProbe = &probe
+	}
 	if r.VoiceMCPProbe != nil {
 		probe := *r.VoiceMCPProbe
 		probe.Issues = append([]string(nil), r.VoiceMCPProbe.Issues...)
@@ -481,7 +487,7 @@ func attackSnapshots(p *Principal) []*attackRecord {
 // are opt-in; experiment-only signals and unknown evidence kinds stay excluded.
 func visibleAttackRecord(rec *attackRecord, observations bool) bool {
 	switch rec.EvidenceKind {
-	case "", "voice-memory-live", "voice-agency-live", "voice-mcp-live":
+	case "", "voice-memory-live", "voice-agency-live", "voice-mcp-live", "voice-admission-live":
 		return true
 	case "vllm-in-place-effect", "vllm-unsupported-stimulus", "catalogue-signal",
 		"vllm-endpoint-lease-live", "vllm-drain-owned-observation", "voice-output-live",

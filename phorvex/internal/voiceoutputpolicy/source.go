@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +55,7 @@ func SourceHashes(cm *corev1.ConfigMap) (string, string, error) {
 	return join(3), join(4), nil
 }
 
-func sourceMount(spec corev1.PodSpec, sourceName string) (corev1.Container, bool) {
+func sourceMount(spec corev1.PodSpec, sourceName string, allowWrapped bool) (corev1.Container, bool) {
 	if sourceName == "" {
 		return corev1.Container{}, false
 	}
@@ -83,8 +84,7 @@ func sourceMount(spec corev1.PodSpec, sourceName string) (corev1.Container, bool
 	if count != 1 {
 		return corev1.Container{}, false
 	}
-	if len(bot.Command) != 3 || bot.Command[0] != "python3" || bot.Command[1] != "-B" ||
-		bot.Command[2] != "/app/bot.py" || len(bot.Args) != 0 {
+	if !voiceadmissionpolicy.LegacyCommand(bot) && !(allowWrapped && voiceadmissionpolicy.WrapperCommand(bot)) {
 		return corev1.Container{}, false
 	}
 	seen := map[string]bool{}
@@ -121,12 +121,22 @@ func VerifySource(ctx context.Context, reader client.Reader, pod *corev1.Pod, de
 	if err := reader.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: name}, cm); err != nil {
 		return evidence, err
 	}
+	if voiceadmissionpolicy.HasWrapperAuthority(pod) {
+		if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, pod, dep); err != nil {
+			return evidence, err
+		}
+		return verifySourceObjects(pod, dep, cm, true)
+	}
 	return VerifySourceObjects(pod, dep, cm)
 }
 
 // VerifySourceObjects is the same source proof for callers that already have
 // authenticated typed API snapshots. It never trusts the event's source claim.
 func VerifySourceObjects(pod *corev1.Pod, dep *appsv1.Deployment, cm *corev1.ConfigMap) (SourceEvidence, error) {
+	return verifySourceObjects(pod, dep, cm, false)
+}
+
+func verifySourceObjects(pod *corev1.Pod, dep *appsv1.Deployment, cm *corev1.ConfigMap, allowWrapped bool) (SourceEvidence, error) {
 	var evidence SourceEvidence
 	if pod == nil || dep == nil || cm == nil || pod.Namespace != Namespace || dep.Namespace != Namespace ||
 		cm.Namespace != Namespace || pod.DeletionTimestamp != nil || dep.DeletionTimestamp != nil ||
@@ -142,8 +152,8 @@ func VerifySourceObjects(pod *corev1.Pod, dep *appsv1.Deployment, cm *corev1.Con
 		dep.Spec.Template.Annotations[SourceSHAAnnotation] != pod.Annotations[SourceSHAAnnotation] {
 		return evidence, errors.New("Voice output Deployment source annotations changed")
 	}
-	bot, ok := sourceMount(pod.Spec, name)
-	templateBot, templateOK := sourceMount(dep.Spec.Template.Spec, name)
+	bot, ok := sourceMount(pod.Spec, name, allowWrapped)
+	templateBot, templateOK := sourceMount(dep.Spec.Template.Spec, name, allowWrapped)
 	if !ok || !templateOK || bot.Image == "" || bot.Image != templateBot.Image ||
 		!slices.Equal(bot.Command, templateBot.Command) || !slices.Equal(bot.Args, templateBot.Args) {
 		return evidence, errors.New("Voice output source mount or bot command changed")

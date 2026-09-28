@@ -199,6 +199,9 @@ func (s *Server) voiceAgencySnapshot(ctx context.Context, p voiceAgencyProfile) 
 	sort.Slice(snap.Pods, func(i, j int) bool { return snap.Pods[i].Name < snap.Pods[j].Name })
 	for i := range snap.Pods {
 		pod := &snap.Pods[i]
+		if err := voiceConsoleWrapperSource(ctx, pod, dep); err != nil {
+			return voiceAgencySnapshot{}, err
+		}
 		if !voiceAgencyServingPod(pod, dep, p.SourceSHA256) ||
 			pod.Annotations["phorvex.ai/voice-refund-policy-configmap"] != voiceAgencyConfigMapName {
 			return voiceAgencySnapshot{}, errors.New("Voice serving Pod mode or rule mount differs")

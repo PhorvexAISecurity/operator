@@ -130,6 +130,8 @@ var classifications = map[model.Action]Bound{
 		"voice refund pair denial and projection readback have no calibrated safe-return deadline"),
 	model.ActionVoiceMCPToolPin: unknown(model.ActionVoiceMCPToolPin, -1,
 		"voice MCP descriptor pinning and projection readback have no calibrated safe-return deadline"),
+	model.ActionVoiceSessionAdmissionEnforce: unknown(model.ActionVoiceSessionAdmissionEnforce, -1,
+		"Voice admission teardown has no calibrated safe-return deadline"),
 	model.ActionVoiceOutputPolicyActivate: unknown(model.ActionVoiceOutputPolicyActivate, -1,
 		"voice output policy activation and projection readback have no calibrated safe-return deadline"),
 	model.ActionLiteLLMClientRevoke: unknown(model.ActionLiteLLMClientRevoke, -1,

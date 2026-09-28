@@ -229,6 +229,9 @@ func (s *Server) voiceMemorySnapshot(ctx context.Context) (voiceMemorySnapshot, 
 	sort.Slice(snap.Pods, func(i, j int) bool { return snap.Pods[i].Name < snap.Pods[j].Name })
 	for i := range snap.Pods {
 		pod := &snap.Pods[i]
+		if err := voiceConsoleWrapperSource(ctx, pod, dep); err != nil {
+			return voiceMemorySnapshot{}, err
+		}
 		if !voiceMemoryServingPod(pod, dep) {
 			return voiceMemorySnapshot{}, errors.New("Voice serving Pod identity or readiness mismatch")
 		}

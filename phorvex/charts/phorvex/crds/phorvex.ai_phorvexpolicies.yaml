@@ -117,6 +117,7 @@ spec:
                       - voice-memory-note-revoke
                       - voice-refund-pair-deny
                       - voice-output-policy-activate
+                      - voice-session-admission-enforce
                       - voice-mcp-tool-pin
                       - litellm-client-revoke
                       - endpoint-lease-revoke

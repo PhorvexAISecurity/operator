@@ -407,6 +407,9 @@ func (s *Server) voiceMCPSnapshot(ctx context.Context, p voiceMCPProfile) (voice
 	snap.SourceConfigMapUID = string(sourceCM.UID)
 	for i := range snap.Pods {
 		pod := snap.Pods[i]
+		if err := voiceConsoleWrapperSource(ctx, &pod, dep); err != nil {
+			return voiceMCPSnapshot{}, err
+		}
 		if pod.Annotations["phorvex.ai/voice-mcp-policy-configmap"] != voiceMCPRuleCM ||
 			pod.Annotations["phorvex.ai/voice-mcp-source-configmap"] != sourceName ||
 			pod.Annotations["phorvex.ai/voice-mcp-event-creator"] != p.EventCreator ||

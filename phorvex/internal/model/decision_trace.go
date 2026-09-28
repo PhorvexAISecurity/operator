@@ -52,6 +52,7 @@ const (
 	DecisionActionVocabularyLive21 = "v7-live21"
 	// Live22 appends endpoint lease revocation; all earlier versions stay frozen.
 	DecisionActionVocabularyLive22 = "v8-live22"
+	DecisionActionVocabularyLive23 = "v9-live23"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -103,6 +104,8 @@ func DecisionTraceActions(version string) ([]Action, error) {
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin), nil
 	case DecisionActionVocabularyLive22:
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke), nil
+	case DecisionActionVocabularyLive23:
+		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke, ActionVoiceSessionAdmissionEnforce), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

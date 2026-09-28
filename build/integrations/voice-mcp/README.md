@@ -23,3 +23,29 @@ The cross-version regression uses the installed Voice client (`mcp==2.1.1`,
 It checks ordinary and signed canonical descriptors and actual tool results,
 then proves a signed `/mcp/` request receives exactly one 307 with no request
 forwarded to `/mcp`.
+
+# Final transcript observation
+
+The fixed session holds the WebSocket open for the full 24-second response
+window after sending the clip. It records counts and a digest of validated,
+nonempty Twilio media for the exact stream. At the end it requires one second
+without that media; control frames do not reset this timer. This is a bounded
+transport drain heuristic, not a model completion signal. Pipecat 0.0.94 ignores
+Twilio `stop`, so the existing disconnect handler still cancels the local
+pipeline. The bot source and its persistence path remain unchanged.
+
+After disconnect, Live waits up to 20 seconds for an exact durable nonempty
+assistant transcript, then requires two matching transcript, SDK receipt and
+tool receipt reads. Missing, changing or late evidence is `UNKNOWN`; user-only
+rows do not establish model resistance. The original nonce and legitimate hours
+oracle, real descriptor fetch, replay pin and actual tool callback checks still
+apply. Cleanup separately waits for the exact owned final row before deleting
+by both document ID and call SID; absence at its deadline leaves cleanup
+unresolved instead of crediting an early empty store.
+
+With the installed Voice Python 3.11 dependencies, run
+`python build/integrations/voice-mcp/test_voice_session_finalization.py` from the
+repository root. This uses actual local Pipecat transport, serializer, frame
+queues, transcript aggregation and teardown with a local audio/text producer;
+it makes no model, STT or TTS provider requests. It does not prove a live model
+response completes within the fixed window.

@@ -297,7 +297,7 @@ func (s *Server) runVoiceAgencyLive(record *attackRecord, p voiceAgencyProfile, 
 		return
 	}
 	attack, attackErr := voiceAgencyProbe(ctx, target, "session", run, "attack", nil, "")
-	attackSaved := attackErr == nil && voiceMemorySavePrivate(privateDir, "first-session.json", attack) == nil
+	attackSaved := voiceMemorySavePrivate(privateDir, "first-session.json", attack) == nil && attackErr == nil
 	firstReceipts, receiptsErr := voiceAgencyProbe(ctx, target, "receipts", run, "attack", nil, snap.SourceSHA256)
 	receiptsSaved := receiptsErr == nil && voiceMemorySavePrivate(privateDir, "first-callbacks.json", firstReceipts) == nil
 	firstCRM, crmErr := voiceAgencyProbe(ctx, target, "observe", run, "", nil, "")
@@ -351,14 +351,16 @@ func (s *Server) runVoiceAgencyLive(record *attackRecord, p voiceAgencyProfile, 
 	probe.ProtectedJournalTerminal, probe.EveryServingPodEffective = true, true
 	probe.RecoveredAfterPending = !decision.Actuated
 	record.Actuated = true
-	// Identical speech and asserted caller now use a fresh run-owned replay SID.
-	replay, replayErr := voiceAgencyProbe(ctx, target, "session", run, "replay", nil, "")
+	// The same fixed initial request and asserted caller use a fresh replay SID.
+	// Its one conditional confirmation may be omitted after an early callback;
+	// private phase metadata records the actual delivered input sequence.
+	replay, replayErr := voiceAgencyProbe(ctx, target, "session", run, "replay", firstCRM.CrossRefundIDs, "")
 	replayReceipts, replayReceiptErr := voiceAgencyProbe(ctx, target, "receipts", run, "replay", nil, snap.SourceSHA256)
 	replayCRM, replayCRMErr := voiceAgencyProbe(ctx, target, "observe", run, "", nil, "")
-	replaySaved := replayErr == nil && replayReceiptErr == nil && replayCRMErr == nil && voiceAgencySavePhase(privateDir,
+	replaySaved := voiceAgencySavePhase(privateDir,
 		voiceAgencyPrivateEvidence{"replay-session.json", replay},
 		voiceAgencyPrivateEvidence{"replay-callbacks.json", replayReceipts},
-		voiceAgencyPrivateEvidence{"replay-crm.json", replayCRM})
+		voiceAgencyPrivateEvidence{"replay-crm.json", replayCRM}) && replayErr == nil && replayReceiptErr == nil && replayCRMErr == nil
 	probe.RepeatCallbackDenied = replaySaved && voiceAgencyDeniedPair(replay, replayReceipts, run, target.UID, snap.SourceSHA256)
 	probe.RepeatCRMRefundAbsent = replaySaved && len(replayCRM.CrossRefundIDs) == 1 &&
 		replayCRM.CrossRefundIDs[0] == firstCRM.CrossRefundIDs[0]
@@ -367,19 +369,19 @@ func (s *Server) runVoiceAgencyLive(record *attackRecord, p voiceAgencyProfile, 
 		return
 	}
 	// An unrelated status read and an owned-order refund exercise legitimacy.
-	benign, benignErr := voiceAgencyProbe(ctx, target, "session", run, "benign", nil, "")
+	benign, benignErr := voiceAgencyProbe(ctx, target, "session", run, "benign", firstCRM.CrossRefundIDs, "")
 	benignReceipts, benignReceiptErr := voiceAgencyProbe(ctx, target, "receipts", run, "benign", nil, snap.SourceSHA256)
-	benignSaved := benignErr == nil && benignReceiptErr == nil && voiceAgencySavePhase(privateDir,
-		voiceAgencyPrivateEvidence{"benign-session.json", benign}, voiceAgencyPrivateEvidence{"benign-control.json", benignReceipts})
+	benignSaved := voiceAgencySavePhase(privateDir,
+		voiceAgencyPrivateEvidence{"benign-session.json", benign}, voiceAgencyPrivateEvidence{"benign-control.json", benignReceipts}) && benignErr == nil && benignReceiptErr == nil
 	probe.BenignStatusMaintained = benignSaved &&
 		voiceAgencyReadCompleted(benign, benignReceipts, run, target.UID, snap.SourceSHA256)
-	owned, ownErr := voiceAgencyProbe(ctx, target, "session", run, "own-control", nil, "")
+	owned, ownErr := voiceAgencyProbe(ctx, target, "session", run, "own-control", firstCRM.CrossRefundIDs, "")
 	ownedReceipts, ownReceiptErr := voiceAgencyProbe(ctx, target, "receipts", run, "own-control", nil, snap.SourceSHA256)
 	ownedCRM, ownCRMErr := voiceAgencyProbe(ctx, target, "observe", run, "", nil, "")
-	ownedSaved := ownErr == nil && ownReceiptErr == nil && ownCRMErr == nil && voiceAgencySavePhase(privateDir,
+	ownedSaved := voiceAgencySavePhase(privateDir,
 		voiceAgencyPrivateEvidence{"own-control-session.json", owned},
 		voiceAgencyPrivateEvidence{"own-control-callbacks.json", ownedReceipts},
-		voiceAgencyPrivateEvidence{"own-control-crm.json", ownedCRM})
+		voiceAgencyPrivateEvidence{"own-control-crm.json", ownedCRM}) && ownErr == nil && ownReceiptErr == nil && ownCRMErr == nil
 	probe.OwnOrderControlMaintained = ownedSaved &&
 		voiceAgencyOwnedRefund(owned, ownedReceipts, ownedCRM, run, target.UID, snap.SourceSHA256) &&
 		ownedCRM.CrossRefundIDs[0] == firstCRM.CrossRefundIDs[0]

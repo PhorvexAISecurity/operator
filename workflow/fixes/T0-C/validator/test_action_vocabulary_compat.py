@@ -76,11 +76,22 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
             live21 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE20})))
 
     def test_live22_appends_endpoint_lease_without_reinterpreting_live21(self):
-        live22 = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE22)
+        live22 = self.trace(validator.LIVE22_ACTIONS, validator.ACTION_VOCABULARY_LIVE22)
         self.assertEqual(validator.v3_action_status(live22), [])
         self.assertEqual(validator.check_ordering(live22).status, validator.PASS)
         self.assertIn("want 21", "; ".join(validator.v3_action_status(
             live22 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE21})))
+
+    def test_live23_appends_admission_without_reinterpreting_live22(self):
+        self.assertEqual(len(validator.LIVE22_ACTIONS), 22)
+        self.assertEqual(len(validator.MUTATING_ACTIONS), 23)
+        self.assertEqual(validator.MUTATING_ACTIONS[:-1], validator.LIVE22_ACTIONS)
+        self.assertEqual(validator.MUTATING_ACTIONS[-1], "voice-session-admission-enforce")
+        live23 = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE23)
+        self.assertEqual(validator.v3_action_status(live23), [])
+        self.assertEqual(validator.check_ordering(live23).status, validator.PASS)
+        self.assertIn("want 22", "; ".join(validator.v3_action_status(
+            live23 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE22})))
 
     def test_new_marked_fifteen_and_unknown_marker_are_refused(self):
         incomplete = self.trace(validator.LEGACY_MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)

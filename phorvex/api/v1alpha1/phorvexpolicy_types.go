@@ -436,7 +436,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;disable
 type ActionType string
 
 const (
@@ -468,6 +468,7 @@ const (
 	ActionVoiceMemoryNoteRevoke         ActionType = "voice-memory-note-revoke"
 	ActionVoiceRefundPairDeny           ActionType = "voice-refund-pair-deny"
 	ActionVoiceOutputPolicyActivate     ActionType = "voice-output-policy-activate"
+	ActionVoiceSessionAdmissionEnforce  ActionType = "voice-session-admission-enforce"
 	ActionVoiceMCPToolPin               ActionType = "voice-mcp-tool-pin"
 	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"

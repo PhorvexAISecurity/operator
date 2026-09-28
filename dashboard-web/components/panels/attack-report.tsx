@@ -20,6 +20,7 @@ import { EndpointLeaseProbe } from "@/components/panels/endpoint-lease-probe";
 import { VoiceMemoryProbe } from "@/components/panels/voice-memory-probe";
 import { VoiceAgencyProbe } from "@/components/panels/voice-agency-probe";
 import { VoiceOutputProbe } from "@/components/panels/voice-output-probe";
+import { VoiceAdmissionProbe } from "@/components/panels/voice-admission-probe";
 import { VoiceMCPProbe } from "@/components/panels/voice-mcp-probe";
 import { LiteLLMLiveProbe } from "@/components/panels/litellm-live-probe";
 import { LiteLLMOutputProbe } from "@/components/panels/litellm-output-probe";
@@ -175,6 +176,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
         {r.voiceAgencyProbe && <VoiceAgencyProbe result={r.voiceAgencyProbe} />}
         {r.voiceOutputProbe && <VoiceOutputProbe result={r.voiceOutputProbe} />}
+        {r.voiceAdmissionProbe && <VoiceAdmissionProbe result={r.voiceAdmissionProbe} />}
         {r.voiceMCPProbe && <VoiceMCPProbe result={r.voiceMCPProbe} />}
         {r.litellmLiveProbe && <LiteLLMLiveProbe result={r.litellmLiveProbe} />}
         {r.litellmOutputProbe && <LiteLLMOutputProbe result={r.litellmOutputProbe} />}

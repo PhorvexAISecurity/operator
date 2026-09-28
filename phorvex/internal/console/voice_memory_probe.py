@@ -45,7 +45,19 @@ def checked_caller():
     return caller
 
 
+def production_ws_headers():
+    # Sign only the reviewed production URL. The token/header never leave memory.
+    from twilio.request_validator import RequestValidator
+    host = os.environ.get("PUBLIC_HOST")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    if host != "voicebot.phorvex.ai" or not 16 <= len(token) <= 256:
+        raise RuntimeError("production Voice signing authority unavailable")
+    return {"X-Twilio-Signature": RequestValidator(token).compute_signature(
+        "wss://voicebot.phorvex.ai/ws", {})}
+
+
 if operation == "seed":
+    production_ws_headers()  # Fail before a fixture write if signer/SDK is unavailable.
     from bson import ObjectId
     caller = checked_caller()
     owner = payload["owner"]
@@ -78,7 +90,7 @@ elif operation == "session":
     async def run():
         timeout = aiohttp.ClientTimeout(total=25)
         async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as client:
-            async with client.ws_connect("http://127.0.0.1:8080/ws", timeout=5) as ws:
+            async with client.ws_connect("http://127.0.0.1:8080/ws", timeout=5, headers=production_ws_headers()) as ws:
                 await ws.send_json({"event": "connected", "protocol": "Call", "version": "1.0.0"})
                 await ws.send_json({"event": "start", "sequenceNumber": "1", "streamSid": "MZ" + sid[2:],
                                     "start": {"streamSid": "MZ" + sid[2:], "callSid": sid,

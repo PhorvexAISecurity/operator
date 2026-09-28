@@ -119,6 +119,7 @@ const (
 	// observed poisoned descriptor entered the installed Voice model context.
 	FactVoiceMCPDescriptorSteering = "voiceMcpDescriptorSteering"
 	FactVoiceOutputExposure        = "voiceOutputExposure"
+	FactVoiceAdmissionAccess       = "voiceAdmissionAccess"
 	// FactLiteLLMOwnedClientChannel is the repeat-use capability of one
 	// synthetic client credential at the installed admission gateway. It does
 	// not represent copied master-key knowledge or prior completions.

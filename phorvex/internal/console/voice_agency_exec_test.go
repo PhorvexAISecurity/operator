@@ -69,7 +69,7 @@ func TestVoiceAgencyExecRejectsUnboundedInputBeforePodRead(t *testing.T) {
 	called := false
 	get := func(context.Context, string) (*corev1.Pod, error) { called = true; return agencyExecPod(), nil }
 	invoke := func(context.Context, string, string, []byte) ([]byte, error) { called = true; return nil, nil }
-	_, err := voiceAgencyRunExactPod(context.Background(), voiceAgencyPodPin{}, "fixed-script", []byte(strings.Repeat("x", 128<<10+1)), get, invoke)
+	_, err := voiceAgencyRunExactPod(context.Background(), voiceAgencyPodPin{}, "fixed-script", []byte(strings.Repeat("x", 192<<10+1)), get, invoke)
 	if err == nil || called {
 		t.Fatal("unbounded probe input reached Pod")
 	}

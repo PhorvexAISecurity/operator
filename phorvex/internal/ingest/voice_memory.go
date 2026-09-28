@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicememorypolicy"
 )
 
@@ -142,6 +143,11 @@ func bindVoiceMemoryObservation(ctx context.Context, reader client.Reader, p *mo
 	dep, ok := voiceMemoryDeployment(ctx, reader, live)
 	if !ok || string(dep.UID) != payload.DeploymentUID {
 		return
+	}
+	if voiceadmissionpolicy.HasWrapperAuthority(live) {
+		if _, err := voiceadmissionpolicy.VerifySource(ctx, reader, live, dep); err != nil {
+			return
+		}
 	}
 	cm := &corev1.ConfigMap{}
 	if reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: p.VoiceMemoryConfigMap}, cm) != nil || len(cm.OwnerReferences) != 1 ||

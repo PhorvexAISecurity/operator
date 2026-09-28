@@ -2,8 +2,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: phorvex-voice-output-profile-f5ea67a56067
+  name: phorvex-voice-output-profile-742557bfdee0
   namespace: {{ .Release.Namespace }}
 immutable: true
 data:
-  profile.json: "{\"attackClipSHA256\":\"eeb77c21eb175368c0a0658525bc81487d77344d1821bef95fecdf45e30ecaa4\",\"auditSourceIdentity\":\"https://phorvex-phorvex-audit-source.phorvex-system.svc:8445|phorvex-phorvex-audit-source.phorvex-system.svc\",\"benignClipSHA256\":\"bbc1efce2f7380b634726666e884fafae5716482cacf510ee4f164dfbb357d9d\",\"eventCreator\":\"system:serviceaccount:phorvex-system:phorvex-phorvex-console\",\"maxRunSeconds\":900,\"policyName\":\"voice-defense\",\"probeSHA256\":\"18c16e6828408c8985648571090a6653787cfc8e1e795c8efcd0f5b966339a71\",\"sourceSHA256\":\"92e847ac1bdff7e8e50846420bcd6bfada11d79807be79b8e89b1b2b7be28bb0\",\"version\":1}"
+  profile.json: "{\"attackClipSHA256\":\"eeb77c21eb175368c0a0658525bc81487d77344d1821bef95fecdf45e30ecaa4\",\"auditSourceIdentity\":\"https://phorvex-phorvex-audit-source.phorvex-system.svc:8445|phorvex-phorvex-audit-source.phorvex-system.svc\",\"benignClipSHA256\":\"bbc1efce2f7380b634726666e884fafae5716482cacf510ee4f164dfbb357d9d\",\"eventCreator\":\"system:serviceaccount:phorvex-system:phorvex-phorvex-console\",\"maxRunSeconds\":900,\"policyName\":\"voice-defense\",\"probeSHA256\":\"1b16a583516e442381222fb612452bada3ce4522fea0b167eb61136656fa2b11\",\"sourceSHA256\":\"92e847ac1bdff7e8e50846420bcd6bfada11d79807be79b8e89b1b2b7be28bb0\",\"version\":1}"

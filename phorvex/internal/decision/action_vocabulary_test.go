@@ -47,20 +47,24 @@ func TestDecisionTraceActionVocabularyKeepsHistoricalRows(t *testing.T) {
 		!slices.Equal(priorCurrentActions[:20], outputPolicyActions) || priorCurrentActions[20] != model.ActionVoiceMCPToolPin {
 		t.Fatalf("historical Live21 action vocabulary changed: %v, error %v", priorCurrentActions, err)
 	}
-	currentActions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive22)
-	if err != nil || len(currentActions) != 22 || !slices.Equal(currentActions, model.MutatingActions) ||
-		!slices.Equal(currentActions[:21], priorCurrentActions) || currentActions[21] != model.ActionEndpointLeaseRevoke {
+	live22Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive22)
+	if err != nil || len(live22Actions) != 22 || !slices.Equal(live22Actions[:21], priorCurrentActions) || live22Actions[21] != model.ActionEndpointLeaseRevoke {
+		t.Fatalf("historical Live22 vocabulary changed: %v", live22Actions)
+	}
+	currentActions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive23)
+	if err != nil || len(currentActions) != 23 || !slices.Equal(currentActions, model.MutatingActions) ||
+		!slices.Equal(currentActions[:22], live22Actions) || currentActions[22] != model.ActionVoiceSessionAdmissionEnforce {
 		t.Fatalf("combined current action vocabulary differs from the emitted optimizer order: %v, error %v", currentActions, err)
 	}
 	trace := fixedTraceEngine().Decide([]*model.WorkloadView{covView("vocab", true, 2*time.Hour, false)}, decisionTracePolicy(1, true))[0].Trace
-	if trace == nil || trace.ActionVocabularyVersion != model.DecisionActionVocabularyLive22 {
+	if trace == nil || trace.ActionVocabularyVersion != model.DecisionActionVocabularyLive23 {
 		t.Fatalf("new production trace lacks named action vocabulary: %+v", trace)
 	}
 	if err := trace.Validate(); err != nil {
 		t.Fatalf("new trace invalid: %v", err)
 	}
 	currentJSON, err := json.Marshal(trace)
-	if err != nil || !strings.Contains(string(currentJSON), `"actionVocabularyVersion":"v8-live22"`) {
+	if err != nil || !strings.Contains(string(currentJSON), `"actionVocabularyVersion":"v9-live23"`) {
 		t.Fatalf("new trace did not serialize its vocabulary marker: %v, %s", err, currentJSON)
 	}
 	output := *trace
@@ -94,6 +98,12 @@ func TestDecisionTraceActionVocabularyKeepsHistoricalRows(t *testing.T) {
 		t.Fatalf("historical Live21 trace rejected: %v", err)
 	}
 
+	live22Historical := *trace
+	live22Historical.ActionVocabularyVersion = model.DecisionActionVocabularyLive22
+	live22Historical.ActionStatus = append([]model.DecisionActionStatusV3(nil), trace.ActionStatus[:22]...)
+	if err := live22Historical.Validate(); err != nil {
+		t.Fatalf("historical Live22 trace rejected: %v", err)
+	}
 	legacy := *trace
 	legacy.ActionVocabularyVersion = ""
 	legacy.ActionStatus = append([]model.DecisionActionStatusV3(nil), trace.ActionStatus[:15]...)
@@ -131,8 +141,8 @@ func TestDecisionTraceActionVocabularyKeepsHistoricalRows(t *testing.T) {
 	}
 	legacyExtra := *trace
 	legacyExtra.ActionVocabularyVersion = ""
-	if err := legacyExtra.Validate(); err == nil || !strings.Contains(err.Error(), "actionStatus carries 22 rows") {
-		t.Fatalf("unmarked 22-action trace accepted: %v", err)
+	if err := legacyExtra.Validate(); err == nil || !strings.Contains(err.Error(), "actionStatus carries 23 rows") {
+		t.Fatalf("unmarked 23-action trace accepted: %v", err)
 	}
 	wrongOrder := legacy
 	wrongOrder.ActionStatus = append([]model.DecisionActionStatusV3(nil), legacy.ActionStatus...)

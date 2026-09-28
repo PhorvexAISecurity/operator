@@ -20,7 +20,7 @@ func isAIMove(a model.Action) bool {
 	case model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
 		model.ActionKVReset, model.ActionEndpointRotate,
 		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
-		model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke:
+		model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke:
 		return true
 	}
 	return false
@@ -53,6 +53,8 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 		available = view.Pod.HasBoundVoiceMCPObservation()
 	case model.ActionVoiceOutputPolicyActivate:
 		available = view.Pod.HasBoundVoiceOutputObservation()
+	case model.ActionVoiceSessionAdmissionEnforce:
+		available = view.Pod.HasBoundVoiceAdmissionObservation()
 	case model.ActionLiteLLMClientRevoke:
 		available = view.Pod.HasBoundLiteLLMClientObservation()
 	case model.ActionEndpointLeaseRevoke:

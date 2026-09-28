@@ -223,3 +223,7 @@ var (
 	_ PolicyBindingLifecycle   = (*HybridActuator)(nil)
 	_ StandingPolicyMaintainer = (*HybridActuator)(nil)
 )
+
+func (h *HybridActuator) SetVoiceAdmissionEnabled(enabled bool) {
+	h.native.VoiceAdmissionEnabled = enabled
+}

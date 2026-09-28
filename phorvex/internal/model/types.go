@@ -12,6 +12,8 @@ package model
 import (
 	"strings"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 )
 
 // ActuationBrakeObservation is a normalized operator annotation observation.
@@ -114,7 +116,8 @@ const (
 	ActionVoiceRefundPairDeny Action = "voice-refund-pair-deny"
 	// ActionVoiceOutputPolicyActivate blocks one observed synthetic hidden-context
 	// marker before Voice speech and assistant transcript persistence.
-	ActionVoiceOutputPolicyActivate Action = "voice-output-policy-activate"
+	ActionVoiceOutputPolicyActivate    Action = "voice-output-policy-activate"
+	ActionVoiceSessionAdmissionEnforce Action = "voice-session-admission-enforce"
 	// ActionVoiceMCPToolPin binds an observed Voice MCP tool response to an
 	// exact reviewed tool authority after the normal selector chooses it.
 	ActionVoiceMCPToolPin Action = "voice-mcp-tool-pin"
@@ -156,6 +159,7 @@ var MutatingActions = []Action{
 	ActionVoiceOutputPolicyActivate,
 	ActionVoiceMCPToolPin,
 	ActionEndpointLeaseRevoke,
+	ActionVoiceSessionAdmissionEnforce,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -493,44 +497,49 @@ type Pod struct {
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
-	ImageID                   string              // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
-	CPURequestMilli           int64               // sum of container CPU requests (millicores) — scheduler-slack input
-	MemRequestBytes           int64               // sum of container memory requests (bytes) — scheduler-slack input
-	GPURequestCount           int64               // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
-	VRAMRequestBytes          int64               // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
-	SMFraction                float64             // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
-	ModelID                   string              // served model identity/version fingerprint (AI; "" if not a model server)
-	EndpointPath              string              // inference endpoint/API route the attacker can map (AI; "" if none)
-	SuspectAdapter            string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
-	AdapterObservation        *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
-	OutputPolicyConfigMap     string
-	OutputPolicyRuleSHA256    string
-	OutputProxySourceSHA256   string
-	OutputSupportSourceSHA256 string
-	OutputEventCreator        string
-	OutputPolicyObservation   *SensitiveOutputObservation
-	VoiceMemoryConfigMap      string
-	VoiceMemorySourceSHA256   string
-	VoiceMemoryDeploymentUID  string
-	VoiceMemoryEventCreator   string
-	VoiceMemoryObservation    *VoiceMemoryObservation
-	VoiceRefundConfigMap      string
-	VoiceRefundSourceSHA256   string
-	VoiceRefundDeploymentUID  string
-	VoiceRefundEventCreator   string
-	VoiceRefundObservation    *VoiceRefundObservation
-	VoiceOutputConfigMap      string
-	VoiceOutputSourceSHA256   string
-	VoiceOutputDeploymentUID  string
-	VoiceOutputEventCreator   string
-	VoiceOutputObservation    *VoiceOutputObservation
-	VoiceMCPConfigMap         string
-	VoiceMCPSourceSHA256      string
-	VoiceMCPDeploymentUID     string
-	VoiceMCPEventCreator      string
-	VoiceMCPObservation       *VoiceMCPObservation
-	LiteLLMClientObservation  *LiteLLMClientObservation
-	EndpointLeaseObservation  *EndpointLeaseObservation
+	ImageID                     string              // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
+	CPURequestMilli             int64               // sum of container CPU requests (millicores) — scheduler-slack input
+	MemRequestBytes             int64               // sum of container memory requests (bytes) — scheduler-slack input
+	GPURequestCount             int64               // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
+	VRAMRequestBytes            int64               // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
+	SMFraction                  float64             // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
+	ModelID                     string              // served model identity/version fingerprint (AI; "" if not a model server)
+	EndpointPath                string              // inference endpoint/API route the attacker can map (AI; "" if none)
+	SuspectAdapter              string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
+	AdapterObservation          *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
+	OutputPolicyConfigMap       string
+	OutputPolicyRuleSHA256      string
+	OutputProxySourceSHA256     string
+	OutputSupportSourceSHA256   string
+	OutputEventCreator          string
+	OutputPolicyObservation     *SensitiveOutputObservation
+	VoiceMemoryConfigMap        string
+	VoiceMemorySourceSHA256     string
+	VoiceMemoryDeploymentUID    string
+	VoiceMemoryEventCreator     string
+	VoiceMemoryObservation      *VoiceMemoryObservation
+	VoiceRefundConfigMap        string
+	VoiceRefundSourceSHA256     string
+	VoiceRefundDeploymentUID    string
+	VoiceRefundEventCreator     string
+	VoiceRefundObservation      *VoiceRefundObservation
+	VoiceOutputConfigMap        string
+	VoiceOutputSourceSHA256     string
+	VoiceOutputDeploymentUID    string
+	VoiceOutputEventCreator     string
+	VoiceAdmissionConfigMap     string
+	VoiceAdmissionSourceSHA256  string
+	VoiceAdmissionDeploymentUID string
+	VoiceAdmissionEventCreator  string
+	VoiceAdmissionObservation   *VoiceAdmissionObservation
+	VoiceOutputObservation      *VoiceOutputObservation
+	VoiceMCPConfigMap           string
+	VoiceMCPSourceSHA256        string
+	VoiceMCPDeploymentUID       string
+	VoiceMCPEventCreator        string
+	VoiceMCPObservation         *VoiceMCPObservation
+	LiteLLMClientObservation    *LiteLLMClientObservation
+	EndpointLeaseObservation    *EndpointLeaseObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -615,6 +624,11 @@ func (p Pod) HasBoundVoiceRefundObservation() bool {
 		o.PolicyUID != "" && o.PolicyGeneration > 0 && o.AssertedCallerSHA256 != "" && o.OrderSHA256 != ""
 }
 
+func (p Pod) HasBoundVoiceAdmissionObservation() bool {
+	o := p.VoiceAdmissionObservation
+	return o != nil && o.Assertion.Valid() && p.Namespace == "voice" && p.UID != "" && p.VoiceAdmissionConfigMap == voiceadmissionpolicy.ConfigMapName && o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceAdmissionDeploymentUID && o.SourceSHA256 == p.VoiceAdmissionSourceSHA256 && o.ConfigMapUID == o.Assertion.PolicyCMUID && o.ConfigMapResourceVersion == o.Assertion.PolicyResourceVersion && o.RuleSHA256 == o.Assertion.RuleSHA256 && o.SourceSHA256 == o.Assertion.AdmissionSourceSHA256 && o.SessionID == o.Assertion.SessionID && o.TargetPodUID == o.Assertion.PodUID && o.DeploymentUID == o.Assertion.DeploymentUID && o.PolicyUID == o.Assertion.SecurityPolicyUID && o.PolicyGeneration == o.Assertion.SecurityPolicyGeneration && o.EventName != "" && voiceadmissionpolicy.ValidUID(o.EventUID) && o.CreatorIdentity == voiceadmissionpolicy.Creator && o.CreatorIdentity == p.VoiceAdmissionEventCreator && o.PolicyName != "" && o.ScenarioID == voiceadmissionpolicy.ScenarioID && o.EvidenceSource == "TEST_INJECTED" && o.SelectedRevision == 0
+}
+
 func (p Pod) HasBoundVoiceOutputObservation() bool {
 	o := p.VoiceOutputObservation
 	return o != nil && p.Namespace == "voice" && p.UID != "" && p.VoiceOutputConfigMap == "voice-output-policy" &&
@@ -687,6 +701,7 @@ const (
 	AttackVectorVoiceMemory        = "phorvex.attack.voice-memory-note"
 	AttackVectorVoiceRefund        = "phorvex.attack.voice-refund-pair"
 	AttackVectorVoiceOutput        = "phorvex.attack.voice-output-leak"
+	AttackVectorVoiceAdmission     = "phorvex.attack.voice-session-admission"
 	AttackVectorVoiceMCP           = "phorvex.attack.voice-mcp-descriptor"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 	AttackVectorEndpointLeaseReuse = "phorvex.attack.endpoint-lease-reuse"
@@ -764,6 +779,7 @@ type SecurityEventInfo struct {
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
 	SensitiveOutputV2Raw              string // LiteLLM output assertion; parsed and bound separately from v1
+	VoiceAdmissionRaw                 string
 	VoiceOutputRaw                    string // synthetic hidden-context marker hash assertion; never marker bytes
 	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
@@ -890,6 +906,21 @@ type LiteOutputObservation struct {
 
 // VoiceOutputObservation binds a trusted synthetic first-loss event to the
 // selected Voice Pod and append-only output rule. It carries no hidden text.
+// VoiceAdmissionObservation binds actual unsigned pipeline evidence to a
+// one-way, independently attested Deployment-wide admission rule.
+type VoiceAdmissionObservation struct {
+	EventName, EventUID, CreatorIdentity   string
+	ScenarioID, EvidenceSource             string
+	TargetPodUID, DeploymentUID            string
+	ConfigMapUID, ConfigMapResourceVersion string
+	RuleSHA256, SourceSHA256, SessionID    string
+	PolicyName, PolicyUID                  string
+	PolicyGeneration                       int64
+	SelectedRevision                       uint64
+	Assertion                              voiceadmissionpolicy.EventAssertion
+	ObservedAt                             time.Time
+}
+
 type VoiceOutputObservation struct {
 	EventName, EventUID, CreatorIdentity   string
 	ScenarioID, EvidenceSource             string
@@ -1255,13 +1286,14 @@ func CloneDrainOperationEvidence(in *DrainOperationEvidence) *DrainOperationEvid
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	AdapterObservation      *AdapterObservation         `json:"adapterObservation,omitempty"`
-	OutputPolicyObservation *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
-	VoiceMemoryObservation  *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
-	VoiceRefundObservation  *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
-	VoiceOutputObservation  *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
-	VoiceMCPObservation     *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
-	Existential             *ExistentialDecision
+	AdapterObservation        *AdapterObservation         `json:"adapterObservation,omitempty"`
+	OutputPolicyObservation   *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
+	VoiceMemoryObservation    *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
+	VoiceRefundObservation    *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
+	VoiceAdmissionObservation *VoiceAdmissionObservation  `json:"voiceAdmissionObservation,omitempty"`
+	VoiceOutputObservation    *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
+	VoiceMCPObservation       *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
+	Existential               *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
 	Claim          *ClaimScope

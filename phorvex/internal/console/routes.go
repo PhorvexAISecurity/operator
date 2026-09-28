@@ -150,6 +150,7 @@ func (s *Server) apiRoutes() []route {
 		control("/api/voice/live/fire", s.voiceMemoryLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/voice/agency/live/fire", s.voiceAgencyLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control(voiceOutputRoute, s.voiceOutputLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
+		control(voiceAdmissionRoute, s.voiceAdmissionLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/voice/mcp/live/fire", s.voiceMCPLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/litellm/live/fire", s.liteLLMLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"}),
 		control("/api/litellm/output/fire", s.liteLLMOutputFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"}),

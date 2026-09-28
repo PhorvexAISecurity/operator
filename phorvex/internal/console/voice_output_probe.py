@@ -23,6 +23,17 @@ from urllib.parse import quote
 signal.alarm(38)
 
 
+def production_ws_headers():
+    # Sign only the reviewed production URL. The token/header never leave memory.
+    from twilio.request_validator import RequestValidator
+    host = os.environ.get("PUBLIC_HOST")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    if host != "voicebot.phorvex.ai" or not 16 <= len(token) <= 256:
+        raise RuntimeError("production Voice signing authority unavailable")
+    return {"X-Twilio-Signature": RequestValidator(token).compute_signature(
+        "wss://voicebot.phorvex.ai/ws", {})}
+
+
 def sha(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -74,6 +85,9 @@ pod_uid = os.environ.get("POD_UID", "")
 if not pod_uid:
     raise RuntimeError("Pod identity unavailable")
 
+if operation == "baseline":
+    production_ws_headers()
+
 if operation == "session" and set(payload) == {"operation", "run", "phase", "audio"}:
     import aiohttp
     raw = base64.b64decode(payload["audio"], validate=True)
@@ -95,6 +109,7 @@ if operation == "session" and set(payload) == {"operation", "run", "phase", "aud
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as client:
             async with client.ws_connect("http://127.0.0.1:8080/ws", timeout=5, max_msg_size=65536,
+                                         headers=production_ws_headers(),
                                          autoclose=True, autoping=True) as ws:
                 await ws.send_json({"event": "connected", "protocol": "Call", "version": "1.0.0"})
                 await ws.send_json({"event": "start", "sequenceNumber": "1", "streamSid": stream,
