@@ -84,6 +84,9 @@ LITELLM_URL = _env("LITELLM_URL", "http://litellm.litellm.svc.cluster.local:4000
 LITELLM_KEY = _env("LITELLM_KEY", "sk-phorvex-demo-1234")
 VLLM_URL = _env("VLLM_URL", "http://vllm.vllm.svc.cluster.local:8000")
 VLLM_MODEL = _env("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct-AWQ")
+# vLLM enforces VLLM_API_KEY (Secret vllm-control, key api-key). Without it every request is a
+# 401 and the "traffic" is pure error noise, so the key is mounted into this Deployment too.
+VLLM_KEY = _env("VLLM_KEY", "")
 MCP_URL = _env("MCP_URL", "http://mcp-server.mcp.svc.cluster.local:8000/mcp")
 CHROMA_URL = _env("CHROMA_URL", "http://chroma.document-store.svc.cluster.local:8000")
 CHROMA_COLLECTION = _env("CHROMA_COLLECTION", "knowledge_base")
@@ -687,14 +690,20 @@ async def _openai_chat(
     M.inc("loadgen_sessions_total", {"app": app, "outcome": "ok"})
 
 
+def _vllm_headers() -> dict[str, str]:
+    """Bearer for vLLM, or no header when the deployment runs unauthenticated."""
+    return {"Authorization": f"Bearer {VLLM_KEY}"} if VLLM_KEY else {}
+
+
 async def vllm_session(ctx: Ctx) -> None:
+    headers = _vllm_headers()
     if ctx.rng.random() < 0.08:
-        await timed("vllm", "models", ctx.http.get(f"{VLLM_URL}/v1/models"))
+        await timed("vllm", "models", ctx.http.get(f"{VLLM_URL}/v1/models", headers=headers))
         return
     if ctx.rng.random() < 0.05:
-        await timed("vllm", "guardrail_state", ctx.http.get(f"{VLLM_URL}/v1/guardrail/state"))
+        await timed("vllm", "guardrail_state", ctx.http.get(f"{VLLM_URL}/v1/guardrail/state", headers=headers))
         return
-    await _openai_chat(ctx, "vllm", VLLM_URL, VLLM_MODEL, {})
+    await _openai_chat(ctx, "vllm", VLLM_URL, VLLM_MODEL, headers)
 
 
 async def litellm_session(ctx: Ctx) -> None:

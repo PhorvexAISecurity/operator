@@ -106,6 +106,16 @@ spec:
               value: "http://vllm.vllm.svc.cluster.local:8000"
             - name: VLLM_MODEL
               value: "Qwen/Qwen2.5-7B-Instruct-AWQ"
+            # vLLM rejects unauthenticated callers with 401. apply.sh mirrors ONLY the
+            # `api-key` entry of vllm/vllm-control into this namespace — never `admin-bearer`
+            # or the TLS private key, which the generator has no business holding. A
+            # secretKeyRef cannot cross namespaces, hence the local copy.
+            - name: VLLM_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: loadgen-vllm
+                  key: api-key
+                  optional: true
             - name: MCP_URL
               value: "http://mcp-server.mcp.svc.cluster.local:8000/mcp"
             - name: CHROMA_URL
@@ -119,8 +129,11 @@ spec:
               value: "1.0"
             - name: DIURNAL
               value: "1"
-            - name: TZ_OFFSET_HOURS      # users are Pacific; cluster is us-east-2
-              value: "-8"
+            # The diurnal curve peaks at 13:00 in THIS timezone. It is set to the demo
+            # audience's local time, not the cluster's: at -8 the peak landed at 21:00 UTC and
+            # a working-hours demo in Tehran saw the 14% night floor and read as "loadgen is dead".
+            - name: TZ_OFFSET_HOURS      # Asia/Tehran
+              value: "3.5"
             # peak sessions per minute, before the diurnal curve scales them down
             - name: CRM_SPM
               value: "6"

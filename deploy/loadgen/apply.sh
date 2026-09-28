@@ -21,6 +21,19 @@ command -v kubectl >/dev/null || { echo "kubectl not found" >&2; exit 1; }
 echo "==> namespace + workload"
 kubectl apply -f loadgen.yaml
 
+# vLLM enforces an API key. Mirror ONLY the client credential (`api-key`) into this namespace;
+# `admin-bearer` and the TLS private key in that Secret stay where they are. Without this the
+# generator gets a 401 on every vLLM request and produces pure error traffic.
+echo "==> vLLM client credential"
+if kubectl get secret vllm-control -n vllm >/dev/null 2>&1; then
+  VLLM_API_KEY=$(kubectl get secret vllm-control -n vllm -o jsonpath='{.data.api-key}' | base64 -d)
+  kubectl create secret generic loadgen-vllm -n "$NS" \
+    --from-literal=api-key="$VLLM_API_KEY" \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  echo "    WARN: vllm/vllm-control not found; vLLM traffic will be unauthenticated (401s)"
+fi
+
 echo "==> code ConfigMap from loadgen.py"
 kubectl create configmap loadgen-code -n "$NS" \
   --from-file=loadgen.py=loadgen.py \
