@@ -842,8 +842,16 @@ spec:
           readOnly: true
         {{- end }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
+        # Single-file subPath mounts, like every other reviewed profile: the console opens the
+        # profile with O_NOFOLLOW, and a directory mount of a projected volume exposes each key
+        # as a symlink into ..data, which that open refuses (LiteLLM Live then never arms).
         - name: litellm-live-reviewed-inputs
-          mountPath: /etc/phorvex-litellm-live
+          mountPath: /etc/phorvex-litellm-live/profile.json
+          subPath: profile.json
+          readOnly: true
+        - name: litellm-live-reviewed-inputs
+          mountPath: /etc/phorvex-litellm-live/seed
+          subPath: seed
           readOnly: true
         - name: litellm-live-status-token
           mountPath: /etc/phorvex-litellm-status
