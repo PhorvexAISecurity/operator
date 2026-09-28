@@ -44,10 +44,14 @@ import (
 
 // Server is the console API.
 type Server struct {
-	cfg            Config
-	runs           *RunManager
-	history        *historyStore
-	historyInitErr string
+	cfg             Config
+	liveReadOnce    sync.Once
+	liveReadSlots   chan struct{}
+	liveWriteBudget time.Duration
+	liveReadBudget  time.Duration
+	runs            *RunManager
+	history         *historyStore
+	historyInitErr  string
 	// auth is the identity/authorization boundary. Nil means the console has NO trust boundary,
 	// and in that state every API route answers 503 rather than serving anything.
 	auth *Authenticator

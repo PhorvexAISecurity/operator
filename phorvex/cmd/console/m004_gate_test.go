@@ -11,7 +11,7 @@ import (
 )
 
 func TestRemoteAuditAdmissionBoundsShortReadersAndStreamsSeparately(t *testing.T) {
-	entered := make(chan string, 6)
+	entered := make(chan string, 20)
 	release := make(chan struct{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entered <- r.URL.Path
@@ -19,7 +19,7 @@ func TestRemoteAuditAdmissionBoundsShortReadersAndStreamsSeparately(t *testing.T
 		w.WriteHeader(http.StatusOK)
 	})
 	gate := boundedAuditGate(next, func(context.Context) error { return nil }, time.Second, time.Second)
-	finished := make(chan struct{}, 6)
+	finished := make(chan struct{}, 20)
 	serve := func(path string) {
 		go func() {
 			gate.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil))
@@ -40,10 +40,10 @@ func TestRemoteAuditAdmissionBoundsShortReadersAndStreamsSeparately(t *testing.T
 			t.Fatal("short read was not admitted")
 		}
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 16; i++ {
 		serve("/api/live")
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 16; i++ {
 		select {
 		case path := <-entered:
 			if path != "/api/live" {
@@ -78,7 +78,7 @@ func TestRemoteAuditAdmissionBoundsShortReadersAndStreamsSeparately(t *testing.T
 		t.Fatal("session was blocked by audit readers")
 	}
 	close(release)
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 20; i++ {
 		select {
 		case <-finished:
 		case <-time.After(time.Second):

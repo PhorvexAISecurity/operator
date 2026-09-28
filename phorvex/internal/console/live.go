@@ -13,7 +13,9 @@ package console
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -55,10 +57,23 @@ func (c Config) auditPathForContext(ctxName string) string {
 }
 
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	if !liveCanFlush(w) {
 		writeJSON(w, 500, map[string]string{"error": "streaming unsupported"})
 		return
+	}
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	r = r.WithContext(ctx)
+	writeBudget := s.liveWriteBudget
+	if writeBudget <= 0 {
+		writeBudget = liveWriteTimeout
+	}
+	send := func(sendCtx context.Context, body []byte) bool {
+		if sendCtx.Err() != nil {
+			cancel()
+			return false
+		}
+		return liveSSEWrite(sendCtx, w, body, cancel, writeBudget)
 	}
 	// The projection comes from the GRANT, narrowed by any lens the request asked for. It is not
 	// a header the caller chooses: an operator lens on an owner-only grant stays owner.
@@ -112,12 +127,11 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		}
 		return lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated))
 	}
-	notice := func(message string) {
+	noticeScoped := func(writeCtx context.Context, message string) {
 		b, _ := json.Marshal(map[string]string{"message": message})
-		_, _ = w.Write([]byte("event: notice\ndata: " + string(b) + "\n\n"))
-		flusher.Flush()
+		send(writeCtx, []byte("event: notice\ndata: "+string(b)+"\n\n"))
 	}
-	emit := func(rec audit.Record) {
+	emitScoped := func(writeCtx context.Context, rec audit.Record) {
 		if rec.Kind != "phorvex.decision" {
 			return
 		}
@@ -143,13 +157,16 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 			payload = rec // investor/operator get the full internals
 		}
 		b, _ := json.Marshal(payload)
-		_, _ = w.Write([]byte("data: " + string(b) + "\n\n"))
-		flusher.Flush()
+		send(writeCtx, []byte("data: "+string(b)+"\n\n"))
 	}
 
+	notice := func(message string) { noticeScoped(ctx, message) }
+	emit := func(rec audit.Record) { emitScoped(ctx, rec) }
+
 	// initial heartbeat so the client connects even with no audit yet.
-	_, _ = w.Write([]byte(": connected\n\n"))
-	flusher.Flush()
+	if !send(ctx, []byte(": connected\n\n")) {
+		return
+	}
 
 	// TAIL-ONLY initial replay: after the operator has run for hours the audit can hold tens of
 	// thousands of records — replaying ALL of them on connect floods the page ("fast train").
@@ -168,7 +185,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		notice("Replay is limited to 1000 records; use /api/live/history for older decisions.")
 	}
 	if s.cfg.AuditSource != nil {
-		s.remoteLive(r, path, tail, visible, emit, notice)
+		s.remoteLive(r, path, tail, visible, emitScoped, noticeScoped)
 		return
 	}
 	var previous os.FileInfo
@@ -185,7 +202,6 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		f.Close()
 	}
 
-	ctx := r.Context()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -213,7 +229,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) remoteLive(r *http.Request, path string, tail int, visible func(audit.Record) bool, emit func(audit.Record), notice func(string)) {
+func (s *Server) remoteLive(r *http.Request, path string, tail int, visible func(audit.Record) bool, emitScoped func(context.Context, audit.Record), noticeScoped func(context.Context, string)) {
 	ctx := r.Context()
 	source := s.cfg.AuditSource
 	id := strings.TrimPrefix(path, "audit://")
@@ -225,29 +241,39 @@ func (s *Server) remoteLive(r *http.Request, path string, tail int, visible func
 		}
 		return audittransport.Segment{}, false
 	}
-	m, e := source.Manifest(ctx)
-	if e != nil {
-		notice("Live audit source unavailable: " + e.Error())
-		return
-	}
-	live, ok := find(m, id)
-	if !ok {
-		notice("Configured provider audit source unavailable.")
-		return
-	}
-	f := source.Open(ctx, live)
+	var live audittransport.Segment
 	var offset int64
 	var anchor string
 	skipping := false
-	if tail <= 0 {
-		offset, anchor = streamAuditFile(f, 0, &skipping, emit, notice)
-	} else {
-		offset, anchor = replayAuditFile(f, tail, visible, emit, notice)
-	}
-	if e = f.Verify(); e != nil {
-		notice("Live audit replay changed; reconnect to recover history.")
+	if err := s.withLiveAuditRead(ctx, func(readCtx context.Context) error {
+		emit := func(rec audit.Record) { emitScoped(readCtx, rec) }
+		notice := func(message string) { noticeScoped(readCtx, message) }
+		m, e := source.Manifest(readCtx)
+		if e != nil {
+			notice("Live audit source unavailable: " + e.Error())
+			return errors.New("live audit replay unavailable")
+		}
+		var ok bool
+		live, ok = find(m, id)
+		if !ok {
+			notice("Configured provider audit source unavailable.")
+			return errors.New("live audit replay unavailable")
+		}
+		f := source.Open(readCtx, live)
+		if tail <= 0 {
+			offset, anchor = streamAuditFile(f, 0, &skipping, emit, notice)
+		} else {
+			offset, anchor = replayAuditFile(f, tail, visible, emit, notice)
+		}
+		if e = f.Verify(); e != nil {
+			notice("Live audit replay changed; reconnect to recover history.")
+			return errors.New("live audit replay unavailable")
+		}
+		return nil
+	}); err != nil {
 		return
 	}
+
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -256,67 +282,74 @@ func (s *Server) remoteLive(r *http.Request, path string, tail int, visible func
 			return
 		case <-ticker.C:
 		}
-		m, e = source.Manifest(ctx)
-		if e != nil {
-			notice("Live audit source unavailable; reconnect after recovery.")
-			return
-		}
-		newLive, found := find(m, id)
-		if !found {
-			notice("Configured provider audit source unavailable.")
-			return
-		}
-		if newLive.Generation != live.Generation {
-			// Finish any records committed just before rotation from the retained
-			// copy, then start the new live file at zero. A missing old segment is
-			// a visible retention gap, never an empty verified replay.
-			old, retained := audittransport.Segment{}, false
-			for _, seg := range m.Segments {
-				if seg.Generation == live.Generation && strings.HasPrefix(seg.ID, strings.TrimSuffix(id, "live")+"backup-") {
-					old = seg
-					retained = true
-					break
+		if err := s.withLiveAuditRead(ctx, func(readCtx context.Context) error {
+			emit := func(rec audit.Record) { emitScoped(readCtx, rec) }
+			notice := func(message string) { noticeScoped(readCtx, message) }
+			m, e := source.Manifest(readCtx)
+			if e != nil {
+				notice("Live audit source unavailable; reconnect after recovery.")
+				return errors.New("live audit poll unavailable")
+			}
+			newLive, found := find(m, id)
+			if !found {
+				notice("Configured provider audit source unavailable.")
+				return errors.New("live audit poll unavailable")
+			}
+			if newLive.Generation != live.Generation {
+				// Finish any records committed just before rotation from the retained
+				// copy, then start the new live file at zero. A missing old segment is
+				// a visible retention gap, never an empty verified replay.
+				old, retained := audittransport.Segment{}, false
+				for _, seg := range m.Segments {
+					if seg.Generation == live.Generation && strings.HasPrefix(seg.ID, strings.TrimSuffix(id, "live")+"backup-") {
+						old = seg
+						retained = true
+						break
+					}
+				}
+				if !retained {
+					notice("Audit generation lost before reconnect; refresh retained history.")
+					return errors.New("live audit poll unavailable")
+				}
+				if old.ID != strings.TrimSuffix(id, "live")+"backup-1" {
+					notice("More than one audit rotation occurred between live polls; refresh paged retained history to recover intervening decisions.")
+					return errors.New("live audit poll unavailable")
+				}
+				oldReader := source.Open(readCtx, old)
+				if offset > old.Size {
+					notice("Audit generation truncated during rotation.")
+					return errors.New("live audit poll unavailable")
+				}
+				offset, _ = streamAuditFile(oldReader, offset, &skipping, emit, notice)
+				if e = oldReader.Verify(); e != nil {
+					notice("Retained audit generation changed during rotation.")
+					return errors.New("live audit poll unavailable")
+				}
+				live = newLive
+				offset = 0
+				anchor = ""
+				skipping = false
+			} else if newLive.Size < offset {
+				notice("Audit truncated; reconnect and refresh history.")
+				return errors.New("live audit poll unavailable")
+			} else {
+				live = newLive
+			}
+			reader := source.Open(readCtx, live)
+			if offset > 0 {
+				current, ae := auditAnchor(reader, offset)
+				if ae != nil || current != anchor {
+					notice("Audit append boundary changed; reconnect and refresh history.")
+					return errors.New("live audit poll unavailable")
 				}
 			}
-			if !retained {
-				notice("Audit generation lost before reconnect; refresh retained history.")
-				return
+			offset, anchor = streamAuditFile(reader, offset, &skipping, emit, notice)
+			if e = reader.Verify(); e != nil {
+				notice("Live audit generation changed during read; reconnect.")
+				return errors.New("live audit poll unavailable")
 			}
-			if old.ID != strings.TrimSuffix(id, "live")+"backup-1" {
-				notice("More than one audit rotation occurred between live polls; refresh paged retained history to recover intervening decisions.")
-				return
-			}
-			oldReader := source.Open(ctx, old)
-			if offset > old.Size {
-				notice("Audit generation truncated during rotation.")
-				return
-			}
-			offset, _ = streamAuditFile(oldReader, offset, &skipping, emit, notice)
-			if e = oldReader.Verify(); e != nil {
-				notice("Retained audit generation changed during rotation.")
-				return
-			}
-			live = newLive
-			offset = 0
-			anchor = ""
-			skipping = false
-		} else if newLive.Size < offset {
-			notice("Audit truncated; reconnect and refresh history.")
-			return
-		} else {
-			live = newLive
-		}
-		reader := source.Open(ctx, live)
-		if offset > 0 {
-			current, ae := auditAnchor(reader, offset)
-			if ae != nil || current != anchor {
-				notice("Audit append boundary changed; reconnect and refresh history.")
-				return
-			}
-		}
-		offset, anchor = streamAuditFile(reader, offset, &skipping, emit, notice)
-		if e = reader.Verify(); e != nil {
-			notice("Live audit generation changed during read; reconnect.")
+			return nil
+		}); err != nil {
 			return
 		}
 	}

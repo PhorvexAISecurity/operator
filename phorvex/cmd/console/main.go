@@ -165,13 +165,11 @@ func run() int {
 	if auditPath != "" {
 		cfg.AuditPath = auditPath
 	}
-	var source *audittransport.Client
 	if auditSourceURL != "" {
 		client, err := audittransport.NewClient(audittransport.ClientConfig{URL: auditSourceURL, ServerDNSName: auditServerDNS, CertFile: auditClientCert, KeyFile: auditClientKey, CAFile: auditSourceCA})
 		if err != nil {
 			log.Fatalf("audit source configuration: %v", err)
 		}
-		source = client
 		cfg.AuditSource = client
 		cfg.AuditSourceIdentity = auditSourceURL + "|" + auditServerDNS
 	}
@@ -266,7 +264,7 @@ func run() int {
 	// deadline would sever mid-stream.
 	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           auditGate(srv.Handler(), source),
+		Handler:           srv.AuditGate(srv.Handler()),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -743,70 +741,8 @@ func workerKubernetesRuntime(profile cataloguev1.ProfileID, runtimeConfig catalo
 	return restConfig, kube, err
 }
 
-func auditGate(next http.Handler, source *audittransport.Client) http.Handler {
-	if source == nil {
-		return next
-	}
-	return boundedAuditGate(next, source.ProbeContext, 5*time.Second, 30*time.Second)
-}
-
-// Admission happens before source probes, 16 MiB allocations, and segment scans.
-// Long live SSE subscriptions have their own slots; they cannot occupy all
-// short-read capacity needed by paged history and derived readers.
 func boundedAuditGate(next http.Handler, probe func(context.Context) error, probeTimeout, requestTimeout time.Duration) http.Handler {
-	shortReads := make(chan struct{}, 4)
-	streams := make(chan struct{}, 2)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !auditDependentRoute(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		limit := shortReads
-		stream := r.URL.Path == "/api/live"
-		if stream {
-			limit = streams
-		}
-		select {
-		case limit <- struct{}{}:
-			defer func() { <-limit }()
-		case <-r.Context().Done():
-			return
-		default:
-			http.Error(w, "remote audit reader limit reached", http.StatusServiceUnavailable)
-			return
-		}
-		ctx := r.Context()
-		cancelRequest := func() {}
-		if !stream {
-			ctx, cancelRequest = context.WithTimeout(ctx, requestTimeout)
-			defer cancelRequest()
-		}
-		probeCtx, cancelProbe := context.WithTimeout(ctx, probeTimeout)
-		err := probe(probeCtx)
-		cancelProbe()
-		if err != nil {
-			http.Error(w, "live audit source unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if ctx.Err() != nil {
-			http.Error(w, "remote audit request timed out", http.StatusServiceUnavailable)
-			return
-		}
-		if stream {
-			next.ServeHTTP(w, r)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func auditDependentRoute(path string) bool {
-	switch path {
-	case "/api/live", "/api/live/history", "/api/owner/events", "/api/owner/tenants", "/api/cost-timeseries", "/api/cost", "/api/uptime", "/api/effectiveness", "/api/posture":
-		return true
-	default:
-		return false
-	}
+	return console.BoundedAuditGate(next, probe, probeTimeout, requestTimeout, nil)
 }
 
 func firstNonEmpty(vals ...string) string {
