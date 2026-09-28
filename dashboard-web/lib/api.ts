@@ -494,7 +494,7 @@ export interface AttackResult {
   claim?: ClaimScope;
   id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
-  status: "running" | "partial" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
+  status: "running" | "partial" | "done"; outcome: "DEFENDED" | "LANDED" | "PROTECTION_REVALIDATED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
   outcomeClass?: "behavioral-oracle-unsupported" | "effect-only" | "effect-unverified" | string;
   evidenceKind?: "catalogue-signal" | "synthetic-detector-signal" | string;
   producerRoute?: string;
@@ -613,16 +613,21 @@ export interface GuardrailEffectProbeResult {
 }
 export interface EndpointLeaseProbeResult {
   schema: "vllm-endpoint-lease-live-v1";
-  status: "UNKNOWN" | "LANDED" | "DEFENDED" | "EXISTING_PROTECTION_OR_DIFFERENT_ROSTER";
+  status: "UNKNOWN" | "LANDED" | "DEFENDED" | "PROTECTION_REVALIDATED" | "EXISTING_PROTECTION_OR_DIFFERENT_ROSTER";
   scenarioId: "ai2-endpoint-security";
   signalMode: string; defenseScope: string;
   targetPodUID?: string; serviceUID?: string; policyUID?: string; proxySourceSHA256?: string;
   firstAccepted: boolean; initialAStatus?: number; initialBStatus?: number;
   initialAResponseSHA256?: string; initialBResponseSHA256?: string;
-  eventUID?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
+  eventUID?: string; eventName?: string; selectedAction?: string; selectedDecisionId?: string; selectedTickId?: string;
   noopReason?: string; actionExclusion?: string;
   protectedJournalTerminal: boolean; everyServingPodEffective: boolean;
   terminalAfterDispatchError: boolean;
+  protectionRevalidated?: boolean;
+  historicalOperationId?: string; historicalEventName?: string; historicalEventUID?: string; historicalTickId?: string;
+  historicalJournalSHA256?: string; currentStateSHA256?: string; currentRevision?: number;
+  postAResponseSHA256?: string; postBResponseSHA256?: string;
+  cleanup?: string;
   postAStatus?: number; postBStatus?: number;
   postAExactDenial: boolean; postBValidCompletion: boolean;
   issues: string[];

@@ -331,10 +331,10 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                     {a.armed && (verdicts[a.id] !== undefined || firing === a.id) && (
                       v ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated/30 p-2 text-[12px]">
-                          <span>{v.outcome || (verdict?.noop ? "NOOP" : v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
+                          <span>{verdict?.revalidated ? "EXISTING PROTECTION VERIFIED" : v.outcome || (verdict?.noop ? "NOOP" : v.status === "done" ? "UNCONFIRMED" : v.status)}</span>
                           <span className="text-muted-foreground">observed <span className="font-mono text-foreground/80">{verdict?.action}</span></span>
                           <span className="text-muted-foreground">expected <span className="font-mono text-foreground/80">{v.expectedActuator || a.expectedActuator || "—"}</span></span>
-                          <span className="ml-auto font-medium text-muted-foreground">{verdict?.noop ? "no actuation recorded" : (matches ? "matches expected" : "differs from expected")}</span>
+                          <span className="ml-auto font-medium text-muted-foreground">{verdict?.revalidated ? "no new actuation" : verdict?.noop ? "no actuation recorded" : (matches ? "matches expected" : "differs from expected")}</span>
                           {verdict?.reason && <span className="basis-full text-muted-foreground">reason: {verdict.reason}</span>}
                           {verdict?.blocked.map((candidate) => <span key={candidate} className="basis-full text-muted-foreground">candidate: {candidate}</span>)}
                         </div>
