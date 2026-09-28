@@ -213,6 +213,52 @@ func drainV11CreateFromReceipt(receipt *drainV11Receipt) drainV11CreateRequest {
 		Mode: "abort-and-quiesce", Supersedes: receipt.Supersedes}
 }
 
+// Work observed during preparation can finish while the protected claim and
+// Kubernetes authorities are being checked. Recheck the exact prepared backend
+// immediately before the first serving/epoch mutation, not after withdrawal.
+// This does not reserve scheduler work; a later race remains a native failure.
+func drainV11FinalCapability(ctx context.Context, ec EnactCtx, pod *corev1.Pod, r *drainV11Receipt) error {
+	const unavailable = "request-drain unavailable before routing mutation: prepared backend no longer advertises the exact operation"
+	if r == nil || r.Attempt != 1 || pod == nil || string(pod.UID) != r.Owner.PodUID {
+		return errors.New(unavailable)
+	}
+	if err := drainV11Authority(ctx, ec, r); err != nil {
+		return errors.New(unavailable)
+	}
+	backend, err := drainV11Client(ec)
+	if err != nil {
+		return errors.New(unavailable)
+	}
+	ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+	if err != nil {
+		return errors.New(unavailable)
+	}
+	cap, err := backend.DrainV11Capability(ctx, ep)
+	if err != nil {
+		return errors.New(unavailable)
+	}
+	// Retain the existing injected-client fixture allowance, never live authority.
+	if ec.ServingSecurity == nil && ec.VLLM != nil && cap.PodUID == "" {
+		cap.PodUID = r.Owner.PodUID
+	}
+	if validateDrainV11Capability(cap) != nil || !validDrainV11Hex(cap.RawSHA256, sha256.Size) ||
+		cap.PodUID != r.Owner.PodUID || cap.LedgerID != r.LedgerID || cap.ProxyBootID != r.ProxyBootID ||
+		cap.EngineBootID != r.EngineBootID || cap.IncarnationDigest != r.ExpectedIncarnation ||
+		cap.ProxySource != r.ProxySource || cap.EngineSource != r.EngineSource || cap.Admission != "OPEN" ||
+		cap.NextOperationGeneration != r.OperationGeneration {
+		return errors.New(unavailable)
+	}
+	high, highErr := strconv.ParseUint(cap.GenerationHighWater, 10, 64)
+	generation, generationErr := strconv.ParseUint(r.OperationGeneration, 10, 64)
+	if highErr != nil || generationErr != nil || generation == 0 || high != generation-1 {
+		return errors.New(unavailable)
+	}
+	if err := drainV11Authority(ctx, ec, r); err != nil {
+		return errors.New(unavailable)
+	}
+	return nil
+}
+
 // A capacity refusal is restorable only while the original backend incarnation
 // remains OPEN and has not consumed the requested generation. This is a fresh
 // capability proof following an actual rejected POST, never a 404 inference.

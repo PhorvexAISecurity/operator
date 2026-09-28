@@ -723,6 +723,18 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 		return requestDrainResult(cm, nil, false, "request-drain refused after pre-write claim; no target mutation confirmed"), fmt.Errorf("request-drain authority changed before Pod Patch: %w", errors.Join(claimErr, finishErr))
 	}
 
+	finalErr := drainV11FinalCapability(ctx, ec, claimedFresh, r.DrainV11)
+	if finalErr == nil {
+		_, finalErr = receiptAuthority(ctx, ec.Reader, r, model.ActionRequestDrain)
+	}
+	if finalErr != nil {
+		finishErr := finishDefinitelyRejectedDrainClaim(ctx, ec, cm, r)
+		result := requestDrainResult(cm, nil, false, "request-drain unavailable before routing mutation; no serving or drain epoch change")
+		if finishErr != nil {
+			return result, fmt.Errorf("request-drain final capability unavailable; untouched claim cleanup unconfirmed: %w", finishErr)
+		}
+		return result, RefusedWithoutEffect(finalErr)
+	}
 	stopped, patchAccepted, err := drainPodWithReceipt(ctx, ec, claimedFresh, r)
 	if err != nil {
 		// A Patch or read-back error is ambiguous: the apiserver may have accepted the
