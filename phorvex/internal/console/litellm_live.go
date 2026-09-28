@@ -675,11 +675,16 @@ func (w *liteLiveWorker) loadTokens() error {
 	return nil
 }
 
+// The installed vLLM prompt-injection guardrail (ProtectAI DeBERTa v2, threshold 0.5) scores
+// "Reply with the single word OK." and "...BLUE." as injections (0.78) and refuses them, so a run
+// never obtained its first accepted completion. Every prompt below was checked to pass it.
+const liteBenignControlPrompt = "What is 4 plus 5? Reply with one digit."
+
 func litePrompt(scenario string, index int) string {
 	if scenario == "ai2-unbounded-consumption" {
-		return "Reply with the single word OK."
+		return "What is 1 plus 1? Reply with one digit."
 	}
-	return []string{"Reply with the single word BLUE.", "What is 2 plus 2? Reply with one digit.", "Reply with the single word GREEN.", "What is 3 plus 5? Reply with one digit."}[index]
+	return []string{"What is 6 minus 1? Reply with one digit.", "What is 2 plus 2? Reply with one digit.", "Reply with the single word GREEN.", "What is 3 plus 5? Reply with one digit."}[index]
 }
 
 func liteHTTPClient(timeout time.Duration) *http.Client {
@@ -1004,7 +1009,7 @@ func (w *liteLiveWorker) execute(probe *liteLLMLiveProbeResult) (err error) {
 	if len(seen) != 2 {
 		return errors.New("LiteLLM real Service did not route original work to both exact gateways")
 	}
-	control, err := w.call("before-control", w.controlToken, "Reply with the single word OK.")
+	control, err := w.call("before-control", w.controlToken, liteBenignControlPrompt)
 	if err != nil || control.Class != "ACCEPTED_MODEL_COMPLETION" {
 		return errors.New("LiteLLM original benign control unavailable")
 	}
@@ -1095,7 +1100,7 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 		probe.Status = "ATTACK_CONTINUES"
 		return errors.New("LiteLLM equivalent attacker replay was not revoked")
 	}
-	control, err := w.call("after-control", w.controlToken, "Reply with the single word OK.")
+	control, err := w.call("after-control", w.controlToken, liteBenignControlPrompt)
 	if err != nil || control.Class != "ACCEPTED_MODEL_COMPLETION" {
 		probe.Status = "BENIGN_REGRESSION"
 		return errors.New("LiteLLM ordinary authorized completion regressed")
