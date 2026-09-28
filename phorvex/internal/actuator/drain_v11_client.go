@@ -190,13 +190,51 @@ type drainV11Receipt struct {
 	ObservationSequences      []string                        `json:"observationSequences,omitempty"`
 	ObservationHashes         []string                        `json:"observationHashes,omitempty"`
 	CreateRequests            int                             `json:"createRequests,omitempty"`
+	CreateRejection           *drainV11CreateRejection        `json:"createRejection,omitempty"`
 	StatusRequests            int                             `json:"statusRequests,omitempty"`
 	CancelRequests            int                             `json:"cancelRequests,omitempty"`
 	ReopenRequests            int                             `json:"reopenRequests,omitempty"`
 }
 
+// This proof is minted only from the authenticated response to the exact create
+// request. A missing operation on a later GET is never a create rejection.
+type drainV11CreateRejection struct {
+	HTTPStatus          int    `json:"httpStatus"`
+	Code                string `json:"code"`
+	RequestSHA256       string `json:"requestSHA256"`
+	ResponseSHA256      string `json:"responseSHA256"`
+	CapabilitySHA256    string `json:"capabilitySHA256"`
+	GenerationHighWater string `json:"generationHighWater"`
+}
+
+type drainV11CreateRejectedError struct{ proof drainV11CreateRejection }
+
+func (e *drainV11CreateRejectedError) Error() string {
+	return "drain v11 create definitely rejected: ledger_capacity"
+}
+
+func (r *drainV11Receipt) rejected() bool {
+	if r == nil || r.CreateRejection == nil || r.Attempt != 1 || r.CreateRequests != 1 ||
+		r.CancelRequests != 0 || r.ReopenRequests != 0 || r.State != "" || r.Revision != "" ||
+		r.OwnerDigest != "" || r.BackendIncarnation != "" || r.ReceiptSHA256 != "" ||
+		r.Aborted != 0 || r.CompletedBeforeAbort != 0 || len(r.TerminalDigests) != 0 || len(r.SnapshotDigests) != 0 {
+		return false
+	}
+	p := r.CreateRejection
+	requestSHA, err := drainV11Digest("phorvex-drain-create-v1", drainV11CreateFromReceipt(r))
+	high, highErr := strconv.ParseUint(p.GenerationHighWater, 10, 64)
+	generation, generationErr := strconv.ParseUint(r.OperationGeneration, 10, 64)
+	return err == nil && p.HTTPStatus == http.StatusServiceUnavailable && p.Code == "ledger_capacity" &&
+		p.RequestSHA256 == requestSHA && validDrainV11Hex(p.ResponseSHA256, sha256.Size) &&
+		validDrainV11Hex(p.CapabilitySHA256, sha256.Size) && validDrainV11Decimal(p.GenerationHighWater, false) &&
+		highErr == nil && generationErr == nil && generation > 0 && high == generation-1
+}
+
 func (r *drainV11Receipt) prepared() bool {
 	if r == nil {
+		return false
+	}
+	if r.CreateRejection != nil && !r.rejected() {
 		return false
 	}
 	if len(r.TerminalDigests) > 16 {
@@ -689,8 +727,7 @@ func validateDrainV11Capability(value drainV11CapabilityResponse) error {
 		len(value.VirtualEngineIDs) != 1 || value.VirtualEngineIDs[0] != 0 ||
 		!validDrainV11Decimal(value.GenerationHighWater, false) ||
 		(value.NextOperationGeneration != "" && !validDrainV11Decimal(value.NextOperationGeneration, true)) ||
-		(value.Admission != "OPEN" && value.Admission != "CLOSED") ||
-		(value.Admission == "OPEN" && value.NextOperationGeneration == "") {
+		(value.Admission != "OPEN" && value.Admission != "CLOSED") {
 		return fmt.Errorf("drain v11 capability is incomplete, closed, or unsupported")
 	}
 	return nil
@@ -777,6 +814,26 @@ func (c *httpVLLM) drainV11Request(ctx context.Context, ep servingEndpoint, meth
 		return "", err
 	}
 	if code != http.StatusOK && code != http.StatusCreated {
+		// This one producer refusal occurs before the ledger generation, admission
+		// gate, or engine work changes. All other HTTP failures remain ambiguous.
+		if create, ok := payload.(drainV11CreateRequest); ok && method == http.MethodPost &&
+			route == drainV11Base(ep)+"/operations" && code == http.StatusServiceUnavailable {
+			mediaType, _, mediaErr := mime.ParseMediaType(responseType)
+			var refusal struct {
+				Error string `json:"error"`
+			}
+			if mediaErr == nil && strings.EqualFold(mediaType, "application/json") &&
+				strictDrainV11Decode(response, &refusal) == nil && refusal.Error == "ledger_capacity" {
+				requestSHA, hashErr := drainV11Digest("phorvex-drain-create-v1", create)
+				if hashErr == nil {
+					responseSHA := sha256.Sum256([]byte(response))
+					return "", &drainV11CreateRejectedError{proof: drainV11CreateRejection{
+						HTTPStatus: code, Code: refusal.Error, RequestSHA256: requestSHA,
+						ResponseSHA256: hex.EncodeToString(responseSHA[:]),
+					}}
+				}
+			}
+		}
 		return "", fmt.Errorf("drain v11 %s: HTTP %d", method, code)
 	}
 	mediaType, _, mediaErr := mime.ParseMediaType(responseType)

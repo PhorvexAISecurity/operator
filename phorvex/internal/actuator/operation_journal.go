@@ -308,7 +308,7 @@ func legacyRequestDrainPhase(phase string) bool {
 
 func operationRequestDrainPhase(phase string) bool {
 	switch phase {
-	case "prepared", "claimed", "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent",
+	case "prepared", "claimed", "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent", "drain-rejected-v11",
 		"drain-cancel-dispatching-v11", "drain-cancelled-v11", "drain-confirmed-v11",
 		"reopen-dispatching-v11", "backend-reopened-v11", "restored":
 		return true
@@ -318,6 +318,10 @@ func operationRequestDrainPhase(phase string) bool {
 }
 
 func (r operationReceipt) valid() bool {
+	if r.DrainV11 != nil && r.DrainV11.CreateRejection != nil &&
+		(r.Kind != "request-drain" || (r.Phase != "drain-rejected-v11" && r.Phase != "restored")) {
+		return false
+	}
 	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion && r.Version != servingEffectReceiptVersion && r.Version != warmDrainReceiptVersion && r.Version != operationDrainReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
@@ -441,6 +445,8 @@ func (r operationReceipt) valid() bool {
 		switch r.Phase {
 		case "prepared", "claimed", "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent":
 			return r.Aborted == 0
+		case "drain-rejected-v11":
+			return r.Aborted == 0 && r.DrainV11.rejected()
 		case "drain-cancel-dispatching-v11":
 			return r.Aborted == 0 && r.DrainV11.CancelRequests == 1
 		case "drain-cancelled-v11":

@@ -6,6 +6,26 @@ acknowledgement), the existing dual-listener guardrail proxy, a Pod-scoped
 operation ledger, and the current `vllm` Service. Running the renderer does not
 publish an image, create credentials, or change a cluster.
 
+## Protected ledger capacity and recovery
+
+The ledger retains at most 64 operations. When all slots contain protected recent
+proofs, capability withholds the next generation so native request-drain refuses
+before withdrawing routing. An exact authenticated create response with HTTP 503
+and `ledger_capacity` can instead be recorded as a request-bound rejection. Native
+recovery then checks the same OPEN backend incarnation and unchanged generation,
+restores only the owned Pod routing label, and confirms endpoint return. This is
+availability recovery; it supplies no abort or defense credit. Existing 24-hour
+retention remains unchanged: only OPENED proofs at least 24 hours old are eligible
+for eviction when an accepted new operation requires capacity.
+
+Lost responses, generic 404/503 responses, and unacknowledged rejection proofs
+remain protected. Pre-fix unresolved receipts cannot be automatically reclassified
+as definite rejections; availability recovery needs separately recorded manual
+evidence and must preserve their unresolved journal. The journal serializes normal
+native operations, but runtime reads and Kubernetes routing writes are not atomic
+against an independent privileged backend client. A changed post-restoration
+read retains the receipt and reports an unknown outcome without completion credit.
+
 ## Current evidence and remaining authority
 
 The 2026-09-27 09:40 UTC read retained in the private campaign runtime shows the

@@ -456,11 +456,27 @@ class Coordinator:
             # A STALE current operation keeps admission closed but advertises
             # the one exact next generation needed for authenticated attempt-2
             # supersession. Other active states remain non-creatable.
-            if (high < MAX_U64 and
+            if (high < MAX_U64 and self._capacity_evictions(current) is not None and
                     (self.ledger.data["current"] is None or
                      self.ledger.data["current"].get("state") == "STALE")):
                 body["next_operation_generation"] = str(high + 1)
             return body
+
+    def _capacity_evictions(self, current):
+        """Read-only admission check using the existing 64-entry/24h retention.
+
+        Capability must not advertise an operation which create cannot retain.
+        No retained proof is removed by a read or a refused create.
+        """
+        history = self.ledger.data["history"]
+        needed = max(0, len(history) + (1 if current is not None else 0) + 1 - 64)
+        cutoff = datetime.now(timezone.utc).timestamp() - 86400
+        eligible = [index for index, item in enumerate(history)
+                    if item.get("state") == "OPENED"
+                    and datetime.fromisoformat(
+                        item["last_transition"].replace("Z", "+00:00")
+                    ).timestamp() <= cutoff]
+        return eligible[:needed] if len(eligible) >= needed else None
 
     def admit_generation(self):
         if not self.admission_open:
@@ -520,20 +536,15 @@ class Coordinator:
                 raise DrainError(409, "invalid_supersession")
 
             history = self.ledger.data["history"]
-            while len(history) + (1 if current is not None else 0) >= 64:
-                cutoff = datetime.now(timezone.utc).timestamp() - 86400
-                eligible = next((index for index, item in enumerate(history)
-                                 if item.get("state") == "OPENED"
-                                 and datetime.fromisoformat(
-                                     item["last_transition"].replace("Z", "+00:00")
-                                 ).timestamp() <= cutoff), None)
-                if eligible is None:
-                    raise DrainError(503, "ledger_capacity")
-                history.pop(eligible)
+            evictions = self._capacity_evictions(current)
+            if evictions is None:
+                raise DrainError(503, "ledger_capacity")
             engine_capability = await self._engine_capability()
             incarnation = self._incarnation(engine_capability)
             if payload["expected_incarnation_digest"] != incarnation:
                 raise DrainError(409, "incarnation_mismatch")
+            for index in reversed(evictions):
+                history.pop(index)
             self.admission_open = False
             owner_digest = domain_digest("phorvex-drain-owner-v1", payload["owner"])
             record = {

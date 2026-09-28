@@ -6,6 +6,7 @@ from pathlib import Path
 import socket
 import tempfile
 import unittest
+from unittest.mock import patch
 import httpx
 import drain_v11 as drain
 
@@ -318,6 +319,63 @@ class DrainLedgerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(fresh.ledger.data["history"]),63)
         with self.assertRaisesRegex(drain.DrainError,"expired_generation"):
             await fresh.status("1","1"*32,"8"*32)
+
+    async def test_64_real_operations_capacity_preflight_and_http_refusal_preserve_all_proofs(self):
+        c,e=await self.coordinator()
+        for generation in range(1,65):
+            operation_id=f"{generation:032x}"
+            code,_=await c.create(await self.payload(c,str(generation),operation_id))
+            self.assertEqual(code,201)
+            await c.status(str(generation),operation_id,"a"*32)
+            terminal=await c.status(str(generation),operation_id,"b"*32)
+            opened=await c.reopen(str(generation),operation_id,terminal["owner_digest"],
+                                  terminal["backend_incarnation_digest"],terminal["revision"])
+            self.assertEqual(opened["state"],"OPENED")
+        before=(self.root/"ledger.json").read_bytes()
+        capability=await c.capability()
+        self.assertEqual((capability["admission"],capability["generation_high_water"]),("OPEN","64"))
+        self.assertNotIn("next_operation_generation",capability)
+        self.assertEqual((self.root/"ledger.json").read_bytes(),before)
+        payload=await self.payload(c,"65","e"*32)
+        calls=list(e.calls)
+        # Actual FastAPI wrapper + actual Coordinator/ledger producer, with only
+        # the GPU scheduler's RPC boundary represented by FakeEngine.
+        app=guardrail_proxy.create_app(runtime=None,load_models=False,
+                                      admin_api_key="admin",drain_coordinator=c)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url="http://test") as client:
+            response=await client.post("/v1/drain/operations",json=payload,
+                                       headers={"Authorization":"Bearer admin"})
+            self.assertEqual((response.status_code,response.json()),(503,{"error":"ledger_capacity"}))
+            self.assertTrue(response.headers["content-type"].startswith("application/json"))
+            missing=await client.get("/v1/drain/operations/65/"+"e"*32+"?observation_nonce="+"c"*32,
+                                    headers={"Authorization":"Bearer admin"})
+            self.assertEqual((missing.status_code,missing.json()),(404,{"error":"unknown_operation"}))
+        self.assertEqual(e.calls,calls)  # no engine capability/begin/abort RPC after rejection
+        self.assertEqual((self.root/"ledger.json").read_bytes(),before)
+        self.assertEqual((len(c.ledger.data["history"]),c.ledger.data["current"],e.admission,e.generation),
+                         (64,None,"OPEN",64))
+
+    async def test_capacity_admission_slot_and_exact_retention_boundary(self):
+        c,_=await self.coordinator()
+        fixed=datetime(2026,9,28,12,tzinfo=timezone.utc)
+        class FrozenDateTime(datetime):
+            @classmethod
+            def now(cls,tz=None): return fixed
+        recent={"state":"OPENED","last_transition":drain.deadline_text(fixed)}
+        eligible={"state":"OPENED","last_transition":drain.deadline_text(fixed-timedelta(hours=24))}
+        too_recent={"state":"OPENED","last_transition":drain.deadline_text(fixed-timedelta(hours=24)+timedelta(microseconds=1))}
+        with patch.object(drain,"datetime",FrozenDateTime):
+            c.ledger.data["history"]=[dict(recent) for _ in range(63)]
+            self.assertEqual(c._capacity_evictions(None),[])
+            self.assertIsNone(c._capacity_evictions({"state":"STALE"}))
+            c.ledger.data["history"][0]=eligible
+            self.assertEqual(c._capacity_evictions({"state":"STALE"}),[0])
+            c.ledger.data["history"].append(dict(recent))
+            self.assertEqual(c._capacity_evictions(None),[0])
+            c.ledger.data["history"][0]=too_recent
+            self.assertIsNone(c._capacity_evictions(None))
+            c.ledger.data["history"][0]=dict(eligible,state="STALE")
+            self.assertIsNone(c._capacity_evictions(None))
     def test_decimal_strict_json_corruption_and_new_domain(self):
         for v in ("0",str(2**53-1),str(2**53),str(2**64-1)): self.assertEqual(drain.u64(v,"x"),int(v))
         for v in (0,-1,"-1","01",str(2**64),1.0):

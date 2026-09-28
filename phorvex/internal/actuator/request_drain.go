@@ -396,6 +396,21 @@ func recoverRequestDrain(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
 	if _, err := readBoundDrainService(ctx, ec.Reader, *r); err != nil {
 		return "request-drain Service authority changed; Pod left untouched and receipt retained", confirmedWrite, err
 	}
+	if r.DrainV11 != nil && r.DrainV11.CreateRejection != nil {
+		if drainReceiptEndpointConfigDigest(pod, r.Version) != r.EndpointConfigSHA256 || pod.Status.PodIP != r.EndpointAddresses[0] {
+			return "request-drain rejection endpoint authority changed; receipt retained", confirmedWrite, fmt.Errorf("request-drain rejection endpoint configuration changed")
+		}
+		if _, err := receiptAuthority(ctx, ec.Reader, *r, model.ActionRequestDrain); err != nil {
+			return "request-drain rejection policy authority changed; receipt retained", confirmedWrite, err
+		}
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
+		if err == nil {
+			_, err = drainV11UnadvancedCapability(ctx, ec, ep, r.DrainV11)
+		}
+		if err != nil {
+			return "request-drain rejected create OPEN authority unresolved; receipt retained", confirmedWrite, err
+		}
+	}
 	if r.Version == operationDrainReceiptVersion && r.Phase == "drain-dispatching-v11" {
 		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, pod)
 		if err != nil {
@@ -509,12 +524,26 @@ func recoverRequestDrain(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
 		}
 	}
 	if r.Version == operationDrainReceiptVersion && r.Phase != "stopped" && r.Phase != "withdrawn" &&
-		r.Phase != "claimed" && r.Phase != "drain-unsent" && r.Phase != "backend-reopened-v11" && r.Phase != "restored" {
+		r.Phase != "claimed" && r.Phase != "drain-unsent" && r.Phase != "drain-rejected-v11" && r.Phase != "backend-reopened-v11" && r.Phase != "restored" {
 		return "request-drain v11 is not ready for route restoration", confirmedWrite,
 			fmt.Errorf("request-drain v11 phase %q is not restorable", r.Phase)
 	}
-	if _, err := restoreDrainPod(ctx, ec, *r); err != nil {
+	restored, err := restoreDrainPod(ctx, ec, *r)
+	if err != nil {
 		return "request-drain restoration unresolved; receipt retained", confirmedWrite, err
+	}
+	if r.DrainV11 != nil && r.DrainV11.CreateRejection != nil {
+		// The protected journal serializes normal native choices, but a runtime
+		// read and a Kubernetes CAS are not one atomic cross-plane transaction.
+		// Recheck after the owned route write before claiming completion or
+		// retiring the only recovery authority.
+		ep, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, restored)
+		if err == nil {
+			_, err = drainV11UnadvancedCapability(ctx, ec, ep, r.DrainV11)
+		}
+		if err != nil {
+			return "serving label write observed; rejected create OPEN authority changed before restoration confirmation; receipt retained", confirmedWrite, err
+		}
 	}
 	if r.Phase != "restored" {
 		r.Phase = "restored"
@@ -531,6 +560,9 @@ func recoverRequestDrain(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
 	if r.Aborted > 0 {
 		return fmt.Sprintf("%d in-flight requests confirmed aborted; exact serving state and endpoint membership restored; receipt finished", r.Aborted), confirmedWrite, nil
 	}
+	if r.DrainV11 != nil && r.DrainV11.CreateRejection != nil {
+		return "create definitively rejected for ledger capacity; no backend drain or abort; exact serving state and endpoint membership restored; receipt finished", confirmedWrite, nil
+	}
 	return "exact serving state and endpoint membership restored; receipt finished", confirmedWrite, nil
 }
 
@@ -539,7 +571,7 @@ func requestDrainWriteConfirmed(r operationReceipt, pod *corev1.Pod) bool {
 		return true
 	}
 	switch r.Phase {
-	case "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent", "drain-cancel-dispatching-v11", "drain-cancelled-v11", "drain-confirmed-v11", "reopen-dispatching-v11", "backend-reopened-v11", "restored":
+	case "stopped", "withdrawn", "drain-dispatching-v11", "drain-unsent", "drain-rejected-v11", "drain-cancel-dispatching-v11", "drain-cancelled-v11", "drain-confirmed-v11", "reopen-dispatching-v11", "backend-reopened-v11", "restored":
 		return true
 	default:
 		return false
@@ -735,6 +767,19 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 	}
 	create := drainV11CreateFromReceipt(r.DrainV11)
 	if err := completeDrainV11(ctx, ec, ep, r.DrainV11, &create); err != nil {
+		var rejected *drainV11CreateRejectedError
+		if errors.As(err, &rejected) {
+			if proofErr := bindDrainV11CreateRejection(ctx, ec, ep, r.DrainV11, rejected); proofErr != nil {
+				return requestDrainFailure(ctx, ec, cm, &r, stopped, errors.Join(err, proofErr))
+			}
+			r.Phase = "drain-rejected-v11"
+			if journalErr := journalAdvance(ctx, ec, cm, r); journalErr != nil {
+				// Do not restore from an unacknowledged durable proof. Recovery may
+				// consume the protected rejection only if the CAS actually landed.
+				return requestDrainResult(cm, stopped, true, "request-drain create rejection receipt unconfirmed; owned routing and protected receipt retained"), journalErr
+			}
+			return requestDrainFailure(ctx, ec, cm, &r, stopped, err)
+		}
 		var unreachable *definiteServingUnreachableError
 		if errors.As(err, &unreachable) {
 			r.Phase = "drain-unsent"

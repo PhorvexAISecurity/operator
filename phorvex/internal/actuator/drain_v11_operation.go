@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -210,6 +211,64 @@ func drainV11CreateFromReceipt(receipt *drainV11Receipt) drainV11CreateRequest {
 		OperationGeneration: receipt.OperationGeneration, Attempt: receipt.Attempt, Owner: receipt.Owner,
 		ExpectedIncarnationDigest: receipt.ExpectedIncarnation, Deadline: receipt.Deadline,
 		Mode: "abort-and-quiesce", Supersedes: receipt.Supersedes}
+}
+
+// A capacity refusal is restorable only while the original backend incarnation
+// remains OPEN and has not consumed the requested generation. This is a fresh
+// capability proof following an actual rejected POST, never a 404 inference.
+func drainV11UnadvancedCapability(ctx context.Context, ec EnactCtx, ep servingEndpoint, r *drainV11Receipt) (drainV11CapabilityResponse, error) {
+	var cap drainV11CapabilityResponse
+	if r == nil || r.Attempt != 1 {
+		return cap, fmt.Errorf("drain v11 rejection requires the original attempt")
+	}
+	if err := drainV11Authority(ctx, ec, r); err != nil {
+		return cap, err
+	}
+	backend, err := drainV11Client(ec)
+	if err != nil {
+		return cap, err
+	}
+	cap, err = backend.DrainV11Capability(ctx, ep)
+	if err != nil {
+		return cap, err
+	}
+	if err := validateDrainV11Capability(cap); err != nil {
+		return cap, err
+	}
+	high, highErr := strconv.ParseUint(cap.GenerationHighWater, 10, 64)
+	generation, generationErr := strconv.ParseUint(r.OperationGeneration, 10, 64)
+	if cap.PodUID != r.Owner.PodUID || cap.LedgerID != r.LedgerID || cap.ProxyBootID != r.ProxyBootID ||
+		cap.EngineBootID != r.EngineBootID || cap.IncarnationDigest != r.ExpectedIncarnation ||
+		cap.ProxySource != r.ProxySource || cap.EngineSource != r.EngineSource || cap.Admission != "OPEN" ||
+		!validDrainV11Hex(cap.RawSHA256, sha256.Size) || highErr != nil || generationErr != nil ||
+		generation == 0 || high != generation-1 ||
+		(cap.NextOperationGeneration != "" && cap.NextOperationGeneration != r.OperationGeneration) {
+		return cap, fmt.Errorf("drain v11 rejected create no longer has exact OPEN unadvanced authority")
+	}
+	return cap, drainV11Authority(ctx, ec, r)
+}
+
+func bindDrainV11CreateRejection(ctx context.Context, ec EnactCtx, ep servingEndpoint, r *drainV11Receipt, rejection *drainV11CreateRejectedError) error {
+	if r == nil || rejection == nil || r.CreateRejection != nil {
+		return fmt.Errorf("drain v11 create rejection proof unavailable")
+	}
+	requestSHA, err := drainV11Digest("phorvex-drain-create-v1", drainV11CreateFromReceipt(r))
+	if err != nil || rejection.proof.RequestSHA256 != requestSHA {
+		return fmt.Errorf("drain v11 create rejection changed the request")
+	}
+	cap, err := drainV11UnadvancedCapability(ctx, ec, ep, r)
+	if err != nil {
+		return err
+	}
+	proof := rejection.proof
+	proof.CapabilitySHA256 = cap.RawSHA256
+	proof.GenerationHighWater = cap.GenerationHighWater
+	r.CreateRejection = &proof
+	if !r.rejected() {
+		r.CreateRejection = nil
+		return fmt.Errorf("drain v11 create rejection proof invalid")
+	}
+	return nil
 }
 
 func prepareDrainV11Supersession(ctx context.Context, ec EnactCtx, ep servingEndpoint,
