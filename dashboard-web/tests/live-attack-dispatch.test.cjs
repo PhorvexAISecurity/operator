@@ -20,7 +20,12 @@ const api = {
 const source = fs.readFileSync(path.join(__dirname, "../lib/live-attack-dispatch.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const subject = { exports: {} };
+const truth = { exports: {} };
+const truthCompiled = ts.transpileModule(fs.readFileSync(path.join(__dirname, "../lib/attack-result-truth.ts"), "utf8"),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+new Function("module", "exports", truthCompiled)(truth, truth.exports);
 new Function("require", "module", "exports", compiled)((name) => {
+  if (name === "@/lib/attack-result-truth") return truth.exports;
   assert.equal(name, "@/lib/api");
   return { api };
 }, subject, subject.exports);

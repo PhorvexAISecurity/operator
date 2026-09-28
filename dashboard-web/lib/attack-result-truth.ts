@@ -1,4 +1,30 @@
-import type { AttackResult, AttackDecisionEvidence, CatalogCompat } from "@/lib/api";
+import type { AttackResult, AttackDecisionEvidence, CatalogCompat, EndpointLeaseProbeResult } from "@/lib/api";
+
+export function isEndpointLeaseRevalidationProbe(p: EndpointLeaseProbeResult | undefined): boolean {
+  const sha = (value: string | undefined) => !!value && /^[0-9a-f]{64}$/.test(value);
+  return !!p && p.schema === "vllm-endpoint-lease-live-v1" && p.scenarioId === "ai2-endpoint-security" &&
+    p.status === "PROTECTION_REVALIDATED" && p.protectionRevalidated === true &&
+    p.signalMode === "EXISTING_PROTECTION_REVALIDATION" && p.cleanup === "NOT_NEEDED" && p.firstAccepted === false &&
+    !p.eventUID && !p.eventName && !p.selectedAction && !p.selectedDecisionId && !p.selectedTickId &&
+    p.protectedJournalTerminal === true && p.everyServingPodEffective === true &&
+    p.postAStatus === 401 && p.postAExactDenial === true && p.postBStatus === 200 && p.postBValidCompletion === true &&
+    sha(p.postAResponseSHA256) && sha(p.postBResponseSHA256) && sha(p.historicalJournalSHA256) &&
+    sha(p.currentStateSHA256) && Number.isSafeInteger(p.currentRevision) && (p.currentRevision ?? 0) > 0 &&
+    !!p.historicalOperationId && /^[0-9a-f]{32,64}$/.test(p.historicalOperationId) &&
+    !!p.historicalEventName && !!p.historicalEventUID && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.historicalEventUID) &&
+    !!p.historicalTickId && Array.isArray(p.issues) && p.issues.length === 0;
+}
+
+export function isEndpointProtectionRevalidated(r: AttackResult): boolean {
+  return r.status === "done" && r.outcome === "PROTECTION_REVALIDATED" &&
+    r.evidenceKind === "vllm-endpoint-lease-live" && r.producerRoute === "/api/vllm/attack" &&
+    r.resultSchemaVersion === "vllm-endpoint-lease-live-v1" &&
+    r.outcomeClass === "endpoint-lease-PROTECTION_REVALIDATED" && r.actuated === false && r.phorvexAction === "" &&
+    r.timeToDefendSec === 0 && (r.responseSeconds ?? 0) === 0 && !r.responseAction && !r.responseObserved &&
+    r.dwellSec === 0 && !r.dwellOngoing && !r.containment && !r.defendedPod &&
+    !r.decisionEvidence && !r.temporalDecisionEvidence && !(r.decisionTraceEvidence || []).length &&
+    !r.stimulusEvidence && isEndpointLeaseRevalidationProbe(r.endpointLeaseProbe);
+}
 
 export function canSendCatalogueSignal(item: CatalogCompat, armed: boolean): boolean {
   return armed && item.compatible === true && item.signalEligible === true;
@@ -60,7 +86,7 @@ export function catalogueSignalState(result: AttackResult): {
 }
 
 export function showSecurityOutcomeSections(result: AttackResult): boolean {
-  return !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" &&
+  return result.outcome !== "PROTECTION_REVALIDATED" && !isCatalogueSignalResult(result) && result.evidenceKind !== "voice-memory-live" &&
     result.evidenceKind !== "voice-agency-live" && result.evidenceKind !== "litellm-live-client-policy" &&
     result.evidenceKind !== "litellm-real-provider-output";
 }

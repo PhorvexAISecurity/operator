@@ -119,6 +119,10 @@ type endpointLeaseHTTPReceipt struct {
 }
 
 func endpointLeasePublicCall(ctx context.Context, bearer []byte) (endpointLeaseHTTPReceipt, error) {
+	return endpointLeasePublicCallURL(ctx, bearer, "http://vllm.vllm.svc.cluster.local:8000/v1/chat/completions")
+}
+
+func endpointLeasePublicCallURL(ctx context.Context, bearer []byte, url string) (endpointLeaseHTTPReceipt, error) {
 	var result endpointLeaseHTTPReceipt
 	if !endpointLeaseTokenValid(bearer) {
 		return result, errors.New("endpoint lease owned caller unavailable")
@@ -131,7 +135,7 @@ func endpointLeasePublicCall(ctx context.Context, bearer []byte) (endpointLeaseH
 	callCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	request, err := http.NewRequestWithContext(callCtx, http.MethodPost,
-		"http://vllm.vllm.svc.cluster.local:8000/v1/chat/completions", bytes.NewReader(body))
+		url, bytes.NewReader(body))
 	if err != nil {
 		return result, errors.New("endpoint lease public request unavailable")
 	}

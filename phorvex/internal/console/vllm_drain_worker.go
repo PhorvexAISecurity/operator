@@ -40,10 +40,16 @@ func (s *Server) drainReadKubeInput(ctx context.Context, out, label string, allo
 	stdout, stderr := &availabilityCappedWriter{max: 1 << 20}, &availabilityCappedWriter{max: 4096}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if err := cmd.Run(); err != nil || stdout.overflow || stderr.overflow {
+		if issue := drainLiveReadIssue(label); issue != "" {
+			return nil, issue
+		}
 		return nil, fmt.Errorf("bounded request-drain GET unavailable: %s", label)
 	}
 	raw := append([]byte(nil), stdout.Bytes()...)
 	if len(raw) == 0 && !allowEmpty {
+		if issue := drainLiveReadIssue(label); issue != "" {
+			return nil, issue
+		}
 		return nil, fmt.Errorf("empty request-drain GET: %s", label)
 	}
 	if len(raw) > 0 {
@@ -51,7 +57,7 @@ func (s *Server) drainReadKubeInput(ctx context.Context, out, label string, allo
 		if strings.HasSuffix(label, "-target") || strings.HasSuffix(label, "-manager") || strings.HasSuffix(label, "-console") {
 			var pod vllmPodState
 			if json.Unmarshal(raw, &pod) != nil {
-				return nil, errors.New("Pod source JSON malformed")
+				return nil, drainLiveStaticIssue("Pod source JSON malformed")
 			}
 			labels := map[string]string{}
 			if pod.Metadata.Labels != nil {
@@ -70,7 +76,7 @@ func (s *Server) drainReadKubeInput(ctx context.Context, out, label string, allo
 		} else if strings.HasSuffix(label, "-console-replicaset") || strings.HasSuffix(label, "-console-deployment") {
 			var owner vllmPodState
 			if json.Unmarshal(raw, &owner) != nil {
-				return nil, errors.New("console owner JSON malformed")
+				return nil, drainLiveStaticIssue("console owner JSON malformed")
 			}
 			saved = drainJSON(map[string]any{"rawSHA256": availabilityHash(raw), "metadata": map[string]any{"name": owner.Metadata.Name, "uid": owner.Metadata.UID, "ownerReferences": owner.Metadata.OwnerReferences}})
 		} else if strings.HasSuffix(label, "-journal") {
@@ -81,7 +87,7 @@ func (s *Server) drainReadKubeInput(ctx context.Context, out, label string, allo
 				} `json:"metadata"`
 			}
 			if json.Unmarshal(raw, &cm) != nil {
-				return nil, errors.New("journal metadata malformed")
+				return nil, drainLiveStaticIssue("journal metadata malformed")
 			}
 			saved = drainJSON(map[string]any{"rawSHA256": availabilityHash(raw), "metadata": cm.Metadata, "dataIncluded": false})
 		}
@@ -136,7 +142,7 @@ func (s *Server) drainInstalledSource(ctx context.Context, out, phase string, p 
 	}
 	var hashes map[string]string
 	if json.Unmarshal(raw, &hashes) != nil || len(hashes) != 2 || hashes["serving_completion.py"] != p.ServingCompletionSHA256 || hashes["serving_engine.py"] != p.ServingEngineSHA256 {
-		return errors.New("installed serving source drift")
+		return drainLiveStaticIssue("installed serving source drift")
 	}
 	return nil
 }
@@ -155,13 +161,13 @@ func (s *Server) drainModelInventory(ctx context.Context, out, phase string, p d
 		Count int  `json:"count"`
 	}
 	if json.Unmarshal(raw, &row) != nil || !row.Exact || row.Count < 1 || row.Count > 16 {
-		return errors.New("fixed model identity unavailable")
+		return drainLiveStaticIssue("fixed model identity unavailable")
 	}
 	return nil
 }
 
 func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLiveProfile, phase string) error {
-	if err := p.retainedCaller.check(ctx); err != nil {
+	if err := drainRetainedCallerIssue(p.retainedCaller.check(ctx)); err != nil {
 		return err
 	}
 	read := func(label string, allowEmpty bool, args ...string) ([]byte, error) {
@@ -177,7 +183,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		} `json:"metadata"`
 	}
 	if json.Unmarshal(raw, &cluster) != nil || cluster.Metadata.UID != p.ClusterUID {
-		return errors.New("cluster UID drift")
+		return drainLiveStaticIssue("cluster UID drift")
 	}
 	raw, err = read("target", false, "-n", "vllm", "get", "pod", p.PodName, "-o", "json")
 	if err != nil {
@@ -188,15 +194,15 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		(*pod.Metadata.Labels)["phorvex.ai/serving"] != "true" || pod.Metadata.Annotations == nil ||
 		(*pod.Metadata.Annotations)["phorvex.ai/drain-proxy-source"] != p.DrainProxySourceSHA256 ||
 		(*pod.Metadata.Annotations)["phorvex.ai/drain-engine-source"] != p.DrainEngineSourceSHA256 {
-		return errors.New("target Pod/source drift")
+		return drainLiveStaticIssue("target Pod/source drift")
 	}
 	_, leaseSource := (*pod.Metadata.Annotations)["phorvex.ai/endpoint-lease-source-sha256"]
 	if leaseSource != (p.retainedCaller != nil) {
-		return errors.New("drain source and retained caller authority differ")
+		return drainLiveStaticIssue("drain source and retained caller authority differ")
 	}
 	if !drainPinnedContainer(pod, "vllm", p.PodImageID, p.PodContainerID) ||
 		!drainPinnedContainer(pod, "guardrail", p.ProxyImageID, p.ProxyContainerID) {
-		return errors.New("target vLLM container identity drift")
+		return drainLiveStaticIssue("target vLLM container identity drift")
 	}
 	if err = s.drainInstalledSource(ctx, out, phase, p); err != nil {
 		return err
@@ -213,12 +219,12 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	var svc vllmServiceState
 	if json.Unmarshal(raw, &svc) != nil || svc.Metadata.UID != p.ServiceUID || svc.Metadata.Name != p.ServiceName || svc.Spec.Selector == nil || !maps.Equal(*svc.Spec.Selector, p.ServiceSelector) ||
 		len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0].Port != 8000 || svc.Spec.Ports[0].Protocol != "TCP" || string(svc.Spec.Ports[0].TargetPort) != "8000" {
-		return errors.New("route Service identity drift")
+		return drainLiveStaticIssue("route Service identity drift")
 	}
 	for key, value := range *svc.Spec.Selector {
 		actual, exists := (*pod.Metadata.Labels)[key]
 		if !exists || actual != value {
-			return errors.New("route Service no longer selects exact target")
+			return drainLiveStaticIssue("route Service no longer selects exact target")
 		}
 	}
 	raw, err = read("services", false, "-n", "vllm", "get", "services", "-o", "json")
@@ -227,7 +233,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	}
 	var services vllmServiceList
 	if json.Unmarshal(raw, &services) != nil || len(services.Items) > 64 {
-		return errors.New("route Service inventory malformed")
+		return drainLiveStaticIssue("route Service inventory malformed")
 	}
 	selecting := 0
 	for _, candidate := range services.Items {
@@ -245,12 +251,12 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		if match {
 			selecting++
 			if candidate.Metadata.UID != p.ServiceUID || candidate.Metadata.Name != p.ServiceName {
-				return errors.New("alternate selecting Service present")
+				return drainLiveStaticIssue("alternate selecting Service present")
 			}
 		}
 	}
 	if selecting != 1 {
-		return errors.New("route Service cardinality drift")
+		return drainLiveStaticIssue("route Service cardinality drift")
 	}
 	raw, err = read("endpointslices", false, "-n", "vllm", "get", "endpointslices", "-l", "kubernetes.io/service-name="+p.ServiceName, "-o", "json")
 	if err != nil {
@@ -258,12 +264,12 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	}
 	var slices vllmEndpointSliceList
 	if json.Unmarshal(raw, &slices) != nil || len(slices.Items) < 1 || len(slices.Items) > 8 {
-		return errors.New("route EndpointSlice inventory drift")
+		return drainLiveStaticIssue("route EndpointSlice inventory drift")
 	}
 	readyTarget := 0
 	for _, slice := range slices.Items {
 		if slice.Metadata.Labels["kubernetes.io/service-name"] != p.ServiceName {
-			return errors.New("route EndpointSlice label drift")
+			return drainLiveStaticIssue("route EndpointSlice label drift")
 		}
 		owner := 0
 		for _, ref := range slice.Metadata.OwnerReferences {
@@ -272,19 +278,19 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 			}
 		}
 		if owner != 1 {
-			return errors.New("route EndpointSlice owner drift")
+			return drainLiveStaticIssue("route EndpointSlice owner drift")
 		}
 		for _, endpoint := range slice.Endpoints {
 			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready && (endpoint.Conditions.Terminating == nil || !*endpoint.Conditions.Terminating) {
 				if endpoint.TargetRef == nil || endpoint.TargetRef.UID != p.PodUID {
-					return errors.New("route has alternate Ready target")
+					return drainLiveStaticIssue("route has alternate Ready target")
 				}
 				readyTarget++
 			}
 		}
 	}
 	if readyTarget != 1 {
-		return errors.New("route Ready target cardinality drift")
+		return drainLiveStaticIssue("route Ready target cardinality drift")
 	}
 	raw, err = read("policy", false, "-n", "vllm", "get", "phorvexpolicy", p.PolicyName, "-o", "json")
 	if err != nil {
@@ -306,12 +312,12 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		} `json:"spec"`
 	}
 	if json.Unmarshal(raw, &policy) != nil || policy.Metadata.UID != p.PolicyUID || policy.Metadata.Generation != p.PolicyGeneration || policy.Spec.Mode != "active" || len(policy.Spec.Selector.MatchLabels) == 0 {
-		return errors.New("policy identity drift")
+		return drainLiveStaticIssue("policy identity drift")
 	}
 	for key, value := range policy.Spec.Selector.MatchLabels {
 		actual, exists := (*pod.Metadata.Labels)[key]
 		if !exists || actual != value {
-			return errors.New("policy no longer selects target")
+			return drainLiveStaticIssue("policy no longer selects target")
 		}
 	}
 	allowed := false
@@ -319,7 +325,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		allowed = allowed || a == "request-drain"
 	}
 	if !allowed {
-		return errors.New("policy does not enable request-drain")
+		return drainLiveStaticIssue("policy does not enable request-drain")
 	}
 	raw, err = read("manager", false, "-n", "phorvex-system", "get", "pod", p.ManagerPodName, "-o", "json")
 	if err != nil {
@@ -327,7 +333,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	}
 	var manager vllmPodState
 	if json.Unmarshal(raw, &manager) != nil || manager.Metadata.UID != p.ManagerPodUID {
-		return errors.New("manager Pod identity drift")
+		return drainLiveStaticIssue("manager Pod identity drift")
 	}
 	managerReady := false
 	for _, c := range manager.Status.ContainerStatuses {
@@ -336,11 +342,11 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		}
 	}
 	if !managerReady {
-		return errors.New("manager image drift")
+		return drainLiveStaticIssue("manager image drift")
 	}
 	consoleName := os.Getenv("PHORVEX_CONSOLE_POD_NAME")
 	if consoleName == "" {
-		return errors.New("console self identity unavailable")
+		return drainLiveStaticIssue("console self identity unavailable")
 	}
 	raw, err = read("console", false, "-n", "phorvex-system", "get", "pod", consoleName, "-o", "json")
 	if err != nil {
@@ -348,7 +354,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	}
 	var self vllmPodState
 	if json.Unmarshal(raw, &self) != nil || self.Metadata.UID == "" || self.Metadata.UID != os.Getenv("PHORVEX_CONSOLE_POD_UID") || self.Metadata.Name != consoleName {
-		return errors.New("console Pod identity drift")
+		return drainLiveStaticIssue("console Pod identity drift")
 	}
 	consoleReady := false
 	for _, c := range self.Status.ContainerStatuses {
@@ -357,11 +363,11 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		}
 	}
 	if !consoleReady {
-		return errors.New("console image drift")
+		return drainLiveStaticIssue("console image drift")
 	}
 	rsName, rsUID, ownerOK := soleControllerOwner(self.Metadata.OwnerReferences, "ReplicaSet")
 	if !ownerOK {
-		return errors.New("console ReplicaSet owner unavailable")
+		return drainLiveStaticIssue("console ReplicaSet owner unavailable")
 	}
 	raw, err = read("console-replicaset", false, "-n", "phorvex-system", "get", "replicaset", rsName, "-o", "json")
 	if err != nil {
@@ -369,11 +375,11 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	}
 	var rs vllmPodState
 	if json.Unmarshal(raw, &rs) != nil || rs.Metadata.UID != rsUID {
-		return errors.New("console ReplicaSet identity drift")
+		return drainLiveStaticIssue("console ReplicaSet identity drift")
 	}
 	depName, depUID, ownerOK := soleControllerOwner(rs.Metadata.OwnerReferences, "Deployment")
 	if !ownerOK || depName != p.ConsoleDeploymentName || depUID != p.ConsoleDeploymentUID {
-		return errors.New("console Deployment owner drift")
+		return drainLiveStaticIssue("console Deployment owner drift")
 	}
 	raw, err = read("console-deployment", false, "-n", "phorvex-system", "get", "deployment", depName, "-o", "json")
 	if err != nil {
@@ -381,7 +387,7 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	}
 	var dep vllmPodState
 	if json.Unmarshal(raw, &dep) != nil || dep.Metadata.UID != p.ConsoleDeploymentUID {
-		return errors.New("console Deployment identity drift")
+		return drainLiveStaticIssue("console Deployment identity drift")
 	}
 	journalName := drainJournalName(p.PolicyUID, p.PodUID)
 	raw, err = read("journal", true, "-n", "phorvex-system", "get", "configmap", journalName, "-o", "json", "--ignore-not-found=true")
@@ -389,9 +395,9 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 		return err
 	}
 	if len(raw) != 0 {
-		return errors.New("protected request-drain journal occupied")
+		return drainLiveStaticIssue("protected request-drain journal occupied")
 	}
-	return p.retainedCaller.check(ctx)
+	return drainRetainedCallerIssue(p.retainedCaller.check(ctx))
 }
 
 func drainPinnedContainer(pod vllmPodState, name, imageID, containerID string) bool {
@@ -465,7 +471,7 @@ func drainJournalName(policyUID, podUID string) string {
 }
 
 func (s *Server) drainBenign(ctx context.Context, p drainLiveProfile, body []byte) (int, bool, error) {
-	if err := p.retainedCaller.check(ctx); err != nil {
+	if err := drainRetainedCallerIssue(p.retainedCaller.check(ctx)); err != nil {
 		return 0, false, err
 	}
 	c, stop := context.WithTimeout(ctx, 25*time.Second)
@@ -491,7 +497,7 @@ func (s *Server) drainBenign(ctx context.Context, p drainLiveProfile, body []byt
 	if decoder.Decode(&row) != nil || decoder.Decode(&struct{}{}) != io.EOF || !staticSHA256.MatchString(row.BodySHA256) {
 		return 0, false, errors.New("benign completion projection malformed")
 	}
-	if err := p.retainedCaller.check(ctx); err != nil {
+	if err := drainRetainedCallerIssue(p.retainedCaller.check(ctx)); err != nil {
 		return 0, false, err
 	}
 	return row.Status, row.Valid, nil
@@ -612,7 +618,7 @@ func drainNonce() (string, error) {
 // startDrainStream keeps kubectl exec attached. Its only stdout is a bounded
 // typed projection; the Python process never prints model text or credentials.
 func startDrainStream(parent context.Context, p drainLiveProfile, body []byte, nonce string) (*drainStreamRun, error) {
-	if err := p.retainedCaller.check(parent); err != nil {
+	if err := drainRetainedCallerIssue(p.retainedCaller.check(parent)); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -917,11 +923,97 @@ func parseStrictDrainRows(ctx context.Context, b []byte) ([]audit.Record, [][]by
 	return records, originals, nil
 }
 
+// Only local static gates produce this type. Transport errors and arbitrary
+// response text cannot acquire a public issue by matching an error string.
+type drainLiveStaticIssue string
+
+func (issue drainLiveStaticIssue) Error() string { return string(issue) }
+
+var drainLiveStaticMessages = map[drainLiveStaticIssue]string{
+	"target Pod read unavailable":                                              "request-drain reviewed target Pod is unavailable; inspect the target and refresh reviewed Pod pins",
+	"manager Pod read unavailable":                                             "request-drain reviewed manager Pod is unavailable; refresh reviewed manager pins",
+	"console source read unavailable":                                          "request-drain Console Pod or owner source is unavailable; inspect Console ownership and refresh reviewed pins",
+	"installed source read unavailable":                                        "request-drain reviewed target source cannot be read; inspect the target and refresh reviewed source pins",
+	"retained caller authority unavailable":                                    "request-drain retained caller profile or authority is unavailable; refresh matching drain and retained caller profiles",
+	"Pod source JSON malformed":                                                "request-drain target, manager or Console Pod source is malformed; inspect the current Pod",
+	"console owner JSON malformed":                                             "request-drain Console owner source is malformed; inspect the current ReplicaSet and Deployment",
+	"journal metadata malformed":                                               "request-drain protected journal metadata is malformed; preserve and inspect the journal",
+	"installed serving source drift":                                           "request-drain installed vLLM serving source differs from the reviewed profile; refresh reviewed source pins",
+	"fixed model identity unavailable":                                         "request-drain fixed model identity is unavailable; verify the production Service model inventory",
+	"cluster UID drift":                                                        "request-drain cluster UID differs from the reviewed profile; refresh the reviewed profile",
+	"target Pod/source drift":                                                  "request-drain target Pod, serving label or source pins differ from the reviewed profile; inspect the target and refresh reviewed pins",
+	"drain source and retained caller authority differ":                        "request-drain source and retained caller authority differ; review the mounted caller profile and target source together",
+	"target vLLM container identity drift":                                     "request-drain target container incarnation or image differs from the reviewed profile; refresh reviewed target pins",
+	"route Service identity drift":                                             "request-drain Service identity or configuration differs from the reviewed profile; review the current Service",
+	"route Service no longer selects exact target":                             "request-drain Service no longer selects the exact reviewed target; inspect the serving label and selector",
+	"route Service inventory malformed":                                        "request-drain Service inventory is malformed; inspect current routing",
+	"alternate selecting Service present":                                      "request-drain target has an alternate selecting Service; review routing before retrying",
+	"route Service cardinality drift":                                          "request-drain target does not have exactly one selecting Service; review routing before retrying",
+	"route EndpointSlice inventory drift":                                      "request-drain EndpointSlice inventory differs from the reviewed route; inspect Service endpoints",
+	"route EndpointSlice label drift":                                          "request-drain EndpointSlice Service label differs; inspect Service endpoints",
+	"route EndpointSlice owner drift":                                          "request-drain EndpointSlice owner differs from the reviewed Service; inspect Service endpoints",
+	"route has alternate Ready target":                                         "request-drain route has an alternate Ready target; inspect Service endpoints",
+	"route Ready target cardinality drift":                                     "request-drain route does not have exactly one Ready reviewed target; inspect Service endpoints",
+	"policy identity drift":                                                    "request-drain policy identity, generation or mode differs from the reviewed profile; refresh reviewed policy pins",
+	"policy no longer selects target":                                          "request-drain policy no longer selects the reviewed target; review the policy selector",
+	"policy does not enable request-drain":                                     "request-drain is not enabled by the current policy; review the policy action configuration",
+	"manager Pod identity drift":                                               "request-drain manager Pod differs from the reviewed profile; refresh reviewed manager pins",
+	"manager image drift":                                                      "request-drain manager image, container incarnation or readiness differs from the reviewed profile; inspect the manager and refresh reviewed pins",
+	"console self identity unavailable":                                        "request-drain Console self identity is unavailable; inspect Console Pod identity configuration",
+	"console Pod identity drift":                                               "request-drain Console Pod identity differs from its configured incarnation; inspect Console identity configuration",
+	"console image drift":                                                      "request-drain Console image or readiness differs from the reviewed profile; refresh reviewed Console pins",
+	"console ReplicaSet owner unavailable":                                     "request-drain Console ReplicaSet owner is unavailable; inspect Console ownership",
+	"console ReplicaSet identity drift":                                        "request-drain Console ReplicaSet identity differs; inspect Console ownership",
+	"console Deployment owner drift":                                           "request-drain Console Deployment owner differs from the reviewed profile; refresh reviewed Console ownership pins",
+	"console Deployment identity drift":                                        "request-drain Console Deployment identity differs from the reviewed profile; refresh reviewed Console ownership pins",
+	"protected request-drain journal occupied":                                 "request-drain protected journal is occupied; inspect and resolve the existing operation without deleting its proof",
+	"request-drain profile lacks reviewed exact source or fixed limits":        "request-drain profile has invalid source pins or fixed limits; prepare a reviewed profile",
+	"reviewed request-drain profile or authenticated audit source unavailable": "request-drain reviewed profile or authenticated audit source is unavailable; inspect Console configuration",
+	"request-drain profile bytes unavailable":                                  "request-drain mounted profile bytes do not match the configured digest or are unavailable; refresh the reviewed profile mount and digest",
+	"authenticated audit source identity drift":                                "request-drain audit source identity differs from the reviewed profile; review the configured audit source",
+}
+
+func drainLiveReadIssue(label string) drainLiveStaticIssue {
+	// Labels originate locally. Exact matching prevents arbitrary transport
+	// labels or stderr from being presented as a recognized source failure.
+	switch label {
+	case "before-target", "after-target":
+		return "target Pod read unavailable"
+	case "before-manager", "after-manager":
+		return "manager Pod read unavailable"
+	case "before-console", "after-console", "before-console-replicaset", "after-console-replicaset", "before-console-deployment", "after-console-deployment":
+		return "console source read unavailable"
+	case "before-installed-source", "after-installed-source":
+		return "installed source read unavailable"
+	default:
+		return ""
+	}
+}
+
+func drainRetainedCallerIssue(err error) error {
+	if err != nil {
+		return drainLiveStaticIssue("retained caller authority unavailable")
+	}
+	return nil
+}
+
+func newDrainRetainedCallerAuthority(cfg Config, p drainLiveProfile) (*retainedCallerAuthority, error) {
+	authority, err := newRetainedCallerAuthority(cfg, p.RetainedCallerLeaseProfileSHA256,
+		p.ServiceUID, p.PolicyUID, "", p.PodUID)
+	return authority, drainRetainedCallerIssue(err)
+}
+
 func drainLiveSafeIssue(err error) string {
 	if err == nil {
 		return ""
 	}
 	// Never echo transport stderr, model output or remote response details.
+	var issue drainLiveStaticIssue
+	if errors.As(err, &issue) {
+		if message, ok := drainLiveStaticMessages[issue]; ok {
+			return message
+		}
+	}
 	return "bounded request-drain step unavailable"
 }
 
@@ -951,8 +1043,7 @@ func (s *Server) runDrainLive(r *attackRecord, p drainLiveProfile, raw []byte) {
 	} else if err = os.MkdirAll(out, 0700); err == nil {
 		err = publishMongoAuditFile(out, "profile-original.json", raw, 16<<10)
 		if err == nil {
-			p.retainedCaller, err = newRetainedCallerAuthority(s.cfg, p.RetainedCallerLeaseProfileSHA256,
-				p.ServiceUID, p.PolicyUID, "", p.PodUID)
+			p.retainedCaller, err = newDrainRetainedCallerAuthority(s.cfg, p)
 		}
 		if err == nil {
 			err = s.executeDrainLive(ctx, out, r, p)
@@ -1058,7 +1149,7 @@ func (s *Server) executeDrainLive(ctx context.Context, out string, r *attackReco
 	if first.Status != 200 {
 		return errors.New("retained caller stream was not authenticated by model")
 	}
-	if err = p.retainedCaller.check(ctx); err != nil {
+	if err = drainRetainedCallerIssue(p.retainedCaller.check(ctx)); err != nil {
 		return err
 	}
 	// A completed stream before the event has no discriminating overlap.

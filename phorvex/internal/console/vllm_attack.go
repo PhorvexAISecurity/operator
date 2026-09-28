@@ -165,7 +165,7 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	if body.Action == "request-drain" && s.cfg.DrainLiveEnabled {
 		profile, raw, profileErr := loadDrainLiveProfile(s.cfg)
 		if profileErr != nil {
-			writeJSON(w, 503, map[string]string{"error": "reviewed request-drain profile unavailable"})
+			writeJSON(w, 503, map[string]string{"error": drainLiveSafeIssue(profileErr)})
 			return
 		}
 		if !drainLiveInFlight.CompareAndSwap(false, true) {

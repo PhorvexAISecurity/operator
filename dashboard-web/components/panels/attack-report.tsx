@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { LIVE_SELECTION_EVENT, LiveSelectionEvent, readLiveSelection } from "@/lib/live-selection";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { useExactRecord } from "@/lib/query";
-import { attackCSVRow, hasAvailabilityCostEvidence, isCatalogueSignalResult, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
+import { attackCSVRow, hasAvailabilityCostEvidence, isCatalogueSignalResult, isEndpointProtectionRevalidated, isUnversionedResult, showSecurityOutcomeSections } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { DecisionEvidencePanel } from "@/components/panels/decision-evidence";
 import { GuardrailEffectProbe } from "@/components/panels/guardrail-effect-probe";
@@ -141,12 +141,13 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
   const running = r.status === "running";
   const partial = r.status === "partial";
   const defended = !signal && r.outcome === "DEFENDED";
+  const revalidated = !signal && isEndpointProtectionRevalidated(r);
   const landed = !signal && r.outcome === "LANDED";
   const effectOnly = !defended && !landed && r.effectEvidence?.observed === true;
   const confirmed = defended || landed;
   const cinfo = containmentInfo(r);
   return (
-    <Card className={cn("border-l-2", selected && "ring-1 ring-primary/60", defended ? "border-l-success" : landed ? "border-l-danger" : "border-l-warning")}>
+    <Card className={cn("border-l-2", selected && "ring-1 ring-primary/60", defended || revalidated ? "border-l-success" : landed ? "border-l-danger" : "border-l-warning")}>
       <CardContent className="space-y-3 p-4">
         {/* header */}
         <div className="flex flex-wrap items-center gap-2">
@@ -155,7 +156,8 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
             : unversioned && !running ? <Badge variant="neutral">RECORDED LEGACY LABEL · {r.outcome || r.status.toUpperCase()}</Badge>
             : running ? <Badge variant="modeled" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> measuring…</Badge>
             : partial ? <Badge variant="pending">PARTIAL RECORD</Badge>
-            : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> RESPONSE RECORDED</Badge>
+            : revalidated ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> EXISTING PROTECTION VERIFIED</Badge>
+              : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> RESPONSE RECORDED</Badge>
               : landed ? <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> LANDED</Badge>
                 : effectOnly ? <Badge variant="modeled">EFFECT OBSERVED · OUTCOME UNVERIFIED</Badge>
                   : <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> UNCONFIRMED</Badge>}
@@ -172,7 +174,7 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
         {signal && <CatalogueSignalResult result={r} />}
         {r.guardrailEffectProbe && <GuardrailEffectProbe result={r.guardrailEffectProbe} />}
         {r.guardrailOutputProbe && <GuardrailOutputProbe result={r.guardrailOutputProbe} />}
-        {r.endpointLeaseProbe && <EndpointLeaseProbe result={r.endpointLeaseProbe} />}
+        {r.endpointLeaseProbe && <EndpointLeaseProbe result={r.endpointLeaseProbe} attackResult={r} />}
         {r.voiceMemoryProbe && <VoiceMemoryProbe result={r.voiceMemoryProbe} />}
         {r.voiceAgencyProbe && <VoiceAgencyProbe result={r.voiceAgencyProbe} />}
         {r.voiceOutputProbe && <VoiceOutputProbe result={r.voiceOutputProbe} />}

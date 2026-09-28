@@ -1,4 +1,5 @@
 import { api, AttackResult, CompatEntry, Lens, VllmAttackAction } from "@/lib/api";
+import { isEndpointProtectionRevalidated } from "@/lib/attack-result-truth";
 
 type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } | { kind: "voice-agency" } | { kind: "voice-output" } | { kind: "voice-mcp" } | { kind: "voice-admission" } |
   { kind: "litellm"; scenario: "ai2-unbounded-consumption" | "ai2-query-extraction" } |
@@ -60,6 +61,7 @@ export function liveAttackPollBudgetMs(route: LiveRoute): number {
 }
 
 export function liveAttackVerdict(result: AttackResult) {
+  const revalidated = isEndpointProtectionRevalidated(result);
   const action = result.phorvexAction || result.decisionEvidence?.action || "";
   const noop = result.status !== "running" && action === "noop";
   const statuses = result.decisionEvidence?.actionStatus || [];
@@ -69,10 +71,11 @@ export function liveAttackVerdict(result: AttackResult) {
     .slice(0, 4)
     .map((candidate) => `${candidate.action}: ${candidate.status}${candidate.reason ? ` — ${candidate.reason}` : ""}`);
   return {
-    action: noop ? "NOOP" : action || (result.status === "running" ? "pending" : "UNCONFIRMED"),
-    reason: result.decisionEvidence?.reason || result.observationError || result.why || "",
+    action: revalidated ? "existing protection" : noop ? "NOOP" : action || (result.status === "running" ? "pending" : "UNCONFIRMED"),
+    reason: revalidated ? `Current denial verified under original operation ${result.endpointLeaseProbe?.historicalOperationId}; no new actuation.` : result.decisionEvidence?.reason || result.observationError || result.why || "",
     blocked,
     noop,
+    revalidated,
   };
 }
 

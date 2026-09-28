@@ -38,6 +38,16 @@ type endpointLeaseProbeResult struct {
 	ProtectedJournalTerminal   bool     `json:"protectedJournalTerminal"`
 	EveryServingPodEffective   bool     `json:"everyServingPodEffective"`
 	TerminalAfterDispatchError bool     `json:"terminalAfterDispatchError"`
+	ProtectionRevalidated      bool     `json:"protectionRevalidated"`
+	HistoricalOperationID      string   `json:"historicalOperationId,omitempty"`
+	HistoricalEventName        string   `json:"historicalEventName,omitempty"`
+	HistoricalEventUID         string   `json:"historicalEventUID,omitempty"`
+	HistoricalTickID           string   `json:"historicalTickId,omitempty"`
+	HistoricalJournalSHA256    string   `json:"historicalJournalSHA256,omitempty"`
+	CurrentStateSHA256         string   `json:"currentStateSHA256,omitempty"`
+	CurrentRevision            uint64   `json:"currentRevision,omitempty"`
+	PostAResponseSHA256        string   `json:"postAResponseSHA256,omitempty"`
+	PostBResponseSHA256        string   `json:"postBResponseSHA256,omitempty"`
 	PostAStatus                int      `json:"postAStatus,omitempty"`
 	PostBStatus                int      `json:"postBStatus,omitempty"`
 	PostAExactDenial           bool     `json:"postAExactDenial"`
@@ -128,8 +138,7 @@ func (s *Server) runEndpointLease(record *attackRecord, p endpointLeaseProfile, 
 		return
 	}
 	if len(snap.State.RevokedClientHMACs) > 0 || !endpointLeaseBefore(snap.State, p) {
-		probe.Status = "EXISTING_PROTECTION_OR_DIFFERENT_ROSTER"
-		probe.Issues = append(probe.Issues, "A already revoked or current roster differs; no event or new response credit")
+		s.revalidateEndpointLease(ctx, record, p, snap, journalCM, tokens, kube, privateDir)
 		return
 	}
 	target := snap.Pods[0]
