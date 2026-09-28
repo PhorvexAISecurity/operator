@@ -148,6 +148,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 			ok, why := act.SupportsAction(t.Context(), e.Action, Target{Namespace: "ns", Pod: "p", UID: "target-uid"})
 			// The static row describes handler acceptance. This empty fake client has
 			// no exact Pod, policy, or preinstalled rule source for a live capability.
+			if e.Action == model.ActionRequestDrain && e.Accepted {
+				if ok || !strings.HasPrefix(why, "request-drain-capability:") {
+					t.Fatalf("missing authenticated current drain capability accepted: %s/%s %v %q", backend, e.Action, ok, why)
+				}
+				continue
+			}
 			if e.Action == model.ActionSensitiveOutputPolicyActivate && e.Accepted {
 				if ok || why != "output-policy-pod-read-failed" || e.Prerequisite == "" {
 					t.Fatalf("%s/%s: missing output-policy authority must be an explicit prerequisite refusal: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
