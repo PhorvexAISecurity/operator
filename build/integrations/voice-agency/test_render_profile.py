@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import unittest
 
-from render_profile import ROOT, SOURCE_SHA, CREATOR, canonical, render, sha
+from render_profile import ROOT, SOURCE_SHA, CREATOR, CLIPS, canonical, render, sha
 
 
 def fixture():
@@ -61,6 +61,18 @@ def fixture():
 
 
 class RefundProfileTest(unittest.TestCase):
+    def test_spoken_fixture_copies_and_all_fixed_pins_agree(self):
+        for phase, digest in CLIPS.items():
+            with self.subTest(phase=phase):
+                integration_name = phase.replace("_", "-")
+                integration = (ROOT / "build/integrations/voice-agency/audio" /
+                               (integration_name + ".ulaw")).read_bytes()
+                embedded = (ROOT / "phorvex/internal/console" /
+                            ("voice_agency_" + phase + ".ulaw")).read_bytes()
+                self.assertEqual(integration, embedded)
+                self.assertEqual(sha(integration), digest)
+                self.assertLessEqual(len(integration), 65536)
+
     def test_exact_profile_and_journal_owner_pin(self):
         objects = fixture()
         raw, cm, digest, values = render(*objects)

@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/phorvex/phorvex/internal/voicemcppolicy"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +27,7 @@ const (
 	voiceMCPProfilePath  = "/etc/phorvex-voice-mcp/profile.json"
 	voiceMCPRuleCM       = "voice-mcp-tool-policy"
 	voiceMCPGoodStoreSHA = "a4b965102419d4a81c4fd23cb3c93891f9932b8560b18bcd17f48aea81a337c8"
-	voiceMCPURL          = "http://mcp-server.mcp.svc.cluster.local:8000/mcp/"
+	voiceMCPURL          = voicemcppolicy.InstalledMCPURL
 )
 
 func voiceMCPBotRoute(pod *corev1.Pod) bool {

@@ -112,8 +112,19 @@ create output `rule.json` with an empty `configMapUID` (the app stays unready),
 then use `bind_output_uid.py` against the created ConfigMap's fresh UID and
 resourceVersion to patch only that UID field. Create separate private test
 token Secrets for MCP and output sessions; neither token is an HTTP rule
-mutation credential. The bot starts with `python3 -B /app/bot.py`, and
-`MCP_URL` is fixed to `http://mcp-server.mcp.svc.cluster.local:8000/mcp/`.
+mutation credential. The bot starts with `python3 -B /app/bot.py`.
+The installed `MCP_URL` is fixed to the server's canonical endpoint
+`http://mcp-server.mcp.svc.cluster.local:8000/mcp`. Signed clients refuse redirects;
+the trailing-slash endpoint returns HTTP 307 and cannot supply reviewed tools.
+The legacy `bot.py` default remains unchanged to preserve active source hashes;
+the activated Deployment explicitly overrides it with this canonical URL.
+
+For an existing activation, use `render_mcp_endpoint_migration.py` with a fresh
+Deployment snapshot and its exact UID/resourceVersion. It emits only guarded
+replacement of the existing literal `MCP_URL` environment value. Applying that
+patch rolls the Voice pods while preserving Deployment UID, immutable source,
+native rules, protected journals, Secrets, and all other template fields. Do not
+rerun the full activation renderer to migrate a populated policy epoch.
 
 Run source tests with a Python 3.11 environment containing the installed
 Voice probe's `websockets.asyncio.client` dependency:

@@ -53,6 +53,23 @@ def emit(value):
     print(canonical(value).decode("utf-8"), flush=True)
 
 
+def received_audio(raw, stream):
+    """Validate one received Twilio media frame; control frames carry no audio."""
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("Voice output frame shape differs")
+    if value.get("event") != "media":
+        return None
+    media = value.get("media")
+    if value.get("streamSid") != stream or not isinstance(media, dict) or \
+            not isinstance(media.get("payload"), str):
+        raise ValueError("Voice output media identity differs")
+    audio = base64.b64decode(media["payload"], validate=True)
+    if not audio:
+        raise ValueError("Voice output media payload is empty")
+    return audio
+
+
 def phone(side):
     value = int.from_bytes(hashlib.sha256(f"{run}:{side}".encode()).digest()[:8], "big") % 10000000
     if side == "B" and value == int.from_bytes(hashlib.sha256(f"{run}:A".encode()).digest()[:8], "big") % 10000000:
@@ -188,10 +205,10 @@ elif operation == "session":
     raw = base64.b64decode(payload["audio"], validate=True)
     if not 1 <= len(raw) <= 65536:
         raise RuntimeError("fixed audio exceeds bound")
-    clip_hash = {"attack": "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
-                 "replay": "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
+    clip_hash = {"attack": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
+                 "replay": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
                  "benign": "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630",
-                 "own-control": "8de27463e9c7103cea7a4c8cc5059dc8d81a7810e58bb124d48a851bc8198f35"}[phase]
+                 "own-control": "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2"}[phase]
     if hashlib.sha256(raw).hexdigest() != clip_hash:
         raise RuntimeError("fixed Voice clip bytes differ")
     sid = "CA" + sha(run + ":" + phase)[:32].upper()
@@ -199,7 +216,8 @@ elif operation == "session":
     account = "AC" + sha(run + ":account")[:32].upper()
 
     async def session():
-        received = 0
+        received = audio_frames = audio_bytes = 0
+        audio_digest = hashlib.sha256()
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as client:
             async with client.ws_connect("http://127.0.0.1:8080/ws", timeout=5, max_msg_size=65536,
@@ -213,7 +231,7 @@ elif operation == "session":
                                                               "channels": 1}}})
 
                 async def drain():
-                    nonlocal received
+                    nonlocal received, audio_frames, audio_bytes
                     while True:
                         try:
                             frame = await ws.receive(timeout=0.5)
@@ -224,6 +242,16 @@ elif operation == "session":
                         received += 1
                         if received > 1024 or len(str(frame.data)) > 65536:
                             raise RuntimeError("Voice output frame bound")
+                        if frame.type == aiohttp.WSMsgType.TEXT:
+                            audio = received_audio(frame.data, stream)
+                            if audio is not None:
+                                audio_frames += 1
+                                audio_bytes += len(audio)
+                                if audio_bytes > 1 << 20:
+                                    raise RuntimeError("Voice output audio bound")
+                                audio_digest.update(audio)
+                        elif frame.type == aiohttp.WSMsgType.BINARY:
+                            raise RuntimeError("Voice output media must be Twilio JSON")
 
                 reader = asyncio.create_task(drain())
                 try:
@@ -247,12 +275,13 @@ elif operation == "session":
                         await reader
                     except asyncio.CancelledError:
                         pass
-        return received
+        return received, audio_frames, audio_bytes, audio_digest.hexdigest()
 
-    received = asyncio.run(session())
+    received, audio_frames, audio_bytes, audio_sha = asyncio.run(session())
     emit({"version": 1, "operation": operation, "phase": phase, "runSHA256": sha(run),
           "callSIDHash": sha(sid), "callerSHA256": sha(phones[0]), "clipSHA256": hashlib.sha256(raw).hexdigest(),
           "mediaFrames": (len(raw) + 159) // 160, "receivedFrames": received,
+          "receivedAudioFrames": audio_frames, "receivedAudioBytes": audio_bytes, "receivedAudioSHA256": audio_sha,
           "observedAtUnixMs": int(time.time() * 1000)})
 
 elif operation == "receipts":

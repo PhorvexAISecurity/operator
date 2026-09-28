@@ -63,8 +63,8 @@ class ScopedDescriptorTest(unittest.TestCase):
             async with app.router.lifespan_context(app):
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
                                              base_url="http://localhost", headers=headers,
-                                             trust_env=False, timeout=10.0) as client:
-                    async with streamable_http_client("http://localhost/mcp/", http_client=client) as parts:
+                                             trust_env=False, timeout=10.0, follow_redirects=False) as client:
+                    async with streamable_http_client("http://localhost/mcp", http_client=client) as parts:
                         async with ClientSession(parts[0], parts[1]) as session:
                             await session.initialize()
                             listed = (await session.list_tools()).tools

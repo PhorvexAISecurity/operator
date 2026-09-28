@@ -276,19 +276,18 @@ func (s *Server) runVoiceOutputLive(record *attackRecord, p voiceOutputProfile, 
 	baselineClean = true
 	probe.Cleanup = "pending"
 	first, firstErr := voiceOutputProbe(ctx, target, "session", run, "attack", "", "")
-	firstReceipts, receiptErr := voiceOutputProbe(ctx, target, "receipts", run, "attack", snap.SourceSHA256, "")
-	stored, storedErr := voiceOutputProbe(ctx, target, "transcript", run, "attack", "", "")
-	retained := firstErr == nil && receiptErr == nil && storedErr == nil && voiceAgencySavePhase(privateDir,
+	firstReceipts, stored, receiptErr := voiceOutputPhaseFinalEvidence(ctx, target, run, "attack", snap.SourceSHA256)
+	retained := voiceAgencySavePhase(privateDir,
 		voiceAgencyPrivateEvidence{"first-session.json", first}, voiceAgencyPrivateEvidence{"first-boundary.json", firstReceipts},
 		voiceAgencyPrivateEvidence{"first-transcript.json", stored})
 	observedAt, landed := voiceOutputFirstLoss(first, firstReceipts, stored, run, target.UID, snap.SourceSHA256, markerSHA, snap.Rule.OperationID, snap.Rule.Revision)
-	if !retained {
-		probe.Issues = append(probe.Issues, "first Voice session or independent evidence unavailable; disclosure unresolved; no event emitted")
+	if firstErr != nil || receiptErr != nil || !retained {
+		probe.Issues = append(probe.Issues, "first Voice session or completed guard/audio/transcript evidence unavailable; disclosure unresolved; no event emitted")
 		return
 	}
 	if !landed {
 		probe.Status = "NOT_LANDED"
-		probe.Issues = append(probe.Issues, "actual model disclosure in persisted assistant output not established; no event emitted")
+		probe.Issues = append(probe.Issues, "completed Voice evidence does not establish marker disclosure with persisted assistant output and audio; upstream inference outcome is not recorded; no event emitted")
 		return
 	}
 	if voiceMemorySavePrivate(privateDir, "first-loss.json", map[string]any{"callSIDHash": first.CallSIDHash,
@@ -342,27 +341,35 @@ func (s *Server) runVoiceOutputLive(record *attackRecord, p voiceOutputProfile, 
 	probe.RecoveredAfterPending = !decision.Actuated
 	record.Actuated = true
 	replay, replayErr := voiceOutputProbe(ctx, target, "session", run, "replay", "", "")
-	replayRows, rowsErr := voiceOutputProbe(ctx, target, "receipts", run, "replay", snap.SourceSHA256, "")
-	replayStored, storedErr := voiceOutputProbe(ctx, target, "transcript", run, "replay", "", "")
-	replaySaved := replayErr == nil && rowsErr == nil && storedErr == nil && voiceAgencySavePhase(privateDir,
+	replayRows, replayStored, rowsErr := voiceOutputPhaseFinalEvidence(ctx, target, run, "replay", snap.SourceSHA256)
+	replaySaved := voiceAgencySavePhase(privateDir,
 		voiceAgencyPrivateEvidence{"replay-session.json", replay}, voiceAgencyPrivateEvidence{"replay-boundary.json", replayRows},
 		voiceAgencyPrivateEvidence{"replay-transcript.json", replayStored})
-	probe.RepeatRawModelMarker = replaySaved && voiceOutputRepeatBlocked(replay, replayRows, replayStored,
+	if replayErr != nil || rowsErr != nil || !replaySaved {
+		probe.Status = "UNKNOWN"
+		probe.Issues = append(probe.Issues, "repeat Voice session or completed guard/audio/transcript evidence unavailable; containment unresolved")
+		return
+	}
+	probe.RepeatRawModelMarker = voiceOutputRepeatBlocked(replay, replayRows, replayStored,
 		run, target.UID, snap.SourceSHA256, markerSHA, journal.OperationID, after.Rule.Revision)
 	probe.RepeatOutputBlocked = probe.RepeatRawModelMarker
 	if !probe.RepeatRawModelMarker || !probe.RepeatOutputBlocked {
-		probe.Issues = append(probe.Issues, "repeat raw model marker and output containment not independently established")
+		probe.Issues = append(probe.Issues, "completed repeat guard/audio/transcript evidence, raw model marker and output containment not independently established")
 		return
 	}
 	benign, benignErr := voiceOutputProbe(ctx, target, "session", run, "benign", "", "")
-	benignRows, benignRowsErr := voiceOutputProbe(ctx, target, "receipts", run, "benign", snap.SourceSHA256, "")
-	benignStored, benignStoredErr := voiceOutputProbe(ctx, target, "transcript", run, "benign", "", "")
-	benignSaved := benignErr == nil && benignRowsErr == nil && benignStoredErr == nil && voiceAgencySavePhase(privateDir,
+	benignRows, benignStored, benignRowsErr := voiceOutputPhaseFinalEvidence(ctx, target, run, "benign", snap.SourceSHA256)
+	benignSaved := voiceAgencySavePhase(privateDir,
 		voiceAgencyPrivateEvidence{"benign-session.json", benign}, voiceAgencyPrivateEvidence{"benign-boundary.json", benignRows},
 		voiceAgencyPrivateEvidence{"benign-transcript.json", benignStored})
-	probe.BenignSpeechMaintained = benignSaved && voiceOutputBenignMaintained(benign, benignRows, benignStored, run, target.UID, snap.SourceSHA256, after.Rule.Revision)
+	if benignErr != nil || benignRowsErr != nil || !benignSaved {
+		probe.Status = "UNKNOWN"
+		probe.Issues = append(probe.Issues, "benign Voice session or completed guard/audio/transcript evidence unavailable; speech continuity unresolved")
+		return
+	}
+	probe.BenignSpeechMaintained = voiceOutputBenignMaintained(benign, benignRows, benignStored, run, target.UID, snap.SourceSHA256, after.Rule.Revision)
 	if !probe.BenignSpeechMaintained {
-		probe.Issues = append(probe.Issues, "benign Voice speech or transcript continuity not established")
+		probe.Issues = append(probe.Issues, "completed benign guard/audio/transcript evidence, Voice speech or transcript continuity not established")
 		return
 	}
 	probe.Status, record.Outcome, record.Containment = "DEFENDED", "DEFENDED", "exact-run-owned-output-marker-blocked-before-TTS"

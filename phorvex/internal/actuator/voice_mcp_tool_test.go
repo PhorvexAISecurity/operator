@@ -271,6 +271,13 @@ func TestVoiceMCPNativeRefusesSourceAndReadbackDrift(t *testing.T) {
 	if err := f.client.Get(ctx, client.ObjectKeyFromObject(f.voicePod), voiceCurrent); err != nil {
 		t.Fatal(err)
 	}
+	voiceCurrent.Spec.Containers[0].Env[1].Value = voiceMCPInstalledURL + "/"
+	if err := f.client.Update(ctx, voiceCurrent); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := (voiceMCPHandler{}).Enact(ctx, f.ec, f.req); err == nil || result.Emitted {
+		t.Fatalf("redirecting legacy MCP URL admitted: %+v %v", result, err)
+	}
 	voiceCurrent.Spec.Containers[0].Env[1].Value = "http://unreviewed.mcp.svc.cluster.local:8000/mcp/"
 	if err := f.client.Update(ctx, voiceCurrent); err != nil {
 		t.Fatal(err)

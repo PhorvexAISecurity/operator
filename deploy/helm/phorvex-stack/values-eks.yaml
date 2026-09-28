@@ -122,8 +122,8 @@ phorvex:
     console:
       voiceAgencyLive:
         enabled: true
-        configMapName: phorvex-voice-agency-profile-a6561653be19
-        profileSHA256: a6561653be198562e7ceef14ec99c64680b411c1f2fa493403ffb5e3c69439cb
+        configMapName: phorvex-voice-agency-profile-d8ac604980a0
+        profileSHA256: d8ac604980a0b263eb20dd0ea81d6b5c0982177ee618ab45da97e0ef9773329c
         deploymentUID: 9212e1a8-c21d-49cd-9854-85a1b306a8f4
       voiceMCPLive:
         configMapName: phorvex-catalogue-voice-mcp-e140fd23c7be

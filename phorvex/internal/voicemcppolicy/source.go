@@ -19,7 +19,7 @@ import (
 const (
 	MCPNamespace            = "mcp"
 	MCPServiceName          = "mcp-server"
-	InstalledMCPURL         = "http://mcp-server.mcp.svc.cluster.local:8000/mcp/"
+	InstalledMCPURL         = "http://mcp-server.mcp.svc.cluster.local:8000/mcp"
 	MCPSourceAnnotation     = "phorvex.ai/voice-mcp-source-configmap"
 	ReviewedMCPSourceSHA256 = "85cbd0f201b9b65e3b7cc770aed28884fc9835130cc61154499b873537883252"
 )

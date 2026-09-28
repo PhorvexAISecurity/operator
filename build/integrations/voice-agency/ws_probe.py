@@ -20,10 +20,10 @@ from websockets.asyncio.client import connect
 
 AUDIO = Path(__file__).resolve().parent / "audio"
 CLIP_SHA = {
-    "attack": "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
-    "replay": "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
+    "attack": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
+    "replay": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
     "benign": "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630",
-    "own-control": "8de27463e9c7103cea7a4c8cc5059dc8d81a7810e58bb124d48a851bc8198f35",
+    "own-control": "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2",
 }
 
 
@@ -67,16 +67,34 @@ def clip(phase: str) -> bytes:
     return data
 
 
+def received_audio(raw, stream):
+    """Validate one received Twilio media frame; control frames carry no audio."""
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("Voice output frame shape differs")
+    if value.get("event") != "media":
+        return None
+    media = value.get("media")
+    if value.get("streamSid") != stream or not isinstance(media, dict) or \
+            not isinstance(media.get("payload"), str):
+        raise ValueError("Voice output media identity differs")
+    audio = base64.b64decode(media["payload"], validate=True)
+    if not audio:
+        raise ValueError("Voice output media payload is empty")
+    return audio
+
+
 async def run_probe(url: str, run: str, phase: str, *, connector=connect) -> dict:
     checked_url(url)
     stream, call = identity(run, phase)
     caller, _ = agency_phones(run)
     account = account_identity(run)
     data = clip(phase)
-    received = 0
+    received = audio_frames = audio_bytes = 0
+    audio_digest = hashlib.sha256()
 
     async def drain(ws) -> None:
-        nonlocal received
+        nonlocal received, audio_frames, audio_bytes
         while True:
             try:
                 frame = await asyncio.wait_for(ws.recv(), timeout=0.5)
@@ -87,6 +105,15 @@ async def run_probe(url: str, run: str, phase: str, *, connector=connect) -> dic
             received += 1
             if received > 1024 or len(frame) > 65536:
                 raise ValueError("Voice output exceeded fixed frame bound")
+            if not isinstance(frame, str):
+                raise ValueError("Voice output media must be Twilio JSON")
+            audio = received_audio(frame, stream)
+            if audio is not None:
+                audio_frames += 1
+                audio_bytes += len(audio)
+                if audio_bytes > 1 << 20:
+                    raise ValueError("Voice output audio bound")
+                audio_digest.update(audio)
 
     async with asyncio.timeout(10):
         async with connector(url, open_timeout=2, close_timeout=1, max_size=65536, max_queue=8,
@@ -122,7 +149,8 @@ async def run_probe(url: str, run: str, phase: str, *, connector=connect) -> dic
                     pass
     return {"schema": 1, "phase": phase, "run": run, "callSid": call, "streamSid": stream,
             "caller": caller, "clipSHA256": CLIP_SHA[phase], "mediaFrames": (len(data) + 159) // 160,
-            "receivedFrames": received, "note": "transport only; inspect exact CRM state for any tool effect"}
+            "receivedFrames": received, "receivedAudioFrames": audio_frames,
+            "receivedAudioBytes": audio_bytes, "receivedAudioSHA256": audio_digest.hexdigest(), "note": "transport only; inspect exact CRM state for any tool effect"}
 
 
 def main() -> None:

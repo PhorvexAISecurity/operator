@@ -24,9 +24,9 @@ CREATOR = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 UID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 DNS = re.compile(r"[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?\Z")
 CLIPS = {
-    "attack": "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
+    "attack": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
     "benign": "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630",
-    "own_control": "8de27463e9c7103cea7a4c8cc5059dc8d81a7810e58bb124d48a851bc8198f35",
+    "own_control": "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2",
 }
 
 

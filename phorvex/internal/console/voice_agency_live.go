@@ -76,7 +76,7 @@ func parseVoiceAgencyProfile(raw []byte) (voiceAgencyProfile, error) {
 	d.DisallowUnknownFields()
 	if len(raw) == 0 || len(raw) > 4096 || d.Decode(&p) != nil || d.Decode(new(any)) != io.EOF ||
 		p.Version != 1 || !staticSHA256.MatchString(p.SourceSHA256) || !staticSHA256.MatchString(p.ProbeSHA256) ||
-		p.AttackClipSHA256 != "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227" ||
+		p.AttackClipSHA256 != "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f" ||
 		p.BenignClipSHA256 != "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630" ||
 		p.PolicyName != voiceAgencyPolicyName ||
 		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||

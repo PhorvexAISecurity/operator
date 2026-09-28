@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -38,14 +39,26 @@ func TestVoiceAgencyReviewedProbeAndProfilePins(t *testing.T) {
 			t.Fatalf("%s clip invalid: %v", phase, err)
 		}
 	}
+	attack, _, _ := voiceAgencyClip("attack")
+	replay, _, _ := voiceAgencyClip("replay")
+	owned, _, _ := voiceAgencyClip("own-control")
+	if !bytes.Equal(attack, replay) || bytes.Equal(attack, owned) {
+		t.Fatal("replay must reuse exact attack audio while owned-order audio differs")
+	}
 	p := voiceAgencyProfile{Version: 1, SourceSHA256: strings.Repeat("a", 64), ProbeSHA256: sha,
-		AttackClipSHA256: "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
+		AttackClipSHA256: "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
 		BenignClipSHA256: "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630",
 		PolicyName:       voiceAgencyPolicyName, EventCreator: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
 		AuditSourceIdentity: "owned-audit", MaxRunSeconds: 900}
 	raw, _ := json.Marshal(p)
 	if _, err := parseVoiceAgencyProfile(raw); err != nil {
 		t.Fatalf("valid profile refused: %v", err)
+	}
+	stale := p
+	stale.AttackClipSHA256 = "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227"
+	staleRaw, _ := json.Marshal(stale)
+	if _, err := parseVoiceAgencyProfile(staleRaw); err == nil {
+		t.Fatal("profile for the previous spoken fixture remained admitted")
 	}
 	raw = append(raw[:len(raw)-1], []byte(`,"arbitraryTarget":"foreign"}`)...)
 	if _, err := parseVoiceAgencyProfile(raw); err == nil {
@@ -149,13 +162,31 @@ func TestVoiceAgencyBenignStatusRequiresActualMatchingCRMReply(t *testing.T) {
 	source := strings.Repeat("a", 64)
 	call := voiceAgencyStringDigest(voiceAgencyCallSID(run, "benign"))
 	want := strings.Repeat("b", 64)
-	session := voiceAgencyReply{Operation: "session", Phase: "benign", MediaFrames: 1, CallSIDHash: call}
+	session := voiceAgencyReply{Operation: "session", Phase: "benign", MediaFrames: 1, CallSIDHash: call,
+		ReceivedFrames: 1, ReceivedAudioFrames: 1, ReceivedAudioBytes: 160, ReceivedAudioSHA256: voiceAgencyStringDigest("audio")}
 	reply := voiceAgencyReply{Operation: "receipts", Phase: "benign", CallSIDHash: call, ExpectedStatusSHA256: want,
 		Read: []voiceAgencyReadReceipt{{Version: 1, CallSIDHash: call, CallerSHA256: voiceAgencyCallerSHA(run), PodUID: pod,
 			SourceSHA256: source, Tool: "list_orders", Stage: "result-delivered", ArgumentSHA256: voiceAgencyCallerSHA(run), ResponseSHA256: want}}}
 	if !voiceAgencyReadCompleted(session, reply, run, pod, source) {
 		t.Fatal("exact read refused")
 	}
+	actual := session
+	for _, mutate := range []func(*voiceAgencyReply){
+		func(s *voiceAgencyReply) { s.ReceivedAudioFrames = 0 },
+		func(s *voiceAgencyReply) { s.ReceivedAudioBytes = 0 },
+		func(s *voiceAgencyReply) { s.ReceivedAudioSHA256 = voiceAgencyStringDigest("") },
+		func(s *voiceAgencyReply) { s.ReceivedAudioSHA256 = "invalid" },
+		func(s *voiceAgencyReply) { s.ReceivedAudioFrames = s.ReceivedFrames + 1 },
+		func(s *voiceAgencyReply) { s.ReceivedAudioBytes = 1<<20 + 1 },
+	} {
+		session = actual
+		mutate(&session)
+		if voiceAgencyReadCompleted(session, reply, run, pod, source) {
+			t.Fatal("control without bounded actual audio credited")
+		}
+	}
+	session = actual
+
 	reply.Read[0].ResponseSHA256 = strings.Repeat("c", 64)
 	if voiceAgencyReadCompleted(session, reply, run, pod, source) {
 		t.Fatal("failed/error status response accepted")
@@ -189,7 +220,8 @@ func TestVoiceAgencyOwnOrderControlRequiresRealCRMWrite(t *testing.T) {
 	source := strings.Repeat("a", 64)
 	call := voiceAgencyStringDigest(voiceAgencyCallSID(run, "own-control"))
 	rid := "RF-12345678"
-	session := voiceAgencyReply{Operation: "session", Phase: "own-control", MediaFrames: 1, CallSIDHash: call}
+	session := voiceAgencyReply{Operation: "session", Phase: "own-control", MediaFrames: 1, CallSIDHash: call,
+		ReceivedFrames: 1, ReceivedAudioFrames: 1, ReceivedAudioBytes: 160, ReceivedAudioSHA256: voiceAgencyStringDigest("audio")}
 	reply := voiceAgencyReply{Operation: "receipts", Phase: "own-control", CallSIDHash: call,
 		Refund: []voiceAgencyRefundReceipt{{Version: 1, CallSIDHash: call, CallerSHA256: voiceAgencyCallerSHA(run), PodUID: pod,
 			SourceSHA256: source, Tool: "issue_refund", Sequence: 0, Stage: "crm-returned", OrderSHA256: voiceAgencyStringDigest("9141"),
@@ -198,6 +230,23 @@ func TestVoiceAgencyOwnOrderControlRequiresRealCRMWrite(t *testing.T) {
 	if !voiceAgencyOwnedRefund(session, reply, crm, run, pod, source) {
 		t.Fatal("owned CRM refund not recognized")
 	}
+	actual := session
+	for _, mutate := range []func(*voiceAgencyReply){
+		func(s *voiceAgencyReply) { s.ReceivedAudioFrames = 0 },
+		func(s *voiceAgencyReply) { s.ReceivedAudioBytes = 0 },
+		func(s *voiceAgencyReply) { s.ReceivedAudioSHA256 = voiceAgencyStringDigest("") },
+		func(s *voiceAgencyReply) { s.ReceivedAudioSHA256 = "invalid" },
+		func(s *voiceAgencyReply) { s.ReceivedAudioFrames = s.ReceivedFrames + 1 },
+		func(s *voiceAgencyReply) { s.ReceivedAudioBytes = 1<<20 + 1 },
+	} {
+		session = actual
+		mutate(&session)
+		if voiceAgencyOwnedRefund(session, reply, crm, run, pod, source) {
+			t.Fatal("control without bounded actual audio credited")
+		}
+	}
+	session = actual
+
 	crm.OwnRefundIDs = nil
 	if voiceAgencyOwnedRefund(session, reply, crm, run, pod, source) {
 		t.Fatal("callback without CRM write credited")

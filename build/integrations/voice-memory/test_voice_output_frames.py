@@ -3,12 +3,13 @@
 import ast
 import asyncio
 import hashlib
+import json
 import pathlib
 import tempfile
 import unittest
 
 from voice_output_policy import (VoiceOutputPolicy, UtteranceGate, UNAVAILABLE_ANSWER,
-                                 canonical_bytes, marker_for_run)
+                                 canonical_bytes, marker_for_run, write_private_receipt)
 
 
 class Frame:
@@ -103,6 +104,26 @@ class ActualFrameGuardTests(unittest.TestCase):
 
     def step(self, guard, frame):
         asyncio.run(guard.process_frame(frame, FrameDirection.DOWNSTREAM))
+
+    def test_actual_audio_receipt_exists_only_after_final_retention(self):
+        # The console must wait across this real producer boundary: guard output
+        # can be complete while the teardown-only final audio receipt is absent.
+        self.ns["write_private_receipt"] = write_private_receipt
+        call_sid = "CA" + "A" * 32
+        guard, audio = self.Guard(call_sid, True), self.AudioTap(call_sid, True)
+        self.step(guard, LLMFullResponseStartFrame())
+        self.step(guard, TextFrame("The public status is available."))
+        self.step(guard, LLMFullResponseEndFrame())
+        state = self.policy.state_dir
+        prefix = "output-" + hashlib.sha256(call_sid.encode()).hexdigest()
+        self.assertTrue((state / (prefix + "-0-guard.json")).exists())
+        audio_path = state / (prefix + "-0-audio.json")
+        asyncio.run(audio.process_frame(TTSAudioRawFrame(b"real-test-audio"), FrameDirection.DOWNSTREAM))
+        self.assertFalse(audio_path.exists())
+        self.assertTrue(audio.retain())
+        receipt = json.loads(audio_path.read_bytes())
+        self.assertEqual(receipt["audioFrames"], 1)
+        self.assertEqual(receipt["audioSHA256"], hashlib.sha256(b"real-test-audio").hexdigest())
 
     def test_split_marker_is_never_forwarded_to_tts_when_active(self):
         run = "a1b2c3d4e5f60708"

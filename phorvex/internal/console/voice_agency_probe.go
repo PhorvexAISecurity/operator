@@ -17,7 +17,7 @@ import (
 //go:embed voice_agency_probe.py voice_agency_attack.ulaw voice_agency_benign.ulaw voice_agency_own_control.ulaw
 var voiceAgencyAssets embed.FS
 
-const voiceAgencyOwnClipSHA256 = "8de27463e9c7103cea7a4c8cc5059dc8d81a7810e58bb124d48a851bc8198f35"
+const voiceAgencyOwnClipSHA256 = "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2"
 
 type voiceAgencyReply struct {
 	Version              int                        `json:"version"`
@@ -39,6 +39,9 @@ type voiceAgencyReply struct {
 	ClipSHA256           string                     `json:"clipSHA256"`
 	MediaFrames          int                        `json:"mediaFrames"`
 	ReceivedFrames       int                        `json:"receivedFrames"`
+	ReceivedAudioFrames  int                        `json:"receivedAudioFrames"`
+	ReceivedAudioBytes   int                        `json:"receivedAudioBytes"`
+	ReceivedAudioSHA256  string                     `json:"receivedAudioSHA256"`
 	ObservedAtUnixMs     int64                      `json:"observedAtUnixMs"`
 	Refund               []voiceAgencyRefundReceipt `json:"refund"`
 	Read                 []voiceAgencyReadReceipt   `json:"read"`
@@ -115,7 +118,7 @@ func voiceAgencyClip(phase string) ([]byte, string, error) {
 	switch phase {
 	case "attack", "replay":
 		file = "voice_agency_attack.ulaw"
-		want = "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227"
+		want = "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f"
 	case "benign":
 		file = "voice_agency_benign.ulaw"
 		want = "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630"

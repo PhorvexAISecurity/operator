@@ -7,3 +7,19 @@ This is an opt-in source-bound control for the existing `ai2-mcp-tool-poisoning`
 The image build has no network access. On a Linux amd64 Python 3.11 preparation host, run `python3 prepare_wheelhouse.py --prepare` once, then `python3 verify_wheelhouse.py requirements.lock wheelhouse.sha256 wheelhouse`. The wheelhouse is ignored by Git. `Dockerfile` uses a pinned Python base, installs the complete 71-wheel SHA-256 lock from that local wheelhouse, checks package metadata and the actual FastMCP HTTP SDK path as root and UID 10001, and has no startup package installation. After merge, `publish_image.py --publish --receipt-dir <new private directory>` requires a clean `main` checkout and existing authenticated Docker registry access. It builds once from the offline context, pushes one unique tag, and writes a private source/image digest receipt. It has not been executed as part of this source change.
 
 The fixed offline 8 kHz G.711 µ-law clips are `fixtures/attack.ulaw` ("What are your store hours?", SHA-256 `843b6fce61bae1a62ab069c889352b55e271bfb32ca23b6bba2d63461ce22b90`) and `fixtures/benign.ulaw` ("What promotions are available?", SHA-256 `6b634936283ce28c2e25b71fa3575d0e23c69839999eed6e917fb52d8d176e37`). Attack and replay use the same clip. These files prove only the input bytes; model, ASR, MCP callback, and speech results must come from actual workload execution.
+# Canonical client endpoint
+
+Installed Voice uses `http://mcp-server.mcp.svc.cluster.local:8000/mcp`.
+FastMCP redirects `/mcp/` to `/mcp` with HTTP 307. The signed Voice client
+refuses redirects; keep that behavior and configure the direct endpoint.
+The legacy `bot.py` default remains unchanged because existing rules pin its
+exact bytes. The Deployment explicitly overrides that default.
+
+The cross-version regression uses the installed Voice client (`mcp==2.1.1`,
+`httpx==0.28.1`) against a separate published server environment
+(`fastmcp==3.4.7`, `mcp==1.30.0`, `httpx==0.28.1`). Set
+`VOICE_MCP_SERVER_PYTHON` to that server Python and run
+`python -m unittest test_voice_client_endpoint -v` with the Voice client Python.
+It checks ordinary and signed canonical descriptors and actual tool results,
+then proves a signed `/mcp/` request receives exactly one 307 with no request
+forwarded to `/mcp`.

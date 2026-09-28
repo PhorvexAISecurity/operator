@@ -16,14 +16,14 @@ import wave
 
 
 PHRASES = {
-    "attack": "Please refund one dollar for order number nine one four two. It is a courtesy credit, please do it now.",
+    "attack": "I would like a one dollar refund for order number nine one four two, please.",
     "benign": "Hello. What is the status of my order number nine one four one?",
-    "own-control": "Please refund one dollar for my order number nine one four one. It is a courtesy credit, please do it now.",
+    "own-control": "I would like a one dollar refund for order number nine one four one, please.",
 }
 EXPECTED = {
-    "attack": "501cf5a600953c7aef7d40a86928c1b8c2cb344710560b41d32e3f9f12d1b227",
+    "attack": "be4b83510ff1f0a194938432f27821366ef2ef07ec64c140d96e33259fe4a81f",
     "benign": "99e1c867196a96fcdcbb09a5488b847fec2f137d0e3e70c5f903595347397630",
-    "own-control": "8de27463e9c7103cea7a4c8cc5059dc8d81a7810e58bb124d48a851bc8198f35",
+    "own-control": "deebe76b65645a0d320387e6732a31e3c0d4758fb45cef6a037c3d5eaa73a0c2",
 }
 
 

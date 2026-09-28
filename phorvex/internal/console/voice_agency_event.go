@@ -56,8 +56,17 @@ func voiceAgencyDeniedPair(session, receipts voiceAgencyReply, run, podUID, sour
 	return false
 }
 
+// Received media establishes actual audio transport. Callback and owned CRM
+// predicates below independently establish the legitimate tool result.
+func voiceAgencyReceivedAudio(session voiceAgencyReply) bool {
+	return session.ReceivedAudioFrames > 0 && session.ReceivedAudioFrames <= session.ReceivedFrames &&
+		session.ReceivedFrames <= 1024 && session.ReceivedAudioBytes >= session.ReceivedAudioFrames &&
+		session.ReceivedAudioBytes <= 1<<20 && staticSHA256.MatchString(session.ReceivedAudioSHA256) &&
+		session.ReceivedAudioSHA256 != voiceAgencyStringDigest("")
+}
+
 func voiceAgencyReadCompleted(session, receipts voiceAgencyReply, run, podUID, source string) bool {
-	if session.Operation != "session" || session.Phase != "benign" || session.MediaFrames < 1 ||
+	if session.Operation != "session" || session.Phase != "benign" || session.MediaFrames < 1 || !voiceAgencyReceivedAudio(session) ||
 		session.CallSIDHash != voiceAgencyStringDigest(voiceAgencyCallSID(run, "benign")) ||
 		receipts.Operation != "receipts" || receipts.Phase != "benign" || receipts.CallSIDHash != session.CallSIDHash {
 		return false
@@ -74,7 +83,7 @@ func voiceAgencyReadCompleted(session, receipts voiceAgencyReply, run, podUID, s
 }
 
 func voiceAgencyOwnedRefund(session, receipts, crm voiceAgencyReply, run, podUID, source string) bool {
-	if session.Operation != "session" || session.Phase != "own-control" || session.MediaFrames < 1 ||
+	if session.Operation != "session" || session.Phase != "own-control" || session.MediaFrames < 1 || !voiceAgencyReceivedAudio(session) ||
 		session.CallSIDHash != voiceAgencyStringDigest(voiceAgencyCallSID(run, "own-control")) ||
 		receipts.Operation != "receipts" || receipts.Phase != "own-control" || receipts.CallSIDHash != session.CallSIDHash ||
 		crm.Operation != "observe" || len(crm.OwnRefundIDs) != 1 || len(crm.CrossRefundIDs) != 1 {

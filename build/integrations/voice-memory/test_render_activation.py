@@ -154,7 +154,7 @@ class RenderVoiceMemoryActivationTest(unittest.TestCase):
         volumes = {volume["name"]: volume for volume in template["spec"]["volumes"]}
         self.assertEqual(volumes["voice-mcp-rule"]["configMap"], {"name": "voice-mcp-tool-policy"})
         self.assertEqual(volumes["voice-output-rule"]["configMap"], {"name": "voice-output-policy"})
-        self.assertIn({"name": "MCP_URL", "value": "http://mcp-server.mcp.svc.cluster.local:8000/mcp/"},
+        self.assertIn({"name": "MCP_URL", "value": "http://mcp-server.mcp.svc.cluster.local:8000/mcp"},
                       bot["env"])
         bootstrap = objects["output-policy-bootstrap-configmap.json"]
         self.assertEqual(json.loads(bootstrap["data"]["rule.json"])["configMapUID"], "")
