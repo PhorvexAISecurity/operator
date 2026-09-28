@@ -96,6 +96,13 @@ phorvex:
       approvedSourceSHA256: 322595a608b2384f2ed6994886416838fc4e1d1c45c9dadbf1c00f04a5f52691
       approvedProxyImage: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:91cd4812dcb808d0498ddd0f7f768d64c34e86d05229cec25250abdd1402db32
       approvedEngineImage: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:5f80f90be83db84932e1bf70b8fe12ecc3d4f48ffc7b1131003707d8862bdb51
+    # LiteLLM Live client revoke (installed 2026-09-28 with
+    # build/test-harness/fixtures/litellm-live/install.sh). Grants the manager get/update on
+    # litellm/phorvex-litellm-client-policy only, and mounts the gateway status token for the
+    # exact-Pod readback. Needs the named verbs from #411 before litellm-defense enables the action.
+    litellmClientRevoke:
+      enabled: true
+      statusSecret: phorvex-litellm-status-token
     # PHVX-9b requires every NaN-cost veto to be visible. The live EKS cluster
     # already runs kube-prometheus-stack, so render the dedicated rule here.
     costNaNAlert:
@@ -142,6 +149,17 @@ phorvex:
         enabled: true
         configMapName: phorvex-voice-output-profile-742557bfdee0
         profileSHA256: 742557bfdee0973e96174c9aa4078d6f1cc03ed971aa4c7ae953c4b22fef800a
+      # LiteLLM Live (ai2-unbounded-consumption, ai2-query-extraction). The profile ConfigMap,
+      # trial-seed and status-token Secrets were created out of band by install.sh prepare;
+      # the gateway sidecar serves the litellm Service on 4001 since install.sh switch.
+      litellmLive:
+        enabled: true
+        configMapName: phorvex-litellm-live-profile-7ca969928785
+        profileSHA256: 7ca969928785e68e4959b99605b34d5666e34f239ce300a031fe438b619553cc
+        sourceConfigMapName: phorvex-litellm-admission-gateway-4bf046ce690c
+        seedSecret: phorvex-litellm-trial-seed
+        statusSecret: phorvex-litellm-status-token
+        journalName: phorvex-litellm-revoke-journal
       endpointLease:
         callerSecretName: vllm-endpoint-lease-callers
         configMapName: phorvex-catalogue-endpoint-lease-de895d667c93
