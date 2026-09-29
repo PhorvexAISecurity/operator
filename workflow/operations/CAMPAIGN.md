@@ -1,5 +1,9 @@
 # Run a full-system live campaign
 
+For workload-derived red-team design, Console Live promotion, and the original
+22-item continuation map, start with [LIVE-CATALOGUE.md](LIVE-CATALOGUE.md).
+It explains the case/evidence contract; this runbook still governs campaign state.
+
 A request to test Phorvex or the dev cluster authorizes campaign planning and
 read-only preflight; the user need not use the word “campaign.” A broad live
 attack phase still requires its explicit bounded scope. It is
