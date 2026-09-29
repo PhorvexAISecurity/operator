@@ -587,12 +587,19 @@ func voiceMemoryExactActuation(decision voiceMemoryDecision, before, after voice
 	return err == nil && string(after.Rule.Bytes()) == string(want.Bytes())
 }
 
+// voiceMemoryPostDecisionWait bounds how long a run waits for the selected rule to be read back
+// on every serving Pod after the manager applied it.
+const voiceMemoryPostDecisionWait = 150 * time.Second
+
 func (s *Server) waitVoiceMemoryPostSnapshot(ctx context.Context, before voiceMemorySnapshot, decision voiceMemoryDecision,
 	eventUID, caller, digest string) (voiceMemorySnapshot, error) {
 	if decision.Action != string(model.ActionVoiceMemoryNoteRevoke) || !decision.Selected || !decision.Actuated {
 		return s.voiceMemorySnapshot(ctx)
 	}
-	deadline := time.NewTimer(30 * time.Second)
+	// The manager now reports the revoke as soon as the rule is written (#415), before every
+	// serving Pod has read it back. The kubelet refreshes ConfigMap volumes on its own sync
+	// cadence, often 60 s or more, so a 30 s wait turned applied defenses into LANDED verdicts.
+	deadline := time.NewTimer(voiceMemoryPostDecisionWait)
 	defer deadline.Stop()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
