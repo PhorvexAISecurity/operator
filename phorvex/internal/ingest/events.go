@@ -149,6 +149,12 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			resolved = append(resolved, key)
 		}
 		base.ResolvedTargets = resolved
+		namespaces := make([]string, 0, len(resolved))
+		for _, key := range resolved {
+			ns, _, _ := strings.Cut(key, "/")
+			namespaces = append(namespaces, ns)
+		}
+		metrics.RecordSecurityEventFirstSeen(string(se.UID), trust, namespaces)
 		if boundUID, bound := se.Annotations[ConsoleTargetPodUIDAnnotation]; bound {
 			base.ConsoleTargetPodUID = boundUID
 			switch {

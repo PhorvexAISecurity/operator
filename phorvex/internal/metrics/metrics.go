@@ -159,6 +159,14 @@ var (
 		Name: "phorvex_security_events_total",
 		Help: "Ingested SecurityEvents by trust verdict on the admission-stamped creator identity (M-94): trusted | self | unstamped | untrusted-identity | no-allowlist | target-unresolved.",
 	}, []string{"trust"})
+	// securityEventsTotal counts an event on every tick that lists it, and the per-pod risk
+	// gauge usually returns to 0 before a 30s scrape sees an event consumed in one 10s tick.
+	// This counter answers "was this namespace attacked": once per event UID, never from a
+	// proactive move.
+	securityEventsFirstSeen = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_security_events_first_seen_total",
+		Help: "Distinct SecurityEvents by target namespace and trust verdict, counted once per event UID when first ingested; Phorvex's own emitted events are excluded.",
+	}, []string{"namespace", "trust"})
 	sloGateSkippedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_slo_gate_skipped_total",
 		Help: "SLO gate skipped because latency headroom was not a usable measurement (skip+count, never block).",
@@ -237,7 +245,7 @@ func init() {
 		actuationConfirmations, maintenanceAttempts, ticksTotal, tickOutcomes, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration, managerTickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
-		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
+		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal, securityEventsFirstSeen,
 		candidatesExcludedTotal, candidatesRBACUnknownTotal, actuationCircuitCollector{},
 	)
 }
@@ -396,6 +404,47 @@ func RecordSecurityEvent(trust string) {
 	securityEventsTotal.WithLabelValues(trust).Inc()
 }
 
+// maxSeenEventUIDs bounds the first-seen memory. An evicted UID that is still listed is
+// counted once more, as is every live event after a manager restart.
+const maxSeenEventUIDs = 4096
+
+var seenEvents = struct {
+	sync.Mutex
+	set   map[string]struct{}
+	order []string
+}{set: map[string]struct{}{}}
+
+// RecordSecurityEventFirstSeen counts one SecurityEvent the first time its UID is ingested,
+// once per distinct target namespace ("" when no target names one). Later ticks that list
+// the same event do not count it again.
+func RecordSecurityEventFirstSeen(uid, trust string, namespaces []string) {
+	if uid == "" {
+		return
+	}
+	seenEvents.Lock()
+	if _, seen := seenEvents.set[uid]; seen {
+		seenEvents.Unlock()
+		return
+	}
+	seenEvents.set[uid] = struct{}{}
+	seenEvents.order = append(seenEvents.order, uid)
+	if len(seenEvents.order) > maxSeenEventUIDs {
+		delete(seenEvents.set, seenEvents.order[0])
+		seenEvents.order = seenEvents.order[1:]
+	}
+	seenEvents.Unlock()
+	if len(namespaces) == 0 {
+		namespaces = []string{""}
+	}
+	counted := map[string]bool{}
+	for _, ns := range namespaces {
+		if !counted[ns] {
+			counted[ns] = true
+			securityEventsFirstSeen.WithLabelValues(ns, trust).Inc()
+		}
+	}
+}
+
 // RecordSLOGateSkipped counts an SLO gate skipped because latency headroom was not a usable
 // measurement (T1-C P-NO-FREEZE): absence skips-and-counts, never blocks. reason = absent|stale|error.
 func RecordSLOGateSkipped(tenant, reason string) {
@@ -532,6 +581,9 @@ func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decisi
 	RefreshOwnerPodSeries(tenant, uid)
 	publishTickEnvelope(tenant, policy, len(decisions), durSeconds, TickCompleted)
 	selectedPods.WithLabelValues(tenant).Set(float64(selected))
+	// Expose the policy namespace's trusted first-seen series at 0, so increase() also sees
+	// the first event after a restart instead of a series that starts at 1.
+	securityEventsFirstSeen.WithLabelValues(namespace, "trusted")
 
 	for _, d := range decisions {
 		// Keep the legacy Prometheus metric stable while the versioned Decision/audit

@@ -30,6 +30,23 @@ label and the Grafana sidecar stops loading the dashboard (this happened once on
 `helm upgrade` of `kube-prom-stack`, pass `additional-scrape-configs.yaml` as
 `additionalScrapeConfigs` or the vllm job reverts.
 
+## 2026-09-30 changes
+
+- **"Apps attacked" no longer counts proactive moves.** The candidate-coverage gauge
+  (`phorvex_pod_risk_score`) rises whenever the brain covers exposure, attack or not. With no
+  event at all, vLLM's value reached 3.8 every 20–40 minutes on 2026-09-29 (31 episodes in 12
+  hours), each time with a proactive kv-reset or request-drain. The 15-minute window therefore
+  showed vllm as attacked most of the day. Voice and LiteLLM showed the opposite: their event is
+  consumed within one 10 s manager tick, so the value was back at 0 before the 30 s scrape. In the
+  latest defended Voice-memory and LiteLLM runs Prometheus recorded 0 for the whole window, even
+  though the actuation counter moved.
+- The manager now exports `phorvex_security_events_first_seen_total{namespace,trust}`, counted
+  once per SecurityEvent UID when first ingested (Phorvex's own events excluded). It is pre-created
+  at 0 for each policy namespace. "Apps attacked" and "Apps under attack" use
+  `increase(...{trust="trusted"}[15m])`. A counter cannot be missed between scrapes, and it counts
+  only real events. The coverage panel stays, retitled to say it includes proactive moves. Needs a
+  manager image with this counter; before that the two stats read 0.
+
 ## 2026-09-29 changes
 
 - **vllm scrape job — still down.** It kept container port 8000, the guardrail boundary, which answers
