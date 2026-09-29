@@ -157,25 +157,6 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     finally { if (request === generation.current) setFiring(""); }
   };
 
-  const clearAttack = async (a: CompatEntry) => {
-    const route = liveAttackRoute(a, app, true);
-    if (!route) { setErr("Clear is available only for the foothold workload attack."); return; }
-    if (!canMutateApp || !a.armed || !compat?.live.some((entry) => entry.id === a.id && entry.endpoint === a.endpoint && entry.compatible && entry.armed)) {
-      setErr("Clear refused because the operator lens, default context, selected app, or current compatibility no longer matches this control.");
-      return;
-    }
-    cancelPending();
-    clearLiveSelection(lens, sel.context);
-    const request = generation.current;
-    setFiring(a.id + ":clear"); setMsg(""); setErr("");
-    try {
-      const r = await dispatchLiveAttack(route, lens);
-      if (request !== generation.current) return;
-      setMsg(r.message || "Cleared.");
-    } catch (e: any) { if (request === generation.current) setErr(String(e.message || e)); }
-    finally { if (request === generation.current) setFiring(""); }
-  };
-
   // Launch a catalogue scenario in the harness sandbox, then poll its run status to a verdict.
   const runScenario = async (c: CatalogCompat) => {
     if (!queryScope.ready || targetQuery.error || workloadQuery.error || lens !== "operator" || !selectedTarget || selectedTarget.id !== targetId || selectedTarget.context !== sel.context || nss?.some((item) => item.namespace === app) !== true || compat?.namespace !== app || !c.compatible) {
@@ -316,13 +297,9 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
                         <Button size="sm" variant={a.armed ? "primary" : "outline"} disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => fire(a)}>
                           {firing === a.id ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> firing…</> : <>Fire</>}
                         </Button>
-                        {!liveAttackRoute(a, app, true) ? (
-                          <span className="inline-flex items-center rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title="Reset is unavailable without durable per-run restoration authority">Reset unavailable</span>
-                        ) : (
-                          <Button size="sm" variant="ghost" disabled={!a.armed || !canMutateApp || firing !== ""} onClick={() => clearAttack(a)}>
-                            {firing === a.id + ":clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Clear</>}
-                          </Button>
-                        )}
+                        {/* Manual clear is refused server-side (no exact per-run restoration authority);
+                            the console's sweeper deletes injected attack events after ~5 minutes. */}
+                        <span className="inline-flex items-center rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title="The console refuses manual clears without exact per-run restoration authority; the injected attack event is removed automatically about 5 minutes after it was fired.">Auto-clears in ~5 min</span>
                       </span>
                     </div>
                     <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>
