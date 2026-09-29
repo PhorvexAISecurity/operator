@@ -28,6 +28,9 @@ canonical:
   current_release: releases/CURRENT.yaml
   attack_catalogue: attacks/catalogue.yaml
   attack_runbook: attacks/README.md
+  live_catalogue_runbook: operations/LIVE-CATALOGUE.md
+  live_catalogue_handoff: campaigns/2026-09-23-catalogue-coverage/HANDOFF-20260929.md
+  original_22_catalogue_map: campaigns/2026-09-23-catalogue-coverage/EXISTING-22-INDEX.md
   campaigns: campaigns
   coordination: coordination
   schemas: schemas
@@ -41,6 +44,7 @@ operations:
   issue: operations/ISSUE.md
   sync: operations/SYNC.md
   campaign: operations/CAMPAIGN.md
+  live_catalogue: operations/LIVE-CATALOGUE.md
   assessment: operations/ASSESSMENT.md
   audit: operations/AUDIT.md
   triage: operations/TRIAGE.md

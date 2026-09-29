@@ -3,6 +3,11 @@
 One catalogue, two consumers: scoped fix L3 and campaign rounds. Results and
 findings stay in those existing records; this directory is not another backlog.
 
+For designing new workload-derived cases or promoting a scenario into Console
+Live attacks, use the [live catalogue runbook](../operations/LIVE-CATALOGUE.md).
+The [original 22-item map](../campaigns/2026-09-23-catalogue-coverage/EXISTING-22-INDEX.md)
+separates existing controls from behavioral cases and links newer live producers.
+
 ## Agent entry
 
 - “Verify fix X on dev”: select relevant cases into that fix's attack plan.

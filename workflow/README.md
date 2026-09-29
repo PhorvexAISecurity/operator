@@ -45,6 +45,7 @@ trees are neither moved nor removed.
 | Outstanding live verification and missing fixtures | [Live-verification backlog](assessments/LIVE-VERIFICATION-BACKLOG.md) |
 | Full-system investigator / master-register regeneration | `operations/ASSESSMENT.md` |
 | Campaign owner | `operations/CAMPAIGN.md` |
+| Agent designing catalogue items or continuing Live attacks | [Live catalogue runbook](operations/LIVE-CATALOGUE.md), then [successor handoff and 22-item map](campaigns/2026-09-23-catalogue-coverage/HANDOFF-20260929.md) |
 
 Run the consistency check from the code-repository root:
 
