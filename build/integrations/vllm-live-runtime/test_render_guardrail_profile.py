@@ -107,6 +107,11 @@ def fixture():
     return dict(zip(renderer.ROLES, (cluster, pod, service, slices, source, policy, manager, console, rs, deployment)))
 
 
+# Historical closures (four-file and c0316931/322595a6 lease) were installed with the
+# pre-metrics dual listener; the checked-in dual_server.py now adds the engine metrics port.
+PRIOR_DUAL = HERE.parents[2] / "phorvex/internal/console/testdata/endpoint-lease-source-upgrade/prior-dual-server.py"
+
+
 def lease_fixture():
     objects = fixture()
     pod, source, service, policy = (objects[k] for k in ("pod", "source", "service", "policy"))
@@ -116,6 +121,7 @@ def lease_fixture():
     # Preserve the actual historical lease closure after newer drain code lands.
     prior_drain = HERE.parents[2] / "phorvex/internal/console/testdata/endpoint-lease-source-upgrade/prior-drain-v11.py"
     source["data"]["drain_v11.py"] = prior_drain.read_text()
+    source["data"]["dual_server.py"] = PRIOR_DUAL.read_text()
     guard["command"] = ["python3", "-B", "/src/dual_server.py"]
     guard["volumeMounts"] = [{"name": "admin-tls", "mountPath": "/etc/phorvex/admin-tls", "readOnly": True}]
     guard["volumeMounts"].extend({"name": "source", "mountPath": "/src/" + name,

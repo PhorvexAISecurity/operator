@@ -428,7 +428,9 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
                 "legacy source carries lease-only authority")
         mount(guard, pod["spec"].get("volumes", []), "/src", "configMap", "guardrail-proxy")
         if repaired_four:
-            require(files["dual_server.py"] == read_regular_bounded(DUAL, 1 << 20),
+            # Four-file closures were installed with the pre-metrics listener; the checked-in
+            # dual_server.py has since gained the read-only engine metrics port.
+            require(digest(files["dual_server.py"]) == STARTUP_REPAIRED_LEGACY_SOURCE_SHA256["dual_server.py"],
                     "startup-repaired dual listener differs from reviewed source")
     else:
         require(set(objects) == set(ROLES) | {LEASE_ROLE} and retained_lease_profile_bytes is not None and
@@ -439,8 +441,11 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
                 "lease dual-listener closure or retained credential profile differs")
         reviewed = {"guardrail_proxy.py": PROXY, "dual_server.py": DUAL, "endpoint_lease.py": LEASE}
         for key, path in reviewed.items():
-            require(files[key] == read_regular_bounded(path, 1 << 20),
-                    key + " installed bytes differ from reviewed lease source")
+            installed = files[key] == read_regular_bounded(path, 1 << 20)
+            if key == "dual_server.py" and not installed:
+                # Closures c0316931 and 322595a6 carry the reviewed pre-metrics listener.
+                installed = digest(files[key]) == STARTUP_REPAIRED_LEGACY_SOURCE_SHA256["dual_server.py"]
+            require(installed, key + " installed bytes differ from reviewed lease source")
         lease_mounts(guard, pod["spec"].get("volumes", []))
         require(not any(e.get("name") in {"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP",
                                              "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL"}
@@ -468,8 +473,10 @@ def render(objects: dict[str, dict], context: str, retained_lease_profile_bytes:
                                             state, guard, vllm)
     drain_pins = DRAIN_SOURCE_SHA256 if historical_four else STARTUP_REPAIRED_DRAIN_SOURCE_SHA256
     if lease_data is not None and "sourceUpgrade" in lease_data:
-        require(composite == "322595a608b2384f2ed6994886416838fc4e1d1c45c9dadbf1c00f04a5f52691",
-                "source upgrade differs from reviewed drain capacity closure")
+        # 322595a6: drain capacity repair; 870c8709: + read-only engine metrics listener.
+        require(composite in ("322595a608b2384f2ed6994886416838fc4e1d1c45c9dadbf1c00f04a5f52691",
+                              "870c8709a5da026d01449be737939fa35420ebd1bda341ea2371c6081926fda4"),
+                "source upgrade differs from a reviewed maintenance closure")
         drain_pins = CAPACITY_REPAIRED_DRAIN_SOURCE_SHA256
     elif lease_data is not None:
         require(composite == "c031693170c1d21d0a23405af255f83319efa240ce84d9c25d2436388528a3ff",

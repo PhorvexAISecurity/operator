@@ -39,6 +39,14 @@ the boundary substitutes the upstream API key on the loopback hop; the named
 guardrail routes retain the admin bearer. No control credential is placed in
 Pod annotations or a public URL.
 
+A third, plain-HTTP listener on Pod port 9102 answers only `GET /metrics`. It
+relays the engine's Prometheus text from `127.0.0.1:8001/metrics` without any
+credential and reaches no other engine route: other paths return 404 and other
+methods 405. Prometheus scrapes it because the engine binds loopback only. A
+bind failure is logged as `engine_metrics_unavailable` and never stops either
+serving listener. Adding it changed `dual_server.py`, so the source closure is
+`870c8709…`; ENDPOINT-LEASE.md describes the reviewed source upgrade.
+
 The renderer binds vLLM to `127.0.0.1:8001`, so an external Pod cannot bypass
 the guardrail or reach vLLM's developer routes at PodIP:8001. Existing vLLM
 `/health` probes become equivalent in-container loopback checks with their

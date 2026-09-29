@@ -2,6 +2,8 @@
 
 The public listener never exposes an upstream control route. Both listeners share
 the same FastAPI app, classifier state, and drain coordinator in one process.
+A third, read-only listener serves only the engine's Prometheus text on its own
+port; it carries no credential and reaches no other engine route.
 """
 
 from __future__ import annotations
@@ -54,6 +56,12 @@ ADMIN_OPERATION = re.compile(
     r"/v1/drain/operations/[0-9]+/[0-9a-f]{32,64}(?:/(?:cancel|reopen))?\Z"
 )
 MAX_ADMIN_BODY = 65536
+# The engine binds 127.0.0.1 only, and neither serving listener forwards /metrics,
+# so Prometheus could not collect vllm:* series. This port answers exactly
+# GET /metrics from the local engine and nothing else.
+METRICS_PORT = 9102
+ENGINE_METRICS_URL = "http://127.0.0.1:8001/metrics"
+MAX_METRICS_BYTES = 16 << 20
 
 
 def _credential(name: str) -> str:
@@ -98,6 +106,73 @@ def _status_query(raw: bytes) -> tuple[str, str] | None:
     if len(fields) != 2:
         return None
     return fields[b"revokedClientHMAC"], fields[b"retainedClientHMAC"]
+
+
+def metrics_server(port: int | None = None, upstream: str = ENGINE_METRICS_URL,
+                   timeout: float = 5.0, host: str = "0.0.0.0"):
+    """Build the read-only engine metrics listener (call serve_forever on it)."""
+    import http.server
+    import urllib.request
+
+    port = METRICS_PORT if port is None else port
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        server_version = "phorvex-engine-metrics"
+        sys_version = ""
+
+        def log_message(self, *args):
+            pass
+
+        def _deny(self, status: int, code: bytes):
+            body = b'{"error":"' + code + b'"}'
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path != "/metrics":
+                self._deny(404, b"route_unavailable")
+                return
+            try:
+                with opener.open(upstream, timeout=timeout) as resp:
+                    body = resp.read(MAX_METRICS_BYTES + 1)
+                    content_type = resp.headers.get("Content-Type") or "text/plain; version=0.0.4"
+            except Exception:
+                self._deny(502, b"engine_metrics_unavailable")
+                return
+            if len(body) > MAX_METRICS_BYTES:
+                self._deny(502, b"engine_metrics_too_large")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):
+            self._deny(405, b"method_unavailable")
+
+        do_PUT = do_DELETE = do_PATCH = do_POST
+
+    server = http.server.ThreadingHTTPServer((host, port), Handler)
+    server.daemon_threads = True
+    return server
+
+
+def start_metrics_listener():
+    """Start engine telemetry; its failure never blocks either serving listener."""
+    try:
+        server = metrics_server()
+    except OSError as err:
+        print(json.dumps({"event": "engine_metrics_unavailable", "error": type(err).__name__},
+                         separators=(",", ":")), flush=True)
+        return None
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
 
 
 class ServingBoundary:
@@ -262,7 +337,14 @@ async def serve():
     private = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=ADMIN_PORT,
                                             lifespan="off", proxy_headers=False,
                                             ssl_certfile=str(cert), ssl_keyfile=str(key), log_level="info"))
-    await serve_pair(public, private)
+    # Read-only engine telemetry; independent of both serving listeners.
+    metrics = start_metrics_listener()
+    try:
+        await serve_pair(public, private)
+    finally:
+        if metrics is not None:
+            metrics.shutdown()
+            metrics.server_close()
 
 
 async def serve_pair(public, private, *, shutdown_timeout=10.0):
