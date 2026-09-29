@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -392,6 +393,27 @@ type voiceMemoryHandler struct{}
 
 func (voiceMemoryHandler) Name() string { return string(model.ActionVoiceMemoryNoteRevoke) }
 
+// errVoiceMemoryProjectionPending marks a resume whose rule write landed but whose per-Pod
+// projection was not yet visible within the synchronous budget. The kubelet refreshes a
+// ConfigMap volume on its own sync cadence (often tens of seconds), so a 4 s wait usually ends
+// here even though the rule is in place.
+var errVoiceMemoryProjectionPending = errors.New("voice memory projection readback timed out")
+
+// voiceMemoryDispatch reports a written-but-not-yet-projected rule as an emitted, unconfirmed
+// effect on the DISPATCH path only. Returning it as an error made the runner count every
+// working revoke as a failed dispatch (phorvex_actuation_attempts_total{outcome="dispatch-error"}),
+// record a failed SLO outcome and never increment phorvex_actuations_total. The receipt stays
+// "prepared", so protected recovery still owns the confirmation, and recovery calls
+// voiceMemoryResume directly and keeps the pending error until the projection is observed.
+func voiceMemoryDispatch(res HandlerResult, err error) (HandlerResult, error) {
+	if !errors.Is(err, errVoiceMemoryProjectionPending) {
+		return res, err
+	}
+	return HandlerResult{ObjectsTouched: []string{voicememorypolicy.Namespace + "/" + voicememorypolicy.ConfigMapName},
+		MutationKind: "partial", Emitted: true,
+		Note: "voice memory rule written; per-Pod projection not yet observed, protected recovery confirms it"}, nil
+}
+
 func voiceMemoryResume(ctx context.Context, ec EnactCtx, journal *corev1.ConfigMap, receipt voiceMemoryReceipt) (HandlerResult, error) {
 	target := Target{Namespace: voicememorypolicy.Namespace, Pod: receipt.TargetName, UID: receipt.TargetPodUID, PolicyName: receipt.PolicyName, PolicyUID: receipt.PolicyUID}
 	s, err := voiceMemoryScopeAt(ctx, ec.Reader, target)
@@ -444,7 +466,7 @@ func voiceMemoryResume(ctx context.Context, ec EnactCtx, journal *corev1.ConfigM
 		}
 		select {
 		case <-deadline.Done():
-			return HandlerResult{MutationKind: "partial", Note: "voice memory rule updated; complete per-Pod projection unverified"}, fmt.Errorf("voice memory projection readback timed out: %w", scopeErr)
+			return HandlerResult{MutationKind: "partial", Note: "voice memory rule updated; complete per-Pod projection unverified"}, fmt.Errorf("%w: %w", errVoiceMemoryProjectionPending, scopeErr)
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
@@ -476,7 +498,7 @@ func (voiceMemoryHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (
 			recorded.Prior.SHA256() != o.RuleSHA256 || recorded.Desired.OperationID != opID {
 			return HandlerResult{}, fmt.Errorf("voice memory journal occupied by another selection")
 		}
-		return voiceMemoryResume(ctx, ec, journal, recorded)
+		return voiceMemoryDispatch(voiceMemoryResume(ctx, ec, journal, recorded))
 	} else if !apierrors.IsNotFound(err) {
 		return HandlerResult{}, err
 	}
@@ -554,9 +576,9 @@ func (voiceMemoryHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (
 		if readErr != nil || existing.OperationID != opID || existing.EventUID != o.EventUID || existing.Phase != "prepared" || existing.Prior.SHA256() != s.rule.SHA256() || existing.Desired.SHA256() != desired.SHA256() {
 			return HandlerResult{}, fmt.Errorf("voice memory journal occupied by another selection")
 		}
-		return voiceMemoryResume(ctx, ec, journal, existing)
+		return voiceMemoryDispatch(voiceMemoryResume(ctx, ec, journal, existing))
 	}
-	return voiceMemoryResume(ctx, ec, journal, receipt)
+	return voiceMemoryDispatch(voiceMemoryResume(ctx, ec, journal, receipt))
 }
 
 func init() { HandlerRegistry.Register(voiceMemoryHandler{}) }

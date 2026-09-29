@@ -1,0 +1,80 @@
+# Prometheus additionalScrapeConfigs for kube-prom-stack (kube-prometheus-stack 88.5.3, release
+# kube-prom-stack in monitoring). Live copy: Secret monitoring/kube-prom-stack-kube-prome-prometheus-scrape-confg,
+# key additional-scrape-configs.yaml. Use this file as prometheus.prometheusSpec.additionalScrapeConfigs
+# on the next helm upgrade so it is not reverted.
+#
+# 2026-09-29: the vllm job kept container port 8000, which is the guardrail proxy in the vLLM Pod; it
+# answers /metrics with 404, so no vllm:* series (latency, TTFT, queue, tokens) were collected. The
+# vLLM engine serves /metrics on 8001 (not declared as a containerPort), so the job now keeps only the
+# vllm container and rewrites the target address to <podIP>:8001.
+- job_name: dcgm
+  static_configs:
+  - targets:
+    - dcgm-exporter.gpu-telemetry.svc.cluster.local:9400
+- job_name: vllm
+  kubernetes_sd_configs:
+  - namespaces:
+      names:
+      - vllm
+    role: pod
+  relabel_configs:
+  - action: keep
+    regex: '8000'
+    source_labels:
+    - __meta_kubernetes_pod_container_port_number
+  - action: keep
+    regex: vllm
+    source_labels:
+    - __meta_kubernetes_pod_container_name
+  - action: replace
+    regex: (.+)
+    replacement: $1:8001
+    source_labels:
+    - __meta_kubernetes_pod_ip
+    target_label: __address__
+  - action: keep
+    regex: Running
+    source_labels:
+    - __meta_kubernetes_pod_phase
+  - source_labels:
+    - __meta_kubernetes_namespace
+    target_label: namespace
+  - source_labels:
+    - __meta_kubernetes_pod_name
+    target_label: pod
+  - source_labels:
+    - __meta_kubernetes_pod_container_name
+    target_label: container
+  - source_labels:
+    - __meta_kubernetes_pod_node_name
+    target_label: node
+- job_name: cadvisor-standalone
+  kubernetes_sd_configs:
+  - namespaces:
+      names:
+      - monitoring
+    role: pod
+  metric_relabel_configs:
+  - source_labels:
+    - container_label_io_kubernetes_pod_namespace
+    target_label: namespace
+  - source_labels:
+    - container_label_io_kubernetes_pod_name
+    target_label: pod
+  - source_labels:
+    - container_label_io_kubernetes_container_name
+    target_label: container
+  - action: labeldrop
+    regex: container_label_io_kubernetes_.*
+  relabel_configs:
+  - action: keep
+    regex: cadvisor
+    source_labels:
+    - __meta_kubernetes_pod_label_app
+  - action: keep
+    regex: '8080'
+    source_labels:
+    - __meta_kubernetes_pod_container_port_number
+  - source_labels:
+    - __meta_kubernetes_pod_node_name
+    target_label: node

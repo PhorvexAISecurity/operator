@@ -283,6 +283,12 @@ func litellmReadback(ctx context.Context, ec EnactCtx, live litellmclient.Live, 
 
 // Projected ConfigMap files can lag a successful API-server CAS. Observe both
 // exact sidecars for a finite interval; never issue another policy write.
+// errLiteLLMReadbackPending marks a readback that did not see the deny on both gateway Pods
+// within its bounded wait. Each gateway reads the policy from a projected ConfigMap volume,
+// which the kubelet refreshes on its own sync cadence, so this commonly outlasts the wait
+// although the CAS already landed.
+var errLiteLLMReadbackPending = errors.New("owned-client both-Pod effective readback deadline")
+
 func litellmAwaitReadback(ctx context.Context, ec EnactCtx, live litellmclient.Live, clientSHA, opID string) error {
 	deadline := time.NewTimer(15 * time.Second)
 	defer deadline.Stop()
@@ -297,7 +303,7 @@ func litellmAwaitReadback(ctx context.Context, ec EnactCtx, live litellmclient.L
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			return fmt.Errorf("owned-client both-Pod effective readback deadline: %w", last)
+			return fmt.Errorf("%w: %w", errLiteLLMReadbackPending, last)
 		case <-tick.C:
 		}
 	}
@@ -419,6 +425,15 @@ func (litellmClientRevokeHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 		return HandlerResult{MutationKind: "partial"}, errors.New("owned-client post-CAS authority not confirmed")
 	}
 	if e = litellmAwaitReadback(ctx, ec, current, o.ClientSHA256, req.OperationID); e != nil {
+		if errors.Is(e, errLiteLLMReadbackPending) {
+			// The deny is written and confirmed by the API above; only the Pods' projected
+			// readback is outstanding. Report an emitted, unconfirmed effect so the runner
+			// counts the actuation; the journal stays "prepared" and protected recovery
+			// (recoverPreparedLiteLLMClient) completes it once both gateways read it back.
+			return HandlerResult{MutationKind: "partial", Emitted: true,
+				ObjectsTouched: []string{req.Namespace + "/" + litellmclient.PolicyConfigMapName, ec.JournalNamespace + "/" + litellmclient.JournalName},
+				Note:           fmt.Sprintf("owned LiteLLM client deny written for operation %s; both-gateway readback pending protected recovery", req.OperationID)}, nil
+		}
 		return HandlerResult{MutationKind: "partial"}, e
 	}
 	receipt.Phase = "terminal-full"

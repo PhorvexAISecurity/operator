@@ -403,9 +403,9 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                     <Lock className="h-3 w-3" /> Reset unavailable
                   </span>
                 ) : (
-                  <Button size="sm" variant="ghost" disabled={attackControlsDisabled || !compatibleAttacks.some((a) => a.armed && !!liveAttackRoute(a, curWl?.ns || "", true))} onClick={() => fireAttack("clear")} className="gap-1.5 text-muted-foreground">
-                    {attacking === "clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Clear attack
-                  </Button>
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title="The console refuses manual clears without exact per-run restoration authority; the injected attack event is removed automatically about 5 minutes after it was fired.">
+                    <Lock className="h-3 w-3" /> Auto-clears in ~5 min
+                  </span>
                 )}
               </div>
               {/* Compare all three defenders on THIS app with THIS attack — the result streams into
