@@ -273,8 +273,8 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Apps attacked (risk > 0, last 15m)",
-      "description": "Namespaces with a current P1 decision whose considered or selected action has positive recon-fact coverage value. Zero may mean no eligible covering action; it is not an all-clear or an attack detector.",
+      "title": "Apps attacked (trusted attack events, last 15m)",
+      "description": "Namespaces that received at least one trusted SecurityEvent in the last 15 minutes, counted once per event. Proactive moves (the brain rotating vLLM KV cache or sessions with no attack) do not count, and an event consumed within one tick is not lost between scrapes. Zero means no trusted event arrived, not that no attack was attempted.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -291,7 +291,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(count by (namespace) (max_over_time(phorvex_pod_risk_score{namespace=~\"$app\"}[15m]) > 0)) or vector(0)",
+          "expr": "count(sum by (namespace) (increase(phorvex_security_events_first_seen_total{trust=\"trusted\",namespace=~\"$app\"}[15m])) > 0) or vector(0)",
           "legendFormat": "",
           "refId": "D",
           "instant": true,
@@ -506,8 +506,8 @@
     {
       "id": 33,
       "type": "stat",
-      "title": "Apps under attack — peak candidate coverage, last 15m",
-      "description": "One tile per namespace with positive P1 candidate coverage value. Empty means no positive covering candidate is reported; it does not show that no attack occurred.",
+      "title": "Apps under attack — trusted attack events, last 15m",
+      "description": "One tile per namespace with the number of distinct trusted SecurityEvents in the last 15 minutes. Proactive moves are excluded; see Candidate coverage value for those.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -524,7 +524,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (namespace) (max_over_time(phorvex_pod_risk_score{namespace=~\"$app\"}[15m])) > 0",
+          "expr": "round(sum by (namespace) (increase(phorvex_security_events_first_seen_total{trust=\"trusted\",namespace=~\"$app\"}[15m]))) > 0",
           "legendFormat": "{{namespace}}",
           "refId": "A",
           "instant": true,
@@ -1481,8 +1481,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Candidate coverage value",
-      "description": "P1 recon-fact coverage value of the considered or selected action. This legacy risk-named metric is zero when no candidate is chosen; zero does not prove no attack or no trusted event.",
+      "title": "Candidate coverage value (includes proactive moves)",
+      "description": "P1 recon-fact coverage value of the considered or selected action. It rises for proactive moves with no attack (vLLM every 20-40 minutes), and an event consumed within one 10s tick is usually gone before the 30s scrape, so use Apps attacked for attack events.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
