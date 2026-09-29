@@ -49,6 +49,8 @@ class SourceUpgradeTest(unittest.TestCase):
         source = objects["source"]
         source["metadata"]["uid"] = uid(25)
         source["data"]["drain_v11.py"] = new_drain.decode()
+        # The current reviewed closure adds the engine metrics listener to dual_server.py.
+        source["data"]["dual_server.py"] = g.DUAL.read_text()
         current_state = g.unique_json(current["data"]["state.json"].encode())
         current_state["proxySourceSHA256"] = renderer.NEW_SOURCE
         current["data"]["state.json"] = canonical(current_state).decode()

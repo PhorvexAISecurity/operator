@@ -11,7 +11,10 @@ import render_guardrail_profile as g
 from endpoint_lease_source_upgrade import canonical, validate_upgrade
 
 OLD_SOURCE = "c031693170c1d21d0a23405af255f83319efa240ce84d9c25d2436388528a3ff"
-NEW_SOURCE = "322595a608b2384f2ed6994886416838fc4e1d1c45c9dadbf1c00f04a5f52691"
+# The revision-2 maintenance state carries the current reviewed closure. 322595a6 (drain
+# capacity repair) was the first; 870c8709 adds dual_server.py's read-only engine metrics
+# listener (2026-09-29). Lease decisions, Secrets and the protected journal are unchanged.
+NEW_SOURCE = "870c8709a5da026d01449be737939fa35420ebd1bda341ea2371c6081926fda4"
 
 
 def render(old_raw, prior_cm, current_cm, journal_cm, source_cm):
