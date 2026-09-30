@@ -88,7 +88,9 @@ phorvex:
       enabled: true
     voiceMCP:
       enabled: true
-      approvedImage: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:deea8034fee4908ac0d0a1f1f8b02918fe72c010a55d660a5b7da3fddbaf085a
+      # Republished 2026-09-30 by publish-voice-mcp-runtime (run 36749892259, main 161d6661):
+      # the ECR lifecycle rule expired the reviewed deea8034 image and mcp-server could not pull it.
+      approvedImage: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cf260cb846239f4ac7046e32d63246a3ebefbd108ab414440dae782a9383e0f6
     # DEV caller-lease runtime: reviewed five-file source and immutable images.
     # Console admission is enabled separately after capturing the new manager.
     endpointLease:
@@ -139,11 +141,11 @@ phorvex:
         profileSHA256: a518c389310bfae62ca35fe81a2c522d2a48fa819c544a07e3a32a0e2f99be8a
         deploymentUID: 9212e1a8-c21d-49cd-9854-85a1b306a8f4
       voiceMCPLive:
-        configMapName: phorvex-catalogue-voice-mcp-fc0bccec4d9a
+        configMapName: phorvex-catalogue-voice-mcp-b25d5992064d
         deploymentUID: 9212e1a8-c21d-49cd-9854-85a1b306a8f4
         enabled: true
         mcpSourceConfigMapName: voice-mcp-source-85cbd0f201b9
-        profileSHA256: fc0bccec4d9a11a17ee8cfe2aa4d84f6f2346d0c9735add931bf6cc25760c2d2
+        profileSHA256: b25d5992064dbccbb36099973ee4e72069ab5ee6ae3943765c498ee5261f4b39
         sourceConfigMapName: voice-memory-source-e3cfcb87456b
       voiceOutputLive:
         enabled: true
