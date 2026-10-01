@@ -1,0 +1,1 @@
+{"ns": "vllm", "attackId": "endpoint-rotate", "route": "/api/vllm/attack", "firedResultId": "", "fireResp": "{\"error\":\"multiple Services select the exact target Pod\",\"restoration\":\"not-needed\",\"serviceUid\":\"\",\"targetUid\":\"15ac7b82-7752-41c7-a1f2-e93f9b75daf3\",\"verdict\":\"setup-failed\"}", "record": null}
