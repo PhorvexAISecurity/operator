@@ -1,0 +1,13 @@
+# Phorvex refund deny-guard for the live mini-CRM (crm namespace).
+# Default denied_order_ids is empty => the guard is OFF and the CRM keeps its
+# original deliberately-trusting confused-deputy behaviour. A Phorvex actuator
+# (or an operator, for a drill) adds an abused order_id to revoke its refunds;
+# the app re-reads this ConfigMap per request, so an update reaches every pod.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-refund-guard
+  namespace: crm
+data:
+  denied.json: |
+    {"denied_order_ids": []}
