@@ -1,0 +1,7 @@
+mode,ns,attack,route,budget,startOffsetSec,endOffsetSec,durationSec,firedResultId,status,outcomeClass,outcome,phorvexAction,actuated,fireVerdict,hasLiveRecord
+parallel,crm,foothold,/api/workload/attack,60,0.0,0.45,0.45,,,,,,,namespace crm is outside this identity's tenant scope,False
+parallel,litellm,ai2-query-extraction,/api/litellm/live/fire,300,0.0,314.35,314.34,atk-dltv4og0f7hi5,running,litellm-live-UNKNOWN,,,False,ok,True
+parallel,vllm,kvcache,/api/vllm/attack,240,0.0,135.77,135.77,atk-dltv4ymxkywz,partial,effect-unverified,,,False,ok,True
+parallel,voice,ai2-agent-memory-contamination,/api/voice/live/fire,300,0.0,314.0,314.0,voice-memory-de2c46a74e614d24,running,voice-memory-first-exposure-landed,LANDED,,False,ok,True
+parallel,mcp,foothold,/api/workload/attack,90,0.01,102.56,102.55,atk-dltv4x163264,,,,,,ok,False
+parallel,nats,foothold,/api/workload/attack,90,0.01,103.41,103.4,atk-dltv4xkv70pm,,,,,,ok,False

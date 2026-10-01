@@ -1,0 +1,43 @@
+<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>Parallel live-attack benchmark</title>
+<meta name=description content="Wall-clock timeline and outcomes for the parallel live-attack benchmark run.">
+<style>
+:root{--bg:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--sub:#52514e;--muted:#898781;--line:#e1e0d9}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d0d0d;--surface:#1a1a19;--ink:#fff;--sub:#c3c2b7;--muted:#898781;--line:#2c2c2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:30px 16px 70px}
+h1{font-size:23px;margin:0 0 2px}.lede{color:var(--sub);margin:0 0 18px}
+.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 22px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:150px}
+.kpi .v{font-size:26px;font-weight:650}.kpi .l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+h2{font-size:15px;margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.lane{display:grid;grid-template-columns:170px 1fr 150px;gap:10px;align-items:center;margin:5px 0}
+.lname{font-size:12.5px;font-weight:600}.lname span{display:block;color:var(--muted);font-weight:400;font-size:11.5px}
+.track{position:relative;height:22px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.bar{position:absolute;top:2px;height:16px;border-radius:4px;min-width:3px}
+.bar span{position:absolute;right:4px;top:-1px;font-size:10.5px;color:#fff;line-height:16px}
+.lv{font-size:12px;font-weight:600}
+.axis{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:4px 0 0 180px}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:8px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+tr:last-child td{border-bottom:0}.n{text-align:right;font-variant-numeric:tabular-nums}.sub{color:var(--muted);font-size:11px}
+.pill{color:#fff;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:600;white-space:nowrap}
+footer{color:var(--muted);font-size:12px;margin-top:26px}a{color:#2a78d6}
+</style></head><body><div class=wrap>
+<h1>Parallel live-attack benchmark</h1>
+<p class=lede>One armed Live attack per app, fired all at once (across apps) through the Console on <code>phorvex-dev-eks</code>. Generated 2026-10-01 22:48 UTC. Companion: <a href="serial.html">serial.html</a>.</p>
+<div class=kpis>
+<div class=kpi><div class=v>314s</div><div class=l>Total wall-clock</div></div>
+<div class=kpi><div class=v>6</div><div class=l>Attacks fired</div></div>
+<div class=kpi><div class=v>0</div><div class=l>Defended / protected</div></div>
+<div class=kpi><div class=v>314s</div><div class=l>Longest single attack</div></div>
+</div>
+<h2>Execution timeline (bar = when each attack ran, within the 314s window)</h2>
+<div class=lane><div class=lname>crm<span>foothold</span></div><div class=track><div class=bar style="left:0.0%;width:1.2%;background:#898781" title="crm/foothold 0.0–0.45s"><span>0.45s</span></div></div><div class=lv style="color:#898781">fired (no live record)</div></div><div class=lane><div class=lname>litellm<span>ai2-query-extraction</span></div><div class=track><div class=bar style="left:0.0%;width:100.0%;background:#eda100" title="litellm/ai2-query-extraction 0.0–314.35s"><span>314.34s</span></div></div><div class=lv style="color:#eda100">inconclusive</div></div><div class=lane><div class=lname>vllm<span>kvcache</span></div><div class=track><div class=bar style="left:0.0%;width:43.2%;background:#eda100" title="vllm/kvcache 0.0–135.77s"><span>135.77s</span></div></div><div class=lv style="color:#eda100">inconclusive</div></div><div class=lane><div class=lname>voice<span>ai2-agent-memory-contamination</span></div><div class=track><div class=bar style="left:0.0%;width:99.9%;background:#d03b3b" title="voice/ai2-agent-memory-contamination 0.0–314.0s"><span>314.0s</span></div></div><div class=lv style="color:#d03b3b">LANDED</div></div><div class=lane><div class=lname>mcp<span>foothold</span></div><div class=track><div class=bar style="left:0.0%;width:32.6%;background:#898781" title="mcp/foothold 0.01–102.56s"><span>102.55s</span></div></div><div class=lv style="color:#898781">fired (no live record)</div></div><div class=lane><div class=lname>nats<span>foothold</span></div><div class=track><div class=bar style="left:0.0%;width:32.9%;background:#898781" title="nats/foothold 0.01–103.41s"><span>103.4s</span></div></div><div class=lv style="color:#898781">fired (no live record)</div></div>
+<div class=axis><span>0s</span><span>157s</span><span>314s</span></div>
+<h2>Per-attack results</h2>
+<table><thead><tr><th>App</th><th>Attack</th><th>Start</th><th>End</th><th>Dur</th><th>Verdict</th><th>Actuator</th><th>Actuated</th><th>Run id</th></tr></thead>
+<tbody><tr><td>crm</td><td>foothold</td><td class=n>0.0</td><td class=n>0.45</td><td class=n>0.45</td><td><span class=pill style="background:#898781">fired (no live record)</span></td><td>—</td><td class=n>None</td><td class=sub></td></tr><tr><td>litellm</td><td>ai2-query-extraction</td><td class=n>0.0</td><td class=n>314.35</td><td class=n>314.34</td><td><span class=pill style="background:#eda100">inconclusive</span></td><td>—</td><td class=n>False</td><td class=sub>atk-dltv4og0f7hi5</td></tr><tr><td>vllm</td><td>kvcache</td><td class=n>0.0</td><td class=n>135.77</td><td class=n>135.77</td><td><span class=pill style="background:#eda100">inconclusive</span></td><td>—</td><td class=n>False</td><td class=sub>atk-dltv4ymxkywz</td></tr><tr><td>voice</td><td>ai2-agent-memory-contamination</td><td class=n>0.0</td><td class=n>314.0</td><td class=n>314.0</td><td><span class=pill style="background:#d03b3b">LANDED</span></td><td>—</td><td class=n>False</td><td class=sub>voice-memory-de2c46a74e614d24</td></tr><tr><td>mcp</td><td>foothold</td><td class=n>0.01</td><td class=n>102.56</td><td class=n>102.55</td><td><span class=pill style="background:#898781">fired (no live record)</span></td><td>—</td><td class=n>None</td><td class=sub>atk-dltv4x163264</td></tr><tr><td>nats</td><td>foothold</td><td class=n>0.01</td><td class=n>103.41</td><td class=n>103.4</td><td><span class=pill style="background:#898781">fired (no live record)</span></td><td>—</td><td class=n>None</td><td class=sub>atk-dltv4xkv70pm</td></tr></tbody></table>
+<footer>Offsets are seconds from the start of this run. In parallel mode the bars overlap (attacks on different apps run at once; the Console serializes same-app runs); in serial mode they are back-to-back. Verdicts: DEFENDED = brain action contained a real landing; PROTECTED = prior protection revalidated; LANDED = attack succeeded uncontained; "fired (no live record)" = the workload foothold route records a manager disposition, not a behavioural live result. Raw rows: parallel.csv.</footer>
+</div></body></html>
