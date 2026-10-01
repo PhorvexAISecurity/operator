@@ -88,6 +88,8 @@ var liveAttackCatalogue = []LiveAttack{
 		"litellm-output", "Sends a real model request with a separate server-owned synthetic case record. A test signal follows only if the original completion actually reveals the private record value."},
 	{"ai2-system-prompt-leakage", "LiteLLM private instruction leakage", "/api/litellm/output/fire", "OWASP LLM07", "sensitive-output-policy-activate",
 		"litellm-output", "Sends a real model request with a separate server-owned private system clause. A test signal follows only if the original completion actually reveals that clause."},
+	{"ai2-cross-record-refund", "CRM cross-account refund abuse", "/api/crm/live/fire", "OWASP LLM06 / confused-deputy", "crm-refund-revoke",
+		"crm-refund", "Performs a real cross-account refund against the unauthenticated mini-CRM (it lands by design) and, once the deny-guard actuator is wired, checks the brain revokes that order across every serving Pod while legitimate refunds continue."},
 }
 
 // appStack is the set of signals the compatibility rules read off a namespace.
@@ -107,6 +109,7 @@ type appStack struct {
 	LiteLLMLive        bool   `json:"litellmLive"`   // reviewed configuration is present; Fire verifies runtime
 	LiteLLMOutput      bool   `json:"litellmOutput"` // reviewed private-context output configuration is present
 	EndpointLease      bool   `json:"endpointLease"` // reviewed caller lease profile is installed
+	CRMRefundGuard     bool   `json:"crmRefundGuard"`     // CRM refund deny-guard (deploy/apps/crm) is mounted on the crm app
 }
 
 // servedModelImage matches the serving stacks the AI attacks are meaningful against. Substring
@@ -218,6 +221,15 @@ func (s *Server) stackOfClient(ctx context.Context, ns string, gpu bool, cs kube
 		st.LiteLLMLive = err == nil
 		_, _, outputErr := loadLiteOutputProfile(s.cfg)
 		st.LiteLLMOutput = st.LiteLLMLive && outputErr == nil
+	}
+	if ns == "crm" {
+		if dep, e := cs.AppsV1().Deployments(ns).Get(ctx, "crm", metav1.GetOptions{}); e == nil {
+			for _, v := range dep.Spec.Template.Spec.Volumes {
+				if v.ConfigMap != nil && v.ConfigMap.Name == "crm-refund-guard" {
+					st.CRMRefundGuard = true
+				}
+			}
+		}
 	}
 	if st.VoiceMemoryHook {
 		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-memory-policy", metav1.GetOptions{})
@@ -368,6 +380,20 @@ func compatibleLive(st appStack) []compatEntry {
 				e.Reason = "LiteLLM Live configuration is present; Fire verifies current Service, Pods, policy and control paths before running"
 			} else {
 				e.Reason = "LiteLLM Live gateway, console configuration or governance is unavailable"
+			}
+		case "crm-refund":
+			e.Compatible = st.Namespace == "crm" && st.Workload
+			// The deny-guard enforcement (deploy/apps/crm) is live, but the console producer
+			// (/api/crm/live/fire) and the brain crm-refund-revoke actuator are not wired yet,
+			// so the console cannot fire it. It is surfaced as compatible-not-armed so the gap
+			// is visible rather than hidden.
+			e.Armed = false
+			if !e.Compatible {
+				e.Reason = "no CRM workload in this namespace"
+			} else if st.CRMRefundGuard {
+				e.Reason = "CRM refund deny-guard installed; live producer and crm-refund-revoke actuator not yet wired"
+			} else {
+				e.Reason = "CRM refund deny-guard not installed (deploy/apps/crm)"
 			}
 		case "voice-memory":
 			e.Compatible = st.Namespace == "voice" && st.Workload
