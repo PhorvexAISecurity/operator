@@ -413,6 +413,60 @@ func TestEndpointRouteResolvesInstalledSelectingServiceWithoutObsoleteName(t *te
 	}
 }
 
+// After the admin control Service (#409) a second Service selects the vLLM Pod. The reviewed
+// Pod's own route-service annotation must disambiguate to the public serving route; a wrong or
+// absent annotation is still refused.
+func TestEndpointRouteDisambiguatesAdminServiceViaRouteAnnotation(t *testing.T) {
+	const publicSvc = `{"metadata":{"name":"vllm","uid":"public-uid","resourceVersion":"31"},"spec":{"selector":{"phorvex.ai/role":"leader"},"ports":[{"port":8000,"protocol":"TCP"}]}}`
+	const adminSvc = `{"metadata":{"name":"vllm-admin","uid":"admin-uid"},"spec":{"selector":{"app":"vllm"},"ports":[{"port":8443,"protocol":"TCP"}]}}`
+	list := `{"items":[` + publicSvc + `,` + adminSvc + `]}`
+	for _, tc := range []struct {
+		name, routeService string
+		wantName           string
+		wantError          bool
+	}{
+		{"annotation selects the public serving Service", "vllm", "vllm", false},
+		{"annotation names a Service that does not select the Pod", "vllm-infer", "", true},
+		{"no annotation leaves the ambiguity unresolved", "", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var pod vllmPodState
+			labels := map[string]string{"app": "vllm", "phorvex.ai/role": "leader"}
+			pod.Metadata.Name = "vllm-0"
+			pod.Metadata.UID = "pod-uid"
+			pod.Metadata.Labels = &labels
+			if tc.routeService != "" {
+				ann := map[string]string{"phorvex.ai/route-service": tc.routeService}
+				pod.Metadata.Annotations = &ann
+			}
+			s := &Server{cfg: Config{Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
+				if bin != "kubectl" {
+					return "", errors.New("unexpected binary")
+				}
+				joined := strings.Join(args, " ")
+				switch {
+				case strings.Contains(joined, "get services -o json"):
+					return list, nil
+				case strings.Contains(joined, "get service vllm -o json"):
+					return publicSvc, nil
+				default:
+					return "", errors.New("unexpected service lookup: " + joined)
+				}
+			}}}
+			service, err := s.resolveVLLMService(pod)
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("ambiguous resolution accepted: %+v", service)
+				}
+				return
+			}
+			if err != nil || service.Metadata.Name != tc.wantName || service.Metadata.UID != "public-uid" {
+				t.Fatalf("resolution=%+v err=%v", service, err)
+			}
+		})
+	}
+}
+
 func TestExactJSONPatchBindsUIDResourceVersionAndAbsentMap(t *testing.T) {
 	var command string
 	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {

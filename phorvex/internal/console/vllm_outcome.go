@@ -779,7 +779,7 @@ func (s *Server) resolveVLLMService(pod vllmPodState) (vllmServiceState, error) 
 	if err := decodeKubectlJSON(s, vllmAttackNS, &list, "get", "services", "-o", "json"); err != nil {
 		return vllmServiceState{}, err
 	}
-	var selected *vllmServiceState
+	var matching []*vllmServiceState
 	for i := range list.Items {
 		item := &list.Items[i]
 		if item.Metadata.Name == "" || item.Metadata.UID == "" || item.Spec.Selector == nil || len(*item.Spec.Selector) == 0 || pod.Metadata.Labels == nil {
@@ -793,19 +793,37 @@ func (s *Server) resolveVLLMService(pod vllmPodState) (vllmServiceState, error) 
 				break
 			}
 		}
-		if !matches {
-			continue
+		if matches {
+			matching = append(matching, item)
 		}
-		if selected != nil {
-			return vllmServiceState{}, fmt.Errorf("multiple Services select the exact target Pod")
-		}
-		selected = item
 	}
-	if selected == nil {
+	if len(matching) == 0 {
 		return vllmServiceState{}, fmt.Errorf("no Service selects the exact target Pod")
 	}
-	if annotated := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/route-service"); annotated != "" && annotated != selected.Metadata.Name {
-		return vllmServiceState{}, fmt.Errorf("target Pod route annotation differs from selecting Service")
+	annotated := stringMapValue(pod.Metadata.Annotations, "phorvex.ai/route-service")
+	var selected *vllmServiceState
+	if len(matching) == 1 {
+		selected = matching[0]
+		if annotated != "" && annotated != selected.Metadata.Name {
+			return vllmServiceState{}, fmt.Errorf("target Pod route annotation differs from selecting Service")
+		}
+	} else {
+		// More than one Service selects the Pod. Since the admin control Service was published
+		// (a second selecting Service alongside the public serving route), the reviewed Pod's own
+		// route-service annotation resolves which is the endpoint-rotate route. Without it the
+		// ambiguity is still refused; the named Service must itself genuinely select this Pod.
+		if annotated == "" {
+			return vllmServiceState{}, fmt.Errorf("multiple Services select the exact target Pod and no route-service annotation disambiguates")
+		}
+		for _, item := range matching {
+			if item.Metadata.Name == annotated {
+				selected = item
+				break
+			}
+		}
+		if selected == nil {
+			return vllmServiceState{}, fmt.Errorf("target Pod route annotation names no Service that selects it")
+		}
 	}
 	state, err := s.readVLLMService(selected.Metadata.Name)
 	if err != nil || state.Metadata.UID != selected.Metadata.UID || !stringMapsEqual(state.Spec.Selector, selected.Spec.Selector) {
