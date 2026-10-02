@@ -1549,6 +1549,115 @@ func decisionDispositionRank(e decisionEvidence) int {
 	}
 }
 
+// liveProbeDecision returns the brain decision id and selected action a live-probe attack
+// (LiteLLM / Voice) recorded in its probe. These attacks bind their decision by id rather
+// than by an observed stimulus event, so fillReasoning's exact-event-uid correlation never
+// attaches their objective math. Returns ("","") when no live probe is present.
+func (r *attackRecord) liveProbeDecision() (decisionID, action string) {
+	switch {
+	case r.LiteLLMLiveProbe != nil:
+		return r.LiteLLMLiveProbe.SelectionDecisionID, r.LiteLLMLiveProbe.SelectedAction
+	case r.VoiceMemoryProbe != nil:
+		return r.VoiceMemoryProbe.SelectedDecisionID, r.VoiceMemoryProbe.SelectedAction
+	case r.VoiceMCPProbe != nil:
+		return r.VoiceMCPProbe.SelectedDecisionID, r.VoiceMCPProbe.SelectedAction
+	case r.VoiceAgencyProbe != nil:
+		return r.VoiceAgencyProbe.SelectedDecisionID, r.VoiceAgencyProbe.SelectedAction
+	case r.VoiceOutputProbe != nil:
+		return r.VoiceOutputProbe.SelectedDecisionID, r.VoiceOutputProbe.SelectedAction
+	}
+	return "", ""
+}
+
+// attachLiveProbeDecision binds a live-probe attack (LiteLLM / Voice) to the exact brain
+// decision its probe recorded and attaches that decision's one-step objective math (reason +
+// admissible-set trace) and economics. The vLLM in-place-effect path gets this through the
+// exact-event-uid correlation in fillReasoning; live-probe attacks have no observed stimulus
+// event, so without this their decisionEvidence and economics stay empty even though a real
+// decision was made and actuated. It is a no-op when the probe carries no decision id, so an
+// attack that never produced a decision (e.g. one that did not land) stays truthfully blank.
+func (s *Server) attachLiveProbeDecision(ctxName string, r *attackRecord) {
+	if r == nil {
+		return
+	}
+	decID, action := r.liveProbeDecision()
+	if decID == "" {
+		return
+	}
+	if r.DecisionEvidence != nil && r.DecisionEvidence.Correlation == "exact-decision-id" {
+		return
+	}
+	if err := s.fillDecisionByIDWithTimeout(ctxName, r, decID, action, 15*time.Second); err != nil {
+		r.DecisionAuditReadGap = true
+	}
+	r.DecisionAuditCoverage = "sampled-live-tail"
+}
+
+// fillDecisionByIDWithTimeout reads the bounded decision window and attaches the audit
+// decision whose decision-trace id equals decisionID (the id a live probe recorded). Unlike
+// exactDecisionEvidence it does not require an observed stimulus event; it matches by decision
+// id, same namespace, and — when known — the selected action (a noop row is allowed), preferring
+// the richest disposition. The attached economics come from that same audit record, exactly as
+// the vLLM path attaches them. Returns an error only on an audit read failure; a decision not
+// present in the window (rotation) is a silent miss that leaves the record truthfully blank.
+func (s *Server) fillDecisionByIDWithTimeout(ctxName string, r *attackRecord, decisionID, action string, timeout time.Duration) error {
+	if decisionID == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	records, err := s.readDecisionWindow(ctx, ctxName)
+	if err != nil {
+		return err
+	}
+	rank := func(d *audit.Record) int {
+		switch {
+		case d.Actuated:
+			return 3
+		case d.Selected:
+			return 2
+		default:
+			return 1
+		}
+	}
+	var chosen *audit.Record
+	for i := range records {
+		d := &records[i]
+		trace := d.DecisionTrace
+		if trace == nil || trace.Validate() != nil || trace.DecisionID != decisionID {
+			continue
+		}
+		if r.Namespace != "" && d.Namespace != r.Namespace {
+			continue
+		}
+		if action != "" && d.Action != action && d.Action != "noop" {
+			continue
+		}
+		if chosen == nil || rank(d) > rank(chosen) ||
+			(rank(d) == rank(chosen) && d.Time.Before(chosen.Time)) {
+			chosen = d
+		}
+	}
+	if chosen == nil {
+		return nil
+	}
+	evidence := decisionEvidenceFromAudit(chosen, "exact-decision-id", "decision-trace-selected-id", matchedEventReference{})
+	r.DecisionEvidence = &evidence
+	r.DecisionTraceEvidence = []decisionEvidence{evidence}
+	if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
+		r.Lambda = chosen.Lambda
+		r.LambdaAvailable = true
+		r.EconomicsVersion = economics.Version
+		r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
+		r.DisruptionAversionPresent = economics.DisruptionAversion.Present
+		if economics.DisruptionAversion.Present {
+			r.DisruptionAversion = economics.DisruptionAversion.Value
+		}
+		r.EconomicsAvailable = true
+	}
+	return nil
+}
+
 func (s *Server) readDecisionWindow(ctx context.Context, ctxName string) ([]audit.Record, error) {
 	path := s.cfg.auditPathForContext(ctxName)
 	f, err := openDecisionSource(ctx, path, s.cfg.AuditSource)

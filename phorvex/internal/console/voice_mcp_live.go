@@ -307,6 +307,7 @@ func (s *Server) finishVoiceMCPLive(record *attackRecord) {
 	record.OutcomeClass = "voice-mcp-" + probe.Status
 	record.Actuated = probe.Status == "DEFENDED" && probe.ProtectedJournalTerminal && probe.EveryServingPodEffective
 	record.Status = "done"
+	s.attachLiveProbeDecision("", record)
 	if err := s.persistAttack(record); err != nil {
 		probe.Issues = append(probe.Issues, "durable terminal attack record unavailable")
 		probe.Status = "UNKNOWN"
