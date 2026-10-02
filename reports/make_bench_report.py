@@ -8,6 +8,34 @@ import csv, datetime as dt, html, json, sys
 
 IN, MODE, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 E = html.escape
+
+import re
+
+
+def parse_reason(reason):
+    """Pull the one-step objective math out of the decision reason string."""
+    out = {}
+    if not reason:
+        return out
+    for key, pat in (("strictGain", r"strict gain (-?[\d.]+)"), ("fullValue_S", r"fullValue=(-?[\d.]+)"),
+                     ("ECost", r"ECost=(-?[\d.]+)"), ("lambda", r"lambda\w*=(-?[\d.]+)"),
+                     ("hazard", r"hazard=(-?[\d.]+)"), ("pHold", r"pHold=(-?[\d.]+)")):
+        m = re.search(pat, reason)
+        if m:
+            out[key] = m.group(1)
+    m = re.search(r"stage=([^\s]+)", reason)
+    if m:
+        out["stage"] = m.group(1)
+    return out
+
+
+def brain_params(rec):
+    de = (rec or {}).get("decisionEvidence") or {}
+    parsed = parse_reason(de.get("reason"))
+    econ = {k: rec.get(k) for k in ("lambda", "lambdaAvailable", "pHold", "coveredFacts", "perDollar",
+            "economicsVersion", "economicsAvailable", "disruptionAversion", "uptimeBefore", "uptimeDip",
+            "uptimeAfter") if rec and rec.get(k) is not None}
+    return parsed, de, econ, (rec or {}).get("cost") or {}
 rows, summary = [], {}
 for line in open(IN):
     line = line.strip()
@@ -19,12 +47,27 @@ rows.sort(key=lambda r: (r.get("startOffsetSec", 0), r.get("ns", "")))
 
 CSV_COLS = ["mode", "ns", "attack", "route", "expectedActuator", "budget", "startOffsetSec",
             "endOffsetSec", "durationSec", "firedResultId", "status", "outcomeClass", "outcome",
-            "phorvexAction", "actuated", "decisionAction", "fireVerdict", "hasLiveRecord"]
+            "phorvexAction", "actuated", "decisionAction", "fireVerdict", "hasLiveRecord",
+            "strictGain", "fullValue_S", "ECost", "lambda", "hazard", "pHold", "stage",
+            "valueAtRisk", "savings", "feasible", "killSwitch", "trustVerdict", "mutationKind",
+            "dispatchOutcome", "decisionId", "tickId", "brainImage", "gitSha", "candidatesEvaluated"]
 with open(f"{OUT}/{MODE}.csv", "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=CSV_COLS, extrasaction="ignore")
     w.writeheader()
     for r in rows:
-        w.writerow(r)
+        rec = r.get("record") or {}
+        parsed, de, econ, cost = brain_params(rec)
+        row = dict(r)
+        row.update(parsed)
+        row.setdefault("lambda", econ.get("lambda"))
+        row.setdefault("pHold", econ.get("pHold"))
+        row.update({"valueAtRisk": cost.get("valueAtRisk"), "savings": cost.get("savings"),
+                    "feasible": de.get("feasible"), "killSwitch": de.get("killSwitch"),
+                    "trustVerdict": de.get("trustVerdict"), "mutationKind": de.get("mutationKind"),
+                    "dispatchOutcome": de.get("dispatchOutcome"), "decisionId": de.get("decisionId"),
+                    "tickId": de.get("tickId"), "brainImage": de.get("brainImage"), "gitSha": de.get("gitSha"),
+                    "candidatesEvaluated": len(de.get("actionStatus") or [])})
+        w.writerow(row)
 
 CH = {"ok": "#0ca30c", "fail": "#d03b3b", "partial": "#eda100", "skip": "#898781", "na": "#898781"}
 
@@ -147,13 +190,64 @@ trows = "".join(
     f'<td>{E(str((r.get("record") or {}).get("phorvexAction") or r.get("decisionAction") or "—"))}</td>'
     f'<td class=n>{E(str(r.get("actuated")))}</td></tr>' for r in rows)
 
-cards = "".join(
-    f'<section class=card id="{E(r["ns"]+"-"+r["attack"])}"><div class=ch><h3>{E(r["attack"])}</h3>'
-    f'<span class=ns>{E(r["ns"])}</span><span class=pill style="background:{verdict(r)[1]}">{E(verdict(r)[0])}</span></div>'
-    f'<div class=meta>expected <code>{E(str(r.get("expectedActuator") or "—"))}</code> · ran {r.get("startOffsetSec")}–{r.get("endOffsetSec")}s ({r.get("durationSec")}s) · run <code>{E(str(r.get("firedResultId") or "—"))}</code></div>'
-    f'<ol class=pipe>' + "".join(
-        f'<li><span class=dot style="background:{CH[s]}"></span><div><b>{E(n)}</b><span class=sd>{E(d)}</span></div></li>'
-        for n, s, d in stages(r)) + '</ol></section>' for r in rows)
+def kv_grid(pairs):
+    cells = "".join(f'<div class=kv><span class=k>{E(k)}</span><span class=val>{E(str(v))}</span></div>'
+                    for k, v in pairs if v is not None and v != "")
+    return f'<div class=grid>{cells}</div>' if cells else ""
+
+
+def brain_block(r):
+    rec = r.get("record") or {}
+    if not rec:
+        return '<div class=brain><div class=bt>Brain parameters</div><p class=none>No live record for this route; no brain decision was recorded.</p></div>'
+    parsed, de, econ, cost = brain_params(rec)
+    obj = kv_grid([
+        ("strict gain", parsed.get("strictGain")), ("fullValue S", parsed.get("fullValue_S")),
+        ("ECost", parsed.get("ECost")), ("lambda", parsed.get("lambda") or econ.get("lambda")),
+        ("hazard", parsed.get("hazard")), ("pHold", parsed.get("pHold") or econ.get("pHold")),
+        ("stage", parsed.get("stage")), ("covered facts", econ.get("coveredFacts")),
+        ("value at risk", cost.get("valueAtRisk")), ("savings", cost.get("savings")),
+        ("economics", econ.get("economicsVersion")),
+        ("uptime before/dip/after", (f"{rec.get('uptimeBefore')}/{rec.get('uptimeDip')}/{rec.get('uptimeAfter')}" if rec.get('uptimeBefore') is not None else None)),
+    ])
+    _, pr = probe_of(rec)
+    ident = kv_grid([
+        ("decision action", de.get("action") or pr.get("selectedAction")),
+        ("probe decisionId", pr.get("selectedDecisionID") or pr.get("selectionDecisionID")),
+        ("dispatch path", pr.get("dispatchPath")), ("event UID", de.get("eventUid") or pr.get("eventUID")),
+        ("selected", de.get("selected")), ("feasible", de.get("feasible")),
+        ("actuated", de.get("actuated")), ("kill switch", de.get("killSwitch")), ("trust", de.get("trustVerdict")),
+        ("mutation", de.get("mutationKind")), ("dispatch", (f"{de.get('dispatchOutcome')} ({de.get('dispatchReason')})" if de.get("dispatchOutcome") else None)),
+        ("event rule", de.get("eventRule")), ("decisionId", de.get("decisionId")), ("tickId", de.get("tickId")),
+        ("policyUid", de.get("policyUid")), ("brain image", de.get("brainImage")), ("git sha", de.get("gitSha")),
+    ])
+    cands = de.get("actionStatus") or []
+    ct = ""
+    if cands:
+        def cc(st):
+            return {"selected": "#0ca30c", "candidate": "#2a78d6", "eligible": "#2a78d6"}.get(st, "#898781")
+        crows = "".join(f'<tr><td>{E(c.get("action",""))}</td>'
+                        f'<td><span class=cst style="color:{cc(c.get("status"))}">{E(str(c.get("status")))}</span></td>'
+                        f'<td class=sub>{E(str(c.get("reason") or c.get("exclusionKind") or ""))}</td></tr>' for c in cands)
+        ct = (f'<div class=ctitle>Admissible-set evaluation — {len(cands)} candidates (the Runtime Math Gate)</div>'
+              f'<table class=cand><thead><tr><th>Action</th><th>Status</th><th>Reason / exclusion</th></tr></thead><tbody>{crows}</tbody></table>')
+    raw = de.get("reason")
+    rawline = f'<div class=raw>objective: <code>{E(raw)}</code></div>' if raw else ""
+    return (f'<div class=brain><div class=bt>Brain parameters — one-step objective J = S − βₙCNorm − β_fCFlow (here S − λ·ECost)</div>'
+            f'{rawline}{obj}'
+            f'<div class=bt2>Decision identity &amp; dispatch</div>{ident}{ct}</div>')
+
+
+def build_card(r):
+    sts = "".join(f'<li><span class=dot style="background:{CH[st]}"></span><div><b>{E(n)}</b><span class=sd>{E(d)}</span></div></li>'
+                  for n, st, d in stages(r))
+    return (f'<section class=card id="{E(r["ns"]+"-"+r["attack"])}"><div class=ch><h3>{E(r["attack"])}</h3>'
+            f'<span class=ns>{E(r["ns"])}</span><span class=pill style="background:{verdict(r)[1]}">{E(verdict(r)[0])}</span></div>'
+            f'<div class=meta>expected <code>{E(str(r.get("expectedActuator") or "—"))}</code> · ran {r.get("startOffsetSec")}–{r.get("endOffsetSec")}s ({r.get("durationSec")}s) · run <code>{E(str(r.get("firedResultId") or "—"))}</code></div>'
+            f'<ol class=pipe>{sts}</ol>{brain_block(r)}</section>')
+
+
+cards = "".join(build_card(r) for r in rows)
 
 title = f"{'Parallel' if MODE=='parallel' else 'Serial'} live-attack benchmark"
 other = "serial" if MODE == "parallel" else "parallel"
@@ -182,7 +276,7 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute
 .meta{color:var(--muted);font-size:11.5px;margin:7px 0}code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px;font-family:ui-monospace,monospace}
 .pipe{list-style:none;margin:0;padding:0;border-left:2px solid var(--line);margin-left:5px}.pipe li{position:relative;padding:4px 0 4px 20px}
 .dot{position:absolute;left:-7px;top:9px;width:11px;height:11px;border-radius:50%;border:2px solid var(--surface)}
-.pipe b{display:block;font-size:12.5px}.sd{display:block;color:var(--sub);font-size:12px}footer{color:var(--muted);font-size:12px;margin-top:24px}
+.pipe b{display:block;font-size:12.5px}.sd{display:block;color:var(--sub);font-size:12px}.brain{margin-top:10px;border-top:1px dashed var(--line);padding-top:9px}.bt,.bt2{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:600;margin:2px 0 6px}.bt2{margin-top:10px}.raw{font-size:11.5px;color:var(--sub);margin-bottom:7px}.raw code{font-size:11px;white-space:normal}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:5px}.kv{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}.kv .k{display:block;font-size:10.5px;color:var(--muted)}.kv .val{font-size:12.5px;font-variant-numeric:tabular-nums;word-break:break-all}.ctitle{font-size:11px;color:var(--muted);margin:10px 0 4px;font-weight:600}.cand{margin-top:0}.cand td,.cand th{padding:4px 8px;font-size:11.5px}.cst{font-weight:600}.none{color:var(--muted);font-size:12px}footer{color:var(--muted);font-size:12px;margin-top:24px}
 """
 doc = f"""<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>{E(title)}</title><meta name=description content="All armed live attacks fired per app in {E(MODE)} mode, with the full brain pipeline and wall-clock timing.">

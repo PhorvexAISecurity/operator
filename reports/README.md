@@ -44,6 +44,35 @@ chain time, not the sum of all 20.
 | LiteLLM | ai2-unbounded-consumption | **DEFENDED** | litellm-client-revoke |
 | LiteLLM | ai2-query-extraction | **DEFENDED** | litellm-client-revoke |
 
+## Brain parameters per attack
+
+Each per-attack card now records the brain's decision parameters, mapped to the
+post-stable math spec:
+
+- **One-step objective** (parsed from the decision trace): `strict gain`,
+  `fullValue S`, `ECost`, `lambda`, `hazard`, `pHold`, `stage`, plus `value at risk`,
+  `savings`, `covered facts`, `economics version`, and uptime before/dip/after.
+  Example (vLLM poison): S=16.65, ECost=0.16, λ=0.04, pHold=0.82, strict gain=16.64,
+  stage=prompt-inject-persist→lateral.
+- **Decision identity & dispatch**: `decision action`, `selected`, `feasible`,
+  `actuated`, `kill switch`, `trust`, `mutation`, `dispatch outcome`, `event rule`,
+  `decisionId`, `tickId`, `policyUid`, `brain image`, `git sha` (and, for voice/litellm,
+  the probe's `selected action`, `decisionId`, `dispatch path`).
+- **Admissible-set evaluation (the Runtime Math Gate)**: the full candidate table —
+  every action with its status (`selected` / `candidate` / `infeasible` / `not-enabled`
+  / `no-cover` / `ineligible`) and the exclusion reason (e.g. `pdb: disruptionsAllowed=0`,
+  `recon-cover: action invalidates no facts`).
+
+Key parameters are also columns in the CSVs (`lambda`, `pHold`, `strictGain`,
+`fullValue_S`, `ECost`, `hazard`, `stage`, `valueAtRisk`, `feasible`, `killSwitch`,
+`decisionId`, `tickId`, `gitSha`, `candidatesEvaluated`, …).
+
+The full objective math + 23-candidate trace is emitted by the vLLM decision attacks
+(kvcache, poison, endpoint-rotate, model-shard-replace, warm-swap) in both modes; the
+voice/LiteLLM attacks carry their decision in their probe (selected action + decision
+id + dispatch path); endpoint-lease (PROTECTED) revalidates a prior decision and raises
+no new one; footholds record a manager disposition only.
+
 ## Honest findings
 
 - Parallel cuts total wall-clock ~2.5×, bounded by the slowest **app chain** (vLLM),
