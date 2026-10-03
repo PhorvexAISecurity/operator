@@ -61,6 +61,51 @@ func TestLiveProbeDecisionAttachesMathByDecisionID(t *testing.T) {
 	}
 }
 
+// Production decision traces read from the audit wire do not always pass the full V7
+// Validate() (seen live: LiteLLM decisions matched by id but were skipped because the match
+// required Validate()==nil). The correlation must still attach the real reason + economics +
+// decisionId from an id-matching trace that does not fully validate.
+func TestLiveProbeDecisionAttachesWhenTraceDoesNotValidate(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	trace := caseTraceValidTrace(now.Add(time.Second), true, false)
+	trace.LambdaRuntime = 99 // out of the 0..10 bound -> Validate() fails, id unchanged
+	if trace.Validate() == nil {
+		t.Fatal("fixture precondition: trace must NOT validate")
+	}
+	economics := &model.EconomicsMetadata{
+		Version:                  model.EconomicsFixedDisruptionAversionV1,
+		DisruptionAversion:       model.OptionalFloat{Present: true, Value: 0.00004},
+		LambdaRuntimeLegacy:      model.OptionalFloat{Present: true, Value: 0.123456789},
+		EffectiveCostCoefficient: 0.00004,
+		CoefficientSource:        model.CostCoefficientSourceBeta,
+	}
+	rec := audit.Record{
+		Kind: "phorvex.decision", Time: now.Add(time.Second), Namespace: "litellm", Pod: "litellm-0",
+		Action: "rotate", Selected: true, Actuated: true,
+		Reason: "rotate: strict gain 3.20 > 0 (fullValue=3.50 ECost=0.30 lambdaRuntimeLegacy=0.1235); stage=query-abuse hazard=0.00 pHold=0.70",
+		Lambda: 0.1235, Economics: economics, DecisionTrace: trace,
+	}
+	path := writeDecisionAudit(t, rec)
+	s := NewServer(Config{AuditPath: path, Now: func() time.Time { return now.Add(3 * time.Second) }})
+	r := &attackRecord{
+		FiredAt: now.Format(time.RFC3339Nano), Namespace: "litellm", EvidenceKind: "litellm-live-client-policy",
+		ObservationStart: now.Format(time.RFC3339Nano), ObservationEnd: now.Add(8 * time.Second).Format(time.RFC3339Nano),
+		LiteLLMLiveProbe: &liteLLMLiveProbeResult{SelectionDecisionID: "decision-1", SelectedAction: "rotate"},
+	}
+
+	s.attachLiveProbeDecision("", r)
+
+	if r.DecisionEvidence == nil || r.DecisionEvidence.Reason != rec.Reason {
+		t.Fatalf("reason not attached from a non-validating trace: %+v", r.DecisionEvidence)
+	}
+	if r.DecisionEvidence.DecisionID != "decision-1" {
+		t.Fatalf("decisionId not backfilled from non-validating trace: %+v", r.DecisionEvidence)
+	}
+	if !r.EconomicsAvailable || r.Lambda != 0.1235 {
+		t.Fatalf("economics not attached: available=%v lambda=%v", r.EconomicsAvailable, r.Lambda)
+	}
+}
+
 // A live-probe attack that never produced a decision (e.g. it did not land) carries no probe
 // decision id, and the enrichment must leave the record truthfully blank rather than inventing
 // a correlation.
