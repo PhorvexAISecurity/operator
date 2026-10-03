@@ -1624,7 +1624,11 @@ func (s *Server) fillDecisionByIDWithTimeout(ctxName string, r *attackRecord, de
 	for i := range records {
 		d := &records[i]
 		trace := d.DecisionTrace
-		if trace == nil || trace.Validate() != nil || trace.DecisionID != decisionID {
+		// Match by decision-trace id only — the same predicate availabilityProjectAuditNamespace
+		// uses to bind a live-probe decision. A full trace.Validate() must NOT gate this: a trace
+		// read from the audit wire does not always pass every V7 invariant, yet it is the genuine
+		// decision whose id the probe recorded, and its reason + economics are authoritative.
+		if trace == nil || trace.DecisionID != decisionID {
 			continue
 		}
 		if r.Namespace != "" && d.Namespace != r.Namespace {
@@ -1642,6 +1646,20 @@ func (s *Server) fillDecisionByIDWithTimeout(ctxName string, r *attackRecord, de
 		return nil
 	}
 	evidence := decisionEvidenceFromAudit(chosen, "exact-decision-id", "decision-trace-selected-id", matchedEventReference{})
+	// decisionEvidenceFromAudit copies the trace identity + admissible-set rows only when the
+	// trace passes full Validate(); backfill them from the real trace when it does not, so the
+	// decisionId and candidate table still appear. The reason + economics are top-level and are
+	// already attached regardless of trace validation.
+	if t := chosen.DecisionTrace; t != nil && evidence.DecisionID == "" {
+		evidence.DecisionID, evidence.TickID, evidence.BrainImage, evidence.GitSHA = t.DecisionID, t.TickID, t.BrainImage, t.GitSHA
+		evidence.PolicyNamespace, evidence.PolicyName, evidence.PolicyUID = t.PolicyNamespace, t.PolicyName, t.PolicyUID
+		if len(evidence.ActionStatus) == 0 {
+			for _, row := range t.ActionStatus {
+				evidence.ActionStatus = append(evidence.ActionStatus, decisionActionEvidence{Action: row.Action,
+					Status: row.Status, ExclusionKind: row.ExclusionKind, Reason: row.Reason, Scored: row.Scored, RBACUnknown: row.RBACUnknown})
+			}
+		}
+	}
 	r.DecisionEvidence = &evidence
 	r.DecisionTraceEvidence = []decisionEvidence{evidence}
 	if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
