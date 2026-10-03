@@ -509,6 +509,7 @@ func (s *Server) finishVoiceMemoryRecord(record *attackRecord, failure error) {
 		record.OutcomeClass = "voice-memory-" + strings.ToLower(probe.Status)
 	}
 	record.Status = "done"
+	s.attachLiveProbeDecision("", record)
 	if err := s.persistAttack(record); err != nil {
 		// A successful replay is not a public DEFENDED result if its terminal
 		// record could not be retained. The first measured exposure remains true.

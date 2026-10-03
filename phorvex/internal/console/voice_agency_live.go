@@ -231,6 +231,7 @@ func (s *Server) runVoiceAgencyLive(record *attackRecord, p voiceAgencyProfile, 
 		}
 		record.OutcomeClass = "voice-agency-" + probe.Status
 		record.Status = "done"
+		s.attachLiveProbeDecision("", record)
 		if err := s.persistAttack(record); err != nil {
 			record.PersistenceError = "Voice agency terminal persistence unavailable"
 			record.Status = "partial"

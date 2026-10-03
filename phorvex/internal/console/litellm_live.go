@@ -253,6 +253,9 @@ func (s *Server) runLiteLive(r *attackRecord, p liteLLMLiveProfile, raw []byte) 
 		return
 	}
 	err := w.execute(probe)
+	// Bind the live-probe attack to its brain decision's objective math + economics while the
+	// audit window is still fresh. No-op unless the run recorded a selected decision id.
+	s.attachLiveProbeDecision("", r)
 	finish(err)
 }
 

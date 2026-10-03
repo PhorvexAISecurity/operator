@@ -217,6 +217,7 @@ func (s *Server) runVoiceOutputLive(record *attackRecord, p voiceOutputProfile, 
 		}
 		record.OutcomeClass = "voice-output-" + probe.Status
 		record.Status = "done"
+		s.attachLiveProbeDecision("", record)
 		if err := s.persistAttack(record); err != nil {
 			record.PersistenceError = "Voice output terminal persistence unavailable"
 			record.Status = "partial"
