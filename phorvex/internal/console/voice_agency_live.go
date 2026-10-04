@@ -137,6 +137,10 @@ func (s *Server) voiceAgencyLiveFire(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
 		return
 	}
+	if s.cfg.liveAttackDisabled("voice", "ai2-agent-excessive-agency") {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "voice Live attack ai2-agent-excessive-agency is retired by operator: it does not currently land (voice pipeline credential / guardrail), so no actuator is reached"})
+		return
+	}
 	var request struct {
 		Scenario string `json:"scenario"`
 	}

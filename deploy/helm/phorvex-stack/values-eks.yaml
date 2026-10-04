@@ -135,6 +135,19 @@ phorvex:
       resources:
         limits: { cpu: 500m, memory: 1Gi }
         requests: { cpu: 10m, memory: 256Mi }
+      # Retired Live attacks (verified 2026-10-04): no actuator fires end to end.
+      #   foothold on served apps  -> brain NOOPs (vllm PDB on 1 replica; voice/litellm SLO gate)
+      #   vllm warm-swap           -> actuator disabled in vllm-defense (single-GPU churn)
+      #   voice mcp/agency/output  -> do not land (voice pipeline credential + pgv2 guardrail)
+      # Remove an entry here (then re-pin/rotate as noted) to bring an attack back with no code change.
+      liveAttackDisabled:
+        - vllm/foothold
+        - voice/foothold
+        - litellm/foothold
+        - vllm/warm-swap
+        - voice/ai2-mcp-tool-poisoning
+        - voice/ai2-agent-excessive-agency
+        - voice/ai2-system-prompt-leakage
       voiceAgencyLive:
         enabled: true
         configMapName: phorvex-voice-agency-profile-a518c389310b

@@ -426,6 +426,10 @@ spec:
         {{- end }}
         - name: PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED
           value: {{ .Values.phorvex.console.litellmLive.enabled | default false | quote }}
+        {{- with .Values.phorvex.console.liveAttackDisabled }}
+        - name: PHORVEX_CONSOLE_LIVE_ATTACK_DISABLED
+          value: {{ join "," . | quote }}
+        {{- end }}
         {{- if .Values.phorvex.console.litellmLive.enabled }}
         - name: PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.litellmLive.profileSHA256 | quote }}

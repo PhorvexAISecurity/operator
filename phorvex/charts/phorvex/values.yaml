@@ -407,6 +407,9 @@ phorvex:
   console:
     enabled: false
     allowWorkloadMutations: false
+    # Live attack ids (namespace/id, or */id) with no actuator wired end to end. Retired rows
+    # show in the catalogue as not-armed with a clear reason, and the fire handlers refuse them.
+    liveAttackDisabled: []
     # Extra read grants for the fixed synthetic vLLM comparison. The shipped
     # harness profile also requires exact reviewed pins before launch.
     guardrailStatic:
