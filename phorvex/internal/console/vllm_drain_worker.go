@@ -276,6 +276,8 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 	if json.Unmarshal(raw, &services) != nil || len(services.Items) > 64 {
 		return drainLiveStaticIssue("route Service inventory malformed")
 	}
+	// The pinned serving Service is validated to expose exactly the serving port above.
+	servingPort, servingTarget := svc.Spec.Ports[0].Port, string(svc.Spec.Ports[0].TargetPort)
 	selecting := 0
 	for _, candidate := range services.Items {
 		if candidate.Spec.Selector == nil || len(*candidate.Spec.Selector) == 0 {
@@ -289,11 +291,20 @@ func (s *Server) drainLivePreflight(ctx context.Context, out string, p drainLive
 				break
 			}
 		}
-		if match {
+		if !match {
+			continue
+		}
+		if candidate.Metadata.UID == p.ServiceUID && candidate.Metadata.Name == p.ServiceName {
 			selecting++
-			if candidate.Metadata.UID != p.ServiceUID || candidate.Metadata.Name != p.ServiceName {
-				return drainLiveStaticIssue("alternate selecting Service present")
-			}
+			continue
+		}
+		// A second Service that also selects the target is a drain-bypass risk ONLY if it can
+		// carry serving traffic to the Pod. A control-plane Service that exposes none of the
+		// serving Service's ports (e.g. the admin-only TLS endpoint on 8443 the actuators use
+		// to drive the drain) reaches no inference route, so it is not an alternate serving path
+		// and must not block the drain.
+		if drainServiceReachesServingPort(candidate, servingPort, servingTarget) {
+			return drainLiveStaticIssue("alternate selecting Service present")
 		}
 	}
 	if selecting != 1 {
@@ -1068,6 +1079,18 @@ var drainLiveStaticMessages = map[drainLiveStaticIssue]string{
 	"reviewed request-drain profile or authenticated audit source unavailable": "request-drain reviewed profile or authenticated audit source is unavailable; inspect Console configuration",
 	"request-drain profile bytes unavailable":                                  "request-drain mounted profile bytes do not match the configured digest or are unavailable; refresh the reviewed profile mount and digest",
 	"authenticated audit source identity drift":                                "request-drain audit source identity differs from the reviewed profile; review the configured audit source",
+}
+
+// drainServiceReachesServingPort reports whether a Service publishes the serving Service's
+// port (by published port or targetPort), i.e. whether it could carry inference traffic to the
+// target Pod and thus be an alternate serving route the drain must account for.
+func drainServiceReachesServingPort(svc vllmServiceState, servingPort int, servingTarget string) bool {
+	for _, port := range svc.Spec.Ports {
+		if port.Port == servingPort || string(port.TargetPort) == servingTarget {
+			return true
+		}
+	}
+	return false
 }
 
 func drainLiveReadIssue(label string) drainLiveStaticIssue {
