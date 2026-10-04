@@ -138,6 +138,8 @@ var classifications = map[model.Action]Bound{
 		"owned client-channel denial and gateway readback have no calibrated safe-return deadline"),
 	model.ActionEndpointLeaseRevoke: unknown(model.ActionEndpointLeaseRevoke, -1,
 		"endpoint lease revocation and proxy readback have no calibrated safe-return deadline"),
+	model.ActionCRMRefundRevoke: unknown(model.ActionCRMRefundRevoke, -1,
+		"CRM refund deny-guard write and all-Pod readback have no calibrated safe-return deadline"),
 }
 
 func init() {
