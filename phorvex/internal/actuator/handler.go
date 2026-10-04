@@ -70,6 +70,7 @@ type EnactCtx struct {
 	VoiceAdmissionTransport           http.RoundTripper // private fixed-Pod-IP readback seam
 	VoiceAdmissionEnabled             bool
 	LiteLLMStatusTransport            http.RoundTripper // test-only exact PodIP status-readback seam
+	CRMRefundTransport                http.RoundTripper // test-only exact PodIP CRM guard-state readback seam
 	LiteLLMStatusToken                string            // test-only; runtime reads the fixed mounted Secret path
 	EndpointLeaseApprovedSourceSHA256 string            // reviewed five-file proxy source, never event-derived
 	EndpointLeaseApprovedProxyImage   string            // reviewed immutable proxy image, never event-derived

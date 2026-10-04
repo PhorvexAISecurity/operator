@@ -128,6 +128,10 @@ const (
 	// (kv-reset is local-only). Local invalidate is real; cross-worker migrate is DEFERRED
 	// [PENDING-GPU-VALIDATION] (needs a disaggregated P/D deployment).
 	ActionKVMigrateInvalidate Action = "kv-migrate-invalidate"
+	// ActionCRMRefundRevoke revokes refunds for one observed cross-record-abused order at the
+	// mini-CRM deny-guard (ConfigMap the app re-reads per request). It never authenticates a
+	// caller or touches any other CRM state; an empty guard preserves the app's behaviour.
+	ActionCRMRefundRevoke Action = "crm-refund-revoke"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -160,6 +164,7 @@ var MutatingActions = []Action{
 	ActionVoiceMCPToolPin,
 	ActionEndpointLeaseRevoke,
 	ActionVoiceSessionAdmissionEnforce,
+	ActionCRMRefundRevoke,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -539,6 +544,7 @@ type Pod struct {
 	VoiceMCPEventCreator        string
 	VoiceMCPObservation         *VoiceMCPObservation
 	LiteLLMClientObservation    *LiteLLMClientObservation
+	CRMRefundObservation        *CRMRefundObservation
 	EndpointLeaseObservation    *EndpointLeaseObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
@@ -665,6 +671,18 @@ func (p Pod) HasBoundLiteLLMClientObservation() bool {
 		o.ClientsConfigMapUID != "" && o.SeedSHA256 != "" && o.GatewaySourceSHA256 != ""
 }
 
+// HasBoundCRMRefundObservation licenses only the mini-CRM deny-guard channel from a trusted
+// cross-record-refund observation. It never authenticates a caller or any other CRM state.
+func (p Pod) HasBoundCRMRefundObservation() bool {
+	o := p.CRMRefundObservation
+	return o != nil && p.Namespace == "crm" && p.UID != "" &&
+		o.TargetPodUID == p.UID && o.PeerPodUID != "" && o.PeerPodUID != p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.OrderID != "" && o.OrderAccountID != "" && o.CallerAccountID != "" &&
+		o.OrderAccountID != o.CallerAccountID && o.GuardConfigMapUID != "" && o.ServiceUID != ""
+}
+
 // HasBoundEndpointLeaseObservation requires a fresh, source-bound synthetic
 // credential observation. The stable endpoint path alone grants no cover.
 func (p Pod) HasBoundEndpointLeaseObservation() bool {
@@ -704,6 +722,7 @@ const (
 	AttackVectorVoiceAdmission     = "phorvex.attack.voice-session-admission"
 	AttackVectorVoiceMCP           = "phorvex.attack.voice-mcp-descriptor"
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
+	AttackVectorCRMRefundAbuse     = "phorvex.attack.crm-refund-abuse"
 	AttackVectorEndpointLeaseReuse = "phorvex.attack.endpoint-lease-reuse"
 )
 
@@ -783,6 +802,7 @@ type SecurityEventInfo struct {
 	VoiceOutputRaw                    string // synthetic hidden-context marker hash assertion; never marker bytes
 	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
+	CRMRefundRaw                      string // untrusted CRM refund observation annotation; validated against live guard and policy before use
 	EndpointLeaseRaw                  string // untrusted event annotation; requires current proxy/lease authority
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
@@ -975,6 +995,26 @@ type LiteLLMClientObservation struct {
 	PolicyUID           string    `json:"policyUID"`
 	PolicyGeneration    int64     `json:"policyGeneration"`
 	ObservedAt          time.Time `json:"observedAt"`
+}
+
+// CRMRefundObservation binds one trusted cross-record-refund-abuse event to the exact
+// CRM deny-guard ConfigMap, Service, two serving Pod lifetimes and selecting policy. It
+// carries only the abused order id and public resource identities; no account data.
+type CRMRefundObservation struct {
+	EventName         string    `json:"eventName"`
+	EventUID          string    `json:"eventUID"`
+	CreatorIdentity   string    `json:"creatorIdentity"`
+	OrderID           string    `json:"orderId"`
+	OrderAccountID    string    `json:"orderAccountId"`
+	CallerAccountID   string    `json:"callerAccountId"`
+	GuardConfigMapUID string    `json:"guardConfigMapUID"`
+	ServiceUID        string    `json:"serviceUID"`
+	TargetPodUID      string    `json:"targetPodUID"`
+	PeerPodUID        string    `json:"peerPodUID"`
+	PolicyName        string    `json:"policyName"`
+	PolicyUID         string    `json:"policyUID"`
+	PolicyGeneration  int64     `json:"policyGeneration"`
+	ObservedAt        time.Time `json:"observedAt"`
 }
 
 // EndpointLeaseObservation contains only digests and public resource identities.

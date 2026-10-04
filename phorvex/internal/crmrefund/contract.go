@@ -25,6 +25,7 @@ const (
 	AppLabelSelector      = "app=crm"
 	GuardConfigMapName    = "crm-refund-guard"
 	GuardKey              = "denied.json"
+	StateKey              = "state.json" // operator-owned ledger; app ignores it and reads GuardKey
 	GuardMountPath        = "/etc/phorvex-crm-guard"
 	JournalName           = "phorvex-crm-refund-revoke-journal"
 	JournalKey            = "receipts.json"

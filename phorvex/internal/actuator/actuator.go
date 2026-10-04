@@ -130,6 +130,7 @@ type Request struct {
 	VoiceAdmissionObservation *model.VoiceAdmissionObservation
 	VoiceOutputObservation    *model.VoiceOutputObservation   // selection-time observed synthetic output marker
 	LiteLLMClientObservation  *model.LiteLLMClientObservation // selection-time owned-client gateway authority
+	CRMRefundObservation      *model.CRMRefundObservation     // selection-time CRM deny-guard + abused-order authority
 	EndpointLeaseObservation  *model.EndpointLeaseObservation // selection-time accepted caller lease reuse authority
 	TargetUID                 string                          // Bound identity from the selecting snapshot.
 	TargetNamespaceUID        string                          // Bound by the protected quarantine-capacity reservation.

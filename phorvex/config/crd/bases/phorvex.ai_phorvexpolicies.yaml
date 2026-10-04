@@ -120,6 +120,7 @@ spec:
                       - voice-session-admission-enforce
                       - voice-mcp-tool-pin
                       - litellm-client-revoke
+                      - crm-refund-revoke
                       - endpoint-lease-revoke
                       - kv-migrate-invalidate
                       - disable
