@@ -244,6 +244,36 @@ subjects:
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- if .Values.phorvex.crmRefundRevoke.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "crmRefundRevoke requires native or hybrid actuator" }}{{- end }}
+---
+# crm-refund-revoke may CAS only the mini-CRM deny-guard ConfigMap. Its Pod,
+# Service and EndpointSlice reads are covered by the existing read-only grants.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-crm-refund-revoke
+  namespace: crm
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["crm-refund-guard"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-crm-refund-revoke
+  namespace: crm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-crm-refund-revoke
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- if .Values.phorvex.endpointLease.enabled }}
 {{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "endpointLease requires native or hybrid actuator" }}{{- end }}
 ---

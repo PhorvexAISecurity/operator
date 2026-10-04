@@ -89,6 +89,14 @@ def health():
     }
 
 
+@app.get("/phorvex-guard/state")
+def phorvex_guard_state():
+    # Read-only: the order ids THIS Pod currently enforces from its mounted deny-guard.
+    # The crm-refund-revoke actuator reads it on every serving Pod to confirm a revoke
+    # reached each one (the ConfigMap volume refresh is eventually consistent).
+    return {"denied_order_ids": sorted(_denied_order_ids())}
+
+
 # ── READ endpoints (the non-privileged lookups) ─────────────────────────────────
 @app.get("/accounts/by-phone/{phone}")
 def account_by_phone(phone: str):

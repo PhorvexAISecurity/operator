@@ -105,6 +105,8 @@ phorvex:
     litellmClientRevoke:
       enabled: true
       statusSecret: phorvex-litellm-status-token
+    crmRefundRevoke:
+      enabled: true
     # PHVX-9b requires every NaN-cost veto to be visible. The live EKS cluster
     # already runs kube-prometheus-stack, so render the dedicated rule here.
     costNaNAlert:

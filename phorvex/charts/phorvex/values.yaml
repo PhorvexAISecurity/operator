@@ -14,6 +14,10 @@ phorvex:
   litellmClientRevoke:
     enabled: false
     statusSecret: ""
+  # Exact get/update grant on the crm-refund-guard ConfigMap for crm-refund-revoke.
+  # Enable BEFORE any policy enables the action, or startup preflight refuses to start.
+  crmRefundRevoke:
+    enabled: false
   litellmOutput:
     enabled: false
   # Base tick interval for the decision loop (per-tenant cadence honored on top).
