@@ -15,6 +15,7 @@ const api = {
   voiceMCPFire: async (...args) => { calls.push(["voice-mcp", ...args]); return response; },
   litellmLiveFire: async (...args) => { calls.push(["litellm", ...args]); return response; },
   litellmOutputFire: async (...args) => { calls.push(["litellm-output", ...args]); return response; },
+  crmRefundFire: async (...args) => { calls.push(["crm", ...args]); return response; },
   workloadAttack: async (...args) => { calls.push(["workload", ...args]); return response; },
 };
 const source = fs.readFileSync(path.join(__dirname, "../lib/live-attack-dispatch.ts"), "utf8");
@@ -44,6 +45,7 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
     [{ id: "ai2-query-extraction", endpoint: "/api/litellm/live/fire" }, "litellm", "litellm"],
     [{ id: "ai2-sensitive-info-disclosure", endpoint: "/api/litellm/output/fire" }, "litellm", "litellm-output"],
     [{ id: "ai2-system-prompt-leakage", endpoint: "/api/litellm/output/fire" }, "litellm", "litellm-output"],
+    [{ id: "ai2-cross-record-refund", endpoint: "/api/crm/live/fire" }, "crm", "crm"],
     [{ id: "foothold", endpoint: "/api/workload/attack" }, "nats", "foothold"],
   ];
   for (const [entry, namespace, kind] of positives) {
@@ -51,7 +53,7 @@ test("only exact advertised endpoint, ID and namespace pairs dispatch", async ()
     assert.equal(route.kind, kind);
     assert.equal((await dispatchLiveAttack(route, "operator")).attackId, "exact-1");
   }
-  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "vllm", "voice", "voice-agency", "voice-output", "voice-mcp", "voice-admission", "litellm", "litellm", "litellm-output", "litellm-output", "workload"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["vllm", "vllm", "voice", "voice-agency", "voice-output", "voice-mcp", "voice-admission", "litellm", "litellm", "litellm-output", "litellm-output", "crm", "workload"]);
   assert.deepEqual(calls.at(-1), ["workload", "nats", "foothold", "operator"]);
 });
 

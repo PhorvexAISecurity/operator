@@ -4,6 +4,7 @@ import { isEndpointProtectionRevalidated } from "@/lib/attack-result-truth";
 type LiveRoute = { kind: "vllm"; action: VllmAttackAction } | { kind: "voice" } | { kind: "voice-agency" } | { kind: "voice-output" } | { kind: "voice-mcp" } | { kind: "voice-admission" } |
   { kind: "litellm"; scenario: "ai2-unbounded-consumption" | "ai2-query-extraction" } |
   { kind: "litellm-output"; scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage" } |
+  { kind: "crm" } |
   { kind: "foothold"; namespace: string; action: "foothold" | "clear" };
 
 const vllmActions = new Set<string>([
@@ -34,6 +35,8 @@ export function liveAttackRoute(entry: Pick<CompatEntry, "id" | "endpoint">, nam
   if (entry.endpoint === "/api/litellm/output/fire" && namespace === "litellm" &&
       (entry.id === "ai2-sensitive-info-disclosure" || entry.id === "ai2-system-prompt-leakage"))
     return { kind: "litellm-output", scenario: entry.id };
+  if (entry.endpoint === "/api/crm/live/fire" && namespace === "crm" && entry.id === "ai2-cross-record-refund")
+    return { kind: "crm" };
   return null;
 }
 
@@ -47,6 +50,7 @@ export async function dispatchLiveAttack(route: LiveRoute, lens: Lens) {
     case "voice-mcp": return api.voiceMCPFire("ai2-mcp-tool-poisoning", lens);
     case "litellm": return api.litellmLiveFire(route.scenario, lens);
     case "litellm-output": return api.litellmOutputFire(route.scenario, lens);
+    case "crm": return api.crmRefundFire("ai2-cross-record-refund", lens);
     case "foothold": return api.workloadAttack(route.namespace, route.action, lens);
   }
 }
@@ -57,6 +61,7 @@ export function liveAttackPollBudgetMs(route: LiveRoute): number {
   if (route.kind === "vllm" && route.action === "endpoint-lease-revoke") return 960_000;
   if (route.kind === "vllm" && route.action === "guardrail-rotate") return 630_000;
   if (route.kind === "vllm" && route.action === "guardrail-output-v2") return 960_000;
+  if (route.kind === "crm") return 600_000;
   return route.kind === "voice" || route.kind === "voice-agency" || route.kind === "voice-output" || route.kind === "voice-mcp" || route.kind === "voice-admission" || route.kind === "litellm" || route.kind === "litellm-output" ? 960_000 : 150_000;
 }
 
