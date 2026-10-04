@@ -140,6 +140,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if a == model.ActionLiteLLMClientRevoke {
 		return litellmClientCapability(ctx, n.Reader, n.JournalNamespace, t)
 	}
+	if a == model.ActionCRMRefundRevoke {
+		return crmRefundCapability(ctx, n.Reader, t)
+	}
 	if a == model.ActionEndpointLeaseRevoke {
 		return endpointLeaseCapability(ctx, n.Reader, n.JournalNamespace, t, n.servingSecurity, n.EndpointLeaseApprovedSourceSHA256, n.EndpointLeaseApprovedProxyImage, n.EndpointLeaseApprovedEngineImage, n.EndpointLeaseStatusTransport, n.EndpointLeaseStatusToken)
 	}

@@ -357,6 +357,9 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionLiteLLMClientRevoke {
 					e.Prerequisite = "reviewed LiteLLM gateway on two Ready Service Pods, one owned-client observation, policy ConfigMap and protected journal"
 				}
+				if a == model.ActionCRMRefundRevoke {
+					e.Prerequisite = "reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap"
+				}
 				if a == model.ActionEndpointLeaseRevoke {
 					e.Prerequisite = "reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal"
 				}
@@ -377,6 +380,8 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not verify the observed raw output, CAS append, per-Pod projection, or post-action speech suppression"
 				} else if a == model.ActionLiteLLMClientRevoke {
 					e.UnverifiedEffect = "support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks"
+				} else if a == model.ActionCRMRefundRevoke {
+					e.UnverifiedEffect = "support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order"
 				} else if a == model.ActionEndpointLeaseRevoke {
 					e.UnverifiedEffect = "support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior"
 				} else {

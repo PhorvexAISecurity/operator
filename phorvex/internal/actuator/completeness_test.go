@@ -122,6 +122,7 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionVoiceSessionAdmissionEnforce:  {plain: "ai-context-required:"},
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 	model.ActionEndpointLeaseRevoke:           {plain: "ai-context-required:"},
+	model.ActionCRMRefundRevoke:               {plain: "ai-context-required:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -213,6 +214,19 @@ func aiViewForAction(action model.Action) *model.WorkloadView {
 			RevokedClientHMAC: strings.Repeat("c", 64), RetainedClientHMAC: strings.Repeat("d", 64),
 			AcceptedStatus: 200, AcceptedResponseSHA256: strings.Repeat("e", 64),
 			RetainedBaselineStatus: 200, RetainedBaselineResponseSHA256: strings.Repeat("f", 64),
+			ObservedAt: time.Now().UTC(),
+		}
+		return v
+	}
+	if action == model.ActionCRMRefundRevoke {
+		v.Pod.Namespace = "crm"
+		v.Pod.CRMRefundObservation = &model.CRMRefundObservation{
+			EventName: "crm-refund-observed", EventUID: "66666666-6666-4666-8666-666666666666",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			OrderID:         "OR-5002", OrderAccountID: "AC-1002", CallerAccountID: "AC-1001",
+			GuardConfigMapUID: "77777777-7777-4777-8777-777777777777", ServiceUID: "88888888-8888-4888-8888-888888888888",
+			TargetPodUID: v.Pod.UID, PeerPodUID: "peer-uid",
+			PolicyName: "crm-defense", PolicyUID: "99999999-9999-4999-8999-999999999999", PolicyGeneration: 1,
 			ObservedAt: time.Now().UTC(),
 		}
 		return v
@@ -346,7 +360,7 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionDebugger || a == model.ActionCustomInject {
 			family = "code-exec-guard:"
 		}
-		if a == model.ActionVoiceSessionAdmissionEnforce || a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke {
+		if a == model.ActionVoiceSessionAdmissionEnforce || a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke || a == model.ActionCRMRefundRevoke {
 			family = "ai-context-required:"
 		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
