@@ -440,6 +440,12 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return err
 	}
 	cfg.LiteLLMLiveEnabled = liteLLMLiveEnabled
+	if raw := strings.TrimSpace(os.Getenv("PHORVEX_CONSOLE_LIVE_ATTACK_DISABLED")); raw != "" {
+		cfg.LiveAttackDisabled = map[string]bool{}
+		for _, entry := range splitList(raw) {
+			cfg.LiveAttackDisabled[entry] = true
+		}
+	}
 	liteLLMLiveProfileSHA256, _ := lookup("PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256")
 	if liteLLMLiveEnabled && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(liteLLMLiveProfileSHA256) {
 		return errors.New("PHORVEX_CONSOLE_LITELLM_LIVE_PROFILE_SHA256 must be a lowercase SHA-256 when enabled")

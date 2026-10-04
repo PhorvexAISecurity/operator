@@ -49,6 +49,11 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	ns := strings.TrimSpace(body.Namespace)
+	if (body.Action == "" || body.Action == "foothold") && s.cfg.liveAttackDisabled(ns, "foothold") {
+		writeJSON(w, 409, map[string]string{"error": "foothold is retired by operator for " + ns +
+			": it raises a trusted event but the brain selects no actuator here (PDB or SLO gate), so there is nothing to actuate"})
+		return
+	}
 	// M-168's resettable stateless experiment path and the normal Fire control share
 	// one typed producer. Other legacy demo actions keep their existing path below.
 	if ns == "voice" && (body.Action == "" || body.Action == "foothold") {

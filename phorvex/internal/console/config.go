@@ -92,6 +92,11 @@ type Config struct {
 	VoiceMCPLiveProfilePath   string
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
+	// LiveAttackDisabled force-hides Live attack rows that have no actuator wired end to end,
+	// keyed "namespace/id" (or "*/id" for every namespace). The catalogue marks a matching row
+	// not-armed and not-compatible, and the foothold and vLLM fire handlers refuse it, so the
+	// operator can retire a non-actuating attack through Helm without a code change.
+	LiveAttackDisabled map[string]bool
 	LiteLLMLiveEnabled       bool
 	LiteLLMLiveProfileSHA256 string
 	LiteLLMLiveProfilePath   string
@@ -299,4 +304,12 @@ func DefaultConfig(root string) Config {
 		Addr:                   ":8090",
 		Web:                    filepath.Join(root, "dashboard-web", "out"),
 	}
+}
+
+// liveAttackDisabled reports whether a Live attack id is operator-disabled for a namespace.
+func (c Config) liveAttackDisabled(namespace, id string) bool {
+	if c.LiveAttackDisabled == nil {
+		return false
+	}
+	return c.LiveAttackDisabled[namespace+"/"+id] || c.LiveAttackDisabled["*/"+id]
 }

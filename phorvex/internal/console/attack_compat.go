@@ -579,6 +579,15 @@ func (s *Server) workloadAttacks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	live := compatibleLive(st)
+	// An operator can retire a Live attack with no actuator wired end to end. A retired row stays
+	// visible but not-armed and not-compatible, so the UI shows WHY it cannot fire rather than
+	// silently dropping it, and the fire handlers refuse it too.
+	for i := range live {
+		if s.cfg.liveAttackDisabled(ns, live[i].ID) {
+			live[i].Compatible, live[i].Armed = false, false
+			live[i].Reason = "retired by operator: no actuator is wired end to end for this attack"
+		}
+	}
 	sort.SliceStable(live, func(i, j int) bool {
 		if live[i].Armed != live[j].Armed {
 			return live[i].Armed // armed attacks float to the top

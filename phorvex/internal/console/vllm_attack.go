@@ -116,6 +116,11 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "a valid action is required"})
 		return
 	}
+	if s.cfg.liveAttackDisabled(vllmAttackNS, body.Action) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "vLLM Live attack " + body.Action +
+			" is retired by operator: no actuator is wired end to end for it", "verdict": "retired"})
+		return
+	}
 	// The built-in transfer can only invalidate locally. Until a reviewed
 	// disaggregated connector is wired, do not launch a producer or create a
 	// signal that could steer the brain toward a nonexistent remote effect.
