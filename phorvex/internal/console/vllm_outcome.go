@@ -570,7 +570,29 @@ func (s *Server) exactJSONPatch(kind, name, uid, resourceVersion string, operati
 	if err != nil {
 		return fmt.Errorf("encode %s JSON patch: %w", kind, err)
 	}
-	return s.checkedVLLMKubectl("patch", kind, name, "--type", "json", "-p", string(payload))
+	// The patch carries the full prior label/annotation maps for its test ops, and Phoenix's
+	// amtd.r6security.com/applied-sec-events annotation grows with every applied event (72 KB
+	// observed on the vLLM Pod). As one argv string the patch then exceeds Linux's 128 KiB
+	// single-argument limit and kubectl never runs ("argument list too long"), failing the
+	// endpoint-rotate fire with 502. Hand the identical patch to kubectl as a private file.
+	file, err := os.CreateTemp("", "phorvex-json-patch-*.json")
+	if err != nil {
+		return fmt.Errorf("stage %s JSON patch: %w", kind, err)
+	}
+	defer os.Remove(file.Name())
+	if err = file.Chmod(0600); err == nil {
+		_, err = file.Write(payload)
+	}
+	if err == nil {
+		err = file.Sync()
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("stage %s JSON patch: %w", kind, err)
+	}
+	return s.checkedVLLMKubectl("patch", kind, name, "--type", "json", "--patch-file", file.Name())
 }
 
 func (s *Server) checkedVLLMKubectl(args ...string) error {

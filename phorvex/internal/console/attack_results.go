@@ -1593,6 +1593,44 @@ func (s *Server) attachLiveProbeDecision(ctxName string, r *attackRecord) {
 	r.DecisionAuditCoverage = "sampled-live-tail"
 }
 
+// bindDecisionRecord attaches the one-step objective math (reason + admissible-set trace) and
+// economics of one exact audit decision row to a live-probe attack record. Live-probe workers
+// call it at the moment they match their decision, while the row is in hand: the live audit
+// grows ~35 MB/min, so a later re-read of the 16 MiB tail (~30 s) no longer contains it.
+func bindDecisionRecord(r *attackRecord, chosen *audit.Record) {
+	if r == nil || chosen == nil {
+		return
+	}
+	evidence := decisionEvidenceFromAudit(chosen, "exact-decision-id", "decision-trace-selected-id", matchedEventReference{})
+	// decisionEvidenceFromAudit copies the trace identity + admissible-set rows only when the
+	// trace passes full Validate(); backfill them from the real trace when it does not, so the
+	// decisionId and candidate table still appear. The reason + economics are top-level and are
+	// already attached regardless of trace validation.
+	if t := chosen.DecisionTrace; t != nil && evidence.DecisionID == "" {
+		evidence.DecisionID, evidence.TickID, evidence.BrainImage, evidence.GitSHA = t.DecisionID, t.TickID, t.BrainImage, t.GitSHA
+		evidence.PolicyNamespace, evidence.PolicyName, evidence.PolicyUID = t.PolicyNamespace, t.PolicyName, t.PolicyUID
+		if len(evidence.ActionStatus) == 0 {
+			for _, row := range t.ActionStatus {
+				evidence.ActionStatus = append(evidence.ActionStatus, decisionActionEvidence{Action: row.Action,
+					Status: row.Status, ExclusionKind: row.ExclusionKind, Reason: row.Reason, Scored: row.Scored, RBACUnknown: row.RBACUnknown})
+			}
+		}
+	}
+	r.DecisionEvidence = &evidence
+	r.DecisionTraceEvidence = []decisionEvidence{evidence}
+	if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
+		r.Lambda = chosen.Lambda
+		r.LambdaAvailable = true
+		r.EconomicsVersion = economics.Version
+		r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
+		r.DisruptionAversionPresent = economics.DisruptionAversion.Present
+		if economics.DisruptionAversion.Present {
+			r.DisruptionAversion = economics.DisruptionAversion.Value
+		}
+		r.EconomicsAvailable = true
+	}
+}
+
 // fillDecisionByIDWithTimeout reads the bounded decision window and attaches the audit
 // decision whose decision-trace id equals decisionID (the id a live probe recorded). Unlike
 // exactDecisionEvidence it does not require an observed stimulus event; it matches by decision
@@ -1645,34 +1683,7 @@ func (s *Server) fillDecisionByIDWithTimeout(ctxName string, r *attackRecord, de
 	if chosen == nil {
 		return nil
 	}
-	evidence := decisionEvidenceFromAudit(chosen, "exact-decision-id", "decision-trace-selected-id", matchedEventReference{})
-	// decisionEvidenceFromAudit copies the trace identity + admissible-set rows only when the
-	// trace passes full Validate(); backfill them from the real trace when it does not, so the
-	// decisionId and candidate table still appear. The reason + economics are top-level and are
-	// already attached regardless of trace validation.
-	if t := chosen.DecisionTrace; t != nil && evidence.DecisionID == "" {
-		evidence.DecisionID, evidence.TickID, evidence.BrainImage, evidence.GitSHA = t.DecisionID, t.TickID, t.BrainImage, t.GitSHA
-		evidence.PolicyNamespace, evidence.PolicyName, evidence.PolicyUID = t.PolicyNamespace, t.PolicyName, t.PolicyUID
-		if len(evidence.ActionStatus) == 0 {
-			for _, row := range t.ActionStatus {
-				evidence.ActionStatus = append(evidence.ActionStatus, decisionActionEvidence{Action: row.Action,
-					Status: row.Status, ExclusionKind: row.ExclusionKind, Reason: row.Reason, Scored: row.Scored, RBACUnknown: row.RBACUnknown})
-			}
-		}
-	}
-	r.DecisionEvidence = &evidence
-	r.DecisionTraceEvidence = []decisionEvidence{evidence}
-	if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
-		r.Lambda = chosen.Lambda
-		r.LambdaAvailable = true
-		r.EconomicsVersion = economics.Version
-		r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
-		r.DisruptionAversionPresent = economics.DisruptionAversion.Present
-		if economics.DisruptionAversion.Present {
-			r.DisruptionAversion = economics.DisruptionAversion.Value
-		}
-		r.EconomicsAvailable = true
-	}
+	bindDecisionRecord(r, chosen)
 	return nil
 }
 

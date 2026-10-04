@@ -702,6 +702,8 @@ func (s *Server) waitVoiceMemoryDecisionWithTiming(ctx context.Context, record *
 		}
 		for _, row := range rows {
 			if candidate, ok := voiceMemorySelectedDecision(row, record, snap, eventUID); ok {
+				matched := row
+				bindDecisionRecord(record, &matched)
 				if !observed.Selected {
 					observed = candidate
 				} else if observed.DecisionID == candidate.DecisionID && observed.TickID == candidate.TickID && candidate.Actuated {

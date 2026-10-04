@@ -1153,6 +1153,9 @@ func (w *liteLiveWorker) afterOriginal(probe *liteLLMLiveProbeResult, before lit
 		selected++
 		probe.SelectedAction = decision.Action
 		probe.SelectionDecisionID = decision.DecisionID
+		if row, ok := audit.decisionRecords[decision.DecisionID]; ok {
+			bindDecisionRecord(w.record, &row)
+		}
 		if decision.Actuated {
 			probe.DispatchPath = "SELECTED_ACTUATED"
 		} else if decision.DispatchOutcome == "dispatch-error" || decision.TopLevelDispatchOutcome == "dispatch-error" {

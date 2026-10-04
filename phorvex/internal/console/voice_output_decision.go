@@ -159,6 +159,8 @@ func (s *Server) waitVoiceOutputDecision(ctx context.Context, record *attackReco
 					noop = diagnostic
 					continue
 				}
+				matched := row
+				bindDecisionRecord(record, &matched)
 				if !observed.Selected {
 					observed = candidate
 				} else if observed.DecisionID == candidate.DecisionID && observed.TickID == candidate.TickID && candidate.Actuated {
