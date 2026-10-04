@@ -508,6 +508,11 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	cfg.VoiceMCPLiveProfileSHA256 = voiceMCPProfileSHA256
 	cfg.VoiceMCPLiveProfilePath = "/etc/phorvex-voice-mcp/profile.json"
+	crmRefundLiveEnabled, err := readBool("PHORVEX_CONSOLE_CRM_LIVE_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.CRMRefundLiveEnabled = crmRefundLiveEnabled
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err

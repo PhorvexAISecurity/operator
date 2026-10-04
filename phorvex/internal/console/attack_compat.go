@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // LiveAttack is one attack the console can fire directly at a live workload. The ID is the exact
@@ -110,6 +111,7 @@ type appStack struct {
 	LiteLLMOutput      bool   `json:"litellmOutput"` // reviewed private-context output configuration is present
 	EndpointLease      bool   `json:"endpointLease"` // reviewed caller lease profile is installed
 	CRMRefundGuard     bool   `json:"crmRefundGuard"`     // CRM refund deny-guard (deploy/apps/crm) is mounted on the crm app
+	CRMRefundLive      bool   `json:"crmRefundLive"`      // the HTTP-driven CRM Live producer is enabled in this console
 }
 
 // servedModelImage matches the serving stacks the AI attacks are meaningful against. Substring
@@ -230,6 +232,7 @@ func (s *Server) stackOfClient(ctx context.Context, ns string, gpu bool, cs kube
 				}
 			}
 		}
+		st.CRMRefundLive = st.CRMRefundGuard && s.cfg.CRMRefundLiveEnabled
 	}
 	if st.VoiceMemoryHook {
 		_, err := cs.CoreV1().ConfigMaps(ns).Get(ctx, "voice-memory-policy", metav1.GetOptions{})
@@ -316,6 +319,9 @@ func applicablePolicyActuators(st appStack) []string {
 	if st.EndpointLease {
 		out = append(out, endpointLeaseAction)
 	}
+	if st.CRMRefundLive {
+		out = append(out, string(model.ActionCRMRefundRevoke))
+	}
 	return out
 }
 
@@ -383,17 +389,18 @@ func compatibleLive(st appStack) []compatEntry {
 			}
 		case "crm-refund":
 			e.Compatible = st.Namespace == "crm" && st.Workload
-			// The deny-guard enforcement (deploy/apps/crm) is live, but the console producer
-			// (/api/crm/live/fire) and the brain crm-refund-revoke actuator are not wired yet,
-			// so the console cannot fire it. It is surfaced as compatible-not-armed so the gap
-			// is visible rather than hidden.
-			e.Armed = false
-			if !e.Compatible {
+			// Armed once the deny-guard is mounted (deploy/apps/crm) AND the console CRM Live
+			// producer is enabled. Fire performs a real cross-account refund and, after it
+			// lands, stamps the trusted event for the crm-refund-revoke actuator.
+			e.Armed = e.Compatible && st.Armed && st.CRMRefundLive
+			if e.Armed {
+				e.Reason = "CRM deny-guard and Live producer are present; Fire lands a real cross-account refund, then verifies the brain revokes exactly that order on every serving Pod"
+			} else if !e.Compatible {
 				e.Reason = "no CRM workload in this namespace"
-			} else if st.CRMRefundGuard {
-				e.Reason = "CRM refund deny-guard installed; live producer and crm-refund-revoke actuator not yet wired"
-			} else {
+			} else if !st.CRMRefundGuard {
 				e.Reason = "CRM refund deny-guard not installed (deploy/apps/crm)"
+			} else {
+				e.Reason = "CRM Live producer is not enabled in this console"
 			}
 		case "voice-memory":
 			e.Compatible = st.Namespace == "voice" && st.Workload

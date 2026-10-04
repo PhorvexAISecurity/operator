@@ -90,6 +90,12 @@ type Config struct {
 	VoiceMCPLiveEnabled       bool
 	VoiceMCPLiveProfileSHA256 string
 	VoiceMCPLiveProfilePath   string
+	// CRMRefundLiveEnabled arms the HTTP-driven CRM cross-account refund Live producer
+	// (/api/crm/live/fire). It needs no reviewed profile: the console ServiceAccount reads
+	// the Service, Pods, policy and the deny-guard ConfigMap UID and drives the CRM app over
+	// its in-cluster Service. It is off by default and enabled through Helm once the console
+	// read-grant on the crm-refund-guard ConfigMap and the crm-refund-revoke actuator are live.
+	CRMRefundLiveEnabled bool
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
 	// LiveAttackDisabled force-hides Live attack rows that have no actuator wired end to end,

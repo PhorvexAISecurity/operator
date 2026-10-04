@@ -506,6 +506,12 @@ phorvex:
       deploymentUID: ""
       sourceConfigMapName: ""
       mcpSourceConfigMapName: ""
+    # HTTP-driven CRM cross-account refund Live producer. No reviewed profile: the console
+    # ServiceAccount reads the Service, Pods, policy and the deny-guard ConfigMap UID and
+    # drives the mini-CRM over its in-cluster Service. Enabling it also renders the console's
+    # resourceName-scoped GET of the crm-refund-guard ConfigMap (console-crm-live-rbac.yaml).
+    crmRefundLive:
+      enabled: false
     # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
     # create/delete or Secret/RBAC write permissions to the console identity.
     natsExposure:
